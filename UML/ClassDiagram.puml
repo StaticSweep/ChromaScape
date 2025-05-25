@@ -1,0 +1,194 @@
+@startuml ChromaScape
+
+left to right direction
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam linetype ortho
+
+
+' Root
+package "Program entry point" as ProgramEntryPoint {
+    class Main {
+        +main(arguments: String[])
+    }
+}
+
+' Controller + Utils
+package "ControllerUtils" as ControllerUtils {
+    class BotController {
+        - running: boolean
+        - paused: boolean
+        - window: WindowUtils
+        - mouse: MouseUtils
+        - colour: ColourUtils
+        - opticalCharacterRecognition: OpticalCharacterRecognitionUtils
+        - image: ImageUtils
+        - keyboard: KeyboardUtils
+        - log: Logger
+        - hotkeys: HotkeyListener
+        +BotController(windowTitle: String)
+        +runScript(script: BaseScript)
+        +toggleStartStop()
+        +togglePause()
+        +shutdown()
+        +isRunning(): boolean
+        +isPaused(): boolean
+        +execute(action: Runnable)
+        +getWindowUtils(): WindowUtils
+        +getMouseUtils(): MouseUtils
+        +getColourUtils(): ColourUtils
+        +getOpticalCharacterRecognitionUtils(): OpticalCharacterRecognitionUtils
+        +getImageUtils(): ImageUtils
+        +getKeyboardUtils(): KeyboardUtils
+        +getLogger(): Logger
+    }
+    ProgramEntryPoint.Main --> ControllerUtils.BotController
+
+    class HotkeyListener {
+        +HotkeyListener(controller: BotController)
+        +startListening()
+    }
+    ControllerUtils.BotController --> ControllerUtils.HotkeyListener
+
+    class WindowUtils {
+        ~ hwnd: HandleToWindow
+        ~ robot: Robot
+        ~WindowUtils(windowTitle: String, controller: BotController)
+        ~getWindowCapture(): BufferedImage
+        ~getWindowBounds(): Rectangle
+        ~isWindowFocused(): boolean
+    }
+    ControllerUtils.BotController --> ControllerUtils.WindowUtils
+
+    class TopologyUtils {
+        ~generateContours(image: BufferedImage): <Points>
+        ~generateRandomPointMask(List<Point>): <Point>
+        ~generateRandomPoint(Rectangle): <Point>
+    }
+    ControllerUtils.BotController --> ControllerUtils.TopologyUtils
+
+    class MouseUtils {
+        ~MouseUtils(controller: BotController)
+        ~humanisedMovement(point: Point, speed)
+        ~click()
+    }
+    ControllerUtils.BotController --> ControllerUtils.MouseUtils
+
+    class ColourUtils {
+        ~createMask(image: BufferedImage, range: ColorRange): BufferedImage
+        ~predefinedColorRanges (PURPLE, YELLOW, …)
+    }
+    ControllerUtils.BotController --> ControllerUtils.ColourUtils
+
+    class OpticalCharacterRecognitionUtils {
+        ~extractText(Rectangle): <String>
+        ~findText(image: BufferedImage, Text: String, Font: String): Rectangle
+    }
+    ControllerUtils.BotController --> ControllerUtils.OpticalCharacterRecognitionUtils
+
+    class ImageUtils {
+        ~findTemplate(image: BufferedImage, templatePath: Path): Rectangle
+    }
+    ControllerUtils.BotController --> ControllerUtils.ImageUtils
+
+    class KeyboardUtils {
+        ~KeyboardUtils(controller: BotController)
+        ~keyDown(key: Key)
+        ~keyUp(key: Key)
+    }
+    ControllerUtils.BotController --> ControllerUtils.KeyboardUtils
+
+    class Logger {
+        ~info(message: String)
+        ~warn(message: String)
+        ~error(message: String)
+    }
+    ControllerUtils.BotController --> ControllerUtils.Logger
+}
+
+package "ScriptFramework" as ScriptFramework {
+    abstract class BaseScript {
+        # controller: ControllerUtils.BotController
+        +BaseScript(controller: ControllerUtils.BotController)
+        +start()
+        #onStart()
+        #onLoop() throws InterruptedException
+        #onStop()
+        +getWindowUtils(): ControllerUtils.WindowUtils
+        +getMouseUtils(): ControllerUtils.MouseUtils
+        +getColourUtils(): ControllerUtils.ColourUtils
+        +getOpticalCharacterRecognitionUtils(): ControllerUtils.OpticalCharacterRecognitionUtils
+        +getImageUtils(): ControllerUtils.ImageUtils
+        +getKeyboardUtils(): ControllerUtils.KeyboardUtils
+        +getLogger(): ControllerUtils.Logger
+    }
+    ControllerUtils.BotController --> ScriptFramework.BaseScript
+}
+
+
+' Actions (defined once)
+package "Actions" as Actions {
+    class ClickColorObject {
+        +run(controller: ControllerUtils.BotController)
+    }
+    class ClickImage {
+        +run(controller: ControllerUtils.BotController)
+    }
+    class ClickText {
+        +run(controller: ControllerUtils.BotController)
+    }
+}
+
+' Features refer to Actions via alias Actions
+package "Features" as Features {
+    class OpenBank {
+        +run(controller: ControllerUtils.BotController)
+    }
+    class HomeTeleport {
+        +run(controller: ControllerUtils.BotController)
+    }
+    class EatFood {
+        +run(controller: ControllerUtils.BotController)
+    }
+    class TurnOnOffPrayer {
+        +run(controller: ControllerUtils.BotController)
+    }
+    class Logout {
+        +run(controller: ControllerUtils.BotController)
+    }
+    class OpenInventory {
+        +run(controller: ControllerUtils.BotController)
+    }
+
+    Features.OpenBank        ..> Actions.ClickColorObject    : uses
+    Features.HomeTeleport    ..> Actions.ClickImage          : uses
+    Features.EatFood         ..> Actions.ClickColorObject    : uses
+    Features.TurnOnOffPrayer ..> Actions.ClickText           : uses
+    Features.OpenInventory   ..> Actions.ClickColorObject    : uses
+}
+
+' Scripts refer to both ControllerUtils and Actions/Features via aliases
+package "Scripts" as Scripts {
+    class FightingRuneDragons
+    class NightmareZonePotter
+    class MakingWines
+    class GlassBlower
+
+    Scripts.FightingRuneDragons ..|> ScriptFramework.BaseScript
+    Scripts.NightmareZonePotter ..|> ScriptFramework.BaseScript
+    Scripts.MakingWines         ..|> ScriptFramework.BaseScript
+    Scripts.GlassBlower         ..|> ScriptFramework.BaseScript
+
+    Scripts.FightingRuneDragons ..> Actions.ClickColorObject    : uses
+    Scripts.FightingRuneDragons ..> Features.OpenBank            : uses
+    Scripts.NightmareZonePotter ..> Actions.ClickText           : uses
+    Scripts.NightmareZonePotter ..> Features.TurnOnOffPrayer     : uses
+    Scripts.MakingWines         ..> Features.OpenBank            : uses
+    Scripts.MakingWines         ..> Actions.ClickImage          : uses
+    Scripts.GlassBlower         ..> Features.OpenInventory       : uses
+    Scripts.GlassBlower         ..> Actions.ClickColorObject    : uses
+}
+
+Actions ..> ControllerUtils : uses
+
+@enduml
