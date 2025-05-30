@@ -1,5 +1,6 @@
 package com.chromascape.controllerutils;
 
+import com.chromascape.BotController.Controller;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
 import com.github.kwhat.jnativehook.GlobalScreen;
@@ -8,7 +9,7 @@ import com.github.kwhat.jnativehook.NativeHookException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-class HotkeyListener implements NativeKeyListener {
+public class HotkeyListener implements NativeKeyListener {
 
     private final Controller controller;
 
