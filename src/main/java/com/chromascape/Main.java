@@ -1,13 +1,8 @@
 package com.chromascape;
 
 import com.chromascape.BotController.Controller;
-import com.chromascape.controllerutils.VirtualMouseUtils;
-import com.chromascape.controllerutils.WindowsInputNative;
-//import com.chromascape.controllerutils.WindowsMouseNative;
 
 import java.awt.*;
-import java.io.InputStream;
-import java.net.URL;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException {
@@ -18,5 +13,7 @@ public class Main {
         Thread.sleep(500);
         Point point1 = new Point(1600, 200);
         controller.getMouse().moveTo(point1, "medium");
+//        Point point2 = new Point(1400, 200);
+//        controller.getMouse().moveTo(point2, "slow");
     }
 }

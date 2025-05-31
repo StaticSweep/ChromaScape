@@ -3,8 +3,6 @@ package com.chromascape.BotController;
 import com.chromascape.controllerutils.HotkeyListener;
 import com.chromascape.controllerutils.VirtualMouseUtils;
 
-import java.awt.*;
-
 public class Controller {
 
     private final HotkeyListener hotkeyListener;

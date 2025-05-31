@@ -59,7 +59,7 @@ public class WindowsInputNative {
             // Set jna.library.path to working directory for DLL loading
             String workingDir = System.getProperty("user.dir");
             System.setProperty("jna.library.path", workingDir);
-            System.out.println("Loading KInputCtrl64.dll from working directory: " + workingDir);
+//            System.out.println("Loading KInputCtrl64.dll from working directory: " + workingDir);
 
             // Load the DLL by name (without path or extension)
             return Native.load("KInputCtrl64", KInput.class);

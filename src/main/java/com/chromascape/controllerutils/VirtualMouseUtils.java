@@ -17,21 +17,30 @@ public class VirtualMouseUtils {
 
     Random rand = new Random();
 
-    private static final DoubleUnaryOperator easeOutQuad = t -> 1 - Math.pow(1 - t, 3);
+    private static final DoubleUnaryOperator easeOutQuad = t -> 1 - Math.pow(1 - t, 2);
 
     public VirtualMouseUtils() {
         nativeMouse = new WindowsInputNative(55724);
         overlay = new MouseOverlay();
     }
 
+    private static final int SCREEN_WIDTH = 1920;
+    private static final int SCREEN_HEIGHT = 1080;
+
+
+    private Point clampToScreen(Point p) {
+        int x = Math.max(0, Math.min(p.x, SCREEN_WIDTH - 1));
+        int y = Math.max(0, Math.min(p.y, SCREEN_HEIGHT - 1));
+        return new Point(x, y);
+    }
+
     public void moveTo(Point target, String speed) throws InterruptedException {
-        List<Point> path = generateBezierPath(currentPosition, target, calculateSteps(currentPosition, target, speed));
-        System.out.println(calculateSteps(currentPosition, target, speed));
+        List<Point> path = generateCubicBezierPath(currentPosition, target, calculateSteps(currentPosition, target, speed));
         for (Point p : path) {
 //            nativeMouse.moveMouse(p.x, p.y);
             currentPosition = p;
             SwingUtilities.invokeLater(() -> overlay.setMousePoint(p));
-            Thread.sleep(1); // simulate 1000hz polling rate
+            Thread.sleep(1);
         }
     }
 
@@ -43,49 +52,77 @@ public class VirtualMouseUtils {
         nativeMouse.clickRight(currentPosition.x, currentPosition.y);
     }
 
-    private List<Point> generateBezierPath(Point p0, Point p2, int steps) {
-        // Calculating the mid-point using the start and end points
-        double mx = (double) (p2.x + p0.x) / 2;
-        double my = (double) (p2.y + p0.y) / 2;
+    private List<Point> generateCubicBezierPath(Point p0, Point p3, int steps) {
+        // Calculate the vector from the start point (p0) to the end point (p3)
+        double dx = p3.x - p0.x;
+        double dy = p3.y - p0.y;
 
-        // Calculating the vector using the start and end points
-        double vx = p2.x - p0.x;
-        double vy = p2.y - p0.y;
+        // Compute the length (magnitude) of the vector
+        double len = Math.sqrt(dx * dx + dy * dy);
 
-        // Calculating the length using the vector
-        double len = Math.sqrt(Math.pow(-vy, 2) + Math.pow(vx, 2));
+        // Compute a unit vector perpendicular to the direction vector (dx, dy)
+        // This will be used to offset control points away from the straight line
+        double ux = -dy / len;
+        double uy = dx / len;
 
-        // Calculating the normalised length using the length and vector
-        double nx = -vy / (double) len;
-        double ny = vx / (double) len;
+        // Choose a random arc offset magnitude to determine how far the curve bends
+        int offset = rand.nextInt(5, 15);
 
-        // The offset for control
-        int offset = rand.nextInt(400, 600);
-
-        // The direction that the mouse will arc
+        // The direction that the mouse will arc (random)
         int direction = rand.nextBoolean() ? 1 : -1;  // Randomly +1 or -1
 
-        // Calculating control using the proposed control location (mid-point for now)
-        double cx = mx + direction * offset * nx;
-        double cy = my + direction * offset * ny;
+        // Calculate the final perpendicular vector to be applied to control points
+        double nx = direction * offset * ux;
+        double ny = direction * offset * uy;
 
-        // Creating a list of points to add to later
+        // Pick two random normalized positions along the line (t values between 0 and 1)
+        // These determine where along the path the control points are placed
+        double t1 = rand.nextDouble(0.2, 0.3);
+        double t2 = rand.nextDouble(0.6, 0.7);
+
+        // Calculating where p1 will be on a straight line
+        double p1x = p0.x + t1 * dx;
+        double p1y = p0.y + t1 * dy;
+
+        // Calculating where p2 will be on a straight line
+        double p2x = p0.x + t2 * dx;
+        double p2y = p0.y + t2 * dy;
+
+        // Offsetting the points so they're not on the line
+        double offset1 = rand.nextInt(20, 30) * (rand.nextBoolean() ? 1 : -1);
+        double offset2 = rand.nextInt(10, 20) * (rand.nextBoolean() ? 1 : -1);
+
+        // Apply the perpendicular offset to create final control points, and clamp to screen bounds
+        Point p1 = clampToScreen(new Point((int)(p1x + offset1 * nx), (int)(p1y + offset1 * ny)));
+        Point p2 = clampToScreen(new Point((int)(p2x + offset2 * nx), (int)(p2y + offset2 * ny)));
+
+        // Initialise the list of points
         List<Point> path = new ArrayList<>();
 
         for (int i = 0; i < steps; i++) {
             double tRaw = i / (double) (steps - 1);
-            // Apply easing function to t for more natural spacing (like speed easing)
+
+            // Apply easing to t to simulate more natural speed variation (starts fast, slows down)
             double t = easeOutQuad.applyAsDouble(tRaw);
 
-            // Quadratic Bezier formula
-            double bx = (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * cx + t * t * p2.x;
-            double by = (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * cy + t * t * p2.y;
+            // Calculate the cubic Bézier point at parameter t
+            double u = 1 - t;
+            double bCx = Math.pow(u, 3) * p0.x
+                    + 3 * Math.pow(u, 2) * t * p1.x
+                    + 3 * u * Math.pow(t, 2) * p2.x
+                    + Math.pow(t, 3) * p3.x;
+            double bCy = Math.pow(u, 3) * p0.y
+                    + 3 * Math.pow(u, 2) * t * p1.y
+                    + 3 * u * Math.pow(t, 2) * p2.y
+                    + Math.pow(t, 3) * p3.y;
 
-            path.add(new Point((int) Math.round(bx), (int) Math.round(by)));
+            // Round to integer pixel coordinates and add to the path
+            path.add(new Point((int) Math.round(bCx), (int) Math.round(bCy)));
         }
 
         return path;
     }
+
 
     private int calculateSteps(Point p0, Point p2, String speed) {
         double vx = p2.x - p0.x;
@@ -94,10 +131,10 @@ public class VirtualMouseUtils {
         double distance = Math.sqrt(vx * vx + vy * vy);
         // tuning factor
         int scale = switch (speed) {
-            case "slow" -> 2;
-            case "medium" -> 6;
-            case "fast" -> 8;
-            case "faster" -> 12;
+            case "slow" -> 1;
+            case "medium" -> 2;
+            case "fast" -> 4;
+            case "faster" -> 6;
             default -> throw new IllegalStateException("Unexpected value: " + speed);
         };
 
