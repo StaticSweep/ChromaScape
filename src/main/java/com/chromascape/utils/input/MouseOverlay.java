@@ -1,4 +1,4 @@
-package com.chromascape.controllerutils;
+package com.chromascape.utils.input;
 
 import javax.swing.*;
 import java.awt.*;

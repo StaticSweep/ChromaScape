@@ -1,4 +1,4 @@
-package com.chromascape.controllerutils;
+package com.chromascape.utils.input;
 
 import com.sun.jna.Library;
 import com.sun.jna.Native;
@@ -49,9 +49,6 @@ public class WindowsInputNative {
         static final int KEY_PRESSED = 401;
         static final int KEY_RELEASED = 402;
     }
-
-    private int curX = 0;
-    private int curY = 0;
 
     // Load library once
     private static KInput loadLibrary() {
@@ -108,8 +105,6 @@ public class WindowsInputNative {
         if (!kinput.KInput_MouseEvent(pid, MouseEventType.MOUSE_RELEASE, now(), 1, x, y, 1, false, MouseButton.LEFT)) {
             throw new RuntimeException("Left mouse release event failed");
         }
-        curX = x;
-        curY = y;
     }
 
     public synchronized void clickRight(int x, int y) {
@@ -121,8 +116,6 @@ public class WindowsInputNative {
         if (!kinput.KInput_MouseEvent(pid, MouseEventType.MOUSE_RELEASE, now(), 0, x, y, 1, false, MouseButton.RIGHT)) {
             throw new RuntimeException("Right mouse release event failed");
         }
-        curX = x;
-        curY = y;
     }
 
     public synchronized void moveMouse(int x, int y) {
@@ -133,8 +126,6 @@ public class WindowsInputNative {
         if (!kinput.KInput_MouseEvent(pid, MouseEventType.MOUSE_MOVE, now(), 0, x, y, 0, false, MouseButton.NONE)) {
             throw new RuntimeException("Mouse move event failed");
         }
-        curX = x;
-        curY = y;
     }
 
     public synchronized void sendKeyEvent(int eventID, char keyChar) {
@@ -174,31 +165,9 @@ public class WindowsInputNative {
         }
     }
 
-    public synchronized int[] getCurrentPosition() {
-        return new int[]{curX, curY};
-    }
-
     public synchronized void destroy() {
         if (!kinput.KInput_Delete(pid)) {
             throw new RuntimeException("Failed to delete KInput instance");
-        }
-    }
-
-    // For testing only - example usage
-    public static void main(String[] args) {
-        // Replace with your target PID
-        int targetPid = 48696;
-
-        WindowsInputNative WindowsInputNative = new WindowsInputNative(targetPid);
-
-        try {
-            WindowsInputNative.moveMouse(100, 100);
-            System.out.println(WindowsInputNative.curX + ", " + WindowsInputNative.curY);
-            WindowsInputNative.clickLeft(100, 100);
-            System.out.println(WindowsInputNative.curX + ", " + WindowsInputNative.curY);
-            WindowsInputNative.sendKeyEvent(KeyEventType.KEY_TYPED, 'A');
-        } finally {
-            WindowsInputNative.destroy();
         }
     }
 }

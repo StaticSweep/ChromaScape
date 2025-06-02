@@ -1,7 +1,8 @@
-package com.chromascape.BotController;
+package com.chromascape.controller;
 
-import com.chromascape.controllerutils.HotkeyListener;
-import com.chromascape.controllerutils.VirtualMouseUtils;
+import com.chromascape.utils.logic.HotkeyListener;
+import com.chromascape.utils.input.VirtualMouseUtils;
+import com.chromascape.utils.input.WindowsInputNative;
 
 public class Controller {
 
@@ -11,13 +12,14 @@ public class Controller {
     private boolean running = false;
 
     public Controller() {
+        WindowsInputNative nativeMouse = new WindowsInputNative(55724);
         this.hotkeyListener = new HotkeyListener(this);
-        this.virtualMouseUtils = new VirtualMouseUtils();
+        this.virtualMouseUtils = new VirtualMouseUtils(nativeMouse, 1920, 1080);
     }
 
     public void shutdown(){
         running = false;
-//        future cleanup n stuffs
+        // future cleanup n stuffs
     }
 
     public void start(){
