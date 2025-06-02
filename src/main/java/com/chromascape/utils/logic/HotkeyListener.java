@@ -1,6 +1,6 @@
-package com.chromascape.controllerutils;
+package com.chromascape.utils.logic;
 
-import com.chromascape.BotController.Controller;
+import com.chromascape.controller.Controller;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
 import com.github.kwhat.jnativehook.GlobalScreen;
