@@ -82,7 +82,7 @@ public class WindowsInputNative {
     private void sleepHumanClick() {
         try {
             Random rand = new Random();
-            Thread.sleep(rand.nextInt(30, 60));
+            Thread.sleep(rand.nextInt(20, 40));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
