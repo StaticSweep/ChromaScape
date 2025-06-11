@@ -1,18 +1,19 @@
 package com.chromascape.controller;
 
-import com.chromascape.utils.logic.HotkeyListener;
-import com.chromascape.utils.input.VirtualMouseUtils;
-import com.chromascape.utils.input.WindowsInputNative;
+import com.chromascape.utils.core.logic.HotkeyListener;
+import com.chromascape.utils.core.input.mouse.VirtualMouseUtils;
+import com.chromascape.utils.core.input.remoteinput.KInput;
 
 public class Controller {
 
     private final HotkeyListener hotkeyListener;
+
     private final VirtualMouseUtils virtualMouseUtils;
 
     private boolean running = false;
 
     public Controller() {
-        WindowsInputNative nativeMouse = new WindowsInputNative(55724);
+        KInput nativeMouse = new KInput(55724);
         this.hotkeyListener = new HotkeyListener(this);
         this.virtualMouseUtils = new VirtualMouseUtils(nativeMouse, 1920, 1080);
     }
