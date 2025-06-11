@@ -147,6 +147,7 @@ public class Zones {
             chatTabs.put(tabNames[i], new Rectangle(zone.x + x, zone.y + y, 52, 19));
             x += 62;
         }
+        chatTabs.put("Chat", new Rectangle(zone.x + 5, zone.y + 5, 506, 129));
     }
 
     private void mapInventory() {
