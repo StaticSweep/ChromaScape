@@ -1,5 +1,6 @@
 package com.chromascape.utils.core.screen.window;
 
+import com.sun.jna.Native;
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef;
 import com.sun.jna.platform.win32.WinDef.HWND;
@@ -17,6 +18,14 @@ public class ScreenCapture {
     private final User32 user32;
 
     /**
+     * Interface for accessing functions not available via JNA
+     */
+    public interface User32Extended extends User32 {
+        void ClientToScreen(HWND hWnd, POINT point);
+        User32Extended INSTANCE = Native.load("user32", User32Extended.class);
+    }
+
+    /**
      * Provides Screen capture utilities.
      *
      * @throws AWTException If the Robot cannot be instantiated.
@@ -27,7 +36,7 @@ public class ScreenCapture {
     }
 
     /**
-     * Captures the visible content of a specified window
+     * Captures the visible content of the inner bounds of a specified window (no padding)
      * Uses the AWT Robot class and assumes the window is visible and unobstructed.
      *
      * @return The BufferedImage of the window in BGR format.
@@ -59,22 +68,35 @@ public class ScreenCapture {
     }
 
     /**
-     * Gets a specified window's bounds using the HWND.
+     * Gets a specified window's inner bounds using the HWND.
      *
      * @return The Rectangle bounds of the window.
      */
     public Rectangle getWindowBounds(HWND hwnd){
         WinDef.RECT dimensions = new WinDef.RECT();
-        user32.GetWindowRect(hwnd, dimensions);
+        user32.GetClientRect(hwnd, dimensions);
 
-        return new Rectangle(dimensions.toRectangle());
+        WinDef.POINT clientTopLeft = new WinDef.POINT();
+
+        clientTopLeft.x = 0;
+        clientTopLeft.y = 0;
+
+        User32Extended uex = User32Extended.INSTANCE;
+        uex.ClientToScreen(hwnd, clientTopLeft);
+
+        return new Rectangle(
+                clientTopLeft.x,
+                clientTopLeft.y,
+                dimensions.right - dimensions.left,
+                dimensions.bottom - dimensions.top
+        );
     }
 
     /**
      * Focuses a specified window by restoring it then setting it to the foreground.
      */
-    private void focusWindow(HWND hwnd) {
-        user32.ShowWindow(hwnd, WinUser.SW_RESTORE);
+    public void focusWindow(HWND hwnd) {
+        user32.ShowWindow(hwnd, WinUser.SW_SHOW);
         user32.SetForegroundWindow(hwnd);
     }
 

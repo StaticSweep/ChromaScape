@@ -1,23 +1,32 @@
 package com.chromascape.utils.core.screen.vision;
 
 import org.bytedeco.javacpp.DoublePointer;
+import org.bytedeco.javacv.Java2DFrameUtils;
+import org.bytedeco.javacv.OpenCVFrameConverter;
+import org.bytedeco.javacv.Java2DFrameConverter;
+
 import org.bytedeco.opencv.opencv_core.Mat;
-import org.bytedeco.opencv.opencv_core.MatVector;
 import org.bytedeco.opencv.opencv_core.Point;
+import org.bytedeco.opencv.opencv_core.Rect;
+import org.bytedeco.opencv.opencv_core.Scalar;
 
 import java.awt.Rectangle;
-import java.util.Arrays;
-import java.util.List;
+import java.awt.image.BufferedImage;
 
+import static org.bytedeco.opencv.global.opencv_core.CV_8UC1;
+import static org.bytedeco.opencv.global.opencv_core.bitwise_and;
 import static org.bytedeco.opencv.global.opencv_core.extractChannel;
-import static org.bytedeco.opencv.global.opencv_core.merge;
-import static org.bytedeco.opencv.global.opencv_cudaarithm.minMaxLoc;
+import static org.bytedeco.opencv.global.opencv_core.minMaxLoc;
+import static org.bytedeco.opencv.global.opencv_imgcodecs.imread;
 import static org.bytedeco.opencv.global.opencv_imgproc.COLOR_BGR2BGRA;
-import static org.bytedeco.opencv.global.opencv_imgproc.TM_SQDIFF_NORMED;
 import static org.bytedeco.opencv.global.opencv_imgproc.cvtColor;
 import static org.bytedeco.opencv.global.opencv_imgproc.matchTemplate;
+import static org.bytedeco.opencv.global.opencv_imgproc.TM_SQDIFF_NORMED;
 
 public class CvUtils {
+
+    private static final OpenCVFrameConverter.ToMat matConverter = new OpenCVFrameConverter.ToMat();
+    private static final Java2DFrameConverter bufferedImageConverter = new Java2DFrameConverter();
 
     /**
      * Performs template matching to locate a smaller image (template) within a larger image (base),
@@ -32,82 +41,119 @@ public class CvUtils {
      * Note: The method releases the native OpenCV memory of the input and intermediate matrices,
      * so the caller should not use the input Mats after this call.
      *
-     * @param template The template image (smaller), expected as a Mat in BGRA format or convertible to it.
-     * @param base The base image (larger) where the template is searched, expected as a Mat in BGRA format or convertible to it.
+     * @param templateImg The template image (smaller), expected as a BufferedImage in BGRA format or convertible to it.
+     * @param baseImg The base image (larger) where the template is searched, expected as a BufferedImage in BGRA format or convertible to it.
      * @param threshold The maximum allowed normalized squared difference score for a valid match. Lower values mean better matches.
+     * @param debugMsg Set this to true if you want detailed messages useful when debugging.
      * @return A {@link Rectangle} representing the position and size of the matching area in the base image,
      *         or {@code null} if no match meets the threshold criteria.
      * @throws IllegalArgumentException If either input Mat is empty (not loaded).
      * @throws Exception If the template is larger than the base image.
      */
-    public Rectangle patternMatch(Mat template, Mat base, double threshold) throws Exception {
+    public Rectangle patternMatch(BufferedImage templateImg, BufferedImage baseImg, double threshold, boolean debugMsg) throws Exception {
 
-        if (template.empty()) {
-            throw new IllegalArgumentException("Template image could not be loaded: " + template);
-        }
+        debug(">> Entered patternMatch()", debugMsg);
 
-        if (base.empty()) {
-            throw new IllegalArgumentException("Base image could not be loaded: " + base);
-        }
+        Mat template = Java2DFrameUtils.toMat(templateImg);
+        Mat base = Java2DFrameUtils.toMat(baseImg);
 
-        // Ensure template has an alpha channel (4 channels). If not, convert from BGR to BGRA.
+        if (template.empty()) throw new IllegalArgumentException("Template image is empty");
+        if (base.empty()) throw new IllegalArgumentException("Base image is empty");
+
+        debug("Template size: " + template.size().width() + "x" + template.size().height() +
+                ", channels: " + template.channels(), debugMsg);
+        debug("Base size: " + base.size().width() + "x" + base.size().height() +
+                ", channels: " + base.channels(), debugMsg);
+
         if (template.channels() != 4) {
+            debug("Converting template to BGRA...", debugMsg);
             cvtColor(template, template, COLOR_BGR2BGRA);
         }
 
-        // Ensure base image has 4 channels (BGRA) for consistency with template.
         if (base.channels() != 4) {
+            debug("Converting base to BGRA...", debugMsg);
             cvtColor(base, base, COLOR_BGR2BGRA);
         }
 
-        // Prevent matching if template is larger than the base image.
         if (template.cols() > base.cols() || template.rows() > base.rows()) {
-            throw new Exception("Template larger than base");
+            throw new Exception("Template is larger than base image");
         }
 
-        // Calculate the size of the result matrix (convolution) for matchTemplate output.
         int convRows = base.rows() - template.rows() + 1;
         int convCols = base.cols() - template.cols() + 1;
+        debug("Convolution matrix size: " + convCols + "x" + convRows, debugMsg);
+
         Mat convolution = new Mat(convRows, convCols);
 
-        // Create a mask based on the template's alpha channel.
-        // Extract alpha channel and replicate it to 3 channels (required for mask in matchTemplate).
         Mat alpha = new Mat();
         extractChannel(template, alpha, 3);
-        List<Mat> channels = Arrays.asList(alpha, alpha, alpha);
-        Mat mask = new Mat();
+        debug("Alpha mask size: " + alpha.size().width() + "x" + alpha.size().height() +
+                ", channels: " + alpha.channels(), debugMsg);
 
-        MatVector vec = new MatVector(channels.size());
-        for (int i = 0; i < channels.size(); i++) {
-            vec.put(i, channels.get(i));
+        debug("Calling matchTemplate()...", debugMsg);
+        matchTemplate(base, template, convolution, TM_SQDIFF_NORMED, alpha);
+        debug("matchTemplate() done.", debugMsg);
+        debug("Convolution empty: " + convolution.empty(), debugMsg);
+
+        if (convolution.empty()) {
+            throw new RuntimeException("matchTemplate() failed — convolution matrix is empty");
         }
-        merge(vec, mask);
 
-        // Perform template matching with normalization and mask applied.
-        matchTemplate(base, template, convolution, TM_SQDIFF_NORMED, mask);
-
-        DoublePointer maxVal = new DoublePointer();
-        DoublePointer minVal = new DoublePointer();
+        DoublePointer minVal = new DoublePointer(1);
+        DoublePointer maxVal = new DoublePointer(1);
         Point minLoc = new Point();
         Point maxLoc = new Point();
 
-        // Find minimum and maximum values and their locations in the convolution result.
-        minMaxLoc(convolution, minVal, maxVal, minLoc, maxLoc);
+        debug("Calling minMaxLoc()...", debugMsg);
+        minMaxLoc(convolution, minVal, maxVal, minLoc, maxLoc, new Mat());
+        debug("minMaxLoc() done.", debugMsg);
+        debug("minVal: " + minVal.get() + ", maxVal: " + maxVal.get(), debugMsg);
+        debug("minLoc: (" + minLoc.x() + "," + minLoc.y() + "), maxLoc: (" + maxLoc.x() + "," + maxLoc.y() + ")", debugMsg);
 
-        // If minimum match value exceeds threshold, no sufficient match was found.
-        if (minVal.get() > threshold) return null;
+        if (minVal.get() > threshold) {
+            System.out.println("No match: minVal above threshold (" + minVal.get() + " > " + threshold + ")");
+            return null;
+        }
 
-        // Return the bounding rectangle where the best match was found.
         Rectangle match = new Rectangle(minLoc.x(), minLoc.y(), template.cols(), template.rows());
+        debug("Match found at: " + match, debugMsg);
 
-        // Release native memory to avoid leaks.
         template.release();
         base.release();
         convolution.release();
         alpha.release();
-        mask.release();
 
+        debug("<< Exiting patternMatch()", debugMsg);
         return match;
     }
 
+    public BufferedImage removeBlocks(BufferedImage originalImg, Rectangle maskArea) {
+        Mat original = Java2DFrameUtils.toMat(originalImg);
+        Mat mask = new Mat(original.size(), CV_8UC1, new Scalar(255));
+
+        Rect rect = new Rect(maskArea.x, maskArea.y, maskArea.width, maskArea.height);
+        Mat maskROI = new Mat(mask, rect);
+        maskROI.setTo(new Mat(new Scalar(0)));
+
+        Mat output = new Mat(original.size(), original.type());
+
+        bitwise_and(original, original, output, mask);
+
+        BufferedImage outImg = matToBufferedImage(output);
+
+        original.release();
+        mask.release();
+        maskROI.release();
+        output.release();
+
+        return outImg;
+    }
+
+    public BufferedImage matToBufferedImage(Mat mat) {
+        return bufferedImageConverter.convert(matConverter.convert(mat));
+    }
+
+    private void debug(String message, boolean debug) {
+        if (debug) System.out.println(message);
+    }
 }

@@ -5,7 +5,7 @@ import java.awt.*;
 
 public class MouseOverlay extends JFrame {
 
-    private Point mousePoint = new Point(100, 100);
+    private Point mousePoint = new Point(0, 0);
 
     public MouseOverlay() {
         setUndecorated(true);

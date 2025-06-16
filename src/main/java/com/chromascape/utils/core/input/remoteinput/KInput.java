@@ -43,13 +43,6 @@ public class KInput {
         static final int RIGHT = 3;
     }
 
-    // Key event IDs
-    private static class KeyEventType {
-        static final int KEY_TYPED = 400;
-        static final int KEY_PRESSED = 401;
-        static final int KEY_RELEASED = 402;
-    }
-
     // Load library once
     private static KInputInterface loadLibrary() {
         try {
@@ -82,7 +75,7 @@ public class KInput {
     private void sleepHumanClick() {
         try {
             Random rand = new Random();
-            Thread.sleep(rand.nextInt(20, 40));
+            Thread.sleep(rand.nextInt(20, 60));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -120,6 +113,17 @@ public class KInput {
         }
     }
 
+    public synchronized void middleHold(int x, int y, int durationMs) throws InterruptedException {
+        focus();
+        if (!kinput.KInput_MouseEvent(pid, MouseEventType.MOUSE_PRESS, now(), 1, x, y, 1, false, MouseButton.MIDDLE)) {
+            throw new RuntimeException("Left mouse press event failed");
+        }
+        Thread.sleep(durationMs);
+        if (!kinput.KInput_MouseEvent(pid, MouseEventType.MOUSE_RELEASE, now(), 1, x, y, 1, false, MouseButton.MIDDLE)) {
+            throw new RuntimeException("Left mouse release event failed");
+        }
+    }
+
     public synchronized void moveMouse(int x, int y) {
         focus();
         boolean result1 = kinput.KInput_MouseEvent(pid, MouseEventType.MOUSE_ENTER, now(), 0, x, y, 0, false, MouseButton.NONE);
@@ -140,29 +144,16 @@ public class KInput {
         }
     }
 
-    public synchronized void sendModifierKey(int eventID, String key) {
+    public synchronized void sendModifierKey(int eventID, String key, int keyID) {
         focus();
-        int keyID = switch (key.toLowerCase()) {
-            case "shift" -> 16;
-            case "enter" -> 10;
-            case "alt" -> 18;
-            default -> throw new IllegalArgumentException("Invalid modifier key: " + key);
-        };
         boolean result = kinput.KInput_KeyEvent(pid, eventID, now(), 0, keyID, (short) 0, 0);
         if (!result) {
             throw new RuntimeException("Modifier key event failed for key: " + key);
         }
     }
 
-    public synchronized void sendArrowKey(int eventID, String key) {
+    public synchronized void sendArrowKey(int eventID, String key, int keyID) {
         focus();
-        int keyID = switch (key.toLowerCase()) {
-            case "left" -> 37;
-            case "right" -> 39;
-            case "up" -> 38;
-            case "down" -> 40;
-            default -> throw new IllegalArgumentException("Invalid arrow key: " + key);
-        };
         boolean result = kinput.KInput_KeyEvent(pid, eventID, now(), 0, keyID, (short) 0, 0);
         if (!result) {
             throw new RuntimeException("Arrow key event failed for key: " + key);

@@ -1,31 +1,56 @@
 package com.chromascape.controller;
 
+import com.chromascape.utils.core.input.keyboard.VirtualKeyboardUtils;
 import com.chromascape.utils.core.logic.HotkeyListener;
 import com.chromascape.utils.core.input.mouse.VirtualMouseUtils;
 import com.chromascape.utils.core.input.remoteinput.KInput;
+import com.chromascape.utils.core.screen.vision.CvUtils;
+import com.chromascape.utils.core.screen.window.ScreenCapture;
+import com.chromascape.utils.core.screen.window.WindowHandler;
+import com.chromascape.utils.domain.zones.ZoneMapper;
+import com.chromascape.utils.domain.zones.ZoneManager;
+
+import java.awt.Rectangle;
 
 public class Controller {
 
     private final HotkeyListener hotkeyListener;
 
+    private final KInput kInput;
+
     private final VirtualMouseUtils virtualMouseUtils;
+
+    private final VirtualKeyboardUtils virtualKeyboardUtils;
+
+    private final WindowHandler windowHandler;
+
+    private final CvUtils cvUtils;
+
+    private final ScreenCapture screenCapture;
+
+    private final ZoneManager zoneManager;
 
     private boolean running = false;
 
-    public Controller() {
-        KInput nativeMouse = new KInput(55724);
-        this.hotkeyListener = new HotkeyListener(this);
-        this.virtualMouseUtils = new VirtualMouseUtils(nativeMouse, 1920, 1080);
+    public Controller() throws Exception {
+        running = true;
+        kInput = new KInput(5788);
+        hotkeyListener = new HotkeyListener(this);
+        hotkeyListener.start();
+        cvUtils = new CvUtils();
+        windowHandler = new WindowHandler("RuneLite");
+        screenCapture = new ScreenCapture();
+        screenCapture.focusWindow(windowHandler.getTargetWindow());
+        Rectangle bounds = screenCapture.getWindowBounds(windowHandler.getTargetWindow());
+        virtualMouseUtils = new VirtualMouseUtils(kInput, bounds);
+        virtualKeyboardUtils = new VirtualKeyboardUtils(kInput);
+        ZoneMapper zoneMapper = new ZoneMapper();
+        zoneManager = new ZoneManager(zoneMapper, cvUtils, screenCapture, windowHandler, false);
     }
 
     public void shutdown(){
         running = false;
-        // future cleanup n stuffs
-    }
-
-    public void start(){
-        running = true;
-        hotkeyListener.start();
+        kInput.destroy();
     }
 
     public void pause(){
@@ -42,4 +67,39 @@ public class Controller {
         }
     }
 
+    public VirtualKeyboardUtils getKeyboard() {
+        if (running) {
+            return virtualKeyboardUtils;
+        } else {
+            System.out.println("Attempted to access virtual keyboard while bot is not running.");
+            return null;
+        }
+    }
+
+    public ZoneManager getZones() {
+        if (running) {
+            return zoneManager;
+        } else {
+            System.out.println("Attempted to access zones while bot is not running.");
+            return null;
+        }
+    }
+
+    public ScreenCapture getScreenCapture() {
+        if (running) {
+            return screenCapture;
+        } else {
+            System.out.println("Attempted to access screen capture while bot is not running.");
+            return null;
+        }
+    }
+
+    public CvUtils getCvUtils() {
+        if (running) {
+            return cvUtils;
+        } else {
+            System.out.println("Attempted to access cv utils while bot is not running.");
+            return null;
+        }
+    }
 }

@@ -1,6 +1,7 @@
 package com.chromascape.utils.core.input.mouse;
 
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -16,19 +17,23 @@ public class MousePathing {
 
     private final int screenHeight;
 
+    private final int startX;
+
+    private final int startY;
+
     /**
      * Uses the start and end points of a required mouse movement.
      * To calculate a human like mouse path.
      * With variable arcs, speed, and easing.
      * The end result of this class is a list of points which should be iterated through to produce a path.
      *
-     * @param screenWidth Width of the screen.
-     * @param screenHeight Height of the screen.
+     * @param bounds Rectangle, containing the screen's bounds.
      */
-    public MousePathing(int screenWidth, int screenHeight) {
-
-        this.screenWidth = screenWidth;
-        this.screenHeight = screenHeight;
+    public MousePathing(Rectangle bounds) {
+        startX = bounds.x;
+        startY = bounds.y;
+        this.screenWidth = bounds.width;
+        this.screenHeight = bounds.height;
     }
 
     /**
@@ -38,8 +43,8 @@ public class MousePathing {
      * @return The clamped position.
      */
     private Point clampToScreen(final Point p) {
-        int x = Math.max(0, Math.min(p.x, screenWidth - 1));
-        int y = Math.max(0, Math.min(p.y, screenHeight - 1));
+        int x = Math.max(0, Math.min(p.x, screenWidth + startX - 1));
+        int y = Math.max(0, Math.min(p.y, screenHeight + startY - 1));
         return new Point(x, y);
     }
 

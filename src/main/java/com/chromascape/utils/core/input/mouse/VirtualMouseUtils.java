@@ -4,6 +4,7 @@ import com.chromascape.utils.core.input.remoteinput.KInput;
 
 import javax.swing.SwingUtilities;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.util.List;
 import java.util.Random;
 
@@ -25,14 +26,14 @@ public class VirtualMouseUtils {
      *
      * @param kInput The operating system dependant utility to send low level mouse inputs.
      *                    This is how we can still use the system cursor separately while this mouse is active.
-     * @param width Window width.
-     * @param height Window height.
+     * @param bounds Rectangle, containing the screen's bounds.
      */
-    public VirtualMouseUtils(final KInput kInput, final int width, final int height) {
+    public VirtualMouseUtils(final KInput kInput, Rectangle bounds) {
         this.kInput = kInput;
         overlay = new MouseOverlay();
-        overlay.setSize(width, height);
-        mousePathing = new MousePathing(width, height);
+        overlay.setSize(bounds.width, bounds.height);
+        overlay.setLocation(bounds.x, bounds.y);
+        mousePathing = new MousePathing(bounds);
     }
 
     /**
@@ -46,7 +47,7 @@ public class VirtualMouseUtils {
         if (currentPosition.equals(target)) return;
         List<Point> path = mousePathing.generateCubicBezierPath(currentPosition, target, speed);
         for (Point p : path) {
-            kInput.moveMouse(p.x, p.y);
+//            kInput.moveMouse(p.x, p.y);
             currentPosition = p;
             SwingUtilities.invokeLater(() -> overlay.setMousePoint(p));
             Thread.sleep(1); // Ensures that the mouse doesn't teleport and for a consistent polling rate
@@ -99,21 +100,31 @@ public class VirtualMouseUtils {
     }
 
     /**
-     * Clicks the left mouse button and jitters.
+     * Clicks the left mouse button.
      */
     public void leftClick() {
         kInput.clickLeft(currentPosition.x, currentPosition.y);
         kInput.moveMouse(currentPosition.x, currentPosition.y);
         microJitter();
     }
-    /**
-     * Clicks the right mouse button and jitters.
-     */
 
+    /**
+     * Clicks the right mouse button.
+     */
     public void rightClick() {
         kInput.clickRight(currentPosition.x, currentPosition.y);
         kInput.moveMouse(currentPosition.x, currentPosition.y);
         microJitter();
+    }
+
+    /**
+     * Performs a middle click, hold, and release at the current mouse position.
+     *
+     * @param duration how long you want it to hold down.
+     * @throws InterruptedException if interrupted.
+     */
+    public void middleClick(int duration) throws InterruptedException {
+        kInput.middleHold(currentPosition.x, currentPosition.y, duration);
     }
 
     /**
