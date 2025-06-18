@@ -16,6 +16,7 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.13.0")
     implementation("net.java.dev.jna:jna-platform:5.13.0")
     implementation("org.bytedeco:javacv-platform:1.5.11")
+    implementation("org.apache.commons:commons-math3:3.6.1")
 }
 
 tasks.test {
