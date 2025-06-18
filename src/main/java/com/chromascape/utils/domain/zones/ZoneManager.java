@@ -15,7 +15,7 @@ import java.util.Map;
 
 public class ZoneManager {
 
-    private final ZoneMapper zoneMapper;
+    private final SubZoneMapper subZoneMapper;
 
     private final boolean isFixed;
 
@@ -44,8 +44,8 @@ public class ZoneManager {
             0.018
     };
 
-    public ZoneManager(ZoneMapper zoneMapper, CvUtils cvUtils, ScreenCapture screenCapture, WindowHandler windowHandler, Boolean isFixed) throws Exception {
-        this.zoneMapper = zoneMapper;
+    public ZoneManager(SubZoneMapper subZoneMapper, CvUtils cvUtils, ScreenCapture screenCapture, WindowHandler windowHandler, Boolean isFixed) throws Exception {
+        this.subZoneMapper = subZoneMapper;
         this.isFixed = isFixed;
         this.cvUtils = cvUtils;
         this.screenCapture = screenCapture;
@@ -55,29 +55,24 @@ public class ZoneManager {
 
     public void mapper() throws Exception {
         try {
-            chatTabs = zoneMapper.mapChat(locateUIElement(Path.of(zoneTemplates[2]), zoneThresholds[2]));
-            ctrlPanel = zoneMapper.mapCtrlPanel(locateUIElement(Path.of(zoneTemplates[1]), zoneThresholds[1]));
-            inventorySlots = zoneMapper.mapInventory(locateUIElement(Path.of(zoneTemplates[1]), zoneThresholds[1]));
+            chatTabs = subZoneMapper.mapChat(locateUIElement(Path.of(zoneTemplates[2]), zoneThresholds[2]));
+            ctrlPanel = subZoneMapper.mapCtrlPanel(locateUIElement(Path.of(zoneTemplates[1]), zoneThresholds[1]));
+            inventorySlots = subZoneMapper.mapInventory(locateUIElement(Path.of(zoneTemplates[1]), zoneThresholds[1]));
 
             if (isFixed) {
-                minimap = zoneMapper.mapFixedMinimap(locateUIElement(Path.of(zoneTemplates[3]), zoneThresholds[3]));
+                minimap = subZoneMapper.mapFixedMinimap(locateUIElement(Path.of(zoneTemplates[3]), zoneThresholds[3]));
             } else {
-                minimap = zoneMapper.mapMinimap(locateUIElement(Path.of(zoneTemplates[0]), zoneThresholds[0]));
+                minimap = subZoneMapper.mapMinimap(locateUIElement(Path.of(zoneTemplates[0]), zoneThresholds[0]));
             }
         } catch (Exception e) {
             System.err.println("[ZoneManager] Mapping failed: " + e.getMessage());
         }
     }
 
-    public Map<String, Rectangle> getMinimap() { return minimap; }
-    public Map<String, Rectangle> getCtrlPanel() { return ctrlPanel; }
-    public Map<String, Rectangle> getChatTabs() { return chatTabs; }
-    public List<Rectangle> getInventorySlots() { return inventorySlots; }
-
     public BufferedImage getGameView() throws Exception {
         BufferedImage gameView;
         if (isFixed) {
-            gameView = screenCapture.captureZone(zoneMapper.mapFixedGameView(screenCapture.getWindowBounds(windowHandler.getTargetWindow())));
+            gameView = screenCapture.captureZone(subZoneMapper.mapFixedGameView(screenCapture.getWindowBounds(windowHandler.getTargetWindow())));
         } else {
             BufferedImage gameViewMask = screenImage();
             for (int i = 0; i < 3; i++) {
@@ -98,4 +93,9 @@ public class ZoneManager {
     public BufferedImage screenImage() throws AWTException {
         return screenCapture.captureWindow(windowHandler.getTargetWindow());
     }
+
+    public Map<String, Rectangle> getMinimap() { return minimap; }
+    public Map<String, Rectangle> getCtrlPanel() { return ctrlPanel; }
+    public Map<String, Rectangle> getChatTabs() { return chatTabs; }
+    public List<Rectangle> getInventorySlots() { return inventorySlots; }
 }

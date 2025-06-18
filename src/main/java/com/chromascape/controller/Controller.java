@@ -7,7 +7,7 @@ import com.chromascape.utils.core.input.remoteinput.KInput;
 import com.chromascape.utils.core.screen.vision.CvUtils;
 import com.chromascape.utils.core.screen.window.ScreenCapture;
 import com.chromascape.utils.core.screen.window.WindowHandler;
-import com.chromascape.utils.domain.zones.ZoneMapper;
+import com.chromascape.utils.domain.zones.SubZoneMapper;
 import com.chromascape.utils.domain.zones.ZoneManager;
 
 import java.awt.Rectangle;
@@ -44,8 +44,8 @@ public class Controller {
         Rectangle bounds = screenCapture.getWindowBounds(windowHandler.getTargetWindow());
         virtualMouseUtils = new VirtualMouseUtils(kInput, bounds);
         virtualKeyboardUtils = new VirtualKeyboardUtils(kInput);
-        ZoneMapper zoneMapper = new ZoneMapper();
-        zoneManager = new ZoneManager(zoneMapper, cvUtils, screenCapture, windowHandler, false);
+        SubZoneMapper subZoneMapper = new SubZoneMapper();
+        zoneManager = new ZoneManager(subZoneMapper, cvUtils, screenCapture, windowHandler, false);
     }
 
     public void shutdown(){

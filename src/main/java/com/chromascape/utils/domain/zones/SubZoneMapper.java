@@ -6,7 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ZoneMapper {
+public class SubZoneMapper {
 
     public Map<String, Rectangle> mapMinimap(Rectangle zone) {
         if (zone != null) {
