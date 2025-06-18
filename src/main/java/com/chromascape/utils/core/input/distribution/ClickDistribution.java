@@ -1,4 +1,4 @@
-package com.chromascape.utils.core.input.RandomPoint;
+package com.chromascape.utils.core.input.distribution;
 
 import org.apache.commons.math3.distribution.MultivariateNormalDistribution;
 import org.apache.commons.math3.random.MersenneTwister;
