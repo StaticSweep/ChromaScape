@@ -46,14 +46,14 @@ public class ZoneManager {
 
     public void mapper() throws Exception {
         try {
-            chatTabs = SubZoneMapper.mapChat(locateUIElement(Path.of(zoneTemplates[2]), zoneThresholds[2]));
-            ctrlPanel = SubZoneMapper.mapCtrlPanel(locateUIElement(Path.of(zoneTemplates[1]), zoneThresholds[1]));
-            inventorySlots = SubZoneMapper.mapInventory(locateUIElement(Path.of(zoneTemplates[1]), zoneThresholds[1]));
+            chatTabs = SubZoneMapper.mapChat(locateUIElement(zoneTemplates[2], zoneThresholds[2]));
+            ctrlPanel = SubZoneMapper.mapCtrlPanel(locateUIElement(zoneTemplates[1], zoneThresholds[1]));
+            inventorySlots = SubZoneMapper.mapInventory(locateUIElement(zoneTemplates[1], zoneThresholds[1]));
 
             if (isFixed) {
-                minimap = SubZoneMapper.mapFixedMinimap(locateUIElement(Path.of(zoneTemplates[3]), zoneThresholds[3]));
+                minimap = SubZoneMapper.mapFixedMinimap(locateUIElement(zoneTemplates[3], zoneThresholds[3]));
             } else {
-                minimap = SubZoneMapper.mapMinimap(locateUIElement(Path.of(zoneTemplates[0]), zoneThresholds[0]));
+                minimap = SubZoneMapper.mapMinimap(locateUIElement(zoneTemplates[0], zoneThresholds[0]));
             }
         } catch (Exception e) {
             System.err.println("[ZoneManager] Mapping failed: " + e.getMessage());
@@ -67,18 +67,16 @@ public class ZoneManager {
         } else {
             BufferedImage gameViewMask = screenImage();
             for (int i = 0; i < 3; i++) {
-                Rectangle element = locateUIElement(Path.of(zoneTemplates[i]), zoneThresholds[i]);
+                Rectangle element = locateUIElement(zoneTemplates[i], zoneThresholds[i]);
                 gameViewMask = MaskZones.maskZones(gameViewMask, element);
             }
             gameView = gameViewMask;
         }
-        DisplayImage.display(gameView);
         return gameView;
     }
 
-    public Rectangle locateUIElement(Path templatePath, double threshold) throws Exception {
-        BufferedImage template = ImageIO.read(templatePath.toFile());
-        return TemplateMatching.patternMatch(template, screenImage(), threshold, false);
+    public Rectangle locateUIElement(String templatePath, double threshold) throws Exception {
+        return TemplateMatching.patternMatch(templatePath, screenImage(), threshold, false);
     }
 
     public BufferedImage screenImage() throws AWTException {

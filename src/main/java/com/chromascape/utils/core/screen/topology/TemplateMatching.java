@@ -11,6 +11,8 @@ import java.awt.image.BufferedImage;
 
 import static org.bytedeco.opencv.global.opencv_core.extractChannel;
 import static org.bytedeco.opencv.global.opencv_core.minMaxLoc;
+import static org.bytedeco.opencv.global.opencv_imgcodecs.IMREAD_UNCHANGED;
+import static org.bytedeco.opencv.global.opencv_imgcodecs.imread;
 import static org.bytedeco.opencv.global.opencv_imgproc.COLOR_BGR2BGRA;
 import static org.bytedeco.opencv.global.opencv_imgproc.cvtColor;
 import static org.bytedeco.opencv.global.opencv_imgproc.matchTemplate;
@@ -40,11 +42,11 @@ public class TemplateMatching {
      * @throws IllegalArgumentException If either input Mat is empty (not loaded).
      * @throws Exception If the template is larger than the base image.
      */
-    public static Rectangle patternMatch(BufferedImage templateImg, BufferedImage baseImg, double threshold, boolean debugMsg) throws Exception {
+    public static Rectangle patternMatch(String templateImg, BufferedImage baseImg, double threshold, boolean debugMsg) throws Exception {
 
         debug(">> Entered patternMatch()", debugMsg);
 
-        Mat template = Java2DFrameUtils.toMat(templateImg);
+        Mat template = imread(templateImg, IMREAD_UNCHANGED);
         Mat base = Java2DFrameUtils.toMat(baseImg);
 
         if (template.empty()) throw new IllegalArgumentException("Template image is empty");
