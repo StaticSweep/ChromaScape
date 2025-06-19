@@ -91,8 +91,8 @@ public class VirtualMouseUtils {
         Point pausePoint = mousePathing.calculatePointAlongPath(
                 currentPosition,
                 target,
-                1.08,
-                1.15,
+                1.04,
+                1.1,
                 random.nextInt(50, 70),
                 direction);
         moveTo(pausePoint, speed);

@@ -10,10 +10,10 @@ public class Main {
     public static void main(String[] args) throws Exception {
         Controller controller = new Controller();
 
-//        controller.Mouse().moveTo(
-//                ClickDistribution.generateRandomPoint(
-//                        controller.Zones().getInventorySlots().get(5)
-//                ), "medium");
+        controller.Mouse().moveToAndOvershoot(
+                ClickDistribution.generateRandomPoint(
+                        controller.Zones().getInventorySlots().get(0)
+                ), "fastest");
 
 //        controller.Mouse().moveTo(
 //                ClickDistribution.generateRandomPoint(
