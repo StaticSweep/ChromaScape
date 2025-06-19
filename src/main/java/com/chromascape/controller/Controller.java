@@ -28,7 +28,7 @@ public class Controller {
 
     public Controller() throws Exception {
         running = true;
-        kInput = new KInput(5788);
+        kInput = new KInput(32736);
         hotkeyListener = new HotkeyListener(this);
         hotkeyListener.start();
         screenCapture = new ScreenCapture();
