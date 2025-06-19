@@ -10,13 +10,9 @@ import java.security.SecureRandom;
 
 public class ClickDistribution {
 
-    private final RandomGenerator rng;
+    private static final RandomGenerator rng = new MersenneTwister(new SecureRandom().nextLong());
 
-    public ClickDistribution() {
-        this.rng = new MersenneTwister(new SecureRandom().nextLong());
-    }
-
-    public Point generateRandomPoint(Rectangle rect) {
+    public static Point generateRandomPoint(Rectangle rect) {
         MultivariateNormalDistribution mnd = getMultivariateNormalDistribution(rect, rng);
 
         Point randomPoint;
@@ -28,7 +24,7 @@ public class ClickDistribution {
         return randomPoint;
     }
 
-    private MultivariateNormalDistribution getMultivariateNormalDistribution(Rectangle rect, RandomGenerator rng) {
+    private static MultivariateNormalDistribution getMultivariateNormalDistribution(Rectangle rect, RandomGenerator rng) {
         double meanX = rect.getX() + rect.getWidth() / 2.0;
         double meanY = rect.getY() + rect.getHeight() / 2.0;
         double[] mean = {meanX, meanY};
@@ -44,7 +40,7 @@ public class ClickDistribution {
         return new MultivariateNormalDistribution(rng, mean, covariance);
     }
 
-    private double deviation(double length) {
+    private static double deviation(double length) {
         if (length >= 50) {
             return 4.0;
         } else if (length >= 25) {

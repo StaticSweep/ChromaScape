@@ -1,4 +1,4 @@
-package com.chromascape.utils.core.logic;
+package com.chromascape.utils.core.runtime;
 
 import com.chromascape.controller.Controller;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;

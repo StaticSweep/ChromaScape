@@ -1,12 +1,12 @@
-package com.chromascape.utils.core.screen.vision;
+package com.chromascape.utils.core.screen.topology;
 
+import com.chromascape.utils.core.screen.colour.ColourObj;
 import org.bytedeco.javacpp.indexer.IntRawIndexer;
 import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.MatVector;
 import org.bytedeco.opencv.opencv_core.Point;
 import org.bytedeco.opencv.opencv_core.Point2f;
-import org.bytedeco.opencv.opencv_core.Scalar;
 
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
@@ -22,27 +22,37 @@ import static org.bytedeco.opencv.global.opencv_imgproc.cvtColor;
 import static org.bytedeco.opencv.global.opencv_imgproc.findContours;
 import static org.bytedeco.opencv.global.opencv_imgproc.pointPolygonTest;
 
-public class ColourUtils {
+public class ContourHandler {
 
-    private final List<ChromaObj> chromaObjects = new ArrayList<>();
-    
-    public Mat extractColours(BufferedImage image, Scalar HSVThresholdMin, Scalar HSVThresholdMax) {
+    private static final List<ChromaObj> chromaObjects = new ArrayList<>();
+
+    public static List<ChromaObj> getChromaObjsInColour(BufferedImage image, ColourObj colourObj) {
+        createChromaObjects(extractContours(extractColours(image, colourObj)));
+        return chromaObjects;
+    }
+
+    public static Mat extractColours(BufferedImage image, ColourObj colourObj) {
         Mat HSVImage = Java2DFrameUtils.toMat(image);
         cvtColor(HSVImage, HSVImage, COLOR_BGR2HSV);
         Mat result = new Mat(HSVImage.size(), CV_8UC1);
-        Mat HSVMin = new Mat(HSVThresholdMin);
-        Mat HSVMax = new Mat(HSVThresholdMax);
+        Mat HSVMin = new Mat(colourObj.getHSVMin());
+        Mat HSVMax = new Mat(colourObj.getHSVMax());
         inRange(HSVImage, HSVMin, HSVMax, result);
+
+        HSVImage.release();
+        HSVMin.release();
+        HSVMax.release();
+
         return result;
     }
 
-    public MatVector extractContours(Mat binaryMask) {
+    public static MatVector extractContours(Mat binaryMask) {
         MatVector contours = new MatVector();
         findContours(binaryMask, contours, CV_RETR_LIST, CHAIN_APPROX_SIMPLE);
         return contours;
     }
 
-    public void createChromaObj(MatVector contours) {
+    public static void createChromaObjects(MatVector contours) {
         chromaObjects.clear();
         for (int i = 0; i < contours.size(); i++) {
             Mat contour = contours.get(i);
@@ -73,13 +83,13 @@ public class ColourUtils {
         }
     }
 
-    public boolean isPointInContour(Point point, Mat contour) {
+    public static boolean isPointInContour(Point point, Mat contour) {
         try (Point2f point2f = new Point2f(point.x(), point.y())) {
             return pointPolygonTest(contour, point2f, false) > 0;
         }
     }
 
-    public List<ChromaObj> getChromaObjects() {
+    public static List<ChromaObj> getChromaObjects() {
         return chromaObjects;
     }
 }

@@ -1,8 +1,7 @@
 package com.chromascape.utils.domain.zones;
 
-import com.chromascape.utils.core.screen.vision.MaskZones;
-import com.chromascape.utils.core.screen.vision.TemplateMatching;
-import com.chromascape.utils.core.screen.vision.DisplayImage;
+import com.chromascape.utils.core.screen.topology.TemplateMatching;
+import com.chromascape.utils.core.screen.DisplayImage;
 import com.chromascape.utils.core.screen.window.ScreenCapture;
 import com.chromascape.utils.core.screen.window.WindowHandler;
 

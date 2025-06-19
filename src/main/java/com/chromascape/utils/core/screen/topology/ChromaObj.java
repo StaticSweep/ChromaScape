@@ -1,4 +1,4 @@
-package com.chromascape.utils.core.screen.vision;
+package com.chromascape.utils.core.screen.topology;
 
 import org.bytedeco.opencv.opencv_core.Mat;
 

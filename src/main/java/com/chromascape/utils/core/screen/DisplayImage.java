@@ -1,4 +1,4 @@
-package com.chromascape.utils.core.screen.vision;
+package com.chromascape.utils.core.screen;
 
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;

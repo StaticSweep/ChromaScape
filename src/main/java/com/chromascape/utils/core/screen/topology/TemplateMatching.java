@@ -1,9 +1,7 @@
-package com.chromascape.utils.core.screen.vision;
+package com.chromascape.utils.core.screen.topology;
 
 import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacv.Java2DFrameUtils;
-import org.bytedeco.javacv.OpenCVFrameConverter;
-import org.bytedeco.javacv.Java2DFrameConverter;
 
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Point;

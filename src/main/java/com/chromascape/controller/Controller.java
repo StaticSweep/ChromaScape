@@ -1,7 +1,7 @@
 package com.chromascape.controller;
 
 import com.chromascape.utils.core.input.keyboard.VirtualKeyboardUtils;
-import com.chromascape.utils.core.logic.HotkeyListener;
+import com.chromascape.utils.core.runtime.HotkeyListener;
 import com.chromascape.utils.core.input.mouse.VirtualMouseUtils;
 import com.chromascape.utils.core.input.remoteinput.KInput;
 import com.chromascape.utils.core.screen.window.ScreenCapture;
@@ -49,7 +49,7 @@ public class Controller {
         hotkeyListener.stop();
     }
 
-    public VirtualMouseUtils getMouse() {
+    public VirtualMouseUtils Mouse() {
         if (running) {
             return virtualMouseUtils;
         } else {
@@ -58,7 +58,7 @@ public class Controller {
         }
     }
 
-    public VirtualKeyboardUtils getKeyboard() {
+    public VirtualKeyboardUtils Keyboard() {
         if (running) {
             return virtualKeyboardUtils;
         } else {
@@ -67,7 +67,7 @@ public class Controller {
         }
     }
 
-    public ZoneManager getZones() {
+    public ZoneManager Zones() {
         if (running) {
             return zoneManager;
         } else {
@@ -76,7 +76,7 @@ public class Controller {
         }
     }
 
-    public ScreenCapture getScreenCapture() {
+    public ScreenCapture ScreenCapture() {
         if (running) {
             return screenCapture;
         } else {
