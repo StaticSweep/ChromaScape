@@ -113,14 +113,10 @@ public class KInput {
         }
     }
 
-    public synchronized void middleHold(int x, int y, int durationMs) throws InterruptedException {
+    public synchronized void middleInput(int x, int y, int eventID) {
         focus();
-        if (!kinput.KInput_MouseEvent(pid, MouseEventType.MOUSE_PRESS, now(), 1, x, y, 1, false, MouseButton.MIDDLE)) {
+        if (!kinput.KInput_MouseEvent(pid, eventID, now(), 1, x, y, 1, false, MouseButton.MIDDLE)) {
             throw new RuntimeException("Left mouse press event failed");
-        }
-        Thread.sleep(durationMs);
-        if (!kinput.KInput_MouseEvent(pid, MouseEventType.MOUSE_RELEASE, now(), 1, x, y, 1, false, MouseButton.MIDDLE)) {
-            throw new RuntimeException("Left mouse release event failed");
         }
     }
 

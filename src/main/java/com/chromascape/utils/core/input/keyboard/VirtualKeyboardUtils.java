@@ -17,7 +17,7 @@ public class VirtualKeyboardUtils {
     }
 
     /**
-     * To send a key character event, without hijacking the actual keyboard.
+     * To send a key character event.
      *
      * @param eventID - 401 to press/ 402 to release.
      * @param keyChar - The key character to send.
@@ -27,7 +27,7 @@ public class VirtualKeyboardUtils {
     }
 
     /**
-     * To send a modifier key event, without hijacking the actual keyboard.
+     * To send a modifier key event.
      *
      * @param eventID - 401 to press/ 402 to release.
      * @param key - The key modifier to send (shift, enter, alt or ctrl).
@@ -44,7 +44,7 @@ public class VirtualKeyboardUtils {
     }
 
     /**
-     * To send an arrow key event, without hijacking the actual keyboard.
+     * To send an arrow key event.
      *
      * @param eventID - 401 to press/ 402 to release.
      * @param key - The key modifier to send (up, down, left or right).

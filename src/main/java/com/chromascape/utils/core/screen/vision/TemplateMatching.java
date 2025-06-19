@@ -7,26 +7,18 @@ import org.bytedeco.javacv.Java2DFrameConverter;
 
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Point;
-import org.bytedeco.opencv.opencv_core.Rect;
-import org.bytedeco.opencv.opencv_core.Scalar;
 
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 
-import static org.bytedeco.opencv.global.opencv_core.CV_8UC1;
-import static org.bytedeco.opencv.global.opencv_core.bitwise_and;
 import static org.bytedeco.opencv.global.opencv_core.extractChannel;
 import static org.bytedeco.opencv.global.opencv_core.minMaxLoc;
-import static org.bytedeco.opencv.global.opencv_imgcodecs.imread;
 import static org.bytedeco.opencv.global.opencv_imgproc.COLOR_BGR2BGRA;
 import static org.bytedeco.opencv.global.opencv_imgproc.cvtColor;
 import static org.bytedeco.opencv.global.opencv_imgproc.matchTemplate;
 import static org.bytedeco.opencv.global.opencv_imgproc.TM_SQDIFF_NORMED;
 
-public class CvUtils {
-
-    private static final OpenCVFrameConverter.ToMat matConverter = new OpenCVFrameConverter.ToMat();
-    private static final Java2DFrameConverter bufferedImageConverter = new Java2DFrameConverter();
+public class TemplateMatching {
 
     /**
      * Performs template matching to locate a smaller image (template) within a larger image (base),
@@ -50,7 +42,7 @@ public class CvUtils {
      * @throws IllegalArgumentException If either input Mat is empty (not loaded).
      * @throws Exception If the template is larger than the base image.
      */
-    public Rectangle patternMatch(BufferedImage templateImg, BufferedImage baseImg, double threshold, boolean debugMsg) throws Exception {
+    public static Rectangle patternMatch(BufferedImage templateImg, BufferedImage baseImg, double threshold, boolean debugMsg) throws Exception {
 
         debug(">> Entered patternMatch()", debugMsg);
 
@@ -127,33 +119,7 @@ public class CvUtils {
         return match;
     }
 
-    public BufferedImage removeBlocks(BufferedImage originalImg, Rectangle maskArea) {
-        Mat original = Java2DFrameUtils.toMat(originalImg);
-        Mat mask = new Mat(original.size(), CV_8UC1, new Scalar(255));
-
-        Rect rect = new Rect(maskArea.x, maskArea.y, maskArea.width, maskArea.height);
-        Mat maskROI = new Mat(mask, rect);
-        maskROI.setTo(new Mat(new Scalar(0)));
-
-        Mat output = new Mat(original.size(), original.type());
-
-        bitwise_and(original, original, output, mask);
-
-        BufferedImage outImg = matToBufferedImage(output);
-
-        original.release();
-        mask.release();
-        maskROI.release();
-        output.release();
-
-        return outImg;
-    }
-
-    public BufferedImage matToBufferedImage(Mat mat) {
-        return bufferedImageConverter.convert(matConverter.convert(mat));
-    }
-
-    private void debug(String message, boolean debug) {
+    private static void debug(String message, boolean debug) {
         if (debug) System.out.println(message);
     }
 }

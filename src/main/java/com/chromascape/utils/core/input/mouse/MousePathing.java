@@ -163,7 +163,7 @@ public class MousePathing {
      * @param distance The normalised distance between start and end points.
      * @return The curve factor origin (left) and bound (right).
      */
-    private int[] calculateOffset(final int distance) {
+    private static int[] calculateOffset(final int distance) {
         if (distance >= 600) {
             return new int[]{160, 220};
         } else if (distance >= 300) {
@@ -184,7 +184,7 @@ public class MousePathing {
      * @param speed The speed you want the mouse to travel "slow", "medium" "fast".
      * @return The number of steps
      */
-    private int calculateSteps(final int distance, final String speed) {
+    private static int calculateSteps(final int distance, final String speed) {
         // tuning factor
         double scale = switch (speed) {
             case "slow" -> 0.5;
@@ -208,7 +208,7 @@ public class MousePathing {
      * @param p3 The end point, the destination.
      * @return The pixel distance between the points.
      */
-    private int calculateDistance(final Point p0, final Point p3) {
+    private static int calculateDistance(final Point p0, final Point p3) {
         double vx = p3.x - p0.x;
         double vy = p3.y - p0.y;
 
@@ -224,7 +224,7 @@ public class MousePathing {
      * @param distance The normalised distance between start and end points.
      * @return The easing factor.
      */
-    private double calculateEasing(final int distance) {
+    private static double calculateEasing(final int distance) {
         if (distance >= 1200) {
             return 16;
         } else if (distance >= 1000) {

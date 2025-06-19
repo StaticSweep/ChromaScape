@@ -4,10 +4,8 @@ import com.chromascape.utils.core.input.keyboard.VirtualKeyboardUtils;
 import com.chromascape.utils.core.logic.HotkeyListener;
 import com.chromascape.utils.core.input.mouse.VirtualMouseUtils;
 import com.chromascape.utils.core.input.remoteinput.KInput;
-import com.chromascape.utils.core.screen.vision.CvUtils;
 import com.chromascape.utils.core.screen.window.ScreenCapture;
 import com.chromascape.utils.core.screen.window.WindowHandler;
-import com.chromascape.utils.domain.zones.SubZoneMapper;
 import com.chromascape.utils.domain.zones.ZoneManager;
 
 import java.awt.Rectangle;
@@ -22,10 +20,6 @@ public class Controller {
 
     private final VirtualKeyboardUtils virtualKeyboardUtils;
 
-    private final WindowHandler windowHandler;
-
-    private final CvUtils cvUtils;
-
     private final ScreenCapture screenCapture;
 
     private final ZoneManager zoneManager;
@@ -37,15 +31,12 @@ public class Controller {
         kInput = new KInput(5788);
         hotkeyListener = new HotkeyListener(this);
         hotkeyListener.start();
-        cvUtils = new CvUtils();
-        windowHandler = new WindowHandler("RuneLite");
         screenCapture = new ScreenCapture();
-        screenCapture.focusWindow(windowHandler.getTargetWindow());
-        Rectangle bounds = screenCapture.getWindowBounds(windowHandler.getTargetWindow());
+        screenCapture.focusWindow(WindowHandler.getTargetWindow());
+        Rectangle bounds = screenCapture.getWindowBounds(WindowHandler.getTargetWindow());
         virtualMouseUtils = new VirtualMouseUtils(kInput, bounds);
         virtualKeyboardUtils = new VirtualKeyboardUtils(kInput);
-        SubZoneMapper subZoneMapper = new SubZoneMapper();
-        zoneManager = new ZoneManager(subZoneMapper, cvUtils, screenCapture, windowHandler, false);
+        zoneManager = new ZoneManager(screenCapture, false);
     }
 
     public void shutdown(){
@@ -90,15 +81,6 @@ public class Controller {
             return screenCapture;
         } else {
             System.out.println("Attempted to access screen capture while bot is not running.");
-            return null;
-        }
-    }
-
-    public CvUtils getCvUtils() {
-        if (running) {
-            return cvUtils;
-        } else {
-            System.out.println("Attempted to access cv utils while bot is not running.");
             return null;
         }
     }

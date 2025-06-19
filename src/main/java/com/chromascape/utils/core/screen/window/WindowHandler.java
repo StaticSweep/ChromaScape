@@ -10,11 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class WindowHandler {
 
-    private final String windowName;
-
-    public WindowHandler(String windowName) {
-        this.windowName = windowName;
-    }
+    private static final String windowName = "RuneLite";
 
     public interface User32 extends StdCallLibrary {
         User32 INSTANCE = Native.load("user32", User32.class);
@@ -22,7 +18,7 @@ public class WindowHandler {
         void GetWindowTextA(HWND hWnd, byte[] lpString, int nMaxCount);
     }
 
-    public HWND getTargetWindow() {
+    public static HWND getTargetWindow() {
         AtomicReference<HWND> targetHwnd = new AtomicReference<>();
         User32 user32 = User32.INSTANCE;
 

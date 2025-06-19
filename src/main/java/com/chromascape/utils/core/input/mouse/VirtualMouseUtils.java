@@ -118,13 +118,12 @@ public class VirtualMouseUtils {
     }
 
     /**
-     * Performs a middle click, hold, and release at the current mouse position.
+     * Performs a middle mouse button event.
      *
-     * @param duration how long you want it to hold down.
-     * @throws InterruptedException if interrupted.
+     * @param eventType - 501 to press/ 502 to release.
      */
-    public void middleClick(int duration) throws InterruptedException {
-        kInput.middleHold(currentPosition.x, currentPosition.y, duration);
+    public void middleClick(int eventType) {
+        kInput.middleInput(currentPosition.x, currentPosition.y, eventType);
     }
 
     /**

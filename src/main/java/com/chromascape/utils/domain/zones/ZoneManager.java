@@ -1,6 +1,7 @@
 package com.chromascape.utils.domain.zones;
 
-import com.chromascape.utils.core.screen.vision.CvUtils;
+import com.chromascape.utils.core.screen.vision.MaskZones;
+import com.chromascape.utils.core.screen.vision.TemplateMatching;
 import com.chromascape.utils.core.screen.vision.DisplayImage;
 import com.chromascape.utils.core.screen.window.ScreenCapture;
 import com.chromascape.utils.core.screen.window.WindowHandler;
@@ -15,15 +16,9 @@ import java.util.Map;
 
 public class ZoneManager {
 
-    private final SubZoneMapper subZoneMapper;
-
     private final boolean isFixed;
 
-    private final CvUtils cvUtils;
-
     private final ScreenCapture screenCapture;
-
-    private final WindowHandler windowHandler;
 
     private Map<String, Rectangle> minimap;
     private Map<String, Rectangle> ctrlPanel;
@@ -44,25 +39,22 @@ public class ZoneManager {
             0.018
     };
 
-    public ZoneManager(SubZoneMapper subZoneMapper, CvUtils cvUtils, ScreenCapture screenCapture, WindowHandler windowHandler, Boolean isFixed) throws Exception {
-        this.subZoneMapper = subZoneMapper;
+    public ZoneManager( ScreenCapture screenCapture, Boolean isFixed) throws Exception {
         this.isFixed = isFixed;
-        this.cvUtils = cvUtils;
         this.screenCapture = screenCapture;
-        this.windowHandler = windowHandler;
         mapper();
     }
 
     public void mapper() throws Exception {
         try {
-            chatTabs = subZoneMapper.mapChat(locateUIElement(Path.of(zoneTemplates[2]), zoneThresholds[2]));
-            ctrlPanel = subZoneMapper.mapCtrlPanel(locateUIElement(Path.of(zoneTemplates[1]), zoneThresholds[1]));
-            inventorySlots = subZoneMapper.mapInventory(locateUIElement(Path.of(zoneTemplates[1]), zoneThresholds[1]));
+            chatTabs = SubZoneMapper.mapChat(locateUIElement(Path.of(zoneTemplates[2]), zoneThresholds[2]));
+            ctrlPanel = SubZoneMapper.mapCtrlPanel(locateUIElement(Path.of(zoneTemplates[1]), zoneThresholds[1]));
+            inventorySlots = SubZoneMapper.mapInventory(locateUIElement(Path.of(zoneTemplates[1]), zoneThresholds[1]));
 
             if (isFixed) {
-                minimap = subZoneMapper.mapFixedMinimap(locateUIElement(Path.of(zoneTemplates[3]), zoneThresholds[3]));
+                minimap = SubZoneMapper.mapFixedMinimap(locateUIElement(Path.of(zoneTemplates[3]), zoneThresholds[3]));
             } else {
-                minimap = subZoneMapper.mapMinimap(locateUIElement(Path.of(zoneTemplates[0]), zoneThresholds[0]));
+                minimap = SubZoneMapper.mapMinimap(locateUIElement(Path.of(zoneTemplates[0]), zoneThresholds[0]));
             }
         } catch (Exception e) {
             System.err.println("[ZoneManager] Mapping failed: " + e.getMessage());
@@ -72,12 +64,12 @@ public class ZoneManager {
     public BufferedImage getGameView() throws Exception {
         BufferedImage gameView;
         if (isFixed) {
-            gameView = screenCapture.captureZone(subZoneMapper.mapFixedGameView(screenCapture.getWindowBounds(windowHandler.getTargetWindow())));
+            gameView = screenCapture.captureZone(SubZoneMapper.mapFixedGameView(screenCapture.getWindowBounds(WindowHandler.getTargetWindow())));
         } else {
             BufferedImage gameViewMask = screenImage();
             for (int i = 0; i < 3; i++) {
                 Rectangle element = locateUIElement(Path.of(zoneTemplates[i]), zoneThresholds[i]);
-                gameViewMask = cvUtils.removeBlocks(gameViewMask, element);
+                gameViewMask = MaskZones.maskZones(gameViewMask, element);
             }
             gameView = gameViewMask;
         }
@@ -87,11 +79,11 @@ public class ZoneManager {
 
     public Rectangle locateUIElement(Path templatePath, double threshold) throws Exception {
         BufferedImage template = ImageIO.read(templatePath.toFile());
-        return cvUtils.patternMatch(template, screenImage(), threshold, false);
+        return TemplateMatching.patternMatch(template, screenImage(), threshold, false);
     }
 
     public BufferedImage screenImage() throws AWTException {
-        return screenCapture.captureWindow(windowHandler.getTargetWindow());
+        return screenCapture.captureWindow(WindowHandler.getTargetWindow());
     }
 
     public Map<String, Rectangle> getMinimap() { return minimap; }

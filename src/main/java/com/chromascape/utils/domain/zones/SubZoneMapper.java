@@ -8,7 +8,7 @@ import java.util.Map;
 
 public class SubZoneMapper {
 
-    public Map<String, Rectangle> mapMinimap(Rectangle zone) {
+    public static Map<String, Rectangle> mapMinimap(Rectangle zone) {
         if (zone != null) {
 
             Map<String, Rectangle> minimap = new HashMap<>();
@@ -29,7 +29,7 @@ public class SubZoneMapper {
         }
     }
 
-    public Map<String, Rectangle> mapFixedMinimap(Rectangle zone) {
+    public static Map<String, Rectangle> mapFixedMinimap(Rectangle zone) {
         if (zone != null) {
 
             Map<String, Rectangle> minimap = new HashMap<>();
@@ -50,7 +50,7 @@ public class SubZoneMapper {
         }
     }
 
-    public Map<String, Rectangle> mapCtrlPanel(Rectangle zone) {
+    public static Map<String, Rectangle> mapCtrlPanel(Rectangle zone) {
         if (zone != null) {
 
             Map<String, Rectangle> ctrlPanel = new HashMap<>();
@@ -81,7 +81,7 @@ public class SubZoneMapper {
         }
     }
 
-    public Map<String, Rectangle> mapChat(Rectangle zone){
+    public static Map<String, Rectangle> mapChat(Rectangle zone){
         if (zone != null) {
 
             Map<String, Rectangle> chatTabs = new HashMap<>();
@@ -102,7 +102,7 @@ public class SubZoneMapper {
         }
     }
 
-    public List<Rectangle> mapInventory(Rectangle zone) {
+    public static List<Rectangle> mapInventory(Rectangle zone) {
         if (zone != null) {
 
             List<Rectangle> inventorySlots = new ArrayList<>();
@@ -128,7 +128,7 @@ public class SubZoneMapper {
         }
     }
 
-    public Rectangle mapFixedGameView(Rectangle zone){
+    public static Rectangle mapFixedGameView(Rectangle zone){
         if (zone != null) {
             return new Rectangle(zone.x + 4, zone.y + 4, 511, 333);
         } else {
