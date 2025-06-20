@@ -1,5 +1,6 @@
 package com.chromascape.utils.core.screen.topology;
 
+import com.chromascape.utils.core.screen.DisplayImage;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import org.bytedeco.javacpp.indexer.IntRawIndexer;
 import org.bytedeco.javacv.Java2DFrameUtils;
@@ -43,6 +44,7 @@ public class ContourHandler {
         HSVMin.release();
         HSVMax.release();
 
+        DisplayImage.display(Java2DFrameUtils.toBufferedImage(result));
         return result;
     }
 
@@ -63,10 +65,21 @@ public class ContourHandler {
             int maxY = Integer.MIN_VALUE;
 
             try (IntRawIndexer indexer = contour.createIndexer()) {
-                int pointsCount = contour.rows();
-                for (int p = 0; p < pointsCount; p++) {
-                    int x = indexer.get(p, 0);
-                    int y = indexer.get(p, 1);
+                int numRows = contour.rows();
+                int numCols = contour.cols();
+
+                for (int p = 0; p < numRows; p++) {
+                    int x, y;
+
+                    if (numCols == 1) {
+                        // Contour shape: Nx1x2 (common OpenCV format)
+                        x = indexer.get(p, 0, 0);
+                        y = indexer.get(p, 0, 1);
+                    } else {
+                        // Contour shape: Nx2 (less common)
+                        x = indexer.get(p, 0);
+                        y = indexer.get(p, 1);
+                    }
 
                     if (x < minX) minX = x;
                     if (x > maxX) maxX = x;

@@ -13,7 +13,13 @@ public class ClickDistribution {
     private static final RandomGenerator rng = new MersenneTwister(new SecureRandom().nextLong());
 
     public static Point generateRandomPoint(Rectangle rect) {
-        MultivariateNormalDistribution mnd = getMultivariateNormalDistribution(rect, rng);
+
+        if (rect.width < 5 || rect.height < 5) {
+            // Just return the center point if too small to sample meaningfully
+            return new Point((int)rect.getCenterX(), (int)rect.getCenterY());
+        }
+
+        MultivariateNormalDistribution mnd = getMultivariateNormalDistribution(rect);
 
         Point randomPoint;
         do {
@@ -24,7 +30,7 @@ public class ClickDistribution {
         return randomPoint;
     }
 
-    private static MultivariateNormalDistribution getMultivariateNormalDistribution(Rectangle rect, RandomGenerator rng) {
+    private static MultivariateNormalDistribution getMultivariateNormalDistribution(Rectangle rect) {
         double meanX = rect.getX() + rect.getWidth() / 2.0;
         double meanY = rect.getY() + rect.getHeight() / 2.0;
         double[] mean = {meanX, meanY};
@@ -37,7 +43,7 @@ public class ClickDistribution {
                 {0, stdDevY * stdDevY}
         };
 
-        return new MultivariateNormalDistribution(rng, mean, covariance);
+        return new MultivariateNormalDistribution(ClickDistribution.rng, mean, covariance);
     }
 
     private static double deviation(double length) {
