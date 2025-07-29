@@ -6,7 +6,7 @@
 
 ---
 
-ChromaScape is a low-level, color-based automation framework designed for game clients like Old School RuneScape. Inspired by Kelltom's [OSBC](https://github.com/kelltom/OS-Bot-COLOR/tree/main), [SRL-dev](https://github.com/Villavu/SRL-Development/tree/master) and [SlyAutomation](https://github.com/slyautomation/), it focuses on educational use, prototyping, and safe, human-like interaction using colour and pixel-based logic.
+ChromaScape is a low-level, color-based automation framework designed for game clients like Old School RuneScape. Inspired by Kelltom's [OSBC](https://github.com/kelltom/OS-Bot-COLOR/tree/main), [SRL-dev](https://github.com/Villavu/SRL-Development/tree/master) and [SlyAutomation](https://github.com/slyautomation/), it focuses on education, prototyping, and safe, human-like interaction using colour and pixel-based logic.
 
 Whether you're just starting with bot development or building advanced automation systems, ChromaScape provides a modular, structured framework to help you prototype fast and learn by doing.
 
