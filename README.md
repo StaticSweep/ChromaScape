@@ -1,8 +1,12 @@
+<div align="center">
 ![Java](https://img.shields.io/badge/Java-17-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows-orange)
 ![Repo Size](https://img.shields.io/github/repo-size/StaticSweep/ChromaScape)
+</div>
 
+<div align="center">
 # ![logo](src/main/resources/static/imagesWeb/CS.png) ChromaScape
+</div>
 
 ---
 
