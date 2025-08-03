@@ -77,7 +77,7 @@ public class DemoWineScript extends BaseScript {
     Sleeper.waitRandomMillis(600, 800);
 
     clickInventSlot(INVENT_SLOT_JUGS, "fast"); // Click the jugs of water in the inventory
-    Sleeper.waitRandomMillis(400, 800);
+    Sleeper.waitRandomMillis(400, 500);
 
     clickInventSlot(INVENT_SLOT_GRAPES, "slow"); // Use the jugs on the grapes to start making wine
     Sleeper.waitRandomMillis(800, 900);
@@ -89,7 +89,7 @@ public class DemoWineScript extends BaseScript {
     Sleeper.waitRandomMillis(700, 900);
 
     clickImage(dumpBank, "medium", 0.055); // Put the fermenting wines in the bank to repeat
-    Sleeper.waitRandomMillis(400, 500);
+    Sleeper.waitRandomMillis(650, 750);
 
     if (checkIfImageExists(unfermented, 0.055)) { // Repeating because bank is weird
       controller().mouse().leftClick();

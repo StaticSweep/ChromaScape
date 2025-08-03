@@ -181,8 +181,8 @@ public class MousePathing {
   private int[] calculateOffset(final int distance) {
     double scaledDistance = distance / tuningFactor;
 
-    if (scaledDistance <= 25) {
-      return new int[] {(int) (6 * tuningFactor), (int) (12 * tuningFactor)};
+    if (scaledDistance <= 70) {
+      return new int[] {(int) (2 * tuningFactor), (int) (6 * tuningFactor)};
     }
     return new int[] {
       (int) (scaledDistance / 6.5 * tuningFactor),
@@ -208,8 +208,8 @@ public class MousePathing {
 
     double baseSpp =
         switch (speed) {
-          case "slow" -> 0.3;
-          case "medium" -> 0.2;
+          case "slow" -> 0.30;
+          case "medium" -> 0.20;
           case "fast" -> 0.12;
           case "fastest" -> 0.05;
           default -> throw new IllegalStateException("Unexpected value: " + speed);
