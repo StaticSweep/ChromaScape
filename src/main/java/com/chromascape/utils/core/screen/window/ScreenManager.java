@@ -28,6 +28,8 @@ public class ScreenManager {
 
   private static final Robot robot;
 
+  private static final HWND hwnd = WindowHandler.getTargetWindow();
+
   /**
    * JNA extension interface to allow calling {@code ClientToScreen} which converts window-relative
    * coordinates to screen coordinates.
@@ -116,14 +118,34 @@ public class ScreenManager {
         dimensions.bottom - dimensions.top);
   }
 
-  /**
-   * Brings the specified window to the foreground and restores it if minimized.
-   *
-   * @param hwnd The handle of the window to focus.
-   */
-  public static void focusWindow(HWND hwnd) {
+  /** Brings the specified window to the foreground and restores it if minimized. */
+  public static void focusWindow() {
     User32.INSTANCE.ShowWindow(hwnd, WinUser.SW_SHOW);
     User32.INSTANCE.SetForegroundWindow(hwnd);
+  }
+
+  /**
+   * Checks which monitor is closest to the target application and returns the monitor's {@link
+   * Rectangle} bounds.
+   *
+   * @return the monitor's bounds.
+   */
+  public static Rectangle getMonitorBounds() {
+    WinUser.HMONITOR monitor =
+        User32.INSTANCE.MonitorFromWindow(
+            WindowHandler.getTargetWindow(), WinUser.MONITOR_DEFAULTTONEAREST);
+
+    WinUser.MONITORINFO mi = new WinUser.MONITORINFO();
+    mi.cbSize = mi.size();
+    User32.INSTANCE.GetMonitorInfo(monitor, mi);
+
+    WinDef.RECT monitorRect = mi.rcMonitor;
+
+    return new Rectangle(
+        monitorRect.left,
+        monitorRect.top,
+        monitorRect.right - monitorRect.left,
+        monitorRect.bottom - monitorRect.top);
   }
 
   /**
@@ -132,25 +154,18 @@ public class ScreenManager {
    * <p>Compares the window's bounds with the dimensions of the monitor it's on. Assumes a taskbar
    * offset of 48 pixels for non-borderless fullscreen windows.
    *
-   * @param hwnd The handle of the window to check.
    * @return True if the window occupies the entire monitor space (minus taskbar), false otherwise.
    */
-  public static boolean isWindowFullscreen(HWND hwnd) {
+  public static boolean isWindowFullscreen() {
     Rectangle windowRect = getWindowBounds();
-
-    WinUser.HMONITOR monitor =
-        User32.INSTANCE.MonitorFromWindow(hwnd, WinUser.MONITOR_DEFAULTTONEAREST);
-    WinUser.MONITORINFO mi = new WinUser.MONITORINFO();
-    mi.cbSize = mi.size();
-    User32.INSTANCE.GetMonitorInfo(monitor, mi);
-
-    WinDef.RECT monitorRect = mi.rcMonitor;
+    Rectangle monitorRect = getMonitorBounds();
 
     int windowsTaskBarOffset = 48;
-    return windowRect.x == monitorRect.left
-        && windowRect.y == monitorRect.top
-        && windowRect.x + windowRect.width == monitorRect.right
-        && windowRect.y + windowRect.height + windowsTaskBarOffset == monitorRect.bottom;
+    return windowRect.x == monitorRect.x
+        && windowRect.y == monitorRect.y
+        && windowRect.x + windowRect.width == monitorRect.x + monitorRect.width
+        && windowRect.y + windowRect.height + windowsTaskBarOffset
+            == monitorRect.y + monitorRect.height;
   }
 
   /**

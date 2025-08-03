@@ -28,6 +28,8 @@ public class MousePathing {
 
   private final int startY;
 
+  private final double tuningFactor;
+
   /**
    * Constructs a MousePathing utility tied to a given screen or window bounds. The bounds define
    * the coordinate space in which generated points will be clamped.
@@ -39,6 +41,7 @@ public class MousePathing {
     startY = bounds.y;
     this.screenWidth = bounds.width;
     this.screenHeight = bounds.height;
+    this.tuningFactor = PhysicalScaling.calculateTuningFactor();
   }
 
   /**
@@ -175,46 +178,79 @@ public class MousePathing {
    * @param distance the pixel distance between start and end points.
    * @return a two-element array: [minimum offset, maximum offset].
    */
-  private static int[] calculateOffset(final int distance) {
-    if (distance >= 600) {
-      return new int[] {100, 140};
-    } else if (distance >= 300) {
-      return new int[] {50, 60};
-    } else if (distance >= 200) {
-      return new int[] {10, 30};
-    } else if (distance >= 100) {
-      return new int[] {5, 10};
-    } else if (distance >= 20) {
-      return new int[] {3, 5};
-    } else {
-      return new int[] {2, 4};
+  private int[] calculateOffset(final int distance) {
+    double scaledDistance = distance / tuningFactor;
+
+    if (scaledDistance <= 25) {
+      return new int[] {(int) (6 * tuningFactor), (int) (12 * tuningFactor)};
     }
+    return new int[] {
+      (int) (scaledDistance / 6.5 * tuningFactor),
+      (int) ((scaledDistance / 6.5 + 15) * tuningFactor)
+    };
   }
 
   /**
-   * Calculates the number of points to generate based on speed and distance. More points = slower
-   * and smoother movement. Change this if you want to personalise your mouse.
+   * Calculates the number of steps required to move a given distance at a specified speed. Uses a
+   * dynamic steps-per-pixel (SPP) value that slows down short-distance movements for smoother and
+   * more natural mouse behavior, blending into faster speeds at longer distances.
    *
-   * @param distance the pixel distance between points.
-   * @param speed one of "slow", "medium", "fast", "fastest".
-   * @return the number of interpolation steps.
+   * @param distance The total distance to move (in pixels).
+   * @param speed The speed category as a string. Expected values: "slow", "medium", "fast",
+   *     "fastest".
+   * @return The calculated number of discrete steps to move, guaranteed to be at least 1.
+   * @throws IllegalStateException if an unexpected speed value is provided.
    */
-  private static int calculateSteps(final int distance, final String speed) {
-    // tuning factor
-    double scale =
+  private int calculateSteps(final int distance, final String speed) {
+    if (distance <= 0) {
+      return 1;
+    }
+
+    double baseSpp =
         switch (speed) {
-          case "slow" -> 2.0;
-          case "medium" -> 3.2;
-          case "fast" -> 4.0;
-          case "fastest" -> 4.5;
+          case "slow" -> 0.3;
+          case "medium" -> 0.2;
+          case "fast" -> 0.12;
+          case "fastest" -> 0.05;
           default -> throw new IllegalStateException("Unexpected value: " + speed);
         };
 
-    // divide distance by scale to get step count
-    int steps = Math.toIntExact(Math.round(distance / scale));
+    // A higher speed for short distances
+    double spp = getSpp((int) (distance * tuningFactor), baseSpp);
 
-    // at least 1 step, to avoid zero
+    int steps = (int) Math.round((distance * tuningFactor) * spp);
     return Math.max(1, steps);
+  }
+
+  /**
+   * Calculates the steps-per-pixel (SPP) value based on the distance and a base SPP. Applies a
+   * smooth linear blend from a higher SPP (slower, more steps) at short distances to the base SPP
+   * at longer distances, over a defined blending window.
+   *
+   * @param distance The adjusted distance (already multiplied by tuningFactor).
+   * @param baseSpp The base steps-per-pixel value corresponding to the desired speed.
+   * @return The dynamically adjusted steps-per-pixel for the given distance.
+   */
+  private static double getSpp(int distance, double baseSpp) {
+    double shortBaseSpp = baseSpp + 0.3; // tweak as needed
+
+    // Define blending window (start and end distance for smooth transition)
+    int blendStart = 100;
+    int blendEnd = 2400;
+
+    double spp;
+    if (distance <= blendStart) {
+      // fully slow at short distances
+      spp = shortBaseSpp;
+    } else if (distance >= blendEnd) {
+      // fully base speed at long distances
+      spp = baseSpp;
+    } else {
+      // interpolate linearly between shortBaseSpp and baseSpp
+      double blendRatio = (distance - blendStart) / (double) (blendEnd - blendStart);
+      spp = shortBaseSpp * (1 - blendRatio) + baseSpp * blendRatio;
+    }
+    return spp;
   }
 
   /**
@@ -224,7 +260,7 @@ public class MousePathing {
    * @param p3 the end point.
    * @return the integer pixel distance.
    */
-  private static int calculateDistance(final Point p0, final Point p3) {
+  private int calculateDistance(final Point p0, final Point p3) {
     double vx = p3.x - p0.x;
     double vy = p3.y - p0.y;
 
@@ -239,23 +275,17 @@ public class MousePathing {
    * @param distance the distance to travel.
    * @return an exponent to use in the ease-out function.
    */
-  private static double calculateEasing(final int distance) {
-    if (distance >= 1200) {
-      return 16;
-    } else if (distance >= 1000) {
-      return 14;
-    } else if (distance >= 800) {
-      return 12;
-    } else if (distance >= 600) {
-      return 10;
-    } else if (distance >= 400) {
-      return 8;
-    } else if (distance >= 200) {
-      return 6;
-    } else if (distance >= 100) {
-      return 4;
-    } else {
+  private double calculateEasing(final int distance) {
+    double scaledDistance = distance / tuningFactor; // Convert to baseline equivalent
+
+    if (scaledDistance <= 100) {
       return 2;
     }
+    if (scaledDistance >= 1200) {
+      return 16;
+    }
+
+    double normalizedDistance = (scaledDistance - 100.0) / 1100.0;
+    return 2 + (14 * Math.pow(normalizedDistance, 0.7));
   }
 }

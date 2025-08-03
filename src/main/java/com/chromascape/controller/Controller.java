@@ -59,8 +59,8 @@ public class Controller {
     kinput = new Kinput(WindowHandler.getPid(WindowHandler.getTargetWindow()));
 
     // Ensure the target window is focused for input simulation
-    ScreenManager.focusWindow(WindowHandler.getTargetWindow());
-    boolean isFullscreen = ScreenManager.isWindowFullscreen(WindowHandler.getTargetWindow());
+    ScreenManager.focusWindow();
+    boolean isFullscreen = ScreenManager.isWindowFullscreen();
 
     // Initialize virtual input utilities with current window bounds and fullscreen status
     virtualMouseUtils =
