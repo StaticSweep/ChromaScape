@@ -41,7 +41,7 @@ public class DemoWineScript extends BaseScript {
   /**
    * Constructs a BaseScript.
    *
-   * @param isFixed whether the client UI is fixed or resizable
+   * @param isFixed whether the client UI is classic fixed or classic resizable
    * @param duration the total runtime of the script in minutes
    * @param logger the logging service for recording events and progress
    */

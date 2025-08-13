@@ -37,8 +37,8 @@ public class Controller {
   /**
    * Constructs a new Controller instance.
    *
-   * @param isFixed Indicates whether the user's client is resizable or fixed. The user selects this
-   *     in the UI.
+   * @param isFixed Indicates whether the user's client is classic resizable or classic fixed. The
+   *     user selects this in the UI.
    * @param logger The logger to record lifecycle events and errors.
    */
   public Controller(boolean isFixed, LogService logger) {
