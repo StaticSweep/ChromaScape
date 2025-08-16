@@ -7,6 +7,7 @@ import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.topology.ChromaObj;
 import com.chromascape.utils.core.screen.topology.ColourContours;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
+import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.web.logs.LogService;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -91,7 +92,7 @@ public class DemoWineScript extends BaseScript {
     clickImage(dumpBank, "medium", 0.055); // Put the fermenting wines in the bank to repeat
     Sleeper.waitRandomMillis(650, 750);
 
-    if (checkIfImageExists(unfermented, 0.055)) { // Repeating because bank is weird
+    if (checkIfImageInv(unfermented, 0.055)) { // Repeating because bank is weird
       controller().mouse().leftClick();
       Sleeper.waitRandomMillis(600, 800);
     }
@@ -229,14 +230,15 @@ public class DemoWineScript extends BaseScript {
   /**
    * Checks if an image exists on the screen and returns a boolean referring to if it was detected.
    *
-   * @param imagePath the path to the image being searched on screen
+   * @param imagePath the path to the image being searched
    * @param threshold the openCV threshold to decide if a match exists
-   * @return true if the image exists on screen, else false
+   * @return true if the image exists in the inventory slot 1, else false
    */
-  private boolean checkIfImageExists(String imagePath, double threshold) {
+  private boolean checkIfImageInv(String imagePath, double threshold) {
     try {
-      BufferedImage gameView = controller().zones().getGameView();
-      Rectangle boundingBox = TemplateMatching.match(imagePath, gameView, threshold, false);
+      BufferedImage inventorySlot1 =
+          ScreenManager.captureZone(controller().zones().getInventorySlots().get(0));
+      Rectangle boundingBox = TemplateMatching.match(imagePath, inventorySlot1, threshold, false);
 
       if (boundingBox == null || boundingBox.isEmpty()) {
         logger.addLog("Template match failed: No valid bounding box.");
@@ -246,7 +248,7 @@ public class DemoWineScript extends BaseScript {
       return true;
 
     } catch (Exception e) {
-      logger.addLog("checkIfImageExists failed: " + e.getMessage());
+      logger.addLog("checkIfImageInv failed: " + e.getMessage());
       stop();
     }
     return false;

@@ -81,9 +81,8 @@ public class ZoneManager {
   /**
    * Captures a screenshot of the current game viewport area.
    *
-   * <p>In fixed mode, captures the fixed game view rectangle. In resizable mode, captures the full
-   * window and masks out UI zones such as minimap, control panel, and chat to isolate the game
-   * viewport.
+   * <p>Captures the full window and masks out UI zones such as minimap, control panel, and chat to
+   * isolate the game viewport.
    *
    * <p>You are intended to use template matching on this image directly for sprite matching You are
    * also intended to use this as the image for colour detection.
@@ -91,20 +90,25 @@ public class ZoneManager {
    * @return A {@link BufferedImage} representing the game viewport screenshot.
    */
   public BufferedImage getGameView() throws Exception {
-    BufferedImage gameView;
+    BufferedImage gameViewMask = ScreenManager.captureWindow();
+
     if (isFixed) {
-      gameView =
-          ScreenManager.captureZone(
-              SubZoneMapper.mapFixedGameView(ScreenManager.getWindowBounds()));
-    } else {
-      BufferedImage gameViewMask = ScreenManager.captureWindow();
-      for (int i = 0; i < 3; i++) {
+      // inv (1), chat (2), minimap_fixed (3)
+      int[] fixedIndices = {1, 2, 3};
+      for (int i : fixedIndices) {
         Rectangle element = locateUiElement(zoneTemplates[i], zoneThresholds[i]);
         gameViewMask = MaskZones.maskZones(gameViewMask, ScreenManager.toClientBounds(element));
       }
-      gameView = gameViewMask;
+    } else {
+      // inv (1), chat (2), minimap (0)
+      int[] resizableIndices = {1, 2, 0};
+      for (int i : resizableIndices) {
+        Rectangle element = locateUiElement(zoneTemplates[i], zoneThresholds[i]);
+        gameViewMask = MaskZones.maskZones(gameViewMask, ScreenManager.toClientBounds(element));
+      }
     }
-    return gameView;
+
+    return gameViewMask;
   }
 
   /**
