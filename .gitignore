@@ -54,4 +54,5 @@ Thumbs.db
 /src/main/resources/images/ui/
 
 # output
-output/
+output/*
+!output/.gitkeep
