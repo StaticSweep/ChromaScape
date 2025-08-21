@@ -34,6 +34,9 @@ public class ZoneManager {
   /** Rectangle defining the location of the grid info box. */
   private Rectangle gridInfo;
 
+  /** Rectangle defining the location of the mouse-over text. */
+  private Rectangle mouseOver;
+
   /** File paths to template images used for UI element detection. */
   private final String[] zoneTemplates = {
     "/images/ui/minimap.png",
@@ -65,7 +68,7 @@ public class ZoneManager {
    */
   public void mapper() {
     try {
-      // The chat's location is used to define the location of the Grid Info box
+      // The chat's location is used to define the location of certain elements
       Rectangle chatLocation = locateUiElement(zoneTemplates[2], zoneThresholds[2]);
       chatTabs = SubZoneMapper.mapChat(chatLocation);
 
@@ -73,16 +76,20 @@ public class ZoneManager {
 
       inventorySlots =
           SubZoneMapper.mapInventory(locateUiElement(zoneTemplates[1], zoneThresholds[1]));
-      // The minimap's location is used in conjunction to the chat's location to define the Grid
-      // -Info box
+      // The minimap's location is used in conjunction to the chat's location to define certain
+      // elements
       if (isFixed) {
         Rectangle minimapLocation = locateUiElement(zoneTemplates[3], zoneThresholds[3]);
         minimap = SubZoneMapper.mapFixedMinimap(minimapLocation);
+
         gridInfo = new Rectangle(chatLocation.x + 6, minimapLocation.y + 23, 129, 56);
+        mouseOver = new Rectangle(chatLocation.x + 1, minimapLocation.y + 3, 407, 26);
       } else {
         Rectangle minimapLocation = locateUiElement(zoneTemplates[0], zoneThresholds[0]);
         minimap = SubZoneMapper.mapMinimap(minimapLocation);
+
         gridInfo = new Rectangle(chatLocation.x + 2, minimapLocation.y + 18, 129, 56);
+        mouseOver = new Rectangle(chatLocation.x - 3, minimapLocation.y - 2, 407, 26);
       }
     } catch (Exception e) {
       System.err.println("[ZoneManager] Mapping failed: " + e.getMessage());
@@ -183,5 +190,15 @@ public class ZoneManager {
    */
   public Rectangle getGridInfo() {
     return gridInfo;
+  }
+
+  /**
+   * Returns the mouse-over zone, where text will show if the user hovers over an interactable
+   * object. Intended to be used alongside the OCR engine.
+   *
+   * @return {@link Rectangle} of the mouse-over area.
+   */
+  public Rectangle getMouseOver() {
+    return mouseOver;
   }
 }
