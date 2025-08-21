@@ -31,6 +31,9 @@ public class ZoneManager {
   /** List of rectangles representing individual inventory slot locations. */
   private List<Rectangle> inventorySlots;
 
+  /** Rectangle defining the location of the grid info box. */
+  private Rectangle gridInfo;
+
   /** File paths to template images used for UI element detection. */
   private final String[] zoneTemplates = {
     "/images/ui/minimap.png",
@@ -62,16 +65,24 @@ public class ZoneManager {
    */
   public void mapper() {
     try {
-      chatTabs = SubZoneMapper.mapChat(locateUiElement(zoneTemplates[2], zoneThresholds[2]));
+      // The chat's location is used to define the location of the Grid Info box
+      Rectangle chatLocation = locateUiElement(zoneTemplates[2], zoneThresholds[2]);
+      chatTabs = SubZoneMapper.mapChat(chatLocation);
+
       ctrlPanel = SubZoneMapper.mapCtrlPanel(locateUiElement(zoneTemplates[1], zoneThresholds[1]));
+
       inventorySlots =
           SubZoneMapper.mapInventory(locateUiElement(zoneTemplates[1], zoneThresholds[1]));
-
+      // The minimap's location is used in conjunction to the chat's location to define the Grid
+      // -Info box
       if (isFixed) {
-        minimap =
-            SubZoneMapper.mapFixedMinimap(locateUiElement(zoneTemplates[3], zoneThresholds[3]));
+        Rectangle minimapLocation = locateUiElement(zoneTemplates[3], zoneThresholds[3]);
+        minimap = SubZoneMapper.mapFixedMinimap(minimapLocation);
+        gridInfo = new Rectangle(chatLocation.x + 6, minimapLocation.y + 23, 129, 56);
       } else {
-        minimap = SubZoneMapper.mapMinimap(locateUiElement(zoneTemplates[0], zoneThresholds[0]));
+        Rectangle minimapLocation = locateUiElement(zoneTemplates[0], zoneThresholds[0]);
+        minimap = SubZoneMapper.mapMinimap(minimapLocation);
+        gridInfo = new Rectangle(chatLocation.x + 2, minimapLocation.y + 18, 129, 56);
       }
     } catch (Exception e) {
       System.err.println("[ZoneManager] Mapping failed: " + e.getMessage());
@@ -162,5 +173,15 @@ public class ZoneManager {
    */
   public List<Rectangle> getInventorySlots() {
     return inventorySlots;
+  }
+
+  /**
+   * Returns the {@link Rectangle} for the Grid info area that provides location data. Useful for
+   * knowing the player's location in the game. Meant to be used by the Walker utility.
+   *
+   * @return {@link Rectangle} of the Grid info area.
+   */
+  public Rectangle getGridInfo() {
+    return gridInfo;
   }
 }
