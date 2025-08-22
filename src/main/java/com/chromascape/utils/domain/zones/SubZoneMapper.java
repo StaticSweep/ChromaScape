@@ -16,7 +16,7 @@ import java.util.Map;
 public class SubZoneMapper {
 
   /**
-   * Maps all major UI components in the resizable mode minimap area.
+   * Maps all major UI components in or derived solely from the resizable mode minimap area.
    *
    * @param zone The base minimap zone.
    * @return A map of component names to {@link Rectangle} bounds.
@@ -36,7 +36,8 @@ public class SubZoneMapper {
       minimap.put("specText", new Rectangle(zone.x + 36, zone.y + 151, 20, 13));
       minimap.put("minimap", new Rectangle(zone.x + 52, zone.y + 5, 154, 155));
       minimap.put("totalXP", new Rectangle(zone.x - 147, zone.y + 4, 104, 21));
-
+      minimap.put("playerPos", new Rectangle(zone.x + 123, zone.y + 82, 4, 4));
+      minimap.put("compassSimilarity", new Rectangle(zone.x + 32, zone.y + 1, 37, 37));
       return minimap;
     } else {
       System.out.println("No minimap found");
@@ -45,7 +46,7 @@ public class SubZoneMapper {
   }
 
   /**
-   * Maps UI components in fixed (non-resizable) mode minimap.
+   * Maps UI components in or derived solely from the fixed (non-resizable) mode minimap.
    *
    * @param zone The base minimap zone.
    * @return A map of minimap component rectangles.
@@ -65,6 +66,8 @@ public class SubZoneMapper {
       minimap.put("specOrb", new Rectangle(zone.x + 62, zone.y + 137, 19, 20));
       minimap.put("specText", new Rectangle(zone.x + 36, zone.y + 146, 20, 13));
       minimap.put("totalXP", new Rectangle(zone.x - 104, zone.y + 6, 104, 21));
+      minimap.put("playerPos", new Rectangle(zone.x + 127, zone.y + 82, 4, 4));
+      minimap.put("compassSimilarity", new Rectangle(zone.x + 26, zone.y + 1, 34, 35));
       return minimap;
     } else {
       System.out.println("No fixed minimap found");

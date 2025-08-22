@@ -1,9 +1,7 @@
 package com.chromascape.utils.domain.zones;
 
-import com.chromascape.utils.core.screen.DisplayImage;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
-import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -38,9 +36,6 @@ public class ZoneManager {
 
   /** Rectangle defining the location of the mouse-over text. */
   private Rectangle mouseOver;
-
-  /** Point representing the top left corner of the player's position on the minimap */
-  private Point playerPosition;
 
   /** File paths to template images used for UI element detection. */
   private final String[] zoneTemplates = {
@@ -86,19 +81,13 @@ public class ZoneManager {
       if (isFixed) {
         Rectangle minimapLocation = locateUiElement(zoneTemplates[3], zoneThresholds[3]);
         minimap = SubZoneMapper.mapFixedMinimap(minimapLocation);
-        DisplayImage.display(ScreenManager.captureZone(minimapLocation));
-
-        gridInfo = new Rectangle(chatLocation.x + 6, minimapLocation.y + 23, 129, 56);
         mouseOver = new Rectangle(chatLocation.x + 1, minimapLocation.y + 3, 407, 26);
-        playerPosition = new Point(minimapLocation.x + 127, minimapLocation.y + 82);
+        gridInfo = new Rectangle(chatLocation.x + 6, minimapLocation.y + 23, 129, 56);
       } else {
         Rectangle minimapLocation = locateUiElement(zoneTemplates[0], zoneThresholds[0]);
         minimap = SubZoneMapper.mapMinimap(minimapLocation);
-        DisplayImage.display(ScreenManager.captureZone(minimapLocation));
-
-        gridInfo = new Rectangle(chatLocation.x + 2, minimapLocation.y + 18, 129, 56);
         mouseOver = new Rectangle(chatLocation.x - 3, minimapLocation.y - 2, 407, 26);
-        playerPosition = new Point(minimapLocation.x + 123, minimapLocation.y + 82);
+        gridInfo = new Rectangle(chatLocation.x + 2, minimapLocation.y + 18, 129, 56);
       }
     } catch (Exception e) {
       System.err.println("[ZoneManager] Mapping failed: " + e.getMessage());
@@ -209,15 +198,5 @@ public class ZoneManager {
    */
   public Rectangle getMouseOver() {
     return mouseOver;
-  }
-
-  /**
-   * Returns the {@link Point} co-ordinates of the player on the minimap. This only returns the top
-   * left corner of the player's position and therefore must be considered as a 4x4 square.
-   *
-   * @return {@link Point} co-ordinates of the player on the minimap.
-   */
-  public Point getPlayerPosition() {
-    return playerPosition;
   }
 }
