@@ -140,6 +140,26 @@ public class SubZoneMapper {
   }
 
   /**
+   * Maps out the three fields contained in the Grid Info box. These fields are meant to be used
+   * with OCR to extract player location data.
+   *
+   * @param zone The bounding box of the parent zone. (Where the box is).
+   * @return A list of {@link Rectangle} subzones (Tile, ChunkID, RegionID).
+   */
+  public static Map<String, Rectangle> mapGridInfo(Rectangle zone) {
+    if (zone != null) {
+      Map<String, Rectangle> gridInfo = new HashMap<>();
+      gridInfo.put("Tile", new Rectangle(zone.x + 39, zone.y, 89, 22));
+      gridInfo.put("ChunkID", new Rectangle(zone.x + 74, zone.y + 20, 54, 19));
+      gridInfo.put("RegionID", new Rectangle(zone.x + 84, zone.y + 36, 45, 19));
+      return gridInfo;
+    } else {
+      System.out.println("No Grid found");
+      return null;
+    }
+  }
+
+  /**
    * Generates bounding rectangles for each inventory slot in a 4x7 grid.
    *
    * @param zone The top-left bounding box of the inventory panel.

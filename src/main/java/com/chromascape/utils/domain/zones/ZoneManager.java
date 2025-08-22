@@ -31,8 +31,8 @@ public class ZoneManager {
   /** List of rectangles representing individual inventory slot locations. */
   private List<Rectangle> inventorySlots;
 
-  /** Rectangle defining the location of the grid info box. */
-  private Rectangle gridInfo;
+  /** Map of Rectangles defining the grid info box's location info. */
+  private Map<String, Rectangle> gridInfo;
 
   /** Rectangle defining the location of the mouse-over text. */
   private Rectangle mouseOver;
@@ -82,12 +82,16 @@ public class ZoneManager {
         Rectangle minimapLocation = locateUiElement(zoneTemplates[3], zoneThresholds[3]);
         minimap = SubZoneMapper.mapFixedMinimap(minimapLocation);
         mouseOver = new Rectangle(chatLocation.x + 1, minimapLocation.y + 3, 407, 26);
-        gridInfo = new Rectangle(chatLocation.x + 6, minimapLocation.y + 23, 129, 56);
+        gridInfo =
+            SubZoneMapper.mapGridInfo(
+                new Rectangle(chatLocation.x + 6, minimapLocation.y + 23, 129, 56));
       } else {
         Rectangle minimapLocation = locateUiElement(zoneTemplates[0], zoneThresholds[0]);
         minimap = SubZoneMapper.mapMinimap(minimapLocation);
         mouseOver = new Rectangle(chatLocation.x - 3, minimapLocation.y - 2, 407, 26);
-        gridInfo = new Rectangle(chatLocation.x + 2, minimapLocation.y + 18, 129, 56);
+        gridInfo =
+            SubZoneMapper.mapGridInfo(
+                new Rectangle(chatLocation.x + 2, minimapLocation.y + 18, 129, 56));
       }
     } catch (Exception e) {
       System.err.println("[ZoneManager] Mapping failed: " + e.getMessage());
@@ -181,12 +185,13 @@ public class ZoneManager {
   }
 
   /**
-   * Returns the {@link Rectangle} for the Grid info area that provides location data. Useful for
-   * knowing the player's location in the game. Meant to be used by the Walker utility.
+   * Returns the list of rectangles corresponding to fields in the Grid info area that contain
+   * location data. Useful for knowing the player's location in the game. Meant to be used by the
+   * Walker utility.
    *
    * @return {@link Rectangle} of the Grid info area.
    */
-  public Rectangle getGridInfo() {
+  public Map<String, Rectangle> getGridInfo() {
     return gridInfo;
   }
 
