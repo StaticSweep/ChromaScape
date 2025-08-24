@@ -1,7 +1,6 @@
 package com.chromascape.utils.core.screen.topology;
 
 import org.bytedeco.opencv.global.opencv_core;
-import org.bytedeco.opencv.global.opencv_imgcodecs;
 import org.bytedeco.opencv.global.opencv_imgproc;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Scalar;
@@ -26,7 +25,7 @@ import org.bytedeco.opencv.opencv_core.Size;
  * @author n-kai-cj
  */
 public class Similarity {
-  private static double getPSNR(Mat I1, Mat I2) {
+  public static double getPSNR(Mat I1, Mat I2) {
     Mat s1 = new Mat();
     opencv_core.absdiff(I1, I2, s1); // |I1 - I2|
     s1.convertTo(s1, opencv_core.CV_32F); // cannot make a square on 8 bits
@@ -44,7 +43,7 @@ public class Similarity {
     }
   }
 
-  private static Scalar getMSSIM(Mat i1, Mat i2) {
+  public static Scalar getMSSIM(Mat i1, Mat i2) {
     double C1 = 6.5025, C2 = 58.5225;
     int d = opencv_core.CV_32F;
     Mat I1 = new Mat();
@@ -82,15 +81,5 @@ public class Similarity {
     opencv_core.divide(t3, t1, ssim_map); // ssim_map =  t3./t1;
     // mssim = average of ssim map
     return opencv_core.mean(ssim_map);
-  }
-
-  public static void main(String[] args) {
-    Mat img1 = opencv_imgcodecs.imread("face.jpg");
-    Mat img2 = img1.clone();
-    opencv_imgproc.GaussianBlur(img2, img2, new Size(15, 15), 10);
-    double psnr = getPSNR(img1, img2);
-    Scalar mssim = getMSSIM(img1, img2);
-    System.out.println("PSNR: " + psnr);
-    System.out.printf("SSIM: %f, %f, %f\n", mssim.get(0), mssim.get(1), mssim.get(2));
   }
 }

@@ -204,4 +204,13 @@ public class ZoneManager {
   public Rectangle getMouseOver() {
     return mouseOver;
   }
+
+  /**
+   * {@link Boolean} defining whether the client is in fixed or resizable mode.
+   *
+   * @return True if fixed, false if resizable.
+   */
+  public boolean getIsFixed() {
+    return isFixed;
+  }
 }
