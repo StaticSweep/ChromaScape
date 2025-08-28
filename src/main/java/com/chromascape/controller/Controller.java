@@ -126,7 +126,13 @@ public class Controller {
     return zoneManager;
   }
 
+  /**
+   * Provides access to the walker domain utility.
+   *
+   * @return The walker utility, to be able to pathfind in-game.
+   */
   public Walker walker() {
+    assertRunning("Walker");
     return walker;
   }
 

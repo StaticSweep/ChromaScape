@@ -49,12 +49,10 @@ public class Dax {
             .POST(HttpRequest.BodyPublishers.ofString(payload))
             .build();
     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-    switch (response.statusCode()) {
-      case 429:
-        throw new InterruptedException("RATE_LIMIT_EXCEEDED");
-      case 404:
-        throw new InterruptedException("INVALID_CREDENTIALS");
-    }
-    return response.body();
+    return switch (response.statusCode()) {
+      case 429 -> "RATE_LIMIT_EXCEEDED";
+      case 400, 401, 404 -> throw new InterruptedException("INVALID_CREDENTIALS");
+      default -> response.body();
+    };
   }
 }

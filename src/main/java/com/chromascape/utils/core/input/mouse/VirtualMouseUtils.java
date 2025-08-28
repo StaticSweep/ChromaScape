@@ -129,7 +129,7 @@ public class VirtualMouseUtils {
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
     kinput.clickLeft(clientPoint.x + xoffset, clientPoint.y + yoffset);
     kinput.moveMouse(clientPoint.x + xoffset, clientPoint.y + yoffset);
-    microJitter();
+    //    microJitter();
   }
 
   /**
@@ -140,7 +140,7 @@ public class VirtualMouseUtils {
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
     kinput.clickRight(clientPoint.x + xoffset, clientPoint.y + yoffset);
     kinput.moveMouse(clientPoint.x + xoffset, clientPoint.y + yoffset);
-    microJitter();
+    //    microJitter();
   }
 
   /**
@@ -175,10 +175,10 @@ public class VirtualMouseUtils {
   private void windowOffset(boolean isFullscreen) {
     if (isFullscreen) {
       xoffset = 0;
-      yoffset = -22;
+      yoffset = -21;
     } else {
       xoffset = -4;
-      yoffset = -26;
+      yoffset = -27;
     }
   }
 }
