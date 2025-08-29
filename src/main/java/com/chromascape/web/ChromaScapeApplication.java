@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * The main entry point for the ChromaScape Spring Boot application.
  *
  * <p>This class bootstraps the entire backend system, initializing all Spring components such as
- * REST controllers, services, and configuration classes.
+ * REST controllers, services, and configuration classes.</p>
  */
 @SpringBootApplication
 public class ChromaScapeApplication {
