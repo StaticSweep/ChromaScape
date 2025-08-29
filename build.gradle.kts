@@ -55,3 +55,6 @@ tasks.named("check") {
 	dependsOn("spotlessCheck", "checkstyleMain")
 }
 
+tasks.build {
+    dependsOn("spotlessApply", "checkstyleMain")
+}
