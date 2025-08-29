@@ -7,6 +7,9 @@ import java.awt.Rectangle;
  * platform-specific implementations while maintaining a consistent API.
  */
 public interface WindowManager {
+  
+  /** The name of the window to find. */
+  String windowName = "RuneLite";
 
   /**
    * Attempts to locate a window with the specified title.
