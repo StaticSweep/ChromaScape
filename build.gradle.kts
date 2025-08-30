@@ -145,9 +145,9 @@ val copyNativeLibraries by tasks.registering(Copy::class) {
 	include("*.dll")
 }
 
-// Make build depend on native library building
+// Make build depend on native library building and quality checks
 tasks.named("build") {
-	dependsOn(copyNativeLibraries)
+	dependsOn(copyNativeLibraries, "check")
 }
 
 tasks.named("jar") {
