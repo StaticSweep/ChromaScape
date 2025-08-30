@@ -45,9 +45,14 @@ https://github.com/user-attachments/assets/a7a39096-6d65-4ff6-8843-f3661cc9a92d
 
 
 ### - Remote input
-ChromaScape utilises advanced remote input techniques to act like a separate second mouse that interacts with the client window. 
-This approach avoids hijacking the physical mouse, allowing you to continue using your PC uninterrupted while the bot works away in the background. 
-By interfacing with the Java canvas of the client using JNI, the framework ensures that all mouse actions appear genuine to the client window.
+
+ChromaScape uses advanced remote input techniques to function as a virtual second mouse dedicated to the client window. Unlike traditional input methods, this approach never hijacks your physical mouse, so you can continue using your PC without interruption while the bot runs in the background.
+
+This is achieved through KInput, which provides utilities to send mouse and keyboard events directly into a client’s Java Canvas object. By design, it cannot click outside this canvas and requires the Process ID of the target client to operate.
+
+ChromaScape uses the [64-bit](https://github.com/ThatOneGuyScripts/KInput) supported version of KInput. The [original](https://github.com/Kasi-R/KInput) KInput source is also available for reference.
+
+Feel free to browse the code or build from source if you’d like to dive deeper into how it works.
 
 ### - Humanised mouse movement
 To further reduce bot detection risks, ChromaScape uses humanised mouse movement patterns that mimic real user behavior. Through a combination of multiple bezier paths, easing functions and the ability to overshoot/undershoot then recorrect - this produces surprisingly natural-looking behavior.
