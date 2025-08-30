@@ -9,6 +9,9 @@ plugins {
 group = "com.chromascape"
 version = "0.0.1-SNAPSHOT"
 
+// Customize build directories - put DLLs in build/dist
+layout.buildDirectory.set(file("build"))
+
 java {
 	toolchain {
 		languageVersion.set(JavaLanguageVersion.of(17))
@@ -53,5 +56,101 @@ spotless {
 
 tasks.named("check") {
 	dependsOn("spotlessCheck", "checkstyleMain")
+}
+
+// KInput native build configuration
+val buildKInput by tasks.registering(Exec::class) {
+	group = "native"
+	description = "Build KInput.dll"
+	workingDir = file("src/main/resources/native/KInput/KInput/KInput")
+	
+	// Use cmd.exe to run make commands on Windows
+	commandLine("cmd", "/c", "make clean && make release")
+	
+	outputs.file("${workingDir}/bin/Release/KInput.dll")
+	
+	// Only run if make is available and library doesn't exist
+	onlyIf {
+		val outputFile = file("${workingDir}/bin/Release/KInput.dll")
+		!outputFile.exists() && try {
+			exec {
+				commandLine("make", "--version")
+			}
+			true
+		} catch (e: Exception) {
+			false
+		}
+	}
+	
+	doFirst {
+		file("${workingDir}/bin/Release").mkdirs()
+	}
+}
+
+val buildKInputCtrl by tasks.registering(Exec::class) {
+	group = "native"
+	description = "Build KInputCtrl.dll"
+	workingDir = file("src/main/resources/native/KInput/KInput/KInputCtrl")
+	
+	commandLine("cmd", "/c", "make clean && make release")
+	
+	outputs.file("${workingDir}/bin/Release/KInputCtrl.dll")
+	
+	onlyIf {
+		val outputFile = file("${workingDir}/bin/Release/KInputCtrl.dll")
+		!outputFile.exists() && try {
+			exec {
+				commandLine("make", "--version")
+			}
+			true
+		} catch (e: Exception) {
+			false
+		}
+	}
+	
+	doFirst {
+		file("${workingDir}/bin/Release").mkdirs()
+	}
+}
+
+// Copy built DLLs to build/dist folder
+val copyNativeLibraries by tasks.registering(Copy::class) {
+	group = "native"
+	description = "Copy built native libraries to build/dist"
+	dependsOn(buildKInput, buildKInputCtrl)
+	
+	// Always run this task to ensure build/dist directory exists
+	// If native build failed, copy existing pre-built libraries
+	onlyIf {
+		// Check if we have either built libraries or existing pre-built ones
+		val kInputBuilt = file("src/main/resources/native/KInput/KInput/KInput/bin/Release/KInput.dll").exists()
+		val kInputCtrlBuilt = file("src/main/resources/native/KInput/KInput/KInputCtrl/bin/Release/KInputCtrl.dll").exists()
+		val kInputExisting = file("src/main/resources/native/KInput64.dll").exists()
+		val kInputCtrlExisting = file("src/main/resources/native/KInputCtrl64.dll").exists()
+		
+		kInputBuilt && kInputCtrlBuilt || kInputExisting && kInputCtrlExisting
+	}
+	
+	doFirst {
+		// Ensure build/dist directory exists
+		file("build/dist").mkdirs()
+	}
+	
+	// Copy from built libraries if they exist, otherwise from existing ones
+	from("src/main/resources/native/KInput/KInput/KInput/bin/Release")
+	from("src/main/resources/native/KInput/KInput/KInputCtrl/bin/Release")
+	from("src/main/resources/native")
+	into("build/dist")
+	
+	include("*.dll")
+}
+
+// Make build depend on native library building
+tasks.named("build") {
+	dependsOn(copyNativeLibraries)
+}
+
+tasks.named("jar") {
+	dependsOn(copyNativeLibraries)
 }
 

@@ -152,12 +152,24 @@ public class Kinput {
   }
 
   /**
-   * Loads the Kinput native libraries from the classpath and prepares them for JNA.
+   * Loads the Kinput native libraries from the build directory and prepares them for JNA.
    *
    * @return the loaded KinputInterface
    */
   private static KinputInterface loadLibrary() {
     try {
+      // Try to load from build/dist directory first (preferred)
+      Path buildDistPath = Path.of("build/dist");
+      Path dllFileCtrl = buildDistPath.resolve("KInputCtrl64.dll");
+      Path dllFile64 = buildDistPath.resolve("KInput64.dll");
+
+      if (Files.exists(dllFileCtrl) && Files.exists(dllFile64)) {
+        // Use build directory directly
+        System.setProperty("jna.library.path", buildDistPath.toAbsolutePath().toString());
+        return Native.load("KInputCtrl64", KinputInterface.class);
+      }
+
+      // Fallback to classpath resources if build directory doesn't exist
       InputStream inCtrl = Kinput.class.getResourceAsStream("/native/KInputCtrl64.dll");
       if (inCtrl == null) {
         throw new IOException("Missing: KInputCtrl64.dll");
@@ -171,11 +183,11 @@ public class Kinput {
       Path tempDir = Files.createTempDirectory("native_libs");
       tempDir.toFile().deleteOnExit();
 
-      Path dllFileCtrl = tempDir.resolve("KInputCtrl64.dll");
+      dllFileCtrl = tempDir.resolve("KInputCtrl64.dll");
       Files.copy(inCtrl, dllFileCtrl, StandardCopyOption.REPLACE_EXISTING);
       dllFileCtrl.toFile().deleteOnExit();
 
-      Path dllFile64 = tempDir.resolve("KInput64.dll");
+      dllFile64 = tempDir.resolve("KInput64.dll");
       Files.copy(in64, dllFile64, StandardCopyOption.REPLACE_EXISTING);
       dllFile64.toFile().deleteOnExit();
 
