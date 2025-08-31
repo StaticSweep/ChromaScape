@@ -129,7 +129,7 @@ public class VirtualMouseUtils {
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
     kinput.clickLeft(clientPoint.x + xoffset, clientPoint.y + yoffset);
     kinput.moveMouse(clientPoint.x + xoffset, clientPoint.y + yoffset);
-    //    microJitter();
+    microJitter();
   }
 
   /**
@@ -140,7 +140,7 @@ public class VirtualMouseUtils {
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
     kinput.clickRight(clientPoint.x + xoffset, clientPoint.y + yoffset);
     kinput.moveMouse(clientPoint.x + xoffset, clientPoint.y + yoffset);
-    //    microJitter();
+    microJitter();
   }
 
   /**

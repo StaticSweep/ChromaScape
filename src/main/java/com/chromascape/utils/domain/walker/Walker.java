@@ -14,7 +14,9 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -148,7 +150,7 @@ public class Walker {
    *
    * <p>This approach ensures that the next click location is calculated while waiting, reducing
    * idle time and keeping movement smooth and efficient. The path list is modified in-place by
-   * {@link #chooseNextTarget(List)}.
+   * {@link #chooseNextTarget(List, int, int)}.
    *
    * @param destination the destination {@link Point} to walk to
    * @param isMembers whether the player is a members account, affecting path calculation
@@ -159,17 +161,22 @@ public class Walker {
   public void pathTo(Point destination, boolean isMembers)
       throws IOException, InterruptedException, ExecutionException {
     List<Tile> path = getPath(destination, isMembers);
-    Tile position;
+    // How far away from the current tile the bot should click
+    int maxHorizon = 10;
+    int minHorizon = 8;
     // Synchronously path once
-    Tile target = chooseNextTarget(path);
+    Tile target = chooseNextTarget(path, minHorizon, maxHorizon);
     logger.addLog("Synchronously clicking once at " + target.x() + ", " + target.y());
     controller.mouse().moveTo(getClickLocation(target, getPlayerPosition()), "medium");
     controller.mouse().leftClick();
     // Looping until at destination
     while (getPlayerPosition().x() != destination.getX()
-        && getPlayerPosition().y() != destination.getY()) {
+        || getPlayerPosition().y() != destination.getY()) {
+      if (path.isEmpty()) {
+        break;
+      }
       // Effectively final variables for the lambda function.
-      Tile newTarget = chooseNextTarget(path);
+      Tile newTarget = chooseNextTarget(path, minHorizon, maxHorizon);
       Tile oldTarget = target;
       // Async precomputing the next click point while waiting for the bot to stop
       pointFuture = CompletableFuture.supplyAsync(() -> getClickLocation(newTarget, oldTarget));
@@ -177,19 +184,29 @@ public class Walker {
       logger.addLog("Precomputing next click at " + newTarget.x() + ", " + newTarget.y());
       waitToStop();
       // Recalculate path and cancel async if not at expected location
-      position = getPlayerPosition();
+      Tile position = getPlayerPosition();
       Point clickpoint;
-      if (position.x() != target.x() && position.y() != target.y()) {
+      if (position.x() != target.x() || position.y() != target.y()) {
         logger.addLog("Veered off path, recalculating...");
-        path = getPath(destination, isMembers);
-        pointFuture.cancel(true);
-        target = chooseNextTarget(path);
+        pointFuture.cancel(false);
+        try {
+          pointFuture.join();
+        } catch (CancellationException | CompletionException e) {
+          logger.addLog("Async task was cancelled and thread joined");
+        }
+        // If the path is out of range recalculate whole path
+        target = chooseNextTarget(path, 5, 7);
+        if (Math.abs(position.x() - target.x()) > 7 || Math.abs(position.y() - target.y()) > 7) {
+          logger.addLog("Too far from path, calling Dax...");
+          path = getPath(destination, isMembers);
+          target = chooseNextTarget(path, minHorizon, maxHorizon);
+        }
         clickpoint = getClickLocation(target, getPlayerPosition());
       } else {
         clickpoint = pointFuture.get();
+        // Update target
+        target = newTarget;
       }
-      // Update target
-      target = newTarget;
       // Both scenarios saved as the clickPoint
       controller.mouse().moveTo(clickpoint, "medium");
       controller.mouse().leftClick();
@@ -212,10 +229,7 @@ public class Walker {
    *     destination; this list will be modified by removing tiles up to the chosen target
    * @return the {@link Tile} selected as the next click target
    */
-  private Tile chooseNextTarget(List<Tile> path) {
-    // How far away from the current tile the bot should click
-    int maxHorizon = 10;
-    int minHorizon = 8;
+  private Tile chooseNextTarget(List<Tile> path, int minHorizon, int maxHorizon) {
     int targetPos = random.nextInt(minHorizon, maxHorizon + 1);
     Tile target;
     // If we're about to overshoot the last tile, just click the last tile
@@ -224,6 +238,7 @@ public class Walker {
       path.subList(0, targetPos).clear();
     } else {
       target = path.get(path.size() - 1);
+      path.clear();
     }
     return target;
   }
@@ -247,8 +262,8 @@ public class Walker {
     int y = playerPosition.y();
     // Calculating distance from the player to the target, in pixels
     // and adding an offset of a few pixels to click randomly within the tile
-    int dx = ((target.x() - x) * pixelsPerTile);
-    int dy = ((y - target.y()) * pixelsPerTile);
+    double dx = ((target.x() - x) * pixelsPerTile);
+    double dy = ((y - target.y()) * pixelsPerTile);
     // Locating the player's tile on the minimap
     Rectangle playerMinimap = controller.zones().getMinimap().get("playerPos");
     // Origins dictate the perfect center - used to rotate the click location
