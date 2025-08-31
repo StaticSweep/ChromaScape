@@ -68,6 +68,8 @@ This utility allows you to pick exact pixel colours directly from the screen. It
 
 <img width="1298" height="751" alt="colourScreenshot" src="https://github.com/user-attachments/assets/b93eb66c-2a61-40ba-9abb-24fb0596d7b5" />
 
+> Note: You will need all other colours except your desired one to be black. (This is just an example to show colour filtering)
+
 ### - Colour Detection
 Using the colours obtained from the picker, the framework scans defined screen regions to find matching outlines or clusters of pixels. This process enables the bot to recognise in-game objects, UI elements, or indicators by their unique colour signatures. The detection logic is optimized to handle slight variations in colour due to lighting or graphical effects by allowing for a lower and upper range of colours.
 
