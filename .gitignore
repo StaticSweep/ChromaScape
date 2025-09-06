@@ -20,6 +20,8 @@ hs_err_pid*
 
 # Generated files
 bin/
+!third_party/KInput/KInput/KInput/bin/
+!third_party/KInput/KInput/KInputCtrl/bin/
 out/
 build/
 !third_party/minhook/build/
