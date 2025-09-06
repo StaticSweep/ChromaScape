@@ -35,9 +35,6 @@ mingw32-make
    - Download from: https://adoptium.net/ or https://www.oracle.com/java/technologies/downloads/
    - Note the installation path (e.g., `C:\Program Files\Microsoft\jdk-17.x.x.x-hotspot`)
 
-3. **Code::Blocks IDE** (optional, for GUI development)
-   - Download from: http://www.codeblocks.org/
-
 ## Project Structure
 
 ```
