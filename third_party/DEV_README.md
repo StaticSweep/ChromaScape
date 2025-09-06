@@ -4,6 +4,10 @@ This guide explains how to set up and build the KInput and KInputCtrl projects f
 
 ## Quick Build Commands
 
+Note:
+- **Replace the path to MinGW to the real path in your system**
+- **All of these commands assume you're already in the `third_party` directory**
+
 **PowerShell:**
 ```powershell
 # Build MinHook
