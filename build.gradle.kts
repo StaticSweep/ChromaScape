@@ -9,6 +9,9 @@ plugins {
 group = "com.chromascape"
 version = "0.0.1-SNAPSHOT"
 
+// Customize build directories - put DLLs in build/dist
+layout.buildDirectory.set(file("build"))
+
 java {
 	toolchain {
 		languageVersion.set(JavaLanguageVersion.of(17))
@@ -53,5 +56,69 @@ spotless {
 
 tasks.named("check") {
 	dependsOn("spotlessCheck", "checkstyleMain")
+}
+
+// Windows-only native build configuration
+val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
+
+// Copy prebuilt DLLs to build/dist folder
+val copyNativeLibraries by tasks.registering(Copy::class) {
+	group = "native"
+	description = "Copy prebuilt native libraries to build/dist"
+	
+	// Only run on Windows
+	onlyIf {
+		isWindows
+	}
+	
+	// Check if we have prebuilt libraries
+	onlyIf {
+		val kInputExists = file("third_party/KInput/KInput/KInput/bin/Release/KInput.dll").exists()
+		val kInputCtrlExists = file("third_party/KInput/KInput/KInputCtrl/bin/Release/KInputCtrl.dll").exists()
+		
+		kInputExists && kInputCtrlExists
+	}
+	
+	doFirst {
+		// Ensure build/dist directory exists
+		file("build/dist").mkdirs()
+	}
+	
+	// Copy from prebuilt libraries
+	from("third_party/KInput/KInput/KInput/bin/Release")
+	from("third_party/KInput/KInput/KInputCtrl/bin/Release")
+	into("build/dist")
+	
+	include("*.dll")
+}
+
+// Copy native libraries to resources for classpath fallback
+val copyNativeToResources by tasks.registering(Copy::class) {
+	group = "native"
+	description = "Copy native libraries to resources for classpath fallback"
+	dependsOn(copyNativeLibraries)
+	
+	// Only run on Windows
+	onlyIf {
+		isWindows
+	}
+	
+	from("build/dist")
+	into("src/main/resources/native")
+	
+	include("*.dll")
+}
+
+// Make build depend on native library copying and quality checks
+tasks.named("processResources") {
+	dependsOn(copyNativeToResources)
+}
+
+tasks.named("build") {
+	dependsOn(copyNativeLibraries, copyNativeToResources, "check")
+}
+
+tasks.named("jar") {
+	dependsOn(copyNativeLibraries, copyNativeToResources)
 }
 
