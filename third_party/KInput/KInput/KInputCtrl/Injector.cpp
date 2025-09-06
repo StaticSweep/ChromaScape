@@ -100,10 +100,10 @@ bool Injector::CallExport(void* DLL, std::string ProcName, void* Data, std::uint
 
     char* dllName = nullptr;
     if (sizeof(void*) == 8) {
-        dllName = "KInput64.dll";
+        dllName = "KInput.dll";
     }
     else if (sizeof(void*) == 4) {
-        dllName = "KInput32.dll";
+        dllName = "KInput.dll";
     }
     else {
         std::cout << "Unknown architecture\n";

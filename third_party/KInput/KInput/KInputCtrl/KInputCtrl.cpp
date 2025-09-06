@@ -24,10 +24,10 @@ KInputCtrl::KInputCtrl(DWORD PID, std::string Path) : Injector(PID)
 {
     char* dllName = nullptr;
     if (sizeof(void*) == 8) {
-        dllName = "\\KInput64.dll";
+        dllName = "\\KInput.dll";
     }
     else if (sizeof(void*) == 4) {
-        dllName = "\\KInput32.dll";
+        dllName = "\\KInput.dll";
     }
     this->FileName = Path + dllName;
     this->DLL = this->Load(FileName);

@@ -158,13 +158,13 @@ public class Kinput {
     try {
       // Try to load from build/dist directory first (preferred)
       Path buildDistPath = Path.of("build/dist");
-      Path dllFileCtrl = buildDistPath.resolve("KInputCtrl.dll");
-      Path dllFile64 = buildDistPath.resolve("KInput.dll");
+      Path dllFileCtrl = buildDistPath.resolve("KInputCtrl64.dll");
+      Path dllFile64 = buildDistPath.resolve("KInput64.dll");
 
       if (Files.exists(dllFileCtrl) && Files.exists(dllFile64)) {
         // Use build directory directly
         System.setProperty("jna.library.path", buildDistPath.toAbsolutePath().toString());
-        return Native.load("KInputCtrl", KinputInterface.class);
+        return Native.load("KInputCtrl64", KinputInterface.class);
       }
 
       // If DLLs are not found in build directory, throw an error
