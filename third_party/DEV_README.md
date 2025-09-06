@@ -8,7 +8,7 @@ This guide explains how to set up and build the KInput and KInputCtrl projects f
 ```powershell
 # Build MinHook
 cd minhook\build\MinGW
-$env:PATH += ";C:\Users\kngo1\mingw64\bin"
+$env:PATH += ";C:\path\to\mingw64\bin"
 gcc -c -I../../include -I../../src -Wall -Werror -std=c11 -masm=intel ../../src/*.c ../../src/hde/*.c
 ar rcs libMinHook.a *.o
 
@@ -33,7 +33,7 @@ mingw32-make
 
 2. **Java Development Kit (JDK) 17 or later**
    - Download from: https://adoptium.net/ or https://www.oracle.com/java/technologies/downloads/
-   - Note the installation path (e.g., `C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot`)
+   - Note the installation path (e.g., `C:\Program Files\Microsoft\jdk-17.x.x.x-hotspot`)
 
 3. **Code::Blocks IDE** (optional, for GUI development)
    - Download from: http://www.codeblocks.org/
@@ -93,8 +93,8 @@ Edit the following paths in `KInput.cbp`:
 
 ```xml
 <!-- Java include paths - Update to your JDK installation -->
-<Add directory="C:/Program Files/Microsoft/jdk-17.0.16.8-hotspot/include" />
-<Add directory="C:/Program Files/Microsoft/jdk-17.0.16.8-hotspot/include/win32" />
+<Add directory="C:/Program Files/Microsoft/jdk-17.x.x.x-hotspot/include" />
+<Add directory="C:/Program Files/Microsoft/jdk-17.x.x.x-hotspot/include/win32" />
 
 <!-- MinHook include path - Should point to minhook/include -->
 <Add directory="../../minhook/include" />
@@ -114,7 +114,7 @@ INC = -I"..\..\..\minhook\include"
 LIBDIR = -L"..\..\..\minhook\build\MinGW"
 
 # Java include paths - Update to your JDK installation
-INC_RELEASE = $(INC) -I"C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot\include" -I"C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot\include\win32"
+INC_RELEASE = $(INC) -I"C:\Program Files\Microsoft\jdk-17.x.x.x-hotspot\include" -I"C:\Program Files\Microsoft\jdk-17.x.x.x-hotspot\include\win32"
 ```
 
 ### Step 3: Build KInput
