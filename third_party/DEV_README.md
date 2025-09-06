@@ -85,7 +85,7 @@ ar rcs libMinHook.a *.o
 
 ### Step 2: Update Configuration Files
 
-#### Update KInput.cbp (Code::Blocks Project)
+#### Update KInput.cbp
 Edit the following paths in `KInput.cbp`:
 
 ```xml
