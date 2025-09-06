@@ -16,7 +16,7 @@ import java.util.Map;
 public class SubZoneMapper {
 
   /**
-   * Maps all major UI components in the resizable mode minimap area.
+   * Maps all major UI components in or derived solely from the resizable mode minimap area.
    *
    * @param zone The base minimap zone.
    * @return A map of component names to {@link Rectangle} bounds.
@@ -36,7 +36,8 @@ public class SubZoneMapper {
       minimap.put("specText", new Rectangle(zone.x + 36, zone.y + 151, 20, 13));
       minimap.put("minimap", new Rectangle(zone.x + 52, zone.y + 5, 154, 155));
       minimap.put("totalXP", new Rectangle(zone.x - 147, zone.y + 4, 104, 21));
-
+      minimap.put("playerPos", new Rectangle(zone.x + 127, zone.y + 80, 4, 4));
+      minimap.put("compassSimilarity", new Rectangle(zone.x + 33, zone.y + 2, 37, 37));
       return minimap;
     } else {
       System.out.println("No minimap found");
@@ -45,7 +46,7 @@ public class SubZoneMapper {
   }
 
   /**
-   * Maps UI components in fixed (non-resizable) mode minimap.
+   * Maps UI components in or derived solely from the fixed (non-resizable) mode minimap.
    *
    * @param zone The base minimap zone.
    * @return A map of minimap component rectangles.
@@ -65,6 +66,8 @@ public class SubZoneMapper {
       minimap.put("specOrb", new Rectangle(zone.x + 62, zone.y + 137, 19, 20));
       minimap.put("specText", new Rectangle(zone.x + 36, zone.y + 146, 20, 13));
       minimap.put("totalXP", new Rectangle(zone.x - 104, zone.y + 6, 104, 21));
+      minimap.put("playerPos", new Rectangle(zone.x + 124, zone.y + 82, 4, 4));
+      minimap.put("compassSimilarity", new Rectangle(zone.x + 27, zone.y + 2, 34, 35));
       return minimap;
     } else {
       System.out.println("No fixed minimap found");
@@ -132,6 +135,26 @@ public class SubZoneMapper {
       return chatTabs;
     } else {
       System.out.println("No Chat found");
+      return null;
+    }
+  }
+
+  /**
+   * Maps out the three fields contained in the Grid Info box. These fields are meant to be used
+   * with OCR to extract player location data.
+   *
+   * @param zone The bounding box of the parent zone. (Where the box is).
+   * @return A list of {@link Rectangle} subzones (Tile, ChunkID, RegionID).
+   */
+  public static Map<String, Rectangle> mapGridInfo(Rectangle zone) {
+    if (zone != null) {
+      Map<String, Rectangle> gridInfo = new HashMap<>();
+      gridInfo.put("Tile", new Rectangle(zone.x + 39, zone.y, 89, 22));
+      gridInfo.put("ChunkID", new Rectangle(zone.x + 74, zone.y + 20, 54, 19));
+      gridInfo.put("RegionID", new Rectangle(zone.x + 84, zone.y + 36, 45, 19));
+      return gridInfo;
+    } else {
+      System.out.println("No Grid found");
       return null;
     }
   }

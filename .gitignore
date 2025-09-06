@@ -52,6 +52,9 @@ Thumbs.db
 # Templates
 /src/main/resources/fonts/
 /src/main/resources/images/ui/
+/src/main/resources/images/user/*
+/src/main/resources/images/user/.gitkeep
 
 # output
-output/
+output/*
+!output/.gitkeep

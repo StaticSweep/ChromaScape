@@ -5,6 +5,7 @@ import com.chromascape.utils.core.input.mouse.VirtualMouseUtils;
 import com.chromascape.utils.core.input.remoteinput.Kinput;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.core.screen.window.WindowHandler;
+import com.chromascape.utils.domain.walker.Walker;
 import com.chromascape.utils.domain.zones.ZoneManager;
 import com.chromascape.web.logs.LogService;
 
@@ -32,6 +33,7 @@ public class Controller {
   private VirtualMouseUtils virtualMouseUtils;
   private VirtualKeyboardUtils virtualKeyboardUtils;
   private ZoneManager zoneManager;
+  private Walker walker;
   private final LogService logger;
 
   /**
@@ -71,6 +73,9 @@ public class Controller {
     zoneManager = new ZoneManager(isFixed);
 
     state = ControllerState.RUNNING;
+
+    // Initialises a walker to provide the script with Walking functionality through the DAX API
+    walker = new Walker(this, logger);
   }
 
   /**
@@ -119,6 +124,16 @@ public class Controller {
   public ZoneManager zones() {
     assertRunning("ZoneManager");
     return zoneManager;
+  }
+
+  /**
+   * Provides access to the walker domain utility.
+   *
+   * @return The walker utility, to be able to pathfind in-game.
+   */
+  public Walker walker() {
+    assertRunning("Walker");
+    return walker;
   }
 
   /**

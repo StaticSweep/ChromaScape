@@ -8,4 +8,5 @@
     <suppress files=".*Kinput\.java" checks="MethodName"/>
     <suppress files=".*WindowHandler\.java" checks="MethodName"/>
     <suppress files=".*ScreenManager\.java" checks="MethodName"/>
+    <suppress files=".*Similarity\.java" checks=".*"/>
 </suppressions>

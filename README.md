@@ -15,7 +15,7 @@
 
 ---
 
-ChromaScape is a low-level, colour-based automation framework designed for game clients like Old School RuneScape. Inspired by Kelltom's [OSBC](https://github.com/kelltom/OS-Bot-COLOR/tree/main), [SRL-dev](https://github.com/Villavu/SRL-Development/tree/master) and [SlyAutomation](https://github.com/slyautomation/), it focuses on education, prototyping, and safe, human-like interaction using colour and pixel-based logic.
+ChromaScape is a low-level, colour-based automation framework designed for game clients like Old School RuneScape. Inspired by Kelltom's [OSBC](https://github.com/kelltom/OS-Bot-COLOR/tree/main), [SRL-dev](https://github.com/Villavu/SRL-Development/tree/master), Nick Cemenenkoff's [RuneDark](https://github.com/cemenenkoff/runedark-public) and [SlyAutomation](https://github.com/slyautomation/), it focuses on education, prototyping, and safe, human-like interaction using colour and pixel-based logic.
 
 Whether you're just starting with bot development or building advanced automation systems, ChromaScape provides a modular, structured framework to help you prototype fast and learn by doing.
 
@@ -68,6 +68,8 @@ This utility allows you to pick exact pixel colours directly from the screen. It
 
 <img width="1298" height="751" alt="colourScreenshot" src="https://github.com/user-attachments/assets/b93eb66c-2a61-40ba-9abb-24fb0596d7b5" />
 
+> Note: You will need all other colours except your desired one to be black. (This is just an example to show colour filtering)
+
 ### - Colour Detection
 Using the colours obtained from the picker, the framework scans defined screen regions to find matching outlines or clusters of pixels. This process enables the bot to recognise in-game objects, UI elements, or indicators by their unique colour signatures. The detection logic is optimized to handle slight variations in colour due to lighting or graphical effects by allowing for a lower and upper range of colours.
 
@@ -78,4 +80,4 @@ ChromaScape includes functionality for identifying images or sprites by comparin
 ChromaScape utilises template matching for accurate and fast OCR. This solution - as opposed to machine learning - provides for ocr at runtime. This was inspired by SRL and OSBC.
 
 ### Note on dependencies:
-This project downloads specific fonts and UI elements from the [OSBC](https://github.com/kelltom/OS-Bot-COLOR/tree/main) and [SRL-dev](https://github.com/Villavu/SRL-Development/tree/master) projects to enable accurate template matching, OCR, and UI consistency. These resources are used solely for educational and research purposes and they are not packaged directly within this repository
+This project downloads specific fonts and UI elements from the [OSBC](https://github.com/kelltom/OS-Bot-COLOR/tree/main), [RuneDark](https://github.com/cemenenkoff/runedark-public) and [SRL-dev](https://github.com/Villavu/SRL-Development/tree/master) projects to enable accurate template matching, OCR, and UI consistency. These resources are used solely for educational and research purposes and they are not packaged directly within this repository.
