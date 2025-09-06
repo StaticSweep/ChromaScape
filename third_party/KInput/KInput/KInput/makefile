@@ -11,20 +11,20 @@ AR = ar.exe
 LD = g++.exe
 WINDRES = windres.exe
 
-INC = -I"minhook\include"
+INC = -I"..\..\..\minhook\include"
 CFLAGS = 
 RESINC = 
-LIBDIR = -L"minhook\lib"
+LIBDIR = -L"..\..\..\minhook\build\MinGW"
 LIB = -l"MinHook"
 LDFLAGS =
 
-INC_RELEASE = $(INC) -I"C:\Program Files (x86)\Java\jdk1.8.0_171\include" -I"C:\Program Files (x86)\Java\jdk1.8.0_171\include\win32"
-CFLAGS_RELEASE = $(CFLAGS) -Os -Wall -std=c++1z -m32 -DBUILD_DLL
+INC_RELEASE = $(INC) -I"C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot\include" -I"C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot\include\win32"
+CFLAGS_RELEASE = $(CFLAGS) -Os -Wall -std=c++1z -DBUILD_DLL
 RESINC_RELEASE = $(RESINC)
 RCFLAGS_RELEASE = $(RCFLAGS)
 LIBDIR_RELEASE = $(LIBDIR)
 LIB_RELEASE = $(LIB)
-LDFLAGS_RELEASE = $(LDFLAGS) -s -static-libstdc++ -static-libgcc -static -m32
+LDFLAGS_RELEASE = $(LDFLAGS) -s -static-libstdc++ -static-libgcc -static
 OBJDIR_RELEASE = obj\\Release
 DEP_RELEASE = 
 OUT_RELEASE = bin\\Release\\KInput.dll

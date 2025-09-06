@@ -58,77 +58,25 @@ tasks.named("check") {
 	dependsOn("spotlessCheck", "checkstyleMain")
 }
 
-// KInput native build configuration
-val buildKInput by tasks.registering(Exec::class) {
-	group = "native"
-	description = "Build KInput.dll"
-	workingDir = file("src/main/resources/native/KInput/KInput/KInput")
-	
-	// Use cmd.exe to run make commands on Windows
-	commandLine("cmd", "/c", "make clean && make release")
-	
-	outputs.file("${workingDir}/bin/Release/KInput.dll")
-	
-	// Only run if make is available and library doesn't exist
-	onlyIf {
-		val outputFile = file("${workingDir}/bin/Release/KInput.dll")
-		!outputFile.exists() && try {
-			exec {
-				commandLine("make", "--version")
-			}
-			true
-		} catch (e: Exception) {
-			false
-		}
-	}
-	
-	doFirst {
-		file("${workingDir}/bin/Release").mkdirs()
-	}
-}
+// Windows-only native build configuration
+val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
 
-val buildKInputCtrl by tasks.registering(Exec::class) {
-	group = "native"
-	description = "Build KInputCtrl.dll"
-	workingDir = file("src/main/resources/native/KInput/KInput/KInputCtrl")
-	
-	commandLine("cmd", "/c", "make clean && make release")
-	
-	outputs.file("${workingDir}/bin/Release/KInputCtrl.dll")
-	
-	onlyIf {
-		val outputFile = file("${workingDir}/bin/Release/KInputCtrl.dll")
-		!outputFile.exists() && try {
-			exec {
-				commandLine("make", "--version")
-			}
-			true
-		} catch (e: Exception) {
-			false
-		}
-	}
-	
-	doFirst {
-		file("${workingDir}/bin/Release").mkdirs()
-	}
-}
-
-// Copy built DLLs to build/dist folder
+// Copy prebuilt DLLs to build/dist folder
 val copyNativeLibraries by tasks.registering(Copy::class) {
 	group = "native"
-	description = "Copy built native libraries to build/dist"
-	dependsOn(buildKInput, buildKInputCtrl)
+	description = "Copy prebuilt native libraries to build/dist"
 	
-	// Always run this task to ensure build/dist directory exists
-	// If native build failed, copy existing pre-built libraries
+	// Only run on Windows
 	onlyIf {
-		// Check if we have either built libraries or existing pre-built ones
-		val kInputBuilt = file("src/main/resources/native/KInput/KInput/KInput/bin/Release/KInput.dll").exists()
-		val kInputCtrlBuilt = file("src/main/resources/native/KInput/KInput/KInputCtrl/bin/Release/KInputCtrl.dll").exists()
-		val kInputExisting = file("src/main/resources/native/KInput64.dll").exists()
-		val kInputCtrlExisting = file("src/main/resources/native/KInputCtrl64.dll").exists()
+		isWindows
+	}
+	
+	// Check if we have prebuilt libraries
+	onlyIf {
+		val kInputExists = file("third_party/KInput/KInput/KInput/bin/Release/KInput.dll").exists()
+		val kInputCtrlExists = file("third_party/KInput/KInput/KInputCtrl/bin/Release/KInputCtrl.dll").exists()
 		
-		kInputBuilt && kInputCtrlBuilt || kInputExisting && kInputCtrlExisting
+		kInputExists && kInputCtrlExists
 	}
 	
 	doFirst {
@@ -136,21 +84,41 @@ val copyNativeLibraries by tasks.registering(Copy::class) {
 		file("build/dist").mkdirs()
 	}
 	
-	// Copy from built libraries if they exist, otherwise from existing ones
-	from("src/main/resources/native/KInput/KInput/KInput/bin/Release")
-	from("src/main/resources/native/KInput/KInput/KInputCtrl/bin/Release")
-	from("src/main/resources/native")
+	// Copy from prebuilt libraries
+	from("third_party/KInput/KInput/KInput/bin/Release")
+	from("third_party/KInput/KInput/KInputCtrl/bin/Release")
 	into("build/dist")
 	
 	include("*.dll")
 }
 
-// Make build depend on native library building and quality checks
+// Copy native libraries to resources for classpath fallback
+val copyNativeToResources by tasks.registering(Copy::class) {
+	group = "native"
+	description = "Copy native libraries to resources for classpath fallback"
+	dependsOn(copyNativeLibraries)
+	
+	// Only run on Windows
+	onlyIf {
+		isWindows
+	}
+	
+	from("build/dist")
+	into("src/main/resources/native")
+	
+	include("*.dll")
+}
+
+// Make build depend on native library copying and quality checks
+tasks.named("processResources") {
+	dependsOn(copyNativeToResources)
+}
+
 tasks.named("build") {
-	dependsOn(copyNativeLibraries, "check")
+	dependsOn(copyNativeLibraries, copyNativeToResources, "check")
 }
 
 tasks.named("jar") {
-	dependsOn(copyNativeLibraries)
+	dependsOn(copyNativeLibraries, copyNativeToResources)
 }
 

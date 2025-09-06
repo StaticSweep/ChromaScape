@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <map>
 #include <string>
+#include <cstdint>
 
 class Injector
 {

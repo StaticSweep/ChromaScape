@@ -3,10 +3,8 @@ package com.chromascape.utils.core.input.remoteinput;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Random;
 
 /**
@@ -160,40 +158,18 @@ public class Kinput {
     try {
       // Try to load from build/dist directory first (preferred)
       Path buildDistPath = Path.of("build/dist");
-      Path dllFileCtrl = buildDistPath.resolve("KInputCtrl64.dll");
-      Path dllFile64 = buildDistPath.resolve("KInput64.dll");
+      Path dllFileCtrl = buildDistPath.resolve("KInputCtrl.dll");
+      Path dllFile64 = buildDistPath.resolve("KInput.dll");
 
       if (Files.exists(dllFileCtrl) && Files.exists(dllFile64)) {
         // Use build directory directly
         System.setProperty("jna.library.path", buildDistPath.toAbsolutePath().toString());
-        return Native.load("KInputCtrl64", KinputInterface.class);
+        return Native.load("KInputCtrl", KinputInterface.class);
       }
 
-      // Fallback to classpath resources if build directory doesn't exist
-      InputStream inCtrl = Kinput.class.getResourceAsStream("/native/KInputCtrl64.dll");
-      if (inCtrl == null) {
-        throw new IOException("Missing: KInputCtrl64.dll");
-      }
-
-      InputStream in64 = Kinput.class.getResourceAsStream("/native/KInput64.dll");
-      if (in64 == null) {
-        throw new IOException("Missing: KInput64.dll");
-      }
-
-      Path tempDir = Files.createTempDirectory("native_libs");
-      tempDir.toFile().deleteOnExit();
-
-      dllFileCtrl = tempDir.resolve("KInputCtrl64.dll");
-      Files.copy(inCtrl, dllFileCtrl, StandardCopyOption.REPLACE_EXISTING);
-      dllFileCtrl.toFile().deleteOnExit();
-
-      dllFile64 = tempDir.resolve("KInput64.dll");
-      Files.copy(in64, dllFile64, StandardCopyOption.REPLACE_EXISTING);
-      dllFile64.toFile().deleteOnExit();
-
-      System.setProperty("jna.library.path", tempDir.toString());
-
-      return Native.load("KInputCtrl64", KinputInterface.class);
+      // If DLLs are not found in build directory, throw an error
+      throw new IOException(
+          "Missing native libraries in build/dist directory. Please run the build process first.");
     } catch (Throwable e) {
       throw new RuntimeException("Failed to load Kinput DLLs", e);
     }

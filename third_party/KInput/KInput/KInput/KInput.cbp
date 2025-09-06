@@ -15,20 +15,18 @@
 				<Compiler>
 					<Add option="-Os" />
 					<Add option="-Wall" />
-					<Add option="-m32" />
 					<Add option="-std=c++1z" />
 					<Add option="-DBUILD_DLL" />
-					<Add directory="../../../../../Program Files/Java/jdk1.8.0_361/include" />
-					<Add directory="C:/Program Files/Java/jdk1.8.0_361/include/win32" />
-					<Add directory="C:/Users/ThatOneGuy/Desktop/minhook-master/include" />
+					<Add directory="C:/Program Files/Microsoft/jdk-17.0.16.8-hotspot/include" />
+					<Add directory="C:/Program Files/Microsoft/jdk-17.0.16.8-hotspot/include/win32" />
+					<Add directory="../../minhook/include" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
 					<Add option="-static-libstdc++" />
 					<Add option="-static-libgcc" />
 					<Add option="-static" />
-					<Add option="-m32" />
-					<Add library="C:/Users/ThatOneGuy/Downloads/MinHook.x64.lib" />
+					<Add library="../../minhook/build/MinGW/libMinHook.a" />
 				</Linker>
 			</Target>
 		</Build>

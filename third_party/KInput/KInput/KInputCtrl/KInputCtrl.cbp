@@ -15,7 +15,6 @@
 				<Compiler>
 					<Add option="-O2" />
 					<Add option="-Wall" />
-					<Add option="-m64" />
 					<Add option="-std=c++1z" />
 					<Add option="-DBUILD_DLL" />
 				</Compiler>
@@ -27,7 +26,6 @@
 					<Add option="-static-libstdc++" />
 					<Add option="-static-libgcc" />
 					<Add option="-static" />
-					<Add option="-m64" />
 				</Linker>
 			</Target>
 		</Build>

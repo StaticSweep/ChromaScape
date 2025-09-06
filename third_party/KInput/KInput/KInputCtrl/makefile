@@ -19,17 +19,17 @@ LIB =
 LDFLAGS = 
 
 INC_RELEASE = $(INC)
-CFLAGS_RELEASE = $(CFLAGS) -O2 -Wall -std=c++1z -m32 -DBUILD_DLL
+CFLAGS_RELEASE = $(CFLAGS) -O2 -Wall -std=c++1z -DBUILD_DLL
 RESINC_RELEASE = $(RESINC)
 RCFLAGS_RELEASE = $(RCFLAGS)
 LIBDIR_RELEASE = $(LIBDIR)
 LIB_RELEASE = $(LIB)
-LDFLAGS_RELEASE = $(LDFLAGS) -s -static-libstdc++ -static-libgcc -static -m32
+LDFLAGS_RELEASE = $(LDFLAGS) -s -static-libstdc++ -static-libgcc -static
 OBJDIR_RELEASE = obj\\Release
 DEP_RELEASE = 
 OUT_RELEASE = bin\\Release\\KInputCtrl.dll
 
-OBJ_RELEASE = $(OBJDIR_RELEASE)\\Injector.o $(OBJDIR_RELEASE)\\KInputCtrl.o $(OBJDIR_RELEASE)\\main.o
+OBJ_RELEASE = $(OBJDIR_RELEASE)\\Injector.o $(OBJDIR_RELEASE)\\KInputCtrl.o $(OBJDIR_RELEASE)\\main.o $(OBJDIR_RELEASE)\\RemoteProcFinder.o
 
 all: release
 
@@ -54,6 +54,9 @@ $(OBJDIR_RELEASE)\\KInputCtrl.o: KInputCtrl.cpp
 
 $(OBJDIR_RELEASE)\\main.o: main.cpp
 	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c main.cpp -o $(OBJDIR_RELEASE)\\main.o
+
+$(OBJDIR_RELEASE)\\RemoteProcFinder.o: RemoteProcFinder.cpp
+	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c RemoteProcFinder.cpp -o $(OBJDIR_RELEASE)\\RemoteProcFinder.o
 
 clean_release: 
 	cmd /c del /f $(OBJ_RELEASE) $(OUT_RELEASE)
