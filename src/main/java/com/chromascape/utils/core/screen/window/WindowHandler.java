@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class WindowHandler {
 
-  private static final String windowName = "RuneLite";
+  private static final String windowName = "RuneLite - Frostcast97";
 
   /**
    * JNA interface for accessing low-level Win32 User32 functions that are not provided by the
