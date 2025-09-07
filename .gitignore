@@ -20,8 +20,11 @@ hs_err_pid*
 
 # Generated files
 bin/
+!third_party/KInput/KInput/KInput/bin/
+!third_party/KInput/KInput/KInputCtrl/bin/
 out/
 build/
+!third_party/minhook/build/
 
 # Gradle cache and wrappers
 .gradle/
@@ -53,7 +56,7 @@ Thumbs.db
 /src/main/resources/fonts/
 /src/main/resources/images/ui/
 /src/main/resources/images/user/*
-/src/main/resources/images/user/.gitkeep
+!/src/main/resources/images/user/.gitkeep
 
 # output
 output/*

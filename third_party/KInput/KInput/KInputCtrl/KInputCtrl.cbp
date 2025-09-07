@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="KInputCtrl" />
+		<Option makefile="makefile" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="Release">
+				<Option output="bin/Release/KInputCtrl" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="3" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O2" />
+					<Add option="-Wall" />
+					<Add option="-std=c++1z" />
+					<Add option="-DBUILD_DLL" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../KInputCtrl" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-s" />
+					<Add option="-static-libstdc++" />
+					<Add option="-static-libgcc" />
+					<Add option="-static" />
+				</Linker>
+			</Target>
+		</Build>
+		<Unit filename="Injector.cpp" />
+		<Unit filename="Injector.hpp" />
+		<Unit filename="KInputCtrl.cpp" />
+		<Unit filename="KInputCtrl.hpp" />
+		<Unit filename="RemoteProcFinder.cpp" />
+		<Unit filename="RemoteProcFinder.h" />
+		<Unit filename="main.cpp" />
+		<Extensions>
+			<lib_finder disable_auto="1" />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>
