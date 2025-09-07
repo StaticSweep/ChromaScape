@@ -28,7 +28,12 @@ public class ScreenManager {
 
   private static final Robot robot;
 
-  private static final HWND hwnd = WindowHandler.getTargetWindow();
+  /**
+   * Grabs the HWND of the second child of the RuneLite window - The game view portion. This is
+   * prone to breaking if RuneLite add more canvas elements, but this is not likely.
+   */
+  private static final HWND canvasHwnd =
+      WindowHandler.findNthChildWindow(WindowHandler.getTargetWindow(), "SunAwtCanvas", 2);
 
   /**
    * JNA extension interface to allow calling {@code ClientToScreen} which converts window-relative
@@ -44,6 +49,22 @@ public class ScreenManager {
      */
     void ClientToScreen(HWND hwnd, POINT point);
 
+    /**
+     * Retrieves the coordinates of a window's client area. The client coordinates specify the
+     * upper-left and lower-right corners of the client area. Because client coordinates are
+     * relative to the upper-left corner of a window's client area, the coordinates of the
+     * upper-left corner are (0,0). <a
+     * href="https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclientrect">Link
+     * to documentation</a>
+     *
+     * @param hwnd Handle to the window.
+     * @param rect Long pointer to a RECT structure that receives the client coordinates. The left
+     *     and top members are zero. The right and bottom members contain the width and height of
+     *     the window.
+     * @return True if succeeded, false otherwise.
+     */
+    boolean GetClientRect(HWND hwnd, RECT rect);
+
     User32Extended INSTANCE = Native.load("user32", User32Extended.class);
   }
 
@@ -56,7 +77,7 @@ public class ScreenManager {
   }
 
   /**
-   * Captures the visible content of the client (inner) area of the target window.
+   * Captures the Canvas object of the RuneLite GameView.
    *
    * <p>Converts the ARGB screenshot into a BGR BufferedImage for OpenCV compatibility.
    *
@@ -93,23 +114,23 @@ public class ScreenManager {
   }
 
   /**
-   * Gets the client (inner content) bounds of the currently focused window.
+   * Gets the bounds of the (game view) RuneLite AWT Canvas object.
    *
    * <p>Converts the client-relative origin to screen coordinates using {@code ClientToScreen}.
    *
-   * @return A {@link Rectangle} representing the on-screen position and size of the window's client
-   *     area.
+   * @return A {@link Rectangle} representing the on-screen position and size of RuneLite's client
+   *     area excluding possible window borders, title or scrollbars.
    */
   public static Rectangle getWindowBounds() {
     WinDef.RECT dimensions = new WinDef.RECT();
-    User32.INSTANCE.GetClientRect(WindowHandler.getTargetWindow(), dimensions);
+    User32.INSTANCE.GetClientRect(canvasHwnd, dimensions);
 
     WinDef.POINT clientTopLeft = new WinDef.POINT();
     clientTopLeft.x = 0;
     clientTopLeft.y = 0;
 
     User32Extended uex = User32Extended.INSTANCE;
-    uex.ClientToScreen(WindowHandler.getTargetWindow(), clientTopLeft);
+    uex.ClientToScreen(canvasHwnd, clientTopLeft);
 
     return new Rectangle(
         clientTopLeft.x,
@@ -118,22 +139,15 @@ public class ScreenManager {
         dimensions.bottom - dimensions.top);
   }
 
-  /** Brings the specified window to the foreground and restores it if minimized. */
-  public static void focusWindow() {
-    User32.INSTANCE.ShowWindow(hwnd, WinUser.SW_SHOW);
-    User32.INSTANCE.SetForegroundWindow(hwnd);
-  }
-
   /**
-   * Checks which monitor is closest to the target application and returns the monitor's {@link
-   * Rectangle} bounds.
+   * Checks which monitor contains the target application's top left corner and returns the
+   * monitor's {@link Rectangle} bounds.
    *
    * @return the monitor's bounds.
    */
   public static Rectangle getMonitorBounds() {
     WinUser.HMONITOR monitor =
-        User32.INSTANCE.MonitorFromWindow(
-            WindowHandler.getTargetWindow(), WinUser.MONITOR_DEFAULTTONEAREST);
+        User32.INSTANCE.MonitorFromWindow(canvasHwnd, WinUser.MONITOR_DEFAULTTONEAREST);
 
     WinUser.MONITORINFO mi = new WinUser.MONITORINFO();
     mi.cbSize = mi.size();
@@ -149,38 +163,17 @@ public class ScreenManager {
   }
 
   /**
-   * Checks whether the target window is in fullscreen mode.
-   *
-   * <p>Compares the window's bounds with the dimensions of the monitor it's on. Assumes a taskbar
-   * offset of 48 pixels for non-borderless fullscreen windows.
-   *
-   * @return True if the window occupies the entire monitor space (minus taskbar), false otherwise.
-   */
-  public static boolean isWindowFullscreen() {
-    Rectangle windowRect = getWindowBounds();
-    Rectangle monitorRect = getMonitorBounds();
-
-    int windowsTaskBarOffset = 48;
-    return windowRect.x == monitorRect.x
-        && windowRect.y == monitorRect.y
-        && windowRect.x + windowRect.width == monitorRect.x + monitorRect.width
-        && windowRect.y + windowRect.height + windowsTaskBarOffset
-            == monitorRect.y + monitorRect.height;
-  }
-
-  /**
-   * Converts a screen-space {@link Rectangle} to client-local coordinates relative to the captured
-   * window.
+   * Converts a screen-space {@link Rectangle} to RuneLite game-view canvas local coordinates.
    *
    * <p>This method adjusts the rectangle's position by subtracting the top-left corner of the
-   * client window (as determined by {@link ScreenManager#getWindowBounds()}) from its {@code x} and
-   * {@code y} coordinates. This is necessary when working with screen-detected regions (e.g., from
-   * template matching) and applying them to client-local images.
+   * canvas (as determined by {@link ScreenManager#getWindowBounds()}) from its {@code x} and {@code
+   * y} coordinates. This is necessary when working with screen-detected regions (e.g., from
+   * template matching) and applying them to canvas-local images.
    *
    * <p><b>Note:</b> This method mutates and returns the original {@code Rectangle} instance.
    *
    * @param screenBounds the rectangle in absolute screen coordinates
-   * @return the same rectangle, now adjusted to client-local coordinates
+   * @return the same rectangle, now adjusted to canvas-local coordinates
    */
   public static Rectangle toClientBounds(Rectangle screenBounds) {
     Rectangle offset = ScreenManager.getWindowBounds();
@@ -190,16 +183,15 @@ public class ScreenManager {
   }
 
   /**
-   * Converts a screen-space {@link Point} to client-local coordinates relative to the captured
-   * window.
+   * Converts a screen-space {@link Point} to RuneLite game-view canvas local coordinates.
    *
-   * <p>This method adjusts the point's position by subtracting the top-left corner of the client
-   * window (as returned by {@link ScreenManager#getWindowBounds()}). This is typically used when
+   * <p>This method adjusts the point's position by subtracting the top-left corner of the canvas
+   * (as returned by {@link ScreenManager#getWindowBounds()}). This is typically used when
    * translating points detected in full-screen captures into the coordinate space of the
-   * client-local window image.
+   * canvas-local window image.
    *
    * @param screenPoint the point in absolute screen coordinates
-   * @return a new {@code Point} adjusted to client-local coordinates
+   * @return a new {@code Point} adjusted to canvas-local coordinates
    */
   public static Point toClientCoords(Point screenPoint) {
     Rectangle offset = ScreenManager.getWindowBounds();

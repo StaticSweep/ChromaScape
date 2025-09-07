@@ -60,13 +60,8 @@ public class Controller {
     // Obtain process ID of the target window to initialize input injection
     kinput = new Kinput(WindowHandler.getPid(WindowHandler.getTargetWindow()));
 
-    // Ensure the target window is focused for input simulation
-    ScreenManager.focusWindow();
-    boolean isFullscreen = ScreenManager.isWindowFullscreen();
-
     // Initialize virtual input utilities with current window bounds and fullscreen status
-    virtualMouseUtils =
-        new VirtualMouseUtils(kinput, ScreenManager.getWindowBounds(), isFullscreen);
+    virtualMouseUtils = new VirtualMouseUtils(kinput, ScreenManager.getWindowBounds());
     virtualKeyboardUtils = new VirtualKeyboardUtils(kinput);
 
     // Initialize zone management with fixed mode option

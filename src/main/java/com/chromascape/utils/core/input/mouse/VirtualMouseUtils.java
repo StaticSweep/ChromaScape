@@ -21,7 +21,7 @@ import javax.swing.SwingUtilities;
 public class VirtualMouseUtils {
 
   /** The current virtual mouse position. */
-  private Point currentPosition = new Point(0, 0);
+  private Point currentPosition;
 
   /** Semi-transparent visual overlay to show virtual mouse position. */
   private final MouseOverlay overlay;
@@ -33,9 +33,6 @@ public class VirtualMouseUtils {
 
   private final MousePathing mousePathing;
 
-  private int xoffset;
-  private int yoffset;
-
   /**
    * The orchestrator for all inputs mouse related. provides human like mouse movement, clicking and
    * a little overlay so you can see where it is.
@@ -44,15 +41,22 @@ public class VirtualMouseUtils {
    *     how we can still use the system cursor separately while this mouse is active.
    * @param bounds Rectangle, containing the screen's bounds.
    */
-  public VirtualMouseUtils(
-      final Kinput kinput, final Rectangle bounds, final boolean isFullscreen) {
+  public VirtualMouseUtils(final Kinput kinput, final Rectangle bounds) {
     this.kinput = kinput;
     overlay = new MouseOverlay();
     overlay.setSize(bounds.width, bounds.height);
-    overlay.setLocation(bounds.x, bounds.y);
-    mousePathing = new MousePathing(bounds);
-    windowOffset(isFullscreen);
+
     random = new Random();
+    mousePathing = new MousePathing(bounds);
+
+    // Randomize starting position within the client window
+    int startX = bounds.x + random.nextInt(bounds.width);
+    int startY = bounds.y + random.nextInt(bounds.height);
+    currentPosition = new Point(startX, startY);
+
+    // Place overlay at the same randomized position
+    SwingUtilities.invokeLater(() -> overlay.setMousePoint(currentPosition));
+    overlay.setLocation(bounds.x, bounds.y); // keep overlay frame aligned with window
   }
 
   /**
@@ -70,7 +74,7 @@ public class VirtualMouseUtils {
     List<Point> path = mousePathing.generateCubicBezierPath(currentPosition, target, speed);
     for (Point p : path) {
       Point clientPoint = ScreenManager.toClientCoords(p);
-      kinput.moveMouse(clientPoint.x + xoffset, clientPoint.y + yoffset);
+      kinput.moveMouse(clientPoint.x, clientPoint.y);
       currentPosition = p;
       SwingUtilities.invokeLater(() -> overlay.setMousePoint(p));
       Thread.sleep(1); // Ensures that the mouse doesn't teleport and for a consistent polling rate
@@ -121,26 +125,18 @@ public class VirtualMouseUtils {
     moveTo(target, "medium");
   }
 
-  /**
-   * Simulates a left-click at the current virtual mouse location. Includes a small random jitter to
-   * emulate human instability.
-   */
+  /** Simulates a left-click at the current virtual mouse location. */
   public void leftClick() {
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
-    kinput.clickLeft(clientPoint.x + xoffset, clientPoint.y + yoffset);
-    kinput.moveMouse(clientPoint.x + xoffset, clientPoint.y + yoffset);
-    microJitter();
+    kinput.clickLeft(clientPoint.x, clientPoint.y);
+    kinput.moveMouse(clientPoint.x, clientPoint.y);
   }
 
-  /**
-   * Simulates a right-click at the current virtual mouse location. Includes a small random jitter
-   * to emulate human instability.
-   */
+  /** Simulates a right-click at the current virtual mouse location. */
   public void rightClick() {
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
-    kinput.clickRight(clientPoint.x + xoffset, clientPoint.y + yoffset);
-    kinput.moveMouse(clientPoint.x + xoffset, clientPoint.y + yoffset);
-    microJitter();
+    kinput.clickRight(clientPoint.x, clientPoint.y);
+    kinput.moveMouse(clientPoint.x, clientPoint.y);
   }
 
   /**
@@ -150,35 +146,19 @@ public class VirtualMouseUtils {
    */
   public void middleClick(int eventType) {
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
-    kinput.middleInput(clientPoint.x + xoffset, clientPoint.y + yoffset, eventType);
+    kinput.middleInput(clientPoint.x, clientPoint.y, eventType);
   }
 
   /**
    * Applies a micro-jitter (1–3 pixels) to the virtual cursor, intended to simulate small human
    * hand movements when clicking.
    */
-  private void microJitter() {
+  public void microJitter() {
     if (random.nextBoolean()) {
       currentPosition.translate(random.nextInt(-1, 2), random.nextInt(-1, 4));
       SwingUtilities.invokeLater(() -> overlay.setMousePoint(currentPosition));
       Point clientPoint = ScreenManager.toClientCoords(currentPosition);
-      kinput.moveMouse(clientPoint.x + xoffset, clientPoint.y + yoffset);
-    }
-  }
-
-  /**
-   * Sets positional offsets based on whether the target window is fullscreen or windowed. These
-   * offsets correct alignment for raw input injection.
-   *
-   * @param isFullscreen True if the client is in fullscreen mode.
-   */
-  private void windowOffset(boolean isFullscreen) {
-    if (isFullscreen) {
-      xoffset = 0;
-      yoffset = -21;
-    } else {
-      xoffset = -4;
-      yoffset = -27;
+      kinput.moveMouse(clientPoint.x, clientPoint.y);
     }
   }
 }
