@@ -55,7 +55,7 @@ spotless {
 }
 
 tasks.named("check") {
-	dependsOn("spotlessCheck", "checkstyleMain")
+	dependsOn("spotlessApply", "spotlessCheck", "checkstyleMain")
 }
 
 // Windows-only native build configuration
@@ -108,3 +108,25 @@ tasks.named("jar") {
 	dependsOn(copyNativeLibraries)
 }
 
+// Custom task to clean .chromascape directory
+tasks.register("cleanChromascape") {
+	group = "cleanup"
+	description = "Remove the .chromascape directory"
+	
+	doLast {
+		val chromascapeDir = file(".chromascape")
+		if (chromascapeDir.exists()) {
+			delete(chromascapeDir)
+			println("Removed .chromascape directory")
+		} else {
+			println(".chromascape directory does not exist")
+		}
+	}
+}
+
+// Task to clean everything including .chromascape
+tasks.register("cleanAll") {
+	group = "cleanup"
+	description = "Clean build artifacts and .chromascape directory"
+	dependsOn("clean", "cleanChromascape")
+}

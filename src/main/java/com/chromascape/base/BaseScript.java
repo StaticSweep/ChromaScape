@@ -18,10 +18,9 @@ import java.time.LocalTime;
  * #cycle()} to define the script's main logic.
  */
 public abstract class BaseScript {
-
   private final Controller controller;
   private final int duration; // Duration to run the script in minutes
-  private final LogService logger;
+  protected final LogService logger;
   private final HotkeyListener hotkeyListener;
   private boolean running = true;
   private LocalTime startTime;
