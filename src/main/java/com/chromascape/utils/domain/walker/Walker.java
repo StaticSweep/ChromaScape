@@ -6,7 +6,6 @@ import com.chromascape.utils.core.input.Sleeper;
 import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.domain.ocr.Ocr;
-import com.chromascape.web.logs.LogService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -18,6 +17,8 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Provides high-level pathfinding and walking functionality for the bot.
@@ -53,12 +54,12 @@ import java.util.concurrent.ExecutionException;
  * }</pre>
  *
  * <p>This will walk the player to the given tile, respecting camera rotation and randomized path
- * horizons, while logging progress to the provided {@link LogService}.
+ * horizons, while logging progress to the provided {@link Logger}.
  */
 public class Walker {
 
   private final Controller controller;
-  private final LogService logger;
+  private static final Logger logger = LogManager.getLogger(Walker.class.getName());
   private final Dax dax;
   private final ObjectMapper objectMapper;
   private final Compass compass;
@@ -70,15 +71,13 @@ public class Walker {
    * controller access, logging, DAX API, and compass handling.
    *
    * @param controller The bot's controller
-   * @param logger The {@link LogService} to be able to let the user know what's happening.
    */
-  public Walker(Controller controller, LogService logger) {
+  public Walker(Controller controller) {
     this.controller = controller;
-    this.logger = logger;
     this.dax = new Dax();
     this.objectMapper = new ObjectMapper();
     this.random = new Random();
-    this.compass = new Compass(controller, logger);
+    this.compass = new Compass(controller);
     this.pointFuture = new CompletableFuture<>();
   }
 
@@ -134,7 +133,7 @@ public class Walker {
         break; // success
       } catch (IOException e) {
         // Log and retry on deserialization failure
-        logger.addLog("Failed to deserialize DAX response: " + e.getMessage());
+        logger.error("Failed to deserialize DAX response: {}", e.getMessage());
       }
     }
     if (daxPath == null) {
@@ -166,7 +165,7 @@ public class Walker {
     int minHorizon = 8;
     // Synchronously path once
     Tile target = chooseNextTarget(path, minHorizon, maxHorizon);
-    logger.addLog("Synchronously clicking once at " + target.x() + ", " + target.y());
+    logger.info("Synchronously clicking once at {}, {}", target.x(), target.y());
     controller.mouse().moveTo(getClickLocation(target, getPlayerPosition()), "medium");
     controller.mouse().leftClick();
     // Looping until at destination
@@ -181,23 +180,23 @@ public class Walker {
       // Async precomputing the next click point while waiting for the bot to stop
       pointFuture = CompletableFuture.supplyAsync(() -> getClickLocation(newTarget, oldTarget));
       // This blocks the main thread, but the next point is being computed already.
-      logger.addLog("Precomputing next click at " + newTarget.x() + ", " + newTarget.y());
+      logger.info("Precomputing next click at " + newTarget.x() + ", " + newTarget.y());
       waitToStop();
       // Recalculate path and cancel async if not at expected location
       Tile position = getPlayerPosition();
       Point clickpoint;
       if (position.x() != target.x() || position.y() != target.y()) {
-        logger.addLog("Veered off path, recalculating...");
+        logger.error("Veered off path, recalculating...");
         pointFuture.cancel(false);
         try {
           pointFuture.join();
         } catch (CancellationException | CompletionException e) {
-          logger.addLog("Async task was cancelled and thread joined");
+          logger.error("Async task was cancelled and thread joined");
         }
         // If the path is out of range recalculate whole path
         target = chooseNextTarget(path, 5, 7);
         if (Math.abs(position.x() - target.x()) > 7 || Math.abs(position.y() - target.y()) > 7) {
-          logger.addLog("Too far from path, calling Dax...");
+          logger.error("Too far from path, calling Dax...");
           path = getPath(destination, isMembers);
           target = chooseNextTarget(path, minHorizon, maxHorizon);
         }

@@ -8,13 +8,14 @@ import com.chromascape.controller.Controller;
 import com.chromascape.utils.core.screen.topology.Similarity;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
-import com.chromascape.web.logs.LogService;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.IntStream;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Scalar;
@@ -33,6 +34,7 @@ public class Compass {
 
   private final Controller controller;
   private Map<Integer, Mat> compassLibrary;
+  private static final Logger logger = LogManager.getLogger(Compass.class.getName());
 
   /**
    * Constructs a {@code Compass} instance and initializes the compass image library from bundled
@@ -40,14 +42,13 @@ public class Compass {
    *
    * @param controller Provides access to client zones and state for determining compass position on
    *     screen.
-   * @param logger Log service for reporting errors that may occur during resource loading.
    */
-  public Compass(Controller controller, LogService logger) {
+  public Compass(Controller controller) {
     this.controller = controller;
     try {
       this.compassLibrary = loadCompass();
     } catch (IOException e) {
-      logger.addLog(e.getMessage());
+      logger.error(e.getMessage());
     }
   }
 

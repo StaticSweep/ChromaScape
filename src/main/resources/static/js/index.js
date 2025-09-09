@@ -1,12 +1,31 @@
+/**
+ * Selected window mode for script execution ("Fixed" or "Resizable").
+ * @type {string|null}
+ */
 let selectedWindowMode = null;
+
+/**
+ * Name of the script currently selected in the UI.
+ * @type {string|null}
+ */
 let selectedScriptName = null;
+
+/**
+ * Reference to the previously selected list element to manage highlighting.
+ * @type {HTMLElement|null}
+ */
 let previouslySelectedElement = null;
+
+/**
+ * Indicates whether the script is currently started.
+ * @type {boolean}
+ */
 let isStarted = false;
 
-const INTERVAL_LOGS = 600;
-const INTERVAL_PROGRESS = 5000;
-const INTERVAL_STATUS = 500;
-
+/**
+ * Initializes the UI after the DOM content is fully loaded.
+ * Connects WebSockets, fetches scripts, and sets up UI elements.
+ */
 document.addEventListener("DOMContentLoaded", () => {
     (async () => {
         try {
@@ -17,24 +36,29 @@ document.addEventListener("DOMContentLoaded", () => {
     })();
 });
 
+/**
+ * Initializes the UI by setting up WebSocket connections and UI elements.
+ */
 async function initializeUI() {
+    connectLogWebSocket();
+    connectProgressWebSocket();
+    connectStateWebSocket();
+
     try {
         await fetchAndRenderScripts();
     } catch (error) {
         console.error("Failed to initialize scripts:", error);
     }
 
-    setInterval(fetchLogs, INTERVAL_LOGS);
-    setInterval(fetchProgress, INTERVAL_PROGRESS);
-    setInterval(syncRunningStatus, INTERVAL_STATUS);
-
     setupWindowModeDropdown();
     setupStartStopButton();
 }
 
-
 // ----------------- SCRIPT FETCH + UI -----------------
 
+/**
+ * Fetches the list of available scripts from the backend and renders them in the UI.
+ */
 async function fetchAndRenderScripts() {
     try {
         const response = await fetch("/api/scripts");
@@ -46,6 +70,10 @@ async function fetchAndRenderScripts() {
     }
 }
 
+/**
+ * Renders the script list in the sidebar and sets up selection highlighting.
+ * @param {string[]} scripts - List of script names to display.
+ */
 function renderScriptList(scripts) {
     const listGroup = document.getElementById("script-list");
     if (!listGroup) return;
@@ -81,6 +109,10 @@ function renderScriptList(scripts) {
 
 // ----------------- WINDOW MODE -----------------
 
+/**
+ * Sets up the dropdown for selecting window mode.
+ * Updates the UI text and stores the selected value.
+ */
 function setupWindowModeDropdown() {
     document.querySelectorAll(".dropdown-item").forEach(item => {
         item.addEventListener("click", e => {
@@ -94,54 +126,105 @@ function setupWindowModeDropdown() {
 
 // ----------------- LOGS -----------------
 
-async function fetchLogs() {
-    try {
-        const response = await fetch("/api/logs");
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const logs = await response.json();
+/**
+ * Establishes a WebSocket connection to the backend log stream.
+ * Incoming logs are appended to the console output terminal in real time.
+ */
+function connectLogWebSocket() {
+    const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${wsProtocol}://${location.host}/ws/logs`;
+    let ws;
 
-        const terminal = document.getElementById("consoleOutput");
-        if (!terminal) return;
+    function initialize() {
+        ws = new WebSocket(wsUrl);
 
-        const scrollBefore = terminal.scrollTop;
-        const scrollHeightBefore = terminal.scrollHeight;
+        ws.onopen = () => console.log("Connected to log WebSocket:", wsUrl);
 
-        terminal.innerHTML = "";
-        logs.forEach(line => {
-            const logEl = document.createElement("a");
-            logEl.textContent = line;
-            terminal.appendChild(logEl);
-            terminal.appendChild(document.createElement("br"));
-        });
+        ws.onmessage = (event) => appendLogLine(event.data);
 
-        const nearBottom = (scrollHeightBefore - terminal.clientHeight - scrollBefore) <= 5;
-        terminal.scrollTop = nearBottom ? terminal.scrollHeight - terminal.clientHeight : scrollBefore;
+        ws.onclose = (event) => {
+            console.warn("Log WebSocket closed:", event.reason);
+            setTimeout(initialize, 2000); // reconnect
+        };
 
-    } catch (err) {
-        console.error("Error fetching logs:", err);
+        ws.onerror = (error) => {
+            console.error("WebSocket error:", error);
+            ws.close();
+        };
+    }
+
+    initialize();
+}
+
+/**
+ * Appends a single log line to the terminal output.
+ * @param {string} line - Log line to append
+ */
+function appendLogLine(line) {
+    const terminal = document.getElementById("consoleOutput");
+    if (!terminal) return;
+
+    const nearBottom = (terminal.scrollHeight - terminal.clientHeight - terminal.scrollTop) <= 5;
+
+    const logEl = document.createElement("a");
+    logEl.textContent = line;
+    terminal.appendChild(logEl);
+    terminal.appendChild(document.createElement("br"));
+
+    if (nearBottom) {
+        terminal.scrollTop = terminal.scrollHeight - terminal.clientHeight;
     }
 }
 
 // ----------------- PROGRESS -----------------
 
-async function fetchProgress() {
-    try {
-        const response = await fetch("/api/progress");
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const progress = await response.json();
+/**
+ * Establishes a WebSocket connection to receive progress updates from the backend.
+ */
+function connectProgressWebSocket() {
+    const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${wsProtocol}://${location.host}/ws/progress`;
+    let ws;
 
-        const bar = document.getElementById("progressBar");
-        if (bar) {
-            bar.textContent = `${progress}%`;
-            bar.style.width = `${progress}%`;
-        }
-    } catch (err) {
-        console.error("Error fetching progress:", err);
+    function initialize() {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => console.log("Connected to progress WebSocket:", wsUrl);
+
+        ws.onmessage = (event) => updateProgressBar(event.data);
+
+        ws.onclose = (event) => {
+            console.warn("Progress WebSocket closed:", event.reason);
+            setTimeout(initialize, 2000);
+        };
+
+        ws.onerror = (error) => {
+            console.error("Progress WebSocket error:", error);
+            ws.close();
+        };
+    }
+
+    initialize();
+}
+
+/**
+ * Updates the progress bar UI element.
+ * @param {number|string} progress - Progress percentage (0-100)
+ */
+function updateProgressBar(progress) {
+    const bar = document.getElementById("progressBar");
+    if (bar) {
+        bar.textContent = `${progress}%`;
+        bar.style.width = `${progress}%`;
     }
 }
 
 // ----------------- START/STOP -----------------
 
+/**
+ * Sets up the Start/Stop button and its click handler.
+ * Toggles script execution and updates the button UI.
+ */
 function setupStartStopButton() {
     const startBtn = document.getElementById("startButton");
     if (!startBtn) return;
@@ -151,13 +234,10 @@ function setupStartStopButton() {
         if (!runConfig) return;
 
         try {
-            console.log("Button clicked. isStarted before toggle:", isStarted);
             if (!isStarted) {
                 await startScript(runConfig);
-                console.log("Script started. isStarted now:", isStarted);
             } else {
                 await stopScript();
-                console.log("Script stopped. isStarted now:", isStarted);
             }
             updateStartButtonUI();
         } catch (err) {
@@ -166,6 +246,10 @@ function setupStartStopButton() {
     });
 }
 
+/**
+ * Retrieves the configuration for running the selected script.
+ * @returns {{script: string, duration: number, fixed: boolean}|null} Run configuration or null if invalid
+ */
 function getRunConfig() {
     const mode = document.getElementById("windowModeDropdown")?.textContent;
     const duration = parseInt(document.getElementById("durationInput")?.value);
@@ -176,22 +260,20 @@ function getRunConfig() {
     }
 
     let fixed;
-    if (mode === "Fixed") {
-        fixed = true;
-    } else if (mode === "Resizable") {
-        fixed = false;
-    } else {
+    if (mode === "Fixed") fixed = true;
+    else if (mode === "Resizable") fixed = false;
+    else {
         alert("Please choose a window mode.");
         return null;
     }
 
-    return {
-        script: selectedScriptName,
-        duration,
-        fixed
-    };
+    return { script: selectedScriptName, duration, fixed };
 }
 
+/**
+ * Sends a request to start the selected script on the backend.
+ * @param {object} config - Run configuration
+ */
 async function startScript(config) {
     const res = await fetch("/api/runConfig", {
         method: "POST",
@@ -200,12 +282,11 @@ async function startScript(config) {
     });
     if (!res.ok) throw new Error("Failed to start script");
     isStarted = true;
-
-    setTimeout(() => {
-        syncRunningStatus();
-    }, 2000);
 }
 
+/**
+ * Sends a request to stop the running script on the backend.
+ */
 async function stopScript() {
     const res = await fetch("/api/stop", {
         method: "POST",
@@ -216,14 +297,13 @@ async function stopScript() {
     isStarted = false;
 }
 
+/**
+ * Updates the Start/Stop button UI to reflect the current script state.
+ */
 function updateStartButtonUI() {
     const btn = document.getElementById("startButton");
-    if (!btn) {
-        console.log("Start button not found!");
-        return;
-    }
+    if (!btn) return;
 
-    console.log("Updating button UI. isStarted =", isStarted);
     if (isStarted) {
         btn.className = "btn btn-danger m-2";
         btn.textContent = "Stop";
@@ -233,23 +313,40 @@ function updateStartButtonUI() {
     }
 }
 
-
 // ----------------- BACKEND STATE SYNC -----------------
 
-async function syncRunningStatus() {
-    try {
-        const response = await fetch("/api/isRunning");
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const isRunning = await response.json();
+/**
+ * Establishes a WebSocket connection to track backend script running state.
+ * Updates the Start/Stop button if the state changes.
+ */
+function connectStateWebSocket() {
+    const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${wsProtocol}://${location.host}/ws/state`;
+    let ws;
 
-        const wasStarted = isStarted;
-        isStarted = isRunning;
+    function initialize() {
+        ws = new WebSocket(wsUrl);
 
-        if (isStarted !== wasStarted) {
-            updateStartButtonUI();
-        }
-    } catch (err) {
-        console.error("Error syncing script state:", err);
+        ws.onopen = () => console.log("Connected to state WebSocket:", wsUrl);
+
+        ws.onmessage = (event) => {
+            const running = event.data === "true";
+            const wasStarted = isStarted;
+            isStarted = running;
+
+            if (isStarted !== wasStarted) updateStartButtonUI();
+        };
+
+        ws.onclose = (event) => {
+            console.warn("State WebSocket closed:", event.reason);
+            setTimeout(initialize, 2000);
+        };
+
+        ws.onerror = (error) => {
+            console.error("State WebSocket error:", error);
+            ws.close();
+        };
     }
-}
 
+    initialize();
+}

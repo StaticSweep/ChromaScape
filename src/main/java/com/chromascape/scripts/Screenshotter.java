@@ -2,10 +2,11 @@ package com.chromascape.scripts;
 
 import com.chromascape.base.BaseScript;
 import com.chromascape.utils.core.screen.window.ScreenManager;
-import com.chromascape.web.logs.LogService;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import javax.imageio.ImageIO;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Creates screenshots of the client and stores it in an external folder "screenshots". Screenshots
@@ -19,7 +20,7 @@ public class Screenshotter extends BaseScript {
    * The logger is specially initialised to be used in this program. This is exactly how you should
    * access it in a user script.
    */
-  private final LogService logger;
+  private final Logger logger = LogManager.getLogger(this.getClass().getName());
 
   public static final String ORIGINAL_IMAGE_PATH = "output/original.png";
 
@@ -28,11 +29,9 @@ public class Screenshotter extends BaseScript {
    *
    * @param isFixed whether the client is in classic fixed or classic resizable
    * @param duration the total runtime of the script in minutes
-   * @param logger the logging service for recording events and progress
    */
-  public Screenshotter(boolean isFixed, int duration, LogService logger) {
-    super(isFixed, duration, logger);
-    this.logger = logger;
+  public Screenshotter(boolean isFixed, int duration) {
+    super(isFixed, duration);
   }
 
   /**
@@ -47,7 +46,7 @@ public class Screenshotter extends BaseScript {
     try {
       ImageIO.write(sc, "png", new File(ORIGINAL_IMAGE_PATH));
     } catch (Exception e) {
-      logger.addLog(e.getMessage());
+      logger.error(e.getMessage());
     }
     stop();
   }

@@ -15,6 +15,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.global.opencv_imgcodecs;
@@ -35,6 +37,8 @@ import org.bytedeco.opencv.opencv_core.Point;
  * return.
  */
 public class TemplateMatching {
+
+  private static final Logger logger = LogManager.getLogger(TemplateMatching.class.getName());
 
   /**
    * Performs template matching to locate a smaller image (template) within a larger image (base),
@@ -188,7 +192,7 @@ public class TemplateMatching {
    */
   private static void debug(String message, boolean debug) {
     if (debug) {
-      System.out.println(message);
+      logger.info(message);
     }
   }
 

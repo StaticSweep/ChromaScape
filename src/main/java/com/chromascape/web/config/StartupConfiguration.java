@@ -1,11 +1,9 @@
 package com.chromascape.web.config;
 
-import com.chromascape.web.logs.LogService;
 import jakarta.annotation.PostConstruct;
 import java.io.File;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.context.annotation.Configuration;
 
 /**
@@ -19,10 +17,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class StartupConfiguration {
 
-  // Log4j Logger
-  private static final Logger logger = LoggerFactory.getLogger(StartupConfiguration.class);
-
-  @Autowired private LogService logService;
+  private static Logger logger = LogManager.getLogger(StartupConfiguration.class);
 
   /**
    * Initializes application infrastructure after Spring context is fully loaded.
@@ -50,7 +45,7 @@ public class StartupConfiguration {
       logger.info("CHROMASCAPE STARTUP CONFIGURATION COMPLETED");
 
     } catch (Exception e) {
-      logService.addLog("Error during infrastructure initialization: " + e.getMessage());
+      logger.error("Error during infrastructure initialization: {}", e.getMessage());
       // You might want to throw a RuntimeException here to prevent app startup
       // if critical infrastructure fails to initialize
     }
@@ -70,28 +65,27 @@ public class StartupConfiguration {
       if (!chromascapeDir.exists()) {
         boolean created = chromascapeDir.mkdirs();
         if (created) {
-          logService.addLog(
-              "Created .chromascape directory at: " + chromascapeDir.getAbsolutePath());
+          logger.info("Created .chromascape directory at: {}", chromascapeDir.getAbsolutePath());
           // Only create subdirectories if we just created the main directory
           createSubdirectories(chromascapeDir);
         } else {
-          logService.addLog("Failed to create .chromascape directory");
+          logger.error("Failed to create .chromascape directory");
           throw new RuntimeException("Could not create .chromascape directory");
         }
       } else {
-        logService.addLog(
-            "Found existing .chromascape directory at: " + chromascapeDir.getAbsolutePath());
+        logger.info(
+            "Found existing .chromascape directory at: {}", chromascapeDir.getAbsolutePath());
         // Directory already exists, don't modify it
       }
 
       // Verify directory is writable
       if (!chromascapeDir.canWrite()) {
-        logService.addLog("Warning: .chromascape directory is not writable");
+        logger.warn("Warning: .chromascape directory is not writable");
         throw new RuntimeException("Cannot write to .chromascape directory");
       }
 
     } catch (Exception e) {
-      logService.addLog("Error initializing .chromascape directory: " + e.getMessage());
+      logger.error("Error initializing .chromascape directory: {}", e.getMessage());
       throw new RuntimeException("Failed to initialize .chromascape directory", e);
     }
   }
@@ -109,9 +103,9 @@ public class StartupConfiguration {
       if (!subdirFile.exists()) {
         boolean created = subdirFile.mkdir();
         if (created) {
-          logService.addLog("Created subdirectory: " + subdir);
+          logger.info("Created subdirectory: {}", subdir);
         } else {
-          logService.addLog("Warning: Failed to create subdirectory: " + subdir);
+          logger.warn("Warning: Failed to create subdirectory: {}", subdir);
         }
       }
     }

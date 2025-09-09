@@ -1,7 +1,6 @@
 package com.chromascape.web.instance;
 
 import com.chromascape.base.BaseScript;
-import com.chromascape.web.logs.LogService;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 
@@ -16,6 +15,7 @@ public class ScriptInstance {
 
   private final BaseScript instance;
   private volatile Thread thread;
+  private final WebSocketStateHandler stateHandler;
 
   /**
    * Constructs a ScriptInstance by dynamically loading the script class specified in the config.
@@ -24,33 +24,40 @@ public class ScriptInstance {
    * duration, LogService logService)}.
    *
    * @param config the RunConfig containing script name, duration, and UI layout flag
-   * @param logService the logging service to be passed to the script constructor
    * @throws NoSuchMethodException if the expected constructor is not found
    * @throws ClassNotFoundException if the script class cannot be found
    * @throws InvocationTargetException if the constructor throws an exception
    * @throws InstantiationException if the class is abstract or an interface
    * @throws IllegalAccessException if the constructor is not accessible
    */
-  public ScriptInstance(RunConfig config, LogService logService)
+  public ScriptInstance(RunConfig config, WebSocketStateHandler stateHandler)
       throws NoSuchMethodException,
           ClassNotFoundException,
           InvocationTargetException,
           InstantiationException,
           IllegalAccessException {
+    this.stateHandler = stateHandler;
 
     String fileName = config.getScript();
     String className = fileName.replace(".java", "");
 
     Class<?> script = Class.forName("com.chromascape.scripts." + className);
-    Constructor<?> constructor =
-        script.getDeclaredConstructor(boolean.class, int.class, LogService.class);
-    instance =
-        (BaseScript) constructor.newInstance(config.isFixed(), config.getDuration(), logService);
+    Constructor<?> constructor = script.getDeclaredConstructor(boolean.class, int.class);
+    instance = (BaseScript) constructor.newInstance(config.isFixed(), config.getDuration());
   }
 
   /** Starts the script execution in a new thread. */
   public void start() {
-    thread = new Thread(instance::run);
+    thread =
+        new Thread(
+            () -> {
+              stateHandler.broadcast(true);
+              try {
+                instance.run();
+              } finally {
+                stateHandler.broadcast(false);
+              }
+            });
     thread.start();
   }
 
@@ -68,15 +75,7 @@ public class ScriptInstance {
         // Thread join interrupted, ignore to proceed with shutdown
       }
     }
-  }
-
-  /**
-   * Checks whether the script thread is currently running.
-   *
-   * @return true if the script thread exists and is alive; false otherwise
-   */
-  public boolean isRunning() {
-    return thread != null && thread.isAlive();
+    stateHandler.broadcast(false);
   }
 
   /**

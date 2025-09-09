@@ -161,4 +161,13 @@ public class VirtualMouseUtils {
       kinput.moveMouse(clientPoint.x, clientPoint.y);
     }
   }
+
+  /**
+   * Returns the Mouse overlay object. Intended to be used by the Controller to destroy the overlay.
+   *
+   * @return The MouseOverlay object.
+   */
+  public MouseOverlay getMouseOverlay() {
+    return overlay;
+  }
 }

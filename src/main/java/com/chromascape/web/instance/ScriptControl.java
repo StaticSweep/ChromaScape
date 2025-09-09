@@ -1,11 +1,11 @@
 package com.chromascape.web.instance;
 
-import com.chromascape.web.logs.LogService;
 import java.lang.reflect.InvocationTargetException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,15 +22,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class ScriptControl {
 
-  private final LogService logService;
+  private static final Logger logger = LogManager.getLogger(ScriptControl.class.getName());
+  private final WebSocketStateHandler stateHandler;
 
   /**
-   * Constructs the controller with the given LogService for logging script events.
+   * Constructs the script controller with a state handler.
    *
-   * @param logService the logging service instance
+   * @param webSocketStateHandler state handler used to send state to the client via web-socket.
    */
-  public ScriptControl(LogService logService) {
-    this.logService = logService;
+  public ScriptControl(WebSocketStateHandler webSocketStateHandler) {
+    this.stateHandler = webSocketStateHandler;
   }
 
   /**
@@ -48,41 +49,41 @@ public class ScriptControl {
     try {
       // Validation checks
       if (config.getScript() == null || config.getScript().isEmpty()) {
-        logService.addLog("No script is selected");
+        logger.error("No script is selected");
         return ResponseEntity.badRequest().body("Script must be specified.");
       }
 
       if (config.getDuration() <= 0) {
-        logService.addLog("Duration incorrectly specified");
+        logger.error("Duration incorrectly specified");
         return ResponseEntity.badRequest().body("Duration must be greater than 0.");
       }
 
       if (config.isFixed() == null) {
-        logService.addLog("No window style selected");
+        logger.error("No window style selected");
         return ResponseEntity.badRequest().body("Window style (Fixed?) must be specified.");
       }
 
-      logService.addLog("Config valid: attempting to run script");
+      logger.info("Config valid: attempting to run script");
 
       // Instantiate and start the script instance
-      ScriptInstance instance = new ScriptInstance(config, logService);
+      ScriptInstance instance = new ScriptInstance(config, stateHandler);
       ScriptInstanceManager.getInstance().setInstance(instance);
       instance.start();
 
       return ResponseEntity.ok("Script started successfully.");
 
     } catch (ClassNotFoundException e) {
-      logService.addLog("Script class not found: " + e.getMessage());
+      logger.error("Script class not found: {}", e.getMessage());
       return ResponseEntity.badRequest().body("Script class not found.");
     } catch (NoSuchMethodException e) {
-      logService.addLog("Script constructor not found: " + e.getMessage());
+      logger.error("Script constructor not found: {}", e.getMessage());
       return ResponseEntity.badRequest().body("Script constructor not valid.");
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-      logService.addLog("Failed to instantiate script: " + e.getMessage());
+      logger.error("Failed to instantiate script: {}", e.getMessage());
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body("Failed to start script.");
     } catch (Exception e) {
-      logService.addLog("Unexpected error: " + e.getMessage());
+      logger.error("Unexpected error: {}", e.getMessage());
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body("Unexpected error: " + e.getMessage());
     }
@@ -97,19 +98,8 @@ public class ScriptControl {
    */
   @PostMapping(path = "/stop", consumes = MediaType.APPLICATION_JSON_VALUE)
   public ResponseEntity<Object> stopScript() {
-    logService.addLog("Received stop request");
+    logger.info("Received stop request");
     ScriptInstanceManager.getInstance().getInstanceRef().stop();
     return ResponseEntity.ok().build();
-  }
-
-  /**
-   * Checks whether a script instance is currently running.
-   *
-   * @return true if a script is running, false otherwise
-   */
-  @GetMapping(path = "/isRunning", produces = MediaType.APPLICATION_JSON_VALUE)
-  public boolean getIsRunning() {
-    ScriptInstance instance = ScriptInstanceManager.getInstance().getInstanceRef();
-    return instance != null && instance.isRunning();
   }
 }

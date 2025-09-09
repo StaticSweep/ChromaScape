@@ -8,11 +8,12 @@ import com.chromascape.utils.core.screen.topology.ChromaObj;
 import com.chromascape.utils.core.screen.topology.ColourContours;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
-import com.chromascape.web.logs.LogService;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * DemoWineScript serves as a tutorial and example script to demonstrate how to automate basic tasks
@@ -26,7 +27,7 @@ import java.util.List;
  */
 public class DemoWineScript extends BaseScript {
 
-  private final LogService logger;
+  private final Logger logger = LogManager.getLogger(this.getClass().getName());
 
   private static final String grapes = "/images/user/Grapes.png";
   private static final String jugs = "/images/user/Jug_of_water.png";
@@ -44,11 +45,9 @@ public class DemoWineScript extends BaseScript {
    *
    * @param isFixed whether the client UI is classic fixed or classic resizable
    * @param duration the total runtime of the script in minutes
-   * @param logger the logging service for recording events and progress
    */
-  public DemoWineScript(boolean isFixed, int duration, LogService logger) {
-    super(isFixed, duration, logger);
-    this.logger = logger;
+  public DemoWineScript(boolean isFixed, int duration) {
+    super(isFixed, duration);
   }
 
   /**
@@ -131,13 +130,13 @@ public class DemoWineScript extends BaseScript {
           ColourContours.getChromaObjsInColour(
               controller().zones().getGameView(), ColourInstances.getByName("Purple"));
     } catch (Exception e) {
-      logger.addLog(e.getMessage());
+      logger.error(e.getMessage());
       stop();
       return;
     }
 
     if (purpleObjs.isEmpty()) {
-      logger.addLog("No purple objects found");
+      logger.error("No purple objects found");
       stop();
       return;
     }
@@ -152,9 +151,9 @@ public class DemoWineScript extends BaseScript {
       clickLocation = ClickDistribution.generateRandomPoint(purpleObject.boundingBox());
       attempts++;
     }
-    logger.addLog("Attempts: " + attempts);
+    logger.info("Attempts: {}", attempts);
     if (attempts >= MAX_ATTEMPTS) {
-      logger.addLog("Failed to find a valid point in purple contour.");
+      logger.error("Failed to find a valid point in purple contour.");
       stop();
       return;
     }
@@ -162,9 +161,9 @@ public class DemoWineScript extends BaseScript {
     try {
       controller().mouse().moveTo(clickLocation, "medium");
       controller().mouse().leftClick();
-      logger.addLog("Clicked on purple bank object at " + clickLocation);
+      logger.info("Clicked on purple bank object at {}", clickLocation);
     } catch (Exception e) {
-      logger.addLog(e.getMessage());
+      logger.error(e.getMessage());
       stop();
     }
   }
@@ -183,7 +182,7 @@ public class DemoWineScript extends BaseScript {
       Rectangle boundingBox = TemplateMatching.match(imagePath, gameView, threshold, false);
 
       if (boundingBox == null || boundingBox.isEmpty()) {
-        logger.addLog("Template match failed: No valid bounding box.");
+        logger.error("Template match failed: No valid bounding box.");
         stop();
         return;
       }
@@ -192,10 +191,10 @@ public class DemoWineScript extends BaseScript {
 
       controller().mouse().moveTo(clickLocation, speed);
       controller().mouse().leftClick();
-      logger.addLog("Clicked on image at " + clickLocation);
+      logger.info("Clicked on image at {}", clickLocation);
 
     } catch (Exception e) {
-      logger.addLog("clickImage failed: " + e.getMessage());
+      logger.error("clickImage failed: {}", e.getMessage());
       stop();
     }
   }
@@ -210,7 +209,7 @@ public class DemoWineScript extends BaseScript {
     try {
       Rectangle boundingBox = controller().zones().getInventorySlots().get(slot);
       if (boundingBox == null || boundingBox.isEmpty()) {
-        logger.addLog("Inventory slot " + slot + " not found.");
+        logger.info("Inventory slot {} not found.", slot);
         stop();
         return;
       }
@@ -219,10 +218,10 @@ public class DemoWineScript extends BaseScript {
 
       controller().mouse().moveTo(clickLocation, speed);
       controller().mouse().leftClick();
-      logger.addLog("Clicked inventory slot " + slot + " at " + clickLocation);
+      logger.info("Clicked inventory slot {} at {}", slot, clickLocation);
 
     } catch (Exception e) {
-      logger.addLog("clickInventSlot failed: " + e.getMessage());
+      logger.error("clickInventSlot failed: {}", e.getMessage());
       stop();
     }
   }
@@ -241,14 +240,14 @@ public class DemoWineScript extends BaseScript {
       Rectangle boundingBox = TemplateMatching.match(imagePath, inventorySlot1, threshold, false);
 
       if (boundingBox == null || boundingBox.isEmpty()) {
-        logger.addLog("Template match failed: No valid bounding box.");
+        logger.error("Template match failed: No valid inventory bounding box.");
         return false;
       }
 
       return true;
 
     } catch (Exception e) {
-      logger.addLog("checkIfImageInv failed: " + e.getMessage());
+      logger.error("checkIfImageInv failed: {}", e.getMessage());
       stop();
     }
     return false;

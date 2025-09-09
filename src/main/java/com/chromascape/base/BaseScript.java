@@ -1,12 +1,12 @@
 package com.chromascape.base;
 
-import static java.time.temporal.ChronoUnit.MINUTES;
-
 import com.chromascape.controller.Controller;
 import com.chromascape.utils.core.runtime.HotkeyListener;
+import com.chromascape.utils.core.runtime.ScriptProgressPublisher;
 import com.chromascape.utils.core.runtime.ScriptStoppedException;
-import com.chromascape.web.logs.LogService;
 import java.time.LocalTime;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Abstract base class representing a generic automation script with lifecycle management.
@@ -20,7 +20,7 @@ import java.time.LocalTime;
 public abstract class BaseScript {
   private final Controller controller;
   private final int duration; // Duration to run the script in minutes
-  protected final LogService logger;
+  private static final Logger logger = LogManager.getLogger(BaseScript.class.getName());
   private final HotkeyListener hotkeyListener;
   private boolean running = true;
   private LocalTime startTime;
@@ -30,12 +30,10 @@ public abstract class BaseScript {
    *
    * @param isFixed whether the client UI is fixed or resizable
    * @param duration the total runtime of the script in minutes
-   * @param logger the logging service for recording events and progress
    */
-  public BaseScript(final boolean isFixed, final int duration, final LogService logger) {
-    controller = new Controller(isFixed, logger);
+  public BaseScript(final boolean isFixed, final int duration) {
+    controller = new Controller(isFixed);
     this.duration = duration;
-    this.logger = logger;
     this.hotkeyListener = new HotkeyListener(this);
   }
 
@@ -51,31 +49,32 @@ public abstract class BaseScript {
   public final void run() {
     startTime = LocalTime.now();
     LocalTime endTime = startTime.plusMinutes(duration);
-    logger.addLog("Starting. Script will run for " + duration + " minutes.");
+    logger.info("Starting. Script will run for {} minutes.", duration);
     controller.init();
     hotkeyListener.start();
 
     try {
       while (running && LocalTime.now().isBefore(endTime)) {
         if (Thread.currentThread().isInterrupted()) {
-          logger.addLog("Thread interrupted, exiting.");
+          logger.info("Thread interrupted, exiting.");
           break;
         }
         try {
           cycle();
+          ScriptProgressPublisher.updateProgress(getProgressPercent());
         } catch (ScriptStoppedException e) {
-          logger.addLog("Cycle interrupted: " + e.getMessage());
+          logger.info("Cycle interrupted: {}", e.getMessage());
           break;
         } catch (Exception e) {
-          logger.addLog("Exception in cycle: " + e.getMessage());
+          logger.info("Exception in cycle: {}", e.getMessage());
           break;
         }
       }
     } finally {
-      logger.addLog("Stopping and cleaning up.");
+      logger.info("Stopping and cleaning up.");
       controller.shutdown();
     }
-    logger.addLog("Finished running script.");
+    logger.info("Finished running script.");
   }
 
   /**
@@ -89,7 +88,7 @@ public abstract class BaseScript {
     if (!running) {
       return;
     }
-    logger.addLog("Stop requested");
+    logger.info("Stop requested");
     running = false;
     hotkeyListener.stop();
     throw new ScriptStoppedException();
@@ -103,14 +102,14 @@ public abstract class BaseScript {
    *
    * @return an integer between 0 and 100 representing progress percent, or 0 if not started
    */
-  public int getProgressPercent() {
+  private int getProgressPercent() {
     if (startTime == null) {
       return 0;
     }
-    LocalTime now = LocalTime.now();
-    long minsDone = MINUTES.between(startTime, now);
-    long clamped = Math.min(minsDone, duration);
-    return (int) (clamped * 100 / duration);
+    long secondsDone = java.time.Duration.between(startTime, LocalTime.now()).getSeconds();
+    long totalSeconds = duration * 60L;
+    long clamped = Math.min(secondsDone, totalSeconds);
+    return (int) (clamped * 100 / totalSeconds);
   }
 
   /**

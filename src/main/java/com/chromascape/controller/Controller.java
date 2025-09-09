@@ -7,7 +7,8 @@ import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.core.screen.window.WindowHandler;
 import com.chromascape.utils.domain.walker.Walker;
 import com.chromascape.utils.domain.zones.ZoneManager;
-import com.chromascape.web.logs.LogService;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * The central controller managing the lifecycle and access to core stateful utilities for input
@@ -34,19 +35,17 @@ public class Controller {
   private VirtualKeyboardUtils virtualKeyboardUtils;
   private ZoneManager zoneManager;
   private Walker walker;
-  private final LogService logger;
+  private static final Logger logger = LogManager.getLogger(Controller.class.getName());
 
   /**
    * Constructs a new Controller instance.
    *
    * @param isFixed Indicates whether the user's client is classic resizable or classic fixed. The
    *     user selects this in the UI.
-   * @param logger The logger to record lifecycle events and errors.
    */
-  public Controller(boolean isFixed, LogService logger) {
+  public Controller(boolean isFixed) {
     this.state = ControllerState.STOPPED;
     this.isFixed = isFixed;
-    this.logger = logger;
   }
 
   /**
@@ -70,7 +69,7 @@ public class Controller {
     state = ControllerState.RUNNING;
 
     // Initialises a walker to provide the script with Walking functionality through the DAX API
-    walker = new Walker(this, logger);
+    walker = new Walker(this);
   }
 
   /**
@@ -80,9 +79,10 @@ public class Controller {
    * utilities until re-initialized.
    */
   public void shutdown() {
-    state = ControllerState.STOPPED;
+    mouse().getMouseOverlay().eraseOverlay();
     kinput.destroy();
-    logger.addLog("Shutting down");
+    state = ControllerState.STOPPED;
+    logger.info("Shutting down");
   }
 
   /**
@@ -141,7 +141,7 @@ public class Controller {
   private void assertRunning(String component) {
     if (state != ControllerState.RUNNING) {
       if (logger != null) {
-        logger.addLog(component + " accessed while bot is not running.");
+        logger.info("{} accessed while bot is not running.", component);
       }
       throw new IllegalStateException(component + " accessed while bot is not running.");
     }

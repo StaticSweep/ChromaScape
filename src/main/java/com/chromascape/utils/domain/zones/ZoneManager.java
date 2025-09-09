@@ -6,6 +6,8 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Map;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Manages the detection and mapping of key UI zones within the RuneLite client window, including
@@ -47,6 +49,8 @@ public class ZoneManager {
 
   /** Threshold values corresponding to template matching sensitivity for each UI element. */
   private final double[] zoneThresholds = {0.025, 0.100, 0.035, 0.020};
+
+  private static final Logger logger = LogManager.getLogger(ZoneManager.class.getName());
 
   /**
    * Constructs a new ZoneManager configured for either fixed or resizable mode.
@@ -94,7 +98,8 @@ public class ZoneManager {
                 new Rectangle(chatLocation.x + 2, minimapLocation.y + 18, 129, 56));
       }
     } catch (Exception e) {
-      System.err.println("[ZoneManager] Mapping failed: " + e.getMessage());
+      logger.error("[ZoneManager] Mapping failed: {}", e.getMessage());
+      logger.debug(e.getStackTrace());
     }
   }
 
