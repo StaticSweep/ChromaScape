@@ -192,7 +192,7 @@ public class TemplateMatching {
    */
   private static void debug(String message, boolean debug) {
     if (debug) {
-      logger.info(message);
+      logger.debug(message);
     }
   }
 

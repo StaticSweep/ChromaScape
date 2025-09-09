@@ -63,10 +63,10 @@ public abstract class BaseScript {
           cycle();
           ScriptProgressPublisher.updateProgress(getProgressPercent());
         } catch (ScriptStoppedException e) {
-          logger.info("Cycle interrupted: {}", e.getMessage());
+          logger.error("Cycle interrupted: {}", e.getMessage());
           break;
         } catch (Exception e) {
-          logger.info("Exception in cycle: {}", e.getMessage());
+          logger.error("Exception in cycle: {}", e.getMessage());
           break;
         }
       }

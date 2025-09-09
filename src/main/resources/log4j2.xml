@@ -12,7 +12,7 @@
 
     <Loggers>
         <!-- Root logger sends logs to both console and WebSocket -->
-        <Root level="info">
+        <Root level="debug">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="WebSocket"/>
         </Root>
