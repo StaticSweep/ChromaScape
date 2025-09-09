@@ -6,10 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import java.io.File;
 import java.io.IOException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 
 /**
@@ -77,29 +75,35 @@ public class StartupConfiguration {
           logger.info("Created .chromascape directory at: {}", chromascapeDir.getAbsolutePath());
           createSubdirectories(chromascapeDir);
         } else {
-          String message = String.format(
-            "Could not create %s directory", CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME);
+          String message =
+              String.format(
+                  "Could not create %s directory", CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME);
           logger.error(message);
           throw new RuntimeException(message);
         }
       } else {
-        String message = String.format(
-          "Found existing %s directory at: %s", CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME, chromascapeDir.getAbsolutePath());
-          logger.info(message);
+        String message =
+            String.format(
+                "Found existing %s directory at: %s",
+                CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME, chromascapeDir.getAbsolutePath());
+        logger.info(message);
       }
 
       // Verify directory is writable
       if (!chromascapeDir.canWrite()) {
-        String message = String.format(
-          "Warning: %s directory is not writable", CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME);
+        String message =
+            String.format(
+                "Warning: %s directory is not writable",
+                CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME);
         logger.warn(message);
         throw new RuntimeException(message);
       }
 
     } catch (Exception e) {
-      String message = String.format(
-        "Error initializing %s directory: %s",
-        CacheFolderConstants.CACHE_FOLDER_NAME, e.getMessage());
+      String message =
+          String.format(
+              "Error initializing %s directory: %s",
+              CacheFolderConstants.CACHE_FOLDER_NAME, e.getMessage());
       logger.error(message);
       throw new RuntimeException(message, e);
     }

@@ -9,10 +9,10 @@ import static org.mockito.Mockito.verify;
 
 import java.io.File;
 import java.lang.reflect.Method;
-import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.Logger;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** Test class for {@link StartupConfiguration}. */
@@ -26,7 +26,7 @@ class StartupConfigurationTest {
   @BeforeEach
   void setUp() {
     startupConfiguration = new StartupConfiguration();
-    mockLogger = mock(Logger.class);
+    mockLogger = mock(Logger.class); // This will now create an SLF4J mock
     ReflectionTestUtils.setField(startupConfiguration, "logger", mockLogger);
   }
 
