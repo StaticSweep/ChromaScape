@@ -1,9 +1,15 @@
 package com.chromascape.web.config;
 
+import com.chromascape.utils.core.AccountManager;
+import com.chromascape.utils.core.constants.CacheFolderConstants;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import java.io.File;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import java.io.IOException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 
 /**
@@ -17,7 +23,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class StartupConfiguration {
 
-  private static Logger logger = LogManager.getLogger(StartupConfiguration.class);
+  private static Logger logger = LoggerFactory.getLogger(StartupConfiguration.class);
 
   /**
    * Initializes application infrastructure after Spring context is fully loaded.
@@ -42,6 +48,9 @@ public class StartupConfiguration {
       // Initialize .chromascape directory
       initializeChromascapeDirectory();
 
+      // Load account configuration
+      loadAccountConfiguration();
+
       logger.info("CHROMASCAPE STARTUP CONFIGURATION COMPLETED");
 
     } catch (Exception e) {
@@ -59,34 +68,40 @@ public class StartupConfiguration {
     try {
       // Get project root directory (where build.gradle.kts is located)
       String projectRoot = System.getProperty("user.dir");
-      File chromascapeDir = new File(projectRoot, ".chromascape");
+      File chromascapeDir = new File(projectRoot, CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME);
 
       // Create .chromascape directory if it doesn't exist
       if (!chromascapeDir.exists()) {
         boolean created = chromascapeDir.mkdirs();
         if (created) {
           logger.info("Created .chromascape directory at: {}", chromascapeDir.getAbsolutePath());
-          // Only create subdirectories if we just created the main directory
           createSubdirectories(chromascapeDir);
         } else {
-          logger.error("Failed to create .chromascape directory");
-          throw new RuntimeException("Could not create .chromascape directory");
+          String message = String.format(
+            "Could not create %s directory", CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME);
+          logger.error(message);
+          throw new RuntimeException(message);
         }
       } else {
-        logger.info(
-            "Found existing .chromascape directory at: {}", chromascapeDir.getAbsolutePath());
-        // Directory already exists, don't modify it
+        String message = String.format(
+          "Found existing %s directory at: %s", CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME, chromascapeDir.getAbsolutePath());
+          logger.info(message);
       }
 
       // Verify directory is writable
       if (!chromascapeDir.canWrite()) {
-        logger.warn("Warning: .chromascape directory is not writable");
-        throw new RuntimeException("Cannot write to .chromascape directory");
+        String message = String.format(
+          "Warning: %s directory is not writable", CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME);
+        logger.warn(message);
+        throw new RuntimeException(message);
       }
 
     } catch (Exception e) {
-      logger.error("Error initializing .chromascape directory: {}", e.getMessage());
-      throw new RuntimeException("Failed to initialize .chromascape directory", e);
+      String message = String.format(
+        "Error initializing %s directory: %s",
+        CacheFolderConstants.CACHE_FOLDER_NAME, e.getMessage());
+      logger.error(message);
+      throw new RuntimeException(message, e);
     }
   }
 
@@ -96,9 +111,7 @@ public class StartupConfiguration {
    * @param chromascapeDir the main .chromascape directory
    */
   private void createSubdirectories(File chromascapeDir) {
-    String[] subdirs = {"config", "logs", "scripts", "data", "cache"};
-
-    for (String subdir : subdirs) {
+    for (String subdir : CacheFolderConstants.CHROMA_CACHE_FOLDER_SUBDIRS) {
       File subdirFile = new File(chromascapeDir, subdir);
       if (!subdirFile.exists()) {
         boolean created = subdirFile.mkdir();
@@ -108,6 +121,47 @@ public class StartupConfiguration {
           logger.warn("Warning: Failed to create subdirectory: {}", subdir);
         }
       }
+    }
+  }
+
+  /**
+   * Loads account configuration from the accounts.json file and populates the AccountManager. This
+   * method reads the first account from the JSON file and sets it as the selected account.
+   */
+  private void loadAccountConfiguration() {
+    try {
+      String projectRoot = System.getProperty("user.dir");
+      File accountsFile =
+          new File(
+              projectRoot,
+              CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME
+                  + "/"
+                  + CacheFolderConstants.CONFIG_FOLDER_NAME
+                  + "/"
+                  + CacheFolderConstants.ACCOUNTS_FILE_NAME);
+
+      if (accountsFile.exists()) {
+        logger.info("Loading account configuration from: {}", accountsFile.getAbsolutePath());
+
+        // Read the JSON file and parse it as a String array
+        ObjectMapper objectMapper = new ObjectMapper();
+        String[] accounts = objectMapper.readValue(accountsFile, String[].class);
+
+        // Select the first account if any exist
+        if (accounts.length > 0) {
+          String firstAccount = accounts[0];
+          AccountManager.setSelectedAccount(firstAccount);
+          logger.info("Account loaded successfully: {}", firstAccount);
+        } else {
+          logger.warn("No accounts found in accounts.json file");
+        }
+      } else {
+        logger.info("No accounts.json file found, no account will be loaded");
+      }
+    } catch (IOException e) {
+      logger.error("Error reading accounts file: {}", e.getMessage());
+    } catch (Exception e) {
+      logger.error("Unexpected error during account loading: {}", e.getMessage());
     }
   }
 }
