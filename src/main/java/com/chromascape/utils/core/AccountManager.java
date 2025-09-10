@@ -9,10 +9,10 @@ import org.slf4j.LoggerFactory;
  */
 public class AccountManager {
 
-  private static final Logger _logger = LoggerFactory.getLogger(AccountManager.class);
+  private static final Logger logger = LoggerFactory.getLogger(AccountManager.class);
 
   // Static variable that persists across all classes
-  private static String _selectedAccount = null;
+  private static String selectedAccount = null;
 
   // Private constructor to prevent instantiation
   private AccountManager() {
@@ -26,7 +26,7 @@ public class AccountManager {
    * @return The selected account name, or null if none is selected
    */
   public static String getSelectedAccount() {
-    return _selectedAccount;
+    return selectedAccount;
   }
 
   /**
@@ -35,14 +35,14 @@ public class AccountManager {
    * @param account The account name to set
    */
   public static void setSelectedAccount(String account) {
-    _selectedAccount = account;
-    _logger.info("Selected account updated to: {}", account);
+    selectedAccount = account;
+    logger.info("Selected account updated to: {}", account);
   }
 
   /** Clears the selected account. */
   public static void clearSelectedAccount() {
-    _selectedAccount = null;
-    _logger.info("Selected account cleared");
+    selectedAccount = null;
+    logger.info("Selected account cleared");
   }
 
   /**
@@ -51,7 +51,7 @@ public class AccountManager {
    * @return true if an account is selected, false otherwise
    */
   public static boolean hasSelectedAccount() {
-    return _selectedAccount != null && !_selectedAccount.trim().isEmpty();
+    return selectedAccount != null && !selectedAccount.trim().isEmpty();
   }
 
   /**
@@ -61,6 +61,6 @@ public class AccountManager {
    * @return The selected account or the default value
    */
   public static String getSelectedAccountOrDefault(String defaultValue) {
-    return hasSelectedAccount() ? _selectedAccount : defaultValue;
+    return hasSelectedAccount() ? selectedAccount : defaultValue;
   }
 }

@@ -18,6 +18,10 @@ java {
 	}
 }
 
+springBoot {
+	mainClass.set("com.chromascape.web.ChromaScapeApplication")
+}
+
 repositories {
 	mavenCentral()
 }

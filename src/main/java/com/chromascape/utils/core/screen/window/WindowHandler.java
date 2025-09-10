@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
  * Windows operating system using JNA and Win32 APIs.
  */
 public class WindowHandler {
-  private static final Logger _logger = LoggerFactory.getLogger(WindowHandler.class);
+  private static final Logger logger = LoggerFactory.getLogger(WindowHandler.class);
   private static final String _windowName = "RuneLite";
 
   /**
