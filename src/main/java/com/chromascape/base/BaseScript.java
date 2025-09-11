@@ -129,7 +129,7 @@ public abstract class BaseScript {
    *
    * @return The controller object.
    */
-  protected Controller controller() {
+  public Controller controller() {
     return controller;
   }
 }

@@ -1,17 +1,14 @@
 package com.chromascape.scripts;
 
 import com.chromascape.base.BaseScript;
+import com.chromascape.utils.actions.RandomPoint;
 import com.chromascape.utils.core.input.Sleeper;
 import com.chromascape.utils.core.input.distribution.ClickDistribution;
-import com.chromascape.utils.core.screen.colour.ColourInstances;
-import com.chromascape.utils.core.screen.topology.ChromaObj;
-import com.chromascape.utils.core.screen.topology.ColourContours;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
-import java.util.List;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -124,38 +121,14 @@ public class DemoWineScript extends BaseScript {
    * click successfully.
    */
   private void clickBank() {
-    List<ChromaObj> purpleObjs;
+    Point clickLocation = new Point();
     try {
-      purpleObjs =
-          ColourContours.getChromaObjsInColour(
-              controller().zones().getGameView(), ColourInstances.getByName("Purple"));
+      clickLocation =
+          RandomPoint.getRandomPointInColour(
+              this, controller().zones().getGameView(), "Purple", MAX_ATTEMPTS);
     } catch (Exception e) {
-      logger.error(e.getMessage());
+      logger.error("Failed while generating bank click location: {}", String.valueOf(e));
       stop();
-      return;
-    }
-
-    if (purpleObjs.isEmpty()) {
-      logger.error("No purple objects found");
-      stop();
-      return;
-    }
-
-    Point clickLocation;
-    ChromaObj purpleObject = purpleObjs.get(0);
-
-    int attempts = 0;
-    clickLocation = ClickDistribution.generateRandomPoint(purpleObject.boundingBox());
-    while (!ColourContours.isPointInContour(clickLocation, purpleObject.contour())
-        && attempts < MAX_ATTEMPTS) {
-      clickLocation = ClickDistribution.generateRandomPoint(purpleObject.boundingBox());
-      attempts++;
-    }
-    logger.info("Attempts: {}", attempts);
-    if (attempts >= MAX_ATTEMPTS) {
-      logger.error("Failed to find a valid point in purple contour.");
-      stop();
-      return;
     }
 
     try {
@@ -179,15 +152,8 @@ public class DemoWineScript extends BaseScript {
   private void clickImage(String imagePath, String speed, double threshold) {
     try {
       BufferedImage gameView = controller().zones().getGameView();
-      Rectangle boundingBox = TemplateMatching.match(imagePath, gameView, threshold, false);
-
-      if (boundingBox == null || boundingBox.isEmpty()) {
-        logger.error("Template match failed: No valid bounding box.");
-        stop();
-        return;
-      }
-
-      Point clickLocation = ClickDistribution.generateRandomPoint(boundingBox);
+      Point clickLocation =
+          RandomPoint.getRandomPointInImage(this, imagePath, gameView, threshold);
 
       controller().mouse().moveTo(clickLocation, speed);
       controller().mouse().leftClick();
