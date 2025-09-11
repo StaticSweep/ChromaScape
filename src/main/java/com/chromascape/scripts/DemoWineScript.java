@@ -124,10 +124,14 @@ public class DemoWineScript extends BaseScript {
     Point clickLocation = new Point();
     try {
       clickLocation =
-          RandomPoint.getRandomPointInColour(
-              this, controller().zones().getGameView(), "Purple", MAX_ATTEMPTS);
+          RandomPoint.getRandomPointInColour(controller().zones().getGameView(), "Purple", MAX_ATTEMPTS);
     } catch (Exception e) {
       logger.error("Failed while generating bank click location: {}", String.valueOf(e));
+      stop();
+    }
+
+    if (clickLocation == null) {
+      logger.error("clickBank click location is null");
       stop();
     }
 
@@ -153,7 +157,12 @@ public class DemoWineScript extends BaseScript {
     try {
       BufferedImage gameView = controller().zones().getGameView();
       Point clickLocation =
-          RandomPoint.getRandomPointInImage(this, imagePath, gameView, threshold);
+          RandomPoint.getRandomPointInImage(imagePath, gameView, threshold);
+
+      if (clickLocation == null) {
+        logger.error("clickImage click location is null");
+        stop();
+      }
 
       controller().mouse().moveTo(clickLocation, speed);
       controller().mouse().leftClick();
@@ -181,6 +190,11 @@ public class DemoWineScript extends BaseScript {
       }
 
       Point clickLocation = ClickDistribution.generateRandomPoint(boundingBox);
+
+      if (clickLocation == null) {
+        logger.error("clickInventSlot click location is null");
+        stop();
+      }
 
       controller().mouse().moveTo(clickLocation, speed);
       controller().mouse().leftClick();
