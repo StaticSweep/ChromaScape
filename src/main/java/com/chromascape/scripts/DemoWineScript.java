@@ -1,7 +1,7 @@
 package com.chromascape.scripts;
 
 import com.chromascape.base.BaseScript;
-import com.chromascape.utils.actions.RandomPoint;
+import com.chromascape.utils.actions.PointSelector;
 import com.chromascape.utils.core.input.Sleeper;
 import com.chromascape.utils.core.input.distribution.ClickDistribution;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
@@ -124,7 +124,8 @@ public class DemoWineScript extends BaseScript {
     Point clickLocation = new Point();
     try {
       clickLocation =
-          RandomPoint.getRandomPointInColour(controller().zones().getGameView(), "Purple", MAX_ATTEMPTS);
+          PointSelector.getRandomPointInColour(
+              controller().zones().getGameView(), "Purple", MAX_ATTEMPTS);
     } catch (Exception e) {
       logger.error("Failed while generating bank click location: {}", String.valueOf(e));
       stop();
@@ -156,8 +157,7 @@ public class DemoWineScript extends BaseScript {
   private void clickImage(String imagePath, String speed, double threshold) {
     try {
       BufferedImage gameView = controller().zones().getGameView();
-      Point clickLocation =
-          RandomPoint.getRandomPointInImage(imagePath, gameView, threshold);
+      Point clickLocation = PointSelector.getRandomPointInImage(imagePath, gameView, threshold);
 
       if (clickLocation == null) {
         logger.error("clickImage click location is null");
