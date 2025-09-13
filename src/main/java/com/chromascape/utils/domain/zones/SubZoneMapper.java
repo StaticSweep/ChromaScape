@@ -132,6 +132,7 @@ public class SubZoneMapper {
         x += 62;
       }
       chatTabs.put("Chat", new Rectangle(zone.x + 5, zone.y + 5, 506, 129));
+      chatTabs.put("Latest Message", new Rectangle(zone.x + 5, zone.y + 104, 488, 15));
       return chatTabs;
     } else {
       System.out.println("No Chat found");

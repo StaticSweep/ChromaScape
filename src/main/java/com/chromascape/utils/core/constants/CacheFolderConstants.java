@@ -23,7 +23,11 @@ package com.chromascape.utils.core.constants;
  * <p><b>Example usage:</b>
  *
  * <pre>
- * String configPath = Path.of(CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME, CacheFolderConstants.CONFIG_FOLDER_NAME).toString();
+ *   String configPath =
+ *       Path.of(
+ *               CacheFolderConstants.CHROMA_CACHE_FOLDER_NAME,
+ *               CacheFolderConstants.CONFIG_FOLDER_NAME)
+ *           .toString();
  * </pre>
  */
 public class CacheFolderConstants {
