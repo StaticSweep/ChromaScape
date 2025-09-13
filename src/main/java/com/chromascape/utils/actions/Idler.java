@@ -5,7 +5,8 @@ import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.domain.ocr.Ocr;
 import java.awt.Rectangle;
-import java.time.LocalTime;
+import java.time.Duration;
+import java.time.Instant;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -35,8 +36,9 @@ public class Idler {
    */
   public static void waitUntilIdle(BaseScript base, int timeoutSeconds) {
     try {
-      LocalTime now = LocalTime.now();
-      while (LocalTime.now().isBefore(now.plusSeconds(timeoutSeconds))) {
+      Instant start = Instant.now();
+      Instant deadline = start.plus(Duration.ofSeconds(timeoutSeconds));
+      while (Instant.now().isBefore(deadline)) {
         Rectangle latestMessage = base.controller().zones().getChatTabs().get("Latest Message");
         ColourObj red = ColourInstances.getByName("ChatRed");
         String ocr = Ocr.extractText(latestMessage, "Plain 12", red, true);
@@ -46,8 +48,7 @@ public class Idler {
         }
       }
     } catch (Exception e) {
-      logger.error(e);
-      logger.error(e.getStackTrace());
+      logger.error("Error while waiting for idle", e);
     }
   }
 }

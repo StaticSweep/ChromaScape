@@ -4,7 +4,8 @@ import com.chromascape.controller.Controller;
 import com.chromascape.utils.core.runtime.HotkeyListener;
 import com.chromascape.utils.core.runtime.ScriptProgressPublisher;
 import com.chromascape.utils.core.runtime.ScriptStoppedException;
-import java.time.LocalTime;
+import java.time.Duration;
+import java.time.Instant;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -23,7 +24,7 @@ public abstract class BaseScript {
   private static final Logger logger = LogManager.getLogger(BaseScript.class.getName());
   private final HotkeyListener hotkeyListener;
   private boolean running = true;
-  private LocalTime startTime;
+  private Instant startTime;
 
   /**
    * Constructs a BaseScript.
@@ -47,14 +48,14 @@ public abstract class BaseScript {
    * <p>This method blocks until completion.
    */
   public final void run() {
-    startTime = LocalTime.now();
-    LocalTime endTime = startTime.plusMinutes(duration);
+    startTime = Instant.now();
+    Instant endTime = startTime.plus(Duration.ofMinutes(duration));
     logger.info("Starting. Script will run for {} minutes.", duration);
     controller.init();
     hotkeyListener.start();
 
     try {
-      while (running && LocalTime.now().isBefore(endTime)) {
+      while (running && Instant.now().isBefore(endTime)) {
         if (Thread.currentThread().isInterrupted()) {
           logger.info("Thread interrupted, exiting.");
           break;
@@ -106,7 +107,7 @@ public abstract class BaseScript {
     if (startTime == null) {
       return 0;
     }
-    long secondsDone = java.time.Duration.between(startTime, LocalTime.now()).getSeconds();
+    long secondsDone = Duration.between(startTime, Instant.now()).getSeconds();
     long totalSeconds = duration * 60L;
     long clamped = Math.min(secondsDone, totalSeconds);
     return (int) (clamped * 100 / totalSeconds);
