@@ -3,7 +3,6 @@ package com.chromascape.web.instance;
 import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.lang.Nullable;
@@ -21,9 +20,9 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
  * script is running, or {@code "false"} if no script is active. The handler maintains a thread-safe
  * set of active sessions and automatically handles client connect/disconnect events.
  *
- * <p>This implementation uses an {@link ExecutorService} to send messages asynchronously, ensuring
- * that blocking network operations do not interfere with the main application thread or script
- * execution.
+ * <p>This component is typically registered in {@link
+ * org.springframework.web.socket.config.annotation.WebSocketConfigurer} to expose a `/ws/state`
+ * endpoint.
  */
 @Component
 public class WebSocketStateHandler extends TextWebSocketHandler {
@@ -52,16 +51,15 @@ public class WebSocketStateHandler extends TextWebSocketHandler {
    */
   @Override
   public void afterConnectionClosed(
-      @Nullable WebSocketSession session, @Nullable CloseStatus status) {
+          @Nullable WebSocketSession session, @Nullable CloseStatus status) {
     sessions.remove(session);
   }
 
   /**
-   * Broadcasts the current script running state to all connected clients asynchronously.
+   * Broadcasts the current script running state to all connected clients.
    *
    * <p>The message sent is a simple {@code "true"} or {@code "false"} string, representing whether
-   * a script is currently active. This method offloads network operations to a separate executor to
-   * prevent blocking the calling thread.
+   * a script is currently active.
    *
    * @param isRunning {@code true} if a script is running, {@code false} otherwise
    */
@@ -71,14 +69,7 @@ public class WebSocketStateHandler extends TextWebSocketHandler {
         try {
           session.sendMessage(new TextMessage(Boolean.toString(isRunning)));
         } catch (IOException e) {
-          sessions.remove(session);
-          logger.warn("Failed to send message to session: {}", e.getMessage());
-        } catch (RuntimeException e) {
-          if (Thread.currentThread().isInterrupted()) {
-            logger.info("Broadcast interrupted, exiting task.");
-            return;
-          }
-          throw e;
+          logger.error("Failed to send running state to client", e);
         }
       }
     }

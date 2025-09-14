@@ -21,7 +21,7 @@ import org.apache.logging.log4j.Logger;
  */
 public class Idler {
 
-  private static final Logger logger = LogManager.getLogger(Idler.class.getName());
+  private static final Logger logger = LogManager.getLogger(Idler.class);
 
   /**
    * Waits until either the specified timeout has elapsed or until the client chatbox reports that

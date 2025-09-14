@@ -23,7 +23,7 @@ import org.apache.logging.log4j.Logger;
  */
 public class DemoWineScript extends BaseScript {
 
-  private final Logger logger = LogManager.getLogger(this.getClass().getName());
+  private final Logger logger = LogManager.getLogger(this.getClass());
 
   private static final String grapes = "/images/user/Grapes.png";
   private static final String jugs = "/images/user/Jug_of_water.png";

@@ -61,7 +61,7 @@ import org.apache.logging.log4j.Logger;
 public class Walker {
 
   private final Controller controller;
-  private static final Logger logger = LogManager.getLogger(Walker.class.getName());
+  private static final Logger logger = LogManager.getLogger(Walker.class);
   private final Dax dax;
   private final ObjectMapper objectMapper;
   private final Compass compass;

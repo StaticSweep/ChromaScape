@@ -35,7 +35,7 @@ public class Controller {
   private VirtualKeyboardUtils virtualKeyboardUtils;
   private ZoneManager zoneManager;
   private Walker walker;
-  private static final Logger logger = LogManager.getLogger(Controller.class.getName());
+  private static final Logger logger = LogManager.getLogger(Controller.class);
 
   /**
    * Constructs a new Controller instance.

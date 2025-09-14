@@ -20,12 +20,12 @@ public class Screenshotter extends BaseScript {
    * The logger is specially initialised to be used in this program. This is exactly how you should
    * access it in a user script.
    */
-  private final Logger logger = LogManager.getLogger(this.getClass().getName());
+  private final Logger logger = LogManager.getLogger(Screenshotter.class);
 
   public static final String ORIGINAL_IMAGE_PATH = "output/original.png";
 
   /**
-   * Same constructor as super (BaseScript) but logger is saved as a global variable.
+   * Same constructor as super (BaseScript).
    *
    * @param isFixed whether the client is in classic fixed or classic resizable
    */

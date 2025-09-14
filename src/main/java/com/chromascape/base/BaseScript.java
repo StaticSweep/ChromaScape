@@ -28,7 +28,7 @@ public abstract class BaseScript {
    *
    * @param isFixed whether the client UI is fixed or resizable
    */
-  public BaseScript(boolean isFixed) {
+  public BaseScript(final boolean isFixed) {
     controller = new Controller(isFixed);
     hotkeyListener = new HotkeyListener(this);
   }

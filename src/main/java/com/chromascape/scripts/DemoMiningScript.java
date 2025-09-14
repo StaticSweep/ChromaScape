@@ -28,7 +28,7 @@ import org.apache.logging.log4j.Logger;
  */
 public class DemoMiningScript extends BaseScript {
 
-  private static final Logger logger = LogManager.getLogger(DemoMiningScript.class.getName());
+  private static final Logger logger = LogManager.getLogger(DemoMiningScript.class);
   private static final String ironOre = "/images/user/Iron_ore.png";
 
   /**

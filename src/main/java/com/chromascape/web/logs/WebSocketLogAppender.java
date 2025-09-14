@@ -30,10 +30,10 @@ import org.apache.logging.log4j.core.config.plugins.PluginFactory;
  * @see LogWebSocketHandler
  */
 @Plugin(
-    name = "WebSocketLogAppender",
-    category = "Core",
-    elementType = Appender.ELEMENT_TYPE,
-    printObject = true)
+        name = "WebSocketLogAppender",
+        category = "Core",
+        elementType = Appender.ELEMENT_TYPE,
+        printObject = true)
 public class WebSocketLogAppender extends AbstractAppender {
 
   /**

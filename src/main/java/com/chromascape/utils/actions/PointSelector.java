@@ -40,7 +40,7 @@ import org.apache.logging.log4j.Logger;
  */
 public class PointSelector {
 
-  private static final Logger logger = LogManager.getLogger(PointSelector.class.getName());
+  private static final Logger logger = LogManager.getLogger(PointSelector.class);
 
   /**
    * Searches for the provided image template within the current game view, then returns a random
