@@ -1,5 +1,6 @@
 package com.chromascape.utils.core.input.keyboard;
 
+import com.chromascape.base.BaseScript;
 import com.chromascape.utils.core.input.remoteinput.Kinput;
 
 /**
@@ -28,6 +29,7 @@ public class VirtualKeyboardUtils {
    * @param keyChar The character key to send.
    */
   public synchronized void sendKeyChar(int eventId, char keyChar) {
+    BaseScript.checkInterrupted();
     kinput.sendKeyEvent(eventId, keyChar);
   }
 
@@ -40,6 +42,7 @@ public class VirtualKeyboardUtils {
    * @throws IllegalArgumentException if the key name is invalid.
    */
   public synchronized void sendModifierKey(int eventId, String key) {
+    BaseScript.checkInterrupted();
     int keyId =
         switch (key.toLowerCase()) {
           case "shift" -> 16;
@@ -61,6 +64,7 @@ public class VirtualKeyboardUtils {
    * @throws IllegalArgumentException if the arrow direction is invalid.
    */
   public synchronized void sendArrowKey(int eventId, String key) {
+    BaseScript.checkInterrupted();
     int keyId =
         switch (key.toLowerCase()) {
           case "left" -> 37;
