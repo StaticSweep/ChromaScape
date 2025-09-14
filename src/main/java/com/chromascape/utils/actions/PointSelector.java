@@ -1,5 +1,6 @@
 package com.chromascape.utils.actions;
 
+import com.chromascape.base.BaseScript;
 import com.chromascape.utils.core.input.distribution.ClickDistribution;
 import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.topology.ChromaObj;
@@ -52,6 +53,7 @@ public class PointSelector {
    */
   public static Point getRandomPointInImage(
       String templatePath, BufferedImage image, double threshold) {
+    BaseScript.checkInterrupted();
     try {
       Rectangle boundingBox = TemplateMatching.match(templatePath, image, threshold, false);
 
@@ -96,6 +98,7 @@ public class PointSelector {
     int attempts = 0;
     Point p = ClickDistribution.generateRandomPoint(obj.boundingBox());
     while (!ColourContours.isPointInContour(p, obj.contour()) && attempts < maxAttempts) {
+      BaseScript.checkInterrupted();
       p = ClickDistribution.generateRandomPoint(obj.boundingBox());
       attempts++;
     }

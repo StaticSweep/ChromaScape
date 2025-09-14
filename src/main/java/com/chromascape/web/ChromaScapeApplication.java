@@ -1,7 +1,5 @@
 package com.chromascape.web;
 
-import com.chromascape.utils.core.runtime.ScriptProgressPublisher;
-import com.chromascape.web.instance.WebSocketProgressHandler;
 import com.chromascape.web.logs.LogWebSocketHandler;
 import com.chromascape.web.logs.WebSocketLogAppender;
 import org.apache.logging.log4j.LogManager;
@@ -41,18 +39,5 @@ public class ChromaScapeApplication {
   @Autowired
   public void configureWebSocketHandler(LogWebSocketHandler handler) {
     WebSocketLogAppender.setWebSocketHandler(handler);
-  }
-
-  /**
-   * Injects the {@link WebSocketProgressHandler} bean into the {@link ScriptProgressPublisher}.
-   *
-   * <p>This allows the {@link ScriptProgressPublisher} to publish progress updates of running
-   * scripts over WebSocket to connected clients.
-   *
-   * @param handler the WebSocket handler responsible for sending script progress updates
-   */
-  @Autowired
-  public void initProgressPublisher(WebSocketProgressHandler handler) {
-    ScriptProgressPublisher.setWebSocketHandler(handler);
   }
 }

@@ -41,7 +41,6 @@ document.addEventListener("DOMContentLoaded", () => {
  */
 async function initializeUI() {
     connectLogWebSocket();
-    connectProgressWebSocket();
     connectStateWebSocket();
 
     try {
@@ -176,37 +175,6 @@ function appendLogLine(line) {
     }
 }
 
-// ----------------- PROGRESS -----------------
-
-/**
- * Establishes a WebSocket connection to receive progress updates from the backend.
- */
-function connectProgressWebSocket() {
-    const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
-    const wsUrl = `${wsProtocol}://${location.host}/ws/progress`;
-    let ws;
-
-    function initialize() {
-        ws = new WebSocket(wsUrl);
-
-        ws.onopen = () => console.log("Connected to progress WebSocket:", wsUrl);
-
-        ws.onmessage = (event) => updateProgressBar(event.data);
-
-        ws.onclose = (event) => {
-            console.warn("Progress WebSocket closed:", event.reason);
-            setTimeout(initialize, 2000);
-        };
-
-        ws.onerror = (error) => {
-            console.error("Progress WebSocket error:", error);
-            ws.close();
-        };
-    }
-
-    initialize();
-}
-
 /**
  * Updates the progress bar UI element.
  * @param {number|string} progress - Progress percentage (0-100)
@@ -248,14 +216,13 @@ function setupStartStopButton() {
 
 /**
  * Retrieves the configuration for running the selected script.
- * @returns {{script: string, duration: number, fixed: boolean}|null} Run configuration or null if invalid
+ * @returns {{script: string, fixed: boolean}|null} Run configuration or null if invalid
  */
 function getRunConfig() {
     const mode = document.getElementById("windowModeDropdown")?.textContent;
-    const duration = parseInt(document.getElementById("durationInput")?.value);
 
-    if (!selectedScriptName || isNaN(duration)) {
-        alert("Please select a script and a valid duration.");
+    if (!selectedScriptName) {
+        alert("Please select a script.");
         return null;
     }
 
@@ -267,7 +234,7 @@ function getRunConfig() {
         return null;
     }
 
-    return { script: selectedScriptName, duration, fixed };
+    return { script: selectedScriptName, fixed };
 }
 
 /**

@@ -3,6 +3,8 @@ package com.chromascape.web.logs;
 import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
@@ -39,6 +41,9 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
    * concurrent modification issues during broadcast.
    */
   private final Set<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
+
+  /** Executor service to send WebSocket requests without blocking the main thread. */
+  private final ExecutorService wsExecutor = Executors.newCachedThreadPool();
 
   /**
    * Called when a new WebSocket connection is established. Adds the session to the active set and
@@ -98,12 +103,15 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
    */
   public void broadcast(String message) {
     for (WebSocketSession session : sessions) {
-      try {
-        session.sendMessage(new TextMessage(message));
-      } catch (IOException e) {
-        sessions.remove(session);
-        logger.warn("Failed to send message to session: {}", e.getMessage());
-      }
+      wsExecutor.submit(
+          () -> {
+            try {
+              session.sendMessage(new TextMessage(message));
+            } catch (IOException e) {
+              sessions.remove(session);
+              logger.warn("Failed to send message to session: {}", e.getMessage());
+            }
+          });
     }
   }
 }

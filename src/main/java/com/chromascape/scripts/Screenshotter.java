@@ -28,10 +28,9 @@ public class Screenshotter extends BaseScript {
    * Same constructor as super (BaseScript) but logger is saved as a global variable.
    *
    * @param isFixed whether the client is in classic fixed or classic resizable
-   * @param duration the total runtime of the script in minutes
    */
-  public Screenshotter(boolean isFixed, int duration) {
-    super(isFixed, duration);
+  public Screenshotter(boolean isFixed) {
+    super(isFixed);
   }
 
   /**

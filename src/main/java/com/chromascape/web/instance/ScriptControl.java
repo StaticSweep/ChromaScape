@@ -53,11 +53,6 @@ public class ScriptControl {
         return ResponseEntity.badRequest().body("Script must be specified.");
       }
 
-      if (config.getDuration() <= 0) {
-        logger.error("Duration incorrectly specified");
-        return ResponseEntity.badRequest().body("Duration must be greater than 0.");
-      }
-
       if (config.isFixed() == null) {
         logger.error("No window style selected");
         return ResponseEntity.badRequest().body("Window style (Fixed?) must be specified.");

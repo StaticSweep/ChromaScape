@@ -3,7 +3,6 @@ package com.chromascape.scripts;
 import com.chromascape.base.BaseScript;
 import com.chromascape.utils.actions.Idler;
 import com.chromascape.utils.actions.PointSelector;
-import com.chromascape.utils.core.input.Sleeper;
 import com.chromascape.utils.core.input.distribution.ClickDistribution;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
@@ -36,10 +35,9 @@ public class DemoMiningScript extends BaseScript {
    * Constructs a new mining script.
    *
    * @param isFixed whether the client UI is fixed or resizable
-   * @param duration the total runtime of the script in minutes
    */
-  public DemoMiningScript(boolean isFixed, int duration) {
-    super(isFixed, duration);
+  public DemoMiningScript(boolean isFixed) {
+    super(isFixed);
   }
 
   /**
@@ -54,7 +52,7 @@ public class DemoMiningScript extends BaseScript {
       dropIronOre();
     }
     clickOre();
-    Sleeper.waitRandomMillis(800, 1000);
+    waitRandomMillis(800, 1000);
     Idler.waitUntilIdle(this, 20);
   }
 
@@ -105,15 +103,15 @@ public class DemoMiningScript extends BaseScript {
   private void dropIronOre() {
     try {
       controller().keyboard().sendModifierKey(401, "shift");
-      Sleeper.waitRandomMillis(800, 1200);
+      waitRandomMillis(800, 1200);
       for (int i = 0; i < 28; i++) {
         Rectangle invSlot = controller().zones().getInventorySlots().get(i);
         Point clickLoc = ClickDistribution.generateRandomPoint(invSlot);
         controller().mouse().moveTo(clickLoc, "medium");
         controller().mouse().leftClick();
-        Sleeper.waitRandomMillis(200, 650);
+        waitRandomMillis(200, 650);
       }
-      Sleeper.waitRandomMillis(600, 800);
+      waitRandomMillis(600, 800);
       controller().keyboard().sendModifierKey(402, "shift");
     } catch (Exception e) {
       logger.error(e);

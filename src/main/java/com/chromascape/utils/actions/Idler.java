@@ -35,6 +35,7 @@ public class Idler {
    * @param timeoutSeconds the maximum number of seconds to remain idle before continuing
    */
   public static void waitUntilIdle(BaseScript base, int timeoutSeconds) {
+    BaseScript.checkInterrupted();
     try {
       Instant start = Instant.now();
       Instant deadline = start.plus(Duration.ofSeconds(timeoutSeconds));

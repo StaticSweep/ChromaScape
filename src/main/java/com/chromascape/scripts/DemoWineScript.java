@@ -2,7 +2,6 @@ package com.chromascape.scripts;
 
 import com.chromascape.base.BaseScript;
 import com.chromascape.utils.actions.PointSelector;
-import com.chromascape.utils.core.input.Sleeper;
 import com.chromascape.utils.core.input.distribution.ClickDistribution;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
@@ -41,10 +40,9 @@ public class DemoWineScript extends BaseScript {
    * Constructs a BaseScript.
    *
    * @param isFixed whether the client UI is classic fixed or classic resizable
-   * @param duration the total runtime of the script in minutes
    */
-  public DemoWineScript(boolean isFixed, int duration) {
-    super(isFixed, duration);
+  public DemoWineScript(boolean isFixed) {
+    super(isFixed);
   }
 
   /**
@@ -59,38 +57,38 @@ public class DemoWineScript extends BaseScript {
   protected void cycle() {
     if (bankFlag) {
       clickBank(); // Open the bank once at the start of the script
-      Sleeper.waitRandomMillis(700, 900);
+      waitRandomMillis(700, 900);
       bankFlag = false;
       // Cannot start in bank because UI needs to initialise
     }
 
     clickImage(grapes, "fast", 0.07); // Take out grapes
-    Sleeper.waitRandomMillis(300, 600);
+    waitRandomMillis(300, 600);
 
     clickImage(jugs, "slow", 0.065); // Take out water jugs
-    Sleeper.waitRandomMillis(400, 500);
+    waitRandomMillis(400, 500);
 
     pressEscape(); // Exit bank UI
-    Sleeper.waitRandomMillis(600, 800);
+    waitRandomMillis(600, 800);
 
     clickInventSlot(INVENT_SLOT_JUGS, "fast"); // Click the jugs of water in the inventory
-    Sleeper.waitRandomMillis(400, 500);
+    waitRandomMillis(400, 500);
 
     clickInventSlot(INVENT_SLOT_GRAPES, "slow"); // Use the jugs on the grapes to start making wine
-    Sleeper.waitRandomMillis(800, 900);
+    waitRandomMillis(800, 900);
 
     pressSpace(); // Accept the start button
-    Sleeper.waitRandomMillis(17000, 18000); // Wait for wines to combine
+    waitRandomMillis(17000, 18000); // Wait for wines to combine
 
     clickBank(); // Open the bank to drop off items
-    Sleeper.waitRandomMillis(700, 900);
+    waitRandomMillis(700, 900);
 
     clickImage(dumpBank, "medium", 0.055); // Put the fermenting wines in the bank to repeat
-    Sleeper.waitRandomMillis(650, 750);
+    waitRandomMillis(650, 750);
 
     if (checkIfImageInv(unfermented, 0.055)) { // Repeating because bank is weird
       controller().mouse().leftClick();
-      Sleeper.waitRandomMillis(600, 800);
+      waitRandomMillis(600, 800);
     }
   }
 
@@ -100,7 +98,7 @@ public class DemoWineScript extends BaseScript {
    */
   private void pressEscape() {
     controller().keyboard().sendModifierKey(401, "esc");
-    Sleeper.waitRandomMillis(80, 100);
+    waitRandomMillis(80, 100);
     controller().keyboard().sendModifierKey(402, "esc");
   }
 
@@ -110,7 +108,7 @@ public class DemoWineScript extends BaseScript {
    */
   private void pressSpace() {
     controller().keyboard().sendModifierKey(401, "space");
-    Sleeper.waitRandomMillis(300, 500);
+    waitRandomMillis(300, 500);
     controller().keyboard().sendModifierKey(402, "space");
   }
 

@@ -8,30 +8,18 @@ package com.chromascape.web.instance;
  */
 public class RunConfig {
 
-  private final int duration;
   private final String script;
   private final Boolean fixed;
 
   /**
    * Constructs a new RunConfig with the specified duration, script, and fixed flag.
    *
-   * @param duration the runtime duration in minutes for the script
    * @param script the identifier or name of the script to run
    * @param fixed true if the UI layout is fixed; false otherwise
    */
-  public RunConfig(int duration, String script, boolean fixed) {
-    this.duration = duration;
+  public RunConfig(String script, boolean fixed) {
     this.script = script;
     this.fixed = fixed;
-  }
-
-  /**
-   * Returns the duration for which the script should run.
-   *
-   * @return the runtime duration in minutes
-   */
-  public int getDuration() {
-    return duration;
   }
 
   /**

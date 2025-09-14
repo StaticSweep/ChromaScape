@@ -1,8 +1,10 @@
 package com.chromascape.utils.domain.walker;
 
+import static com.chromascape.base.BaseScript.waitRandomMillis;
+
 import com.chromascape.api.Dax;
+import com.chromascape.base.BaseScript;
 import com.chromascape.controller.Controller;
-import com.chromascape.utils.core.input.Sleeper;
 import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.domain.ocr.Ocr;
@@ -124,7 +126,7 @@ public class Walker {
       rawPath = dax.generatePath(new Point(position.x(), position.y()), destination, isMembers);
       if ("RATE_LIMIT_EXCEEDED".equals(rawPath)) {
         // Wait a bit before retrying to avoid hammering the API
-        Sleeper.waitRandomMillis(600, 700);
+        waitRandomMillis(600, 700);
         continue; // retry
       }
       try {
@@ -286,13 +288,13 @@ public class Walker {
     // Ticks on some worlds can vary, it's usual on world 302 to be 0.618 per tick
     long tick = 650;
     Tile position = getPlayerPosition();
-    Sleeper.waitMillis(tick);
+    BaseScript.waitMillis(tick);
     while (true) {
       if (position.equals(getPlayerPosition())) {
         return;
       } else {
         position = getPlayerPosition();
-        Sleeper.waitMillis(tick);
+        BaseScript.waitMillis(tick);
       }
     }
   }

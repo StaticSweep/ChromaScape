@@ -20,8 +20,7 @@ public class ScriptInstance {
   /**
    * Constructs a ScriptInstance by dynamically loading the script class specified in the config.
    *
-   * <p>The script class must have a constructor with the signature: {@code (boolean fixed, int
-   * duration, LogService logService)}.
+   * <p>The script class must have a constructor with the signature: {@code (boolean fixed)}.
    *
    * @param config the RunConfig containing script name, duration, and UI layout flag
    * @throws NoSuchMethodException if the expected constructor is not found
@@ -42,8 +41,8 @@ public class ScriptInstance {
     String className = fileName.replace(".java", "");
 
     Class<?> script = Class.forName("com.chromascape.scripts." + className);
-    Constructor<?> constructor = script.getDeclaredConstructor(boolean.class, int.class);
-    instance = (BaseScript) constructor.newInstance(config.isFixed(), config.getDuration());
+    Constructor<?> constructor = script.getDeclaredConstructor(boolean.class);
+    instance = (BaseScript) constructor.newInstance(config.isFixed());
   }
 
   /** Starts the script execution in a new thread. */
@@ -76,14 +75,5 @@ public class ScriptInstance {
       }
     }
     stateHandler.broadcast(false);
-  }
-
-  /**
-   * Returns the underlying BaseScript instance.
-   *
-   * @return the BaseScript instance managed by this ScriptInstance
-   */
-  public BaseScript getScriptInstance() {
-    return instance;
   }
 }
