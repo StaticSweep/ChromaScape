@@ -24,7 +24,8 @@ public class PhysicalScaling {
           "3440x1440", 34.0, // Standard 34" ultrawide
           "3840x2160", 28.0, // Common 28" 4K
           "2560x1080", 29.0, // 29" ultrawide 1080p
-          "1366x768", 15.6 // Common laptop size
+          "1366x768", 15.6, // Common laptop size
+          "1440x2560", 27.0 // 27" 1440p vertical
           );
 
   /**

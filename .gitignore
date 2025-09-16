@@ -64,3 +64,7 @@ output/*
 
 # chromascape runtime cache
 .chromascape/
+
+# custom user scripts
+/src/main/java/com/chromascape/scripts/*/
+/scripts/*/

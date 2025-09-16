@@ -22,6 +22,7 @@ import org.apache.logging.log4j.Logger;
 public class Idler {
 
   private static final Logger logger = LogManager.getLogger(Idler.class);
+  private static volatile String lastMessage = "";
 
   /**
    * Waits until either the specified timeout has elapsed or until the client chatbox reports that
@@ -43,7 +44,8 @@ public class Idler {
         Rectangle latestMessage = base.controller().zones().getChatTabs().get("Latest Message");
         ColourObj red = ColourInstances.getByName("ChatRed");
         String ocr = Ocr.extractText(latestMessage, "Plain 12", red, true);
-        if (ocr.contains("idle")) {
+        if (ocr.contains("idle") && ocr != lastMessage) {
+          lastMessage = ocr;
           return;
         }
       }

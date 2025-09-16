@@ -10,6 +10,7 @@ import static org.bytedeco.opencv.global.opencv_imgproc.cvtColor;
 import static org.bytedeco.opencv.global.opencv_imgproc.findContours;
 import static org.bytedeco.opencv.global.opencv_imgproc.pointPolygonTest;
 
+import com.chromascape.utils.core.screen.DisplayImage;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import java.awt.Point;
@@ -29,6 +30,8 @@ import org.bytedeco.opencv.opencv_core.Rect;
  * objects representing these contours.
  */
 public class ColourContours {
+
+  public static boolean debug = false;
 
   /**
    * Finds and returns a list of ChromaObj instances representing contours in the given image that
@@ -63,6 +66,12 @@ public class ColourContours {
     hsvImage.release();
     hsvMin.release();
     hsvMax.release();
+
+    // if debugging, display the mask
+    if (debug) {
+      DisplayImage.display(Java2DFrameUtils.toBufferedImage(result));
+    }
+
     return result;
   }
 
