@@ -44,7 +44,7 @@ public class Idler {
         Rectangle latestMessage = base.controller().zones().getChatTabs().get("Latest Message");
         ColourObj red = ColourInstances.getByName("ChatRed");
         String ocr = Ocr.extractText(latestMessage, "Plain 12", red, true);
-        if (ocr.contains("idle") && ocr != lastMessage) {
+        if ((ocr.contains("moving") || ocr.contains("idle")) && ocr != lastMessage) {
           lastMessage = ocr;
           return;
         }
