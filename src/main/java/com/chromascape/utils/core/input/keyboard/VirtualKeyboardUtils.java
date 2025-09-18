@@ -25,12 +25,11 @@ public class VirtualKeyboardUtils {
    * Sends a keyboard event for a character key (e.g., letters, numbers, symbols). Intended for use
    * with regular text input simulation.
    *
-   * @param eventId 401 to simulate a key press, or 402 to simulate a key release.
    * @param keyChar The character key to send.
    */
-  public synchronized void sendKeyChar(int eventId, char keyChar) {
+  public synchronized void sendKeyChar(char keyChar) {
     BaseScript.checkInterrupted();
-    kinput.sendKeyEvent(eventId, keyChar);
+    kinput.sendKeyEvent(400, keyChar);
   }
 
   /**

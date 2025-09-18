@@ -28,9 +28,9 @@ public class Idler {
    * Waits until either the specified timeout has elapsed or until the client chatbox reports that
    * the player is idle.
    *
-   * <p>Specifically, this method monitors the "Latest Message" zone in the chatbox for a red message
-   * containing the substring {@code "idle"} or {@code "moving"}, which typically appears when
-   * using the Idle Notifier plugin
+   * <p>Specifically, this method monitors the "Latest Message" zone in the chatbox for a red
+   * message containing the substring {@code "idle"} or {@code "moving"}, which typically appears
+   * when using the Idle Notifier plugin
    *
    * @param base the active {@link BaseScript} instance, usually passed as {@code this}
    * @param timeoutSeconds the maximum number of seconds to remain idle before continuing
@@ -46,7 +46,8 @@ public class Idler {
         ColourObj black = ColourInstances.getByName("Black");
         String idleText = Ocr.extractText(latestMessage, "Plain 12", red, true);
         String timeStamp = Ocr.extractText(latestMessage, "Plain 12", black, true);
-        if ((idleText.contains("moving") || idleText.contains("idle")) && !timeStamp.equals(lastMessage)) {
+        if ((idleText.contains("moving") || idleText.contains("idle"))
+            && !timeStamp.equals(lastMessage)) {
           lastMessage = timeStamp;
           return;
         }

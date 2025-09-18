@@ -51,7 +51,7 @@ public class WebSocketStateHandler extends TextWebSocketHandler {
    */
   @Override
   public void afterConnectionClosed(
-          @Nullable WebSocketSession session, @Nullable CloseStatus status) {
+      @Nullable WebSocketSession session, @Nullable CloseStatus status) {
     sessions.remove(session);
   }
 
