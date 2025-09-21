@@ -9,7 +9,6 @@ import java.time.Duration;
 import java.time.Instant;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bytedeco.opencv.opencv_core.Scalar;
 
 /**
  * Utility class for handling idle behavior in scripts.

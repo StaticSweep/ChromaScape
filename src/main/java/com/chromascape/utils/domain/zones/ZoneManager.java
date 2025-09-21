@@ -90,6 +90,11 @@ public class ZoneManager {
     }
   }
 
+  /**
+   * Checks the two minimap images against the client window, compares them based on accuracy.
+   *
+   * @return {@code boolean} True if Fixed classic, false if Resizable classic.
+   */
   private boolean checkIfFixed() {
     BufferedImage screen = ScreenManager.captureWindow();
     double fixedMinVal = 0;
