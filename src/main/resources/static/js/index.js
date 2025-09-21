@@ -216,7 +216,7 @@ function setupStartStopButton() {
 
 /**
  * Retrieves the configuration for running the selected script.
- * @returns {{script: string, fixed: boolean}|null} Run configuration or null if invalid
+ * @returns {{script: string}|null} Run configuration or null if invalid
  */
 function getRunConfig() {
     const mode = document.getElementById("windowModeDropdown")?.textContent;
@@ -226,15 +226,7 @@ function getRunConfig() {
         return null;
     }
 
-    let fixed;
-    if (mode === "Fixed") fixed = true;
-    else if (mode === "Resizable") fixed = false;
-    else {
-        alert("Please choose a window mode.");
-        return null;
-    }
-
-    return { script: selectedScriptName, fixed };
+    return { script: selectedScriptName };
 }
 
 /**

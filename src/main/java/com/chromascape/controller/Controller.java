@@ -28,7 +28,6 @@ public class Controller {
   }
 
   private ControllerState state;
-  private final boolean isFixed;
 
   private Kinput kinput;
   private VirtualMouseUtils virtualMouseUtils;
@@ -37,15 +36,9 @@ public class Controller {
   private Walker walker;
   private static final Logger logger = LogManager.getLogger(Controller.class);
 
-  /**
-   * Constructs a new Controller instance.
-   *
-   * @param isFixed Indicates whether the user's client is classic resizable or classic fixed. The
-   *     user selects this in the UI.
-   */
-  public Controller(boolean isFixed) {
+  /** Constructs a new Controller instance. */
+  public Controller() {
     this.state = ControllerState.STOPPED;
-    this.isFixed = isFixed;
   }
 
   /**
@@ -64,7 +57,7 @@ public class Controller {
     virtualKeyboardUtils = new VirtualKeyboardUtils(kinput);
 
     // Initialize zone management with fixed mode option
-    zoneManager = new ZoneManager(isFixed);
+    zoneManager = new ZoneManager();
 
     state = ControllerState.RUNNING;
 

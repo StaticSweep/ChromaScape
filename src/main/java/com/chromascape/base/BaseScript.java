@@ -23,13 +23,9 @@ public abstract class BaseScript {
   private volatile boolean running = true;
   private Thread scriptThread;
 
-  /**
-   * Constructs a BaseScript.
-   *
-   * @param isFixed whether the client UI is fixed or resizable
-   */
-  public BaseScript(final boolean isFixed) {
-    controller = new Controller(isFixed);
+  /** Constructs a BaseScript. */
+  public BaseScript() {
+    controller = new Controller();
     hotkeyListener = new HotkeyListener(this);
   }
 

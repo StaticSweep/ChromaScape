@@ -39,6 +39,9 @@ public class ZoneManager {
   /** Rectangle defining the location of the mouse-over text. */
   private Rectangle mouseOver;
 
+  /** Default template matching threshold to verify that an image is matched successfully. */
+  private static final double THRESHOLD = 0.15;
+
   /** File paths to template images used for UI element detection. */
   private final String[] zoneTemplates = {
     "/images/ui/minimap.png",
@@ -47,60 +50,59 @@ public class ZoneManager {
     "/images/ui/minimap_fixed.png"
   };
 
-  /** Threshold values corresponding to template matching sensitivity for each UI element. */
-  private final double[] zoneThresholds = {0.025, 0.100, 0.035, 0.020};
-
   private static final Logger logger = LogManager.getLogger(ZoneManager.class.getName());
 
-  /**
-   * Constructs a new ZoneManager configured for either fixed or resizable mode.
-   *
-   * @param isFixed true if the client is in fixed mode, false otherwise.
-   */
-  public ZoneManager(boolean isFixed) {
-    this.isFixed = isFixed;
+  /** Constructs a new ZoneManager configured for either fixed or resizable mode. */
+  public ZoneManager() {
+    this.isFixed = checkIfFixed();
     mapper();
   }
 
   /**
    * Performs template matching to locate UI elements and maps their respective zones.
    *
-   * <p>Populates the minimap, control panel, chat tabs, and inventory slots with their bounding
-   * rectangles based on current window mode.
-   *
    * <p>Any exceptions during mapping are caught and logged to standard error.
    */
   public void mapper() {
     try {
-      // The chat's location is used to define the location of certain elements
-      Rectangle chatLocation = locateUiElement(zoneTemplates[2], zoneThresholds[2]);
-      chatTabs = SubZoneMapper.mapChat(chatLocation);
+      chatTabs = SubZoneMapper.mapChat(locateUiElement(zoneTemplates[2]));
+      ctrlPanel = SubZoneMapper.mapCtrlPanel(locateUiElement(zoneTemplates[1]));
+      inventorySlots = SubZoneMapper.mapInventory(locateUiElement(zoneTemplates[1]));
 
-      ctrlPanel = SubZoneMapper.mapCtrlPanel(locateUiElement(zoneTemplates[1], zoneThresholds[1]));
+      Rectangle windowBounds = ScreenManager.getWindowBounds();
 
-      inventorySlots =
-          SubZoneMapper.mapInventory(locateUiElement(zoneTemplates[1], zoneThresholds[1]));
-      // The minimap's location is used in conjunction to the chat's location to define certain
-      // elements
       if (isFixed) {
-        Rectangle minimapLocation = locateUiElement(zoneTemplates[3], zoneThresholds[3]);
-        minimap = SubZoneMapper.mapFixedMinimap(minimapLocation);
-        mouseOver = new Rectangle(chatLocation.x + 1, minimapLocation.y + 3, 407, 26);
+        minimap = SubZoneMapper.mapFixedMinimap(locateUiElement(zoneTemplates[3]));
+        mouseOver = new Rectangle(windowBounds.x, windowBounds.y, 407, 26);
         gridInfo =
             SubZoneMapper.mapGridInfo(
-                new Rectangle(chatLocation.x + 6, minimapLocation.y + 23, 129, 56));
+                new Rectangle(windowBounds.x + 9, windowBounds.y + 24, 129, 56));
       } else {
-        Rectangle minimapLocation = locateUiElement(zoneTemplates[0], zoneThresholds[0]);
-        minimap = SubZoneMapper.mapMinimap(minimapLocation);
-        mouseOver = new Rectangle(chatLocation.x - 3, minimapLocation.y - 2, 407, 26);
+        minimap = SubZoneMapper.mapMinimap(locateUiElement(zoneTemplates[0]));
+        mouseOver = new Rectangle(windowBounds.x, windowBounds.y, 407, 26);
         gridInfo =
             SubZoneMapper.mapGridInfo(
-                new Rectangle(chatLocation.x + 2, minimapLocation.y + 18, 129, 56));
+                new Rectangle(windowBounds.x + 5, windowBounds.y + 20, 129, 56));
       }
     } catch (Exception e) {
       logger.error("[ZoneManager] Mapping failed: {}", e.getMessage());
       logger.debug(e.getStackTrace());
     }
+  }
+
+  private boolean checkIfFixed() {
+    BufferedImage screen = ScreenManager.captureWindow();
+    double fixedMinVal = 0;
+    double resizableMinVal = 0;
+    try {
+      TemplateMatching.match(zoneTemplates[0], screen, THRESHOLD, false);
+      resizableMinVal = TemplateMatching.getMinVal();
+      TemplateMatching.match(zoneTemplates[3], screen, THRESHOLD, false);
+      fixedMinVal = TemplateMatching.getMinVal();
+    } catch (Exception e) {
+      logger.error("[ZoneManager] Check if fixed failed: {}", e.getMessage());
+    }
+    return fixedMinVal < resizableMinVal;
   }
 
   /**
@@ -121,14 +123,14 @@ public class ZoneManager {
       // inv (1), chat (2), minimap_fixed (3)
       int[] fixedIndices = {1, 2, 3};
       for (int i : fixedIndices) {
-        Rectangle element = locateUiElement(zoneTemplates[i], zoneThresholds[i]);
+        Rectangle element = locateUiElement(zoneTemplates[i]);
         gameViewMask = MaskZones.maskZones(gameViewMask, ScreenManager.toClientBounds(element));
       }
     } else {
       // inv (1), chat (2), minimap (0)
       int[] resizableIndices = {1, 2, 0};
       for (int i : resizableIndices) {
-        Rectangle element = locateUiElement(zoneTemplates[i], zoneThresholds[i]);
+        Rectangle element = locateUiElement(zoneTemplates[i]);
         gameViewMask = MaskZones.maskZones(gameViewMask, ScreenManager.toClientBounds(element));
       }
     }
@@ -141,12 +143,11 @@ public class ZoneManager {
    * game window capture.
    *
    * @param templatePath The file path to the template image to match.
-   * @param threshold The matching threshold (lower values mean stricter matching).
    * @return A {@link Rectangle} representing the bounds of the matched UI element.
    * @throws Exception if the template matching fails or no match is found.
    */
-  public Rectangle locateUiElement(String templatePath, double threshold) throws Exception {
-    return TemplateMatching.match(templatePath, ScreenManager.captureWindow(), threshold, false);
+  public Rectangle locateUiElement(String templatePath) throws Exception {
+    return TemplateMatching.match(templatePath, ScreenManager.captureWindow(), THRESHOLD, false);
   }
 
   /**

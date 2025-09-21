@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bytedeco.opencv.opencv_core.Scalar;
 
 /**
  * Utility class for handling idle behavior in scripts.
@@ -23,6 +24,8 @@ public class Idler {
 
   private static final Logger logger = LogManager.getLogger(Idler.class);
   private static volatile String lastMessage = "";
+  private static final ColourObj chatRed =
+      new ColourObj("ChatRed", new Scalar(177, 229, 239, 0), new Scalar());
 
   /**
    * Waits until either the specified timeout has elapsed or until the client chatbox reports that
