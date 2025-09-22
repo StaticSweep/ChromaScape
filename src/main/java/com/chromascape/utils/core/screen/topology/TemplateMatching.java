@@ -40,6 +40,8 @@ public class TemplateMatching {
 
   private static final Logger logger = LogManager.getLogger(TemplateMatching.class.getName());
 
+  private static double minVal;
+
   /**
    * Performs template matching to locate a smaller image (template) within a larger image (base),
    * using normalized squared difference matching with an alpha channel mask to ignore transparent
@@ -161,9 +163,10 @@ public class TemplateMatching {
             + ")",
         debugMsg);
 
+    TemplateMatching.minVal = minVal.get();
+
     if (minVal.get() > threshold) {
-      System.out.println(
-          "No match: minVal above threshold (" + minVal.get() + " > " + threshold + ")");
+      logger.error("No match: minVal above threshold ({} > {})", minVal.get(), threshold);
       return null;
     }
     // offset for screen cords
@@ -226,5 +229,15 @@ public class TemplateMatching {
     }
 
     return mat;
+  }
+
+  /**
+   * Returns the minVal of the last matched object. The minVal dictates how strongly an object
+   * matches onscreen. (lower = better)
+   *
+   * @return the minVal.
+   */
+  public static double getMinVal() {
+    return minVal;
   }
 }

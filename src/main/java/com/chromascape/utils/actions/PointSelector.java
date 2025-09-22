@@ -84,11 +84,20 @@ public class PointSelector {
     return getRandomPointByColour(image, ColourInstances.getByName(colourName), maxAttempts);
   }
 
+  /**
+   * Attempts to find a random point inside the contour of the first object of the specified
+   * ColourObj.
+   *
+   * @param image the image to search in (e.g. game view from controller)
+   * @param colour the name of the colour (must match ColourInstances key, e.g. "Purple")
+   * @param maxAttempts maximum number of attempts to find a point inside the contour
+   * @return a random Point inside the contour, or null if not found/error
+   */
   public static Point getRandomPointByColour(
-      BufferedImage image, ColourObj colourName, int maxAttempts) {
+      BufferedImage image, ColourObj colour, int maxAttempts) {
     List<ChromaObj> objs;
     try {
-      objs = ColourContours.getChromaObjsInColour(image, colourName);
+      objs = ColourContours.getChromaObjsInColour(image, colour);
     } catch (Exception e) {
       logger.error(e.getMessage());
       logger.error(e.getStackTrace());
@@ -96,7 +105,7 @@ public class PointSelector {
     }
 
     if (objs.isEmpty()) {
-      logger.error("No objects found for colour: {}", colourName);
+      logger.error("No objects found for colour: {}", colour);
       return null;
     }
 
@@ -108,10 +117,10 @@ public class PointSelector {
       p = ClickDistribution.generateRandomPoint(obj.boundingBox());
       attempts++;
     }
-    logger.info("Attempts to find point in colour '{}': {}", colourName, attempts);
+    logger.info("Attempts to find point in colour '{}': {}", colour, attempts);
     if (attempts >= maxAttempts) {
       logger.error(
-          "Failed to find a valid point in {} contour after {} attempts.", colourName, maxAttempts);
+          "Failed to find a valid point in {} contour after {} attempts.", colour, maxAttempts);
       return null;
     }
 

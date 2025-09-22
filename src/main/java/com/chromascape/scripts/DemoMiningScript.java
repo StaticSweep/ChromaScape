@@ -31,13 +31,9 @@ public class DemoMiningScript extends BaseScript {
   private static final Logger logger = LogManager.getLogger(DemoMiningScript.class);
   private static final String ironOre = "/images/user/Iron_ore.png";
 
-  /**
-   * Constructs a new mining script.
-   *
-   * @param isFixed whether the client UI is fixed or resizable
-   */
-  public DemoMiningScript(boolean isFixed) {
-    super(isFixed);
+  /** Constructs a new mining script. */
+  public DemoMiningScript() {
+    super();
   }
 
   /**

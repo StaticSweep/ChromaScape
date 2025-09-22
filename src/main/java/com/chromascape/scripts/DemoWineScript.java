@@ -36,13 +36,9 @@ public class DemoWineScript extends BaseScript {
 
   private boolean bankFlag = true;
 
-  /**
-   * Constructs a BaseScript.
-   *
-   * @param isFixed whether the client UI is classic fixed or classic resizable
-   */
-  public DemoWineScript(boolean isFixed) {
-    super(isFixed);
+  /** Constructs a BaseScript. */
+  public DemoWineScript() {
+    super();
   }
 
   /**

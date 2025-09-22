@@ -24,13 +24,9 @@ public class Screenshotter extends BaseScript {
 
   public static final String ORIGINAL_IMAGE_PATH = "output/original.png";
 
-  /**
-   * Same constructor as super (BaseScript).
-   *
-   * @param isFixed whether the client is in classic fixed or classic resizable
-   */
-  public Screenshotter(boolean isFixed) {
-    super(isFixed);
+  /** Same constructor as super (BaseScript). */
+  public Screenshotter() {
+    super();
   }
 
   /**

@@ -20,9 +20,7 @@ public class ScriptInstance {
   /**
    * Constructs a ScriptInstance by dynamically loading the script class specified in the config.
    *
-   * <p>The script class must have a constructor with the signature: {@code (boolean fixed)}.
-   *
-   * @param config the RunConfig containing script name, duration, and UI layout flag
+   * @param config the RunConfig containing script name
    * @throws NoSuchMethodException if the expected constructor is not found
    * @throws ClassNotFoundException if the script class cannot be found
    * @throws InvocationTargetException if the constructor throws an exception
@@ -37,12 +35,12 @@ public class ScriptInstance {
           IllegalAccessException {
     this.stateHandler = stateHandler;
 
-    String fileName = config.getScript();
+    String fileName = config.script();
     String className = fileName.replace(".java", "").replace("/", ".");
 
     Class<?> script = Class.forName("com.chromascape.scripts." + className);
-    Constructor<?> constructor = script.getDeclaredConstructor(boolean.class);
-    instance = (BaseScript) constructor.newInstance(config.isFixed());
+    Constructor<?> constructor = script.getDeclaredConstructor();
+    instance = (BaseScript) constructor.newInstance();
   }
 
   /** Starts the script execution in a new thread. */

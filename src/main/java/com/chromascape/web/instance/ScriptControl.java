@@ -48,14 +48,9 @@ public class ScriptControl {
   public ResponseEntity<Object> getRunConfig(@RequestBody RunConfig config) {
     try {
       // Validation checks
-      if (config.getScript() == null || config.getScript().isEmpty()) {
+      if (config.script() == null || config.script().isEmpty()) {
         logger.error("No script is selected");
         return ResponseEntity.badRequest().body("Script must be specified.");
-      }
-
-      if (config.isFixed() == null) {
-        logger.error("No window style selected");
-        return ResponseEntity.badRequest().body("Window style (Fixed?) must be specified.");
       }
 
       logger.info("Config valid: attempting to run script");
