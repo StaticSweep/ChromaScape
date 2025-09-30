@@ -2,6 +2,7 @@ package com.chromascape.web.config;
 
 import com.chromascape.utils.core.AccountManager;
 import com.chromascape.utils.core.constants.CacheFolderConstants;
+import com.chromascape.utils.core.runtime.profile.ProfileManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import java.io.File;
@@ -48,6 +49,10 @@ public class StartupConfiguration {
 
       // Load account configuration
       loadAccountConfiguration();
+
+      // Load bot profile config file into RuneLite
+      ProfileManager profileManager = new ProfileManager();
+      profileManager.loadBotProfile();
 
       logger.info("CHROMASCAPE STARTUP CONFIGURATION COMPLETED");
 
