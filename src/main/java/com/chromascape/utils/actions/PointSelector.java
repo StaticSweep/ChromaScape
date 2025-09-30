@@ -45,7 +45,9 @@ public class PointSelector {
 
   /**
    * Searches for the provided image template within the current game view, then returns a random
-   * point within the detected bounding box if the match exceeds the defined threshold.
+   * point within the detected bounding box if the match exceeds the defined threshold. Uses {@link
+   * TemplateMatching#match(String, BufferedImage, double, boolean) TemplateMatching.match} to
+   * derive the location of the image onscreen based on the threshold (lower = stricter).
    *
    * @param templatePath the BufferedImage template to locate and click within the larger image view
    * @param image the larger image, what you're searching in
@@ -73,6 +75,12 @@ public class PointSelector {
 
   /**
    * Attempts to find a random point inside the contour of the first object of the specified colour.
+   * Is an abstraction of {@link #getRandomPointByColourObj(BufferedImage, ColourObj, int)
+   * getRandomPointByColourObj} and instead searches the colour for you at runtime. Uses
+   * ColourContours to mask out the provided buffered image by the provided ColourObj. Based on the
+   * mask, extracts contours of the colour. Generates a random point within the bounding box of its
+   * {@link ChromaObj} and checks a maximum of {@code int maxAttempts} whether the point lands in
+   * the contour. Fails if exceeded.
    *
    * @param image the image to search in (e.g. game view from controller)
    * @param colourName the name of the colour (must match ColourInstances key, e.g. "Purple")
@@ -81,19 +89,22 @@ public class PointSelector {
    */
   public static Point getRandomPointInColour(
       BufferedImage image, String colourName, int maxAttempts) {
-    return getRandomPointByColour(image, ColourInstances.getByName(colourName), maxAttempts);
+    return getRandomPointByColourObj(image, ColourInstances.getByName(colourName), maxAttempts);
   }
 
   /**
    * Attempts to find a random point inside the contour of the first object of the specified
-   * ColourObj.
+   * ColourObj. Uses ColourContours to mask out the provided buffered image by the provided
+   * ColourObj. Based on the mask, extracts contours of the colour. Generates a random point within
+   * the bounding box of its {@link ChromaObj} and checks a maximum of {@code int maxAttempts}
+   * whether the point lands in the contour. Fails if exceeded.
    *
    * @param image the image to search in (e.g. game view from controller)
    * @param colour the name of the colour (must match ColourInstances key, e.g. "Purple")
    * @param maxAttempts maximum number of attempts to find a point inside the contour
    * @return a random Point inside the contour, or null if not found/error
    */
-  public static Point getRandomPointByColour(
+  public static Point getRandomPointByColourObj(
       BufferedImage image, ColourObj colour, int maxAttempts) {
     List<ChromaObj> objs;
     try {
