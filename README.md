@@ -20,13 +20,7 @@ ChromaScape is a low-level, colour-based automation framework designed for game 
 Whether you're just starting with bot development or building advanced automation systems, ChromaScape provides a modular, structured framework to help you prototype fast and learn by doing.
 
 # Setup
-Due to the constraints of remote input, this project currently supports Windows only.
-
-1. Install JDK 17.0.12
-2. Install an IDE (IntelliJ IDEA recommended)
-3. Clone this repository
-4. Run `CVTemplates.bat` to download template dependencies
-5. (Optional) Pat yourself on the back :]
+Check out a full step by step guide on how to get started [Pre-requisites](https://github.com/StaticSweep/ChromaScape/wiki/Pre%E2%80%90requisite-installations)
 
 # Documentation and Tutorials
 - Please visit the [Wiki](https://github.com/StaticSweep/ChromaScape/wiki) for detailed guides on writing scripts with this framework.
@@ -35,8 +29,9 @@ Due to the constraints of remote input, this project currently supports Windows 
 # Features
 
 ## Architecture
-ChromaScape provides a highly modular botting framework that uses dependency injection where possible to maximize flexibility and reusability across different automation tasks.
-Due to the separation of domain and core utilities it provides a greater level of control and expansion.
+ChromaScape provides a highly modular colour botting framework that provides granular utilities to maximize flexibility and reusability across different automation tasks.
+
+Due to the separation of domain, core and actions utilities it provides a greater level of control and expansion.
 
 ## Mouse input
 
