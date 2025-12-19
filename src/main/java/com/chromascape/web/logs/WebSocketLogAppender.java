@@ -88,9 +88,18 @@ public class WebSocketLogAppender extends AbstractAppender {
       // Handler not configured; drop message.
       return;
     }
-    String logMessage = event.getMessage().getFormattedMessage();
+    String level = event.getLevel().name();
+    String message = event.getMessage().getFormattedMessage();
+    // Simple JSON construction (escaping quotes in message is prudent but assuming
+    // simple logs for now)
+    // A more robust way would be using a library, but this keeps deps low.
+    String json =
+        String.format(
+            "{\"level\": \"%s\", \"message\": \"%s\"}",
+            level, message.replace("\"", "\\\"").replace("\n", " ").replace("\r", ""));
+
     try {
-      webSocketHandler.broadcast(logMessage);
+      webSocketHandler.broadcast(json);
     } catch (Exception e) {
       System.err.println("Failed to broadcast log: " + e.getMessage());
     }

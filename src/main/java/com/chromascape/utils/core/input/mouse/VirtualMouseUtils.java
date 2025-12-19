@@ -3,6 +3,10 @@ package com.chromascape.utils.core.input.mouse;
 import com.chromascape.base.BaseScript;
 import com.chromascape.utils.core.input.remoteinput.Kinput;
 import com.chromascape.utils.core.screen.window.ScreenManager;
+import com.chromascape.utils.core.state.BotState;
+import com.chromascape.utils.core.state.StateManager;
+import com.chromascape.utils.core.statistics.StatisticsManager;
+
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.util.List;
@@ -70,6 +74,8 @@ public class VirtualMouseUtils {
    */
   public void moveTo(final Point target, final String speed) throws InterruptedException {
     BaseScript.checkInterrupted();
+    StateManager.setState(BotState.ACTING);
+    StatisticsManager.incrementInputs();
     if (currentPosition.equals(target)) {
       return;
     }
@@ -130,6 +136,8 @@ public class VirtualMouseUtils {
   /** Simulates a left-click at the current virtual mouse location. */
   public void leftClick() {
     BaseScript.checkInterrupted();
+    StateManager.setState(BotState.ACTING);
+    StatisticsManager.incrementInputs();
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
     kinput.clickLeft(clientPoint.x, clientPoint.y);
     kinput.moveMouse(clientPoint.x, clientPoint.y);
@@ -138,6 +146,8 @@ public class VirtualMouseUtils {
   /** Simulates a right-click at the current virtual mouse location. */
   public void rightClick() {
     BaseScript.checkInterrupted();
+    StateManager.setState(BotState.ACTING);
+    StatisticsManager.incrementInputs();
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
     kinput.clickRight(clientPoint.x, clientPoint.y);
     kinput.moveMouse(clientPoint.x, clientPoint.y);
@@ -150,6 +160,8 @@ public class VirtualMouseUtils {
    */
   public void middleClick(int eventType) {
     BaseScript.checkInterrupted();
+    StateManager.setState(BotState.ACTING);
+    StatisticsManager.incrementInputs();
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
     kinput.middleInput(clientPoint.x, clientPoint.y, eventType);
   }

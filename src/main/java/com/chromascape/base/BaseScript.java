@@ -3,7 +3,11 @@ package com.chromascape.base;
 import com.chromascape.controller.Controller;
 import com.chromascape.utils.core.runtime.HotkeyListener;
 import com.chromascape.utils.core.runtime.ScriptStoppedException;
+import com.chromascape.utils.core.state.BotState;
+import com.chromascape.utils.core.state.StateManager;
 import java.util.concurrent.ThreadLocalRandom;
+
+import com.chromascape.utils.core.statistics.StatisticsManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -42,9 +46,11 @@ public abstract class BaseScript {
     scriptThread = Thread.currentThread();
     controller.init();
     hotkeyListener.start();
+    StatisticsManager.reset();
 
     try {
       while (running) {
+        StatisticsManager.incrementCycles();
         if (Thread.currentThread().isInterrupted()) {
           logger.info("Thread interrupted, exiting.");
           break;
@@ -55,6 +61,7 @@ public abstract class BaseScript {
           logger.error("Cycle interrupted: {}", e.getMessage());
           break;
         } catch (Exception e) {
+          StateManager.setState(BotState.ERROR);
           logger.error("Exception in cycle: {}", e.getMessage());
           break;
         }
@@ -95,7 +102,8 @@ public abstract class BaseScript {
    * @param ms the duration to sleep in milliseconds
    * @throws ScriptStoppedException if the thread is interrupted during sleep
    */
-  public static void waitMillis(long ms) throws ScriptStoppedException {
+  public static void waitMillis(long ms) {
+    StateManager.setState(BotState.WAITING);
     try {
       Thread.sleep(ms);
     } catch (InterruptedException e) {

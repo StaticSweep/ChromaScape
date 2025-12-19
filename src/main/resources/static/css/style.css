@@ -1,73 +1,326 @@
-.btn-primary {
-  --bs-btn-color: #fff;
-  --bs-btn-bg: #3d5a80;
-  --bs-btn-border-color: #e0fbfc;
-  --bs-btn-hover-color: #fff;
-  --bs-btn-hover-bg: #ee6c4d;
-  --bs-btn-hover-border-color: #ee6c4d;
-  --bs-btn-focus-shadow-rgb: 49, 132, 253;
-  --bs-btn-active-color: #fff;
-  --bs-btn-active-bg: #ee6c4d;
-  --bs-btn-active-border-color: #98c1d9;
-  --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
-  --bs-btn-disabled-color: #fff;
-}
+@import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css");
+@import url('https://fonts.googleapis.com/css2?family=sf-pro-display, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif');
 
-.bg-dark {
-  --bs-bg-opacity: 1;
-  background-color: #293241 !important;
-}
-
-.bg-light {
-  --bs-bg-opacity: 1;
-  background-color: #ee6c4d !important;
-}
-
-.bg-med {
-  --bs-bg-opacity: 1;
-  background-color: #3d5a80;
-}
-
-header {
-  height: 56px
-}
-
-.list-group-item.bg-med.list-group-item-action:hover {
-  background-color: #933823 !important;
-  color: #fff;
+:root {
+  --bg-color: #e3e8ef;
+  --glass-bg: rgba(255, 255, 255, 0.45);
+  /* Balanced transparency */
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+  --accent-blue: #4FACFE;
+  --accent-orange: #FF9966;
+  --text-main: #1c1c1e;
+  --text-muted: #6e6e73;
 }
 
 body {
-  padding-top: 56px;
+  padding-top: 70px;
+  /* Space for header */
+  background-color: var(--bg-color);
+  background-image:
+    radial-gradient(circle at 10% 10%, rgba(79, 172, 254, 0.4) 0%, transparent 40%),
+    radial-gradient(circle at 90% 90%, rgba(255, 153, 102, 0.4) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.8) 0%, transparent 100%);
+  background-attachment: fixed;
+  background-size: cover;
+  /* Fix bottom bar issue */
+  background-repeat: no-repeat;
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Navbar - Floating Glass Pill Style */
+.navbar {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.03);
+  height: 60px;
+  padding: 0;
+}
+
+.container-fluid {
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.navbar-brand {
+  font-size: 1.2rem;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1c1c1e, var(--accent-blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Colour Picker Button (Primary) */
+.btn-primary {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--accent-blue);
+  color: var(--accent-blue);
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 6px 16px;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  background: var(--accent-blue);
+  color: white;
+  box-shadow: 0 0 15px rgba(79, 172, 254, 0.4);
+}
+
+/* Layout */
+main {
+  height: calc(100vh - 70px);
+  padding: 20px 20px 40px 20px;
+}
+
+.row {
+  height: 100%;
+}
+
+.col-md-3,
+.col-md-5,
+.col-md-6,
+.col-md-7 {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Glass Panels */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  box-shadow: var(--glass-shadow);
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+}
+
+.glass-panel:hover {
+  border-color: #fff;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+}
+
+/* Titles */
+h5 {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+  padding-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+h5 i {
+  color: var(--accent-blue);
+}
+
+/* Script List - Better Scaling */
+#script-list-container {
+  overflow-y: auto;
+  flex-grow: 1;
+  /* Custom Scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+}
+
+.list-group-item {
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 10px 14px;
+  /* Reduced vertical padding */
+  font-size: 0.9rem;
+  color: black;
+  /* User requested black */
+  font-weight: 500;
+  margin-bottom: 6px;
+  border-radius: 12px !important;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#bot-status-pill {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+  /* Override parent's gradient text */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.list-group-item:hover {
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateX(3px);
+}
+
+.list-group-item.active {
+  background: rgba(79, 172, 254, 0.25);
+  /* Glassy transparent blue */
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(79, 172, 254, 0.5);
+  color: var(--text-main);
+  /* Keep text dark/readable */
+  font-weight: 700;
+  box-shadow: 0 4px 15px rgba(79, 172, 254, 0.2);
+}
+
+/* Viewport & Console */
+.col-md-6 .glass-panel:first-child {
+  flex: 1.5;
+  margin-bottom: 16px;
+  min-height: 0;
+}
+
+.col-md-6 .glass-panel:last-child {
+  flex: 1;
+  margin-bottom: 0;
+  min-height: 0;
+}
+
+#viewport-container {
+  flex-grow: 1;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.02);
+}
+
+#viewport-container img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 #consoleOutput {
-  height: 500px;
-  min-width: 600px;
+  height: 100%;
+  background: #1e1e1e;
+  /* Terminal Grey */
+  color: #f0f0f0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: 'SF Mono', monospace;
+  font-size: 0.8rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   overflow-y: auto;
-  overflow-x: hidden;
 }
 
-.range-with-spacing {
-  padding-bottom: 2.2rem;
+.log-entry {
+  display: block;
+  margin-bottom: 2px;
 }
 
-.border-primary {
-  border-color: #3d5a80 !important;
+.log-INFO {
+  color: #a5d6a7;
 }
 
-.border-secondary {
-  border-color: #98c1d9 !important;
+/* Green */
+.log-WARN {
+  color: #ffcc80;
 }
 
-footer {
-  position:fixed;
-  bottom:0;
-  width:100%;
-  height: 72px;
+/* Orange */
+.log-ERROR {
+  color: #ef9a9a;
 }
 
-#script-list {
-  max-height: calc(76vh);
-  overflow-y: auto;
+/* Red */
+.log-DEBUG {
+  color: #90caf9;
+}
+
+/* Blueish */
+
+/* Colour Picker Columns */
+.col-md-5 .glass-panel,
+.col-md-7 .glass-panel {
+  flex: 1;
+  margin-bottom: 0;
+  min-height: 0;
+}
+
+/* Right Column */
+.col-md-3 .glass-panel:first-child {
+  flex-grow: 0;
+  height: auto;
+}
+
+.col-md-3 .glass-panel:last-child {
+  flex-grow: 1;
+  margin-bottom: 0;
+}
+
+/* Buttons */
+.btn {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Unified Font */
+}
+
+.btn-success {
+  background: linear-gradient(135deg, var(--accent-blue), #2afadf);
+  border: none;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-radius: 30px;
+  padding: 14px;
+  box-shadow: 0 4px 15px rgba(79, 172, 254, 0.4);
+  color: white;
+}
+
+.btn-success:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(79, 172, 254, 0.6);
+  color: white;
+}
+
+/* Stop Button Styling */
+.btn-danger {
+  background: linear-gradient(135deg, #ff416c, #ff4b2b);
+  border: none;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-radius: 30px;
+  padding: 14px;
+  box-shadow: 0 4px 15px rgba(255, 75, 43, 0.4);
+  color: white;
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 75, 43, 0.6);
+  color: white;
+}
+
+/* Stats */
+.stat-card {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid white;
+}
+
+.stat-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-blue);
 }

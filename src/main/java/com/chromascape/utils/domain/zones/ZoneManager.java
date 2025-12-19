@@ -39,6 +39,11 @@ public class ZoneManager {
   /** Rectangle defining the location of the mouse-over text. */
   private Rectangle mouseOver;
 
+  // Cached bounds for getGameView optimization
+  private Rectangle minimapBounds;
+  private Rectangle ctrlPanelBounds;
+  private Rectangle chatBounds;
+
   /** Default template matching threshold to verify that an image is matched successfully. */
   private static final double THRESHOLD = 0.15;
 
@@ -65,21 +70,26 @@ public class ZoneManager {
    */
   public void mapper() {
     try {
-      chatTabs = SubZoneMapper.mapChat(locateUiElement(zoneTemplates[2]));
-      ctrlPanel = SubZoneMapper.mapCtrlPanel(locateUiElement(zoneTemplates[1]));
-      inventorySlots = SubZoneMapper.mapInventory(locateUiElement(zoneTemplates[1]));
+      // Cache the bounds first
+      chatBounds = locateUiElement(zoneTemplates[2]);
+      ctrlPanelBounds = locateUiElement(zoneTemplates[1]);
+
+      chatTabs = SubZoneMapper.mapChat(chatBounds);
+      ctrlPanel = SubZoneMapper.mapCtrlPanel(ctrlPanelBounds);
+      inventorySlots = SubZoneMapper.mapInventory(ctrlPanelBounds);
 
       Rectangle windowBounds = ScreenManager.getWindowBounds();
+      mouseOver = new Rectangle(windowBounds.x, windowBounds.y, 407, 26);
 
       if (isFixed) {
-        minimap = SubZoneMapper.mapFixedMinimap(locateUiElement(zoneTemplates[3]));
-        mouseOver = new Rectangle(windowBounds.x, windowBounds.y, 407, 26);
+        minimapBounds = locateUiElement(zoneTemplates[3]);
+        minimap = SubZoneMapper.mapFixedMinimap(minimapBounds);
         gridInfo =
             SubZoneMapper.mapGridInfo(
                 new Rectangle(windowBounds.x + 9, windowBounds.y + 24, 129, 56));
       } else {
-        minimap = SubZoneMapper.mapMinimap(locateUiElement(zoneTemplates[0]));
-        mouseOver = new Rectangle(windowBounds.x, windowBounds.y, 407, 26);
+        minimapBounds = locateUiElement(zoneTemplates[0]);
+        minimap = SubZoneMapper.mapMinimap(minimapBounds);
         gridInfo =
             SubZoneMapper.mapGridInfo(
                 new Rectangle(windowBounds.x + 5, windowBounds.y + 20, 129, 56));
@@ -121,25 +131,23 @@ public class ZoneManager {
    *
    * @return A {@link BufferedImage} representing the game viewport screenshot.
    */
-  public BufferedImage getGameView() throws Exception {
+  public BufferedImage getGameView() {
     BufferedImage gameViewMask = ScreenManager.captureWindow();
-
-    if (isFixed) {
-      // inv (1), chat (2), minimap_fixed (3)
-      int[] fixedIndices = {1, 2, 3};
-      for (int i : fixedIndices) {
-        Rectangle element = locateUiElement(zoneTemplates[i]);
-        gameViewMask = MaskZones.maskZones(gameViewMask, ScreenManager.toClientBounds(element));
-      }
-    } else {
-      // inv (1), chat (2), minimap (0)
-      int[] resizableIndices = {1, 2, 0};
-      for (int i : resizableIndices) {
-        Rectangle element = locateUiElement(zoneTemplates[i]);
-        gameViewMask = MaskZones.maskZones(gameViewMask, ScreenManager.toClientBounds(element));
-      }
+    if (ctrlPanelBounds != null) {
+      gameViewMask =
+          MaskZones.maskZones(
+              gameViewMask, ScreenManager.toClientBounds(new Rectangle(ctrlPanelBounds)));
     }
-
+    if (chatBounds != null) {
+      gameViewMask =
+          MaskZones.maskZones(
+              gameViewMask, ScreenManager.toClientBounds(new Rectangle(chatBounds)));
+    }
+    if (minimapBounds != null) {
+      gameViewMask =
+          MaskZones.maskZones(
+              gameViewMask, ScreenManager.toClientBounds(new Rectangle(minimapBounds)));
+    }
     return gameViewMask;
   }
 

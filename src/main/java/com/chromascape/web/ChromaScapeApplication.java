@@ -1,12 +1,15 @@
 package com.chromascape.web;
 
+import com.chromascape.utils.core.screen.viewport.ViewportManager;
+import com.chromascape.utils.core.state.StateManager;
 import com.chromascape.web.logs.LogWebSocketHandler;
 import com.chromascape.web.logs.WebSocketLogAppender;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import com.chromascape.web.state.WebsocketBotStateListener;
+import com.chromascape.web.viewport.WebsocketViewport;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * The main entry point for the ChromaScape Spring Boot application.
@@ -15,9 +18,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * REST controllers, services, and configuration classes.
  */
 @SpringBootApplication
+@EnableScheduling
 public class ChromaScapeApplication {
-
-  private static final Logger logger = LogManager.getLogger(ChromaScapeApplication.class);
 
   /**
    * Launches the ChromaScape application.
@@ -39,5 +41,31 @@ public class ChromaScapeApplication {
   @Autowired
   public void configureWebSocketHandler(LogWebSocketHandler handler) {
     WebSocketLogAppender.setWebSocketHandler(handler);
+  }
+
+  /**
+   * Injects the {@link WebsocketViewport} into the {@link ViewportManager}.
+   *
+   * <p>This hooks the static ViewportManager usage in core utils to the Spring WebSocket
+   * implementation.
+   *
+   * @param viewport the WebsocketViewport implementation
+   */
+  @Autowired
+  public void configureViewport(WebsocketViewport viewport) {
+    ViewportManager.setInstance(viewport);
+  }
+
+  /**
+   * Injects the {@link WebsocketBotStateListener} into the {@link StateManager}.
+   *
+   * <p>This hooks the static StateManager usage in core utils to the Spring WebSocket
+   * implementation.
+   *
+   * @param listener the WebsocketBotStateListener implementation
+   */
+  @Autowired
+  public void configureStateManager(WebsocketBotStateListener listener) {
+    StateManager.setListener(listener);
   }
 }

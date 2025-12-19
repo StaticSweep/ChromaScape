@@ -12,12 +12,16 @@ import static org.bytedeco.opencv.global.opencv_imgproc.pointPolygonTest;
 
 import com.chromascape.utils.core.screen.DisplayImage;
 import com.chromascape.utils.core.screen.colour.ColourObj;
+import com.chromascape.utils.core.screen.viewport.ViewportManager;
 import com.chromascape.utils.core.screen.window.ScreenManager;
+import com.chromascape.utils.core.state.StateManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.chromascape.utils.core.statistics.StatisticsManager;
 import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.MatVector;
@@ -57,6 +61,7 @@ public class ColourContours {
    * @return a Mat binary mask with pixels in range set to 255, others 0
    */
   public static Mat extractColours(BufferedImage image, ColourObj colourObj) {
+    StateManager.setState(com.chromascape.utils.core.state.BotState.SEARCHING);
     Mat hsvImage = Java2DFrameUtils.toMat(image);
     cvtColor(hsvImage, hsvImage, COLOR_BGR2HSV);
     Mat result = new Mat(hsvImage.size(), CV_8UC1);
@@ -71,6 +76,8 @@ public class ColourContours {
     if (debug) {
       DisplayImage.display(Java2DFrameUtils.toBufferedImage(result));
     }
+
+    ViewportManager.getInstance().updateState(result);
 
     return result;
   }
@@ -103,6 +110,7 @@ public class ColourContours {
       Rectangle contourBounds =
           new Rectangle(rect.x() + offset.x, rect.y() + offset.y, rect.width(), rect.height());
       chromaObjects.add(new ChromaObj(i, contour, contourBounds));
+      StatisticsManager.incrementObjectsDetected();
     }
     return chromaObjects;
   }

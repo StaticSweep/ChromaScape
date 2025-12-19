@@ -2,6 +2,9 @@ package com.chromascape.web.config;
 
 import com.chromascape.web.instance.WebSocketStateHandler;
 import com.chromascape.web.logs.LogWebSocketHandler;
+import com.chromascape.web.state.SemanticWebSocketHandler;
+import com.chromascape.web.stats.StatisticsWebSocketHandler;
+import com.chromascape.web.viewport.ViewportWebSocketHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
@@ -30,17 +33,35 @@ public class WebSocketConfig implements WebSocketConfigurer {
   /** The shared handler for broadcasting running state updates. */
   private final WebSocketStateHandler stateWebSocketHandler;
 
+  /** The shared handler for broadcasting viewport updates. */
+  private final ViewportWebSocketHandler viewportWebSocketHandler;
+
+  /** The shared handler for broadcasting semantic state. */
+  private final SemanticWebSocketHandler semanticWebSocketHandler;
+
+  /** The shared handler for broadcasting bot statistic state */
+  private final StatisticsWebSocketHandler statisticsWebSocketHandler;
+
   /**
    * Constructs the configuration with the injected handlers.
    *
    * @param logWebSocketHandler handler for log messages
    * @param stateWebSocketHandler handler for script running state
+   * @param viewportWebSocketHandler handler for viewport updates
+   * @param semanticWebSocketHandler handler for semantic state updates
    */
   @Autowired
   public WebSocketConfig(
-      LogWebSocketHandler logWebSocketHandler, WebSocketStateHandler stateWebSocketHandler) {
+      LogWebSocketHandler logWebSocketHandler,
+      WebSocketStateHandler stateWebSocketHandler,
+      ViewportWebSocketHandler viewportWebSocketHandler,
+      SemanticWebSocketHandler semanticWebSocketHandler,
+      StatisticsWebSocketHandler statisticsWebSocketHandler) {
     this.logWebSocketHandler = logWebSocketHandler;
     this.stateWebSocketHandler = stateWebSocketHandler;
+    this.viewportWebSocketHandler = viewportWebSocketHandler;
+    this.semanticWebSocketHandler = semanticWebSocketHandler;
+    this.statisticsWebSocketHandler = statisticsWebSocketHandler;
   }
 
   /**
@@ -55,5 +76,14 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     // Script running state
     registry.addHandler(stateWebSocketHandler, "/ws/state").setAllowedOrigins("*");
+
+    // Viewport image stream
+    registry.addHandler(viewportWebSocketHandler, "/ws/viewport").setAllowedOrigins("*");
+
+    // Semantic state stream
+    registry.addHandler(semanticWebSocketHandler, "/ws/semantic-state").setAllowedOrigins("*");
+
+    // Statistics stream
+    registry.addHandler(statisticsWebSocketHandler, "/ws/stats").setAllowedOrigins("*");
   }
 }

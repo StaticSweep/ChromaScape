@@ -85,7 +85,7 @@ function renderScriptList(scripts) {
         listItem.style.cursor = "pointer";
 
         const title = document.createElement("div");
-        title.className = "fw-bold p-2 text-white";
+        title.className = "fw-bold p-2"; // Removed text-white to allow CSS to control color
         title.textContent = script;
 
         listItem.appendChild(title);
@@ -159,19 +159,32 @@ function connectLogWebSocket() {
  * Appends a single log line to the terminal output.
  * @param {string} line - Log line to append
  */
-function appendLogLine(line) {
+function appendLogLine(data) {
     const terminal = document.getElementById("consoleOutput");
     if (!terminal) return;
 
-    const nearBottom = (terminal.scrollHeight - terminal.clientHeight - terminal.scrollTop) <= 5;
+    const nearBottom = (terminal.scrollHeight - terminal.clientHeight - terminal.scrollTop) <= 20;
 
-    const logEl = document.createElement("a");
-    logEl.textContent = line;
+    const logEl = document.createElement("div");
+    logEl.className = "log-entry";
+
+    try {
+        const logObj = JSON.parse(data);
+        const level = logObj.level || "INFO";
+        const msg = logObj.message || data;
+
+        logEl.classList.add(`log-${level}`);
+        logEl.textContent = `[${level}] ${msg}`;
+    } catch (e) {
+        // Fallback for non-JSON messages
+        logEl.classList.add("log-INFO");
+        logEl.textContent = data;
+    }
+
     terminal.appendChild(logEl);
-    terminal.appendChild(document.createElement("br"));
 
     if (nearBottom) {
-        terminal.scrollTop = terminal.scrollHeight - terminal.clientHeight;
+        terminal.scrollTop = terminal.scrollHeight;
     }
 }
 
