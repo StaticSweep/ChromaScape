@@ -123,6 +123,20 @@
               </button>
             </div>
 
+            <!-- Code Snippet -->
+            <div class="mt-4 pt-3 border-top">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <h6 class="text-uppercase text-muted m-0">Java Code Snippet</h6>
+                <button class="btn btn-sm btn-outline-secondary"
+                  onclick="navigator.clipboard.writeText(document.getElementById('codeSnippet').innerText)"
+                  title="Copy to Clipboard">
+                  <i class="bi bi-clipboard"></i> Copy
+                </button>
+              </div>
+              <pre class="code-block p-3 rounded" id="codeSnippet"
+                style="background: rgba(0,0,0,0.05); color: #333; font-size: 0.85rem; white-space: pre-wrap; word-break: break-all;">// Check the result...</pre>
+            </div>
+
           </div>
         </div>
       </div>

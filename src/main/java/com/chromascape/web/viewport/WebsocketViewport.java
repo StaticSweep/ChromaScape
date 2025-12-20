@@ -31,7 +31,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class WebsocketViewport implements Viewport {
 
+  /** logger for logging things :) . */
   private static final Logger logger = LoggerFactory.getLogger(WebsocketViewport.class);
+
+  /** Websocket handler to broadcast messages. */
   private final ViewportWebSocketHandler handler;
 
   /** Holds the latest update to be processed, or null if empty. */

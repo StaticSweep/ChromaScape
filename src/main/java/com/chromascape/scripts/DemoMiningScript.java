@@ -65,7 +65,7 @@ public class DemoMiningScript extends BaseScript {
         stop();
         return;
       }
-      controller().mouse().moveTo(clickLoc, "medium");
+      controller().mouse().moveTo(clickLoc, "fast");
       controller().mouse().leftClick();
     } catch (Exception e) {
       logger.error(e);
@@ -103,7 +103,7 @@ public class DemoMiningScript extends BaseScript {
       for (int i = 0; i < 28; i++) {
         Rectangle invSlot = controller().zones().getInventorySlots().get(i);
         Point clickLoc = ClickDistribution.generateRandomPoint(invSlot);
-        controller().mouse().moveTo(clickLoc, "medium");
+        controller().mouse().moveTo(clickLoc, "fast");
         controller().mouse().leftClick();
         waitRandomMillis(200, 650);
       }

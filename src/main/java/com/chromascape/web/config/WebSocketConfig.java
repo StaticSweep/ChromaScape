@@ -39,7 +39,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
   /** The shared handler for broadcasting semantic state. */
   private final SemanticWebSocketHandler semanticWebSocketHandler;
 
-  /** The shared handler for broadcasting bot statistic state */
+  /** The shared handler for broadcasting bot statistic state. */
   private final StatisticsWebSocketHandler statisticsWebSocketHandler;
 
   /**

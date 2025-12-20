@@ -36,11 +36,15 @@ public class Idler {
    * @param timeoutSeconds the maximum number of seconds to remain idle before continuing
    */
   public static void waitUntilIdle(BaseScript base, int timeoutSeconds) {
+    // Initial wait to prevent race condition to previous idle message.
+    BaseScript.waitMillis(600);
     BaseScript.checkInterrupted();
     try {
       Instant start = Instant.now();
       Instant deadline = start.plus(Duration.ofSeconds(timeoutSeconds));
       while (Instant.now().isBefore(deadline)) {
+        // Throttle wait to reduce lag, this is enough.
+        BaseScript.waitMillis(300);
         Rectangle latestMessage = base.controller().zones().getChatTabs().get("Latest Message");
         ColourObj red = ColourInstances.getByName("ChatRed");
         ColourObj black = ColourInstances.getByName("Black");

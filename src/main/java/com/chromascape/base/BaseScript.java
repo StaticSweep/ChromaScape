@@ -5,9 +5,8 @@ import com.chromascape.utils.core.runtime.HotkeyListener;
 import com.chromascape.utils.core.runtime.ScriptStoppedException;
 import com.chromascape.utils.core.state.BotState;
 import com.chromascape.utils.core.state.StateManager;
-import java.util.concurrent.ThreadLocalRandom;
-
 import com.chromascape.utils.core.statistics.StatisticsManager;
+import java.util.concurrent.ThreadLocalRandom;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

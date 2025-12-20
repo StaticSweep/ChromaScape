@@ -74,7 +74,11 @@ public class SemanticWebSocketHandler extends TextWebSocketHandler {
     for (WebSocketSession session : sessions) {
       if (session.isOpen()) {
         try {
-          session.sendMessage(new TextMessage(json));
+          synchronized (session) {
+            if (session.isOpen()) {
+              session.sendMessage(new TextMessage(json));
+            }
+          }
         } catch (IOException e) {
           logger.warn("Failed to send state update: {}", e.getMessage());
         }

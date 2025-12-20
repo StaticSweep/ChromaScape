@@ -11,4 +11,11 @@ import org.bytedeco.opencv.opencv_core.Mat;
  * @param contour The OpenCV matrix representing the object's contour.
  * @param boundingBox The bounding rectangle used to sample interaction points.
  */
-public record ChromaObj(int id, Mat contour, Rectangle boundingBox) {}
+public record ChromaObj(int id, Mat contour, Rectangle boundingBox) {
+  /** Releases the native OpenCV memory associated with the contour. */
+  public void release() {
+    if (contour != null) {
+      contour.release();
+    }
+  }
+}

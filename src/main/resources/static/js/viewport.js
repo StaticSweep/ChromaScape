@@ -16,12 +16,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const wrapper = document.createElement('div');
     wrapper.className = 'text-center p-2';
 
+    // Create the loading container
+    const loaderContainer = document.createElement('div');
+    loaderContainer.id = 'viewport-loader';
+    loaderContainer.className = 'loader-container';
+
+    const loader = document.createElement('div');
+    loader.className = 'glass-loader';
+
+    const loaderText = document.createElement('div');
+    loaderText.className = 'loader-text';
+    loaderText.innerText = 'Waiting for Visual Input...';
+
+    loaderContainer.appendChild(loader);
+    loaderContainer.appendChild(loaderText);
+
+    // Create the main image element (hidden initially)
     const img = document.createElement('img');
     img.id = 'viewport-image';
     img.className = 'img-fluid border border-secondary rounded shadow-sm';
     img.style.maxHeight = '400px';
-    img.style.display = 'none'; // Hide until we have data
+    img.style.display = 'none';
 
+    wrapper.appendChild(loaderContainer);
     wrapper.appendChild(img);
     viewportContainer.appendChild(wrapper);
 
@@ -29,9 +46,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.onmessage = (event) => {
         try {
+            // Hide loader if visible
+            if (loaderContainer.style.display !== 'none') {
+                loaderContainer.style.display = 'none';
+                img.style.display = 'inline-block';
+            }
+
             // Update the single image view
             img.src = event.data;
-            img.style.display = 'inline-block';
         } catch (e) {
             console.error('Failed to process viewport message', e);
         }

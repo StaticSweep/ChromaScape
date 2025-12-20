@@ -57,14 +57,22 @@ public class Ocr {
           "ĭ", "į", "ı", "ƚ", "ỉ", "ị", "ˈ", "ˌ", "ʻ", "ʼ", "ʽ", "˚", "ʾ", "ʿ", "˙", "`", "¨", "¯",
           "´", "¹", " ", "\t", "\n", "·");
 
+  /** Cache for loaded fonts to prevent disk I/O on every OCR call. */
+  private static final Map<String, Map<String, Mat>> fontCache = new HashMap<>();
+
   /**
-   * Loads a font glyph set from disk, converts each glyph to grayscale, and stores in a map.
+   * Loads a font glyph set from disk, converts each glyph to grayscale, and stores in a map. Uses
+   * an internal cache to avoid repeated disk I/O.
    *
    * @param font Name of the font folder inside resources.
    * @return A map from character string to Mat (glyph image).
    * @throws IOException if font data cannot be read.
    */
-  public static Map<String, Mat> loadFont(String font) throws IOException {
+  public static synchronized Map<String, Mat> loadFont(String font) throws IOException {
+    if (fontCache.containsKey(font)) {
+      return fontCache.get(font);
+    }
+
     Map<String, Mat> fontMap = new HashMap<>();
 
     try (BufferedReader reader =
@@ -91,6 +99,7 @@ public class Ocr {
         }
       }
     }
+    fontCache.put(font, fontMap);
     return fontMap;
   }
 
@@ -111,64 +120,80 @@ public class Ocr {
     matches.clear();
     BufferedImage zoneImage = ScreenManager.captureZone(zone);
     double threshold = 0.99;
-    // Masking the zone by the colour and loading it as an 8 bit unsigned 1 channel (CV_8UC1) binary
+    // Masking the zone by the colour and loading it as an 8 bit unsigned 1 channel
+    // (CV_8UC1) binary
     // greyscale.
     Mat zoneMat = ColourContours.extractColours(zoneImage, colour);
-    // Template match each glyph in the font to the zoneMat.
-    for (String glyph : fontMap.keySet()) {
-      // Make sure none of the elements are a space or a problem character.
-      if (glyph.trim().isEmpty() || problemChars.contains(glyph)) {
-        continue;
-      }
+    try {
+      // Template match each glyph in the font to the zoneMat.
+      for (String glyph : fontMap.keySet()) {
+        // Make sure none of the elements are a space or a problem character.
+        if (glyph.trim().isEmpty() || problemChars.contains(glyph)) {
+          continue;
+        }
 
-      Mat correlation = new Mat(); // This Mat will be the output for image template matching.
+        Mat correlation = new Mat(); // This Mat will be the output for image template matching.
+        try {
+          int glyphImgRows; // These are to store the glyph sizes outside of try with resources
+          // scope.
+          int glyphImgCols;
 
-      int glyphImgRows; // These are to store the glyph sizes outside of try with resources scope.
-      int glyphImgCols;
+          // We are trimming the font images and template matching -
+          // Based on the font type and how the image is stored.
 
-      // We are trimming the font images and template matching -
-      // Based on the font type and how the image is stored.
+          int ycropModifier = getCropModifierForFont(font);
 
-      int ycropModifier = getCropModifierForFont(font);
-
-      try (Rect roi =
-              new Rect(
-                  0,
-                  ycropModifier,
-                  fontMap.get(glyph).arrayWidth(),
-                  fontMap.get(glyph).arrayHeight() - ycropModifier);
-          Mat croppedGlyph = new Mat(fontMap.get(glyph), roi)) {
-        // Match template with cropped glyph and store size outside try-with-resources.
-        matchTemplate(zoneMat, croppedGlyph, correlation, TM_CCOEFF_NORMED);
-        glyphImgRows = croppedGlyph.rows();
-        glyphImgCols = croppedGlyph.cols();
-      }
-      // Call minMaxLoc repeatedly, zero out the area based on glyph size, save locations as
-      // CharMatch objs.
-      while (true) { // Loop breaks when threshold is not met.
-        try (DoublePointer minVal = new DoublePointer(1);
-            DoublePointer maxVal = new DoublePointer(1);
-            Point minLoc = new Point();
-            Point maxLoc = new Point()) {
-
-          minMaxLoc(correlation, minVal, maxVal, minLoc, maxLoc, null);
-
-          if (maxVal.get() < threshold) {
-            break;
+          try (Rect roi =
+                  new Rect(
+                      0,
+                      ycropModifier,
+                      fontMap.get(glyph).arrayWidth(),
+                      fontMap.get(glyph).arrayHeight() - ycropModifier);
+              Mat croppedGlyph = new Mat(fontMap.get(glyph), roi)) {
+            // Match template with cropped glyph and store size outside try-with-resources.
+            matchTemplate(zoneMat, croppedGlyph, correlation, TM_CCOEFF_NORMED);
+            glyphImgRows = croppedGlyph.rows();
+            glyphImgCols = croppedGlyph.cols();
           }
+          // Call minMaxLoc repeatedly, zero out the area based on glyph size, save
+          // locations as
+          // CharMatch objs.
+          while (true) { // Loop breaks when threshold is not met.
+            try (DoublePointer minVal = new DoublePointer(1);
+                DoublePointer maxVal = new DoublePointer(1);
+                Point minLoc = new Point();
+                Point maxLoc = new Point()) {
 
-          Rectangle matchLocation =
-              new Rectangle(maxLoc.x(), maxLoc.y(), glyphImgCols, glyphImgRows);
-          matches.add(
-              new CharMatch(glyph, matchLocation.x, matchLocation.y, glyphImgCols, glyphImgRows));
+              minMaxLoc(correlation, minVal, maxVal, minLoc, maxLoc, null);
 
-          zeroOutRegion(correlation, matchLocation);
-          zoneMat = MaskZones.maskZonesMat(zoneMat.clone(), matchLocation);
+              if (maxVal.get() < threshold) {
+                break;
+              }
+
+              Rectangle matchLocation =
+                  new Rectangle(maxLoc.x(), maxLoc.y(), glyphImgCols, glyphImgRows);
+              matches.add(
+                  new CharMatch(
+                      glyph, matchLocation.x, matchLocation.y, glyphImgCols, glyphImgRows));
+
+              zeroOutRegion(correlation, matchLocation);
+
+              Mat oldZoneMat = zoneMat;
+              zoneMat = MaskZones.maskZonesMat(zoneMat.clone(), matchLocation);
+              if (oldZoneMat != null) {
+                oldZoneMat.release();
+              }
+            }
+          }
+        } finally {
+          correlation.release();
         }
       }
-      correlation.release();
+    } finally {
+      if (zoneMat != null) {
+        zoneMat.release();
+      }
     }
-    zoneMat.release();
 
     // Sort CharMatch objects based on left-most positions.
     matches.sort(Comparator.comparingInt(CharMatch::y).thenComparingInt(CharMatch::x));

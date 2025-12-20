@@ -5,6 +5,7 @@ import com.chromascape.utils.core.input.mouse.VirtualMouseUtils;
 import com.chromascape.utils.core.input.remoteinput.Kinput;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.core.screen.window.WindowHandler;
+import com.chromascape.utils.domain.ocr.Ocr;
 import com.chromascape.utils.domain.walker.Walker;
 import com.chromascape.utils.domain.zones.ZoneManager;
 import org.apache.logging.log4j.LogManager;
@@ -49,20 +50,36 @@ public class Controller {
    * internal state for running.
    */
   public void init() {
+    logger.info("Setting up Font masks...");
+    // Warmup: Pre-load common fonts
+    try {
+      Ocr.loadFont("Plain 11");
+      Ocr.loadFont("Plain 12");
+      Ocr.loadFont("Bold 12");
+    } catch (Exception e) {
+      logger.error("Failed to pre-load fonts during init: {}", e.getMessage());
+    }
+
+    logger.info("Setting up Remote Input Library...");
     // Obtain process ID of the target window to initialize input injection
     kinput = new Kinput(WindowHandler.getPid(WindowHandler.getTargetWindow()));
 
     // Initialize virtual input utilities with current window bounds and fullscreen status
+    logger.info("Initialising mouse and keyboard utils...");
     virtualMouseUtils = new VirtualMouseUtils(kinput, ScreenManager.getWindowBounds());
     virtualKeyboardUtils = new VirtualKeyboardUtils(kinput);
 
+    logger.info("Pre-loading and instantiating zones...");
     // Initialize zone management with fixed mode option
     zoneManager = new ZoneManager();
+    // Initialise gameView instead of LazyLoading, to improve startup overhead
+    zoneManager.getGameView();
 
     state = ControllerState.RUNNING;
 
     // Initialises a walker to provide the script with Walking functionality through the DAX API
     walker = new Walker(this);
+    logger.info("Controller State: {}", state);
   }
 
   /**
@@ -74,8 +91,44 @@ public class Controller {
   public void shutdown() {
     mouse().getMouseOverlay().eraseOverlay();
     kinput.destroy();
+    if (!killKinput()) {
+      logger.warn("Kinput failed to destroy");
+    }
     state = ControllerState.STOPPED;
     logger.info("Shutting down");
+  }
+
+  /**
+   * Uses the command prompt to forcibly delete KInput.dll and KInputCtrl.dll from the build
+   * directory. Effectively freeing up the program to rerun.
+   *
+   * @return {@code true} if successful, {@code false} if not.
+   */
+  public boolean killKinput() {
+    try {
+      String distPath = new java.io.File("build/dist").getAbsolutePath();
+      String kInputCtrl = "\"" + distPath + "\\KInputCtrl.dll\"";
+      String kInput = "\"" + distPath + "\\KInput.dll\"";
+
+      // Wait 2s, then force delete files.
+      // We use cmd /c start "" /B to ensure it runs detached/background if possible.
+      // Using ProcessBuilder to avoid Runtime.exec deprecation.
+      new ProcessBuilder(
+              "cmd.exe",
+              "/c",
+              "start",
+              "/MIN",
+              "cmd.exe",
+              "/c",
+              "timeout /t 2 /nobreak > NUL & del /f /q " + kInputCtrl + " " + kInput)
+          .start();
+
+      logger.info("Scheduled forced Kinput DLL cleanup in 2 seconds.");
+      return true;
+    } catch (Exception e) {
+      logger.error("Failed to schedule Kinput cleanup: {}", e.getMessage());
+      return false;
+    }
   }
 
   /**

@@ -13,18 +13,38 @@ import java.util.concurrent.atomic.AtomicLong;
 public class StatisticsManager {
 
   private static final AtomicLong startTime = new AtomicLong(0);
+  private static final AtomicLong endTime = new AtomicLong(0);
+  private static volatile boolean running = false;
+
   private static final AtomicInteger cycles = new AtomicInteger(0);
   private static final AtomicInteger inputs = new AtomicInteger(0);
   private static final AtomicInteger objectsDetected = new AtomicInteger(0);
 
   private StatisticsManager() {}
 
-  /** Resets all statistics to zero and sets the start time to the current system time. */
+  /**
+   * Resets all statistics to zero and sets the start time to the current system time.
+   *
+   * <p>Also resets the {@code endTime} and sets {@code running} to true.
+   */
   public static void reset() {
     startTime.set(System.currentTimeMillis());
+    endTime.set(0);
+    running = true;
     cycles.set(0);
     inputs.set(0);
     objectsDetected.set(0);
+  }
+
+  /**
+   * Stops the statistics tracking, freezing the elapsed time.
+   *
+   * <p>Sets {@code running} to false and records the current time as {@code endTime}. This ensures
+   * {@link #getElapsedTime()} returns a static duration after stopping.
+   */
+  public static void stop() {
+    running = false;
+    endTime.set(System.currentTimeMillis());
   }
 
   /** Increments the cycle count by one. */
@@ -63,10 +83,23 @@ public class StatisticsManager {
   /**
    * Calculates the elapsed time in milliseconds.
    *
+   * <p>If the bot is running, returns {@code now - startTime}. If the bot is stopped, returns
+   * {@code endTime - startTime}.
+   *
    * @return runtime in ms, or 0 if not started.
    */
   public static long getElapsedTime() {
     long start = startTime.get();
-    return start == 0 ? 0 : System.currentTimeMillis() - start;
+    if (start == 0) {
+      return 0;
+    }
+    if (running) {
+      return System.currentTimeMillis() - start;
+    } else {
+      long end = endTime.get();
+      // If end is somehow invalid or 0 (shouldn't happen if stop called), return 0 or
+      // current diff
+      return end > start ? end - start : 0;
+    }
   }
 }

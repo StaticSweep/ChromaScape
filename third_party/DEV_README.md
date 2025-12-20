@@ -10,12 +10,6 @@ Note:
 
 **PowerShell:**
 ```powershell
-# Build MinHook
-cd minhook\build\MinGW
-$env:PATH += ";C:\path\to\mingw64\bin"
-gcc -c -I../../include -I../../src -Wall -Werror -std=c11 -masm=intel ../../src/*.c ../../src/hde/*.c
-ar rcs libMinHook.a *.o
-
 # Build KInput
 cd ..\..\..\KInput\KInput\KInput
 mingw32-make
@@ -43,51 +37,30 @@ mingw32-make
 
 ```
 third_party/
-├── KInput/
-│   └── KInput/
-│       ├── KInput/
-│       │   ├── KInput.cbp          # Code::Blocks project file
-│       │   ├── makefile            # Build configuration
-│       │   ├── KInput.cpp          # Main implementation
-│       │   ├── KInput.hpp          # Header file
-│       │   └── main.cpp            # Entry point
-│       └── KInputCtrl/
-│           ├── KInputCtrl.cbp      # Code::Blocks project file
-│           ├── makefile            # Build configuration
-│           ├── Injector.cpp        # DLL injection implementation
-│           ├── Injector.hpp        # Injection header
-│           ├── KInputCtrl.cpp      # Controller implementation
-│           ├── KInputCtrl.hpp      # Controller header
-│           ├── RemoteProcFinder.cpp # Process finding implementation
-│           ├── RemoteProcFinder.h  # Process finding header
-│           └── main.cpp            # Entry point
-└── minhook/
-    ├── include/                    # MinHook headers
-    ├── src/                        # MinHook source code
-    └── build/MinGW/                # Build output directory
+└── KInput/
+    └── KInput/
+        ├── KInput/
+        │   ├── KInput.cbp          # Code::Blocks project file
+        │   ├── makefile            # Build configuration
+        │   ├── KInput.cpp          # Main implementation
+        │   ├── KInput.hpp          # Header file
+        │   └── main.cpp            # Entry point
+        └── KInputCtrl/
+            ├── KInputCtrl.cbp      # Code::Blocks project file
+            ├── makefile            # Build configuration
+            ├── Injector.cpp        # DLL injection implementation
+            ├── Injector.hpp        # Injection header
+            ├── KInputCtrl.cpp      # Controller implementation
+            ├── KInputCtrl.hpp      # Controller header
+            ├── RemoteProcFinder.cpp # Process finding implementation
+            ├── RemoteProcFinder.h  # Process finding header
+            └── main.cpp            # Entry point
+
 ```
 
 ## Build Process
 
-### Step 1: Build MinHook Library
-
-MinHook is a dependency that must be built first.
-
-```bash
-# Navigate to minhook build directory
-cd minhook/build/MinGW
-
-# Add MinGW to PATH (if not already done)
-set PATH=%PATH%;C:\path\to\mingw64\bin
-
-# Compile MinHook source files
-gcc -c -I../../include -I../../src -Wall -Werror -std=c11 -masm=intel ../../src/*.c ../../src/hde/*.c
-
-# Create static library
-ar rcs libMinHook.a *.o
-```
-
-### Step 2: Update Configuration Files
+### Step 1: Update Configuration Files
 
 #### Update KInput.cbp
 Edit the following paths in `KInput.cbp`:
@@ -96,29 +69,9 @@ Edit the following paths in `KInput.cbp`:
 <!-- Java include paths - Update to your JDK installation -->
 <Add directory="C:/Program Files/Microsoft/jdk-17.x.x.x-hotspot/include" />
 <Add directory="C:/Program Files/Microsoft/jdk-17.x.x.x-hotspot/include/win32" />
-
-<!-- MinHook include path - Should point to minhook/include -->
-<Add directory="../../minhook/include" />
-
-<!-- MinHook library - Should point to built library -->
-<Add library="../../minhook/build/MinGW/libMinHook.a" />
 ```
 
-#### Update makefile
-Edit the following paths in `makefile`:
-
-```makefile
-# MinHook include path
-INC = -I"..\..\..\minhook\include"
-
-# MinHook library path
-LIBDIR = -L"..\..\..\minhook\build\MinGW"
-
-# Java include paths - Update to your JDK installation
-INC_RELEASE = $(INC) -I"C:\Program Files\Microsoft\jdk-17.x.x.x-hotspot\include" -I"C:\Program Files\Microsoft\jdk-17.x.x.x-hotspot\include\win32"
-```
-
-### Step 3: Build KInput
+### Step 2: Build KInput
 
 ```bash
 # Navigate to KInput directory
@@ -133,7 +86,7 @@ mingw32-make
 
 The output will be `bin/Release/KInput.dll`.
 
-### Step 4: Build KInputCtrl
+### Step 3: Build KInputCtrl
 
 KInputCtrl is a DLL injection controller that manages the KInput library in target processes.
 
@@ -150,7 +103,7 @@ mingw32-make
 
 The output will be `bin/Release/KInputCtrl.dll`.
 
-**Note**: KInputCtrl doesn't require MinHook or Java dependencies - it's a standalone injection controller.
+**Note**: KInputCtrl doesn't require Java dependencies - it's a standalone injection controller.
 
 ## Configuration Details
 
@@ -163,7 +116,6 @@ The output will be `bin/Release/KInputCtrl.dll`.
 ### Dependencies
 
 #### KInput
-- **MinHook**: Function hooking library
 - **Java JNI**: Java Native Interface for Java integration
 - **Windows API**: Standard Windows system libraries
 
@@ -175,25 +127,21 @@ The output will be `bin/Release/KInputCtrl.dll`.
 
 ### Common Issues
 
-1. **"cannot find -lMinHook"**
-   - Ensure MinHook library is built and path is correct
-   - Check that `libMinHook.a` exists in the specified directory
-
-2. **"cannot find -lstdc++" or similar library errors**
+1. **"cannot find -lstdc++" or similar library errors**
    - This usually indicates 32-bit/64-bit architecture mismatch
    - Ensure you're using 64-bit MinGW for 64-bit builds
    - Or install 32-bit MinGW for 32-bit builds
 
-3. **Java include path errors**
+2. **Java include path errors**
    - Verify JDK installation path
    - Check that `jni.h` exists in the include directory
    - Ensure JDK version is 17 or later
 
-4. **MinGW not found**
+3. **MinGW not found**
    - Add MinGW bin directory to system PATH
    - Or use full paths to MinGW executables
 
-5. **"std::uint32_t has not been declared" (KInputCtrl)**
+4. **"std::uint32_t has not been declared" (KInputCtrl)**
    - This is fixed by adding `#include <cstdint>` to header files
    - The makefile has been updated to include this fix
 
@@ -203,8 +151,7 @@ This build is configured for **64-bit** architecture. If you need 32-bit:
 
 1. Install 32-bit MinGW
 2. Add `-m32` flag back to compiler and linker flags
-3. Rebuild MinHook with 32-bit target
-4. Update library paths accordingly
+3. Update library paths accordingly
 
 ## Development Workflow
 
@@ -214,9 +161,8 @@ This build is configured for **64-bit** architecture. If you need 32-bit:
 4. **Test**: Use the generated DLLs in your application
 
 ### Build Order
-1. **MinHook** (if building KInput)
-2. **KInput** (core keyboard input library)
-3. **KInputCtrl** (DLL injection controller)
+1. **KInput** (core keyboard input library)
+2. **KInputCtrl** (DLL injection controller)
 
 ## Integration with Java
 
@@ -252,7 +198,6 @@ public native void cleanup();
 ## Notes
 
 - Both projects use static linking for maximum portability
-- MinHook is built as a static library to avoid DLL dependencies
 - Java 17+ is required for modern JNI features (KInput only)
 - KInputCtrl is a standalone injection controller with no external dependencies
 - The build system is designed to be portable across different development environments
@@ -260,5 +205,5 @@ public native void cleanup();
 ## Build Summary
 
 After following this guide, you will have:
-- **KInput.dll**: Core keyboard input library (requires MinHook + Java 17)
+- **KInput.dll**: Core keyboard input library (requires Java 17)
 - **KInputCtrl.dll**: DLL injection controller (standalone)

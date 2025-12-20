@@ -15,13 +15,12 @@ import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.core.screen.viewport.ViewportManager;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.core.state.StateManager;
+import com.chromascape.utils.core.statistics.StatisticsManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
-
-import com.chromascape.utils.core.statistics.StatisticsManager;
 import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.MatVector;

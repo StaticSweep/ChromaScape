@@ -1,4 +1,4 @@
-package com.chromascape.web;
+package com.chromascape.web.instance;
 
 import java.io.IOException;
 import java.nio.file.Files;

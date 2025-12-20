@@ -37,9 +37,8 @@ function initSliders() {
         const maxEl = document.getElementById(pair.max);
 
         if (minEl && maxEl) {
-            // Create independent debounced senders for each slider
-            const sendMin = debounce(sendSliderVal, 150);
-            const sendMax = debounce(sendSliderVal, 150);
+            const sendMin = throttle(sendSliderVal, 150); // Updates ~6 times a second while dragging
+            const sendMax = throttle(sendSliderVal, 150);
 
             // Attach input listeners for live constraint and display updates
             minEl.addEventListener("input", () => {
@@ -56,6 +55,29 @@ function initSliders() {
             updateDisplay(pair.max, maxEl.value);
         }
     });
+}
+
+/**
+ * Creates a throttled version of a function that ensures it is called at most once
+ * within the specified time limit.
+ *
+ * <p>Unlike debounce, which waits for a pause in execution, throttle guarantees
+ * that the function fires regularly (every `limit` ms) during continuous events
+ * like scrolling or slider dragging.
+ *
+ * @param {Function} func - The function to throttle.
+ * @param {number} limit - The time interval in milliseconds (e.g., 100ms).
+ * @returns {Function} A new throttled function that accepts the same arguments.
+ */
+function throttle(func, limit) {
+    let inThrottle;
+    return function (...args) {
+        if (!inThrottle) {
+            func.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    }
 }
 
 /**
@@ -87,6 +109,7 @@ function handleInput(pair, type) {
 
     updateDisplay(pair.min, minEl.value);
     updateDisplay(pair.max, maxEl.value);
+    updateCodeSnippet();
 }
 
 /**
@@ -185,17 +208,30 @@ async function updateImages() {
 }
 
 /**
- * Creates a debounced version of a function that delays its execution until after
- * `wait` milliseconds have elapsed since the last time it was invoked.
- *
- * @param {Function} func - The function to debounce.
- * @param {number} wait - The number of milliseconds to delay.
- * @returns {Function} A new debounced function.
+ * Updates the code snippet display with the current slider values and colour name.
  */
-function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-    };
+function updateCodeSnippet() {
+    const name = document.getElementById("colourNameInput").value.trim() || "MyColour";
+
+    // Get values
+    const hMin = document.getElementById("hueMin").value;
+    const hMax = document.getElementById("hueMax").value;
+    const sMin = document.getElementById("satMin").value;
+    const sMax = document.getElementById("satMax").value;
+    const vMin = document.getElementById("valMin").value;
+    const vMax = document.getElementById("valMax").value;
+
+    const snippet = `ColourObj ${toCamelCase(name)} = new ColourObj("${name}", new Scalar(${hMin}, ${sMin}, ${vMin}, 0), new Scalar(${hMax}, ${sMax}, ${vMax}, 0));`;
+
+    const codeEl = document.getElementById("codeSnippet");
+    if (codeEl) codeEl.innerText = snippet;
+}
+
+/**
+ * Helper to convert valid variable names
+ */
+function toCamelCase(str) {
+    return str.replace(/(?:^\w|[A-Z]|\b\w)/g, (word, index) => {
+        return index === 0 ? word.toLowerCase() : word.toUpperCase();
+    }).replace(/\s+/g, '');
 }

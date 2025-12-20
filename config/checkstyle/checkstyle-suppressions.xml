@@ -9,4 +9,7 @@
     <suppress files=".*WindowHandler\.java" checks="MethodName"/>
     <suppress files=".*ScreenManager\.java" checks="MethodName"/>
     <suppress files=".*Similarity\.java" checks=".*"/>
+    <suppress files=".*WindMouse\.java" checks=".*"/>
+    <suppress files=".*TemplateMatching\.java" checks="AvoidStarImport"/>
+    <suppress files=".*ScreenManager\.java" checks="LocalVariableName"/>
 </suppressions>

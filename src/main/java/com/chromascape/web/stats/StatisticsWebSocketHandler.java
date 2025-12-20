@@ -15,9 +15,8 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 /**
  * WebSocket handler that manages connections for the statistics endpoint.
  *
- * <p>Listens on {@code /ws/stats}. This handler maintains a registry of active sessions
- * and provides a mechanism to broadcast statistical data updates to all connected clients
- * in real-time.
+ * <p>Listens on {@code /ws/stats}. This handler maintains a registry of active sessions and
+ * provides a mechanism to broadcast statistical data updates to all connected clients in real-time.
  */
 @Component
 public class StatisticsWebSocketHandler extends TextWebSocketHandler {
@@ -26,21 +25,21 @@ public class StatisticsWebSocketHandler extends TextWebSocketHandler {
 
   /**
    * A thread-safe set of active WebSocket sessions.
-   * <p>
-   * {@link CopyOnWriteArraySet} is used here to ensure safe iteration during broadcasts while
+   *
+   * <p>{@link CopyOnWriteArraySet} is used here to ensure safe iteration during broadcasts while
    * allowing concurrent additions and removals of sessions.
    */
   private final Set<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
 
   /**
-   * Invoked after a WebSocket negotiation has succeeded and the WebSocket connection is
-   * opened and ready for use.
+   * Invoked after a WebSocket negotiation has succeeded and the WebSocket connection is opened and
+   * ready for use.
    *
    * <p>This implementation registers the new session in the tracking set to receive future
    * broadcasts.
    *
-   * @param session the new {@link WebSocketSession}; may be {@code null} if the framework passes a null session
-   * (though unlikely in standard Spring WebSocket flow)
+   * @param session the new {@link WebSocketSession}; may be {@code null} if the framework passes a
+   *     null session (though unlikely in standard Spring WebSocket flow)
    */
   @Override
   public void afterConnectionEstablished(@Nullable WebSocketSession session) {
@@ -50,11 +49,11 @@ public class StatisticsWebSocketHandler extends TextWebSocketHandler {
   }
 
   /**
-   * Invoked after the WebSocket connection has been closed by either side, or after a
-   * transport error has occurred.
+   * Invoked after the WebSocket connection has been closed by either side, or after a transport
+   * error has occurred.
    *
-   * <p>This implementation removes the session from the tracking set to prevent memory leaks
-   * and attempted writes to closed connections.
+   * <p>This implementation removes the session from the tracking set to prevent memory leaks and
+   * attempted writes to closed connections.
    *
    * @param session the {@link WebSocketSession} that was closed
    * @param status the close status code and reason

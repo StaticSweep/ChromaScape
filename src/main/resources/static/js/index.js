@@ -53,10 +53,37 @@ async function initializeUI() {
     setupStartStopButton();
 }
 
+// ----------------- CONTROL STATE MANAGEMENT -----------------
+
+/**
+ * Updates the enabled/disabled state of the UI controls based on whether a script is running.
+ * @param {boolean} running - Whether a script is currently running
+ */
+function updateControlsState(running) {
+    const screenshotterBtn = document.getElementById("screenshotterButton");
+    const scriptList = document.getElementById("script-list");
+    const startBtn = document.getElementById("startButton");
+
+    // Disable/Enable Screenshotter Button
+    if (screenshotterBtn) {
+        screenshotterBtn.disabled = running;
+    }
+
+    // Disable/Enable Script List
+    if (scriptList) {
+        if (running) {
+            scriptList.classList.add("disabled-script-list");
+        } else {
+            scriptList.classList.remove("disabled-script-list");
+        }
+    }
+}
+
 // ----------------- SCRIPT FETCH + UI -----------------
 
 /**
  * Fetches the list of available scripts from the backend and renders them in the UI.
+ * Connects to the /api/scripts endpoint.
  */
 async function fetchAndRenderScripts() {
     try {
@@ -71,14 +98,19 @@ async function fetchAndRenderScripts() {
 
 /**
  * Renders the script list in the sidebar and sets up selection highlighting.
+ * Populates the 'script-list' unordered list element.
+ * 
  * @param {string[]} scripts - List of script names to display.
  */
 function renderScriptList(scripts) {
     const listGroup = document.getElementById("script-list");
     if (!listGroup) return;
 
+    listGroup.innerHTML = ""; // Clear existing list
+
     scripts.forEach(script => {
         if (script === "package-info.java") return;
+        if (script === "Screenshotter.java") return; // Exclude Screenshotter
 
         const listItem = document.createElement("li");
         listItem.className = "list-group-item d-flex justify-content-between align-items-start list-group-item-action bg-med";
@@ -92,6 +124,8 @@ function renderScriptList(scripts) {
         listGroup.appendChild(listItem);
 
         listItem.addEventListener("click", () => {
+            if (isStarted) return; // double check logic if pointer-events fails or via keyboard
+
             if (previouslySelectedElement) {
                 previouslySelectedElement.classList.remove("bg-light");
                 previouslySelectedElement.classList.add("bg-med");
@@ -111,6 +145,7 @@ function renderScriptList(scripts) {
 /**
  * Sets up the dropdown for selecting window mode.
  * Updates the UI text and stores the selected value.
+ * Listeners are attached to all elements with class 'dropdown-item'.
  */
 function setupWindowModeDropdown() {
     document.querySelectorAll(".dropdown-item").forEach(item => {
@@ -128,6 +163,7 @@ function setupWindowModeDropdown() {
 /**
  * Establishes a WebSocket connection to the backend log stream.
  * Incoming logs are appended to the console output terminal in real time.
+ * Handles automatic reconnection on closure.
  */
 function connectLogWebSocket() {
     const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
@@ -157,7 +193,10 @@ function connectLogWebSocket() {
 
 /**
  * Appends a single log line to the terminal output.
- * @param {string} line - Log line to append
+ * Parses the log data as JSON if possible to style by log level.
+ * Auto-scrolls to the bottom if the user is near the end of the log.
+ * 
+ * @param {string} data - Raw log data string (JSON or plain text)
  */
 function appendLogLine(data) {
     const terminal = document.getElementById("consoleOutput");
@@ -190,6 +229,8 @@ function appendLogLine(data) {
 
 /**
  * Updates the progress bar UI element.
+ * Sets the text content and width of the progress bar.
+ * 
  * @param {number|string} progress - Progress percentage (0-100)
  */
 function updateProgressBar(progress) {
@@ -200,36 +241,55 @@ function updateProgressBar(progress) {
     }
 }
 
-// ----------------- START/STOP -----------------
+// ----------------- START/STOP & SCREENSHOTTER -----------------
 
 /**
- * Sets up the Start/Stop button and its click handler.
- * Toggles script execution and updates the button UI.
+ * Sets up the Start/Stop button and the Screenshotter button.
+ * - Start/Stop: Toggles script execution via /api/runConfig or /api/stop.
+ * - Screenshotter: Runs the specific "Screenshotter.java" script.
  */
 function setupStartStopButton() {
     const startBtn = document.getElementById("startButton");
-    if (!startBtn) return;
+    const screenshotterBtn = document.getElementById("screenshotterButton");
 
-    startBtn.addEventListener("click", async () => {
-        const runConfig = getRunConfig();
-        if (!runConfig) return;
+    if (startBtn) {
+        startBtn.addEventListener("click", async () => {
+            try {
+                if (!isStarted) {
+                    const runConfig = getRunConfig();
+                    if (!runConfig) return;
 
-        try {
-            if (!isStarted) {
-                await startScript(runConfig);
-            } else {
-                await stopScript();
+                    await startScript(runConfig);
+                } else {
+                    await stopScript();
+                }
+                // UI update to be handled by WebSocket state logic mostly
+                updateStartButtonUI();
+            } catch (err) {
+                console.error("Error toggling script:", err);
             }
-            updateStartButtonUI();
-        } catch (err) {
-            console.error("Error toggling script:", err);
-        }
-    });
+        });
+    }
+
+    if (screenshotterBtn) {
+        screenshotterBtn.addEventListener("click", async () => {
+            if (isStarted) return; // Should be disabled, but safety check
+
+            // Start Screenshotter
+            try {
+                await startScript({ script: "Screenshotter.java" });
+            } catch (err) {
+                console.error("Error starting Screenshotter:", err);
+            }
+        });
+    }
 }
 
 /**
  * Retrieves the configuration for running the selected script.
- * @returns {{script: string}|null} Run configuration or null if invalid
+ * Validates that a script is selected.
+ * 
+ * @returns {{script: string}|null} Run configuration object with script name, or null if invalid.
  */
 function getRunConfig() {
     const mode = document.getElementById("windowModeDropdown")?.textContent;
@@ -243,8 +303,10 @@ function getRunConfig() {
 }
 
 /**
- * Sends a request to start the selected script on the backend.
- * @param {object} config - Run configuration
+ * Sends a POST request to start the selected script on the backend.
+ * Triggers a page reload upon success to refresh state.
+ * 
+ * @param {object} config - Run configuration object containing script name.
  */
 async function startScript(config) {
     const res = await fetch("/api/runConfig", {
@@ -253,11 +315,13 @@ async function startScript(config) {
         body: JSON.stringify(config)
     });
     if (!res.ok) throw new Error("Failed to start script");
-    isStarted = true;
+    // Trigger a full page reload to ensure fresh state (clear logs, reset UI)
+    window.location.reload();
 }
 
 /**
- * Sends a request to stop the running script on the backend.
+ * Sends a POST request to stop the currently running script on the backend.
+ * Updates local state to stopped.
  */
 async function stopScript() {
     const res = await fetch("/api/stop", {
@@ -271,17 +335,23 @@ async function stopScript() {
 
 /**
  * Updates the Start/Stop button UI to reflect the current script state.
+ * Toggles class names and text content between "Start" and "Stop".
+ * Preserves layout classes (btn-lg, w-100, py-3, mb-2).
  */
 function updateStartButtonUI() {
     const btn = document.getElementById("startButton");
     if (!btn) return;
 
     if (isStarted) {
-        btn.className = "btn btn-danger m-2";
-        btn.textContent = "Stop";
+        // Switch to Stop state
+        btn.classList.remove("btn-success");
+        btn.classList.add("btn-danger");
+        btn.innerHTML = '<i class="bi bi-stop-circle-fill me-2"></i>STOP';
     } else {
-        btn.className = "btn btn-success m-2";
-        btn.textContent = "Start";
+        // Switch to Start state
+        btn.classList.remove("btn-danger");
+        btn.classList.add("btn-success");
+        btn.innerHTML = '<i class="bi bi-play-circle-fill me-2"></i>START';
     }
 }
 
@@ -289,7 +359,8 @@ function updateStartButtonUI() {
 
 /**
  * Establishes a WebSocket connection to track backend script running state.
- * Updates the Start/Stop button if the state changes.
+ * Updates the Start/Stop button and Control Panel state if the backend state changes.
+ * Handles automatic reconnection.
  */
 function connectStateWebSocket() {
     const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
@@ -306,7 +377,11 @@ function connectStateWebSocket() {
             const wasStarted = isStarted;
             isStarted = running;
 
-            if (isStarted !== wasStarted) updateStartButtonUI();
+            if (isStarted !== wasStarted) {
+                updateStartButtonUI();
+            }
+            // Always ensure controls match state
+            updateControlsState(isStarted);
         };
 
         ws.onclose = (event) => {
@@ -322,3 +397,4 @@ function connectStateWebSocket() {
 
     initialize();
 }
+

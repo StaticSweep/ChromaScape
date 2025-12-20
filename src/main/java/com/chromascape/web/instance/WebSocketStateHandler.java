@@ -34,13 +34,31 @@ public class WebSocketStateHandler extends TextWebSocketHandler {
   private final Set<WebSocketSession> sessions = ConcurrentHashMap.newKeySet();
 
   /**
+   * Tracks the last broadcasted state (running or not) to immediately synchronize new connections.
+   *
+   * <p>Initialized to {@code false}. Updated every time {@link #broadcast(boolean)} is called.
+   */
+  private volatile boolean lastState = false;
+
+  /**
    * Invoked after a new WebSocket connection is established.
+   *
+   * <p>Adds the session to the active set and immediately sends the {@code lastState} so the client
+   * UI can sync its start/stop button without waiting for a new event.
    *
    * @param session the session that was established
    */
   @Override
   public void afterConnectionEstablished(@Nullable WebSocketSession session) {
     sessions.add(session);
+    // Send current state immediately to the new session
+    if (session != null && session.isOpen()) {
+      try {
+        session.sendMessage(new TextMessage(Boolean.toString(lastState)));
+      } catch (IOException e) {
+        logger.error("Failed to send initial state to client", e);
+      }
+    }
   }
 
   /**
@@ -61,9 +79,12 @@ public class WebSocketStateHandler extends TextWebSocketHandler {
    * <p>The message sent is a simple {@code "true"} or {@code "false"} string, representing whether
    * a script is currently active.
    *
+   * <p>Also updates {@link #lastState} to persist this state for future connections.
+   *
    * @param isRunning {@code true} if a script is running, {@code false} otherwise
    */
   public void broadcast(boolean isRunning) {
+    this.lastState = isRunning;
     for (WebSocketSession session : sessions) {
       if (session.isOpen()) {
         try {

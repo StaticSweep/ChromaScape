@@ -7,6 +7,9 @@ import static org.opencv.imgproc.Imgproc.TM_SQDIFF_NORMED;
 
 import com.chromascape.utils.core.screen.viewport.ViewportManager;
 import com.chromascape.utils.core.screen.window.ScreenManager;
+import com.chromascape.utils.core.state.BotState;
+import com.chromascape.utils.core.state.StateManager;
+import com.chromascape.utils.core.statistics.StatisticsManager;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -14,10 +17,6 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-
-import com.chromascape.utils.core.state.BotState;
-import com.chromascape.utils.core.state.StateManager;
-import com.chromascape.utils.core.statistics.StatisticsManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bytedeco.javacpp.DoublePointer;
@@ -91,6 +90,8 @@ public class TemplateMatching {
       cvtColor(template, view, COLOR_BGR2RGB);
     }
     ViewportManager.getInstance().updateState(view);
+    // Release the view Mat immediately as ViewportManager handles the data.
+    view.release();
 
     if (template.empty()) {
       throw new IllegalArgumentException("Template image is empty");

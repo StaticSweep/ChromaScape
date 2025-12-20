@@ -19,14 +19,12 @@
 					<Add option="-DBUILD_DLL" />
 					<Add directory="C:/Program Files/Microsoft/jdk-17.0.16.8-hotspot/include" />
 					<Add directory="C:/Program Files/Microsoft/jdk-17.0.16.8-hotspot/include/win32" />
-					<Add directory="../../minhook/include" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
 					<Add option="-static-libstdc++" />
 					<Add option="-static-libgcc" />
 					<Add option="-static" />
-					<Add library="../../minhook/build/MinGW/libMinHook.a" />
 				</Linker>
 			</Target>
 		</Build>
