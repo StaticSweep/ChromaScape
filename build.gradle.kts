@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.chromascape"
-version = "0.0.1-SNAPSHOT"
+version = "0.1.0"
 
 // Customize build directories - put DLLs in build/dist
 layout.buildDirectory.set(file("build"))
