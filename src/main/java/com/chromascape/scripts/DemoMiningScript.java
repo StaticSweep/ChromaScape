@@ -2,8 +2,8 @@ package com.chromascape.scripts;
 
 import com.chromascape.base.BaseScript;
 import com.chromascape.utils.actions.Idler;
+import com.chromascape.utils.actions.ItemDropper;
 import com.chromascape.utils.actions.PointSelector;
-import com.chromascape.utils.core.input.distribution.ClickDistribution;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import java.awt.Point;
@@ -45,7 +45,7 @@ public class DemoMiningScript extends BaseScript {
   @Override
   protected void cycle() {
     if (isInventoryFull()) {
-      dropIronOre();
+      ItemDropper.dropAll(controller());
     }
     clickOre();
     waitRandomMillis(800, 1000);
@@ -65,7 +65,7 @@ public class DemoMiningScript extends BaseScript {
         stop();
         return;
       }
-      controller().mouse().moveTo(clickLoc, "fast");
+      controller().mouse().moveTo(clickLoc, "medium");
       controller().mouse().leftClick();
     } catch (Exception e) {
       logger.error(e);
@@ -89,29 +89,5 @@ public class DemoMiningScript extends BaseScript {
       logger.error(e);
     }
     return false;
-  }
-
-  /**
-   * Drops all iron ore in the inventory using shift-click.
-   *
-   * <p>Iterates through all 28 slots, clicking each one while the shift modifier is held down.
-   */
-  private void dropIronOre() {
-    try {
-      controller().keyboard().sendModifierKey(401, "shift");
-      waitRandomMillis(800, 1200);
-      for (int i = 0; i < 28; i++) {
-        Rectangle invSlot = controller().zones().getInventorySlots().get(i);
-        Point clickLoc = ClickDistribution.generateRandomPoint(invSlot);
-        controller().mouse().moveTo(clickLoc, "fast");
-        controller().mouse().leftClick();
-        waitRandomMillis(200, 650);
-      }
-      waitRandomMillis(600, 800);
-      controller().keyboard().sendModifierKey(402, "shift");
-    } catch (Exception e) {
-      logger.error(e);
-      logger.error(e.getStackTrace());
-    }
   }
 }

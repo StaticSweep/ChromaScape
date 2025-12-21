@@ -60,8 +60,22 @@ public class ColourContours {
    * @return a Mat binary mask with pixels in range set to 255, others 0
    */
   public static Mat extractColours(BufferedImage image, ColourObj colourObj) {
+    // Convert BufferedImage to Mat explicitly
+    try (Mat hsvImage = Java2DFrameUtils.toMat(image)) {
+      return extractColours(hsvImage, colourObj);
+    }
+  }
+
+  /**
+   * Converts the input Mat to HSV colour space and extracts a binary mask.
+   *
+   * @param inputMat the source image Mat (BGR)
+   * @param colourObj the ColourObj specifying the HSV minimum and maximum bounds
+   * @return a Mat binary mask with pixels in range set to 255, others 0
+   */
+  public static Mat extractColours(Mat inputMat, ColourObj colourObj) {
     StateManager.setState(com.chromascape.utils.core.state.BotState.SEARCHING);
-    Mat hsvImage = Java2DFrameUtils.toMat(image);
+    Mat hsvImage = inputMat.clone();
     cvtColor(hsvImage, hsvImage, COLOR_BGR2HSV);
     Mat result = new Mat(hsvImage.size(), CV_8UC1);
     Mat hsvMin = new Mat(colourObj.hsvMin());

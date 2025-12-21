@@ -107,8 +107,8 @@ public class Controller {
   public boolean killKinput() {
     try {
       String distPath = new java.io.File("build/dist").getAbsolutePath();
-      String kInputCtrl = "\"" + distPath + "\\KInputCtrl.dll\"";
-      String kInput = "\"" + distPath + "\\KInput.dll\"";
+      String kinputCtrl = "\"" + distPath + "\\KInputCtrl.dll\"";
+      String kinput = "\"" + distPath + "\\KInput.dll\"";
 
       // Wait 2s, then force delete files.
       // We use cmd /c start "" /B to ensure it runs detached/background if possible.
@@ -120,7 +120,7 @@ public class Controller {
               "/MIN",
               "cmd.exe",
               "/c",
-              "timeout /t 2 /nobreak > NUL & del /f /q " + kInputCtrl + " " + kInput)
+              "timeout /t 2 /nobreak > NUL & del /f /q " + kinputCtrl + " " + kinput)
           .start();
 
       logger.info("Scheduled forced Kinput DLL cleanup in 2 seconds.");

@@ -18,18 +18,47 @@ const pairs = [
 document.addEventListener("DOMContentLoaded", () => {
     initSliders();
     initSubmitButton();
+    fetchSliderState(); // Restore state from server
     updateImages().catch(console.error);
 });
 
 /**
+ * Fetches the current slider state from the server and updates the UI.
+ *
+ * <p>Retrieves the HSV values from `/api/slider` and updates the corresponding input elements
+ * and display text. This ensures the frontend matches the backend state on page load.
+ *
+ * @async
+ * @returns {Promise<void>}
+ */
+async function fetchSliderState() {
+    try {
+        const response = await fetch(`/api/slider?t=${Date.now()}`);
+        if (!response.ok) throw new Error(`Failed to fetch slider state: ${response.status}`);
+
+        const state = await response.json();
+
+        // Iterate over returned state and update UI
+        for (const [id, value] of Object.entries(state)) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = value;
+                updateDisplay(id, value);
+            }
+        }
+
+        updateCodeSnippet(); // Refresh code snippet with new values
+    } catch (err) {
+        console.error("Error loading slider state:", err);
+    }
+}
+
+/**
  * Initializes all slider inputs defined in the {@link pairs} array.
  *
- * <p>This function:
- * <ul>
- * <li>Attaches debounced event listeners to send updates to the server.</li>
- * <li>Attaches immediate input listeners to enforce UI constraints (min < max).</li>
- * <li>Initializes the numerical display values next to the sliders.</li>
- * </ul>
+ * <p>This function attaches event listeners that delegate to the {@link sendSliderVal} concurrency
+ * loop, attaches immediate input listeners to enforce UI constraints (min < max), and initializes
+ * the numerical display values next to the sliders.
  */
 function initSliders() {
     pairs.forEach(pair => {
@@ -37,8 +66,8 @@ function initSliders() {
         const maxEl = document.getElementById(pair.max);
 
         if (minEl && maxEl) {
-            const sendMin = throttle(sendSliderVal, 150); // Updates ~6 times a second while dragging
-            const sendMax = throttle(sendSliderVal, 150);
+            const sendMin = sendSliderVal;
+            const sendMax = sendSliderVal;
 
             // Attach input listeners for live constraint and display updates
             minEl.addEventListener("input", () => {
@@ -55,29 +84,6 @@ function initSliders() {
             updateDisplay(pair.max, maxEl.value);
         }
     });
-}
-
-/**
- * Creates a throttled version of a function that ensures it is called at most once
- * within the specified time limit.
- *
- * <p>Unlike debounce, which waits for a pause in execution, throttle guarantees
- * that the function fires regularly (every `limit` ms) during continuous events
- * like scrolling or slider dragging.
- *
- * @param {Function} func - The function to throttle.
- * @param {number} limit - The time interval in milliseconds (e.g., 100ms).
- * @returns {Function} A new throttled function that accepts the same arguments.
- */
-function throttle(func, limit) {
-    let inThrottle;
-    return function (...args) {
-        if (!inThrottle) {
-            func.apply(this, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    }
 }
 
 /**
@@ -167,27 +173,70 @@ function initSubmitButton() {
 }
 
 /**
- * Sends a slider value update to the server.
+ * A registry of active transmission states for each slider.
  *
- * <p>After successfully updating the backend via `/api/slider`, triggers an image refresh.
+ * <p>Each entry stores the most recent value from the input event (pending transmission)
+ * and a boolean flag indicating if the specific slider loop is currently active.
  *
- * @async
+ * @type {Map<string, {latestValue: (string|number|null), isSending: boolean}>}
+ */
+const pendingUpdates = new Map();
+
+/**
+ * Sends a slider value update to the server using a conflating queue loop.
+ *
+ * <p>This implementation solves the "backend overload" problem by ensuring that only one request
+ * is ever in flight per slider. If the user moves the slider repeatedly while a request is processing,
+ * intermediate values are locally overwritten (conflated). As soon as the active request finishes,
+ * the loop immediately picks up the current latest value and sends it.
+ *
+ * <p>This guarantees the server always receives the final state eventually without lag accumulation.
+ *
  * @param {string} sliderName - The ID/name of the slider being updated.
  * @param {string|number} value - The new value of the slider.
  * @returns {Promise<void>}
  */
 async function sendSliderVal(sliderName, value) {
-    try {
-        const response = await fetch("/api/slider", {
-            method: "POST",
-            headers: { "Content-type": "application/json" },
-            body: JSON.stringify({ sliderName, sliderValue: value })
+    // Update the "latest pending value" for this slider
+    if (!pendingUpdates.has(sliderName)) {
+        pendingUpdates.set(sliderName, {
+            latestValue: value,
+            isSending: false
         });
+    } else {
+        pendingUpdates.get(sliderName).latestValue = value;
+    }
 
-        if (!response.ok) throw new Error(`Slider update failed: ${response.status}`);
-        await updateImages();
-    } catch (err) {
-        console.error("Error updating slider/image:", err);
+    const state = pendingUpdates.get(sliderName);
+
+    // If already sending, do nothing; the loop will pick up the new value automatically
+    if (state.isSending) return;
+
+    // Start the sending loop
+    state.isSending = true;
+
+    try {
+        while (state.latestValue !== null) {
+            // Capture the value we are about to send and clear the "next" slot
+            const valueToSend = state.latestValue;
+            state.latestValue = null; // Mark as "nothing more to send" for now
+
+            try {
+                const response = await fetch("/api/slider", {
+                    method: "POST",
+                    headers: { "Content-type": "application/json" },
+                    body: JSON.stringify({ sliderName, sliderValue: valueToSend })
+                });
+
+                if (!response.ok) throw new Error(`Slider update failed: ${response.status}`);
+                await updateImages();
+            } catch (err) {
+                console.error("Error updating slider/image:", err);
+            }
+        }
+    } finally {
+        // Loop finished (nextValue was null), so we are free again
+        state.isSending = false;
     }
 }
 
