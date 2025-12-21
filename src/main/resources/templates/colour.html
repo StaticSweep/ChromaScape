@@ -1,148 +1,170 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-    <title>ChromaScape Hub</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-      integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr"
-      crossorigin="anonymous"
-    />
-    <link rel="stylesheet" href="/css/style.css" />
-    <script
-      defer
-      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
-      integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
-      crossorigin="anonymous"
-    ></script>
-  </head>
-  <body>
-    <header style="height: 34px">
-      <nav class="navbar navbar-dark fixed-top bg-dark" id="navs">
-        <div class="container-fluid" id="">
-          <span class="navbar-brand h1 d-flex align-items-center gap-2 p-2 m-2">
-            <img
-              src="/imagesWeb/CS.png"
-              alt="ChromaScape logo"
-              style="height: 32px; width: 32px"
-              class="me-2"
-            />
-            ChromaScape Hub
-          </span>
-          <button
-            type="button"
-            class="btn btn-primary p-2 m-2"
-            onclick="window.location.href='/'"
-            style="width: 112px"
-          >
-            Index
-          </button>
-        </div>
-      </nav>
-    </header>
-    <div class="container text-center" style="margin-bottom: 120px">
-      <div class="border border-2 border-primary rounded p-3">
-        <div class="row">
-          <div class="col-12 col-md-6">
-            <label for="hueMin" class="form-label">Hue-min</label>
-            <input
-              type="range"
-              class="form-range border-bottom border-secondary range-with-spacing"
-              value="0"
-              min="0"
-              max="179"
-              id="hueMin"
-            />
 
-            <label for="satMin" class="form-label mt-4">Sat-min</label>
-            <input
-              type="range"
-              class="form-range border-bottom border-secondary range-with-spacing"
-              value="0"
-              min="0"
-              max="255"
-              id="satMin"
-            />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <title>ChromaScape - Colour Picker</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
+    crossorigin="anonymous"></script>
+  <style>
+    /* Specific overrides for sliders */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+    }
 
-            <label for="valMin" class="form-label mt-4">Val-min</label>
-            <input
-              type="range"
-              class="form-range border-bottom border-secondary range-with-spacing"
-              value="0"
-              min="0"
-              max="255"
-              id="valMin"
-            />
+    .slider-label {
+      width: 80px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
 
-            <label for="hueMax" class="form-label mt-4">Hue-max</label>
-            <input
-              type="range"
-              class="form-range border-bottom border-secondary range-with-spacing"
-              value="179"
-              min="0"
-              max="179"
-              id="hueMax"
-            />
+    .slider-val {
+      width: 50px;
+      text-align: right;
+      font-weight: 700;
+      color: var(--accent-blue);
+    }
 
-            <label for="satMax" class="form-label mt-4">Sat-max</label>
-            <input
-              type="range"
-              class="form-range border-bottom border-secondary range-with-spacing"
-              value="255"
-              min="0"
-              max="255"
-              id="satMax"
-            />
+    input[type=range] {
+      flex-grow: 1;
+      margin: 0 15px;
+    }
+  </style>
+</head>
 
-            <label for="valMax" class="form-label mt-4">Val-max</label>
-            <input
-              type="range"
-              class="form-range range-with-spacing"
-              value="255"
-              min="0"
-              max="255"
-              id="valMax"
-            />
+<body>
+  <header>
+    <nav class="navbar fixed-top" id="navs">
+      <div class="container-fluid">
+        <span class="navbar-brand h1 d-flex align-items-center gap-2 p-2 m-2">
+          <img src="/imagesWeb/CS.png" alt="ChromaScape logo" style="height: 32px; width: 32px" class="me-2" />
+          ChromaScape Hub
+        </span>
+        <button type="button" class="btn btn-outline-primary p-2 m-2" onclick="window.location.href='/'">
+          <i class="bi bi-house-door-fill me-2"></i>Dashboard
+        </button>
+      </div>
+    </nav>
+  </header>
 
-            <label style="width: 100%">
-              <input
-                type="text"
-                placeholder="Colour name"
-                class="form-control mt-5"
-              />
-            </label>
-            <button
-              type="button"
-              id="submitButton"
-              class="btn btn-primary w-100 mt-4"
-            >
-              Submit
-            </button>
-          </div>
+  <main class="container-fluid">
+    <div class="row h-100">
 
-          <div class="col-12 col-md-6 mt-2 mt-md-0">
-            <img
-              id="originalImage"
-              alt="Original Screenshot"
-              class="img-fluid rounded"
-              style="max-height: 350px; object-fit: contain"
-            />
-            <img
-              id="modifiedImage"
-              alt="Modified Screenshot"
-              class="img-fluid rounded mt-3"
-              style="max-height: 350px; object-fit: contain"
-            />
+      <!-- Controls Column -->
+      <div class="col-md-5">
+        <div class="glass-panel h-100">
+          <h5><i class="bi bi-sliders me-2"></i>Tuning Controls</h5>
+
+          <div class="p-3 overflow-auto" style="max-height: calc(100vh - 140px);">
+
+            <!-- HUE group -->
+            <div class="mb-4">
+              <h6 class="text-uppercase text-muted border-bottom pb-2 mb-3">Hue (0-179)</h6>
+              <div class="slider-row">
+                <span class="slider-label">Min</span>
+                <input type="range" class="form-range" id="hueMin" min="0" max="179" value="0" autocomplete="off">
+                <span class="slider-val" id="val-hueMin">0</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Max</span>
+                <input type="range" class="form-range" id="hueMax" min="0" max="179" value="179" autocomplete="off">
+                <span class="slider-val" id="val-hueMax">179</span>
+              </div>
+            </div>
+
+            <!-- SATURATION group -->
+            <div class="mb-4">
+              <h6 class="text-uppercase text-muted border-bottom pb-2 mb-3">Saturation (0-255)</h6>
+              <div class="slider-row">
+                <span class="slider-label">Min</span>
+                <input type="range" class="form-range" id="satMin" min="0" max="255" value="0" autocomplete="off">
+                <span class="slider-val" id="val-satMin">0</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Max</span>
+                <input type="range" class="form-range" id="satMax" min="0" max="255" value="255" autocomplete="off">
+                <span class="slider-val" id="val-satMax">255</span>
+              </div>
+            </div>
+
+            <!-- VALUE group -->
+            <div class="mb-4">
+              <h6 class="text-uppercase text-muted border-bottom pb-2 mb-3">Value (0-255)</h6>
+              <div class="slider-row">
+                <span class="slider-label">Min</span>
+                <input type="range" class="form-range" id="valMin" min="0" max="255" value="0" autocomplete="off">
+                <span class="slider-val" id="val-valMin">0</span>
+              </div>
+              <div class="slider-row">
+                <span class="slider-label">Max</span>
+                <input type="range" class="form-range" id="valMax" min="0" max="255" value="255" autocomplete="off">
+                <span class="slider-val" id="val-valMax">255</span>
+              </div>
+            </div>
+
+            <!-- Submit -->
+            <div class="mt-5 pt-3 border-top">
+              <div class="input-group mb-3">
+                <span class="input-group-text bg-white border-0"><i class="bi bi-tag-fill text-primary"></i></span>
+                <input type="text" class="form-control border-0" placeholder="Colour Name (e.g. 'Cyan_Ore_Rocks')"
+                  id="colourNameInput">
+              </div>
+              <button type="button" id="submitButton" class="btn btn-success w-100">
+                <i class="bi bi-check-circle-fill me-2"></i>Save Configuration
+              </button>
+            </div>
+
+            <!-- Code Snippet -->
+            <div class="mt-4 pt-3 border-top">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <h6 class="text-uppercase text-muted m-0">Java Code Snippet</h6>
+                <button class="btn btn-sm btn-outline-secondary"
+                  onclick="navigator.clipboard.writeText(document.getElementById('codeSnippet').innerText)"
+                  title="Copy to Clipboard">
+                  <i class="bi bi-clipboard"></i> Copy
+                </button>
+              </div>
+              <pre class="code-block p-3 rounded" id="codeSnippet"
+                style="background: rgba(0,0,0,0.05); color: #333; font-size: 0.85rem; white-space: pre-wrap; word-break: break-all;">// Check the result...</pre>
+            </div>
+
           </div>
         </div>
       </div>
+
+      <!-- Preview Column -->
+      <div class="col-md-7">
+        <div class="glass-panel h-100">
+          <h5><i class="bi bi-image me-2"></i>Live Preview</h5>
+          <div class="d-flex flex-column h-100 justify-content-center align-items-center gap-3" style="min-height: 0;">
+
+            <div class="position-relative w-100 text-center" style="flex: 1; min-height: 0; overflow: hidden;">
+              <span class="badge bg-secondary position-absolute top-0 start-50 translate-middle-x mt-2">Original</span>
+              <img id="originalImage" alt="Original" class="rounded shadow-sm w-100 h-100 object-fit-contain">
+            </div>
+
+            <div class="position-relative w-100 text-center" style="flex: 1; min-height: 0; overflow: hidden;">
+              <span class="badge bg-primary position-absolute top-0 start-50 translate-middle-x mt-2">Masked</span>
+              <img id="modifiedImage" alt="Masked" class="rounded shadow-sm w-100 h-100 object-fit-contain">
+            </div>
+
+          </div>
+        </div>
+      </div>
+
     </div>
-    <footer class="bg-dark text-white text-center p-3">
-      <p>ChromaScape Hub</p>
-    </footer>
-    <script src="/js/colour.js"></script>
-  </body>
+  </main>
+
+  <script src="/js/colour.js"></script>
+</body>
+
 </html>

@@ -106,7 +106,11 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
       wsExecutor.submit(
           () -> {
             try {
-              session.sendMessage(new TextMessage(message));
+              synchronized (session) {
+                if (session.isOpen()) {
+                  session.sendMessage(new TextMessage(message));
+                }
+              }
             } catch (IOException e) {
               sessions.remove(session);
               logger.warn("Failed to send message to session: {}", e.getMessage());

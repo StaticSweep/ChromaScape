@@ -1,6 +1,7 @@
 package com.chromascape.web.instance;
 
 import com.chromascape.base.BaseScript;
+import com.chromascape.utils.core.statistics.StatisticsManager;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 
@@ -43,15 +44,24 @@ public class ScriptInstance {
     instance = (BaseScript) constructor.newInstance();
   }
 
-  /** Starts the script execution in a new thread. */
+  /**
+   * Starts the script execution in a new thread.
+   *
+   * <p>Resets the statistics via {@link StatisticsManager#reset()} before running, so that each run
+   * starts with fresh metrics.
+   *
+   * <p>Also broadcasts a {@code true} state to clients.
+   */
   public void start() {
     thread =
         new Thread(
             () -> {
               stateHandler.broadcast(true);
+              StatisticsManager.reset();
               try {
                 instance.run();
               } finally {
+                StatisticsManager.stop();
                 stateHandler.broadcast(false);
               }
             });
@@ -61,9 +71,13 @@ public class ScriptInstance {
   /**
    * Stops the script execution by requesting the script to stop, interrupting the running thread,
    * and waiting for it to terminate.
+   *
+   * <p>explicitly calls {@link StatisticsManager#stop()} to freeze metrics immediately. Also
+   * broadcasts a {@code false} state to clients.
    */
   public void stop() {
     instance.stop();
+    StatisticsManager.stop();
     if (thread != null) {
       thread.interrupt();
       try {

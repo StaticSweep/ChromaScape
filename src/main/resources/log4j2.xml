@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="WARN" packages="com.chromascape.web.logs">
+<Configuration status="WARN">
     <Appenders>
         <!-- Console appender for standard output -->
         <Console name="Console" target="SYSTEM_OUT">

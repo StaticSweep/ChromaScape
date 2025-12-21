@@ -43,6 +43,15 @@ public class CurrentSliderState {
   }
 
   /**
+   * Retrieves all current slider values as a map.
+   *
+   * @return a map of slider IDs to their integer values.
+   */
+  public Map<String, Integer> getAll() {
+    return new ConcurrentHashMap<>(sliderValues);
+  }
+
+  /**
    * Converts the current slider state into a {@link ColourObj} using OpenCV HSV bounds.
    *
    * @return a {@link ColourObj} representing the selected HSV range

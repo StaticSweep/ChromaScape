@@ -1,91 +1,114 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <title>ChromaScape Hub</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-      integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr"
-      crossorigin="anonymous"
-    />
-    <link rel="stylesheet" href="/css/style.css" />
-    <script
-      defer
-      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
-      integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
-      crossorigin="anonymous"
-    ></script>
-  </head>
-  <body>
-    <header>
-      <nav class="navbar navbar-dark fixed-top bg-dark" id="navs">
-        <div class="container-fluid" id="">
-          <span class="navbar-brand h1 d-flex align-items-center gap-2 p-2 m-2">
-            <img
-              src="/imagesWeb/CS.png"
-              alt="ChromaScape logo"
-              style="height: 32px; width: 32px"
-              class="me-2"
-            />
-            ChromaScape Hub
-          </span>
-          <button
-            type="button"
-            class="btn btn-primary p-2 m-2"
-            onclick="window.location.href='/colour'"
-          >
-            Colour picker
-          </button>
-        </div>
-      </nav>
-    </header>
-    <main>
-      <!-- script container -->
-      <div class="container-fluid">
-        <div class="row">
-          <!-- Script Selection -->
-          <div class="col-md-3 border-end" id="script-list-container">
-            <!-- Script list content -->
-            <ol class="list-group" id="script-list">
-              <!--This is dynamically allocated with scripts like shown below-->
-              <!--<li class="list-group-item d-flex justify-content-between align-items-start list-group-item-action">-->
-              <!--<div class="fw-bold p-2">Script name</div>-->
-              <!--</li>-->
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <title>ChromaScape Hub</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
+    crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+
+<body>
+  <header>
+    <nav class="navbar fixed-top" id="navs">
+      <div class="container-fluid" id="">
+        <span class="navbar-brand h1 d-flex align-items-center gap-2 p-2 m-2">
+          <img src="/imagesWeb/CS.png" alt="ChromaScape logo" style="height: 32px; width: 32px" class="me-2" />
+          ChromaScape Hub
+          <span id="bot-status-pill" class="badge rounded-pill bg-secondary ms-2">Offline</span>
+        </span>
+        <button type="button" class="btn btn-primary p-2 m-2" onclick="window.location.href='/colour'">
+          Colour picker
+        </button>
+      </div>
+    </nav>
+  </header>
+  <main class="container-fluid mt-4">
+    <div class="row">
+      <!-- LEFT COLUMN: Scripts (3 cols) -->
+      <div class="col-md-3">
+        <div class="glass-panel h-100">
+          <h5><i class="bi bi-code-square me-2"></i>Scripts</h5>
+          <div id="script-list-container">
+            <ol class="list-group list-group-flush" id="script-list">
+              <!-- Dynamically populated -->
             </ol>
-          </div>
-          <!-- Main Area -->
-          <div class="col-md-9 d-flex flex-column">
-            <!-- Console Output -->
-            <div
-              class="flex-grow-1 overflow-auto bg-dark text-white p-3 rounded"
-              id="consoleOutput"
-            >
-              <!-- Logs go here -->
-            </div>
-            <!-- Controls -->
-            <div class="my-3">
-              <div class="d-flex justify-content-end align-items-center gap-2">
-                <!-- Start button -->
-                <button
-                  class="btn btn-success m-2"
-                  style="width: 100px"
-                  id="startButton"
-                >
-                  Start
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
-    </main>
-    <footer class="bg-dark text-white text-center p-3">
-      <p>ChromaScape Hub</p>
-    </footer>
-    <script src="/js/index.js"></script>
-  </body>
+
+      <!-- MIDDLE COLUMN: Viewport & Console (6 cols) -->
+      <div class="col-md-6">
+        <!-- Viewport Section -->
+        <div class="glass-panel">
+          <h5><i class="bi bi-eye me-2"></i>Viewport</h5>
+          <div id="viewport-container">
+            <span class="text-muted fst-italic">Waiting for visual input...</span>
+          </div>
+        </div>
+
+        <!-- Console Section -->
+        <div class="glass-panel">
+          <h5><i class="bi bi-terminal me-2"></i>Terminal Output</h5>
+          <div id="consoleOutput">
+            <!-- Logs go here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN: Controls & Stats (3 cols) -->
+      <div class="col-md-3">
+        <!-- Control Panel -->
+        <div class="glass-panel text-center">
+          <h5>Controls</h5>
+          <button class="btn btn-success btn-lg w-100 py-3 mb-2" id="startButton">
+            <i class="bi bi-play-circle-fill me-2"></i>START
+          </button>
+          <button class="btn btn-primary btn-lg w-100 py-3 mb-2" id="screenshotterButton">
+            <i class="bi bi-camera-fill me-2"></i>Screenshotter
+          </button>
+        </div>
+
+        <!-- Stats Stack -->
+        <div class="glass-panel">
+          <h5>Metrics</h5>
+
+          <div class="stat-card">
+            <div class="stat-label">Execution Time</div>
+            <div class="stat-value" id="stat-time">00:00:00</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Cycles</div>
+            <div class="stat-value" id="stat-cycles">0</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Total Inputs</div>
+            <div class="stat-value" id="stat-inputs">0</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Objects Detected</div>
+            <div class="stat-value" id="stat-objects">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/index.js"></script>
+  <script src="/js/viewport.js"></script>
+  <script src="/js/semantic_state.js"></script>
+  <script src="/js/stats.js"></script>
+</body>
+
 </html>

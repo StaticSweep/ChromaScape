@@ -2,6 +2,9 @@ package com.chromascape.utils.core.input.keyboard;
 
 import com.chromascape.base.BaseScript;
 import com.chromascape.utils.core.input.remoteinput.Kinput;
+import com.chromascape.utils.core.state.BotState;
+import com.chromascape.utils.core.state.StateManager;
+import com.chromascape.utils.core.statistics.StatisticsManager;
 
 /**
  * Provides high-level methods for simulating keyboard input using the Kinput API. This utility
@@ -29,6 +32,8 @@ public class VirtualKeyboardUtils {
    */
   public synchronized void sendKeyChar(char keyChar) {
     BaseScript.checkInterrupted();
+    StateManager.setState(BotState.ACTING);
+    StatisticsManager.incrementInputs();
     kinput.sendKeyEvent(400, keyChar);
   }
 
@@ -42,6 +47,8 @@ public class VirtualKeyboardUtils {
    */
   public synchronized void sendModifierKey(int eventId, String key) {
     BaseScript.checkInterrupted();
+    StateManager.setState(BotState.ACTING);
+    StatisticsManager.incrementInputs();
     int keyId =
         switch (key.toLowerCase()) {
           case "shift" -> 16;
@@ -64,6 +71,8 @@ public class VirtualKeyboardUtils {
    */
   public synchronized void sendArrowKey(int eventId, String key) {
     BaseScript.checkInterrupted();
+    StateManager.setState(BotState.ACTING);
+    StatisticsManager.incrementInputs();
     int keyId =
         switch (key.toLowerCase()) {
           case "left" -> 37;
