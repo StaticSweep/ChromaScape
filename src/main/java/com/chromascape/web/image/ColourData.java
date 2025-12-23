@@ -1,5 +1,8 @@
 package com.chromascape.web.image;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
  * Represents a color range in OpenCV's HSV color space with a name identifier and minimum and
  * maximum HSV bounds.
@@ -25,6 +28,11 @@ public class ColourData {
    * ranges 0-179, Saturation and Value range 0-255.
    */
   private int[] max;
+
+  /** Optional RGB metadata for this colour represented as [Red, Green, Blue]. */
+  @JsonProperty("RGB")
+  @JsonInclude(JsonInclude.Include.NON_NULL)
+  private int[] rgb;
 
   /**
    * Returns the name of this HSV color range.
@@ -54,6 +62,16 @@ public class ColourData {
   }
 
   /**
+   * Returns the optional RGB values for this colour.
+   *
+   * @return an int array of length 3 representing [Red, Green, Blue], or null if unset.
+   */
+  @JsonProperty("RGB")
+  public int[] getRgb() {
+    return rgb;
+  }
+
+  /**
    * Sets the name of this HSV color range.
    *
    * @param name the color name to set.
@@ -78,5 +96,15 @@ public class ColourData {
    */
   public void setMax(int[] max) {
     this.max = max;
+  }
+
+  /**
+   * Sets the optional RGB metadata for this colour.
+   *
+   * @param rgb an int array of length 3 representing [Red, Green, Blue].
+   */
+  @JsonProperty("RGB")
+  public void setRgb(int[] rgb) {
+    this.rgb = rgb;
   }
 }

@@ -11,13 +11,18 @@ const pairs = [
     { min: "valMin", max: "valMax", limit: 255 }
 ];
 
+const rgbInputIds = ["rgbRedInput", "rgbGreenInput", "rgbBlueInput"];
+
 /**
  * Initializes the application once the DOM is fully loaded.
  * Sets up slider event listeners, the submit button, and fetches the initial images.
  */
 document.addEventListener("DOMContentLoaded", () => {
     initSliders();
+    initRgbInputs();
     initSubmitButton();
+    const nameInput = document.getElementById("colourNameInput");
+    if (nameInput) nameInput.addEventListener("input", updateCodeSnippet);
     fetchSliderState(); // Restore state from server
     updateImages().catch(console.error);
 });
@@ -84,6 +89,35 @@ function initSliders() {
             updateDisplay(pair.max, maxEl.value);
         }
     });
+}
+
+function initRgbInputs() {
+    rgbInputIds.forEach(id => {
+        const input = document.getElementById(id);
+        if (!input) return;
+
+        input.addEventListener("input", () => {
+            clampInputValue(input);
+            updateCodeSnippet();
+        });
+    });
+}
+
+function clampInputValue(input) {
+    const value = input.value.trim();
+    if (value === "") return;
+
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) return;
+
+    const clamped = clamp(parsed, 0, 255);
+    if (`${clamped}` !== value) {
+        input.value = clamped;
+    }
+}
+
+function clamp(val, min, max) {
+    return Math.min(max, Math.max(min, val));
 }
 
 /**
@@ -156,11 +190,22 @@ function initSubmitButton() {
             return;
         }
 
+        let rgb = null;
+        try {
+            rgb = collectRgbValues({ requireComplete: true });
+        } catch (err) {
+            alert(err.message);
+            return;
+        }
+
+        const payload = { name: colorName };
+        if (rgb) payload.rgb = rgb;
+
         try {
             const res = await fetch("/api/submitColour", {
                 method: "POST",
-                headers: { "Content-type": "text/plain" },
-                body: colorName
+                headers: { "Content-type": "application/json" },
+                body: JSON.stringify(payload)
             });
 
             if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -260,7 +305,8 @@ async function updateImages() {
  * Updates the code snippet display with the current slider values and colour name.
  */
 function updateCodeSnippet() {
-    const name = document.getElementById("colourNameInput").value.trim() || "MyColour";
+    const nameInput = document.getElementById("colourNameInput");
+    const name = nameInput?.value.trim() || "MyColour";
 
     // Get values
     const hMin = document.getElementById("hueMin").value;
@@ -270,7 +316,17 @@ function updateCodeSnippet() {
     const vMin = document.getElementById("valMin").value;
     const vMax = document.getElementById("valMax").value;
 
-    const snippet = `ColourObj ${toCamelCase(name)} = new ColourObj("${name}", new Scalar(${hMin}, ${sMin}, ${vMin}, 0), new Scalar(${hMax}, ${sMax}, ${vMax}, 0));`;
+    const rgb = collectRgbValues();
+
+    const snippetLines = [
+        `ColourObj ${toCamelCase(name)} = new ColourObj("${name}", new Scalar(${hMin}, ${sMin}, ${vMin}, 0), new Scalar(${hMax}, ${sMax}, ${vMax}, 0));`
+    ];
+
+    if (rgb) {
+        snippetLines.push(`int[] rgb = new int[] { ${rgb[0]}, ${rgb[1]}, ${rgb[2]} }; // Optional RGB metadata`);
+    }
+
+    const snippet = snippetLines.join("\n");
 
     const codeEl = document.getElementById("codeSnippet");
     if (codeEl) codeEl.innerText = snippet;
@@ -283,4 +339,31 @@ function toCamelCase(str) {
     return str.replace(/(?:^\w|[A-Z]|\b\w)/g, (word, index) => {
         return index === 0 ? word.toLowerCase() : word.toUpperCase();
     }).replace(/\s+/g, '');
+}
+
+function collectRgbValues(options = {}) {
+    const requireComplete = options.requireComplete ?? false;
+    const inputs = rgbInputIds.map(id => document.getElementById(id));
+    const raw = inputs.map(el => el ? el.value.trim() : "");
+
+    const hasAny = raw.some(v => v !== "");
+    const hasAll = raw.every(v => v !== "");
+
+    if (!hasAny) return null;
+    if (requireComplete && !hasAll) {
+        throw new Error("Please fill all RGB fields or leave them all empty.");
+    }
+    if (!hasAll) return null;
+
+    const numbers = raw.map(v => Number(v));
+    const invalid = numbers.some(n => Number.isNaN(n) || n < 0 || n > 255);
+
+    if (invalid) {
+        if (requireComplete) {
+            throw new Error("RGB values must be numbers between 0 and 255.");
+        }
+        return null;
+    }
+
+    return numbers.map(n => Math.round(clamp(n, 0, 255)));
 }
