@@ -12,26 +12,22 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class ServePages {
 
   /**
-   * Handles GET requests for the root ("/") URL. Sets the AWT system property to non-headless mode,
-   * then returns the view name for the index page.
+   * Handles GET requests for the root ("/") URL.
    *
    * @return the logical view name "index"
    */
   @GetMapping("/")
   public String serveIndexPage() {
-    System.setProperty("java.awt.headless", "false");
     return "index";
   }
 
   /**
-   * Handles GET requests for the "/colour" URL. Sets the AWT system property to non-headless mode,
-   * then returns the view name for the colour picker page.
+   * Handles GET requests for the "/colour" URL.
    *
    * @return the logical view name "colour"
    */
   @GetMapping("/colour")
   public String serveColourPickerPage() {
-    System.setProperty("java.awt.headless", "false");
     return "colour";
   }
 }
