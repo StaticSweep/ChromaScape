@@ -18,7 +18,7 @@
     .slider-row {
       display: flex;
       align-items: center;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
 
     .slider-label {
@@ -37,6 +37,15 @@
     input[type=range] {
       flex-grow: 1;
       margin: 0 15px;
+    }
+
+    /* Chevron rotation for collapse toggle */
+    .chevron-icon {
+      transition: transform 0.2s ease-in-out;
+    }
+
+    [data-bs-toggle="collapse"][aria-expanded="true"] .chevron-icon {
+      transform: rotate(90deg);
     }
   </style>
 </head>
@@ -64,11 +73,11 @@
         <div class="glass-panel h-100">
           <h5><i class="bi bi-sliders me-2"></i>Tuning Controls</h5>
 
-          <div class="p-3 overflow-auto" style="max-height: calc(100vh - 140px);">
+          <div class="pt-2 px-3 pb-3 overflow-auto" style="max-height: calc(100vh - 140px);">
 
             <!-- HUE group -->
-            <div class="mb-4">
-              <h6 class="text-uppercase text-muted border-bottom pb-2 mb-3">Hue (0-179)</h6>
+            <div class="mb-3">
+              <h6 class="text-uppercase text-muted border-bottom pb-2 mb-2">Hue (0-179)</h6>
               <div class="slider-row">
                 <span class="slider-label">Min</span>
                 <input type="range" class="form-range" id="hueMin" min="0" max="179" value="0" autocomplete="off">
@@ -82,8 +91,8 @@
             </div>
 
             <!-- SATURATION group -->
-            <div class="mb-4">
-              <h6 class="text-uppercase text-muted border-bottom pb-2 mb-3">Saturation (0-255)</h6>
+            <div class="mb-3">
+              <h6 class="text-uppercase text-muted border-bottom pb-2 mb-2">Saturation (0-255)</h6>
               <div class="slider-row">
                 <span class="slider-label">Min</span>
                 <input type="range" class="form-range" id="satMin" min="0" max="255" value="0" autocomplete="off">
@@ -97,8 +106,8 @@
             </div>
 
             <!-- VALUE group -->
-            <div class="mb-4">
-              <h6 class="text-uppercase text-muted border-bottom pb-2 mb-3">Value (0-255)</h6>
+            <div class="mb-3">
+              <h6 class="text-uppercase text-muted border-bottom pb-2 mb-2">Value (0-255)</h6>
               <div class="slider-row">
                 <span class="slider-label">Min</span>
                 <input type="range" class="form-range" id="valMin" min="0" max="255" value="0" autocomplete="off">
@@ -112,21 +121,33 @@
             </div>
 
             <!-- Submit -->
-            <div class="mt-5 pt-3 border-top">
+            <div class="mt-1 pt-3 border-top">
               <div class="input-group mb-3">
                 <span class="input-group-text bg-white border-0"><i class="bi bi-tag-fill text-primary"></i></span>
                 <input type="text" class="form-control border-0" placeholder="Colour Name (e.g. 'Cyan_Ore_Rocks')"
                   id="colourNameInput">
               </div>
-              <div class="input-group mb-4" id="colourRGBInput">
-                <span class="input-group-text bg-white border-0 text-muted fw-semibold">RGB (Optional)</span>
-                <input type="number" class="form-control border-0" placeholder="Red" aria-label="Red" min="0"
-                  max="255" id="rgbRedInput">
-                <input type="number" class="form-control border-0" placeholder="Green" aria-label="Green" min="0"
-                  max="255" id="rgbGreenInput">
-                <input type="number" class="form-control border-0" placeholder="Blue" aria-label="Blue" min="0"
-                  max="255" id="rgbBlueInput">
+
+              <!-- Developer Options Expander -->
+              <button class="btn btn-link btn-sm text-decoration-none mb-3 p-0 d-flex align-items-center gap-2"
+                type="button" data-bs-toggle="collapse" data-bs-target="#developerOptions" aria-expanded="false"
+                aria-controls="developerOptions">
+                <i class="bi bi-chevron-right chevron-icon"></i>
+                <span class="text-muted small">Developer Options</span>
+              </button>
+
+              <div class="collapse" id="developerOptions">
+                <div class="input-group mb-4" id="colourRGBInput">
+                  <span class="input-group-text bg-white border-0 text-muted fw-semibold">RGB (Optional)</span>
+                  <input type="number" class="form-control border-0" placeholder="Red" aria-label="Red" min="0"
+                    max="255" id="rgbRedInput">
+                  <input type="number" class="form-control border-0" placeholder="Green" aria-label="Green" min="0"
+                    max="255" id="rgbGreenInput">
+                  <input type="number" class="form-control border-0" placeholder="Blue" aria-label="Blue" min="0"
+                    max="255" id="rgbBlueInput">
+                </div>
               </div>
+
               <button type="button" id="submitButton" class="btn btn-success w-100">
                 <i class="bi bi-check-circle-fill me-2"></i>Save Configuration
               </button>
