@@ -1,0 +1,36 @@
+# ChromaScape Application Configuration
+
+spring:
+  application:
+    name: ChromaScape
+
+# LeeuwBot Integration Configuration
+leeuwbot:
+  integration:
+    # Enable/disable integration with LeeuwBot API
+    enabled: ${LEEUWBOT_ENABLED:true}
+
+    # URL of the ChromaScape Bridge Service
+    bridge-url: ${LEEUWBOT_BRIDGE_URL:http://localhost:8092}
+
+    # API key for authenticating with the bridge service
+    api-key: ${CHROMASCAPE_API_KEY:dev-token}
+
+    # Heartbeat configuration
+    heartbeat-interval-seconds: ${LEEUWBOT_HEARTBEAT_INTERVAL:30}
+
+    # Connection timeouts
+    connection-timeout-ms: ${LEEUWBOT_CONNECTION_TIMEOUT:5000}
+    read-timeout-ms: ${LEEUWBOT_READ_TIMEOUT:10000}
+
+    # Log forwarding
+    forward-logs: ${LEEUWBOT_FORWARD_LOGS:true}
+    log-batch-size: ${LEEUWBOT_LOG_BATCH_SIZE:50}
+    log-flush-interval-seconds: ${LEEUWBOT_LOG_FLUSH_INTERVAL:10}
+
+    # Script event reporting
+    report-script-events: ${LEEUWBOT_REPORT_EVENTS:true}
+
+# Server configuration
+server:
+  port: ${SERVER_PORT:8090}  # Changed from 8080 to avoid conflict with leeuwbot-api

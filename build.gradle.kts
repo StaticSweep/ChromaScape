@@ -41,6 +41,9 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-log4j2")
 	annotationProcessor("org.apache.logging.log4j:log4j-core:2.24.3")
 
+	// Jackson for JSON serialization (LeeuwBot integration)
+	implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.0")
+
 	// Other libraries
 	implementation("com.github.kwhat:jnativehook:2.2.2")
 	implementation("commons-io:commons-io:2.14.0")
