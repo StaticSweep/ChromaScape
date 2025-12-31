@@ -34,3 +34,12 @@ leeuwbot:
 # Server configuration
 server:
   port: ${SERVER_PORT:8090}  # Changed from 8080 to avoid conflict with leeuwbot-api
+
+# Screen Capture Configuration - Continuous viewport display
+screencapture:
+  # Enable continuous screen capture to viewport
+  enabled: ${SCREENCAPTURE_ENABLED:true}
+  # Frames per second to capture (1-60, default 30)
+  fps: ${SCREENCAPTURE_FPS:30}
+  # Only capture when game window is focused (optional feature)
+  capture-only-when-focused: ${SCREENCAPTURE_FOCUSED_ONLY:false}

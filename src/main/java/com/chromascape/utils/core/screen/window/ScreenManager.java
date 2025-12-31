@@ -35,11 +35,17 @@ import java.awt.image.DataBufferInt;
 public class ScreenManager {
 
   /**
-   * Grabs the HWND of the second child of the RuneLite window - The game view portion. This is
-   * prone to breaking if RuneLite add more canvas elements, but this is not likely.
+   * Gets the HWND of the second child of the RuneLite window - The game view portion.
+   *
+   * <p>This is done dynamically on each call to handle cases where ChromaScape starts before
+   * RuneLite. This is prone to breaking if RuneLite add more canvas elements, but this is not
+   * likely.
+   *
+   * @return the window handle, or null if RuneLite is not running
    */
-  private static final HWND canvasHwnd =
-      WindowHandler.findNthChildWindow(WindowHandler.getTargetWindow(), "SunAwtCanvas", 2);
+  private static HWND getCanvasHwnd() {
+    return WindowHandler.findNthChildWindow(WindowHandler.getTargetWindow(), "SunAwtCanvas", 2);
+  }
 
   /**
    * JNA extension interface to allow calling {@code ClientToScreen} which converts window-relative
@@ -89,6 +95,11 @@ public class ScreenManager {
    * @throws RuntimeException if the window dimensions are invalid or the BitBlt operation fails.
    */
   public static BufferedImage captureWindow() {
+    HWND canvasHwnd = getCanvasHwnd();
+    if (canvasHwnd == null) {
+      throw new RuntimeException("Game window not found - is RuneLite running?");
+    }
+
     RECT bounds = new RECT();
     User32.INSTANCE.GetClientRect(canvasHwnd, bounds);
     int width = bounds.right - bounds.left;
@@ -197,6 +208,11 @@ public class ScreenManager {
    *     area excluding possible window borders, title or scrollbars.
    */
   public static Rectangle getWindowBounds() {
+    HWND canvasHwnd = getCanvasHwnd();
+    if (canvasHwnd == null) {
+      throw new RuntimeException("Game window not found - is RuneLite running?");
+    }
+
     WinDef.RECT dimensions = new WinDef.RECT();
     User32.INSTANCE.GetClientRect(canvasHwnd, dimensions);
 
@@ -221,6 +237,11 @@ public class ScreenManager {
    * @return the monitor's bounds.
    */
   public static Rectangle getMonitorBounds() {
+    HWND canvasHwnd = getCanvasHwnd();
+    if (canvasHwnd == null) {
+      throw new RuntimeException("Game window not found - is RuneLite running?");
+    }
+
     WinUser.HMONITOR monitor =
         User32.INSTANCE.MonitorFromWindow(canvasHwnd, WinUser.MONITOR_DEFAULTTONEAREST);
 

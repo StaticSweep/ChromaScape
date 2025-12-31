@@ -89,9 +89,6 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
    * @param message The message string to broadcast (e.g., a Data URI).
    */
   public void broadcast(String message) {
-    if (sessions.isEmpty()) {
-      return;
-    }
     for (WebSocketSession session : sessions) {
       if (!session.isOpen()) {
         sessions.remove(session);
