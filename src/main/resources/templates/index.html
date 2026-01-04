@@ -25,6 +25,19 @@
           ChromaScape Hub
           <span id="bot-status-pill" class="badge rounded-pill bg-secondary ms-2">Offline</span>
         </span>
+        <div class="dropdown p-2 m-2">
+          <button class="btn btn-primary dropdown-toggle" type="button" id="windowSelectorDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-window me-1"></i><span id="selectedWindowLabel">Auto-detect</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="windowSelectorDropdown" id="windowList">
+            <li><h6 class="dropdown-header">Select RuneLite Instance</h6></li>
+            <li><a class="dropdown-item" href="#" data-window-id="" onclick="selectWindow('')">
+              <i class="bi bi-magic me-2"></i>Auto-detect
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <!-- Dynamically populated -->
+          </ul>
+        </div>
         <button type="button" class="btn btn-primary p-2 m-2" onclick="window.location.href='/colour'">
           Colour picker
         </button>

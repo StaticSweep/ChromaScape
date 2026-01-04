@@ -398,3 +398,152 @@ function connectStateWebSocket() {
     initialize();
 }
 
+// ----------------- WINDOW SELECTION -----------------
+
+/**
+ * Current selected window ID (empty string = auto-detect).
+ * @type {string}
+ */
+let currentWindowId = "";
+
+/**
+ * Fetches the list of available RuneLite windows from the backend.
+ * Populates the window selector dropdown with the results.
+ */
+async function fetchAndRenderWindows() {
+    try {
+        const response = await fetch("/api/windows");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const windows = await response.json();
+        renderWindowList(windows);
+
+        // Also fetch and display current selection
+        await loadCurrentWindowSelection();
+    } catch (err) {
+        console.error("Error fetching windows:", err);
+    }
+}
+
+/**
+ * Renders the list of available windows in the dropdown menu.
+ *
+ * @param {Array} windows - Array of window objects from the API
+ */
+function renderWindowList(windows) {
+    const windowList = document.getElementById("windowList");
+    if (!windowList) return;
+
+    // Clear existing items after the divider (keep header and Auto-detect option)
+    const items = windowList.querySelectorAll("li");
+    for (let i = items.length - 1; i >= 2; i--) {
+        items[i].remove();
+    }
+
+    // Add window options
+    windows.forEach(window => {
+        const listItem = document.createElement("li");
+
+        const anchor = document.createElement("a");
+        anchor.className = "dropdown-item";
+        anchor.href = "#";
+        anchor.setAttribute("data-window-id", window.id);
+
+        const displayName = window.accountName || window.title;
+        anchor.innerHTML = `<i class="bi bi-window-stack me-2"></i>${displayName}`;
+
+        anchor.addEventListener("click", (e) => {
+            e.preventDefault();
+            selectWindow(window.id, displayName);
+        });
+
+        listItem.appendChild(anchor);
+        windowList.appendChild(listItem);
+    });
+
+    // If no windows found, add a message
+    if (windows.length === 0) {
+        const listItem = document.createElement("li");
+        listItem.innerHTML = '<span class="dropdown-item text-muted">No RuneLite windows found</span>';
+        windowList.appendChild(listItem);
+    }
+}
+
+/**
+ * Loads the currently selected window from the backend and updates the UI.
+ */
+async function loadCurrentWindowSelection() {
+    try {
+        const response = await fetch("/api/windows/current");
+        if (response.status === 404) {
+            // No selection - auto-detect mode
+            updateSelectedWindowLabel("", "Auto-detect");
+            return;
+        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const window = await response.json();
+        const displayName = window.accountName || window.title;
+        updateSelectedWindowLabel(window.id, displayName);
+        currentWindowId = window.id;
+    } catch (err) {
+        console.error("Error loading current window selection:", err);
+    }
+}
+
+/**
+ * Updates the window selector dropdown label.
+ *
+ * @param {string} id - Window ID
+ * @param {string} displayName - Display name for the window
+ */
+function updateSelectedWindowLabel(id, displayName) {
+    const label = document.getElementById("selectedWindowLabel");
+    if (label) {
+        label.textContent = id ? displayName : "Auto-detect";
+    }
+    currentWindowId = id;
+}
+
+/**
+ * Selects a window by ID and sends the selection to the backend.
+ *
+ * @param {string} windowId - ID of the window to select (empty for auto-detect)
+ * @param {string} displayName - Display name for the UI update
+ */
+async function selectWindow(windowId, displayName) {
+    try {
+        const response = await fetch("/api/windows/select", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: windowId })
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        updateSelectedWindowLabel(windowId, displayName || "Auto-detect");
+        console.log(`Window selected: ${windowId || "Auto-detect"}`);
+    } catch (err) {
+        console.error("Error selecting window:", err);
+        alert("Failed to select window. Please try again.");
+    }
+}
+
+/**
+ * Global function for window selection (called from HTML onclick).
+ * @param {string} windowId - Window ID to select
+ */
+window.selectWindow = function(windowId) {
+    selectWindow(windowId, "");
+};
+
+// Update initializeUI to include window fetching
+const originalInitializeUI = initializeUI;
+initializeUI = async function() {
+    await originalInitializeUI();
+    await fetchAndRenderWindows();
+
+    // Refresh window list periodically (every 5 seconds)
+    setInterval(fetchAndRenderWindows, 5000);
+};
+

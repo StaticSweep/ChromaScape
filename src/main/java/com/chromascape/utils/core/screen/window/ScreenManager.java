@@ -35,16 +35,53 @@ import java.awt.image.DataBufferInt;
 public class ScreenManager {
 
   /**
+   * Reference to the WindowSelectionService for accessing the user's selected window.
+   * Set via {@link #setWindowSelectionService(WindowSelectionService)} by Spring on startup.
+   */
+  private static WindowSelectionService windowSelectionService;
+
+  /**
+   * Sets the WindowSelectionService instance.
+   * Called by Spring during application startup to enable static access to the selected window.
+   */
+  public static void setWindowSelectionService(WindowSelectionService service) {
+    windowSelectionService = service;
+  }
+
+  /**
    * Gets the HWND of the second child of the RuneLite window - The game view portion.
    *
    * <p>This is done dynamically on each call to handle cases where ChromaScape starts before
    * RuneLite. This is prone to breaking if RuneLite add more canvas elements, but this is not
    * likely.
    *
+   * <p>If a window has been selected via the WindowSelectionService, that window is used.
+   * Otherwise, falls back to the default behavior of finding the window based on the configured
+   * account name.
+   *
    * @return the window handle, or null if RuneLite is not running
    */
   private static HWND getCanvasHwnd() {
-    return WindowHandler.findNthChildWindow(WindowHandler.getTargetWindow(), "SunAwtCanvas", 2);
+    HWND targetWindow = null;
+
+    // Check if a window has been selected via the UI
+    if (windowSelectionService != null) {
+      HWND selectedHwnd = windowSelectionService.getSelectedHwnd();
+      if (selectedHwnd != null) {
+        targetWindow = selectedHwnd;
+      }
+    }
+
+    // Fall back to default window lookup if no selection
+    if (targetWindow == null) {
+      targetWindow = WindowHandler.getTargetWindow();
+    }
+
+    if (targetWindow == null) {
+      return null;
+    }
+
+    return WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 2);
   }
 
   /**

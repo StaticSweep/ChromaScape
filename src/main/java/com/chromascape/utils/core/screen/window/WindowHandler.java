@@ -3,10 +3,16 @@ package com.chromascape.utils.core.screen.window;
 import com.chromascape.utils.core.AccountManager;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
+import com.sun.jna.platform.win32.WinDef;
 import com.sun.jna.platform.win32.WinDef.HWND;
+import com.sun.jna.platform.win32.WinDef.RECT;
 import com.sun.jna.platform.win32.WinUser.WNDENUMPROC;
 import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.win32.StdCallLibrary;
+import java.awt.Rectangle;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,15 +82,30 @@ public class WindowHandler {
      * @param maxCount the maximum number of characters to copy into {@code lpString}
      */
     void GetClassNameA(HWND hwnd, byte[] lpString, int maxCount);
+
+    /**
+     * Retrieves the window rectangle for the specified window.
+     *
+     * @param hwnd The handle of the target window.
+     * @param rect Receives the window rectangle coordinates.
+     * @return true if successful, false otherwise.
+     */
+    boolean GetWindowRect(HWND hwnd, RECT rect);
   }
 
   /**
    * Attempts to locate the window whose title matches the {@code windowName}.
    *
+   * <p>This method uses a multi-tier fallback strategy:
+   * <ol>
+   *   <li>Exact match on "RuneLite" or "RuneLite - accountname"</li>
+   *   <li>Partial match (case-insensitive) for windows containing "runelite"</li>
+   *   <li>First available Java/AWT window (final fallback)</li>
+   * </ol>
+   *
    * @return The {@link HWND} handle of the target window, or {@code null} if not found.
    */
   public static HWND getTargetWindow() {
-    AtomicReference<HWND> targetHwnd = new AtomicReference<>();
     User32 user32 = User32.INSTANCE;
 
     // Get the selected account from AccountManager (loaded during startup)
@@ -96,6 +117,8 @@ public class WindowHandler {
             ? _windowName + " - " + selectedAccount
             : _windowName;
 
+    // Tier 1: Try exact match
+    AtomicReference<HWND> exactMatch = new AtomicReference<>();
     user32.EnumWindows(
         (hwnd, arg) -> {
           byte[] buffer = new byte[512];
@@ -103,14 +126,39 @@ public class WindowHandler {
           String title = Native.toString(buffer);
 
           if (title.trim().equals(resolvedWindowName)) {
-            targetHwnd.set(hwnd);
+            exactMatch.set(hwnd);
             return false; // stop enumeration
           }
           return true;
         },
         null);
 
-    return targetHwnd.get(); // May be null if not found
+    if (exactMatch.get() != null) {
+      return exactMatch.get();
+    }
+
+    // Tier 2: Try partial match (case-insensitive) for windows containing "runelite"
+    AtomicReference<HWND> partialMatch = new AtomicReference<>();
+    user32.EnumWindows(
+        (hwnd, arg) -> {
+          byte[] buffer = new byte[512];
+          user32.GetWindowTextA(hwnd, buffer, 512);
+          String title = Native.toString(buffer);
+
+          if (title.toLowerCase().contains("runelite")) {
+            partialMatch.set(hwnd);
+            return false; // stop enumeration
+          }
+          return true;
+        },
+        null);
+
+    if (partialMatch.get() != null) {
+      return partialMatch.get();
+    }
+
+    // Tier 3: Final fallback - get first Java window (manual selection via UI/API preferred)
+    return getFirstJavaWindow();
   }
 
   /**
@@ -163,5 +211,139 @@ public class WindowHandler {
     IntByReference pid = new IntByReference();
     User32.INSTANCE.GetWindowThreadProcessId(hwnd, pid);
     return pid.getValue();
+  }
+
+  /**
+   * Enumerates all RuneLite windows currently running on the system.
+   *
+   * <p>This method scans all top-level windows and returns information about each window
+   * whose title matches the pattern "RuneLite" or "RuneLite - [accountname]".
+   *
+   * @return A list of WindowInfo objects containing details about each detected window
+   */
+  public static List<WindowInfo> getAllTargetWindows() {
+    List<WindowInfo> windows = new ArrayList<>();
+    User32 user32 = User32.INSTANCE;
+    AtomicInteger index = new AtomicInteger(1);
+
+    user32.EnumWindows(
+        (hwnd, arg) -> {
+          byte[] buffer = new byte[512];
+          user32.GetWindowTextA(hwnd, buffer, 512);
+          String title = Native.toString(buffer).trim();
+
+          // Check if title starts with "RuneLite" or contains it (more flexible)
+          if (title.startsWith(_windowName)
+              || title.toLowerCase().contains("runelite")) {
+            // Extract account name from title (format: "RuneLite - accountname" or just "RuneLite")
+            String accountName = null;
+            if (title.length() > _windowName.length()) {
+              String suffix = title.substring(_windowName.length()).trim();
+              if (suffix.startsWith("-")) {
+                accountName = suffix.substring(1).trim();
+              }
+            }
+
+            // Get process ID
+            int pid = getPid(hwnd);
+
+            // Get window bounds
+            Rectangle bounds = getWindowBounds(user32, hwnd);
+
+            // Create WindowInfo with sequential ID
+            WindowInfo windowInfo = new WindowInfo(
+                String.valueOf(index.get()),
+                hwnd,
+                title,
+                accountName,
+                pid,
+                bounds
+            );
+            windows.add(windowInfo);
+            index.incrementAndGet();
+          }
+          return true; // continue enumeration
+        },
+        null);
+
+    return windows;
+  }
+
+  /**
+   * Helper method to get the bounds (rectangle) of a window.
+   *
+   * @param user32 The User32 interface
+   * @param hwnd The window handle
+   * @return The window bounds as a Rectangle
+   */
+  private static Rectangle getWindowBounds(User32 user32, HWND hwnd) {
+    RECT rect = new RECT();
+    user32.GetWindowRect(hwnd, rect);
+    return new Rectangle(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+  }
+
+  /**
+   * Enumerates all Java/AWT windows currently running on the system.
+   *
+   * <p>This is more flexible than {@link #getAllTargetWindows()} as it detects any Java/AWT window
+   * by checking window class names (e.g., "SunAwtFrame", "DlgFrame"), not just RuneLite windows.
+   *
+   * @return A list of WindowInfo objects containing details about each Java window
+   */
+  public static List<WindowInfo> getAllJavaWindows() {
+    List<WindowInfo> windows = new ArrayList<>();
+    User32 user32 = User32.INSTANCE;
+    AtomicInteger index = new AtomicInteger(1);
+
+    user32.EnumWindows(
+        (hwnd, arg) -> {
+          byte[] titleBuffer = new byte[512];
+          user32.GetWindowTextA(hwnd, titleBuffer, 512);
+          String title = Native.toString(titleBuffer).trim();
+
+          byte[] classBuffer = new byte[512];
+          user32.GetClassNameA(hwnd, classBuffer, 512);
+          String className = Native.toString(classBuffer).trim();
+
+          // Detect Java/AWT windows - they have class names like "SunAwtFrame", "DlgFrame", etc.
+          // Also include RuneLite windows for backward compatibility
+          boolean isJavaWindow =
+              className.contains("Awt")
+                  || className.contains("Sun")
+                  || className.contains("awt")
+                  || title.startsWith(_windowName);
+
+          if (isJavaWindow && !title.isEmpty()) {
+            int pid = getPid(hwnd);
+            Rectangle bounds = getWindowBounds(user32, hwnd);
+
+            WindowInfo windowInfo =
+                new WindowInfo(
+                    String.valueOf(index.get()),
+                    hwnd,
+                    title,
+                    null, // No account name for generic Java windows
+                    pid,
+                    bounds);
+            windows.add(windowInfo);
+            index.incrementAndGet();
+          }
+          return true;
+        },
+        null);
+
+    return windows;
+  }
+
+  /**
+   * Gets the first available Java window for auto-detection fallback.
+   *
+   * <p>This is used as a last resort when the exact RuneLite window cannot be found.
+   *
+   * @return The HWND of the first Java window, or null if none found
+   */
+  public static HWND getFirstJavaWindow() {
+    List<WindowInfo> windows = getAllJavaWindows();
+    return windows.isEmpty() ? null : windows.get(0).getHwnd();
   }
 }

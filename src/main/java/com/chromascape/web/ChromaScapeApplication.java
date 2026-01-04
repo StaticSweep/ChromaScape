@@ -19,6 +19,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication
 @EnableScheduling
+@ComponentScan(basePackages = {"com.chromascape.web", "com.chromascape.utils"})
 public class ChromaScapeApplication {
 
   /**

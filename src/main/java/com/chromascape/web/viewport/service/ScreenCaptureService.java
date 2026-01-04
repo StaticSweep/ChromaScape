@@ -35,6 +35,7 @@ public class ScreenCaptureService {
   private final ScreenCaptureConfig config;
   private final ScheduledExecutorService scheduler;
   private final AtomicBoolean running = new AtomicBoolean(false);
+  private volatile long lastErrorLogTimeMs = 0;
 
   @Autowired
   public ScreenCaptureService(ScreenCaptureConfig config) {
@@ -121,9 +122,15 @@ public class ScreenCaptureService {
         }
       }
     } catch (Exception e) {
-      // Log but don't throw - we want the service to keep running
-      // This handles cases where the game window might be minimized, closed, etc.
-      logger.info("Screen capture failed (window may be unavailable): {}", e.getMessage());
+      // Rate limit error logging to avoid spam when game window is unavailable
+      long now = System.currentTimeMillis();
+      long elapsedMs = now - lastErrorLogTimeMs;
+      long intervalMs = config.getErrorLogIntervalSeconds() * 1000;
+
+      if (elapsedMs >= intervalMs) {
+        lastErrorLogTimeMs = now;
+        logger.info("Screen capture failed (window may be unavailable): {}", e.getMessage());
+      }
     }
   }
 

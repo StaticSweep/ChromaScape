@@ -43,3 +43,22 @@ screencapture:
   fps: ${SCREENCAPTURE_FPS:30}
   # Only capture when game window is focused (optional feature)
   capture-only-when-focused: ${SCREENCAPTURE_FOCUSED_ONLY:false}
+  # Minimum seconds between error logs (rate limiting, default 5)
+  error-log-interval-seconds: ${SCREENCAPTURE_ERROR_LOG_INTERVAL:5}
+
+# Game Recording Configuration - For replay functionality
+recording:
+  # Enable recording functionality
+  enabled: ${RECORDING_ENABLED:true}
+  # Directory where recordings are stored
+  output-directory: ${RECORDING_OUTPUT_DIR:recordings}
+  # Video quality (1-100, higher = better quality)
+  video-quality: ${RECORDING_QUALITY:70}
+  # Frames per second for recording
+  fps: ${RECORDING_FPS:30}
+  # Record audio (not currently supported)
+  record-audio: ${RECORDING_AUDIO:false}
+  # Maximum recording duration in minutes (0 = unlimited)
+  max-duration-minutes: ${RECORDING_MAX_DURATION:60}
+  # Automatically record when game starts
+  auto-record: ${RECORDING_AUTO:false}

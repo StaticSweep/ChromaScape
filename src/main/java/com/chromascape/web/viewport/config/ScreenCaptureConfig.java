@@ -22,6 +22,9 @@ public class ScreenCaptureConfig {
   /** Whether to capture only when the game window is focused. */
   private boolean captureOnlyWhenFocused = false;
 
+  /** Minimum seconds between error log messages (rate limiting). */
+  private long errorLogIntervalSeconds = 5;
+
   public boolean isEnabled() {
     return enabled;
   }
@@ -46,6 +49,14 @@ public class ScreenCaptureConfig {
     this.captureOnlyWhenFocused = captureOnlyWhenFocused;
   }
 
+  public long getErrorLogIntervalSeconds() {
+    return errorLogIntervalSeconds;
+  }
+
+  public void setErrorLogIntervalSeconds(long errorLogIntervalSeconds) {
+    this.errorLogIntervalSeconds = Math.max(1, errorLogIntervalSeconds);
+  }
+
   @Override
   public String toString() {
     return "ScreenCaptureConfig{"
@@ -55,6 +66,8 @@ public class ScreenCaptureConfig {
         + fps
         + ", captureOnlyWhenFocused="
         + captureOnlyWhenFocused
+        + ", errorLogIntervalSeconds="
+        + errorLogIntervalSeconds
         + '}';
   }
 }
