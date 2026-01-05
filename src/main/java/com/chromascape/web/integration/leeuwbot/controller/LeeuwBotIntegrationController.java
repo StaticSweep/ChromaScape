@@ -30,8 +30,7 @@ public class LeeuwBotIntegrationController {
    * @param bridgeService the bridge service
    */
   @Autowired
-  public LeeuwBotIntegrationController(
-      LeeuwBotConfig config, LeeuwBotBridgeService bridgeService) {
+  public LeeuwBotIntegrationController(LeeuwBotConfig config, LeeuwBotBridgeService bridgeService) {
     this.config = config;
     this.bridgeService = bridgeService;
   }

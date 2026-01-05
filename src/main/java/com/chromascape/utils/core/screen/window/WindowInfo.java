@@ -1,6 +1,5 @@
 package com.chromascape.utils.core.screen.window;
 
-import com.sun.jna.platform.win32.WinDef;
 import com.sun.jna.platform.win32.WinDef.HWND;
 import com.sun.jna.platform.win32.WinDef.RECT;
 import java.awt.Rectangle;
@@ -8,8 +7,8 @@ import java.awt.Rectangle;
 /**
  * Represents information about a detected window.
  *
- * <p>This class encapsulates details about a RuneLite window including its handle, title,
- * account name, process ID, and screen position.
+ * <p>This class encapsulates details about a RuneLite window including its handle, title, account
+ * name, process ID, and screen position.
  */
 public class WindowInfo {
 
@@ -30,7 +29,8 @@ public class WindowInfo {
    * @param pid The process ID
    * @param bounds The window bounds on screen
    */
-  public WindowInfo(String id, HWND hwnd, String title, String accountName, int pid, Rectangle bounds) {
+  public WindowInfo(
+      String id, HWND hwnd, String title, String accountName, int pid, Rectangle bounds) {
     this.id = id;
     this.hwnd = hwnd;
     this.title = title;

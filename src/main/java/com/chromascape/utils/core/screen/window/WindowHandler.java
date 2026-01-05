@@ -3,7 +3,6 @@ package com.chromascape.utils.core.screen.window;
 import com.chromascape.utils.core.AccountManager;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
-import com.sun.jna.platform.win32.WinDef;
 import com.sun.jna.platform.win32.WinDef.HWND;
 import com.sun.jna.platform.win32.WinDef.RECT;
 import com.sun.jna.platform.win32.WinUser.WNDENUMPROC;
@@ -97,10 +96,11 @@ public class WindowHandler {
    * Attempts to locate the window whose title matches the {@code windowName}.
    *
    * <p>This method uses a multi-tier fallback strategy:
+   *
    * <ol>
-   *   <li>Exact match on "RuneLite" or "RuneLite - accountname"</li>
-   *   <li>Partial match (case-insensitive) for windows containing "runelite"</li>
-   *   <li>First available Java/AWT window (final fallback)</li>
+   *   <li>Exact match on "RuneLite" or "RuneLite - accountname"
+   *   <li>Partial match (case-insensitive) for windows containing "runelite"
+   *   <li>First available Java/AWT window (final fallback)
    * </ol>
    *
    * @return The {@link HWND} handle of the target window, or {@code null} if not found.
@@ -216,8 +216,8 @@ public class WindowHandler {
   /**
    * Enumerates all RuneLite windows currently running on the system.
    *
-   * <p>This method scans all top-level windows and returns information about each window
-   * whose title matches the pattern "RuneLite" or "RuneLite - [accountname]".
+   * <p>This method scans all top-level windows and returns information about each window whose
+   * title matches the pattern "RuneLite" or "RuneLite - [accountname]".
    *
    * @return A list of WindowInfo objects containing details about each detected window
    */
@@ -233,8 +233,7 @@ public class WindowHandler {
           String title = Native.toString(buffer).trim();
 
           // Check if title starts with "RuneLite" or contains it (more flexible)
-          if (title.startsWith(_windowName)
-              || title.toLowerCase().contains("runelite")) {
+          if (title.startsWith(_windowName) || title.toLowerCase().contains("runelite")) {
             // Extract account name from title (format: "RuneLite - accountname" or just "RuneLite")
             String accountName = null;
             if (title.length() > _windowName.length()) {
@@ -251,14 +250,8 @@ public class WindowHandler {
             Rectangle bounds = getWindowBounds(user32, hwnd);
 
             // Create WindowInfo with sequential ID
-            WindowInfo windowInfo = new WindowInfo(
-                String.valueOf(index.get()),
-                hwnd,
-                title,
-                accountName,
-                pid,
-                bounds
-            );
+            WindowInfo windowInfo =
+                new WindowInfo(String.valueOf(index.get()), hwnd, title, accountName, pid, bounds);
             windows.add(windowInfo);
             index.incrementAndGet();
           }

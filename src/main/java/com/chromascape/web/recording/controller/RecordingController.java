@@ -122,16 +122,17 @@ public class RecordingController {
           paths
               .filter(Files::isRegularFile)
               .filter(p -> p.toString().endsWith(".mp4"))
-              .forEach(p -> {
-                Map<String, Object> info = new HashMap<>();
-                File file = p.toFile();
-                info.put("id", file.getName().replace(".mp4", ""));
-                info.put("filename", file.getName());
-                info.put("size", file.length());
-                info.put("lastModified", file.lastModified());
-                info.put("url", "/api/recordings/download/" + file.getName());
-                recordings.add(info);
-              });
+              .forEach(
+                  p -> {
+                    Map<String, Object> info = new HashMap<>();
+                    File file = p.toFile();
+                    info.put("id", file.getName().replace(".mp4", ""));
+                    info.put("filename", file.getName());
+                    info.put("size", file.length());
+                    info.put("lastModified", file.lastModified());
+                    info.put("url", "/api/recordings/download/" + file.getName());
+                    recordings.add(info);
+                  });
         }
       }
     } catch (Exception e) {

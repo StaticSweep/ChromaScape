@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 /**
  * Initializes the ScreenManager with the WindowSelectionService on application startup.
  *
- * <p>This component bridges Spring's dependency injection with ScreenManager's static methods
- * by setting the WindowSelectionService reference when the application starts.
+ * <p>This component bridges Spring's dependency injection with ScreenManager's static methods by
+ * setting the WindowSelectionService reference when the application starts.
  */
 @Component
 public class ScreenManagerInitializer {
@@ -24,9 +24,7 @@ public class ScreenManagerInitializer {
     this.windowSelectionService = windowSelectionService;
   }
 
-  /**
-   * Initializes the ScreenManager with the WindowSelectionService.
-   */
+  /** Initializes the ScreenManager with the WindowSelectionService. */
   @PostConstruct
   public void init() {
     ScreenManager.setWindowSelectionService(windowSelectionService);

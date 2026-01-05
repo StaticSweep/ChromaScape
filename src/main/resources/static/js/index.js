@@ -537,11 +537,69 @@ window.selectWindow = function(windowId) {
     selectWindow(windowId, "");
 };
 
+/**
+ * Toggle screen capture pause/resume.
+ */
+async function togglePauseCapture() {
+    const pauseIcon = document.getElementById("pauseIcon");
+    const isCurrentlyPaused = pauseIcon.classList.contains("bi-play-fill");
+
+    try {
+        if (isCurrentlyPaused) {
+            // Resume
+            const response = await fetch("/api/screencapture/resume", {
+                method: "POST"
+            });
+            if (response.ok) {
+                pauseIcon.classList.remove("bi-play-fill");
+                pauseIcon.classList.add("bi-pause-fill");
+                console.log("Screen capture resumed");
+            }
+        } else {
+            // Pause
+            const response = await fetch("/api/screencapture/pause", {
+                method: "POST"
+            });
+            if (response.ok) {
+                pauseIcon.classList.remove("bi-pause-fill");
+                pauseIcon.classList.add("bi-play-fill");
+                console.log("Screen capture paused");
+            }
+        }
+    } catch (error) {
+        console.error("Failed to toggle pause state:", error);
+    }
+}
+
+/**
+ * Fetch and update the pause button state on page load.
+ */
+async function updatePauseButtonState() {
+    try {
+        const response = await fetch("/api/screencapture/status");
+        if (response.ok) {
+            const data = await response.json();
+            const pauseIcon = document.getElementById("pauseIcon");
+
+            if (data.paused) {
+                pauseIcon.classList.remove("bi-pause-fill");
+                pauseIcon.classList.add("bi-play-fill");
+            } else {
+                pauseIcon.classList.remove("bi-play-fill");
+                pauseIcon.classList.add("bi-pause-fill");
+            }
+        }
+    } catch (error) {
+        console.error("Failed to fetch pause state:", error);
+    }
+}
+
 // Update initializeUI to include window fetching
 const originalInitializeUI = initializeUI;
 initializeUI = async function() {
     await originalInitializeUI();
     await fetchAndRenderWindows();
+    await updatePauseButtonState();
 
     // Refresh window list periodically (every 5 seconds)
     setInterval(fetchAndRenderWindows, 5000);

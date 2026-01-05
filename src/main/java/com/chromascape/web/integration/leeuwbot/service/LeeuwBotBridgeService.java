@@ -102,10 +102,7 @@ public class LeeuwBotBridgeService {
 
     // Schedule heartbeat sending
     scheduler.scheduleAtFixedRate(
-        this::sendHeartbeat,
-        0,
-        config.getHeartbeatIntervalSeconds(),
-        TimeUnit.SECONDS);
+        this::sendHeartbeat, 0, config.getHeartbeatIntervalSeconds(), TimeUnit.SECONDS);
 
     // Schedule log flushing
     if (config.isForwardLogs()) {

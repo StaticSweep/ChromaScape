@@ -4,9 +4,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Represents a log entry to be forwarded to the LeeuwBot Bridge Service.
- */
+/** Represents a log entry to be forwarded to the LeeuwBot Bridge Service. */
 public class LogEntry {
 
   /** The instance ID that generated this log. */

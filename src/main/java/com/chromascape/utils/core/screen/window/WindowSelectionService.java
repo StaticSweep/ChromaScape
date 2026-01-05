@@ -9,9 +9,9 @@ import org.springframework.stereotype.Service;
 /**
  * Service for managing the currently selected window for capture operations.
  *
- * <p>This service maintains the user's selection of which RuneLite window to capture when
- * multiple instances are running. The selection is stored in memory and can be updated via
- * the REST API or UI.
+ * <p>This service maintains the user's selection of which RuneLite window to capture when multiple
+ * instances are running. The selection is stored in memory and can be updated via the REST API or
+ * UI.
  */
 @Service
 public class WindowSelectionService {
@@ -73,9 +73,7 @@ public class WindowSelectionService {
     return selectedWindow.get() != null;
   }
 
-  /**
-   * Clears the current selection.
-   */
+  /** Clears the current selection. */
   public void clearSelection() {
     selectedWindow.set(null);
   }

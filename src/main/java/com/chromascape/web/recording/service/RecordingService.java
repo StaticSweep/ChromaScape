@@ -13,20 +13,19 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import org.bytedeco.javacv.FFmpegFrameRecorder;
-import org.bytedeco.javacv.Java2DFrameConverter;
-import org.bytedeco.opencv.opencv_core.Mat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bytedeco.javacv.FFmpegFrameRecorder;
+import org.bytedeco.javacv.Java2DFrameConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
  * Service for recording game sessions to video files for later replay.
  *
- * <p>This service captures the game window at a configured FPS rate and encodes it to MP4
- * format using FFmpeg. Recordings are stored with metadata that can be synchronized with logs
- * for replay analysis.
+ * <p>This service captures the game window at a configured FPS rate and encodes it to MP4 format
+ * using FFmpeg. Recordings are stored with metadata that can be synchronized with logs for replay
+ * analysis.
  */
 @Service
 public class RecordingService {
@@ -47,11 +46,13 @@ public class RecordingService {
   @Autowired
   public RecordingService(RecordingConfig config) {
     this.config = config;
-    this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-      Thread t = new Thread(r, "RecordingService");
-      t.setDaemon(true);
-      return t;
-    });
+    this.scheduler =
+        Executors.newSingleThreadScheduledExecutor(
+            r -> {
+              Thread t = new Thread(r, "RecordingService");
+              t.setDaemon(true);
+              return t;
+            });
 
     // Ensure output directory exists
     try {
@@ -91,20 +92,16 @@ public class RecordingService {
       currentRecordingFile = Paths.get(config.getOutputDirectory(), filename).toFile();
 
       // Initialize FFmpeg recorder
-      int width = 800;  // Will be updated on first frame
+      int width = 800; // Will be updated on first frame
       int height = 600;
 
       recorder =
-          new FFmpegFrameRecorder(
-              currentRecordingFile,
-              width,
-              height,
-              0);  // No audio channels
+          new FFmpegFrameRecorder(currentRecordingFile, width, height, 0); // No audio channels
 
-      recorder.setVideoCodecName("libx264");  // H.264 codec
+      recorder.setVideoCodecName("libx264"); // H.264 codec
       recorder.setFormat("mp4");
       recorder.setFrameRate(config.getFps());
-      recorder.setVideoBitrate((int) (config.getVideoQuality() * 10000));  // Quality-based bitrate
+      recorder.setVideoBitrate((int) (config.getVideoQuality() * 10000)); // Quality-based bitrate
       recorder.setVideoQuality(config.getVideoQuality());
 
       recorder.start();
@@ -113,17 +110,11 @@ public class RecordingService {
       recording.set(true);
 
       logger.info(
-          "Started recording: {} at {} FPS",
-          currentRecordingFile.getName(),
-          config.getFps());
+          "Started recording: {} at {} FPS", currentRecordingFile.getName(), config.getFps());
 
       // Start frame capture loop
       long intervalMs = (long) (1000.0 / config.getFps());
-      scheduler.scheduleAtFixedRate(
-          this::captureFrame,
-          0,
-          intervalMs,
-          TimeUnit.MILLISECONDS);
+      scheduler.scheduleAtFixedRate(this::captureFrame, 0, intervalMs, TimeUnit.MILLISECONDS);
 
       return currentRecordingId;
 
@@ -187,9 +178,7 @@ public class RecordingService {
     }
   }
 
-  /**
-   * Captures a single frame and adds it to the recording.
-   */
+  /** Captures a single frame and adds it to the recording. */
   private void captureFrame() {
     if (!recording.get() || recorder == null) {
       return;
@@ -224,23 +213,17 @@ public class RecordingService {
     }
   }
 
-  /**
-   * Returns whether a recording is currently in progress.
-   */
+  /** Returns whether a recording is currently in progress. */
   public boolean isRecording() {
     return recording.get();
   }
 
-  /**
-   * Returns the current recording ID if recording, or null otherwise.
-   */
+  /** Returns the current recording ID if recording, or null otherwise. */
   public String getCurrentRecordingId() {
     return recording.get() ? currentRecordingId : null;
   }
 
-  /**
-   * Cleanup resources.
-   */
+  /** Cleanup resources. */
   @PreDestroy
   public void cleanup() {
     if (recording.get()) {
@@ -248,9 +231,7 @@ public class RecordingService {
     }
   }
 
-  /**
-   * Metadata about a recording session.
-   */
+  /** Metadata about a recording session. */
   public static class RecordingMetadata {
     private final String id;
     private final String filePath;

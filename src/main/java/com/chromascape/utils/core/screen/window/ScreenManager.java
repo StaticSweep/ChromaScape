@@ -35,14 +35,14 @@ import java.awt.image.DataBufferInt;
 public class ScreenManager {
 
   /**
-   * Reference to the WindowSelectionService for accessing the user's selected window.
-   * Set via {@link #setWindowSelectionService(WindowSelectionService)} by Spring on startup.
+   * Reference to the WindowSelectionService for accessing the user's selected window. Set via
+   * {@link #setWindowSelectionService(WindowSelectionService)} by Spring on startup.
    */
   private static WindowSelectionService windowSelectionService;
 
   /**
-   * Sets the WindowSelectionService instance.
-   * Called by Spring during application startup to enable static access to the selected window.
+   * Sets the WindowSelectionService instance. Called by Spring during application startup to enable
+   * static access to the selected window.
    */
   public static void setWindowSelectionService(WindowSelectionService service) {
     windowSelectionService = service;

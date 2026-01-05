@@ -6,8 +6,8 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Configuration properties for continuous screen capture to the viewport.
  *
- * <p>Configures the background service that continuously captures the game window
- * and streams it to the viewport for display, even when no bot script is running.
+ * <p>Configures the background service that continuously captures the game window and streams it to
+ * the viewport for display, even when no bot script is running.
  */
 @Configuration
 @ConfigurationProperties(prefix = "screencapture")
@@ -24,6 +24,9 @@ public class ScreenCaptureConfig {
 
   /** Minimum seconds between error log messages (rate limiting). */
   private long errorLogIntervalSeconds = 5;
+
+  /** Whether screen capture is currently paused (user-controlled). */
+  private volatile boolean paused = false;
 
   public boolean isEnabled() {
     return enabled;
@@ -57,6 +60,14 @@ public class ScreenCaptureConfig {
     this.errorLogIntervalSeconds = Math.max(1, errorLogIntervalSeconds);
   }
 
+  public boolean isPaused() {
+    return paused;
+  }
+
+  public void setPaused(boolean paused) {
+    this.paused = paused;
+  }
+
   @Override
   public String toString() {
     return "ScreenCaptureConfig{"
@@ -68,6 +79,8 @@ public class ScreenCaptureConfig {
         + captureOnlyWhenFocused
         + ", errorLogIntervalSeconds="
         + errorLogIntervalSeconds
+        + ", paused="
+        + paused
         + '}';
   }
 }
