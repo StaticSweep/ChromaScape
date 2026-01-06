@@ -1,0 +1,25 @@
+services:
+  chromascape:
+    build: .
+    ports:
+      - "8090:8090"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/chromascape
+      - SPRING_DATASOURCE_USERNAME=chromascape
+      - SPRING_DATASCAPE_PASSWORD=chromascape123
+    depends_on:
+      - postgres
+    volumes:
+      - ./recordings:/app/recordings
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=chromascape
+      - POSTGRES_USER=chromascape
+      - POSTGRES_PASSWORD=chromascape123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

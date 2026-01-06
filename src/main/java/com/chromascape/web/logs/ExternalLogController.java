@@ -22,10 +22,13 @@ public class ExternalLogController {
   private static final Logger logger = LogManager.getLogger(ExternalLogController.class);
 
   private final LogWebSocketHandler webSocketHandler;
+  private final LogRecordingService logRecordingService;
 
   @Autowired
-  public ExternalLogController(LogWebSocketHandler webSocketHandler) {
+  public ExternalLogController(
+      LogWebSocketHandler webSocketHandler, LogRecordingService logRecordingService) {
     this.webSocketHandler = webSocketHandler;
+    this.logRecordingService = logRecordingService;
   }
 
   /**
@@ -47,10 +50,16 @@ public class ExternalLogController {
               "{\"level\": \"%s\", \"message\": \"%s\"}",
               entry.getLevel(), escapeJson(entry.getMessage()));
 
-      logger.info("Received external log - Level: {}, Message: {}, JSON: {}",
-          entry.getLevel(), entry.getMessage(), json);
+      logger.info(
+          "Received external log - Level: {}, Message: {}, JSON: {}",
+          entry.getLevel(),
+          entry.getMessage(),
+          json);
 
       webSocketHandler.broadcast(json);
+
+      // Also store to database
+      logRecordingService.recordLog(entry.getLevel(), entry.getMessage(), "external");
 
       logger.info("Broadcast complete - log sent to WebSocket clients");
     } catch (Exception e) {

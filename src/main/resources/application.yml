@@ -4,6 +4,16 @@ spring:
   application:
     name: ChromaScape
 
+  # Database configuration
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/chromascape}
+    username: ${SPRING_DATASOURCE_USERNAME:chromascape}
+    password: ${SPRING_DATASCAPE_PASSWORD:chromascape123}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
 # LeeuwBot Integration Configuration
 leeuwbot:
   integration:

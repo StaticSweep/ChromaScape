@@ -1,0 +1,155 @@
+/* Log Replay Page Styles */
+
+.stat-item {
+  padding: 10px;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #888;
+  margin-top: 5px;
+}
+
+/* Log table styles */
+#logsTable td {
+  vertical-align: middle;
+}
+
+.log-level-INFO {
+  color: #0d6efd;
+}
+
+.log-level-WARN {
+  color: #ffc107;
+}
+
+.log-level-ERROR {
+  color: #dc3545;
+}
+
+.log-level-DEBUG {
+  color: #6c757d;
+}
+
+/* Timeline styles */
+.timeline-container {
+  position: relative;
+  padding: 20px 0;
+}
+
+.timeline-event {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  margin: 5px 0;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.timeline-event:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.timeline-event.start {
+  border-left: 4px solid #198754;
+}
+
+.timeline-event.stop {
+  border-left: 4px solid #dc3545;
+}
+
+.timeline-time {
+  font-family: monospace;
+  font-size: 12px;
+  color: #888;
+  min-width: 150px;
+}
+
+.timeline-type {
+  font-weight: bold;
+  min-width: 80px;
+}
+
+.timeline-type.start {
+  color: #198754;
+}
+
+.timeline-type.stop {
+  color: #dc3545;
+}
+
+.timeline-script {
+  flex-grow: 1;
+}
+
+/* Message truncation for table */
+.log-message {
+  max-width: 500px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-message:hover {
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+/* Pagination */
+.pagination {
+  margin-top: 20px;
+}
+
+/* Loading spinner */
+.spinner-container {
+  text-align: center;
+  padding: 20px;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+}
+
+.empty-state i {
+  font-size: 48px;
+  margin-bottom: 20px;
+  display: block;
+}
+
+/* Timeline scroll */
+#timelineContainer {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Custom scrollbar */
+#timelineContainer::-webkit-scrollbar,
+#logsTable div::-webkit-scrollbar {
+  width: 8px;
+}
+
+#timelineContainer::-webkit-scrollbar-track,
+#logsTable div::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+#timelineContainer::-webkit-scrollbar-thumb,
+#logsTable div::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+#timelineContainer::-webkit-scrollbar-thumb:hover,
+#logsTable div::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

@@ -7,6 +7,7 @@ import com.chromascape.web.stats.StatisticsWebSocketHandler;
 import com.chromascape.web.viewport.ViewportWebSocketHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
@@ -25,6 +26,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
  */
 @Configuration
 @EnableWebSocket
+@EnableAsync
 public class WebSocketConfig implements WebSocketConfigurer {
 
   /** The shared handler for broadcasting log messages. */
