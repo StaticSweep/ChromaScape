@@ -454,7 +454,7 @@ function renderWindowList(windows) {
 
         anchor.addEventListener("click", (e) => {
             e.preventDefault();
-            selectWindow(window.id, displayName);
+            selectWindowInternal(window.id, displayName);
         });
 
         listItem.appendChild(anchor);
@@ -511,7 +511,7 @@ function updateSelectedWindowLabel(id, displayName) {
  * @param {string} windowId - ID of the window to select (empty for auto-detect)
  * @param {string} displayName - Display name for the UI update
  */
-async function selectWindow(windowId, displayName) {
+async function selectWindowInternal(windowId, displayName) {
     try {
         const response = await fetch("/api/windows/select", {
             method: "POST",
@@ -534,7 +534,7 @@ async function selectWindow(windowId, displayName) {
  * @param {string} windowId - Window ID to select
  */
 window.selectWindow = function(windowId) {
-    selectWindow(windowId, "");
+    selectWindowInternal(windowId, "");
 };
 
 /**
