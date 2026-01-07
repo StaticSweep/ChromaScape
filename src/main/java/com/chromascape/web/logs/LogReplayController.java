@@ -1,9 +1,13 @@
 package com.chromascape.web.logs;
 
+import com.chromascape.web.recording.entity.RecordingSession;
+import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.chromascape.web.scripts.ScriptEventEntity;
 import com.chromascape.web.scripts.ScriptEventRepository;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,12 +31,16 @@ public class LogReplayController {
 
   private final LogRepository logRepository;
   private final ScriptEventRepository scriptEventRepository;
+  private final RecordingSessionRepository recordingSessionRepository;
 
   @Autowired
   public LogReplayController(
-      LogRepository logRepository, ScriptEventRepository scriptEventRepository) {
+      LogRepository logRepository,
+      ScriptEventRepository scriptEventRepository,
+      RecordingSessionRepository recordingSessionRepository) {
     this.logRepository = logRepository;
     this.scriptEventRepository = scriptEventRepository;
+    this.recordingSessionRepository = recordingSessionRepository;
   }
 
   /**
@@ -154,6 +162,74 @@ public class LogReplayController {
     } catch (Exception e) {
       logger.error("Failed to get recent logs: {}", e.getMessage(), e);
       return ResponseEntity.internalServerError().build();
+    }
+  }
+
+  /**
+   * Get logs synchronized to video timeline position.
+   *
+   * <p>This endpoint calculates the real-world timestamp for a given video position based on the
+   * recording session's start time, then returns logs from a time window around that position.
+   *
+   * @param recordingId The recording ID to sync against
+   * @param videoTimeMs The video position in milliseconds
+   * @param windowSeconds Optional time window in seconds (default: 10)
+   * @return Map containing video timestamp and matching logs
+   */
+  @GetMapping("/timeline")
+  public ResponseEntity<Map<String, Object>> getLogsForVideoPosition(
+      @RequestParam String recordingId,
+      @RequestParam Long videoTimeMs,
+      @RequestParam(defaultValue = "10") Integer windowSeconds) {
+
+    try {
+      // Get recording session to find start time
+      RecordingSession session = recordingSessionRepository.findByRecordingId(recordingId)
+          .orElse(null);
+
+      if (session == null) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", "Recording session not found: " + recordingId);
+        return ResponseEntity.notFound().build();
+      }
+
+      if (session.getStartTime() == null) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", "Recording session has no start time");
+        return ResponseEntity.badRequest().body(error);
+      }
+
+      // Calculate the real-world timestamp for this video position
+      LocalDateTime videoTimestamp = session.getStartTime().plus(videoTimeMs, ChronoUnit.MILLIS);
+
+      // Define the time window for logs
+      LocalDateTime windowStart = videoTimestamp.minusSeconds(windowSeconds);
+      LocalDateTime windowEnd = videoTimestamp.plusSeconds(windowSeconds);
+
+      // Fetch logs within the window
+      List<LogEntity> logs = logRepository.findByTimestampBetween(windowStart, windowEnd);
+
+      // Build response
+      Map<String, Object> response = new HashMap<>();
+      response.put("videoTimeMs", videoTimeMs);
+      response.put("videoTimestamp", videoTimestamp);
+      response.put("windowStart", windowStart);
+      response.put("windowEnd", windowEnd);
+      response.put("logs", logs);
+
+      logger.debug(
+          "Timeline sync for {} at {}ms: returned {} logs",
+          recordingId,
+          videoTimeMs,
+          logs.size());
+
+      return ResponseEntity.ok(response);
+
+    } catch (Exception e) {
+      logger.error("Failed to get logs for video position: {}", e.getMessage(), e);
+      Map<String, Object> error = new HashMap<>();
+      error.put("error", e.getMessage());
+      return ResponseEntity.internalServerError().body(error);
     }
   }
 }

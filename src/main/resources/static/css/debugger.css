@@ -1,0 +1,82 @@
+/* Debugger page specific styles */
+
+.debugger-container {
+  height: calc(100vh - 120px);
+}
+
+.debugger-container .row {
+  height: 100%;
+}
+
+.debugger-container .col-md-6 {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.debugger-container .glass-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.debugger-container .glass-panel h5 {
+  flex-shrink: 0;
+}
+
+/* Console output styling */
+.console-output {
+  flex: 1;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  padding: 10px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  max-height: calc(100vh - 200px);
+}
+
+.log-line {
+  padding: 2px 0;
+  word-wrap: break-word;
+}
+
+.log-timestamp {
+  color: #888;
+}
+
+.log-level {
+  font-weight: bold;
+}
+
+.log-info { color: #61afef; }
+.log-warn { color: #e5c07b; }
+.log-error { color: #e06c75; }
+.log-debug { color: #98c379; }
+
+/* Viewport loader */
+.loader-container {
+  padding: 20px;
+}
+
+.glass-loader {
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top: 3px solid var(--accent-color);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loader-text {
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+}

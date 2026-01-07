@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <title>ChromaScape - Debugger</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPgv6ud+Mvd" crossorigin="anonymous" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/debugger.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+    crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+
+<body>
+  <header>
+    <nav class="navbar fixed-top" id="navs">
+      <div class="container-fluid">
+        <span class="navbar-brand h1 d-flex align-items-center gap-2 p-2 m-2">
+          <img src="/imagesWeb/CS.png" alt="ChromaScape logo" style="height: 32px; width: 32px" class="me-2" />
+          ChromaScape Debugger
+        </span>
+        <button type="button" class="btn btn-primary p-2 m-2" onclick="window.location.href='/'">
+          <i class="bi bi-house-fill me-1"></i>Dashboard
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Mode Switcher -->
+  <div class="container-fluid mt-4">
+    <div class="row mb-3">
+      <div class="col-12">
+        <div class="btn-group w-100" role="group" aria-label="Debugger mode">
+          <button type="button" class="btn btn-outline-primary active" id="liveModeBtn">
+            <i class="bi bi-broadcast me-2"></i>Live Mode
+          </button>
+          <button type="button" class="btn btn-outline-primary" id="replayModeBtn">
+            <i class="bi bi-play-circle me-2"></i>Replay Mode
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE MODE -->
+  <main id="liveMode" class="container-fluid mt-2 debugger-container">
+    <div class="row h-100">
+      <!-- LEFT: Logger -->
+      <div class="col-md-6">
+        <div class="glass-panel h-100">
+          <h5><i class="bi bi-terminal me-2"></i>Logger</h5>
+          <div id="consoleOutput" class="console-output">
+            <div class="text-muted fst-italic">Waiting for logs...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Viewport -->
+      <div class="col-md-6">
+        <div class="glass-panel h-100">
+          <h5><i class="bi bi-eye me-2"></i>Viewport</h5>
+          <div id="viewport-container">
+            <div class="text-muted fst-italic">Waiting for visual input...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- REPLAY MODE -->
+  <main id="replayMode" class="container-fluid mt-2 debugger-container" style="display: none;">
+    <div class="row h-100">
+      <!-- LEFT: Session List & Video Player -->
+      <div class="col-md-7">
+        <!-- Session Selection -->
+        <div class="glass-panel mb-3">
+          <h5><i class="bi bi-collection-play me-2"></i>Recording Sessions</h5>
+          <div class="row">
+            <div class="col-md-8">
+              <select id="sessionSelect" class="form-select" aria-label="Select recording session">
+                <option value="">Loading sessions...</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <button id="refreshSessionsBtn" class="btn btn-outline-secondary w-100">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Video Player -->
+        <div class="glass-panel h-100">
+          <h5><i class="bi bi-film me-2"></i>Video Replay</h5>
+          <div class="ratio ratio-16x9">
+            <video id="replayVideo" controls class="border border-secondary rounded">
+              <source src="" type="video/mp4">
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          <div class="mt-2">
+            <div class="d-flex justify-content-between align-items-center">
+              <span id="videoTimestamp" class="text-muted small">00:00 / 00:00</span>
+              <div class="btn-group btn-group-sm">
+                <button id="syncLogsBtn" class="btn btn-outline-success">
+                  <i class="bi bi-arrow-repeat me-1"></i>Sync Logs
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Timeline Logs -->
+      <div class="col-md-5">
+        <div class="glass-panel h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Timeline Logs</h5>
+            <div class="input-group input-group-sm" style="width: 200px;">
+              <input type="text" id="logSearchInput" class="form-control" placeholder="Search logs...">
+              <button class="btn btn-outline-secondary" type="button" id="logSearchBtn">
+                <i class="bi bi-search"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mb-2">
+            <div class="btn-group btn-group-sm" role="group">
+              <button type="button" class="btn btn-outline-secondary active" data-level="all">All</button>
+              <button type="button" class="btn btn-outline-secondary" data-level="ERROR">Error</button>
+              <button type="button" class="btn btn-outline-secondary" data-level="WARN">Warn</button>
+              <button type="button" class="btn btn-outline-secondary" data-level="INFO">Info</button>
+              <button type="button" class="btn btn-outline-secondary" data-level="DEBUG">Debug</button>
+            </div>
+          </div>
+          <div id="replayLogOutput" class="console-output">
+            <div class="text-muted fst-italic">Select a recording session to view logs...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/debugger.js"></script>
+</body>
+
+</html>
