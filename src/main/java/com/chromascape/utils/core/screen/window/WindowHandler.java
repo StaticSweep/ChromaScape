@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 public class WindowHandler {
   private static final Logger logger = LoggerFactory.getLogger(WindowHandler.class);
   private static final String _windowName = "RuneLite";
+  private static final String[] SUPPORTED_CLIENTS = {"RuneLite", "Leeuwbot", "VitaLite"};
 
   /**
    * JNA interface for accessing low-level Win32 User32 functions that are not provided by the
@@ -137,7 +138,7 @@ public class WindowHandler {
       return exactMatch.get();
     }
 
-    // Tier 2: Try partial match (case-insensitive) for windows containing "runelite"
+    // Tier 2: Try partial match (case-insensitive) for windows containing "runelite", "leeuwbot", or "vitalite"
     AtomicReference<HWND> partialMatch = new AtomicReference<>();
     user32.EnumWindows(
         (hwnd, arg) -> {
@@ -145,7 +146,10 @@ public class WindowHandler {
           user32.GetWindowTextA(hwnd, buffer, 512);
           String title = Native.toString(buffer);
 
-          if (title.toLowerCase().contains("runelite")) {
+          String titleLower = title.toLowerCase();
+          if (titleLower.contains("runelite")
+              || titleLower.contains("leeuwbot")
+              || titleLower.contains("vitalite")) {
             partialMatch.set(hwnd);
             return false; // stop enumeration
           }
@@ -214,10 +218,10 @@ public class WindowHandler {
   }
 
   /**
-   * Enumerates all RuneLite windows currently running on the system.
+   * Enumerates all RuneLite/Leeuwbot/VitaLite windows currently running on the system.
    *
    * <p>This method scans all top-level windows and returns information about each window whose
-   * title matches the pattern "RuneLite" or "RuneLite - [accountname]".
+   * title matches the pattern for supported clients.
    *
    * @return A list of WindowInfo objects containing details about each detected window
    */
@@ -232,12 +236,22 @@ public class WindowHandler {
           user32.GetWindowTextA(hwnd, buffer, 512);
           String title = Native.toString(buffer).trim();
 
-          // Check if title starts with "RuneLite" or contains it (more flexible)
-          if (title.startsWith(_windowName) || title.toLowerCase().contains("runelite")) {
-            // Extract account name from title (format: "RuneLite - accountname" or just "RuneLite")
+          // Check if title matches any supported client (RuneLite, Leeuwbot, VitaLite)
+          String titleLower = title.toLowerCase();
+          String matchedClient = null;
+          for (String client : SUPPORTED_CLIENTS) {
+            if (titleLower.contains(client.toLowerCase())) {
+              matchedClient = client;
+              break;
+            }
+          }
+
+          if (matchedClient != null) {
+            // Extract account name from title (format: "Client - accountname" or just "Client")
             String accountName = null;
-            if (title.length() > _windowName.length()) {
-              String suffix = title.substring(_windowName.length()).trim();
+            int clientIndex = titleLower.indexOf(matchedClient.toLowerCase());
+            if (clientIndex >= 0) {
+              String suffix = title.substring(clientIndex + matchedClient.length()).trim();
               if (suffix.startsWith("-")) {
                 accountName = suffix.substring(1).trim();
               }
@@ -299,14 +313,23 @@ public class WindowHandler {
           String className = Native.toString(classBuffer).trim();
 
           // Detect Java/AWT windows - they have class names like "SunAwtFrame", "DlgFrame", etc.
-          // Also include RuneLite windows for backward compatibility
+          // Also include RuneLite, Leeuwbot, and VitaLite windows for backward compatibility
           boolean isJavaWindow =
               className.contains("Awt")
                   || className.contains("Sun")
-                  || className.contains("awt")
-                  || title.startsWith(_windowName);
+                  || className.contains("awt");
 
-          if (isJavaWindow && !title.isEmpty()) {
+          // Check if title matches any supported client
+          boolean isSupportedClient = false;
+          String titleLower = title.toLowerCase();
+          for (String client : SUPPORTED_CLIENTS) {
+            if (titleLower.contains(client.toLowerCase())) {
+              isSupportedClient = true;
+              break;
+            }
+          }
+
+          if ((isJavaWindow || isSupportedClient) && !title.isEmpty()) {
             int pid = getPid(hwnd);
             Rectangle bounds = getWindowBounds(user32, hwnd);
 
