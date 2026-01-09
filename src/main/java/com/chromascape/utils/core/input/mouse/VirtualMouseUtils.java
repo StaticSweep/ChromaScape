@@ -33,6 +33,10 @@ public class VirtualMouseUtils {
   /** The current virtual mouse position. */
   private Point currentPosition;
 
+  /** Shared virtual mouse position for debug overlays. */
+  private static final AtomicReference<Point> currentScreenPosition =
+      new AtomicReference<>(new Point(0, 0));
+
   /** Timestamp of the last overlay repaint to control frame rate. */
   private long lastOverlayUpdate = 0;
 
@@ -91,6 +95,7 @@ public class VirtualMouseUtils {
     int startX = bounds.x + random.nextInt(bounds.width);
     int startY = bounds.y + random.nextInt(bounds.height);
     currentPosition = new Point(startX, startY);
+    updateSharedPosition(currentPosition);
     // Initialize atomic reference to prevent null pointer in consumer
     pendingInputPoint.set(currentPosition);
 
@@ -166,6 +171,7 @@ public class VirtualMouseUtils {
             // Update the shared reference for the Consumer to pick up
             pendingInputPoint.set(p);
             currentPosition = p;
+            updateSharedPosition(p);
 
             // Throttle overlay updates to ~60 FPS (16ms)
             long now = System.currentTimeMillis();
@@ -183,6 +189,7 @@ public class VirtualMouseUtils {
       // Force the final position update to ensure exact accuracy.
       currentPosition = target;
       pendingInputPoint.set(target); // Sync consumer for safety
+      updateSharedPosition(target);
 
       Point finalClientPoint = ScreenManager.toClientCoords(target);
 
@@ -242,6 +249,7 @@ public class VirtualMouseUtils {
 
       // Update consumer reference so hardware reflects jitter
       pendingInputPoint.set(currentPosition);
+      updateSharedPosition(currentPosition);
 
       SwingUtilities.invokeLater(() -> overlay.setMousePoint(currentPosition));
 
@@ -262,6 +270,21 @@ public class VirtualMouseUtils {
     StatisticsManager.incrementInputs();
     Point clientPoint = ScreenManager.toClientCoords(currentPosition);
     action.accept(clientPoint);
+  }
+
+  /** Returns the current virtual mouse position in client coordinates for overlays. */
+  public static Point getCurrentClientPosition() {
+    Point screenPoint = currentScreenPosition.get();
+    if (screenPoint == null) {
+      return null;
+    }
+    return ScreenManager.toClientCoords(new Point(screenPoint));
+  }
+
+  private static void updateSharedPosition(Point point) {
+    if (point != null) {
+      currentScreenPosition.set(new Point(point));
+    }
   }
 
   /**

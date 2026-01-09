@@ -36,8 +36,8 @@ public class ServePages {
   }
 
   /**
-   * Handles GET requests for the "/debugger" URL. Sets the AWT system property to non-headless mode,
-   * then returns the view name for the debugger page.
+   * Handles GET requests for the "/debugger" URL. Sets the AWT system property to non-headless
+   * mode, then returns the view name for the debugger page.
    *
    * @return the logical view name "debugger"
    */

@@ -5,7 +5,6 @@ import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.chromascape.web.scripts.ScriptEventEntity;
 import com.chromascape.web.scripts.ScriptEventRepository;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -184,8 +183,8 @@ public class LogReplayController {
 
     try {
       // Get recording session to find start time
-      RecordingSession session = recordingSessionRepository.findByRecordingId(recordingId)
-          .orElse(null);
+      RecordingSession session =
+          recordingSessionRepository.findByRecordingId(recordingId).orElse(null);
 
       if (session == null) {
         Map<String, Object> error = new HashMap<>();
@@ -218,10 +217,7 @@ public class LogReplayController {
       response.put("logs", logs);
 
       logger.debug(
-          "Timeline sync for {} at {}ms: returned {} logs",
-          recordingId,
-          videoTimeMs,
-          logs.size());
+          "Timeline sync for {} at {}ms: returned {} logs", recordingId, videoTimeMs, logs.size());
 
       return ResponseEntity.ok(response);
 

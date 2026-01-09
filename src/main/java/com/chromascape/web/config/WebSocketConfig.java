@@ -1,5 +1,7 @@
 package com.chromascape.web.config;
 
+import com.chromascape.web.debug.BotStateWebSocketHandler;
+import com.chromascape.web.debug.OverlayWebSocketHandler;
 import com.chromascape.web.instance.WebSocketStateHandler;
 import com.chromascape.web.logs.LogWebSocketHandler;
 import com.chromascape.web.state.SemanticWebSocketHandler;
@@ -44,6 +46,12 @@ public class WebSocketConfig implements WebSocketConfigurer {
   /** The shared handler for broadcasting bot statistic state. */
   private final StatisticsWebSocketHandler statisticsWebSocketHandler;
 
+  /** The shared handler for broadcasting overlay data. */
+  private final OverlayWebSocketHandler overlayWebSocketHandler;
+
+  /** The shared handler for broadcasting structured bot state. */
+  private final BotStateWebSocketHandler botStateWebSocketHandler;
+
   /**
    * Constructs the configuration with the injected handlers.
    *
@@ -58,12 +66,16 @@ public class WebSocketConfig implements WebSocketConfigurer {
       WebSocketStateHandler stateWebSocketHandler,
       ViewportWebSocketHandler viewportWebSocketHandler,
       SemanticWebSocketHandler semanticWebSocketHandler,
-      StatisticsWebSocketHandler statisticsWebSocketHandler) {
+      StatisticsWebSocketHandler statisticsWebSocketHandler,
+      OverlayWebSocketHandler overlayWebSocketHandler,
+      BotStateWebSocketHandler botStateWebSocketHandler) {
     this.logWebSocketHandler = logWebSocketHandler;
     this.stateWebSocketHandler = stateWebSocketHandler;
     this.viewportWebSocketHandler = viewportWebSocketHandler;
     this.semanticWebSocketHandler = semanticWebSocketHandler;
     this.statisticsWebSocketHandler = statisticsWebSocketHandler;
+    this.overlayWebSocketHandler = overlayWebSocketHandler;
+    this.botStateWebSocketHandler = botStateWebSocketHandler;
   }
 
   /**
@@ -87,5 +99,11 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     // Statistics stream
     registry.addHandler(statisticsWebSocketHandler, "/ws/stats").setAllowedOrigins("*");
+
+    // Overlay stream
+    registry.addHandler(overlayWebSocketHandler, "/ws/overlay").setAllowedOrigins("*");
+
+    // Structured bot state stream
+    registry.addHandler(botStateWebSocketHandler, "/ws/bot-state").setAllowedOrigins("*");
   }
 }

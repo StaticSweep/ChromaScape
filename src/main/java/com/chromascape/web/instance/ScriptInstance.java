@@ -15,8 +15,10 @@ import java.lang.reflect.InvocationTargetException;
 public class ScriptInstance {
 
   private final BaseScript instance;
+  private final String scriptName;
   private volatile Thread thread;
   private final WebSocketStateHandler stateHandler;
+  private volatile long tickStartTime = 0;
 
   /**
    * Constructs a ScriptInstance by dynamically loading the script class specified in the config.
@@ -38,6 +40,7 @@ public class ScriptInstance {
 
     String fileName = config.script();
     String className = fileName.replace(".java", "").replace("/", ".");
+    this.scriptName = className;
 
     Class<?> script = Class.forName("com.chromascape.scripts." + className);
     Constructor<?> constructor = script.getDeclaredConstructor();
@@ -57,6 +60,7 @@ public class ScriptInstance {
         new Thread(
             () -> {
               stateHandler.broadcast(true);
+              tickStartTime = System.currentTimeMillis();
               StatisticsManager.reset();
               try {
                 instance.run();
@@ -87,5 +91,25 @@ public class ScriptInstance {
       }
     }
     stateHandler.broadcast(false);
+  }
+
+  /** Returns the most recent tick count, aligned to the cycle counter. */
+  public int getCurrentTick() {
+    return StatisticsManager.getCycles();
+  }
+
+  /** Returns the timestamp when ticking started for the current run. */
+  public long getTickStartTime() {
+    return tickStartTime;
+  }
+
+  /** Returns the script name for the running instance. */
+  public String getScriptName() {
+    return scriptName;
+  }
+
+  /** Returns whether the script thread is currently running. */
+  public boolean isRunning() {
+    return thread != null && thread.isAlive();
   }
 }

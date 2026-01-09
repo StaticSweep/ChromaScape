@@ -160,6 +160,8 @@ public class WindowController {
       @RequestBody Map<String, String> request) {
     String windowId = request.get("id");
 
+    System.err.println("[WINDOW API] Received select request for window ID: '" + windowId + "'");
+
     if (windowId == null || windowId.trim().isEmpty()) {
       // Clear selection
       windowSelectionService.clearSelection();
@@ -170,15 +172,26 @@ public class WindowController {
     // Find the window with the given ID from filtered game clients
     List<WindowInfo> windows = WindowHandler.getAllJavaWindows();
     List<WindowInfo> filtered = windows.stream().filter(w -> isGameClient(w.getTitle())).toList();
+
+    System.err.println("[WINDOW API] Found " + filtered.size() + " game client windows");
+
     WindowInfo selectedWindow =
         filtered.stream().filter(w -> w.getId().equals(windowId)).findFirst().orElse(null);
 
     if (selectedWindow == null) {
+      System.err.println("[WINDOW API] ERROR: Window with ID '" + windowId + "' not found!");
       return ResponseEntity.notFound().build();
     }
 
     windowSelectionService.setSelectedWindow(selectedWindow);
     logger.info("Window selected via API: {} (ID: {})", selectedWindow.getTitle(), windowId);
+
+    System.err.println(
+        "[WINDOW API] Successfully selected window: "
+            + selectedWindow.getTitle()
+            + " (HWND: "
+            + selectedWindow.getHwnd()
+            + ")");
 
     return ResponseEntity.ok(
         Map.of("status", "selected", "id", windowId, "title", selectedWindow.getTitle()));

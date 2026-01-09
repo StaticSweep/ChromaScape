@@ -1,10 +1,7 @@
 package com.chromascape.web.scripts;
 
-import com.chromascape.web.logs.LogEntity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 /** JPA entity for storing script lifecycle events (START/STOP) in the database. */
 @Entity
@@ -29,9 +26,6 @@ public class ScriptEventEntity {
 
   @Column(nullable = false)
   private LocalDateTime timestamp;
-
-  @OneToMany(mappedBy = "scriptEvent", cascade = CascadeType.ALL)
-  private List<LogEntity> logs = new ArrayList<>();
 
   /** Default constructor required by JPA. */
   public ScriptEventEntity() {}
@@ -75,13 +69,5 @@ public class ScriptEventEntity {
 
   public void setTimestamp(LocalDateTime timestamp) {
     this.timestamp = timestamp;
-  }
-
-  public List<LogEntity> getLogs() {
-    return logs;
-  }
-
-  public void setLogs(List<LogEntity> logs) {
-    this.logs = logs;
   }
 }

@@ -16,6 +16,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// Note: ArrayList is already imported above, but ensuring it's available
+
 /**
  * Utility class for locating and identifying a specific native window (e.g., "RuneLite") on the
  * Windows operating system using JNA and Win32 APIs.
@@ -118,27 +120,43 @@ public class WindowHandler {
             ? _windowName + " - " + selectedAccount
             : _windowName;
 
+    logger.debug("Looking for window: {}", resolvedWindowName);
+
+    // Debug: Count total windows and log some titles
+    AtomicInteger totalWindows = new AtomicInteger(0);
+    List<String> sampleTitles = new ArrayList<>();
+
     // Tier 1: Try exact match
     AtomicReference<HWND> exactMatch = new AtomicReference<>();
     user32.EnumWindows(
         (hwnd, arg) -> {
+          totalWindows.incrementAndGet();
           byte[] buffer = new byte[512];
           user32.GetWindowTextA(hwnd, buffer, 512);
           String title = Native.toString(buffer);
 
+          // Collect sample titles for debugging (first 10)
+          if (sampleTitles.size() < 10 && !title.trim().isEmpty()) {
+            sampleTitles.add(title.trim());
+          }
+
           if (title.trim().equals(resolvedWindowName)) {
             exactMatch.set(hwnd);
+            logger.info("Found exact match: {}", title);
             return false; // stop enumeration
           }
           return true;
         },
         null);
 
+    logger.info("Enumerated {} total windows. Sample titles: {}", totalWindows.get(), sampleTitles);
+
     if (exactMatch.get() != null) {
       return exactMatch.get();
     }
 
-    // Tier 2: Try partial match (case-insensitive) for windows containing "runelite", "leeuwbot", or "vitalite"
+    // Tier 2: Try partial match (case-insensitive) for windows containing "runelite", "leeuwbot",
+    // or "vitalite"
     AtomicReference<HWND> partialMatch = new AtomicReference<>();
     user32.EnumWindows(
         (hwnd, arg) -> {
@@ -150,6 +168,7 @@ public class WindowHandler {
           if (titleLower.contains("runelite")
               || titleLower.contains("leeuwbot")
               || titleLower.contains("vitalite")) {
+            logger.info("Found partial match: {}", title);
             partialMatch.set(hwnd);
             return false; // stop enumeration
           }
@@ -161,8 +180,16 @@ public class WindowHandler {
       return partialMatch.get();
     }
 
+    logger.warn("No matching window found. Total windows enumerated: {}", totalWindows.get());
+
     // Tier 3: Final fallback - get first Java window (manual selection via UI/API preferred)
-    return getFirstJavaWindow();
+    HWND javaWindow = getFirstJavaWindow();
+    if (javaWindow != null) {
+      logger.info("Using fallback Java window");
+    } else {
+      logger.error("No Java window found either - is RuneLite/Leeuwbot/VitaLite running?");
+    }
+    return javaWindow;
   }
 
   /**
@@ -315,9 +342,7 @@ public class WindowHandler {
           // Detect Java/AWT windows - they have class names like "SunAwtFrame", "DlgFrame", etc.
           // Also include RuneLite, Leeuwbot, and VitaLite windows for backward compatibility
           boolean isJavaWindow =
-              className.contains("Awt")
-                  || className.contains("Sun")
-                  || className.contains("awt");
+              className.contains("Awt") || className.contains("Sun") || className.contains("awt");
 
           // Check if title matches any supported client
           boolean isSupportedClient = false;

@@ -1,6 +1,5 @@
 *.log
 .gradle/
-build/
 .idea/
 *.iml
 .DS_Store

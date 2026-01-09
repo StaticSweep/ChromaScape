@@ -1,6 +1,5 @@
 package com.chromascape.web.integration.micro6;
 
-import com.chromascape.web.integration.leeuwbot.model.LogEntry;
 import com.chromascape.web.logs.LogEntity;
 import com.chromascape.web.logs.LogRepository;
 import java.time.LocalDateTime;
@@ -20,8 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * REST controller for micro6 integration endpoints.
  *
- * <p>Provides endpoints to receive logs and events from the micro6 debugger plugin.
- * Logs are stored in the ChromaScape database for replay debugging.
+ * <p>Provides endpoints to receive logs and events from the micro6 debugger plugin. Logs are stored
+ * in the ChromaScape database for replay debugging.
  */
 @RestController
 @RequestMapping("/api/micro6")

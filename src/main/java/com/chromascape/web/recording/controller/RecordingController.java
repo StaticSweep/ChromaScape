@@ -1,7 +1,7 @@
 package com.chromascape.web.recording.controller;
 
-import com.chromascape.utils.core.screen.window.WindowSelectionService;
 import com.chromascape.utils.core.screen.window.WindowInfo;
+import com.chromascape.utils.core.screen.window.WindowSelectionService;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.chromascape.web.recording.service.RecordingService;
@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -88,8 +87,7 @@ public class RecordingController {
               null); // videoPath will be set on stop
 
       recordingSessionRepository.save(session);
-      logger.info(
-          "Created recording session: {} for account: {}", recordingId, accountName);
+      logger.info("Created recording session: {} for account: {}", recordingId, accountName);
 
       Map<String, Object> response = new HashMap<>();
       response.put("status", "recording");
@@ -207,19 +205,21 @@ public class RecordingController {
     try {
       List<RecordingSession> sessions = recordingSessionRepository.findAllByOrderByStartTimeDesc();
 
-      List<Map<String, Object>> response = sessions.stream()
-          .map(session -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", session.getId());
-            map.put("recordingId", session.getRecordingId());
-            map.put("accountName", session.getAccountName());
-            map.put("scriptName", session.getScriptName());
-            map.put("startTime", session.getStartTime());
-            map.put("endTime", session.getEndTime());
-            map.put("triggerType", session.getTriggerType());
-            return map;
-          })
-          .toList();
+      List<Map<String, Object>> response =
+          sessions.stream()
+              .map(
+                  session -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("id", session.getId());
+                    map.put("recordingId", session.getRecordingId());
+                    map.put("accountName", session.getAccountName());
+                    map.put("scriptName", session.getScriptName());
+                    map.put("startTime", session.getStartTime());
+                    map.put("endTime", session.getEndTime());
+                    map.put("triggerType", session.getTriggerType());
+                    return map;
+                  })
+              .toList();
 
       logger.info("Returned {} recording sessions", response.size());
       return ResponseEntity.ok(response);

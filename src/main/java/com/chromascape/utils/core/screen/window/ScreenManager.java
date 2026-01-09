@@ -63,25 +63,57 @@ public class ScreenManager {
    */
   private static HWND getCanvasHwnd() {
     HWND targetWindow = null;
+    boolean usingSelection = false;
 
     // Check if a window has been selected via the UI
     if (windowSelectionService != null) {
       HWND selectedHwnd = windowSelectionService.getSelectedHwnd();
+      System.err.println(
+          "[VIEWPORT DEBUG] windowSelectionService is NOT null, checking selection...");
       if (selectedHwnd != null) {
         targetWindow = selectedHwnd;
+        usingSelection = true;
+        System.err.println("[VIEWPORT DEBUG] Found selected HWND: " + selectedHwnd);
+      } else {
+        System.err.println("[VIEWPORT DEBUG] selectedHwnd is NULL - no window selected");
       }
+    } else {
+      System.err.println("[VIEWPORT DEBUG] windowSelectionService is NULL!");
     }
 
     // Fall back to default window lookup if no selection
     if (targetWindow == null) {
       targetWindow = WindowHandler.getTargetWindow();
+      System.err.println("[VIEWPORT DEBUG] Using fallback window: " + targetWindow);
     }
 
     if (targetWindow == null) {
       return null;
     }
 
-    return WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 2);
+    HWND canvasHwnd = WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 2);
+
+    // Fallback: try 1st canvas if 2nd doesn't exist
+    if (canvasHwnd == null) {
+      System.err.println("[VIEWPORT DEBUG] 2nd canvas not found, trying 1st canvas");
+      canvasHwnd = WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 1);
+    }
+
+    // Last resort: use parent window directly
+    if (canvasHwnd == null) {
+      System.err.println("[VIEWPORT DEBUG] No canvas found, using parent window directly");
+      canvasHwnd = targetWindow;
+    }
+
+    // Debug logging
+    if (usingSelection) {
+      System.err.println("[VIEWPORT DEBUG] Using SELECTED window, canvas HWND: " + canvasHwnd);
+    } else {
+      System.err.println(
+          "[VIEWPORT DEBUG] Using FALLBACK (default) window, canvas HWND: " + canvasHwnd);
+    }
+
+    return canvasHwnd;
   }
 
   /**
