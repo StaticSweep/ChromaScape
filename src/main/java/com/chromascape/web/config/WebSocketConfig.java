@@ -2,6 +2,8 @@ package com.chromascape.web.config;
 
 import com.chromascape.web.debug.BotStateWebSocketHandler;
 import com.chromascape.web.debug.OverlayWebSocketHandler;
+import com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler;
+import com.chromascape.web.debug.tickdebugger.websocket.TickStreamWebSocketHandler;
 import com.chromascape.web.instance.WebSocketStateHandler;
 import com.chromascape.web.logs.LogWebSocketHandler;
 import com.chromascape.web.state.SemanticWebSocketHandler;
@@ -52,6 +54,12 @@ public class WebSocketConfig implements WebSocketConfigurer {
   /** The shared handler for broadcasting structured bot state. */
   private final BotStateWebSocketHandler botStateWebSocketHandler;
 
+  /** The shared handler for receiving tick batches from Micro6. */
+  private final TickStreamWebSocketHandler tickStreamWebSocketHandler;
+
+  /** The shared handler for broadcasting tick data to debugger UI. */
+  private final DebuggerTickWebSocketHandler debuggerTickWebSocketHandler;
+
   /**
    * Constructs the configuration with the injected handlers.
    *
@@ -59,6 +67,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
    * @param stateWebSocketHandler handler for script running state
    * @param viewportWebSocketHandler handler for viewport updates
    * @param semanticWebSocketHandler handler for semantic state updates
+   * @param tickStreamWebSocketHandler handler for Micro6 tick stream
+   * @param debuggerTickWebSocketHandler handler for debugger tick broadcast
    */
   @Autowired
   public WebSocketConfig(
@@ -68,7 +78,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
       SemanticWebSocketHandler semanticWebSocketHandler,
       StatisticsWebSocketHandler statisticsWebSocketHandler,
       OverlayWebSocketHandler overlayWebSocketHandler,
-      BotStateWebSocketHandler botStateWebSocketHandler) {
+      BotStateWebSocketHandler botStateWebSocketHandler,
+      TickStreamWebSocketHandler tickStreamWebSocketHandler,
+      DebuggerTickWebSocketHandler debuggerTickWebSocketHandler) {
     this.logWebSocketHandler = logWebSocketHandler;
     this.stateWebSocketHandler = stateWebSocketHandler;
     this.viewportWebSocketHandler = viewportWebSocketHandler;
@@ -76,6 +88,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
     this.statisticsWebSocketHandler = statisticsWebSocketHandler;
     this.overlayWebSocketHandler = overlayWebSocketHandler;
     this.botStateWebSocketHandler = botStateWebSocketHandler;
+    this.tickStreamWebSocketHandler = tickStreamWebSocketHandler;
+    this.debuggerTickWebSocketHandler = debuggerTickWebSocketHandler;
   }
 
   /**
@@ -105,5 +119,15 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     // Structured bot state stream
     registry.addHandler(botStateWebSocketHandler, "/ws/bot-state").setAllowedOrigins("*");
+
+    // Micro6 tick stream ingestion
+    registry
+        .addHandler(tickStreamWebSocketHandler, "/ws/micro6/tick-stream")
+        .setAllowedOrigins("*");
+
+    // Debugger tick stream broadcast to UI
+    registry
+        .addHandler(debuggerTickWebSocketHandler, "/ws/debugger/tick-stream")
+        .setAllowedOrigins("*");
   }
 }

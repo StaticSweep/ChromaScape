@@ -72,3 +72,18 @@ recording:
   max-duration-minutes: ${RECORDING_MAX_DURATION:60}
   # Automatically record when game starts
   auto-record: ${RECORDING_AUTO:false}
+
+# Tick Debugger Configuration - For tick-based debugging
+tick-debugger:
+  # Enable tick debugger functionality
+  enabled: ${TICK_DEBUGGER_ENABLED:true}
+  # Retention period for debug sessions (days)
+  retention-days: ${TICK_DEBUGGER_RETENTION_DAYS:7}
+  # WebSocket configuration
+  websocket:
+    # Maximum message size in bytes
+    max-message-size: ${TICK_DEBUGGER_WS_MAX_SIZE:1048576}
+  # Batch insert size for performance
+  batch-insert-size: ${TICK_DEBUGGER_BATCH_SIZE:100}
+  # Tick duration in milliseconds (RuneScape standard)
+  tick-duration-ms: ${TICK_DEBUGGER_TICK_DURATION:600}

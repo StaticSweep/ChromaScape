@@ -126,14 +126,20 @@
           </div>
         </div>
         <div class="scrubber-controls">
-          <button id="scrubberPrevBtn" class="btn btn-outline-secondary btn-sm">
+          <button id="scrubberPrevBtn" class="btn btn-outline-secondary btn-sm" title="Previous tick">
             <i class="bi bi-skip-backward"></i>
           </button>
-          <button id="scrubberPlayBtn" class="btn btn-outline-primary btn-sm">
+          <button id="scrubberPlayBtn" class="btn btn-outline-primary btn-sm" title="Play/Pause">
             <i class="bi bi-play-fill"></i>
           </button>
-          <button id="scrubberNextBtn" class="btn btn-outline-secondary btn-sm">
+          <button id="scrubberNextBtn" class="btn btn-outline-secondary btn-sm" title="Next tick">
             <i class="bi bi-skip-forward"></i>
+          </button>
+          <button id="scrubberStartBtn" class="btn btn-outline-secondary btn-sm" title="Jump to start">
+            <i class="bi bi-skip-start-btn"></i>
+          </button>
+          <button id="scrubberEndBtn" class="btn btn-outline-secondary btn-sm" title="Jump to end">
+            <i class="bi bi-skip-end-btn"></i>
           </button>
           <select id="scrubberSpeed" class="form-select form-select-sm">
             <option value="0.5">0.5x</option>
@@ -141,6 +147,19 @@
             <option value="1.5">1.5x</option>
             <option value="2">2x</option>
           </select>
+          <div class="tick-jump-inline">
+            <input id="tickJumpInput" type="number" min="0" class="form-control form-control-sm"
+              placeholder="Tick #" />
+            <button id="tickJumpBtn" class="btn btn-outline-primary btn-sm">Go</button>
+          </div>
+        </div>
+        <div class="timeline-markers" id="timelineMarkers">
+          <!-- Timeline markers will be dynamically added here -->
+        </div>
+        <div class="tick-info">
+          <span>Tick: <span id="currentTick">--</span></span>
+          <span>Time: <span id="currentTime">00:00.0</span> / <span id="totalTime">00:00.0</span></span>
+          <span>Frame: <span id="currentFrame">0</span> / <span id="totalFrame">0</span></span>
         </div>
       </section>
 

@@ -42,13 +42,17 @@ public class WindowController {
    */
   @GetMapping
   public ResponseEntity<List<Map<String, Object>>> listWindows() {
-    List<WindowInfo> windows = WindowHandler.getAllJavaWindows();
+    List<WindowInfo> windows = WindowHandler.getAllTargetWindows();
 
     // Filter to only show game client windows
-    List<WindowInfo> filtered = windows.stream().filter(w -> isGameClient(w.getTitle())).toList();
+    List<WindowInfo> filtered =
+        windows.stream().filter(w -> isGameClient(w.getTitle(), w.getBounds())).toList();
+
+    // Deduplicate by PID (keep only largest window per process)
+    List<WindowInfo> deduplicated = WindowHandler.deduplicateWindowsByPid(filtered);
 
     List<Map<String, Object>> response =
-        filtered.stream()
+        deduplicated.stream()
             .map(
                 window -> {
                   Map<String, Object> map = new HashMap<>();
@@ -76,13 +80,20 @@ public class WindowController {
    * Checks if a window title represents a game client window.
    *
    * <p>Includes RuneLite, Leeuwbot, and VitaLite windows while excluding inspectors, IDE windows,
-   * and other utility windows.
+   * and other utility windows. Also filters out small utility windows based on minimum size.
    *
    * @param title the window title to check
+   * @param bounds the window bounds to check for size filtering
    * @return true if this is a game client window
    */
-  private boolean isGameClient(String title) {
+  private boolean isGameClient(String title, Rectangle bounds) {
     if (title == null) return false;
+    if (bounds == null) return false;
+
+    // Filter out small utility windows (main game windows are typically larger)
+    if (bounds.width < 400 || bounds.height < 400) {
+      return false;
+    }
 
     // Check if it's a game client
     if (!title.contains("RuneLite") && !title.contains("Leeuwbot") && !title.contains("VitaLite")) {
@@ -114,6 +125,11 @@ public class WindowController {
 
     // Exclude windows with brackets that are typically IDE windows
     if (title.matches(".*\\[.*\\].*")) {
+      return false;
+    }
+
+    // Exclude windows with titles starting with special characters (utility windows)
+    if (title.trim().startsWith("-") || title.matches("^\\s*[-–].*")) {
       return false;
     }
 
@@ -170,13 +186,18 @@ public class WindowController {
     }
 
     // Find the window with the given ID from filtered game clients
-    List<WindowInfo> windows = WindowHandler.getAllJavaWindows();
-    List<WindowInfo> filtered = windows.stream().filter(w -> isGameClient(w.getTitle())).toList();
+    List<WindowInfo> windows = WindowHandler.getAllTargetWindows();
+    List<WindowInfo> filtered =
+        windows.stream().filter(w -> isGameClient(w.getTitle(), w.getBounds())).toList();
 
-    System.err.println("[WINDOW API] Found " + filtered.size() + " game client windows");
+    // Deduplicate by PID (keep only largest window per process)
+    List<WindowInfo> deduplicated = WindowHandler.deduplicateWindowsByPid(filtered);
+
+    System.err.println(
+        "[WINDOW API] Found " + deduplicated.size() + " game client windows after deduplication");
 
     WindowInfo selectedWindow =
-        filtered.stream().filter(w -> w.getId().equals(windowId)).findFirst().orElse(null);
+        deduplicated.stream().filter(w -> w.getId().equals(windowId)).findFirst().orElse(null);
 
     if (selectedWindow == null) {
       System.err.println("[WINDOW API] ERROR: Window with ID '" + windowId + "' not found!");

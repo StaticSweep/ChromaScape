@@ -169,7 +169,7 @@ body {
   font-weight: bold;
 }
 
-.log-info { color: #61afef; }
+.log-info { color: #000000; }
 .log-warn { color: #e5c07b; }
 .log-error { color: #e06c75; }
 .log-debug { color: #98c379; }
@@ -282,6 +282,215 @@ body {
   border-radius: 10px;
   padding: 8px 10px;
   line-height: 1.4;
+}
+
+/* ==================== TICK-BASED STYLES ==================== */
+
+/* Timeline markers container */
+.timeline-markers {
+  position: relative;
+  height: 12px;
+  margin-top: 8px;
+  pointer-events: none;
+}
+
+/* Individual timeline marker */
+.timeline-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  z-index: 10;
+}
+
+.timeline-marker:hover {
+  transform: translate(-50%, -50%) scale(1.5);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  z-index: 20;
+}
+
+/* Timeline marker colors by type */
+.timeline-marker.marker-error {
+  background: #e06c75; /* Red */
+}
+
+.timeline-marker.marker-damage {
+  background: #d19a66; /* Orange */
+}
+
+.timeline-marker.marker-prayer {
+  background: #e5c07b; /* Yellow */
+}
+
+.timeline-marker.marker-eat {
+  background: #61afef; /* Blue */
+}
+
+.timeline-marker.marker-spec {
+  background: #c678dd; /* Purple */
+}
+
+.timeline-marker.marker-kill {
+  background: #98c379; /* Green */
+}
+
+.timeline-marker.marker-death {
+  background: #e06c75; /* Red */
+  border: 2px solid #fff;
+}
+
+.timeline-marker.marker-manual {
+  background: #abb2bf; /* Gray */
+}
+
+/* Tick info display */
+.tick-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: monospace;
+  padding: 4px 0;
+}
+
+.tick-info span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Tick scrubber enhancements */
+#scrubberRange {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--glass-bg);
+  outline: none;
+  cursor: pointer;
+}
+
+#scrubberRange::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+#scrubberRange::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Tick jump inline controls */
+.tick-jump-inline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tick-jump-inline input {
+  width: 80px;
+  font-size: 11px;
+}
+
+/* Log line enhancements with tick */
+.log-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  transition: background-color 0.15s ease;
+}
+
+.log-line:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.log-tick {
+  color: #c678dd;
+  font-weight: 600;
+}
+
+.log-subsystem {
+  color: #e5c07b;
+}
+
+/* AI Inspector section styles */
+.ai-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ai-section > strong {
+  color: #61afef;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+/* State item enhancements */
+.state-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.state-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Scrubber controls enhancements */
+.scrubber-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.scrubber-controls .btn {
+  min-width: 32px;
+  padding: 4px 8px;
+}
+
+/* Tick display enhancements */
+#tickDisplay {
+  font-family: monospace;
+  font-size: 14px;
+}
+
+#currentTick,
+#currentTime,
+#totalTime,
+#currentFrame,
+#totalFrame {
+  font-family: monospace;
+  color: #61afef;
 }
 
 @media (max-width: 1200px) {

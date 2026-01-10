@@ -10,9 +10,12 @@ import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.win32.StdCallLibrary;
 import java.awt.Rectangle;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -386,5 +389,41 @@ public class WindowHandler {
   public static HWND getFirstJavaWindow() {
     List<WindowInfo> windows = getAllJavaWindows();
     return windows.isEmpty() ? null : windows.get(0).getHwnd();
+  }
+
+  /**
+   * Deduplicates windows by PID, keeping only the largest window per process.
+   *
+   * <p>This is useful when a client (like Leeuwbot) creates multiple windows for the same process.
+   * We want to show only the largest window per PID to avoid duplicate entries.
+   *
+   * @param windows the list of windows to deduplicate
+   * @return a new list with only the largest window per PID, sorted by original ID order
+   */
+  public static List<WindowInfo> deduplicateWindowsByPid(List<WindowInfo> windows) {
+    if (windows == null || windows.isEmpty()) {
+      return windows;
+    }
+
+    // Group windows by PID
+    Map<Integer, List<WindowInfo>> windowsByPid =
+        windows.stream().collect(Collectors.groupingBy(WindowInfo::getPid));
+
+    // For each PID, keep only the largest window (by area)
+    List<WindowInfo> deduplicated = new ArrayList<>();
+    for (List<WindowInfo> pidWindows : windowsByPid.values()) {
+      WindowInfo largestWindow =
+          pidWindows.stream()
+              .max(Comparator.comparing(w -> w.getBounds().width * w.getBounds().height))
+              .orElse(null);
+      if (largestWindow != null) {
+        deduplicated.add(largestWindow);
+      }
+    }
+
+    // Sort by original ID order
+    return deduplicated.stream()
+        .sorted(Comparator.comparingInt(w -> Integer.parseInt(w.getId())))
+        .collect(Collectors.toList());
   }
 }

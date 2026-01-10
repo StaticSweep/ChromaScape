@@ -38,6 +38,14 @@ function cacheElements() {
   elements.tickJumpBtn = document.getElementById('tickJumpBtn');
   elements.botStateContent = document.getElementById('botStateContent');
   elements.aiInspectorContent = document.getElementById('aiInspectorContent');
+  // New tick-based elements
+  elements.currentTick = document.getElementById('currentTick');
+  elements.currentTime = document.getElementById('currentTime');
+  elements.totalTime = document.getElementById('totalTime');
+  elements.currentFrame = document.getElementById('currentFrame');
+  elements.totalFrame = document.getElementById('totalFrame');
+  elements.scrubberStartBtn = document.getElementById('scrubberStartBtn');
+  elements.scrubberEndBtn = document.getElementById('scrubberEndBtn');
 }
 
 function switchMode(mode) {
@@ -707,6 +715,540 @@ window.selectWindow = function(windowId) {
   selectWindowInternal(windowId, '');
 };
 
+// ==================== TICK-BASED REPLAY ====================
+
+let currentDebugSession = null;
+let currentTick = null;
+let tickRange = { min: 0, max: 0 };
+let tickStreamWebSocket = null;
+let isPlaying = false;
+let playbackSpeed = 1;
+let playbackInterval = null;
+
+/**
+ * Connect to tick stream WebSocket for live tick updates.
+ */
+function connectTickStreamWebSocket() {
+  const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl = `${wsProtocol}://${location.host}/ws/debugger/tick-stream`;
+
+  if (tickStreamWebSocket) {
+    tickStreamWebSocket.close();
+  }
+
+  tickStreamWebSocket = new WebSocket(wsUrl);
+
+  tickStreamWebSocket.onopen = () => {
+    console.log('Connected to tick stream WebSocket');
+  };
+
+  tickStreamWebSocket.onmessage = (event) => {
+    if (currentMode !== 'live') return;
+    try {
+      const data = JSON.parse(event.data);
+      updatePanelsForTick(data);
+    } catch (e) {
+      console.error('Failed to parse tick stream message', e);
+    }
+  };
+
+  tickStreamWebSocket.onerror = (error) => {
+    console.error('Tick stream WebSocket error:', error);
+  };
+
+  tickStreamWebSocket.onclose = () => {
+    tickStreamWebSocket = null;
+    // Reconnect after 3 seconds
+    setTimeout(connectTickStreamWebSocket, 3000);
+  };
+}
+
+/**
+ * Update all panels for a specific tick.
+ */
+function updatePanelsForTick(data) {
+  if (data.tick) {
+    currentTick = data.tick;
+    updateTickDisplay(data.tick);
+  }
+
+  if (data.snapshot) {
+    renderTickBotState(data.snapshot);
+  }
+
+  if (data.logs && data.logs.length > 0) {
+    renderTickLogs(data.logs);
+  }
+
+  if (data.overlays) {
+    renderTickOverlays(data.overlays);
+  }
+
+  // Update AI inspector with current tick
+  if (currentDebugSession && currentTick) {
+    fetchTickInspector(currentDebugSession, currentTick);
+  }
+}
+
+/**
+ * Update tick display elements.
+ */
+function updateTickDisplay(tick) {
+  const currentTickEl = document.getElementById('currentTick');
+  if (currentTickEl) {
+    currentTickEl.textContent = tick;
+  }
+
+  // Calculate time from tick (600ms per tick)
+  const timeSeconds = (tick * 0.6).toFixed(1);
+  const currentTimeEl = document.getElementById('currentTime');
+  if (currentTimeEl) {
+    currentTimeEl.textContent = formatTickTime(timeSeconds);
+  }
+
+  // Calculate frame from tick (assuming 30 FPS)
+  const frame = Math.round(tick * 0.6 * 30);
+  const currentFrameEl = document.getElementById('currentFrame');
+  if (currentFrameEl) {
+    currentFrameEl.textContent = frame;
+  }
+}
+
+/**
+ * Format time from tick seconds.
+ */
+function formatTickTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = (seconds % 60).toFixed(1);
+  return `${mins.toString().padStart(2, '0')}:${secs.padStart(4, '0')}`;
+}
+
+/**
+ * Render bot state from tick snapshot.
+ */
+function renderTickBotState(snapshot) {
+  const container = elements.botStateContent;
+  if (!container || !snapshot.playerState) return;
+
+  const player = snapshot.playerState;
+  const position = player.position || {};
+  const hp = player.hp || {};
+  const prayer = player.prayer || {};
+
+  const items = [
+    { label: 'Position', value: position.x && position.y ? `(${position.x}, ${position.y}, ${position.plane || 0})` : '--' },
+    { label: 'HP', value: hp.current !== undefined ? `${hp.current} / ${hp.max}` : '--' },
+    { label: 'Prayer', value: prayer.current !== undefined ? `${prayer.current} / ${prayer.max}` : '--' },
+    { label: 'Animation', value: player.animation || '--' },
+    { label: 'Energy', value: player.energy !== undefined ? `${player.energy}%` : '--' },
+    { label: 'Threats', value: snapshot.threats ? snapshot.threats.length : 0 },
+    { label: 'Projectiles', value: snapshot.projectiles ? snapshot.projectiles.length : 0 }
+  ];
+
+  // Add cooldowns if available
+  if (snapshot.cooldowns) {
+    Object.entries(snapshot.cooldowns).forEach(([key, value]) => {
+      items.push({ label: key, value: value > 0 ? `${value}t` : 'Ready' });
+    });
+  }
+
+  container.innerHTML = items.map(item => (
+    `<div class="state-item">
+      <div class="state-label">${item.label}</div>
+      <div>${item.value}</div>
+    </div>`
+  )).join('');
+}
+
+/**
+ * Render logs from tick batch.
+ */
+function renderTickLogs(logs) {
+  const container = elements.logsContainer;
+  if (!container) return;
+
+  logs.forEach(log => {
+    const tick = log.tick || currentTick || '--';
+    const level = log.severity || log.level || 'INFO';
+    const subsystem = log.subsystem || '';
+    const message = log.message || '';
+
+    const line = document.createElement('div');
+    line.className = `log-line log-${level.toLowerCase()}`;
+    line.dataset.tick = tick;
+
+    const timestamp = log.timestamp
+      ? new Date(log.timestamp).toLocaleTimeString()
+      : new Date().toLocaleTimeString();
+
+    line.innerHTML = `<span class="log-tick">T${tick}</span> <span class="log-subsystem">${subsystem}</span> <span class="log-level">[${level}]</span> ${message}`;
+    line.title = message; // Tooltip for full message
+
+    // Add hover effect to highlight overlay
+    line.addEventListener('mouseenter', () => highlightTickOverlay(tick));
+    line.addEventListener('mouseleave', () => clearHighlightOverlay());
+
+    container.appendChild(line);
+    container.scrollTop = container.scrollHeight;
+
+    // Limit log entries
+    while (container.children.length > 1000) {
+      container.removeChild(container.firstChild);
+    }
+  });
+}
+
+/**
+ * Render overlays from tick batch.
+ */
+function renderTickOverlays(overlays) {
+  if (!elements.overlayCanvas) return;
+  const ctx = elements.overlayCanvas.getContext('2d');
+  const metrics = getViewportMetrics();
+  if (!metrics) return;
+
+  resizeOverlayCanvas(metrics);
+  ctx.clearRect(0, 0, elements.overlayCanvas.width, elements.overlayCanvas.height);
+
+  const scaleX = metrics.width / metrics.sourceWidth;
+  const scaleY = metrics.height / metrics.sourceHeight;
+
+  overlays.forEach(overlay => {
+    switch (overlay.type) {
+      case 'HITBOX':
+        renderHitbox(ctx, overlay.data, scaleX, scaleY);
+        break;
+      case 'PROJECTILE':
+        renderProjectile(ctx, overlay.data, scaleX, scaleY);
+        break;
+      case 'THREAT_ZONE':
+        renderThreatZone(ctx, overlay.data, scaleX, scaleY);
+        break;
+      case 'PLAYER_TILE':
+        renderPlayerTile(ctx, overlay.data, scaleX, scaleY);
+        break;
+      default:
+        renderDefaultOverlay(ctx, overlay.data, scaleX, scaleY);
+    }
+  });
+}
+
+/**
+ * Render hitbox overlay.
+ */
+function renderHitbox(ctx, data, scaleX, scaleY) {
+  ctx.strokeStyle = 'rgba(255, 77, 77, 0.8)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(
+    (data.x || 0) * scaleX,
+    (data.y || 0) * scaleY,
+    (data.width || 0) * scaleX,
+    (data.height || 0) * scaleY
+  );
+}
+
+/**
+ * Render projectile overlay.
+ */
+function renderProjectile(ctx, data, scaleX, scaleY) {
+  ctx.strokeStyle = 'rgba(0, 255, 136, 0.8)';
+  ctx.lineWidth = 2;
+
+  const x = (data.x || 0) * scaleX;
+  const y = (data.y || 0) * scaleY;
+
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Draw ETA text if available
+  if (data.eta !== undefined) {
+    ctx.fillStyle = 'rgba(0, 255, 136, 0.9)';
+    ctx.font = '10px monospace';
+    ctx.fillText(`ETA:${data.eta}`, x + 8, y);
+  }
+}
+
+/**
+ * Render threat zone overlay.
+ */
+function renderThreatZone(ctx, data, scaleX, scaleY) {
+  ctx.fillStyle = 'rgba(255, 230, 109, 0.2)';
+  ctx.fillRect(
+    (data.x || 0) * scaleX,
+    (data.y || 0) * scaleY,
+    (data.width || 0) * scaleX,
+    (data.height || 0) * scaleY
+  );
+}
+
+/**
+ * Render player tile overlay.
+ */
+function renderPlayerTile(ctx, data, scaleX, scaleY) {
+  ctx.strokeStyle = 'rgba(0, 245, 255, 0.8)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(
+    (data.x || 0) * scaleX,
+    (data.y || 0) * scaleY,
+    (data.width || 32) * scaleX,
+    (data.height || 32) * scaleY
+  );
+}
+
+/**
+ * Render default overlay.
+ */
+function renderDefaultOverlay(ctx, data, scaleX, scaleY) {
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(
+    (data.x || 0) * scaleX,
+    (data.y || 0) * scaleY,
+    (data.width || 0) * scaleX,
+    (data.height || 0) * scaleY
+  );
+}
+
+/**
+ * Highlight overlays for a specific tick.
+ */
+function highlightTickOverlay(tick) {
+  // Future implementation: highlight overlays associated with this tick
+}
+
+/**
+ * Clear overlay highlight.
+ */
+function clearHighlightOverlay() {
+  // Future implementation: clear highlight
+}
+
+/**
+ * Fetch tick inspector analysis.
+ */
+async function fetchTickInspector(sessionId, tick) {
+  try {
+    const response = await fetch(`/api/debug/ai-inspector/tick/${sessionId}/${tick}?contextWindow=50`);
+    if (!response.ok) return;
+    const data = await response.json();
+    renderTickInspector(data);
+  } catch (error) {
+    console.error('Failed to fetch tick inspector', error);
+  }
+}
+
+/**
+ * Render tick inspector results.
+ */
+function renderTickInspector(data) {
+  const container = elements.aiInspectorContent;
+  if (!container) return;
+
+  const evidence = (data.evidence || []).map(item => `<div>• ${item}</div>`).join('') || 'No evidence.';
+
+  container.innerHTML = `
+    <div class="ai-card">
+      <div class="ai-pill">${data.faultLabel || 'OK'} · ${data.confidence || 'LOW'}</div>
+      <div class="ai-section">
+        <strong>Current Tick:</strong> ${data.tick || '--'}
+      </div>
+      <div class="ai-section">
+        <strong>Root Cause:</strong>
+        <div>${data.rootCause || 'No issues detected.'}</div>
+      </div>
+      <div class="ai-section">
+        <strong>Evidence:</strong>
+        <div class="ai-evidence">${evidence}</div>
+      </div>
+      <div class="ai-section">
+        <strong>Surgical Instruction:</strong>
+        <div>${data.surgicalInstruction || 'Continue monitoring.'}</div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Initialize tick-based replay controls.
+ */
+function initTickReplayControls() {
+  // Start button (jump to start)
+  const scrubberStartBtn = document.getElementById('scrubberStartBtn');
+  if (scrubberStartBtn) {
+    scrubberStartBtn.addEventListener('click', () => jumpToTick(tickRange.min));
+  }
+
+  // End button (jump to end)
+  const scrubberEndBtn = document.getElementById('scrubberEndBtn');
+  if (scrubberEndBtn) {
+    scrubberEndBtn.addEventListener('click', () => jumpToTick(tickRange.max));
+  }
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return; // Ignore when typing
+
+    if (e.key === 'ArrowLeft') {
+      jumpToTick((currentTick || 0) - 1);
+    } else if (e.key === 'ArrowRight') {
+      jumpToTick((currentTick || 0) + 1);
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      toggleTickPlayback();
+    }
+  });
+}
+
+/**
+ * Jump to a specific tick.
+ */
+async function jumpToTick(tick) {
+  if (!currentDebugSession || tick < tickRange.min || tick > tickRange.max) return;
+
+  try {
+    const response = await fetch(`/api/debug/replay/tick/${currentDebugSession}/${tick}`);
+    if (!response.ok) return;
+
+    const data = await response.json;
+    updatePanelsForTick(data);
+
+    // Update scrubber
+    if (elements.scrubberRange) {
+      const scrubberValue = ((tick - tickRange.min) / (tickRange.max - tickRange.min)) * 100;
+      elements.scrubberRange.value = scrubberValue;
+    }
+
+    currentTick = tick;
+  } catch (error) {
+    console.error('Failed to jump to tick', error);
+  }
+}
+
+/**
+ * Toggle tick playback.
+ */
+function toggleTickPlayback() {
+  if (isPlaying) {
+    stopTickPlayback();
+  } else {
+    startTickPlayback();
+  }
+}
+
+/**
+ * Start tick playback.
+ */
+function startTickPlayback() {
+  if (!currentDebugSession) return;
+
+  isPlaying = true;
+  const scrubberPlayBtn = document.getElementById('scrubberPlayBtn');
+  if (scrubberPlayBtn) {
+    scrubberPlayBtn.innerHTML = '<i class="bi bi-pause-fill"></i>';
+  }
+
+  playbackInterval = setInterval(() => {
+    if (currentTick < tickRange.max) {
+      jumpToTick(currentTick + 1);
+    } else {
+      stopTickPlayback();
+    }
+  }, 600 / playbackSpeed);
+}
+
+/**
+ * Stop tick playback.
+ */
+function stopTickPlayback() {
+  isPlaying = false;
+  clearInterval(playbackInterval);
+  const scrubberPlayBtn = document.getElementById('scrubberPlayBtn');
+  if (scrubberPlayBtn) {
+    scrubberPlayBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
+  }
+}
+
+/**
+ * Load debug session for replay.
+ */
+async function loadDebugSession(sessionId) {
+  try {
+    // Get session info
+    const sessionResponse = await fetch(`/api/debug/replay/session-info/${sessionId}`);
+    if (!sessionResponse.ok) return;
+
+    const sessionInfo = await sessionResponse.json();
+    currentDebugSession = sessionId;
+    tickRange.min = sessionInfo.minTick || sessionInfo.startTick || 0;
+    tickRange.max = sessionInfo.maxTick || sessionInfo.endTick || tickRange.min;
+
+    // Update scrubber range
+    if (elements.scrubberRange) {
+      elements.scrubberRange.min = 0;
+      elements.scrubberRange.max = 100;
+      elements.scrubberRange.value = 0;
+    }
+
+    // Update total time and frame
+    const totalSeconds = ((tickRange.max - tickRange.min) * 0.6).toFixed(1);
+    document.getElementById('totalTime').textContent = formatTickTime(totalSeconds);
+
+    const totalFrame = Math.round((tickRange.max - tickRange.min) * 0.6 * 30);
+    document.getElementById('totalFrame').textContent = totalFrame;
+
+    // Load timeline markers
+    loadTimelineMarkers(sessionId);
+
+    // Jump to start tick
+    jumpToTick(tickRange.min);
+
+  } catch (error) {
+    console.error('Failed to load debug session', error);
+  }
+}
+
+/**
+ * Load timeline markers for a session.
+ */
+async function loadTimelineMarkers(sessionId) {
+  try {
+    const response = await fetch(`/api/debug/replay/timeline-markers/${sessionId}`);
+    if (!response.ok) return;
+
+    const markers = await response.json();
+    renderTimelineMarkers(markers);
+  } catch (error) {
+    console.error('Failed to load timeline markers', error);
+  }
+}
+
+/**
+ * Render timeline markers.
+ */
+function renderTimelineMarkers(markers) {
+  const container = document.getElementById('timelineMarkers');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  markers.forEach(marker => {
+    const tickPercent = ((marker.tick - tickRange.min) / (tickRange.max - tickRange.min)) * 100;
+
+    const markerEl = document.createElement('div');
+    markerEl.className = `timeline-marker marker-${marker.markerType.toLowerCase()}`;
+    markerEl.style.left = `${tickPercent}%`;
+    markerEl.title = `${marker.label}: ${marker.description || ''}`;
+    markerEl.dataset.tick = marker.tick;
+
+    markerEl.addEventListener('click', () => {
+      jumpToTick(marker.tick);
+    });
+
+    container.appendChild(markerEl);
+  });
+}
+
 // ==================== INIT ====================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -719,9 +1261,13 @@ document.addEventListener('DOMContentLoaded', () => {
   connectViewportWebSocket();
   connectOverlayWebSocket();
   connectBotStateWebSocket();
+  connectTickStreamWebSocket(); // New tick stream WebSocket
+
   initReplayModeListeners();
   initTickControls();
   initLogFilters();
+  initTickReplayControls(); // New tick-based replay controls
+
   startTickPolling();
 
   switchMode('live');
