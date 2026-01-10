@@ -184,7 +184,7 @@ public class TemplateMatching {
     TemplateMatching.minVal = minVal.get();
 
     if (minVal.get() > threshold) {
-      logger.error("No match: minVal above threshold ({} > {})", minVal.get(), threshold);
+      logger.warn("No match: minVal above threshold ({} > {})", minVal.get(), threshold);
       return null;
     }
     // offset for screen cords
@@ -214,7 +214,7 @@ public class TemplateMatching {
    */
   private static void debug(String message, boolean debug) {
     if (debug) {
-      logger.debug(message);
+      logger.warn(message);
     }
   }
 

@@ -32,6 +32,22 @@ curl -o "%UI_DIR%\inv.png" https://raw.githubusercontent.com/kelltom/OS-Bot-COLO
 curl -o "%UI_DIR%\minimap.png" https://raw.githubusercontent.com/kelltom/OS-Bot-COLOR/main/src/images/bot/ui_templates/minimap.png
 curl -o "%UI_DIR%\minimap_fixed.png" https://raw.githubusercontent.com/kelltom/OS-Bot-COLOR/main/src/images/bot/ui_templates/minimap_fixed.png
 
+REM Download Mouse Click images
+set "MOUSE_DIR=src\main\resources\images\mouse_clicks"
+
+if not exist "%MOUSE_DIR%" (
+    mkdir "%MOUSE_DIR%"
+)
+
+echo Downloading Mouse Click images to %MOUSE_DIR%...
+
+curl -o "%MOUSE_DIR%\red_1.png" https://raw.githubusercontent.com/kelltom/OS-Bot-COLOR/main/src/images/bot/mouse_clicks/red_1.png
+curl -o "%MOUSE_DIR%\red_2.png" https://raw.githubusercontent.com/kelltom/OS-Bot-COLOR/main/src/images/bot/mouse_clicks/red_2.png
+curl -o "%MOUSE_DIR%\red_3.png" https://raw.githubusercontent.com/kelltom/OS-Bot-COLOR/main/src/images/bot/mouse_clicks/red_3.png
+curl -o "%MOUSE_DIR%\red_4.png" https://raw.githubusercontent.com/kelltom/OS-Bot-COLOR/main/src/images/bot/mouse_clicks/red_4.png
+
+echo Mouse clicks downloaded.
+
 REM Download compass degree images from RuneDark repo
 echo Cloning RuneDark repo to extract compass degrees...
 
