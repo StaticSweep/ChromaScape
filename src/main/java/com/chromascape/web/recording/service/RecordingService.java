@@ -170,11 +170,11 @@ public class RecordingService {
 
     } catch (RecordingException e) {
       // Re-throw our custom exceptions
-      cleanup();
+      cleanupRecording();
       throw e;
     } catch (Exception e) {
       logger.error("Failed to start recording: {}", e.getMessage(), e);
-      cleanup();
+      cleanupRecording();
       throw new RecordingException(
           "Unexpected error during recording initialization: " + e.getMessage(),
           "An unexpected error occurred while starting the recording. Please try again or check the logs.");
@@ -367,7 +367,43 @@ public class RecordingService {
     return wasRecording;
   }
 
-  /** Cleanup resources. */
+  /**
+   * Cleanup recording resources without shutting down the scheduler.
+   *
+   * <p>Use this for error recovery, not application shutdown. This method cleans up the recorder
+   * and resets recording state but keeps the scheduler running so recording can be attempted
+   * again.
+   */
+  private void cleanupRecording() {
+    logger.debug("Cleaning up recording resources");
+
+    try {
+      if (recorder != null) {
+        recorder.stop();
+        recorder.release();
+        recorder = null;
+      }
+    } catch (Exception e) {
+      logger.warn("Error while cleaning up recorder: {}", e.getMessage());
+    }
+
+    // Reset state but don't shutdown scheduler
+    recording.set(false);
+    currentRecordingId = null;
+    currentRecordingFile = null;
+    recordingStartTime = 0;
+    frameCount.set(0);
+    initialWidth = 0;
+    initialHeight = 0;
+  }
+
+  /**
+   * Cleanup resources on application shutdown.
+   *
+   * <p>WARNING: This method shuts down the scheduler and should ONLY be called during application
+   * termination (@PreDestroy). For error recovery during recording, use cleanupRecording()
+   * instead.
+   */
   @PreDestroy
   public void cleanup() {
     logger.info("RecordingService cleanup - shutting down scheduler");
