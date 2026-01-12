@@ -2,6 +2,8 @@ package com.chromascape.web.instance;
 
 import com.chromascape.base.BaseScript;
 import com.chromascape.utils.core.statistics.StatisticsManager;
+import com.chromascape.web.recording.config.TaskType;
+import com.chromascape.web.recording.service.TaskDetectionService;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 
@@ -18,6 +20,7 @@ public class ScriptInstance {
   private final String scriptName;
   private volatile Thread thread;
   private final WebSocketStateHandler stateHandler;
+  private final TaskDetectionService taskDetectionService;
   private volatile long tickStartTime = 0;
 
   /**
@@ -30,13 +33,17 @@ public class ScriptInstance {
    * @throws InstantiationException if the class is abstract or an interface
    * @throws IllegalAccessException if the constructor is not accessible
    */
-  public ScriptInstance(RunConfig config, WebSocketStateHandler stateHandler)
+  public ScriptInstance(
+      RunConfig config,
+      WebSocketStateHandler stateHandler,
+      TaskDetectionService taskDetectionService)
       throws NoSuchMethodException,
           ClassNotFoundException,
           InvocationTargetException,
           InstantiationException,
           IllegalAccessException {
     this.stateHandler = stateHandler;
+    this.taskDetectionService = taskDetectionService;
 
     String fileName = config.script();
     String className = fileName.replace(".java", "").replace("/", ".");
@@ -62,14 +69,53 @@ public class ScriptInstance {
               stateHandler.broadcast(true);
               tickStartTime = System.currentTimeMillis();
               StatisticsManager.reset();
+
+              // Detect task type and auto-record if enabled
+              if (taskDetectionService != null) {
+                TaskType taskType = detectTaskFromScriptName(scriptName);
+                taskDetectionService.onTaskDetected(taskType, scriptName);
+              }
+
               try {
                 instance.run();
               } finally {
                 StatisticsManager.stop();
+                if (taskDetectionService != null) {
+                  taskDetectionService.onTaskEnded();
+                }
                 stateHandler.broadcast(false);
               }
             });
     thread.start();
+  }
+
+  /** Simple task detection based on script name */
+  private TaskType detectTaskFromScriptName(String scriptName) {
+    String lower = scriptName.toLowerCase();
+    if (lower.contains("combat") || lower.contains("fight") || lower.contains("kill")) {
+      return TaskType.COMBAT;
+    } else if (lower.contains("woodcut") || lower.contains("chop")) {
+      return TaskType.WOODCUTTING;
+    } else if (lower.contains("mining") || lower.contains("ore")) {
+      return TaskType.MINING;
+    } else if (lower.contains("fish")) {
+      return TaskType.FISHING;
+    } else if (lower.contains("cook")) {
+      return TaskType.COOKING;
+    } else if (lower.contains("smith")) {
+      return TaskType.SMITHING;
+    } else if (lower.contains("craft")) {
+      return TaskType.CRAFTING;
+    } else if (lower.contains("thiev")) {
+      return TaskType.THIEVING;
+    } else if (lower.contains("farm")) {
+      return TaskType.FARMING;
+    } else if (lower.contains("quest")) {
+      return TaskType.QUESTING;
+    } else if (lower.contains("boss") || lower.contains("raid")) {
+      return TaskType.BOSSING;
+    }
+    return TaskType.OTHER;
   }
 
   /**

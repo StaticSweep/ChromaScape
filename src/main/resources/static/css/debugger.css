@@ -49,6 +49,25 @@ body {
   gap: 8px;
 }
 
+/* Recording status indicator styles */
+.recording-status {
+  color: #ff4444;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.blink {
+  animation: blink-animation 1s infinite;
+}
+
+@keyframes blink-animation {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
 .session-controls select {
   min-width: 220px;
 }
@@ -515,4 +534,59 @@ body {
   .debugger-container {
     grid-template-rows: auto auto auto;
   }
+}
+
+/* Task Recording Panel */
+.task-recording-panel {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.task-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.task-panel-header h6 {
+  margin: 0;
+  font-weight: 600;
+}
+
+.task-toggles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.task-toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--glass-bg);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.task-toggle-item:hover {
+  background: var(--accent-blue);
+  color: white;
+}
+
+.task-toggle-item input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.task-toggle-item label {
+  cursor: pointer;
+  flex: 1;
+  user-select: none;
+}
+
+.task-toggle-item.active {
+  background: rgba(40, 167, 69, 0.2);
+  border: 1px solid #28a745;
 }

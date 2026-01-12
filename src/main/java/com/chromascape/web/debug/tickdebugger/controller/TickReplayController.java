@@ -11,6 +11,7 @@ import com.chromascape.web.debug.tickdebugger.entity.TickSnapshot;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TimelineMarker;
 import com.chromascape.web.debug.tickdebugger.entity.TimelineMarkerRepository;
+import com.chromascape.web.debug.tickdebugger.service.TickVideoSyncService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.slf4j.Logger;
@@ -36,6 +37,7 @@ public class TickReplayController {
   private final TickLogRepository logRepository;
   private final TickOverlayRepository overlayRepository;
   private final TimelineMarkerRepository markerRepository;
+  private final TickVideoSyncService tickVideoSyncService;
   private final ObjectMapper objectMapper;
 
   public TickReplayController(
@@ -44,12 +46,14 @@ public class TickReplayController {
       TickLogRepository logRepository,
       TickOverlayRepository overlayRepository,
       TimelineMarkerRepository markerRepository,
+      TickVideoSyncService tickVideoSyncService,
       ObjectMapper objectMapper) {
     this.sessionRepository = sessionRepository;
     this.snapshotRepository = snapshotRepository;
     this.logRepository = logRepository;
     this.overlayRepository = overlayRepository;
     this.markerRepository = markerRepository;
+    this.tickVideoSyncService = tickVideoSyncService;
     this.objectMapper = objectMapper;
   }
 
@@ -225,6 +229,25 @@ public class TickReplayController {
 
     } catch (Exception e) {
       log.error("Error getting session info: {}", e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  /**
+   * Get tick-to-video synchronization info for a session.
+   *
+   * @param sessionId the debug session ID
+   * @return sync information including video timestamp and frame number
+   */
+  @GetMapping("/{sessionId}/sync")
+  public ResponseEntity<TickVideoSyncService.SyncInfo> getTickSyncInfo(
+      @PathVariable String sessionId) {
+
+    try {
+      TickVideoSyncService.SyncInfo syncInfo = tickVideoSyncService.getSyncInfo(sessionId);
+      return ResponseEntity.ok(syncInfo);
+    } catch (Exception e) {
+      log.error("Failed to get sync info for session {}: {}", sessionId, e.getMessage(), e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
     }
   }

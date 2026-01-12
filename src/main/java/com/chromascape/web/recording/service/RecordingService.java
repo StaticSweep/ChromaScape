@@ -2,6 +2,10 @@ package com.chromascape.web.recording.service;
 
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.web.recording.config.RecordingConfig;
+import com.chromascape.web.recording.exception.FrameCaptureException;
+import com.chromascape.web.recording.exception.RecordingAlreadyInProgressException;
+import com.chromascape.web.recording.exception.RecordingDisabledException;
+import com.chromascape.web.recording.exception.RecordingException;
 import jakarta.annotation.PreDestroy;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -42,6 +46,8 @@ public class RecordingService {
   private File currentRecordingFile;
   private long recordingStartTime;
   private String currentRecordingId;
+  private int initialWidth;
+  private int initialHeight;
 
   @Autowired
   public RecordingService(RecordingConfig config) {
@@ -75,13 +81,13 @@ public class RecordingService {
    */
   public String startRecording() {
     if (recording.get()) {
-      logger.warn("Recording is already in progress");
-      return currentRecordingId;
+      logger.warn("Recording is already in progress: {}", currentRecordingId);
+      throw new RecordingAlreadyInProgressException(currentRecordingId);
     }
 
     if (!config.isEnabled()) {
       logger.warn("Recording is disabled");
-      return null;
+      throw new RecordingDisabledException();
     }
 
     try {
@@ -91,22 +97,66 @@ public class RecordingService {
       String filename = currentRecordingId + ".mp4";
       currentRecordingFile = Paths.get(config.getOutputDirectory(), filename).toFile();
 
-      // Initialize FFmpeg recorder
-      int width = 800; // Will be updated on first frame
-      int height = 600;
+      // Try to capture first frame to get actual dimensions
+      BufferedImage firstFrame = null;
+      int maxAttempts = 5;
+      for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        firstFrame = ScreenManager.captureWindow();
+        if (firstFrame != null) {
+          break;
+        }
+        if (attempt < maxAttempts) {
+          logger.warn(
+              "Failed to capture frame for recording (attempt {}/{}), retrying...",
+              attempt,
+              maxAttempts);
+          try {
+            Thread.sleep(100);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("Recording start interrupted while waiting for initial frame");
+            break;
+          }
+        }
+      }
 
-      recorder =
-          new FFmpegFrameRecorder(currentRecordingFile, width, height, 0); // No audio channels
+      if (firstFrame == null) {
+        logger.error("Failed to capture first frame after {} attempts", maxAttempts);
+        throw new FrameCaptureException(maxAttempts);
+      }
 
-      recorder.setVideoCodecName("libx264"); // H.264 codec
+      int width = firstFrame.getWidth();
+      int height = firstFrame.getHeight();
+
+      // Store initial dimensions for validation during capture
+      initialWidth = width;
+      initialHeight = height;
+
+      logger.info("Initializing recorder with captured dimensions: {}x{}", width, height);
+
+      // Initialize FFmpeg recorder with dimensions
+      recorder = new FFmpegFrameRecorder(currentRecordingFile, width, height, 0);
+
+      // Video codec settings
+      recorder.setVideoCodecName("libx264");
       recorder.setFormat("mp4");
       recorder.setFrameRate(config.getFps());
-      recorder.setVideoBitrate((int) (config.getVideoQuality() * 10000)); // Quality-based bitrate
+      recorder.setVideoBitrate((int) (config.getVideoQuality() * 10000));
       recorder.setVideoQuality(config.getVideoQuality());
+
+      // Browser compatibility settings
+      recorder.setPixelFormat(
+          org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P); // Most compatible
+      recorder.setVideoOption("preset", "ultrafast"); // Fast encoding
+      recorder.setVideoOption("profile", "main"); // Browser-compatible profile
+      recorder.setVideoOption("movflags", "+faststart"); // Web streaming
 
       recorder.start();
 
-      frameCount.set(0);
+      // Record the first frame
+      recorder.record(frameConverter.convert(firstFrame));
+      frameCount.set(1);
+
       recording.set(true);
 
       logger.info(
@@ -114,14 +164,20 @@ public class RecordingService {
 
       // Start frame capture loop
       long intervalMs = (long) (1000.0 / config.getFps());
-      scheduler.scheduleAtFixedRate(this::captureFrame, 0, intervalMs, TimeUnit.MILLISECONDS);
+      scheduler.scheduleAtFixedRate(this::captureFrame, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
 
       return currentRecordingId;
 
-    } catch (Exception e) {
-      logger.error("Failed to start recording: {}", e.getMessage());
+    } catch (RecordingException e) {
+      // Re-throw our custom exceptions
       cleanup();
-      return null;
+      throw e;
+    } catch (Exception e) {
+      logger.error("Failed to start recording: {}", e.getMessage(), e);
+      cleanup();
+      throw new RecordingException(
+          "Unexpected error during recording initialization: " + e.getMessage(),
+          "An unexpected error occurred while starting the recording. Please try again or check the logs.");
     }
   }
 
@@ -141,27 +197,44 @@ public class RecordingService {
     logger.info("Stopping recording...");
 
     try {
-      // Shutdown scheduler
-      scheduler.shutdown();
-      if (!scheduler.awaitTermination(2, TimeUnit.SECONDS)) {
-        scheduler.shutdownNow();
-      }
-
       // Finalize recording
       if (recorder != null) {
+        // CRITICAL: Flush buffered frames before stopping
+        logger.debug("Flushing recorder buffers...");
+        recorder.flush();
+
+        logger.debug("Stopping recorder...");
         recorder.stop();
+
+        logger.debug("Releasing recorder resources...");
         recorder.release();
         recorder = null;
+
+        // Give file system time to complete I/O
+        try {
+          Thread.sleep(200);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+
+        // Verify file was written
+        if (!currentRecordingFile.exists() || currentRecordingFile.length() == 0) {
+          logger.error("Recording file not created or empty after finalization");
+          return null;
+        }
+
+        logger.debug("Recording file finalized: {} bytes", currentRecordingFile.length());
       }
 
       long duration = System.currentTimeMillis() - recordingStartTime;
       long frames = frameCount.get();
 
       logger.info(
-          "Recording saved: {} ({} frames, {} ms)",
+          "Recording saved: {} ({} frames, {} ms, {} bytes)",
           currentRecordingFile.getName(),
           frames,
-          duration);
+          duration,
+          currentRecordingFile.length());
 
       return new RecordingMetadata(
           currentRecordingId,
@@ -172,10 +245,33 @@ public class RecordingService {
           config.getFps());
 
     } catch (Exception e) {
-      logger.error("Failed to stop recording: {}", e.getMessage());
+      logger.error("Failed to stop recording: {}", e.getMessage(), e);
       cleanup();
       return null;
     }
+  }
+
+  /**
+   * Start recording with auto-start trigger (called when script starts).
+   *
+   * @param scriptName The name of the script that triggered recording
+   * @return The recording ID, or null if recording failed
+   */
+  public String startRecordingAuto(String scriptName) {
+    if (recording.get()) {
+      logger.warn("Recording is already in progress, ignoring auto-start request");
+      return currentRecordingId;
+    }
+
+    if (!config.isEnabled()) {
+      logger.info("Recording is disabled, ignoring auto-start request");
+      return null;
+    }
+
+    logger.info("Auto-starting recording for script: {}", scriptName);
+
+    // Use the existing startRecording method
+    return startRecording();
   }
 
   /** Captures a single frame and adds it to the recording. */
@@ -188,10 +284,20 @@ public class RecordingService {
       BufferedImage capturedImage = ScreenManager.captureWindow();
 
       if (capturedImage != null) {
-        // First frame - set dimensions
-        if (frameCount.get() == 0) {
-          recorder.setImageWidth(capturedImage.getWidth());
-          recorder.setImageHeight(capturedImage.getHeight());
+        // CRITICAL: Validate dimensions match initial dimensions
+        // Changing dimensions after recorder.start() corrupts MP4 metadata
+        int frameWidth = capturedImage.getWidth();
+        int frameHeight = capturedImage.getHeight();
+
+        if (frameWidth != initialWidth || frameHeight != initialHeight) {
+          logger.warn(
+              "Frame dimension mismatch detected! Expected: {}x{}, Got: {}x{}. Dropping frame to preserve video integrity.",
+              initialWidth,
+              initialHeight,
+              frameWidth,
+              frameHeight);
+          // Drop this frame - do not record it
+          return;
         }
 
         // Convert and record frame
@@ -223,11 +329,60 @@ public class RecordingService {
     return recording.get() ? currentRecordingId : null;
   }
 
+  /** Returns the recording start time if recording, or null otherwise. */
+  public Long getRecordingStartTime() {
+    return recording.get() ? recordingStartTime : null;
+  }
+
+  /**
+   * Force reset the recording state.
+   *
+   * <p>This is a recovery mechanism for when the recording state gets stuck. Use with caution as it
+   * may leave incomplete recordings.
+   *
+   * @return true if a recording was in progress and was reset, false otherwise
+   */
+  public boolean forceResetRecordingState() {
+    boolean wasRecording = recording.getAndSet(false);
+
+    if (wasRecording) {
+      logger.warn("Force resetting recording state. Recording ID: {}", currentRecordingId);
+
+      // Clean up resources
+      try {
+        if (recorder != null) {
+          recorder.stop();
+          recorder.release();
+          recorder = null;
+        }
+      } catch (Exception e) {
+        logger.warn("Error while force-stopping recorder: {}", e.getMessage());
+      }
+
+      currentRecordingId = null;
+      recordingStartTime = 0;
+      frameCount.set(0);
+    }
+
+    return wasRecording;
+  }
+
   /** Cleanup resources. */
   @PreDestroy
   public void cleanup() {
+    logger.info("RecordingService cleanup - shutting down scheduler");
     if (recording.get()) {
       stopRecording();
+    }
+    // Shutdown scheduler only during application shutdown
+    scheduler.shutdown();
+    try {
+      if (!scheduler.awaitTermination(2, TimeUnit.SECONDS)) {
+        scheduler.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      scheduler.shutdownNow();
+      Thread.currentThread().interrupt();
     }
   }
 

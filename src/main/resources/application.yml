@@ -41,6 +41,12 @@ leeuwbot:
     # Script event reporting
     report-script-events: ${LEEUWBOT_REPORT_EVENTS:true}
 
+    # Tick data forwarding to Go backend
+    forward-tick-data: ${LEEUWBOT_FORWARD_TICKS:true}
+    tick-forward-timeout-ms: ${LEEUWBOT_TICK_TIMEOUT:5000}
+    # Use Go backend as primary storage (true = Go only, false = hybrid: local + Go)
+    use-go-backend-storage: ${LEEUWBOT_USE_GO_STORAGE:false}
+
 # Server configuration
 server:
   port: ${SERVER_PORT:8090}  # Changed from 8080 to avoid conflict with leeuwbot-api

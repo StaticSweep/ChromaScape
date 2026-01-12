@@ -2,8 +2,13 @@ package com.chromascape.web.recording.controller;
 
 import com.chromascape.utils.core.screen.window.WindowInfo;
 import com.chromascape.utils.core.screen.window.WindowSelectionService;
+import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
+import com.chromascape.web.recording.exception.FrameCaptureException;
+import com.chromascape.web.recording.exception.RecordingAlreadyInProgressException;
+import com.chromascape.web.recording.exception.RecordingDisabledException;
+import com.chromascape.web.recording.exception.RecordingException;
 import com.chromascape.web.recording.service.RecordingService;
 import com.chromascape.web.recording.service.RecordingService.RecordingMetadata;
 import java.io.File;
@@ -28,8 +33,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -47,15 +52,18 @@ public class RecordingController {
   private final RecordingService recordingService;
   private final RecordingSessionRepository recordingSessionRepository;
   private final WindowSelectionService windowSelectionService;
+  private final RecordingConfig recordingConfig;
 
   @Autowired
   public RecordingController(
       RecordingService recordingService,
       RecordingSessionRepository recordingSessionRepository,
-      WindowSelectionService windowSelectionService) {
+      WindowSelectionService windowSelectionService,
+      RecordingConfig recordingConfig) {
     this.recordingService = recordingService;
     this.recordingSessionRepository = recordingSessionRepository;
     this.windowSelectionService = windowSelectionService;
+    this.recordingConfig = recordingConfig;
   }
 
   /**
@@ -65,17 +73,20 @@ public class RecordingController {
    */
   @PostMapping("/start")
   public ResponseEntity<Map<String, Object>> startRecording(
-      @RequestParam(required = false) String accountName,
-      @RequestParam(required = false) String scriptName) {
+      @RequestBody Map<String, String> request) {
+    String accountName = request.get("accountName");
+    String scriptName = request.get("scriptName");
+    String windowTitle = request.get("windowTitle");
+
     // Get account from window selection if not provided
-    if (accountName == null) {
+    if (accountName == null || accountName.isEmpty()) {
       WindowInfo window = windowSelectionService.getSelectedWindow();
       accountName = window != null ? window.getAccountName() : "default";
     }
 
-    String recordingId = recordingService.startRecording();
+    try {
+      String recordingId = recordingService.startRecording();
 
-    if (recordingId != null) {
       // Create RecordingSession entity
       RecordingSession session =
           new RecordingSession(
@@ -95,11 +106,47 @@ public class RecordingController {
       response.put("account", accountName);
       response.put("message", "Recording started");
       return ResponseEntity.ok(response);
-    } else {
+
+    } catch (RecordingAlreadyInProgressException e) {
+      logger.warn("Attempt to start recording while already in progress");
       Map<String, Object> response = new HashMap<>();
       response.put("status", "error");
-      response.put("message", "Failed to start recording (may already be in progress)");
+      response.put("errorType", "ALREADY_IN_PROGRESS");
+      response.put("message", e.getUserMessage());
+      response.put("currentRecordingId", recordingService.getCurrentRecordingId());
       return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+
+    } catch (RecordingDisabledException e) {
+      logger.warn("Attempt to start recording while disabled");
+      Map<String, Object> response = new HashMap<>();
+      response.put("status", "error");
+      response.put("errorType", "DISABLED");
+      response.put("message", e.getUserMessage());
+      return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+
+    } catch (FrameCaptureException e) {
+      logger.warn("Failed to capture frame for recording");
+      Map<String, Object> response = new HashMap<>();
+      response.put("status", "error");
+      response.put("errorType", "CAPTURE_FAILED");
+      response.put("message", e.getUserMessage());
+      return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+
+    } catch (RecordingException e) {
+      logger.error("Recording error: {}", e.getMessage(), e);
+      Map<String, Object> response = new HashMap<>();
+      response.put("status", "error");
+      response.put("errorType", "RECORDING_ERROR");
+      response.put("message", e.getUserMessage());
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+
+    } catch (Exception e) {
+      logger.error("Unexpected error starting recording: {}", e.getMessage(), e);
+      Map<String, Object> response = new HashMap<>();
+      response.put("status", "error");
+      response.put("errorType", "UNEXPECTED");
+      response.put("message", "An unexpected error occurred. Please try again.");
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
   }
 
@@ -112,37 +159,82 @@ public class RecordingController {
   public ResponseEntity<Map<String, Object>> stopRecording() {
     RecordingMetadata metadata = recordingService.stopRecording();
 
-    if (metadata != null) {
-      // Update RecordingSession entity
-      recordingSessionRepository
-          .findByRecordingId(metadata.getId())
-          .ifPresent(
-              session -> {
-                session.setEndTime(LocalDateTime.now());
-                session.setVideoPath(metadata.getFilePath());
-                session.setDurationMs(metadata.getDuration());
-                session.setFrameCount(metadata.getFrameCount());
-                session.setFps(metadata.getFps());
-                recordingSessionRepository.save(session);
-                logger.info(
-                    "Updated recording session: {} with duration: {}ms",
-                    metadata.getId(),
-                    metadata.getDuration());
-              });
+    if (metadata == null) {
+      Map<String, Object> response = new HashMap<>();
+      response.put("status", "error");
+      response.put("message", "No recording in progress");
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
 
+    try {
+      // Find the recording session - throw if not found
+      RecordingSession session =
+          recordingSessionRepository
+              .findByRecordingId(metadata.getId())
+              .orElseThrow(
+                  () -> {
+                    logger.error("Recording session not found in database: {}", metadata.getId());
+                    return new IllegalStateException(
+                        "Recording session not found: " + metadata.getId());
+                  });
+
+      // Validate video file exists and is not empty
+      File videoFile = new File(metadata.getFilePath());
+      if (!videoFile.exists()) {
+        logger.error("Video file does not exist: {}", metadata.getFilePath());
+        throw new IllegalStateException("Video file was not created: " + metadata.getFilePath());
+      }
+      if (videoFile.length() == 0) {
+        logger.error("Video file is empty: {}", metadata.getFilePath());
+        throw new IllegalStateException("Video file is empty: " + metadata.getFilePath());
+      }
+
+      // Update session with metadata
+      session.setEndTime(LocalDateTime.now());
+      session.setVideoPath(metadata.getFilePath());
+      session.setDurationMs(metadata.getDuration());
+      session.setFrameCount(metadata.getFrameCount());
+      session.setFps(metadata.getFps());
+
+      // Save to database
+      RecordingSession saved = recordingSessionRepository.save(session);
+
+      // Validate save was successful
+      if (saved.getVideoPath() == null) {
+        logger.error("Failed to persist videoPath for recording: {}", metadata.getId());
+        throw new IllegalStateException("Database save failed to persist video path");
+      }
+
+      logger.info(
+          "Stopped recording: {} - Video: {}, Duration: {}ms, Frames: {}",
+          metadata.getId(),
+          metadata.getFilePath(),
+          metadata.getDuration(),
+          metadata.getFrameCount());
+
+      // Return success response
       Map<String, Object> response = new HashMap<>();
       response.put("status", "stopped");
       response.put("recordingId", metadata.getId());
       response.put("duration", metadata.getDuration());
       response.put("frameCount", metadata.getFrameCount());
       response.put("filePath", metadata.getFilePath());
-      response.put("message", "Recording saved");
+      response.put("message", "Recording saved successfully");
       return ResponseEntity.ok(response);
-    } else {
-      Map<String, Object> response = new HashMap<>();
-      response.put("status", "error");
-      response.put("message", "No recording in progress");
-      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+
+    } catch (IllegalStateException e) {
+      logger.error("Failed to finalize recording {}: {}", metadata.getId(), e.getMessage());
+      Map<String, Object> errorResponse = new HashMap<>();
+      errorResponse.put("status", "error");
+      errorResponse.put("message", "Failed to save recording: " + e.getMessage());
+      errorResponse.put("recordingId", metadata.getId());
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+    } catch (Exception e) {
+      logger.error("Unexpected error stopping recording: {}", e.getMessage(), e);
+      Map<String, Object> errorResponse = new HashMap<>();
+      errorResponse.put("status", "error");
+      errorResponse.put("message", "Unexpected error: " + e.getMessage());
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
     }
   }
 
@@ -156,6 +248,32 @@ public class RecordingController {
     Map<String, Object> response = new HashMap<>();
     response.put("recording", recordingService.isRecording());
     response.put("recordingId", recordingService.getCurrentRecordingId());
+    response.put("startTime", recordingService.getRecordingStartTime());
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Force reset the recording state.
+   *
+   * <p>This is a recovery endpoint to reset stuck recording state. Use with caution as it may
+   * leave incomplete recordings.
+   *
+   * @return Response indicating whether state was reset
+   */
+  @PostMapping("/reset")
+  public ResponseEntity<Map<String, Object>> resetRecordingState() {
+    logger.warn("Force reset recording state requested");
+
+    boolean wasRecording = recordingService.forceResetRecordingState();
+
+    Map<String, Object> response = new HashMap<>();
+    response.put("reset", wasRecording);
+    response.put(
+        "message",
+        wasRecording
+            ? "Recording state has been reset. Previous recording may be incomplete."
+            : "No recording was in progress.");
+
     return ResponseEntity.ok(response);
   }
 
@@ -169,7 +287,7 @@ public class RecordingController {
     List<Map<String, Object>> recordings = new ArrayList<>();
 
     try {
-      Path recordingsDir = Paths.get("recordings");
+      Path recordingsDir = Paths.get(recordingConfig.getOutputDirectory());
       if (Files.exists(recordingsDir)) {
         try (Stream<Path> paths = Files.list(recordingsDir)) {
           paths
@@ -250,22 +368,36 @@ public class RecordingController {
                 response.put("startTime", session.getStartTime());
                 response.put("endTime", session.getEndTime());
                 response.put("triggerType", session.getTriggerType());
-                response.put("videoPath", session.getVideoPath());
 
-                // Add video URL if path exists
+                // Validate and add video URL
                 if (session.getVideoPath() != null) {
                   File videoFile = new File(session.getVideoPath());
                   if (videoFile.exists()) {
                     String filename = videoFile.getName();
                     response.put("videoUrl", "/api/recordings/download/" + filename);
+                    logger.debug("Generated video URL for {}: {}", recordingId, filename);
+                  } else {
+                    logger.warn(
+                        "Video file missing for recording {}: {}",
+                        recordingId,
+                        session.getVideoPath());
+                    response.put("videoError", "Video file not found on disk");
                   }
+                } else {
+                  logger.warn("Video path is null for recording: {}", recordingId);
+                  response.put(
+                      "videoError", "Recording was not finalized properly - video path not set");
                 }
 
                 return ResponseEntity.ok(response);
               })
-          .orElse(ResponseEntity.notFound().build());
+          .orElseGet(
+              () -> {
+                logger.warn("Recording session not found: {}", recordingId);
+                return ResponseEntity.notFound().build();
+              });
     } catch (Exception e) {
-      logger.error("Failed to get recording: {}", e.getMessage());
+      logger.error("Failed to get recording {}: {}", recordingId, e.getMessage(), e);
       return ResponseEntity.internalServerError().build();
     }
   }
@@ -277,30 +409,36 @@ public class RecordingController {
    * @return The video file
    */
   @GetMapping("/download/{filename:.+}")
-  public ResponseEntity<Resource> downloadRecording(String filename) {
+  public ResponseEntity<Resource> downloadRecording(@PathVariable String filename) {
     try {
       // Security check: ensure filename doesn't contain path traversal
       if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+        logger.warn("Path traversal attempt blocked: {}", filename);
         return ResponseEntity.badRequest().build();
       }
 
-      Path videoPath = Paths.get("recordings", filename).toAbsolutePath();
+      Path videoPath = Paths.get(recordingConfig.getOutputDirectory(), filename).toAbsolutePath();
 
       // Ensure file exists and is an MP4
       if (!Files.exists(videoPath) || !filename.endsWith(".mp4")) {
+        logger.warn("Recording file not found: {}", filename);
         return ResponseEntity.notFound().build();
       }
 
       File file = videoPath.toFile();
       Resource resource = new FileSystemResource(file);
 
+      logger.debug("Serving recording: {} ({} bytes)", filename, file.length());
+
       return ResponseEntity.ok()
           .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+          .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+          .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(file.length()))
           .contentType(MediaType.parseMediaType("video/mp4"))
           .body(resource);
 
     } catch (Exception e) {
-      logger.error("Failed to download recording: {}", e.getMessage());
+      logger.error("Failed to download recording {}: {}", filename, e.getMessage(), e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
     }
   }

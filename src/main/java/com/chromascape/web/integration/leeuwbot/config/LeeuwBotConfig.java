@@ -43,6 +43,15 @@ public class LeeuwBotConfig {
   /** Whether to report script lifecycle events. */
   private boolean reportScriptEvents = true;
 
+  /** Whether to forward tick data to the bridge service. */
+  private boolean forwardTickData = true;
+
+  /** Timeout in milliseconds for tick data forwarding. */
+  private int tickForwardTimeoutMs = 5000;
+
+  /** Whether to use Go backend as primary storage (true) or hybrid mode (false). */
+  private boolean useGoBackendStorage = false;
+
   // Getters and Setters
 
   public boolean isEnabled() {
@@ -123,6 +132,30 @@ public class LeeuwBotConfig {
 
   public void setReportScriptEvents(boolean reportScriptEvents) {
     this.reportScriptEvents = reportScriptEvents;
+  }
+
+  public boolean isForwardTickData() {
+    return forwardTickData;
+  }
+
+  public void setForwardTickData(boolean forwardTickData) {
+    this.forwardTickData = forwardTickData;
+  }
+
+  public int getTickForwardTimeoutMs() {
+    return tickForwardTimeoutMs;
+  }
+
+  public void setTickForwardTimeoutMs(int tickForwardTimeoutMs) {
+    this.tickForwardTimeoutMs = tickForwardTimeoutMs;
+  }
+
+  public boolean isUseGoBackendStorage() {
+    return useGoBackendStorage;
+  }
+
+  public void setUseGoBackendStorage(boolean useGoBackendStorage) {
+    this.useGoBackendStorage = useGoBackendStorage;
   }
 
   @Override

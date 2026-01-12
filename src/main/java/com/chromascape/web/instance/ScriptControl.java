@@ -1,8 +1,10 @@
 package com.chromascape.web.instance;
 
+import com.chromascape.web.recording.service.TaskDetectionService;
 import java.lang.reflect.InvocationTargetException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +26,7 @@ public class ScriptControl {
 
   private static final Logger logger = LogManager.getLogger(ScriptControl.class.getName());
   private final WebSocketStateHandler stateHandler;
+  @Autowired private TaskDetectionService taskDetectionService;
 
   /**
    * Constructs the script controller with a state handler.
@@ -56,7 +59,7 @@ public class ScriptControl {
       logger.info("Config valid: attempting to run script");
 
       // Instantiate and start the script instance
-      ScriptInstance instance = new ScriptInstance(config, stateHandler);
+      ScriptInstance instance = new ScriptInstance(config, stateHandler, taskDetectionService);
       ScriptInstanceManager.getInstance().setInstance(instance);
       instance.start();
 

@@ -48,8 +48,38 @@ public class WindowController {
     List<WindowInfo> filtered =
         windows.stream().filter(w -> isGameClient(w.getTitle(), w.getBounds())).toList();
 
+    // Debug: Show windows before deduplication
+    System.err.println("[WINDOW DEBUG] Before deduplication: " + filtered.size() + " windows");
+    for (WindowInfo w : filtered) {
+      System.err.println(
+          "[WINDOW DEBUG]   - "
+              + w.getTitle()
+              + " (PID: "
+              + w.getPid()
+              + ", ID: "
+              + w.getId()
+              + ", bounds: "
+              + w.getBounds().width
+              + "x"
+              + w.getBounds().height
+              + ")");
+    }
+
     // Deduplicate by PID (keep only largest window per process)
     List<WindowInfo> deduplicated = WindowHandler.deduplicateWindowsByPid(filtered);
+
+    // Debug: Show windows after deduplication
+    System.err.println("[WINDOW DEBUG] After deduplication: " + deduplicated.size() + " windows");
+    for (WindowInfo w : deduplicated) {
+      System.err.println(
+          "[WINDOW DEBUG]   - "
+              + w.getTitle()
+              + " (PID: "
+              + w.getPid()
+              + ", ID: "
+              + w.getId()
+              + ")");
+    }
 
     List<Map<String, Object>> response =
         deduplicated.stream()

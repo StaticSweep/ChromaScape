@@ -11,8 +11,15 @@ import com.chromascape.web.debug.tickdebugger.entity.TickSnapshot;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TimelineMarker;
 import com.chromascape.web.debug.tickdebugger.entity.TimelineMarkerRepository;
+import com.chromascape.web.integration.leeuwbot.config.LeeuwBotConfig;
+import com.chromascape.web.integration.leeuwbot.service.LeeuwBotBridgeService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -21,6 +28,7 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +52,9 @@ public class TickStreamIngestionService {
   private final TickOverlayRepository overlayRepository;
   private final TimelineMarkerRepository markerRepository;
   private final ObjectMapper objectMapper;
+  private final LeeuwBotBridgeService leeuwBotBridgeService;
+  private final LeeuwBotConfig leeuwBotConfig;
+  private final HttpClient httpClient;
 
   private final List<WebSocketSession> debuggerClients = new ArrayList<>();
 
@@ -53,13 +64,18 @@ public class TickStreamIngestionService {
       TickLogRepository logRepository,
       TickOverlayRepository overlayRepository,
       TimelineMarkerRepository markerRepository,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      @Autowired(required = false) LeeuwBotBridgeService leeuwBotBridgeService,
+      @Autowired(required = false) LeeuwBotConfig leeuwBotConfig) {
     this.sessionService = sessionService;
     this.snapshotRepository = snapshotRepository;
     this.logRepository = logRepository;
     this.overlayRepository = overlayRepository;
     this.markerRepository = markerRepository;
     this.objectMapper = objectMapper;
+    this.leeuwBotBridgeService = leeuwBotBridgeService;
+    this.leeuwBotConfig = leeuwBotConfig;
+    this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(5000)).build();
   }
 
   /**
@@ -109,7 +125,10 @@ public class TickStreamIngestionService {
         saveTickOverlays(sessionId, tick, overlays);
       }
 
-      // 4. Broadcast to live debugger clients
+      // 4. Forward to Go backend if enabled
+      forwardToGoBackend(batch);
+
+      // 5. Broadcast to live debugger clients
       broadcastToDebuggerClients(batch);
 
       log.debug("Processed tick batch: sessionId={}, tick={}", sessionId, tick);
@@ -258,6 +277,46 @@ public class TickStreamIngestionService {
   public void unregisterDebuggerClient(WebSocketSession session) {
     debuggerClients.remove(session);
     log.info("Unregistered debugger client: {}", session.getId());
+  }
+
+  /** Forward tick batch to Go backend if enabled. */
+  private void forwardToGoBackend(TickBatchMessage batch) {
+    // Check if forwarding is enabled
+    if (leeuwBotConfig == null || !leeuwBotConfig.isForwardTickData()) {
+      return;
+    }
+
+    // Check if bridge service is available
+    if (leeuwBotBridgeService == null || !leeuwBotBridgeService.isRunning()) {
+      log.debug("Go backend forwarding disabled or not available");
+      return;
+    }
+
+    try {
+      String json = objectMapper.writeValueAsString(batch);
+
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create(leeuwBotConfig.getBridgeUrl() + "/api/v1/ticks/batch"))
+              .header("Content-Type", "application/json")
+              .header("X-API-Key", leeuwBotConfig.getApiKey())
+              .timeout(Duration.ofMillis(leeuwBotConfig.getTickForwardTimeoutMs()))
+              .POST(HttpRequest.BodyPublishers.ofString(json))
+              .build();
+
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+      if (response.statusCode() >= 400) {
+        log.warn("Go backend tick forwarding failed with status: {}", response.statusCode());
+      } else {
+        log.debug("Tick batch forwarded to Go backend: tick={}", batch.getTick());
+      }
+
+    } catch (Exception e) {
+      log.warn("Failed to forward tick batch to Go backend: {}", e.getMessage());
+      // Data is already saved locally, so no action needed
+    }
   }
 
   /** Parse an ISO-8601 timestamp string to LocalDateTime. */

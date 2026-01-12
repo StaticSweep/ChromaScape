@@ -14,6 +14,12 @@ let viewportWebSocket = null;
 let tickPoller = null;
 let aiInspectorPoller = null;
 
+// Recording state variables
+let isRecording = false;
+let currentRecordingId = null;
+let recordingStartTime = null;
+let recordingDurationInterval = null;
+
 const elements = {};
 
 function cacheElements() {
@@ -46,6 +52,15 @@ function cacheElements() {
   elements.totalFrame = document.getElementById('totalFrame');
   elements.scrubberStartBtn = document.getElementById('scrubberStartBtn');
   elements.scrubberEndBtn = document.getElementById('scrubberEndBtn');
+  // Recording control elements
+  elements.recordBtn = document.getElementById('recordBtn');
+  elements.recordBtnText = document.getElementById('recordBtnText');
+  elements.recordingStatus = document.getElementById('recordingStatus');
+  elements.recordingDuration = document.getElementById('recordingDuration');
+  // Task recording elements
+  elements.taskRecordingPanel = document.getElementById('taskRecordingPanel');
+  elements.taskToggles = document.getElementById('taskToggles');
+  elements.resetTasksBtn = document.getElementById('resetTasksBtn');
 }
 
 function switchMode(mode) {
@@ -474,25 +489,69 @@ async function loadRecording(recordingId) {
 
   try {
     const response = await fetch(`/api/recordings/${recordingId}`);
+
+    // Handle HTTP errors
     if (!response.ok) {
-      throw new Error('Failed to load recording');
+      if (response.status === 404) {
+        console.error('Recording not found:', recordingId);
+        alert('Recording session not found. It may have been deleted.');
+      } else {
+        console.error('Failed to load recording, status:', response.status);
+        alert('Failed to load recording. Please try again.');
+      }
+      return;
     }
 
     const recording = await response.json();
     currentRecordingSessionId = recording.id;
 
-    if (elements.replayVideo && recording.videoPath) {
-      elements.replayVideo.src = recording.videoPath;
-      elements.replayVideo.load();
+    console.log('Loaded recording metadata:', recording);
+
+    // Check for video errors
+    if (recording.videoError) {
+      console.error('Video error for recording:', recording.videoError);
+      alert(`Cannot load video: ${recording.videoError}\n\nPlease check the server logs for details.`);
+      return;
     }
 
+    // Validate videoUrl exists
+    if (!recording.videoUrl) {
+      console.error('No video URL in response:', recording);
+      alert('Video is not available. The recording may not have completed properly.\n\nTry stopping and restarting the recording.');
+      return;
+    }
+
+    // Load video
+    if (elements.replayVideo) {
+      console.log('Loading video from:', recording.videoUrl);
+      elements.replayVideo.src = recording.videoUrl;
+      elements.replayVideo.load();
+
+      // Add error handler for video element
+      elements.replayVideo.onerror = (e) => {
+        console.error('Video element failed to load:', e);
+        alert('Failed to load video file. The file may be corrupted or in an unsupported format.');
+      };
+
+      // Add success handler
+      elements.replayVideo.onloadeddata = () => {
+        console.log('Video loaded successfully, duration:', elements.replayVideo.duration);
+      };
+    }
+
+    // Load logs for this recording
     const logResponse = await fetch(`/api/logs/timeline?recordingId=${recordingId}&videoTimeMs=0`);
     if (logResponse.ok) {
       const result = await logResponse.json();
       renderReplayLogs(result.logs);
+    } else {
+      console.warn('Failed to load logs for recording, status:', logResponse.status);
+      // Don't block video playback for log loading failure
     }
+
   } catch (error) {
     console.error('Failed to load recording:', error);
+    alert('An error occurred while loading the recording:\n' + error.message);
   }
 }
 
@@ -1249,6 +1308,372 @@ function renderTimelineMarkers(markers) {
   });
 }
 
+// ==================== RECORDING CONTROLS ====================
+
+/**
+ * Initialize recording controls.
+ */
+function initRecordingControls() {
+  if (!elements.recordBtn) return;
+
+  // Handle record button clicks
+  elements.recordBtn.addEventListener('click', async () => {
+    if (isRecording) {
+      await stopRecording();
+    } else {
+      await startRecording();
+    }
+  });
+
+  // Check if recording is already active on page load
+  checkRecordingStatus();
+
+  // Periodic state sync check (every 30 seconds)
+  // This helps recover from state mismatches
+  setInterval(() => {
+    checkRecordingStatus();
+  }, 30000);
+}
+
+/**
+ * Start a new recording session.
+ */
+async function startRecording() {
+  try {
+    const response = await fetch('/api/recordings/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountName: currentWindowId || 'Unknown',
+        scriptName: 'Debug Session',
+        windowTitle: document.getElementById('selectedWindowLabel')?.textContent || ''
+      })
+    });
+
+    if (!response.ok) {
+      // Parse error response to get specific error message
+      let errorMessage = 'Failed to start recording';
+      let errorType = 'UNKNOWN';
+
+      try {
+        const errorData = await response.json();
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        if (errorData.errorType) {
+          errorType = errorData.errorType;
+        }
+
+        // Special handling for already-in-progress error
+        if (errorType === 'ALREADY_IN_PROGRESS') {
+          console.warn('Recording already in progress:', errorData);
+
+          // Ask user if they want to force reset
+          const shouldReset = confirm(
+            errorMessage + '\n\nWould you like to force reset the recording state? ' +
+            '(Warning: This may leave the previous recording incomplete)'
+          );
+
+          if (shouldReset) {
+            await forceResetRecording();
+            // Retry starting the recording
+            await startRecording();
+            return;
+          }
+        }
+
+      } catch (parseError) {
+        console.error('Failed to parse error response:', parseError);
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    currentRecordingId = data.recordingId;
+    isRecording = true;
+    recordingStartTime = Date.now();
+
+    // Update button state
+    elements.recordBtn.classList.remove('btn-danger');
+    elements.recordBtn.classList.add('btn-success');
+    elements.recordBtnText.textContent = 'Stop Recording';
+
+    // Show recording indicator
+    if (elements.recordingStatus) {
+      elements.recordingStatus.classList.remove('d-none');
+    }
+
+    // Start duration timer
+    startRecordingDurationTimer();
+
+    console.log('✅ Recording started:', currentRecordingId);
+    showNotification('Recording started', 'success');
+
+  } catch (error) {
+    console.error('❌ Failed to start recording:', error);
+    showNotification(error.message, 'error');
+    alert('Failed to start recording: ' + error.message);
+  }
+}
+
+/**
+ * Stop the active recording session.
+ */
+async function stopRecording() {
+  try {
+    const response = await fetch('/api/recordings/stop', {
+      method: 'POST'
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to stop recording');
+    }
+
+    const data = await response.json();
+    isRecording = false;
+
+    // Update button state
+    elements.recordBtn.classList.remove('btn-success');
+    elements.recordBtn.classList.add('btn-danger');
+    elements.recordBtnText.textContent = 'Start Recording';
+
+    // Hide recording indicator
+    if (elements.recordingStatus) {
+      elements.recordingStatus.classList.add('d-none');
+    }
+
+    // Stop duration timer
+    stopRecordingDurationTimer();
+
+    console.log('✅ Recording stopped:', currentRecordingId);
+    showNotification('Recording saved', 'success');
+
+    // Refresh sessions list if in replay mode
+    if (currentMode === 'replay') {
+      loadRecordingSessions();
+    }
+
+    currentRecordingId = null;
+    recordingStartTime = null;
+
+  } catch (error) {
+    console.error('❌ Failed to stop recording:', error);
+    alert('Failed to stop recording: ' + error.message);
+  }
+}
+
+/**
+ * Force reset the recording state.
+ * This is a recovery function for stuck recording states.
+ */
+async function forceResetRecording() {
+  try {
+    console.warn('🔄 Force resetting recording state...');
+
+    const response = await fetch('/api/recordings/reset', {
+      method: 'POST'
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to reset recording state');
+    }
+
+    const data = await response.json();
+
+    // Reset frontend state
+    isRecording = false;
+    currentRecordingId = null;
+    recordingStartTime = null;
+
+    // Update UI
+    elements.recordBtn.classList.remove('btn-success');
+    elements.recordBtn.classList.add('btn-danger');
+    elements.recordBtnText.textContent = 'Start Recording';
+
+    if (elements.recordingStatus) {
+      elements.recordingStatus.classList.add('d-none');
+    }
+
+    if (recordingDurationInterval) {
+      clearInterval(recordingDurationInterval);
+      recordingDurationInterval = null;
+    }
+
+    console.log('✅ Recording state reset:', data);
+    showNotification(data.message, 'warning');
+
+    return data.reset;
+
+  } catch (error) {
+    console.error('❌ Failed to reset recording state:', error);
+    showNotification('Failed to reset recording state: ' + error.message, 'error');
+    throw error;
+  }
+}
+
+/**
+ * Check current recording status and synchronize frontend state with backend.
+ */
+async function checkRecordingStatus() {
+  try {
+    const response = await fetch('/api/recordings/status');
+    if (!response.ok) return;
+
+    const data = await response.json();
+    const backendRecording = data.recording && data.recordingId;
+
+    if (backendRecording && !isRecording) {
+      // Backend says recording, but frontend doesn't know about it
+      console.log('📹 Synchronizing: Backend has active recording, updating frontend state');
+
+      isRecording = true;
+      currentRecordingId = data.recordingId;
+      recordingStartTime = data.startTime ? new Date(data.startTime).getTime() : Date.now();
+
+      // Update UI to recording state
+      elements.recordBtn.classList.remove('btn-danger');
+      elements.recordBtn.classList.add('btn-success');
+      elements.recordBtnText.textContent = 'Stop Recording';
+
+      if (elements.recordingStatus) {
+        elements.recordingStatus.classList.remove('d-none');
+      }
+
+      startRecordingDurationTimer();
+
+      console.log('📹 Recording already in progress:', currentRecordingId);
+
+    } else if (!backendRecording && isRecording) {
+      // Frontend thinks we're recording, but backend says no
+      console.warn('⚠️ State mismatch: Frontend thinks recording, but backend says no. Resetting frontend state.');
+
+      isRecording = false;
+      currentRecordingId = null;
+      recordingStartTime = null;
+
+      // Reset UI
+      elements.recordBtn.classList.remove('btn-success');
+      elements.recordBtn.classList.add('btn-danger');
+      elements.recordBtnText.textContent = 'Start Recording';
+
+      if (elements.recordingStatus) {
+        elements.recordingStatus.classList.add('d-none');
+      }
+
+      if (recordingDurationInterval) {
+        clearInterval(recordingDurationInterval);
+        recordingDurationInterval = null;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to check recording status:', error);
+  }
+}
+
+/**
+ * Start timer to show recording duration.
+ */
+function startRecordingDurationTimer() {
+  if (recordingDurationInterval) {
+    clearInterval(recordingDurationInterval);
+  }
+
+  recordingDurationInterval = setInterval(() => {
+    if (!recordingStartTime || !elements.recordingDuration) return;
+
+    const elapsed = Date.now() - recordingStartTime;
+    const minutes = Math.floor(elapsed / 60000);
+    const seconds = Math.floor((elapsed % 60000) / 1000);
+
+    elements.recordingDuration.textContent =
+      `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }, 1000);
+}
+
+/**
+ * Stop recording duration timer.
+ */
+function stopRecordingDurationTimer() {
+  if (recordingDurationInterval) {
+    clearInterval(recordingDurationInterval);
+    recordingDurationInterval = null;
+  }
+}
+
+/**
+ * Show notification toast.
+ */
+function showNotification(message, type = 'info') {
+  console.log(`[${type.toUpperCase()}] ${message}`);
+}
+
+// ==================== TASK RECORDING CONTROLS ====================
+
+/**
+ * Initialize task recording toggles.
+ */
+function initTaskRecordingControls() {
+  const taskTogglesContainer = document.getElementById('taskToggles');
+  if (!taskTogglesContainer) return;
+
+  // Fetch current task states and render toggles
+  fetch('/api/recordings/tasks')
+    .then(r => r.json())
+    .then(taskStates => {
+      renderTaskToggles(taskTogglesContainer, taskStates);
+    })
+    .catch(err => console.error('Failed to load task states:', err));
+
+  // Reset button handler
+  const resetBtn = document.getElementById('resetTasksBtn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', async () => {
+      const response = await fetch('/api/recordings/tasks/reset', { method: 'POST' });
+      const taskStates = await response.json();
+      renderTaskToggles(taskTogglesContainer, taskStates);
+    });
+  }
+}
+
+/**
+ * Render task toggle checkboxes.
+ */
+function renderTaskToggles(container, taskStates) {
+  container.innerHTML = '';
+
+  Object.keys(taskStates).forEach(taskKey => {
+    const enabled = taskStates[taskKey];
+    const displayName = taskKey.charAt(0).toUpperCase() + taskKey.slice(1);
+
+    const item = document.createElement('div');
+    item.className = 'task-toggle-item' + (enabled ? ' active' : '');
+    item.innerHTML = `
+      <input type="checkbox" id="task-${taskKey}" ${enabled ? 'checked' : ''}>
+      <label for="task-${taskKey}">${displayName}</label>
+    `;
+
+    // Add click handler to toggle
+    item.addEventListener('click', async (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') {
+        const checkbox = item.querySelector('input');
+        const newState = !checkbox.checked;
+
+        // Update server
+        await fetch(`/api/recordings/tasks/${taskKey}?enabled=${newState}`, {
+          method: 'POST'
+        });
+
+        // Update UI
+        checkbox.checked = newState;
+        item.classList.toggle('active', newState);
+      }
+    });
+
+    container.appendChild(item);
+  });
+}
+
 // ==================== INIT ====================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1267,6 +1692,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initTickControls();
   initLogFilters();
   initTickReplayControls(); // New tick-based replay controls
+  initRecordingControls(); // Recording controls
+  initTaskRecordingControls(); // Task recording controls
 
   startTickPolling();
 

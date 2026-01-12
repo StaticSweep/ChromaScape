@@ -17,6 +17,7 @@
 
 # Virtual machine crash logs
 hs_err_pid*
+*.hprof
 
 # Generated files
 bin/
@@ -68,3 +69,6 @@ output/*
 # custom user scripts
 /src/main/java/com/chromascape/scripts/*/
 /scripts/*/
+
+# recordings
+recordings/
