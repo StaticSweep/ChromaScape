@@ -48,6 +48,8 @@ public class RecordingService {
   private String currentRecordingId;
   private int initialWidth;
   private int initialHeight;
+  private static final String[] VIDEO_CODEC_PREFERENCES =
+      new String[] {"libx264", "libopenh264", "mpeg4"};
 
   @Autowired
   public RecordingService(RecordingConfig config) {
@@ -99,11 +101,21 @@ public class RecordingService {
 
       // Try to capture first frame to get actual dimensions
       BufferedImage firstFrame = null;
+      String lastCaptureError = null;
       int maxAttempts = 5;
       for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-        firstFrame = ScreenManager.captureWindow();
-        if (firstFrame != null) {
-          break;
+        try {
+          firstFrame = ScreenManager.captureWindow();
+          if (firstFrame != null) {
+            break;
+          }
+        } catch (RuntimeException e) {
+          lastCaptureError = e.getMessage();
+          logger.warn(
+              "Failed to capture frame for recording (attempt {}/{}): {}",
+              attempt,
+              maxAttempts,
+              e.getMessage());
         }
         if (attempt < maxAttempts) {
           logger.warn(
@@ -122,11 +134,12 @@ public class RecordingService {
 
       if (firstFrame == null) {
         logger.error("Failed to capture first frame after {} attempts", maxAttempts);
-        throw new FrameCaptureException(maxAttempts);
+        throw new FrameCaptureException(maxAttempts, lastCaptureError);
       }
 
-      int width = firstFrame.getWidth();
-      int height = firstFrame.getHeight();
+      BufferedImage normalizedFirstFrame = normalizeFrameDimensions(firstFrame);
+      int width = normalizedFirstFrame.getWidth();
+      int height = normalizedFirstFrame.getHeight();
 
       // Store initial dimensions for validation during capture
       initialWidth = width;
@@ -134,27 +147,11 @@ public class RecordingService {
 
       logger.info("Initializing recorder with captured dimensions: {}x{}", width, height);
 
-      // Initialize FFmpeg recorder with dimensions
-      recorder = new FFmpegFrameRecorder(currentRecordingFile, width, height, 0);
-
-      // Video codec settings
-      recorder.setVideoCodecName("libx264");
-      recorder.setFormat("mp4");
-      recorder.setFrameRate(config.getFps());
-      recorder.setVideoBitrate((int) (config.getVideoQuality() * 10000));
-      recorder.setVideoQuality(config.getVideoQuality());
-
-      // Browser compatibility settings
-      recorder.setPixelFormat(
-          org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P); // Most compatible
-      recorder.setVideoOption("preset", "ultrafast"); // Fast encoding
-      recorder.setVideoOption("profile", "main"); // Browser-compatible profile
-      recorder.setVideoOption("movflags", "+faststart"); // Web streaming
-
-      recorder.start();
+      // Initialize FFmpeg recorder with dimensions and codec fallback
+      startRecorderWithFallbacks(width, height);
 
       // Record the first frame
-      recorder.record(frameConverter.convert(firstFrame));
+      recorder.record(frameConverter.convert(normalizedFirstFrame));
       frameCount.set(1);
 
       recording.set(true);
@@ -284,6 +281,7 @@ public class RecordingService {
       BufferedImage capturedImage = ScreenManager.captureWindow();
 
       if (capturedImage != null) {
+        capturedImage = normalizeFrameDimensions(capturedImage);
         // CRITICAL: Validate dimensions match initial dimensions
         // Changing dimensions after recorder.start() corrupts MP4 metadata
         int frameWidth = capturedImage.getWidth();
@@ -395,6 +393,85 @@ public class RecordingService {
     frameCount.set(0);
     initialWidth = 0;
     initialHeight = 0;
+  }
+
+  private void startRecorderWithFallbacks(int width, int height) {
+    Exception lastException = null;
+
+    for (String codecName : VIDEO_CODEC_PREFERENCES) {
+      FFmpegFrameRecorder candidate = null;
+      try {
+        if (currentRecordingFile.exists() && !currentRecordingFile.delete()) {
+          logger.warn("Failed to delete existing recording file: {}", currentRecordingFile);
+        }
+        candidate = createRecorder(codecName, width, height);
+        candidate.start();
+        recorder = candidate;
+        logger.info("Recording codec initialized: {}", codecName);
+        return;
+      } catch (Exception e) {
+        lastException = e;
+        logger.warn(
+            "Failed to start recorder with codec {}: {}", codecName, e.getMessage());
+        try {
+          if (candidate != null) {
+            candidate.release();
+          }
+        } catch (Exception releaseError) {
+          logger.debug("Failed to release recorder after codec failure: {}", releaseError.getMessage());
+        }
+      }
+    }
+
+    String detail = lastException != null ? lastException.getMessage() : "unknown error";
+    throw new RecordingException(
+        "Failed to start recorder with available codecs: " + detail,
+        "Failed to start video recording. Please check FFmpeg codec availability.");
+  }
+
+  private FFmpegFrameRecorder createRecorder(String codecName, int width, int height) {
+    FFmpegFrameRecorder candidate = new FFmpegFrameRecorder(currentRecordingFile, width, height, 0);
+
+    candidate.setVideoCodecName(codecName);
+    candidate.setFormat("mp4");
+    candidate.setFrameRate(config.getFps());
+    candidate.setVideoBitrate((int) (config.getVideoQuality() * 10000));
+
+    // Browser compatibility settings
+    candidate.setPixelFormat(org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P);
+
+    if ("libx264".equals(codecName)) {
+      candidate.setVideoOption("preset", "ultrafast");
+      candidate.setVideoOption("profile", "main");
+    }
+
+    // Container-level option for web streaming
+    candidate.setOption("movflags", "+faststart");
+    return candidate;
+  }
+
+  private BufferedImage normalizeFrameDimensions(BufferedImage frame) {
+    int width = frame.getWidth();
+    int height = frame.getHeight();
+    int evenWidth = width - (width % 2);
+    int evenHeight = height - (height % 2);
+
+    if (evenWidth <= 0 || evenHeight <= 0) {
+      throw new IllegalArgumentException(
+          "Captured frame dimensions are invalid: " + width + "x" + height);
+    }
+
+    if (evenWidth == width && evenHeight == height) {
+      return frame;
+    }
+
+    logger.warn(
+        "Captured frame dimensions {}x{} are not even; trimming to {}x{} for recorder compatibility.",
+        width,
+        height,
+        evenWidth,
+        evenHeight);
+    return frame.getSubimage(0, 0, evenWidth, evenHeight);
   }
 
   /**
