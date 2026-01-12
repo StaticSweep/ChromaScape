@@ -1,7 +1,6 @@
 package com.chromascape.utils.actions;
 
 import com.chromascape.base.BaseScript;
-import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.domain.ocr.Ocr;
 import java.awt.Rectangle;
@@ -16,6 +15,9 @@ public class Minimap {
 
   private static final ColourObj textColour =
       new ColourObj("green", new Scalar(0, 254, 254, 0), new Scalar(60, 255, 255, 0));
+
+  private static final ColourObj white =
+      new ColourObj("White", new Scalar(0, 0, 255, 0), new Scalar(0, 0, 255, 0));
 
   /**
    * Returns the character's current hitpoints, or -1 if not found.
@@ -89,6 +91,6 @@ public class Minimap {
    */
   public static String getXp(BaseScript script) throws IOException {
     Rectangle xpZone = script.controller().zones().getMinimap().get("totalXP");
-    return Ocr.extractText(xpZone, "Plain 12", ColourInstances.getByName("White"), true);
+    return Ocr.extractText(xpZone, "Plain 12", white, true);
   }
 }
