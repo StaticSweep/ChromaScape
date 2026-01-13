@@ -44,9 +44,11 @@ public class WindowController {
   public ResponseEntity<List<Map<String, Object>>> listWindows() {
     List<WindowInfo> windows = WindowHandler.getAllTargetWindows();
 
-    // Filter to only show game client windows
+    // Filter to only show game client windows (using process verification)
     List<WindowInfo> filtered =
-        windows.stream().filter(w -> isGameClient(w.getTitle(), w.getBounds())).toList();
+        windows.stream()
+            .filter(w -> isGameClient(w.getTitle(), w.getBounds(), w.getPid()))
+            .toList();
 
     // Debug: Show windows before deduplication
     System.err.println("[WINDOW DEBUG] Before deduplication: " + filtered.size() + " windows");
@@ -107,16 +109,17 @@ public class WindowController {
   }
 
   /**
-   * Checks if a window title represents a game client window.
+   * Checks if a window represents a game client window.
    *
-   * <p>Includes RuneLite, Leeuwbot, and VitaLite windows while excluding inspectors, IDE windows,
-   * and other utility windows. Also filters out small utility windows based on minimum size.
+   * <p>Uses process-based verification to distinguish between standalone Java game clients
+   * (RuneLite, Leeuwbot, VitaLite) and IDE-embedded Java processes. Also filters by size and title.
    *
    * @param title the window title to check
    * @param bounds the window bounds to check for size filtering
+   * @param pid the process ID to verify it's a standalone Java process
    * @return true if this is a game client window
    */
-  private boolean isGameClient(String title, Rectangle bounds) {
+  private boolean isGameClient(String title, Rectangle bounds, int pid) {
     if (title == null) return false;
     if (bounds == null) return false;
 
@@ -125,41 +128,21 @@ public class WindowController {
       return false;
     }
 
-    // Check if it's a game client
-    if (!title.contains("RuneLite") && !title.contains("Leeuwbot") && !title.contains("VitaLite")) {
+    // Verify it's a standalone Java process (not running from an IDE)
+    if (!ProcessVerificationUtil.isStandaloneJavaProcess(pid)) {
       return false;
     }
 
-    // Exclude inspector windows
-    if (title.contains("Inspector") || title.contains("Shell")) {
+    // Case-insensitive title check for supported game clients
+    String titleLower = title.toLowerCase();
+    if (!titleLower.contains("runelite")
+        && !titleLower.contains("leeuwbot")
+        && !titleLower.contains("vitalite")) {
       return false;
     }
 
-    // Exclude IDE windows (contain file extensions or IDE markers)
-    if (title.contains(".java")
-        || title.contains(".go")
-        || title.contains(".tsv")
-        || title.contains(".md")
-        || title.contains(" – ")
-        || title.contains(" [")) {
-      return false;
-    }
-
-    // Exclude toolkit/utility windows
-    if (title.contains("AwtToolkit")
-        || title.contains("TrayMessage")
-        || title.contains("Popup")
-        || title.contains("theAwtToolkit")) {
-      return false;
-    }
-
-    // Exclude windows with brackets that are typically IDE windows
-    if (title.matches(".*\\[.*\\].*")) {
-      return false;
-    }
-
-    // Exclude windows with titles starting with special characters (utility windows)
-    if (title.trim().startsWith("-") || title.matches("^\\s*[-–].*")) {
+    // Exclude inspector/shell windows
+    if (titleLower.contains("inspector") || titleLower.contains("shell")) {
       return false;
     }
 
@@ -218,7 +201,9 @@ public class WindowController {
     // Find the window with the given ID from filtered game clients
     List<WindowInfo> windows = WindowHandler.getAllTargetWindows();
     List<WindowInfo> filtered =
-        windows.stream().filter(w -> isGameClient(w.getTitle(), w.getBounds())).toList();
+        windows.stream()
+            .filter(w -> isGameClient(w.getTitle(), w.getBounds(), w.getPid()))
+            .toList();
 
     // Deduplicate by PID (keep only largest window per process)
     List<WindowInfo> deduplicated = WindowHandler.deduplicateWindowsByPid(filtered);
