@@ -86,11 +86,12 @@ public class Minimap {
    * https://github.com/StaticSweep/ChromaScape/wiki/Requirements
    *
    * @param script The current running script (typically pass {@code this})
-   * @return the XP string, or empty if not found
+   * @return the XP integer, or empty if not found
    * @throws IOException if the OCR failed to load the font
    */
-  public static String getXp(BaseScript script) throws IOException {
+  public static int getXp(BaseScript script) throws IOException {
     Rectangle xpZone = script.controller().zones().getMinimap().get("totalXP");
-    return Ocr.extractText(xpZone, "Plain 12", white, true);
+    String xpText = Ocr.extractText(xpZone, "Plain 12", white, true);
+    return Integer.parseInt(xpText.trim().replace(",", ""));
   }
 }

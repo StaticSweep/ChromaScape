@@ -79,7 +79,7 @@ public class MovingObject {
 
     // Initial Calculation and Click
     BufferedImage gameView = baseScript.controller().zones().getGameView();
-    Point clickLocation = PointSelector.getRandomPointByColourObj(gameView, colour, 5);
+    Point clickLocation = PointSelector.getRandomPointByColourObj(gameView, colour, 15);
 
     if (clickLocation == null) {
       return false;
