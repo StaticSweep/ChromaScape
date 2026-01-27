@@ -159,7 +159,7 @@ public class WindowHandler {
     }
 
     // Tier 2: Try partial match (case-insensitive) for windows containing "runelite", "leeuwbot",
-    // or "vitalite"
+    // or "vitalite" - with process verification to exclude IDE windows
     AtomicReference<HWND> partialMatch = new AtomicReference<>();
     user32.EnumWindows(
         (hwnd, arg) -> {
@@ -171,7 +171,13 @@ public class WindowHandler {
           if (titleLower.contains("runelite")
               || titleLower.contains("leeuwbot")
               || titleLower.contains("vitalite")) {
-            logger.info("Found partial match: {}", title);
+            // Verify it's a standalone Java process (not IDE)
+            int pid = getPid(hwnd);
+            if (!ProcessVerificationUtil.isStandaloneJavaProcess(pid)) {
+              logger.debug("Skipping IDE window with matching title: {} (PID: {})", title, pid);
+              return true; // continue enumeration
+            }
+            logger.info("Found partial match: {} (PID: {})", title, pid);
             partialMatch.set(hwnd);
             return false; // stop enumeration
           }

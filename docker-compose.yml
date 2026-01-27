@@ -6,7 +6,7 @@ services:
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/chromascape
       - SPRING_DATASOURCE_USERNAME=chromascape
-      - SPRING_DATASCAPE_PASSWORD=chromascape123
+      - SPRING_DATASOURCE_PASSWORD=chromascape123
     depends_on:
       - postgres
     volumes:

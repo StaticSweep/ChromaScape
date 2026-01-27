@@ -1,8 +1,6 @@
 package com.chromascape.web.recording.exception;
 
-/**
- * Exception thrown when attempting to start a recording while one is already in progress.
- */
+/** Exception thrown when attempting to start a recording while one is already in progress. */
 public class RecordingAlreadyInProgressException extends RecordingException {
   /**
    * Constructs a new RecordingAlreadyInProgressException.

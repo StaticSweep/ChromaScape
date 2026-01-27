@@ -1,8 +1,6 @@
 package com.chromascape.web.recording.exception;
 
-/**
- * Exception thrown when failing to capture the initial frame from the game window.
- */
+/** Exception thrown when failing to capture the initial frame from the game window. */
 public class FrameCaptureException extends RecordingException {
   /**
    * Constructs a new FrameCaptureException.
@@ -23,7 +21,9 @@ public class FrameCaptureException extends RecordingException {
    */
   public FrameCaptureException(int maxAttempts, String detail) {
     super(
-        "Failed to capture frame after " + maxAttempts + " attempts"
+        "Failed to capture frame after "
+            + maxAttempts
+            + " attempts"
             + (detail == null || detail.isBlank() ? "" : ": " + detail),
         "Failed to capture the game window. "
             + (detail == null || detail.isBlank()

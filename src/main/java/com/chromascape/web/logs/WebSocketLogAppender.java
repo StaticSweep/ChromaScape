@@ -1,5 +1,8 @@
 package com.chromascape.web.logs;
 
+import com.chromascape.utils.core.statistics.StatisticsManager;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import org.apache.logging.log4j.core.Appender;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
@@ -27,6 +30,8 @@ import org.apache.logging.log4j.core.config.plugins.PluginFactory;
  * <p>The WebSocket handler must be set using {@link #setWebSocketHandler(LogWebSocketHandler)}
  * after the Spring application context has fully initialized.
  *
+ * <p>The JSON payload includes: level, message, source, timestamp, and tick.
+ *
  * @see LogWebSocketHandler
  */
 @Plugin(
@@ -35,6 +40,9 @@ import org.apache.logging.log4j.core.config.plugins.PluginFactory;
     elementType = Appender.ELEMENT_TYPE,
     printObject = true)
 public class WebSocketLogAppender extends AbstractAppender {
+
+  /** ISO 8601 formatter for timestamps in WebSocket payload. */
+  private static final DateTimeFormatter ISO_INSTANT = DateTimeFormatter.ISO_INSTANT;
 
   /**
    * The handler managing WebSocket sessions. This is set by Spring after context initialization.
@@ -88,20 +96,87 @@ public class WebSocketLogAppender extends AbstractAppender {
       // Handler not configured; drop message.
       return;
     }
+
     String level = event.getLevel().name();
     String message = event.getMessage().getFormattedMessage();
-    // Simple JSON construction (escaping quotes in message is prudent but assuming
-    // simple logs for now)
-    // A more robust way would be using a library, but this keeps deps low.
+    String loggerName = event.getLoggerName();
+    String timestamp = ISO_INSTANT.format(Instant.ofEpochMilli(event.getTimeMillis()));
+
+    // Extract source/subsystem from logger name
+    String source = extractSource(loggerName);
+
+    // Add tick field from StatisticsManager
+    int tick = StatisticsManager.getCycles();
     String json =
         String.format(
-            "{\"level\": \"%s\", \"message\": \"%s\"}",
-            level, message.replace("\"", "\\\"").replace("\n", " ").replace("\r", ""));
+            "{\"level\": \"%s\", \"message\": \"%s\", \"source\": \"%s\", \"timestamp\": \"%s\", \"tick\": %d}",
+            level, escapeJson(message), source, timestamp, tick);
 
     try {
       webSocketHandler.broadcast(json);
     } catch (Exception e) {
+      // Use System.err to avoid recursive logging
       System.err.println("Failed to broadcast log: " + e.getMessage());
     }
+  }
+
+  /**
+   * Extracts a simplified source/subsystem name from the logger name.
+   *
+   * <p>Examples:
+   *
+   * <ul>
+   *   <li>{@code com.chromascape.utils.core.WindowController} → {@code utils.core}
+   *   <li>{@code com.chromascape.web.logs.LogWebSocketHandler} → {@code web.logs}
+   *   <li>{@code System.out} → {@code System}
+   *   <li>{@code System.err} → {@code System}
+   * </ul>
+   *
+   * @param loggerName the full logger name from Log4j2
+   * @return a simplified source identifier
+   */
+  private String extractSource(String loggerName) {
+    if (loggerName == null || loggerName.isEmpty()) {
+      return "unknown";
+    }
+
+    // Handle System.out and System.err specially
+    if (loggerName.startsWith("System.")) {
+      return "System";
+    }
+
+    String[] parts = loggerName.split("\\.");
+    if (parts.length <= 2) {
+      return loggerName;
+    }
+
+    // Extract ChromaScape subsystem: com.chromascape.utils.core.screen → utils.core
+    if (parts.length >= 3 && parts[0].equals("com") && parts[1].equals("chromascape")) {
+      String subsystem = parts[2]; // "utils", "web", or "scripts"
+      if (parts.length >= 4) {
+        return subsystem + "." + parts[3]; // e.g., "utils.core", "web.logs"
+      }
+      return subsystem;
+    }
+
+    // For external libraries or other packages, return the logger name
+    return loggerName;
+  }
+
+  /**
+   * Escapes special characters in text for JSON encoding.
+   *
+   * @param text the text to escape
+   * @return JSON-safe text
+   */
+  private String escapeJson(String text) {
+    if (text == null) {
+      return "";
+    }
+    return text.replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t");
   }
 }

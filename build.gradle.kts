@@ -48,7 +48,11 @@ dependencies {
 	// Jackson for JSON serialization (LeeuwBot integration)
 	implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.0")
 
+	// Gson for JSON parsing (Micro6 integration)
+	implementation("com.google.code.gson:gson:2.10.1")
+
 	// Other libraries
+	implementation("org.java-websocket:Java-WebSocket:1.5.4")
 	implementation("com.github.kwhat:jnativehook:2.2.2")
 	implementation("commons-io:commons-io:2.14.0")
 	implementation("net.java.dev.jna:jna:5.13.0")

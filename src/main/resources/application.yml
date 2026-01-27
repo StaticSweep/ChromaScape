@@ -47,16 +47,42 @@ leeuwbot:
     # Use Go backend as primary storage (true = Go only, false = hybrid: local + Go)
     use-go-backend-storage: ${LEEUWBOT_USE_GO_STORAGE:false}
 
+    # Screen streaming to Mule Service
+    stream:
+      # Enable screen streaming
+      enabled: ${LEEUWBOT_STREAM_ENABLED:true}
+      # WebSocket URL for Mule Service agent endpoint
+      url: ${LEEUWBOT_STREAM_URL:ws://192.168.1.6:8084/ws/screens/agent}
+      # Host identifier for grouping (e.g., "pc1", "pc2")
+      host-id: ${LEEUWBOT_STREAM_HOST_ID:pc1}
+      # Display name for this stream instance
+      display-name: ${LEEUWBOT_STREAM_DISPLAY_NAME:ChromaScape}
+      # Default FPS when streaming is requested
+      fps: ${LEEUWBOT_STREAM_FPS:5}
+      # JPEG quality (1-100)
+      quality: ${LEEUWBOT_STREAM_QUALITY:70}
+      # Stream dimensions
+      width: ${LEEUWBOT_STREAM_WIDTH:800}
+      height: ${LEEUWBOT_STREAM_HEIGHT:600}
+
 # Server configuration
 server:
   port: ${SERVER_PORT:8090}  # Changed from 8080 to avoid conflict with leeuwbot-api
+
+# Unified Frame Capture - Single capture thread for all consumers
+unified-capture:
+  # Enable unified capture (reduces CPU usage by eliminating duplicate screen captures)
+  enabled: ${UNIFIED_CAPTURE_ENABLED:true}
+  # Frames per second for all consumers (viewport, recording, streaming)
+  fps: ${UNIFIED_CAPTURE_FPS:30}
 
 # Screen Capture Configuration - Continuous viewport display
 screencapture:
   # Enable continuous screen capture to viewport
   enabled: ${SCREENCAPTURE_ENABLED:true}
-  # Frames per second to capture (1-60, default 30)
-  fps: ${SCREENCAPTURE_FPS:30}
+  # Frames per second to capture (1-60, default 15)
+  # DEPRECATED: Use unified-capture.fps instead (this is kept for backward compatibility)
+  fps: ${SCREENCAPTURE_FPS:15}
   # Only capture when game window is focused (optional feature)
   capture-only-when-focused: ${SCREENCAPTURE_FOCUSED_ONLY:false}
   # Minimum seconds between error logs (rate limiting, default 5)
@@ -71,7 +97,8 @@ recording:
   # Video quality (1-100, higher = better quality)
   video-quality: ${RECORDING_QUALITY:70}
   # Frames per second for recording
-  fps: ${RECORDING_FPS:30}
+  # DEPRECATED: Use unified-capture.fps instead (this is kept for backward compatibility)
+  fps: ${RECORDING_FPS:15}
   # Record audio (not currently supported)
   record-audio: ${RECORDING_AUDIO:false}
   # Maximum recording duration in minutes (0 = unlimited)

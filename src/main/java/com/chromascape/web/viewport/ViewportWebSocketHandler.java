@@ -28,8 +28,19 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
   /** A thread-safe set of active WebSocket sessions. */
   private final Set<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
 
-  /** Executor service for sending messages asynchronously to avoid blocking. */
-  private final ExecutorService wsExecutor = Executors.newCachedThreadPool();
+  /**
+   * Single-threaded executor for sending messages asynchronously.
+   *
+   * <p>Uses a single thread to guarantee frame ordering, as WebSocketSession.sendMessage is not
+   * thread-safe.
+   */
+  private final ExecutorService wsExecutor =
+      Executors.newSingleThreadExecutor(
+          r -> {
+            Thread t = new Thread(r, "ViewportBroadcast");
+            t.setDaemon(true);
+            return t;
+          });
 
   /**
    * Invoked after the WebSocket connection has been closed by either side, or after a transport
@@ -89,6 +100,10 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
    * @param message The message string to broadcast (e.g., a Data URI).
    */
   public void broadcast(String message) {
+    logger.debug(
+        "Broadcasting viewport frame, size: {} bytes, sessions: {}",
+        message.length(),
+        sessions.size());
     for (WebSocketSession session : sessions) {
       if (!session.isOpen()) {
         sessions.remove(session);

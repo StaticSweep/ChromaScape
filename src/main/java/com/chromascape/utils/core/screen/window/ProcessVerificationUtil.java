@@ -111,9 +111,11 @@ public class ProcessVerificationUtil {
   public static boolean isStandaloneJavaProcess(int pid) {
     String execPath = getProcessExecutablePath(pid);
 
+    // If we can't get the executable path, ALLOW the window rather than exclude it
+    // This prevents false negatives when process access is denied
     if (execPath == null) {
-      logger.debug("Could not get executable path for PID: {}", pid);
-      return false;
+      logger.warn("Could not get executable path for PID: {} - allowing window by default", pid);
+      return true;
     }
 
     String pathLower = execPath.toLowerCase();

@@ -76,7 +76,15 @@
 
         <!-- Console Section -->
         <div class="glass-panel">
-          <h5><i class="bi bi-terminal me-2"></i>Terminal Output</h5>
+          <div class="console-header">
+            <h5><i class="bi bi-terminal me-2"></i>Terminal Output</h5>
+            <div class="console-controls">
+              <select id="dashboardLogSourceFilter" class="form-select form-select-sm">
+                <option value="all">All Logs</option>
+                <option value="external">Client Logs</option>
+              </select>
+            </div>
+          </div>
           <div id="consoleOutput">
             <!-- Logs go here -->
           </div>

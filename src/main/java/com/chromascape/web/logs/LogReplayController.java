@@ -49,6 +49,7 @@ public class LogReplayController {
    * @param start Optional start timestamp (ISO format)
    * @param end Optional end timestamp (ISO format)
    * @param level Optional log level filter
+   * @param source Optional source/subsystem filter
    * @param search Optional search term in message
    * @return List of matching log entries
    */
@@ -60,6 +61,7 @@ public class LogReplayController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
           String end,
       @RequestParam(required = false) String level,
+      @RequestParam(required = false) String source,
       @RequestParam(required = false) String search) {
 
     try {
@@ -67,13 +69,14 @@ public class LogReplayController {
       LocalDateTime endTime = end != null ? LocalDateTime.parse(end, ISO_FORMATTER) : null;
 
       List<LogEntity> logs =
-          logRepository.findLogsWithFilters(script, level, startTime, endTime, search);
+          logRepository.findLogsWithFilters(script, level, source, startTime, endTime, search);
 
       logger.info(
-          "Returned {} log entries for query: script={}, level={}, search={}",
+          "Returned {} log entries for query: script={}, level={}, source={}, search={}",
           logs.size(),
           script,
           level,
+          source,
           search);
       return ResponseEntity.ok(logs);
     } catch (Exception e) {
@@ -95,6 +98,23 @@ public class LogReplayController {
       return ResponseEntity.ok(scripts);
     } catch (Exception e) {
       logger.error("Failed to get script sessions: {}", e.getMessage(), e);
+      return ResponseEntity.internalServerError().build();
+    }
+  }
+
+  /**
+   * Get all unique log sources/subsystems.
+   *
+   * @return List of unique source names
+   */
+  @GetMapping("/sources")
+  public ResponseEntity<List<String>> getLogSources() {
+    try {
+      List<String> sources = logRepository.findDistinctSources();
+      logger.info("Returned {} unique log sources", sources.size());
+      return ResponseEntity.ok(sources);
+    } catch (Exception e) {
+      logger.error("Failed to get log sources: {}", e.getMessage(), e);
       return ResponseEntity.internalServerError().build();
     }
   }

@@ -1,14 +1,13 @@
 package com.chromascape.web.viewport.service;
 
+import com.chromascape.utils.core.screen.FrameEvent;
+import com.chromascape.utils.core.screen.FrameListener;
 import com.chromascape.utils.core.screen.viewport.ViewportManager;
-import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.web.viewport.config.ScreenCaptureConfig;
+import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.awt.image.BufferedImage;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -20,33 +19,32 @@ import org.springframework.stereotype.Service;
 /**
  * Service for continuously capturing the game screen and updating the viewport.
  *
- * <p>This service runs in the background, capturing the game window at a configured FPS rate and
- * sending updates to the viewport. This ensures the viewport always displays the current game
- * state, even when no bot script is running.
+ * <p>This service subscribes to the {@link UnifiedFrameCaptureService} to receive captured frames
+ * and forwards them to the viewport. This ensures the viewport always displays the current game
+ * state while avoiding duplicate screen captures.
  *
- * <p>The service uses {@link ScreenManager#captureWindow()} to capture the game window using
- * Windows GDI, which provides a clean capture without overlay interference.
+ * <p>The service implements {@link FrameListener} to receive frames from the unified capture
+ * service.
  */
 @Service
-public class ScreenCaptureService {
+public class ScreenCaptureService implements FrameListener {
 
   private static final Logger logger = LogManager.getLogger(ScreenCaptureService.class);
 
   private final ScreenCaptureConfig config;
-  private final ScheduledExecutorService scheduler;
-  private final AtomicBoolean running = new AtomicBoolean(false);
-  private volatile long lastErrorLogTimeMs = 0;
+  private final UnifiedCaptureConfig unifiedConfig;
+  private final UnifiedFrameCaptureService unifiedCaptureService;
+  private final AtomicBoolean paused = new AtomicBoolean(false);
+  private final AtomicBoolean registered = new AtomicBoolean(false);
 
   @Autowired
-  public ScreenCaptureService(ScreenCaptureConfig config) {
+  public ScreenCaptureService(
+      ScreenCaptureConfig config,
+      UnifiedCaptureConfig unifiedConfig,
+      UnifiedFrameCaptureService unifiedCaptureService) {
     this.config = config;
-    this.scheduler =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread t = new Thread(r, "ScreenCaptureService");
-              t.setDaemon(true);
-              return t;
-            });
+    this.unifiedConfig = unifiedConfig;
+    this.unifiedCaptureService = unifiedCaptureService;
   }
 
   /**
@@ -54,7 +52,7 @@ public class ScreenCaptureService {
    *
    * <p>This method is automatically called after Spring bean construction via @PostConstruct.
    *
-   * <p>Schedules periodic screen captures at the configured FPS rate.
+   * <p>Registers with the unified capture service to receive frames.
    */
   @PostConstruct
   public void start() {
@@ -63,16 +61,21 @@ public class ScreenCaptureService {
       return;
     }
 
-    if (running.getAndSet(true)) {
-      logger.warn("ScreenCaptureService is already running");
+    if (registered.getAndSet(true)) {
+      logger.warn("ScreenCaptureService is already registered");
       return;
     }
 
-    logger.info("Starting ScreenCaptureService at {} FPS", config.getFps());
-
-    long intervalMs = (long) (1000.0 / config.getFps());
-
-    scheduler.scheduleAtFixedRate(this::captureAndSend, 0, intervalMs, TimeUnit.MILLISECONDS);
+    if (unifiedConfig.isEnabled()) {
+      logger.info(
+          "Registering ScreenCaptureService with unified capture at {} FPS",
+          unifiedConfig.getFps());
+      unifiedCaptureService.registerSubscriber(this);
+    } else {
+      logger.warn(
+          "Unified capture is disabled, falling back to legacy capture mode (not implemented)");
+      // Fallback to legacy mode could be implemented here if needed
+    }
   }
 
   /**
@@ -82,80 +85,60 @@ public class ScreenCaptureService {
    */
   @PreDestroy
   public void stop() {
-    if (!running.getAndSet(false)) {
+    if (!registered.getAndSet(false)) {
       return;
     }
 
-    logger.info("Stopping ScreenCaptureService");
-    scheduler.shutdown();
-    try {
-      if (!scheduler.awaitTermination(2, TimeUnit.SECONDS)) {
-        scheduler.shutdownNow();
-      }
-    } catch (InterruptedException e) {
-      scheduler.shutdownNow();
-      Thread.currentThread().interrupt();
-    }
+    logger.info("Unregistering ScreenCaptureService from unified capture");
+    unifiedCaptureService.unregisterSubscriber(this);
   }
 
   /**
-   * Captures the current game window state and sends it to the viewport.
+   * Called by the unified capture service when a new frame is captured.
    *
-   * <p>This method is called periodically by the scheduler. It:
-   *
-   * <ol>
-   *   <li>Checks if capture is paused (skips if paused)
-   *   <li>Captures the game window using Windows GDI
-   *   <li>Converts the BufferedImage to OpenCV Mat
-   *   <li>Sends the Mat to the viewport via ViewportManager
-   * </ol>
-   *
-   * <p>Captures are wrapped in try-catch to prevent capture errors from stopping the service.
+   * <p>Converts the frame to OpenCV Mat and sends it to the viewport.
    */
-  private void captureAndSend() {
-    // Skip capture if paused
-    if (config.isPaused()) {
-      return;
-    }
-
+  @Override
+  public void onFrameCaptured(FrameEvent event) {
     try {
-      BufferedImage capturedImage = ScreenManager.captureWindow();
-
-      if (capturedImage != null) {
-        try (Mat mat = Java2DFrameUtils.toMat(capturedImage)) {
+      BufferedImage frame = event.getFrame();
+      if (frame != null) {
+        try (Mat mat = Java2DFrameUtils.toMat(frame)) {
           ViewportManager.getInstance().updateState(mat);
         }
       }
     } catch (Exception e) {
-      // Rate limit error logging to avoid spam when game window is unavailable
-      long now = System.currentTimeMillis();
-      long elapsedMs = now - lastErrorLogTimeMs;
-      long intervalMs = config.getErrorLogIntervalSeconds() * 1000;
-
-      if (elapsedMs >= intervalMs) {
-        lastErrorLogTimeMs = now;
-        logger.info("Screen capture failed (window may be unavailable): {}", e.getMessage());
-      }
+      logger.debug("Failed to process frame for viewport: {}", e.getMessage());
     }
+  }
+
+  /**
+   * Returns whether this listener is active and wants to receive frames.
+   *
+   * <p>Returns false when paused to skip frame delivery.
+   */
+  @Override
+  public boolean isActive() {
+    return !paused.get();
   }
 
   /**
    * Pauses the screen capture service.
    *
-   * <p>The scheduler continues running, but no captures are performed until resumed.
+   * <p>The unified capture continues running, but this listener stops receiving frames.
    */
   public void pause() {
-    config.setPaused(true);
-    logger.info("Screen capture paused (CPU usage reduced)");
+    paused.set(true);
+    logger.info("Screen capture paused (frames will not be sent to viewport)");
   }
 
   /**
    * Resumes the screen capture service.
    *
-   * <p>Resumes capturing if the service is running and was paused.
+   * <p>Resumes receiving frames from the unified capture service.
    */
   public void resume() {
-    config.setPaused(false);
+    paused.set(false);
     logger.info("Screen capture resumed");
   }
 
@@ -165,15 +148,15 @@ public class ScreenCaptureService {
    * @return true if paused
    */
   public boolean isPaused() {
-    return config.isPaused();
+    return paused.get();
   }
 
   /**
-   * Returns whether the service is currently running.
+   * Returns whether the service is currently registered with unified capture.
    *
-   * @return true if running
+   * @return true if registered
    */
   public boolean isRunning() {
-    return running.get();
+    return registered.get();
   }
 }

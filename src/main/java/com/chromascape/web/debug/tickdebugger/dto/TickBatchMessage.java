@@ -49,6 +49,9 @@ public class TickBatchMessage {
   /** Overlay data for this tick. */
   private final List<TickOverlayEntry> overlays;
 
+  /** Quest state for this tick (name, stepText, changed). */
+  private final Map<String, Object> quest;
+
   @JsonCreator
   public TickBatchMessage(
       @JsonProperty("type") String type,
@@ -62,7 +65,8 @@ public class TickBatchMessage {
       @JsonProperty("projectiles") List<Map<String, Object>> projectiles,
       @JsonProperty("cooldowns") Map<String, Integer> cooldowns,
       @JsonProperty("logs") List<TickLogEntry> logs,
-      @JsonProperty("overlays") List<TickOverlayEntry> overlays) {
+      @JsonProperty("overlays") List<TickOverlayEntry> overlays,
+      @JsonProperty("quest") Map<String, Object> quest) {
     this.type = type;
     this.sessionId = sessionId;
     this.tick = tick;
@@ -75,6 +79,7 @@ public class TickBatchMessage {
     this.cooldowns = cooldowns;
     this.logs = logs;
     this.overlays = overlays;
+    this.quest = quest;
   }
 
   public String getType() {
@@ -123,6 +128,10 @@ public class TickBatchMessage {
 
   public List<TickOverlayEntry> getOverlays() {
     return overlays;
+  }
+
+  public Map<String, Object> getQuest() {
+    return quest;
   }
 
   /** Individual log entry within a tick batch. */

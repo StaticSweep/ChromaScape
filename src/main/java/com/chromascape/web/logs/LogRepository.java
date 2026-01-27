@@ -35,13 +35,37 @@ public interface LogRepository extends JpaRepository<LogEntity, Long> {
       "SELECT l FROM LogEntity l WHERE "
           + "(:scriptName IS NULL OR l.scriptName = :scriptName) AND "
           + "(:level IS NULL OR l.level = :level) AND "
+          + "(:source IS NULL OR l.source LIKE CONCAT(:source, '%')) AND "
           + "(:start IS NULL OR l.timestamp >= :start) AND "
           + "(:end IS NULL OR l.timestamp <= :end) AND "
           + "(:search IS NULL OR LOWER(l.message) LIKE LOWER(CONCAT('%', :search, '%')))")
   List<LogEntity> findLogsWithFilters(
       @Param("scriptName") String scriptName,
       @Param("level") String level,
+      @Param("source") String source,
       @Param("start") LocalDateTime start,
       @Param("end") LocalDateTime end,
       @Param("search") String search);
+
+  /** Find all distinct log sources. */
+  @Query("SELECT DISTINCT l.source FROM LogEntity l WHERE l.source IS NOT NULL ORDER BY l.source")
+  List<String> findDistinctSources();
+
+  // ActionLogger-specific query methods
+
+  /** Filter by log type (DIALOGUE, INVENTORY, VARBIT, ANIMATION) */
+  List<LogEntity> findByLogType(String logType);
+
+  /** Filter by tick range */
+  List<LogEntity> findByTickBetween(Integer startTick, Integer endTick);
+
+  /** Search in structured data (JSON contains) */
+  @Query("SELECT l FROM LogEntity l WHERE l.structuredData LIKE %:pattern%")
+  List<LogEntity> searchStructuredData(@Param("pattern") String pattern);
+
+  /** Find logs by log type ordered by tick */
+  List<LogEntity> findByLogTypeOrderByTickAsc(String logType);
+
+  /** Find logs by tick and log type */
+  List<LogEntity> findByTickAndLogType(Integer tick, String logType);
 }

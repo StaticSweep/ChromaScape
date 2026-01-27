@@ -245,6 +245,42 @@ h5 i {
 
 /* Blueish */
 
+/* Dashboard console header and controls */
+.console-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.console-header h5 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.console-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.console-controls select {
+    min-width: 140px;
+    font-size: 0.875rem;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.console-controls select:focus {
+    background-color: rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.1);
+}
+
 /* Colour Picker Columns */
 .col-md-5 .glass-panel,
 .col-md-7 .glass-panel {

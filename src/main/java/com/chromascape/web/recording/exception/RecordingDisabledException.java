@@ -1,12 +1,11 @@
 package com.chromascape.web.recording.exception;
 
 /**
- * Exception thrown when attempting to start a recording while recording is disabled in configuration.
+ * Exception thrown when attempting to start a recording while recording is disabled in
+ * configuration.
  */
 public class RecordingDisabledException extends RecordingException {
-  /**
-   * Constructs a new RecordingDisabledException.
-   */
+  /** Constructs a new RecordingDisabledException. */
   public RecordingDisabledException() {
     super(
         "Recording is disabled in configuration",

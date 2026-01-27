@@ -44,6 +44,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const socket = new WebSocket('ws://' + window.location.host + '/ws/viewport');
 
+    socket.onopen = () => {
+        console.log('Viewport WebSocket connected');
+    };
+
+    socket.onerror = (error) => {
+        console.error('Viewport WebSocket error:', error);
+    };
+
+    socket.onclose = (event) => {
+        console.log('Viewport WebSocket closed:', event.code, event.reason);
+    };
+
     socket.onmessage = (event) => {
         try {
             // Hide loader if visible

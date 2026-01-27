@@ -1,19 +1,29 @@
 package com.chromascape.web.recording.service;
 
+import com.chromascape.utils.core.screen.FrameEvent;
+import com.chromascape.utils.core.screen.FrameListener;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.exception.FrameCaptureException;
 import com.chromascape.web.recording.exception.RecordingAlreadyInProgressException;
 import com.chromascape.web.recording.exception.RecordingDisabledException;
 import com.chromascape.web.recording.exception.RecordingException;
+import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
+import com.chromascape.web.viewport.service.UnifiedFrameCaptureService;
 import jakarta.annotation.PreDestroy;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -27,20 +37,29 @@ import org.springframework.stereotype.Service;
 /**
  * Service for recording game sessions to video files for later replay.
  *
- * <p>This service captures the game window at a configured FPS rate and encodes it to MP4 format
- * using FFmpeg. Recordings are stored with metadata that can be synchronized with logs for replay
- * analysis.
+ * <p>This service subscribes to the {@link UnifiedFrameCaptureService} to receive captured frames
+ * and encodes them to MP4 format using FFmpeg. Recordings are stored with metadata that can be
+ * synchronized with logs for replay analysis.
  */
 @Service
-public class RecordingService {
+public class RecordingService implements FrameListener {
 
   private static final Logger logger = LogManager.getLogger(RecordingService.class);
 
   private final RecordingConfig config;
-  private final ScheduledExecutorService scheduler;
+  private final UnifiedCaptureConfig unifiedConfig;
+  private final UnifiedFrameCaptureService unifiedCaptureService;
+  private final ExecutorService encoderThread;
   private final AtomicBoolean recording = new AtomicBoolean(false);
   private final AtomicLong frameCount = new AtomicLong(0);
+  private final AtomicLong droppedFrameCount = new AtomicLong(0);
   private final Java2DFrameConverter frameConverter = new Java2DFrameConverter();
+
+  // Frame buffer for producer-consumer pattern
+  private static final int FRAME_BUFFER_SIZE = 60; // ~2 seconds at 30 FPS
+  private final BlockingQueue<BufferedImage> frameBuffer =
+      new LinkedBlockingQueue<>(FRAME_BUFFER_SIZE);
+  private volatile boolean encoderRunning = false;
 
   private FFmpegFrameRecorder recorder;
   private File currentRecordingFile;
@@ -52,12 +71,19 @@ public class RecordingService {
       new String[] {"libx264", "libopenh264", "mpeg4"};
 
   @Autowired
-  public RecordingService(RecordingConfig config) {
+  public RecordingService(
+      RecordingConfig config,
+      UnifiedCaptureConfig unifiedConfig,
+      UnifiedFrameCaptureService unifiedCaptureService) {
     this.config = config;
-    this.scheduler =
-        Executors.newSingleThreadScheduledExecutor(
+    this.unifiedConfig = unifiedConfig;
+    this.unifiedCaptureService = unifiedCaptureService;
+
+    // Encoder thread - consumes frames from buffer and encodes them
+    this.encoderThread =
+        Executors.newSingleThreadExecutor(
             r -> {
-              Thread t = new Thread(r, "RecordingService");
+              Thread t = new Thread(r, "RecordingEncoder");
               t.setDaemon(true);
               return t;
             });
@@ -93,9 +119,8 @@ public class RecordingService {
     }
 
     try {
-      // Generate recording ID and filename
-      recordingStartTime = System.currentTimeMillis();
-      currentRecordingId = "recording_" + recordingStartTime;
+      // Generate recording ID using UUID (decouple from timestamp)
+      currentRecordingId = "recording_" + UUID.randomUUID().toString().substring(0, 8);
       String filename = currentRecordingId + ".mp4";
       currentRecordingFile = Paths.get(config.getOutputDirectory(), filename).toFile();
 
@@ -150,18 +175,38 @@ public class RecordingService {
       // Initialize FFmpeg recorder with dimensions and codec fallback
       startRecorderWithFallbacks(width, height);
 
-      // Record the first frame
-      recorder.record(frameConverter.convert(normalizedFirstFrame));
+      // Clear any leftover frames in buffer
+      frameBuffer.clear();
+      droppedFrameCount.set(0);
+
+      // CAPTURE START TIME HERE - immediately before first frame queued
+      // This ensures minimal drift between video timeline and log timestamps
+      recordingStartTime = System.currentTimeMillis();
+
+      // Add first frame to buffer
+      frameBuffer.offer(normalizedFirstFrame);
       frameCount.set(1);
 
       recording.set(true);
+      encoderRunning = true;
 
       logger.info(
-          "Started recording: {} at {} FPS", currentRecordingFile.getName(), config.getFps());
+          "Started recording: {} at {} FPS (buffer size: {})",
+          currentRecordingFile.getName(),
+          unifiedConfig.getFps(),
+          FRAME_BUFFER_SIZE);
 
-      // Start frame capture loop
-      long intervalMs = (long) (1000.0 / config.getFps());
-      scheduler.scheduleAtFixedRate(this::captureFrame, intervalMs, intervalMs, TimeUnit.MILLISECONDS);
+      // Start encoder thread (consumer)
+      encoderThread.submit(this::encoderLoop);
+
+      // Register with unified capture service to receive frames
+      if (unifiedConfig.isEnabled()) {
+        unifiedCaptureService.registerSubscriber(this);
+        logger.info("Registered with unified capture service for recording");
+      } else {
+        logger.warn(
+            "Unified capture is disabled, recording will not receive frames (legacy mode not implemented)");
+      }
 
       return currentRecordingId;
 
@@ -194,9 +239,32 @@ public class RecordingService {
     logger.info("Stopping recording...");
 
     try {
+      // Unregister from unified capture service
+      if (unifiedConfig.isEnabled()) {
+        unifiedCaptureService.unregisterSubscriber(this);
+        logger.info("Unregistered from unified capture service");
+      }
+
+      // Signal encoder thread to finish (it will drain remaining frames)
+      encoderRunning = false;
+
+      // Wait for encoder to drain buffer (up to 5 seconds)
+      int waitCount = 0;
+      while (!frameBuffer.isEmpty() && waitCount < 50) {
+        Thread.sleep(100);
+        waitCount++;
+      }
+
+      if (!frameBuffer.isEmpty()) {
+        logger.warn(
+            "Encoder did not drain buffer in time, {} frames remaining", frameBuffer.size());
+      }
+
+      // Give encoder a moment to finish encoding last frames
+      Thread.sleep(200);
+
       // Finalize recording
       if (recorder != null) {
-        // CRITICAL: Flush buffered frames before stopping
         logger.debug("Flushing recorder buffers...");
         recorder.flush();
 
@@ -208,11 +276,7 @@ public class RecordingService {
         recorder = null;
 
         // Give file system time to complete I/O
-        try {
-          Thread.sleep(200);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        }
+        Thread.sleep(200);
 
         // Verify file was written
         if (!currentRecordingFile.exists() || currentRecordingFile.length() == 0) {
@@ -225,11 +289,13 @@ public class RecordingService {
 
       long duration = System.currentTimeMillis() - recordingStartTime;
       long frames = frameCount.get();
+      long dropped = droppedFrameCount.get();
 
       logger.info(
-          "Recording saved: {} ({} frames, {} ms, {} bytes)",
+          "Recording saved: {} ({} frames captured, {} dropped, {} ms, {} bytes)",
           currentRecordingFile.getName(),
           frames,
+          dropped,
           duration,
           currentRecordingFile.length());
 
@@ -239,8 +305,13 @@ public class RecordingService {
           recordingStartTime,
           duration,
           frames,
-          config.getFps());
+          unifiedConfig.getFps());
 
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      logger.error("Recording stop interrupted: {}", e.getMessage());
+      cleanup();
+      return null;
     } catch (Exception e) {
       logger.error("Failed to stop recording: {}", e.getMessage(), e);
       cleanup();
@@ -271,36 +342,51 @@ public class RecordingService {
     return startRecording();
   }
 
-  /** Captures a single frame and adds it to the recording. */
-  private void captureFrame() {
-    if (!recording.get() || recorder == null) {
+  /**
+   * Called by the unified capture service when a new frame is captured.
+   *
+   * <p>Normalizes the frame and adds it to the encoding buffer.
+   */
+  @Override
+  public void onFrameCaptured(FrameEvent event) {
+    if (!recording.get()) {
       return;
     }
 
     try {
-      BufferedImage capturedImage = ScreenManager.captureWindow();
+      BufferedImage capturedImage = event.getFrame();
 
       if (capturedImage != null) {
         capturedImage = normalizeFrameDimensions(capturedImage);
+
         // CRITICAL: Validate dimensions match initial dimensions
-        // Changing dimensions after recorder.start() corrupts MP4 metadata
         int frameWidth = capturedImage.getWidth();
         int frameHeight = capturedImage.getHeight();
 
         if (frameWidth != initialWidth || frameHeight != initialHeight) {
           logger.warn(
-              "Frame dimension mismatch detected! Expected: {}x{}, Got: {}x{}. Dropping frame to preserve video integrity.",
+              "Frame dimension mismatch detected! Expected: {}x{}, Got: {}x{}. Dropping frame.",
               initialWidth,
               initialHeight,
               frameWidth,
               frameHeight);
-          // Drop this frame - do not record it
           return;
         }
 
-        // Convert and record frame
-        recorder.record(frameConverter.convert(capturedImage));
-        frameCount.incrementAndGet();
+        // Try to add to buffer (non-blocking)
+        boolean added = frameBuffer.offer(capturedImage);
+        if (added) {
+          frameCount.incrementAndGet();
+        } else {
+          // Buffer full - drop frame to prevent memory issues
+          long dropped = droppedFrameCount.incrementAndGet();
+          if (dropped % 30 == 1) {
+            logger.warn(
+                "Frame buffer full, dropping frames. Total dropped: {} (buffer size: {})",
+                dropped,
+                frameBuffer.size());
+          }
+        }
 
         // Check max duration
         if (config.getMaxDurationMinutes() > 0) {
@@ -313,8 +399,55 @@ public class RecordingService {
         }
       }
     } catch (Exception e) {
-      logger.warn("Failed to capture frame: {}", e.getMessage());
+      logger.warn("Failed to process frame for recording: {}", e.getMessage());
     }
+  }
+
+  /**
+   * Returns whether this listener is active and wants to receive frames.
+   *
+   * <p>Always returns true while recording is active.
+   */
+  @Override
+  public boolean isActive() {
+    return recording.get();
+  }
+
+  /** Encoder loop that consumes frames from the buffer (consumer). */
+  private void encoderLoop() {
+    logger.info("Encoder thread started");
+
+    while (encoderRunning || !frameBuffer.isEmpty()) {
+      try {
+        // Wait for frame with timeout
+        BufferedImage frame = frameBuffer.poll(100, TimeUnit.MILLISECONDS);
+
+        if (frame != null && recorder != null) {
+          recorder.record(frameConverter.convert(frame));
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        logger.info("Encoder thread interrupted");
+        break;
+      } catch (Exception e) {
+        logger.warn("Failed to encode frame: {}", e.getMessage());
+      }
+    }
+
+    // Drain remaining frames
+    logger.info("Draining {} remaining frames from buffer", frameBuffer.size());
+    BufferedImage frame;
+    while ((frame = frameBuffer.poll()) != null) {
+      try {
+        if (recorder != null) {
+          recorder.record(frameConverter.convert(frame));
+        }
+      } catch (Exception e) {
+        logger.warn("Failed to encode remaining frame: {}", e.getMessage());
+      }
+    }
+
+    logger.info("Encoder thread finished");
   }
 
   /** Returns whether a recording is currently in progress. */
@@ -333,6 +466,19 @@ public class RecordingService {
   }
 
   /**
+   * Returns the recording start time as LocalDateTime for database storage.
+   *
+   * @return The recording start time as LocalDateTime, or null if not recording
+   */
+  public LocalDateTime getRecordingStartTimeAsLocalDateTime() {
+    if (!recording.get() || recordingStartTime == 0) {
+      return null;
+    }
+    return LocalDateTime.ofInstant(
+        Instant.ofEpochMilli(recordingStartTime), ZoneId.systemDefault());
+  }
+
+  /**
    * Force reset the recording state.
    *
    * <p>This is a recovery mechanism for when the recording state gets stuck. Use with caution as it
@@ -346,6 +492,9 @@ public class RecordingService {
     if (wasRecording) {
       logger.warn("Force resetting recording state. Recording ID: {}", currentRecordingId);
 
+      // Stop encoder
+      encoderRunning = false;
+
       // Clean up resources
       try {
         if (recorder != null) {
@@ -357,23 +506,30 @@ public class RecordingService {
         logger.warn("Error while force-stopping recorder: {}", e.getMessage());
       }
 
+      // Clear buffer
+      frameBuffer.clear();
+
       currentRecordingId = null;
       recordingStartTime = 0;
       frameCount.set(0);
+      droppedFrameCount.set(0);
     }
 
     return wasRecording;
   }
 
   /**
-   * Cleanup recording resources without shutting down the scheduler.
+   * Cleanup recording resources without shutting down the schedulers.
    *
    * <p>Use this for error recovery, not application shutdown. This method cleans up the recorder
-   * and resets recording state but keeps the scheduler running so recording can be attempted
+   * and resets recording state but keeps the schedulers running so recording can be attempted
    * again.
    */
   private void cleanupRecording() {
     logger.debug("Cleaning up recording resources");
+
+    // Stop encoder
+    encoderRunning = false;
 
     try {
       if (recorder != null) {
@@ -385,12 +541,16 @@ public class RecordingService {
       logger.warn("Error while cleaning up recorder: {}", e.getMessage());
     }
 
-    // Reset state but don't shutdown scheduler
+    // Clear buffer
+    frameBuffer.clear();
+
+    // Reset state but don't shutdown schedulers
     recording.set(false);
     currentRecordingId = null;
     currentRecordingFile = null;
     recordingStartTime = 0;
     frameCount.set(0);
+    droppedFrameCount.set(0);
     initialWidth = 0;
     initialHeight = 0;
   }
@@ -411,14 +571,14 @@ public class RecordingService {
         return;
       } catch (Exception e) {
         lastException = e;
-        logger.warn(
-            "Failed to start recorder with codec {}: {}", codecName, e.getMessage());
+        logger.warn("Failed to start recorder with codec {}: {}", codecName, e.getMessage());
         try {
           if (candidate != null) {
             candidate.release();
           }
         } catch (Exception releaseError) {
-          logger.debug("Failed to release recorder after codec failure: {}", releaseError.getMessage());
+          logger.debug(
+              "Failed to release recorder after codec failure: {}", releaseError.getMessage());
         }
       }
     }
@@ -434,7 +594,7 @@ public class RecordingService {
 
     candidate.setVideoCodecName(codecName);
     candidate.setFormat("mp4");
-    candidate.setFrameRate(config.getFps());
+    candidate.setFrameRate(unifiedConfig.getFps());
     candidate.setVideoBitrate((int) (config.getVideoQuality() * 10000));
 
     // Browser compatibility settings
@@ -477,24 +637,24 @@ public class RecordingService {
   /**
    * Cleanup resources on application shutdown.
    *
-   * <p>WARNING: This method shuts down the scheduler and should ONLY be called during application
-   * termination (@PreDestroy). For error recovery during recording, use cleanupRecording()
-   * instead.
+   * <p>WARNING: This method shuts down the schedulers and should ONLY be called during application
+   * termination (@PreDestroy). For error recovery during recording, use cleanupRecording() instead.
    */
   @PreDestroy
   public void cleanup() {
-    logger.info("RecordingService cleanup - shutting down scheduler");
+    logger.info("RecordingService cleanup - shutting down threads");
     if (recording.get()) {
       stopRecording();
     }
-    // Shutdown scheduler only during application shutdown
-    scheduler.shutdown();
+
+    // Shutdown encoder thread
+    encoderThread.shutdown();
     try {
-      if (!scheduler.awaitTermination(2, TimeUnit.SECONDS)) {
-        scheduler.shutdownNow();
+      if (!encoderThread.awaitTermination(2, TimeUnit.SECONDS)) {
+        encoderThread.shutdownNow();
       }
     } catch (InterruptedException e) {
-      scheduler.shutdownNow();
+      encoderThread.shutdownNow();
       Thread.currentThread().interrupt();
     }
   }

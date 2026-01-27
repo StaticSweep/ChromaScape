@@ -27,6 +27,16 @@ public class LogEntity {
   @Column(length = 100)
   private String scriptName;
 
+  // ActionLogger-specific fields for structured event data
+  @Column(name = "log_type", length = 50)
+  private String logType; // DIALOGUE, INVENTORY, VARBIT, ANIMATION, etc.
+
+  @Column(name = "tick")
+  private Integer tick; // Game tick number for action logs
+
+  @Column(name = "structured_data", columnDefinition = "TEXT")
+  private String structuredData; // JSON string of structured data
+
   /** Default constructor required by JPA. */
   public LogEntity() {}
 
@@ -38,6 +48,22 @@ public class LogEntity {
     this.message = message;
     this.source = source;
     this.scriptName = scriptName;
+  }
+
+  /** Constructor for creating log entries with ActionLogger data. */
+  public LogEntity(
+      LocalDateTime timestamp,
+      String level,
+      String message,
+      String source,
+      String scriptName,
+      String logType,
+      Integer tick,
+      String structuredData) {
+    this(timestamp, level, message, source, scriptName);
+    this.logType = logType;
+    this.tick = tick;
+    this.structuredData = structuredData;
   }
 
   // Getters and Setters
@@ -88,5 +114,29 @@ public class LogEntity {
 
   public void setScriptName(String scriptName) {
     this.scriptName = scriptName;
+  }
+
+  public String getLogType() {
+    return logType;
+  }
+
+  public void setLogType(String logType) {
+    this.logType = logType;
+  }
+
+  public Integer getTick() {
+    return tick;
+  }
+
+  public void setTick(Integer tick) {
+    this.tick = tick;
+  }
+
+  public String getStructuredData() {
+    return structuredData;
+  }
+
+  public void setStructuredData(String structuredData) {
+    this.structuredData = structuredData;
   }
 }

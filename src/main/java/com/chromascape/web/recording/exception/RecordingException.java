@@ -1,8 +1,8 @@
 package com.chromascape.web.recording.exception;
 
 /**
- * Base exception class for recording-related errors.
- * Provides both technical messages for logging and user-friendly messages for display.
+ * Base exception class for recording-related errors. Provides both technical messages for logging
+ * and user-friendly messages for display.
  */
 public class RecordingException extends RuntimeException {
   private final String userMessage;

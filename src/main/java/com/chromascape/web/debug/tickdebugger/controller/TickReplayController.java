@@ -1,7 +1,5 @@
 package com.chromascape.web.debug.tickdebugger.controller;
 
-import com.chromascape.web.debug.tickdebugger.dto.TickBatchResponse;
-import com.chromascape.web.debug.tickdebugger.dto.TickDataResponse;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickLog;
 import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
@@ -12,8 +10,17 @@ import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TimelineMarker;
 import com.chromascape.web.debug.tickdebugger.entity.TimelineMarkerRepository;
 import com.chromascape.web.debug.tickdebugger.service.TickVideoSyncService;
+import com.chromascape.web.logs.LogEntity;
+import com.chromascape.web.logs.LogRepository;
+import com.chromascape.web.recording.entity.RecordingSession;
+import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -38,6 +45,8 @@ public class TickReplayController {
   private final TickOverlayRepository overlayRepository;
   private final TimelineMarkerRepository markerRepository;
   private final TickVideoSyncService tickVideoSyncService;
+  private final RecordingSessionRepository recordingSessionRepository;
+  private final LogRepository standardLogRepository;
   private final ObjectMapper objectMapper;
 
   public TickReplayController(
@@ -47,6 +56,8 @@ public class TickReplayController {
       TickOverlayRepository overlayRepository,
       TimelineMarkerRepository markerRepository,
       TickVideoSyncService tickVideoSyncService,
+      RecordingSessionRepository recordingSessionRepository,
+      LogRepository standardLogRepository,
       ObjectMapper objectMapper) {
     this.sessionRepository = sessionRepository;
     this.snapshotRepository = snapshotRepository;
@@ -54,6 +65,8 @@ public class TickReplayController {
     this.overlayRepository = overlayRepository;
     this.markerRepository = markerRepository;
     this.tickVideoSyncService = tickVideoSyncService;
+    this.recordingSessionRepository = recordingSessionRepository;
+    this.standardLogRepository = standardLogRepository;
     this.objectMapper = objectMapper;
   }
 
@@ -234,6 +247,125 @@ public class TickReplayController {
   }
 
   /**
+   * Get unified logs (from both logs and tick_logs tables) for video timeline replay.
+   *
+   * <p>This endpoint merges logs from both the standard logs table and tick-specific tick_logs
+   * table, providing a unified view for video replay with proper tick grouping.
+   *
+   * @param recordingId The recording ID to sync against
+   * @param videoTimeMs The video position in milliseconds
+   * @param windowSeconds Optional time window in seconds (default: 10)
+   * @return Map containing video timestamp and merged logs with tick information
+   */
+  @GetMapping("/unified")
+  public ResponseEntity<Map<String, Object>> getUnifiedLogs(
+      @RequestParam String recordingId,
+      @RequestParam Long videoTimeMs,
+      @RequestParam(defaultValue = "10") Integer windowSeconds) {
+
+    try {
+      // Get recording session to find start time
+      RecordingSession recordingSession =
+          recordingSessionRepository.findByRecordingId(recordingId).orElse(null);
+
+      if (recordingSession == null) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", "Recording session not found: " + recordingId);
+        return ResponseEntity.notFound().build();
+      }
+
+      if (recordingSession.getStartTime() == null) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", "Recording session has no start time");
+        return ResponseEntity.badRequest().body(error);
+      }
+
+      // Calculate the real-world timestamp for this video position
+      LocalDateTime videoTimestamp =
+          recordingSession.getStartTime().plus(videoTimeMs, ChronoUnit.MILLIS);
+
+      // Define the time window for logs
+      LocalDateTime windowStart = videoTimestamp.minusSeconds(windowSeconds);
+      LocalDateTime windowEnd = videoTimestamp.plusSeconds(windowSeconds);
+
+      // Fetch logs from standard logs table
+      List<LogEntity> standardLogs =
+          standardLogRepository.findByTimestampBetween(windowStart, windowEnd);
+
+      // Try to find associated debug session for tick logs
+      List<TickLog> tickLogs = new ArrayList<>();
+      sessionRepository
+          .findByRecordingId(recordingId)
+          .ifPresent(
+              debugSession -> {
+                // Fetch tick logs within the time window
+                tickLogs.addAll(
+                    logRepository.findBySessionIdAndTimestampBetweenOrderByTickAsc(
+                        debugSession.getSessionId(), windowStart, windowEnd));
+              });
+
+      // Merge logs into unified format
+      List<UnifiedLogEntry> unifiedLogs = new ArrayList<>();
+
+      // Add standard logs
+      for (LogEntity log : standardLogs) {
+        UnifiedLogEntry entry = new UnifiedLogEntry();
+        entry.setId(log.getId());
+        entry.setTimestamp(log.getTimestamp());
+        entry.setLevel(log.getLevel());
+        entry.setMessage(log.getMessage());
+        entry.setSource(log.getSource());
+        entry.setTick(log.getTick() != null ? log.getTick().longValue() : null);
+        entry.setLogType(log.getLogType());
+        entry.setStructuredData(log.getStructuredData());
+        unifiedLogs.add(entry);
+      }
+
+      // Add tick logs (convert to unified format)
+      for (TickLog tickLog : tickLogs) {
+        UnifiedLogEntry entry = new UnifiedLogEntry();
+        entry.setId(tickLog.getId());
+        entry.setTimestamp(tickLog.getTimestamp());
+        entry.setLevel(tickLog.getSeverity());
+        entry.setMessage(tickLog.getMessage());
+        entry.setSource(tickLog.getSubsystem());
+        entry.setTick(tickLog.getTick());
+        entry.setLogType(tickLog.getEventType());
+        entry.setStructuredData(
+            tickLog.getDetails() != null ? tickLog.getDetails().toString() : null);
+        unifiedLogs.add(entry);
+      }
+
+      // Sort by timestamp
+      unifiedLogs.sort((a, b) -> a.getTimestamp().compareTo(b.getTimestamp()));
+
+      // Build response
+      Map<String, Object> response = new HashMap<>();
+      response.put("videoTimeMs", videoTimeMs);
+      response.put("videoTimestamp", videoTimestamp);
+      response.put("windowStart", windowStart);
+      response.put("windowEnd", windowEnd);
+      response.put("logs", unifiedLogs);
+
+      log.debug(
+          "Unified timeline sync for {} at {}ms: returned {} standard logs + {} tick logs = {} total",
+          recordingId,
+          videoTimeMs,
+          standardLogs.size(),
+          tickLogs.size(),
+          unifiedLogs.size());
+
+      return ResponseEntity.ok(response);
+
+    } catch (Exception e) {
+      log.error("Failed to get unified logs for video position: {}", e.getMessage(), e);
+      Map<String, Object> error = new HashMap<>();
+      error.put("error", e.getMessage());
+      return ResponseEntity.internalServerError().body(error);
+    }
+  }
+
+  /**
    * Get tick-to-video synchronization info for a session.
    *
    * @param sessionId the debug session ID
@@ -331,5 +463,81 @@ public class TickReplayController {
     public Long endTick;
     public Long minTick;
     public Long maxTick;
+  }
+
+  /** Unified log entry DTO that combines fields from both LogEntity and TickLog. */
+  public static class UnifiedLogEntry {
+    private Long id;
+    private LocalDateTime timestamp;
+    private String level;
+    private String message;
+    private String source;
+    private Long tick;
+    private String logType;
+    private String structuredData;
+
+    public Long getId() {
+      return id;
+    }
+
+    public void setId(Long id) {
+      this.id = id;
+    }
+
+    public LocalDateTime getTimestamp() {
+      return timestamp;
+    }
+
+    public void setTimestamp(LocalDateTime timestamp) {
+      this.timestamp = timestamp;
+    }
+
+    public String getLevel() {
+      return level;
+    }
+
+    public void setLevel(String level) {
+      this.level = level;
+    }
+
+    public String getMessage() {
+      return message;
+    }
+
+    public void setMessage(String message) {
+      this.message = message;
+    }
+
+    public String getSource() {
+      return source;
+    }
+
+    public void setSource(String source) {
+      this.source = source;
+    }
+
+    public Long getTick() {
+      return tick;
+    }
+
+    public void setTick(Long tick) {
+      this.tick = tick;
+    }
+
+    public String getLogType() {
+      return logType;
+    }
+
+    public void setLogType(String logType) {
+      this.logType = logType;
+    }
+
+    public String getStructuredData() {
+      return structuredData;
+    }
+
+    public void setStructuredData(String structuredData) {
+      this.structuredData = structuredData;
+    }
   }
 }

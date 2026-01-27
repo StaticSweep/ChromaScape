@@ -86,14 +86,21 @@ public class RecordingController {
 
     try {
       String recordingId = recordingService.startRecording();
+      LocalDateTime preciseStartTime = recordingService.getRecordingStartTimeAsLocalDateTime();
 
-      // Create RecordingSession entity
+      if (preciseStartTime == null) {
+        throw new RecordingException(
+            "Failed to get recording start time",
+            "Recording started but could not retrieve start time. Please try again.");
+      }
+
+      // Create RecordingSession entity with precise start time
       RecordingSession session =
           new RecordingSession(
               recordingId,
               accountName,
               scriptName,
-              LocalDateTime.now(),
+              preciseStartTime,
               RecordingSession.SessionTrigger.MANUAL,
               null); // videoPath will be set on stop
 
@@ -255,8 +262,8 @@ public class RecordingController {
   /**
    * Force reset the recording state.
    *
-   * <p>This is a recovery endpoint to reset stuck recording state. Use with caution as it may
-   * leave incomplete recordings.
+   * <p>This is a recovery endpoint to reset stuck recording state. Use with caution as it may leave
+   * incomplete recordings.
    *
    * @return Response indicating whether state was reset
    */

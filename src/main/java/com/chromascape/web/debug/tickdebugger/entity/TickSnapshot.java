@@ -57,6 +57,10 @@ public class TickSnapshot {
   @JdbcTypeCode(SqlTypes.JSON)
   private JsonNode cooldowns;
 
+  /** Quest state (name, stepText, changed) as JSON object. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode quest;
+
   /** Default constructor required by JPA. */
   public TickSnapshot() {}
 
@@ -148,5 +152,13 @@ public class TickSnapshot {
 
   public void setCooldowns(JsonNode cooldowns) {
     this.cooldowns = cooldowns;
+  }
+
+  public JsonNode getQuest() {
+    return quest;
+  }
+
+  public void setQuest(JsonNode quest) {
+    this.quest = quest;
   }
 }

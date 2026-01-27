@@ -1,12 +1,14 @@
 package com.chromascape.web.debug.tickdebugger.websocket;
 
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartRequest;
+import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStopRequest;
 import com.chromascape.web.debug.tickdebugger.dto.TickBatchMessage;
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -60,7 +62,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
       switch (type) {
         case "SESSION_START":
-          handleSessionStart(root);
+          handleSessionStart(session, root);
           break;
         case "TICK_BATCH":
           handleTickBatch(root);
@@ -93,19 +95,28 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   }
 
   /** Handle SESSION_START message from Micro6. */
-  private void handleSessionStart(JsonNode root) {
+  private void handleSessionStart(WebSocketSession wsSession, JsonNode root) {
     try {
       SessionStartRequest request = objectMapper.treeToValue(root, SessionStartRequest.class);
       log.info(
-          "Starting debug session: account={}, script={}, recording={}",
+          "Starting debug session via WebSocket: account={}, script={}, recording={}",
           request.getAccountName(),
           request.getScriptName(),
           request.getRecordingEnabled());
 
-      sessionService.startSession(
-          request.getAccountName(), request.getScriptName(), request.getRecordingEnabled());
+      SessionStartResponse response =
+          sessionService.startSession(
+              request.getAccountName(), request.getScriptName(), request.getRecordingEnabled());
+
+      // Send response back to Micro6 with the sessionId
+      String responseJson = objectMapper.writeValueAsString(response);
+      wsSession.sendMessage(new TextMessage(responseJson));
+
+      log.info("Sent SESSION_START response to Micro6: sessionId={}", response.getSessionId());
+
     } catch (Exception e) {
       log.error("Error handling SESSION_START: {}", e.getMessage(), e);
+      sendErrorResponse(wsSession, "SESSION_START failed", e.getMessage());
     }
   }
 
@@ -119,7 +130,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         return;
       }
 
-      log.debug(
+      log.info(
           "Received tick batch: sessionId={}, tick={}, logs={}, overlays={}",
           batch.getSessionId(),
           batch.getTick(),
@@ -145,6 +156,16 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       sessionService.stopSession(request.getSessionId(), request.getEndTick());
     } catch (Exception e) {
       log.error("Error handling SESSION_STOP: {}", e.getMessage(), e);
+    }
+  }
+
+  /** Send error response to Micro6 client. */
+  private void sendErrorResponse(WebSocketSession session, String error, String detail) {
+    try {
+      Map<String, Object> errorResponse = Map.of("type", "ERROR", "error", error, "detail", detail);
+      session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorResponse)));
+    } catch (Exception e) {
+      log.error("Failed to send error response: {}", e.getMessage());
     }
   }
 }

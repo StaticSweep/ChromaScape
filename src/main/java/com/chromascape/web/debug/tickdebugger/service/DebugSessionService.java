@@ -5,6 +5,8 @@ import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
+import com.chromascape.web.recording.entity.RecordingSession;
+import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.chromascape.web.recording.service.RecordingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
@@ -28,16 +30,19 @@ public class DebugSessionService {
   private final DebugSessionRepository sessionRepository;
   private final TickSnapshotRepository snapshotRepository;
   private final RecordingService recordingService;
+  private final RecordingSessionRepository recordingSessionRepository;
   private final ObjectMapper objectMapper;
 
   public DebugSessionService(
       DebugSessionRepository sessionRepository,
       TickSnapshotRepository snapshotRepository,
       RecordingService recordingService,
+      RecordingSessionRepository recordingSessionRepository,
       ObjectMapper objectMapper) {
     this.sessionRepository = sessionRepository;
     this.snapshotRepository = snapshotRepository;
     this.recordingService = recordingService;
+    this.recordingSessionRepository = recordingSessionRepository;
     this.objectMapper = objectMapper;
   }
 
@@ -56,20 +61,42 @@ public class DebugSessionService {
     String sessionId = "debug_" + System.currentTimeMillis();
     Long startTick = 0L; // Will be updated by first tick batch
     String recordingId = null;
+    LocalDateTime sessionStartTime;
 
     // Optionally start video recording
     if (Boolean.TRUE.equals(recordingEnabled)) {
       try {
         recordingId = recordingService.startRecording();
+        sessionStartTime = recordingService.getRecordingStartTimeAsLocalDateTime();
+
+        if (sessionStartTime == null) {
+          sessionStartTime = LocalDateTime.now();
+          log.warn("Recording started but time unavailable, using current time");
+        }
+
+        // Create RecordingSession entity for debug session recording
+        RecordingSession recordingSession =
+            new RecordingSession(
+                recordingId,
+                accountName,
+                scriptName,
+                sessionStartTime,
+                RecordingSession.SessionTrigger.MANUAL, // Or could add DEBUG trigger type
+                null);
+        recordingSessionRepository.save(recordingSession);
+
         log.info("Started recording {} for debug session {}", recordingId, sessionId);
       } catch (Exception e) {
+        sessionStartTime = LocalDateTime.now();
         log.warn("Failed to start recording for debug session {}: {}", sessionId, e.getMessage());
       }
+    } else {
+      sessionStartTime = LocalDateTime.now();
     }
 
-    // Create and save the debug session
+    // Create and save the debug session with aligned start time
     DebugSession session =
-        new DebugSession(sessionId, accountName, scriptName, LocalDateTime.now(), startTick);
+        new DebugSession(sessionId, accountName, scriptName, sessionStartTime, startTick);
 
     session.setRecordingId(recordingId);
     session = sessionRepository.save(session);

@@ -47,7 +47,7 @@ public class ExternalLogController {
       // Convert to JSON format matching existing WebSocket messages
       String json =
           String.format(
-              "{\"level\": \"%s\", \"message\": \"%s\"}",
+              "{\"level\": \"%s\", \"message\": \"%s\", \"source\": \"external\"}",
               entry.getLevel(), escapeJson(entry.getMessage()));
 
       logger.info(

@@ -23,6 +23,12 @@ let previouslySelectedElement = null;
 let isStarted = false;
 
 /**
+ * Current log source filter for dashboard console ("all" or "scripts.")
+ * @type {string}
+ */
+let currentDashboardLogSource = 'all';
+
+/**
  * Initializes the UI after the DOM content is fully loaded.
  * Connects WebSockets, fetches scripts, and sets up UI elements.
  */
@@ -51,6 +57,7 @@ async function initializeUI() {
 
     setupWindowModeDropdown();
     setupStartStopButton();
+    setupLogSourceFilter();
 }
 
 // ----------------- CONTROL STATE MANAGEMENT -----------------
@@ -211,13 +218,32 @@ function appendLogLine(data) {
         const logObj = JSON.parse(data);
         const level = logObj.level || "INFO";
         const msg = logObj.message || data;
+        const source = logObj.source || "unknown"; // Extract source
+
+        // Store source in dataset for filtering
+        logEl.dataset.source = source;
 
         logEl.classList.add(`log-${level}`);
         logEl.textContent = `[${level}] ${msg}`;
+
+        // Apply filter before appending (exact match for "external", prefix match for others)
+        if (currentDashboardLogSource !== 'all') {
+            if (currentDashboardLogSource === 'external') {
+                if (source !== 'external') logEl.style.display = 'none';
+            } else if (!source.startsWith(currentDashboardLogSource)) {
+                logEl.style.display = 'none';
+            }
+        }
     } catch (e) {
         // Fallback for non-JSON messages
         logEl.classList.add("log-INFO");
+        logEl.dataset.source = "unknown";
         logEl.textContent = data;
+
+        // Hide if filtering is active
+        if (currentDashboardLogSource !== 'all') {
+            logEl.style.display = 'none';
+        }
     }
 
     terminal.appendChild(logEl);
@@ -225,6 +251,34 @@ function appendLogLine(data) {
     if (nearBottom) {
         terminal.scrollTop = terminal.scrollHeight;
     }
+}
+
+/**
+ * Filters existing dashboard logs based on selected source.
+ * Shows/hides log entries by checking their data-source attribute.
+ */
+function filterDashboardLogs() {
+    const terminal = document.getElementById('consoleOutput');
+    if (!terminal) return;
+
+    const allLogLines = terminal.querySelectorAll('.log-entry');
+
+    allLogLines.forEach(line => {
+        const logSource = line.dataset.source || 'unknown';
+
+        if (currentDashboardLogSource === 'all') {
+            line.style.display = 'block';
+        } else if (currentDashboardLogSource === 'external') {
+            // Exact match for "external" - show only client logs
+            line.style.display = logSource === 'external' ? 'block' : 'none';
+        } else {
+            // Prefix match for other filters (like dynamic sources)
+            line.style.display = logSource.startsWith(currentDashboardLogSource) ? 'block' : 'none';
+        }
+    });
+
+    // Auto-scroll to bottom after filtering
+    terminal.scrollTop = terminal.scrollHeight;
 }
 
 /**
@@ -281,6 +335,20 @@ function setupStartStopButton() {
             } catch (err) {
                 console.error("Error starting Screenshotter:", err);
             }
+        });
+    }
+}
+
+/**
+ * Sets up the log source filter dropdown for the dashboard console.
+ * Allows filtering to show all logs or only script logs.
+ */
+function setupLogSourceFilter() {
+    const dashboardLogSourceFilter = document.getElementById('dashboardLogSourceFilter');
+    if (dashboardLogSourceFilter) {
+        dashboardLogSourceFilter.addEventListener('change', (e) => {
+            currentDashboardLogSource = e.target.value;
+            filterDashboardLogs();
         });
     }
 }

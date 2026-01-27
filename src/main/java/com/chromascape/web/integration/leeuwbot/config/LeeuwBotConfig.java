@@ -52,6 +52,85 @@ public class LeeuwBotConfig {
   /** Whether to use Go backend as primary storage (true) or hybrid mode (false). */
   private boolean useGoBackendStorage = false;
 
+  // Screen streaming configuration (nested class for proper YAML binding)
+  private StreamConfig stream = new StreamConfig();
+
+  /** Nested configuration class for screen streaming properties. */
+  public static class StreamConfig {
+    private boolean enabled = true;
+    private String url = "ws://192.168.1.6:8084/ws/screens/agent";
+    private String hostId = "pc1";
+    private String displayName = "ChromaScape";
+    private int fps = 5;
+    private int quality = 70;
+    private int width = 800;
+    private int height = 600;
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+      this.enabled = enabled;
+    }
+
+    public String getUrl() {
+      return url;
+    }
+
+    public void setUrl(String url) {
+      this.url = url;
+    }
+
+    public String getHostId() {
+      return hostId;
+    }
+
+    public void setHostId(String hostId) {
+      this.hostId = hostId;
+    }
+
+    public String getDisplayName() {
+      return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+      this.displayName = displayName;
+    }
+
+    public int getFps() {
+      return fps;
+    }
+
+    public void setFps(int fps) {
+      this.fps = fps;
+    }
+
+    public int getQuality() {
+      return quality;
+    }
+
+    public void setQuality(int quality) {
+      this.quality = quality;
+    }
+
+    public int getWidth() {
+      return width;
+    }
+
+    public void setWidth(int width) {
+      this.width = width;
+    }
+
+    public int getHeight() {
+      return height;
+    }
+
+    public void setHeight(int height) {
+      this.height = height;
+    }
+  }
+
   // Getters and Setters
 
   public boolean isEnabled() {
@@ -156,6 +235,16 @@ public class LeeuwBotConfig {
 
   public void setUseGoBackendStorage(boolean useGoBackendStorage) {
     this.useGoBackendStorage = useGoBackendStorage;
+  }
+
+  // Screen streaming getter and setter
+
+  public StreamConfig getStream() {
+    return stream;
+  }
+
+  public void setStream(StreamConfig stream) {
+    this.stream = stream;
   }
 
   @Override

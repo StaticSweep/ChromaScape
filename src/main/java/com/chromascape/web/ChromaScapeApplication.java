@@ -2,10 +2,15 @@ package com.chromascape.web;
 
 import com.chromascape.utils.core.screen.viewport.ViewportManager;
 import com.chromascape.utils.core.state.StateManager;
+import com.chromascape.web.logs.LogOutputStream;
 import com.chromascape.web.logs.LogWebSocketHandler;
 import com.chromascape.web.logs.WebSocketLogAppender;
 import com.chromascape.web.state.WebsocketBotStateListener;
 import com.chromascape.web.viewport.WebsocketViewport;
+import jakarta.annotation.PostConstruct;
+import java.io.PrintStream;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -69,5 +74,26 @@ public class ChromaScapeApplication {
   @Autowired
   public void configureStateManager(WebsocketBotStateListener listener) {
     StateManager.setListener(listener);
+  }
+
+  /**
+   * Redirects System.out and System.err to Log4j2 loggers.
+   *
+   * <p>This ensures that all console output (System.out.println, System.err.println) is captured by
+   * the logging framework and can be broadcast via WebSocket and stored in the database. System.out
+   * is redirected to INFO level, System.err to ERROR level.
+   *
+   * <p>This method is called after Spring dependency injection is complete.
+   */
+  @PostConstruct
+  public void redirectSystemStreams() {
+    // Redirect System.out to Log4j2 at INFO level
+    System.setOut(
+        new PrintStream(new LogOutputStream(LogManager.getLogger("System.out"), Level.INFO), true));
+
+    // Redirect System.err to Log4j2 at ERROR level
+    System.setErr(
+        new PrintStream(
+            new LogOutputStream(LogManager.getLogger("System.err"), Level.ERROR), true));
   }
 }

@@ -10,11 +10,13 @@ import com.chromascape.web.state.SemanticWebSocketHandler;
 import com.chromascape.web.stats.StatisticsWebSocketHandler;
 import com.chromascape.web.viewport.ViewportWebSocketHandler;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
+import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 
 /**
  * Spring configuration class for enabling WebSocket support and registering WebSocket handlers.
@@ -90,6 +92,22 @@ public class WebSocketConfig implements WebSocketConfigurer {
     this.botStateWebSocketHandler = botStateWebSocketHandler;
     this.tickStreamWebSocketHandler = tickStreamWebSocketHandler;
     this.debuggerTickWebSocketHandler = debuggerTickWebSocketHandler;
+  }
+
+  /**
+   * Configures the WebSocket container with larger message buffer sizes.
+   *
+   * <p>The default Spring WebSocket message size limit is 64KB, which is too small for viewport
+   * image data. This bean increases the limit to 1MB to support larger image transfers.
+   *
+   * @return configured container factory bean
+   */
+  @Bean
+  public ServletServerContainerFactoryBean createWebSocketContainer() {
+    ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
+    container.setMaxTextMessageBufferSize(1024 * 1024); // 1MB for Base64 image data
+    container.setMaxBinaryMessageBufferSize(1024 * 1024); // 1MB
+    return container;
   }
 
   /**

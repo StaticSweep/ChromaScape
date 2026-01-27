@@ -152,14 +152,14 @@ public class WindowController {
   /**
    * Returns the currently selected window.
    *
-   * @return JSON object representing the selected window, or 404 if none selected
+   * @return JSON object representing the selected window, or 204 No Content if none selected
    */
   @GetMapping("/current")
   public ResponseEntity<Map<String, Object>> getCurrentWindow() {
     WindowInfo selected = windowSelectionService.getSelectedWindow();
 
     if (selected == null) {
-      return ResponseEntity.notFound().build();
+      return ResponseEntity.noContent().build();
     }
 
     Map<String, Object> response = new HashMap<>();

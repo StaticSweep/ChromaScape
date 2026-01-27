@@ -94,7 +94,10 @@ public class TickStreamIngestionService {
 
       // Verify session exists
       if (sessionService.getSession(sessionId).isEmpty()) {
-        log.warn("Received tick batch for unknown session: {}", sessionId);
+        log.warn(
+            "Received tick batch for unknown session: {}. Active sessions: {}",
+            sessionId,
+            sessionService.getActiveSessions().size());
         return;
       }
 
@@ -131,7 +134,7 @@ public class TickStreamIngestionService {
       // 5. Broadcast to live debugger clients
       broadcastToDebuggerClients(batch);
 
-      log.debug("Processed tick batch: sessionId={}, tick={}", sessionId, tick);
+      log.info("Processed tick batch: sessionId={}, tick={}", sessionId, tick);
 
     } catch (Exception e) {
       log.error("Error processing tick batch: {}", e.getMessage(), e);
@@ -152,6 +155,7 @@ public class TickStreamIngestionService {
           batch.getProjectiles() != null ? objectMapper.valueToTree(batch.getProjectiles()) : null;
       JsonNode cooldowns =
           batch.getCooldowns() != null ? objectMapper.valueToTree(batch.getCooldowns()) : null;
+      JsonNode quest = batch.getQuest() != null ? objectMapper.valueToTree(batch.getQuest()) : null;
 
       TickSnapshot snapshot =
           new TickSnapshot(batch.getSessionId(), batch.getTick(), timestamp, playerState);
@@ -161,6 +165,7 @@ public class TickStreamIngestionService {
       snapshot.setThreats(threats);
       snapshot.setProjectiles(projectiles);
       snapshot.setCooldowns(cooldowns);
+      snapshot.setQuest(quest);
 
       snapshotRepository.save(snapshot);
 
