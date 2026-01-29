@@ -1,5 +1,8 @@
 package com.chromascape.web.debug.tickdebugger.controller;
 
+import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
+import com.chromascape.web.debug.tickdebugger.dto.TickCardData;
+import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickLog;
 import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
@@ -9,18 +12,22 @@ import com.chromascape.web.debug.tickdebugger.entity.TickSnapshot;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TimelineMarker;
 import com.chromascape.web.debug.tickdebugger.entity.TimelineMarkerRepository;
+import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.debug.tickdebugger.service.TickVideoSyncService;
 import com.chromascape.web.logs.LogEntity;
 import com.chromascape.web.logs.LogRepository;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -47,6 +54,7 @@ public class TickReplayController {
   private final TickVideoSyncService tickVideoSyncService;
   private final RecordingSessionRepository recordingSessionRepository;
   private final LogRepository standardLogRepository;
+  private final DebugSessionService debugSessionService;
   private final ObjectMapper objectMapper;
 
   public TickReplayController(
@@ -58,6 +66,7 @@ public class TickReplayController {
       TickVideoSyncService tickVideoSyncService,
       RecordingSessionRepository recordingSessionRepository,
       LogRepository standardLogRepository,
+      DebugSessionService debugSessionService,
       ObjectMapper objectMapper) {
     this.sessionRepository = sessionRepository;
     this.snapshotRepository = snapshotRepository;
@@ -67,6 +76,7 @@ public class TickReplayController {
     this.tickVideoSyncService = tickVideoSyncService;
     this.recordingSessionRepository = recordingSessionRepository;
     this.standardLogRepository = standardLogRepository;
+    this.debugSessionService = debugSessionService;
     this.objectMapper = objectMapper;
   }
 
@@ -384,6 +394,316 @@ public class TickReplayController {
     }
   }
 
+  /**
+   * Start a new recording with tick data tracking.
+   *
+   * <p>This endpoint creates both a debug session and a recording session linked together, ensuring
+   * recordings have associated tick data for replay.
+   *
+   * @param request the recording start request
+   * @return session start response with sessionId and recordingId
+   */
+  @PostMapping("/start-recording")
+  public ResponseEntity<SessionStartResponse> startRecording(
+      @RequestBody RecordingStartRequest request) {
+
+    try {
+      String accountName = request.getAccountName();
+      String scriptName = request.getScriptName();
+      Boolean recordingEnabled = request.getRecordingEnabled();
+
+      if (accountName == null || accountName.isEmpty()) {
+        accountName = "Unknown";
+      }
+      if (scriptName == null || scriptName.isEmpty()) {
+        scriptName = "Manual Recording";
+      }
+      if (recordingEnabled == null) {
+        recordingEnabled = true;
+      }
+
+      SessionStartResponse response =
+          debugSessionService.startSession(accountName, scriptName, recordingEnabled);
+
+      log.info(
+          "Started recording via replay page: sessionId={}, recordingId={}",
+          response.getSessionId(),
+          response.getRecordingId());
+
+      return ResponseEntity.ok(response);
+
+    } catch (Exception e) {
+      log.error("Failed to start recording: {}", e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  /**
+   * Stop a running recording.
+   *
+   * @param request the recording stop request
+   * @return success response
+   */
+  @PostMapping("/stop-recording")
+  public ResponseEntity<Map<String, Object>> stopRecording(
+      @RequestBody RecordingStopRequest request) {
+
+    try {
+      String sessionId = request.getSessionId();
+      Long endTick = request.getEndTick();
+
+      if (sessionId == null || sessionId.isEmpty()) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", "Session ID is required");
+        return ResponseEntity.badRequest().body(error);
+      }
+
+      debugSessionService.stopSession(sessionId, endTick);
+
+      Map<String, Object> response = new HashMap<>();
+      response.put("status", "stopped");
+      response.put("sessionId", sessionId);
+
+      log.info("Stopped recording via replay page: sessionId={}", sessionId);
+
+      return ResponseEntity.ok(response);
+
+    } catch (Exception e) {
+      log.error("Failed to stop recording: {}", e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  /**
+   * Get tick cards for a recording.
+   *
+   * <p>Returns tick-organized data with section counts and player summaries for replay page
+   * rendering.
+   *
+   * @param recordingId the recording ID
+   * @param start optional start tick (default: 0)
+   * @param end optional end tick (default: start + 100)
+   * @return list of tick card data
+   */
+  @GetMapping("/tick-cards/{recordingId}")
+  public ResponseEntity<?> getTickCards(
+      @PathVariable String recordingId,
+      @RequestParam(required = false, defaultValue = "0") Long start,
+      @RequestParam(required = false) Long end) {
+
+    try {
+      // Look up debug session by recording ID
+      Optional<DebugSession> sessionOpt = sessionRepository.findByRecordingId(recordingId);
+
+      if (sessionOpt.isEmpty()) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", "No tick data available for this recording");
+        error.put(
+            "message",
+            "This recording was made before tick tracking was enabled. Only video playback is available.");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+      }
+
+      DebugSession session = sessionOpt.get();
+      String sessionId = session.getSessionId();
+
+      // Default end to start + 100 if not provided
+      if (end == null) {
+        end = start + 100;
+      }
+
+      // Fetch tick data in range
+      List<TickSnapshot> snapshots =
+          snapshotRepository.findBySessionIdAndTickBetweenOrderByTick(sessionId, start, end);
+      List<TickLog> logs =
+          logRepository.findBySessionIdAndTickBetweenOrderByTickAsc(sessionId, start, end);
+
+      // Build tick cards
+      Map<Long, TickCardData> tickCardsMap = new LinkedHashMap<>();
+
+      // Process snapshots
+      for (TickSnapshot snapshot : snapshots) {
+        Long tick = snapshot.getTick();
+        TickCardData card = tickCardsMap.computeIfAbsent(tick, this::createEmptyTickCard);
+
+        card.setPlayerSummary(buildPlayerSummary(snapshot));
+
+        // Calculate section counts and data from snapshot
+        Map<String, Integer> sectionCounts = card.getSectionCounts();
+        Map<String, Object> sectionData = card.getSectionData();
+
+        // Quest section
+        if (snapshot.getQuest() != null && !snapshot.getQuest().toString().isEmpty()) {
+          sectionCounts.put("quest", 1);
+          sectionData.put("quest", snapshot.getQuest());
+        }
+
+        // Inventory section
+        if (snapshot.getInventory() != null) {
+          JsonNode inventoryNode = snapshot.getInventory();
+          int itemCount = inventoryNode.isArray() ? inventoryNode.size() : 0;
+          if (itemCount > 0) {
+            sectionCounts.put("inventory", 1);
+            sectionData.put("inventory", snapshot.getInventory());
+          }
+        }
+
+        // NPCs section
+        if (snapshot.getThreats() != null) {
+          JsonNode threatsNode = snapshot.getThreats();
+          int threatCount = threatsNode.isArray() ? threatsNode.size() : 0;
+          sectionCounts.put("npcs", threatCount);
+          sectionData.put("npcs", snapshot.getThreats());
+        }
+
+        // Projectiles section
+        if (snapshot.getProjectiles() != null) {
+          JsonNode projectilesNode = snapshot.getProjectiles();
+          int projCount = projectilesNode.isArray() ? projectilesNode.size() : 0;
+          sectionCounts.put("projectiles", projCount);
+          sectionData.put("projectiles", snapshot.getProjectiles());
+        }
+
+        // Player section (always present)
+        sectionCounts.put("player", 1);
+        sectionData.put("player", snapshot.getPlayerState());
+      }
+
+      // Process logs
+      Map<Long, List<TickLog>> logsByTick = new HashMap<>();
+      for (TickLog log : logs) {
+        logsByTick.computeIfAbsent(log.getTick(), k -> new ArrayList<>()).add(log);
+      }
+
+      for (Map.Entry<Long, List<TickLog>> entry : logsByTick.entrySet()) {
+        Long tick = entry.getKey();
+        List<TickLog> tickLogs = entry.getValue();
+
+        TickCardData card = tickCardsMap.computeIfAbsent(tick, this::createEmptyTickCard);
+
+        Map<String, Integer> sectionCounts = card.getSectionCounts();
+        Map<String, Object> sectionData = card.getSectionData();
+
+        // Actions section (all logs)
+        sectionCounts.put("actions", tickLogs.size());
+        sectionData.put("actions", tickLogs);
+
+        // Dialogue section
+        List<TickLog> dialogueLogs =
+            tickLogs.stream()
+                .filter(
+                    l ->
+                        (l.getEventType() != null
+                                && l.getEventType().toLowerCase().contains("dialogue"))
+                            || (l.getSubsystem() != null
+                                && l.getSubsystem().equalsIgnoreCase("dialogue")))
+                .toList();
+        if (!dialogueLogs.isEmpty()) {
+          sectionCounts.put("dialogue", dialogueLogs.size());
+          sectionData.put("dialogue", dialogueLogs);
+        }
+
+        // Varbit section
+        List<TickLog> varbitLogs =
+            tickLogs.stream()
+                .filter(
+                    l ->
+                        (l.getEventType() != null
+                                && l.getEventType().toLowerCase().contains("varbit"))
+                            || (l.getSubsystem() != null
+                                && l.getSubsystem().equalsIgnoreCase("varbit")))
+                .toList();
+        if (!varbitLogs.isEmpty()) {
+          sectionCounts.put("varbits", varbitLogs.size());
+          sectionData.put("varbits", varbitLogs);
+        }
+      }
+
+      List<TickCardData> tickCards = new ArrayList<>(tickCardsMap.values());
+
+      log.debug(
+          "Loaded {} tick cards for recording {} (ticks {}-{})",
+          tickCards.size(),
+          recordingId,
+          start,
+          end);
+
+      return ResponseEntity.ok(tickCards);
+
+    } catch (Exception e) {
+      log.error("Failed to get tick cards for recording {}: {}", recordingId, e.getMessage(), e);
+      Map<String, Object> error = new HashMap<>();
+      error.put("error", e.getMessage());
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    }
+  }
+
+  /**
+   * Create an empty tick card with initialized maps.
+   *
+   * @param tick the tick number
+   * @return empty tick card
+   */
+  private TickCardData createEmptyTickCard(Long tick) {
+    TickCardData card = new TickCardData();
+    card.setTick(tick);
+    card.setSectionCounts(new HashMap<>());
+    card.setSectionData(new HashMap<>());
+    return card;
+  }
+
+  /**
+   * Build a player state summary string from a snapshot.
+   *
+   * @param snapshot the tick snapshot
+   * @return player summary string
+   */
+  private String buildPlayerSummary(TickSnapshot snapshot) {
+    JsonNode playerState = snapshot.getPlayerState();
+    if (playerState == null) {
+      return "No player data";
+    }
+
+    StringBuilder summary = new StringBuilder();
+
+    // HP
+    JsonNode hp = playerState.get("hp");
+    if (hp != null) {
+      int current = hp.has("current") ? hp.get("current").asInt() : 0;
+      int max = hp.has("max") ? hp.get("max").asInt() : 0;
+      summary.append(String.format("HP %d/%d", current, max));
+    }
+
+    // Prayer
+    JsonNode prayer = playerState.get("prayer");
+    if (prayer != null) {
+      int current = prayer.has("current") ? prayer.get("current").asInt() : 0;
+      int max = prayer.has("max") ? prayer.get("max").asInt() : 0;
+      if (summary.length() > 0) summary.append(" · ");
+      summary.append(String.format("Pray %d/%d", current, max));
+    }
+
+    // Energy
+    JsonNode energy = playerState.get("energy");
+    if (energy != null) {
+      int energyValue = energy.asInt();
+      if (summary.length() > 0) summary.append(" · ");
+      summary.append(String.format("Energy %d%%", energyValue));
+    }
+
+    // Position
+    JsonNode position = playerState.get("position");
+    if (position != null && position.has("x") && position.has("y")) {
+      int x = position.get("x").asInt();
+      int y = position.get("y").asInt();
+      int plane = position.has("plane") ? position.get("plane").asInt() : 0;
+      if (summary.length() > 0) summary.append(" · ");
+      summary.append(String.format("Pos (%d,%d,%d)", x, y, plane));
+    }
+
+    return summary.length() > 0 ? summary.toString() : "No player data";
+  }
+
   /** Response DTO for tick range queries. */
   public static class TickBatchResponse {
     private List<TickSnapshot> snapshots;
@@ -538,6 +858,59 @@ public class TickReplayController {
 
     public void setStructuredData(String structuredData) {
       this.structuredData = structuredData;
+    }
+  }
+
+  /** Request DTO for starting a recording. */
+  public static class RecordingStartRequest {
+    private String accountName;
+    private String scriptName;
+    private Boolean recordingEnabled;
+
+    public String getAccountName() {
+      return accountName;
+    }
+
+    public void setAccountName(String accountName) {
+      this.accountName = accountName;
+    }
+
+    public String getScriptName() {
+      return scriptName;
+    }
+
+    public void setScriptName(String scriptName) {
+      this.scriptName = scriptName;
+    }
+
+    public Boolean getRecordingEnabled() {
+      return recordingEnabled;
+    }
+
+    public void setRecordingEnabled(Boolean recordingEnabled) {
+      this.recordingEnabled = recordingEnabled;
+    }
+  }
+
+  /** Request DTO for stopping a recording. */
+  public static class RecordingStopRequest {
+    private String sessionId;
+    private Long endTick;
+
+    public String getSessionId() {
+      return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+      this.sessionId = sessionId;
+    }
+
+    public Long getEndTick() {
+      return endTick;
+    }
+
+    public void setEndTick(Long endTick) {
+      this.endTick = endTick;
     }
   }
 }

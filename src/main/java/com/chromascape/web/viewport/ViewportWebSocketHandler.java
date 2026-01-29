@@ -5,6 +5,8 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
@@ -31,8 +33,8 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
   /**
    * Single-threaded executor for sending messages asynchronously.
    *
-   * <p>Uses a single thread to guarantee frame ordering, as WebSocketSession.sendMessage is not
-   * thread-safe.
+   * <p>Uses a single thread to keep WebSocketSession.sendMessage serialized while coalescing frames
+   * to avoid backlog.
    */
   private final ExecutorService wsExecutor =
       Executors.newSingleThreadExecutor(
@@ -41,6 +43,12 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
             t.setDaemon(true);
             return t;
           });
+
+  /** Latest viewport payload to send (coalesced). */
+  private final AtomicReference<String> pendingMessage = new AtomicReference<>();
+
+  /** Ensures only one send loop is queued at a time. */
+  private final AtomicBoolean sendScheduled = new AtomicBoolean(false);
 
   /**
    * Invoked after the WebSocket connection has been closed by either side, or after a transport
@@ -94,8 +102,8 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
   /**
    * Broadcasts a text message to all currently connected clients.
    *
-   * <p>Broadcasting is done asynchronously for each client to prevent one slow client from blocking
-   * the update for others.
+   * <p>Frames are coalesced so only the most recent payload is queued for send. This avoids
+   * backpressure when clients or the network can't keep up with capture.
    *
    * @param message The message string to broadcast (e.g., a Data URI).
    */
@@ -104,23 +112,42 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
         "Broadcasting viewport frame, size: {} bytes, sessions: {}",
         message.length(),
         sessions.size());
-    for (WebSocketSession session : sessions) {
-      if (!session.isOpen()) {
-        sessions.remove(session);
-        continue;
+    pendingMessage.set(message);
+    scheduleSend();
+  }
+
+  private void scheduleSend() {
+    if (!sendScheduled.compareAndSet(false, true)) {
+      return;
+    }
+    wsExecutor.submit(this::flushPending);
+  }
+
+  private void flushPending() {
+    try {
+      while (true) {
+        String message = pendingMessage.getAndSet(null);
+        if (message == null) {
+          return;
+        }
+        for (WebSocketSession session : sessions) {
+          if (!session.isOpen()) {
+            sessions.remove(session);
+            continue;
+          }
+          try {
+            session.sendMessage(new TextMessage(message));
+          } catch (IOException e) {
+            logger.warn("Failed to send viewport data to session: {}", e.getMessage());
+            sessions.remove(session);
+          }
+        }
       }
-      wsExecutor.submit(
-          () -> {
-            try {
-              // Double check before sending
-              if (session.isOpen()) {
-                session.sendMessage(new TextMessage(message));
-              }
-            } catch (IOException e) {
-              logger.warn("Failed to send viewport data to session: {}", e.getMessage());
-              sessions.remove(session);
-            }
-          });
+    } finally {
+      sendScheduled.set(false);
+      if (pendingMessage.get() != null) {
+        scheduleSend();
+      }
     }
   }
 }

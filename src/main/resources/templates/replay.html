@@ -39,14 +39,102 @@
             width: 100%;
             cursor: pointer;
         }
-        .log-panel {
-            max-height: 300px;
+        .tick-cards-panel {
+            max-height: 500px;
             overflow-y: auto;
             background: rgba(0, 0, 0, 0.3);
             border-radius: 8px;
             padding: 10px;
             font-family: 'Courier New', monospace;
             font-size: 13px;
+        }
+        .tick-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #0d6efd;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .tick-card.active {
+            border-left-color: #ffc107;
+            background: rgba(255, 193, 7, 0.1);
+        }
+        .tick-transition {
+            background: rgba(108, 117, 125, 0.05);
+            border-left: 3px solid #6c757d;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        .tick-transition-header {
+            font-weight: bold;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        .load-more-indicator {
+            text-align: center;
+            padding: 15px;
+            color: #aaa;
+        }
+        .tick-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .tick-number {
+            font-weight: bold;
+            color: #0d6efd;
+        }
+        .tick-summary {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+        .tick-section {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .section-header {
+            font-weight: bold;
+            font-size: 12px;
+            color: #0d6efd;
+            margin-bottom: 4px;
+        }
+        .section-chip {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background: rgba(13, 110, 253, 0.2);
+            color: #0d6efd;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+        .category-toggles {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .cat-toggle {
+            padding: 5px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.3);
+            color: #999;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .cat-toggle.active {
+            background: rgba(13, 110, 253, 0.3);
+            border-color: #0d6efd;
+            color: #0d6efd;
+        }
+        .cat-toggle:hover {
+            background: rgba(13, 110, 253, 0.2);
         }
         .log-entry {
             padding: 5px 10px;
@@ -179,25 +267,31 @@
                 </div>
             </div>
 
-            <!-- Logs Panel -->
+            <!-- Tick Cards Panel -->
             <div class="col-lg-4">
                 <div class="glass-panel">
-                    <h6><i class="bi bi-file-text me-2"></i>Synchronized Logs</h6>
-                    <div class="mb-2">
-                        <input type="text" id="logSearch" class="form-control form-control-sm" placeholder="Search logs...">
+                    <h6><i class="bi bi-layers me-2"></i>Tick Data</h6>
+
+                    <!-- Global Category Toggles -->
+                    <div class="category-toggles" id="globalCategoryToggles">
+                        <button class="cat-toggle active" data-section="actions" title="Show action log entries">Actions</button>
+                        <button class="cat-toggle active" data-section="quest" title="Show quest progress">Quest</button>
+                        <button class="cat-toggle active" data-section="dialogue" title="Show dialogue">Dialogue</button>
+                        <button class="cat-toggle active" data-section="inventory" title="Show inventory">Inventory</button>
+                        <button class="cat-toggle active" data-section="npcs" title="Show NPCs">NPCs</button>
+                        <button class="cat-toggle active" data-section="projectiles" title="Show projectiles">Projectiles</button>
+                        <button class="cat-toggle active" data-section="player" title="Show player state">Player</button>
+                        <button class="cat-toggle active" data-section="varbits" title="Show varbits">Varbits</button>
                     </div>
-                    <div class="mb-2">
-                        <select id="logLevelFilter" class="form-select form-select-sm">
-                            <option value="all">All Levels</option>
-                            <option value="debug">Debug</option>
-                            <option value="info">Info</option>
-                            <option value="warn">Warning</option>
-                            <option value="error">Error</option>
-                        </select>
-                    </div>
-                    <div id="logPanel" class="log-panel">
-                        <div class="text-center text-muted p-3">
-                            No logs available for this recording
+
+                    <!-- Tick Cards -->
+                    <div id="tickCardsPanel" class="tick-cards-panel">
+                        <div id="noTickDataMessage" class="alert alert-warning" style="display:none">
+                            This recording was made before tick tracking was enabled. Only video playback is available.
+                        </div>
+                        <div id="loadingTickData" class="text-center p-3">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <span class="ms-2">Loading tick data...</span>
                         </div>
                     </div>
                 </div>
@@ -235,8 +329,10 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const API_BASE = '/api/recordings';
+        const DEBUG_API_BASE = '/api/debug/replay';
         let isRecording = false;
-        let currentRecording = null;
+        let currentRecordingId = null;
+        let currentSessionId = null;
 
         // DOM Elements
         const recordBtn = document.getElementById('recordBtn');
@@ -251,10 +347,26 @@
         const durationEl = document.getElementById('duration');
         const playbackSpeed = document.getElementById('playbackSpeed');
         const fullscreenBtn = document.getElementById('fullscreenBtn');
-        const logPanel = document.getElementById('logPanel');
-        const logSearch = document.getElementById('logSearch');
-        const logLevelFilter = document.getElementById('logLevelFilter');
+        const tickCardsPanel = document.getElementById('tickCardsPanel');
+        const noTickDataMessage = document.getElementById('noTickDataMessage');
+        const loadingTickData = document.getElementById('loadingTickData');
         const recordingsList = document.getElementById('recordingsList');
+        const globalCategoryToggles = document.getElementById('globalCategoryToggles');
+
+        // State
+        const state = {
+            globalSectionVisibility: {
+                actions: true, quest: true, dialogue: true, inventory: true,
+                npcs: true, projectiles: true, player: true, varbits: true
+            },
+            tickDataCache: new Map(),
+            currentTick: null,
+            syncInfo: null, // Store sync info from session
+            msPerTick: 600, // Default, will be updated from sync info
+            loadedTickRange: { start: 0, end: 0 }, // Track loaded tick range
+            isLoadingMore: false,
+            hasMoreTicks: true
+        };
 
         // Recording Controls
         recordBtn.addEventListener('click', async () => {
@@ -269,18 +381,28 @@
 
         async function startRecording() {
             try {
-                const response = await fetch(`${API_BASE}/start`, { method: 'POST' });
+                const response = await fetch(`${DEBUG_API_BASE}/start-recording`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        accountName: 'Replay User',
+                        scriptName: 'Manual Recording',
+                        recordingEnabled: true
+                    })
+                });
                 const data = await response.json();
 
-                if (data.status === 'recording') {
+                if (data.sessionId && data.recordingId) {
                     isRecording = true;
-                    currentRecording = data.recordingId;
+                    currentSessionId = data.sessionId;
+                    currentRecordingId = data.recordingId;
                     recordBtn.classList.remove('btn-danger');
                     recordBtn.classList.add('btn-success');
                     recordBtnText.textContent = 'Stop Recording';
                     recordingStatus.textContent = 'Recording...';
                     recordingStatus.classList.remove('bg-secondary');
                     recordingStatus.classList.add('bg-danger');
+                    console.log('Started recording:', data);
                 }
             } catch (error) {
                 console.error('Failed to start recording:', error);
@@ -289,11 +411,19 @@
 
         async function stopRecording() {
             try {
-                const response = await fetch(`${API_BASE}/stop`, { method: 'POST' });
+                const response = await fetch(`${DEBUG_API_BASE}/stop-recording`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: currentSessionId,
+                        endTick: null
+                    })
+                });
                 const data = await response.json();
 
                 if (data.status === 'stopped') {
                     isRecording = false;
+                    currentSessionId = null;
                     recordBtn.classList.remove('btn-success');
                     recordBtn.classList.add('btn-danger');
                     recordBtnText.textContent = 'Start Recording';
@@ -324,9 +454,10 @@
                     <tr class="recording-item" data-id="${r.id}" data-url="${r.url}">
                         <td><code>${r.id}</code></td>
                         <td>${new Date(r.lastModified).toLocaleString()}</td>
+                        <td>${r.durationMs ? formatDuration(r.durationMs) : '--'}</td>
                         <td>${formatSize(r.size)}</td>
                         <td>
-                            <button class="btn btn-sm btn-primary play-recording" data-url="${r.url}">
+                            <button class="btn btn-sm btn-primary play-recording" data-id="${r.id}" data-url="${r.url}">
                                 <i class="bi bi-play-fill"></i> Play
                             </button>
                             <button class="btn btn-sm btn-outline-danger delete-recording" data-id="${r.id}">
@@ -340,7 +471,8 @@
                 document.querySelectorAll('.play-recording').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const url = btn.dataset.url;
-                        loadRecording(url);
+                        const recordingId = btn.dataset.id;
+                        loadRecording(url, recordingId);
                     });
                 });
             } catch (error) {
@@ -348,12 +480,266 @@
             }
         }
 
-        function loadRecording(url) {
+        async function loadRecording(url, recordingId) {
             videoPlayer.src = url;
             playerSection.style.display = 'block';
             playerSection.scrollIntoView({ behavior: 'smooth' });
+            currentRecordingId = recordingId;
+
+            // Load sync info for accurate tick mapping
+            await loadSyncInfo(recordingId);
+
+            // Load tick data for this recording
+            await loadTickCardsForRecording(recordingId);
+
             videoPlayer.play();
         }
+
+        async function loadSyncInfo(recordingId) {
+            try {
+                const response = await fetch(`${DEBUG_API_BASE}/${recordingId}/sync`);
+                if (response.ok) {
+                    state.syncInfo = await response.json();
+                    // Calculate ms per tick if we have FPS info
+                    if (state.syncInfo.fps) {
+                        // Game ticks are typically 600ms (0.6s) in OSRS
+                        state.msPerTick = 600;
+                    }
+                    console.log('Loaded sync info:', state.syncInfo);
+                } else {
+                    console.warn('No sync info available for recording:', recordingId);
+                    state.syncInfo = null;
+                    state.msPerTick = 600; // Default fallback
+                }
+            } catch (error) {
+                console.error('Failed to load sync info:', error);
+                state.syncInfo = null;
+                state.msPerTick = 600; // Default fallback
+            }
+        }
+
+        async function loadTickCardsForRecording(recordingId, startTick = 0, endTick = null, append = false) {
+            if (state.isLoadingMore) return; // Prevent concurrent loads
+
+            state.isLoadingMore = true;
+            loadingTickData.style.display = 'block';
+            if (!append) {
+                noTickDataMessage.style.display = 'none';
+            }
+
+            try {
+                // Load 100 ticks at a time
+                const batchSize = 100;
+                const actualEndTick = endTick !== null ? endTick : startTick + batchSize;
+
+                const url = `${DEBUG_API_BASE}/tick-cards/${recordingId}?start=${startTick}&end=${actualEndTick}`;
+                const response = await fetch(url);
+
+                if (response.status === 404) {
+                    // No tick data available
+                    loadingTickData.style.display = 'none';
+                    if (!append) {
+                        noTickDataMessage.style.display = 'block';
+                        clearTickCards();
+                    }
+                    state.hasMoreTicks = false;
+                    return;
+                }
+
+                const tickCards = await response.json();
+
+                if (response.ok) {
+                    loadingTickData.style.display = 'none';
+
+                    if (tickCards && tickCards.length > 0) {
+                        renderTickCards(tickCards, append);
+                        state.loadedTickRange.start = append ? state.loadedTickRange.start : startTick;
+                        state.loadedTickRange.end = actualEndTick;
+                        state.hasMoreTicks = tickCards.length === batchSize;
+                    } else {
+                        state.hasMoreTicks = false;
+                        if (!append) {
+                            noTickDataMessage.style.display = 'block';
+                        }
+                    }
+                } else {
+                    throw new Error('Failed to load tick cards');
+                }
+            } catch (error) {
+                console.error('Failed to load tick cards:', error);
+                loadingTickData.style.display = 'none';
+                if (!append) {
+                    noTickDataMessage.style.display = 'block';
+                }
+                state.hasMoreTicks = false;
+            } finally {
+                state.isLoadingMore = false;
+            }
+        }
+
+        function clearTickCards() {
+            const existingCards = tickCardsPanel.querySelectorAll('.tick-card');
+            existingCards.forEach(card => card.remove());
+            const loadMoreIndicator = tickCardsPanel.querySelector('.load-more-indicator');
+            if (loadMoreIndicator) {
+                loadMoreIndicator.remove();
+            }
+            state.loadedTickRange = { start: 0, end: 0 };
+            state.hasMoreTicks = true;
+        }
+
+        function renderTickCards(tickCards, append = false) {
+            if (!append) {
+                clearTickCards();
+            }
+
+            if (!tickCards || tickCards.length === 0) {
+                if (!append) {
+                    noTickDataMessage.style.display = 'block';
+                }
+                return;
+            }
+
+            tickCards.forEach(tickData => {
+                const card = createTickCard(tickData);
+                // Insert before loading indicator
+                const loadingIndicator = tickCardsPanel.querySelector('.load-more-indicator');
+                if (loadingIndicator) {
+                    tickCardsPanel.insertBefore(card, loadingIndicator);
+                } else {
+                    tickCardsPanel.appendChild(card);
+                }
+                state.tickDataCache.set(tickData.tick, tickData);
+            });
+
+            // Add load more indicator if there are more ticks
+            if (state.hasMoreTicks && !tickCardsPanel.querySelector('.load-more-indicator')) {
+                const loadMore = document.createElement('div');
+                loadMore.className = 'load-more-indicator';
+                loadMore.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div><span class="ms-2">Scroll for more...</span>';
+                tickCardsPanel.appendChild(loadMore);
+            }
+        }
+
+        // Add infinite scroll for tick cards
+        tickCardsPanel.addEventListener('scroll', () => {
+            if (state.isLoadingMore || !state.hasMoreTicks || !currentRecordingId) return;
+
+            const scrollBottom = tickCardsPanel.scrollHeight - tickCardsPanel.scrollTop - tickCardsPanel.clientHeight;
+
+            // Load more when near bottom (within 100px)
+            if (scrollBottom < 100) {
+                const nextStart = state.loadedTickRange.end + 1;
+                loadTickCardsForRecording(currentRecordingId, nextStart, null, true);
+            }
+        });
+
+        function createTickCard(tickData) {
+            const card = document.createElement('div');
+            card.className = 'tick-card';
+            card.dataset.tick = tickData.tick;
+
+            // Tick header
+            const header = document.createElement('div');
+            header.className = 'tick-header';
+
+            const tickNumber = document.createElement('span');
+            tickNumber.className = 'tick-number';
+            tickNumber.textContent = `Tick ${tickData.tick}`;
+            header.appendChild(tickNumber);
+
+            // Section chips
+            const counts = tickData.sectionCounts || {};
+            Object.keys(counts).forEach(section => {
+                if (counts[section] > 0) {
+                    const chip = document.createElement('span');
+                    chip.className = 'section-chip';
+                    chip.dataset.section = section;
+                    chip.textContent = `${section}: ${counts[section]}`;
+                    header.appendChild(chip);
+                }
+            });
+
+            card.appendChild(header);
+
+            // Player summary
+            if (tickData.playerSummary) {
+                const summary = document.createElement('div');
+                summary.className = 'tick-summary';
+                summary.textContent = tickData.playerSummary;
+                card.appendChild(summary);
+            }
+
+            // Sections
+            const data = tickData.sectionData || {};
+            const sections = ['actions', 'quest', 'dialogue', 'inventory', 'npcs', 'projectiles', 'player', 'varbits'];
+
+            sections.forEach(section => {
+                if (data[section] && state.globalSectionVisibility[section]) {
+                    const sectionEl = createSection(section, data[section], tickData.tick);
+                    card.appendChild(sectionEl);
+                }
+            });
+
+            // Click to seek video to this tick
+            card.addEventListener('click', () => {
+                const videoTime = (tickData.tick * state.msPerTick) / 1000; // Convert to seconds
+                videoPlayer.currentTime = videoTime;
+            });
+
+            return card;
+        }
+
+        function createSection(sectionName, sectionData, tick) {
+            const section = document.createElement('div');
+            section.className = `tick-section section-${sectionName}`;
+            section.dataset.section = sectionName;
+
+            const header = document.createElement('div');
+            header.className = 'section-header';
+            header.innerHTML = `<i class="bi bi-circle-fill" style="font-size: 8px;"></i> ${sectionName.charAt(0).toUpperCase() + sectionName.slice(1)}`;
+            section.appendChild(header);
+
+            const content = document.createElement('div');
+            content.className = 'section-content';
+
+            // Render section content based on type
+            if (sectionName === 'actions' && Array.isArray(sectionData)) {
+                sectionData.forEach(log => {
+                    const logLine = document.createElement('div');
+                    logLine.className = `log-entry ${log.severity?.toLowerCase() || 'info'}`;
+                    logLine.innerHTML = `<span class="log-timestamp">[${log.subsystem || 'Game'}]</span> ${escapeHtml(log.message)}`;
+                    content.appendChild(logLine);
+                });
+            } else if (sectionName === 'player') {
+                content.innerHTML = '<div class="text-muted" style="font-size: 11px;">See summary above</div>';
+            } else {
+                content.innerHTML = `<pre style="font-size: 11px; margin: 0;">${JSON.stringify(sectionData, null, 2)}</pre>`;
+            }
+
+            section.appendChild(content);
+            return section;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Global category toggles
+        globalCategoryToggles.addEventListener('click', (e) => {
+            if (e.target.classList.contains('cat-toggle')) {
+                const section = e.target.dataset.section;
+                e.target.classList.toggle('active');
+                state.globalSectionVisibility[section] = e.target.classList.contains('active');
+
+                // Re-render all visible sections
+                document.querySelectorAll(`.tick-section.section-${section}`).forEach(el => {
+                    el.style.display = state.globalSectionVisibility[section] ? 'block' : 'none';
+                });
+            }
+        });
 
         function formatSize(bytes) {
             if (bytes < 1024) return bytes + ' B';
@@ -365,6 +751,13 @@
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function formatDuration(durationMs) {
+            const seconds = Math.floor(durationMs / 1000);
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
         // Video Player Controls
@@ -382,7 +775,32 @@
             const percent = (videoPlayer.currentTime / videoPlayer.duration) * 100;
             timelineSlider.value = percent;
             currentTimeEl.textContent = formatTime(videoPlayer.currentTime);
+
+            // Highlight current tick card
+            if (currentRecordingId) {
+                const videoTimeMs = videoPlayer.currentTime * 1000;
+                const currentTick = Math.floor(videoTimeMs / state.msPerTick);
+
+                if (currentTick !== state.currentTick) {
+                    state.currentTick = currentTick;
+                    highlightTickCard(currentTick);
+                }
+            }
         });
+
+        function highlightTickCard(tick) {
+            // Remove previous highlights
+            document.querySelectorAll('.tick-card.active').forEach(card => {
+                card.classList.remove('active');
+            });
+
+            // Highlight current tick
+            const card = document.querySelector(`.tick-card[data-tick="${tick}"]`);
+            if (card) {
+                card.classList.add('active');
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
 
         videoPlayer.addEventListener('loadedmetadata', () => {
             durationEl.textContent = formatTime(videoPlayer.duration);
@@ -405,26 +823,6 @@
 
         // Load recordings on page load
         loadRecordings();
-
-        // Simulated logs (TODO: Connect to real log API)
-        const sampleLogs = [
-            { level: 'info', time: 0, message: 'Recording started' },
-            { level: 'debug', time: 2, message: 'Player position updated: (100, 200)' },
-            { level: 'info', time: 5, message: 'Task started: Fishing' },
-            { level: 'debug', time: 8, message: 'Found fishing spot' },
-            { level: 'info', time: 10, message: 'Casting fishing rod...' },
-        ];
-
-        function displayLogs(logs) {
-            logPanel.innerHTML = logs.map(log => `
-                <div class="log-entry ${log.level}" data-time="${log.time}">
-                    <div class="log-timestamp">[${formatTime(log.time)}]</div>
-                    <div>${log.message}</div>
-                </div>
-            `).join('');
-        }
-
-        displayLogs(sampleLogs);
     </script>
 </body>
 </html>

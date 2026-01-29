@@ -56,10 +56,12 @@ public class RecordingService implements FrameListener {
   private final Java2DFrameConverter frameConverter = new Java2DFrameConverter();
 
   // Frame buffer for producer-consumer pattern
-  private static final int FRAME_BUFFER_SIZE = 60; // ~2 seconds at 30 FPS
+  private static final int FRAME_BUFFER_SIZE =
+      120; // ~4 seconds at 30 FPS (increased for stability)
   private final BlockingQueue<BufferedImage> frameBuffer =
       new LinkedBlockingQueue<>(FRAME_BUFFER_SIZE);
   private volatile boolean encoderRunning = false;
+  private long encodedFrameCount = 0; // Track encoded frames for timestamp calculation
 
   private FFmpegFrameRecorder recorder;
   private File currentRecordingFile;
@@ -416,14 +418,27 @@ public class RecordingService implements FrameListener {
   /** Encoder loop that consumes frames from the buffer (consumer). */
   private void encoderLoop() {
     logger.info("Encoder thread started");
+    encodedFrameCount = 0;
+    BufferedImage lastFrame = null;
 
     while (encoderRunning || !frameBuffer.isEmpty()) {
       try {
         // Wait for frame with timeout
         BufferedImage frame = frameBuffer.poll(100, TimeUnit.MILLISECONDS);
 
+        if (frame != null) {
+          lastFrame = frame;
+        } else if (encoderRunning && lastFrame != null) {
+          // Buffer empty but still recording - duplicate last frame to maintain timeline
+          frame = lastFrame;
+        }
+
         if (frame != null && recorder != null) {
+          // Set explicit timestamp based on frame index and FPS
+          long timestampMicros = (encodedFrameCount * 1_000_000L) / unifiedConfig.getFps();
+          recorder.setTimestamp(timestampMicros);
           recorder.record(frameConverter.convert(frame));
+          encodedFrameCount++;
         }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -440,14 +455,17 @@ public class RecordingService implements FrameListener {
     while ((frame = frameBuffer.poll()) != null) {
       try {
         if (recorder != null) {
+          long timestampMicros = (encodedFrameCount * 1_000_000L) / unifiedConfig.getFps();
+          recorder.setTimestamp(timestampMicros);
           recorder.record(frameConverter.convert(frame));
+          encodedFrameCount++;
         }
       } catch (Exception e) {
         logger.warn("Failed to encode remaining frame: {}", e.getMessage());
       }
     }
 
-    logger.info("Encoder thread finished");
+    logger.info("Encoder thread finished (encoded {} frames)", encodedFrameCount);
   }
 
   /** Returns whether a recording is currently in progress. */
@@ -513,6 +531,7 @@ public class RecordingService implements FrameListener {
       recordingStartTime = 0;
       frameCount.set(0);
       droppedFrameCount.set(0);
+      encodedFrameCount = 0;
     }
 
     return wasRecording;
@@ -551,6 +570,7 @@ public class RecordingService implements FrameListener {
     recordingStartTime = 0;
     frameCount.set(0);
     droppedFrameCount.set(0);
+    encodedFrameCount = 0;
     initialWidth = 0;
     initialHeight = 0;
   }
@@ -595,18 +615,20 @@ public class RecordingService implements FrameListener {
     candidate.setVideoCodecName(codecName);
     candidate.setFormat("mp4");
     candidate.setFrameRate(unifiedConfig.getFps());
-    candidate.setVideoBitrate((int) (config.getVideoQuality() * 10000));
 
-    // Browser compatibility settings
+    // Codec-agnostic quality settings (apply to ALL codecs)
     candidate.setPixelFormat(org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P);
+    candidate.setVideoBitrate((int) (config.getVideoQuality() * 10000));
+    candidate.setOption("movflags", "+faststart");
 
+    // Codec-specific optimizations
     if ("libx264".equals(codecName)) {
-      candidate.setVideoOption("preset", "ultrafast");
+      // Use "faster" preset instead of "ultrafast" for better quality
+      candidate.setVideoOption("preset", "faster");
+      candidate.setVideoOption("tune", "zerolatency");
       candidate.setVideoOption("profile", "main");
     }
 
-    // Container-level option for web streaming
-    candidate.setOption("movflags", "+faststart");
     return candidate;
   }
 

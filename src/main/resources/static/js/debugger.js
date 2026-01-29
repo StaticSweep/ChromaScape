@@ -25,7 +25,7 @@ let viewportCanvas = null;
 let viewportCtx = null;
 
 // Multi-frame buffer for smoother playback
-const FRAME_BUFFER_SIZE = 3;
+const FRAME_BUFFER_SIZE = 1;
 let frameBuffer = [];  // Array of {seq, dataUrl}
 let draining = false;  // Prevents concurrent drain loops
 
@@ -2321,7 +2321,8 @@ function bufferFrame(seq, dataUrl) {
 
 /**
  * Get the next frame to decode from buffer.
- * Removes stale frames (seq <= lastDrawnSeq) and returns oldest valid frame.
+ * Removes stale frames (seq <= lastDrawnSeq) and returns newest valid frame.
+ * For live streaming, we always want the latest frame to minimize lag.
  */
 function getNextBufferedFrame() {
   // Remove stale frames before checking
@@ -2329,8 +2330,10 @@ function getNextBufferedFrame() {
 
   if (frameBuffer.length === 0) return null;
 
-  // Return oldest valid frame (sorted ascending, so first element)
-  return frameBuffer.shift();
+  // Return newest frame, drop the rest (latest-only strategy for live viewport)
+  const newest = frameBuffer.pop();
+  frameBuffer = [];  // Clear older frames
+  return newest;
 }
 
 /**
@@ -2381,9 +2384,10 @@ async function drainFrameBuffer() {
     const bitmap = await decodeFrame(frame.dataUrl);
 
     // Check if still valid after decode (could have been superseded)
-    if (frame.seq <= lastDrawnSeq) {
+    // Also check latestSeq - a newer frame may have arrived while decoding
+    if (frame.seq <= lastDrawnSeq || frame.seq < latestSeq) {
       if (window.DEBUG_FRAME_SEQ) {
-        console.log(`[FRAME] Discarded decoded frame ${frame.seq} - already drawn ${lastDrawnSeq}`);
+        console.log(`[FRAME] Discarded decoded frame ${frame.seq} - superseded by ${latestSeq}`);
       }
       if (bitmap?.close) bitmap.close();
     } else {

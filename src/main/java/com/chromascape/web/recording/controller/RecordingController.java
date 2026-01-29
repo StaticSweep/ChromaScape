@@ -304,11 +304,25 @@ public class RecordingController {
                   p -> {
                     Map<String, Object> info = new HashMap<>();
                     File file = p.toFile();
-                    info.put("id", file.getName().replace(".mp4", ""));
+                    String recordingId = file.getName().replace(".mp4", "");
+                    info.put("id", recordingId);
                     info.put("filename", file.getName());
                     info.put("size", file.length());
                     info.put("lastModified", file.lastModified());
                     info.put("url", "/api/recordings/download/" + file.getName());
+
+                    // Include database metadata if available
+                    RecordingSession session =
+                        recordingSessionRepository.findByRecordingId(recordingId).orElse(null);
+                    if (session != null) {
+                      if (session.getDurationMs() != null) {
+                        info.put("durationMs", session.getDurationMs());
+                      }
+                      if (session.getFps() != null) {
+                        info.put("fps", session.getFps());
+                      }
+                    }
+
                     recordings.add(info);
                   });
         }

@@ -40,8 +40,8 @@ public class WebsocketViewport implements Viewport {
   /** Websocket handler to broadcast messages. */
   private final ViewportWebSocketHandler handler;
 
-  /** Queue holding up to 5 frames to be processed. */
-  private final BlockingQueue<BufferedImage> frameQueue = new ArrayBlockingQueue<>(5);
+  /** Queue holding only the latest frame to keep latency low. */
+  private final BlockingQueue<BufferedImage> frameQueue = new ArrayBlockingQueue<>(1);
 
   /** Executor service for running the background processing tasks. */
   private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -65,9 +65,9 @@ public class WebsocketViewport implements Viewport {
   /**
    * Accepts a new image state from the bot.
    *
-   * <p>Frames are added to a 5-frame queue. If the queue is full, the oldest frame is dropped to
-   * maintain low latency. The worker thread processes frames and broadcasts them with sequence
-   * numbers.
+   * <p>Frames are added to a single-frame queue. If the queue is full, the existing frame is
+   * dropped so the newest frame always wins. The worker thread processes frames and broadcasts them
+   * with sequence numbers.
    *
    * @param mat The raw OpenCV matrix representing the new state.
    */

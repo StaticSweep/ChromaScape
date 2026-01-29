@@ -9,6 +9,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.awt.image.BufferedImage;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bytedeco.javacv.Java2DFrameUtils;
@@ -36,6 +37,7 @@ public class ScreenCaptureService implements FrameListener {
   private final UnifiedFrameCaptureService unifiedCaptureService;
   private final AtomicBoolean paused = new AtomicBoolean(false);
   private final AtomicBoolean registered = new AtomicBoolean(false);
+  private final AtomicLong latestCaptureTimeNanos = new AtomicLong(0);
 
   @Autowired
   public ScreenCaptureService(
@@ -100,10 +102,19 @@ public class ScreenCaptureService implements FrameListener {
    */
   @Override
   public void onFrameCaptured(FrameEvent event) {
+    long captureTime = event.getCaptureTimeNanos();
+    long latestTime = latestCaptureTimeNanos.updateAndGet(prev -> Math.max(prev, captureTime));
+    if (captureTime < latestTime) {
+      return;
+    }
+
     try {
       BufferedImage frame = event.getFrame();
       if (frame != null) {
         try (Mat mat = Java2DFrameUtils.toMat(frame)) {
+          if (captureTime < latestCaptureTimeNanos.get()) {
+            return;
+          }
           ViewportManager.getInstance().updateState(mat);
         }
       }
