@@ -1,7 +1,6 @@
 package com.chromascape.utils.actions;
 
 import com.chromascape.base.BaseScript;
-import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.domain.ocr.Ocr;
 import java.awt.Rectangle;
@@ -9,20 +8,23 @@ import java.time.Duration;
 import java.time.Instant;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bytedeco.opencv.opencv_core.Scalar;
 
 /**
  * Utility class for handling idle behavior in scripts.
  *
  * <p>This class provides functionality to pause execution for a given amount of time, or until the
  * game client indicates the player has become idle again through a chat message.
- *
- * <p>You can add ChatRed directly to your colours/colours.json file by adding this. { "name" :
- * "ChatRed", "min" : [ 177, 229, 239, 0 ], "max" : [ 179, 240, 240, 0 ] }
  */
 public class Idler {
 
   private static final Logger logger = LogManager.getLogger(Idler.class);
   private static volatile String lastMessage = "";
+
+  private static final ColourObj black =
+      new ColourObj("black", new Scalar(0, 0, 0, 0), new Scalar(0, 0, 0, 0));
+  private static final ColourObj chatRed =
+      new ColourObj("chatRed", new Scalar(177, 229, 239, 0), new Scalar(179, 240, 240, 0));
 
   /**
    * Waits until either the specified timeout has elapsed or until the client chatbox reports that
@@ -46,9 +48,7 @@ public class Idler {
         // Throttle wait to reduce lag, this is enough.
         BaseScript.waitMillis(300);
         Rectangle latestMessage = base.controller().zones().getChatTabs().get("Latest Message");
-        ColourObj red = ColourInstances.getByName("ChatRed");
-        ColourObj black = ColourInstances.getByName("Black");
-        String idleText = Ocr.extractText(latestMessage, "Plain 12", red, true);
+        String idleText = Ocr.extractText(latestMessage, "Plain 12", chatRed, true);
         String timeStamp = Ocr.extractText(latestMessage, "Plain 12", black, true);
         if ((idleText.contains("moving") || idleText.contains("idle"))
             && !timeStamp.equals(lastMessage)) {

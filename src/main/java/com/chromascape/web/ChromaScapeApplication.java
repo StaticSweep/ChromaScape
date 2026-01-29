@@ -27,6 +27,8 @@ public class ChromaScapeApplication {
    * @param args command-line arguments passed to the application
    */
   public static void main(String[] args) {
+    // Disable headless mode to allow GUI components (e.g., MouseOverlay)
+    System.setProperty("java.awt.headless", "false");
     SpringApplication.run(ChromaScapeApplication.class, args);
   }
 

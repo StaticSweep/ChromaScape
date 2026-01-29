@@ -28,8 +28,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import javax.imageio.ImageIO;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
@@ -46,23 +47,23 @@ public class Ocr {
   /** Stores successful character matches during Ocr extraction. */
   private static final List<CharMatch> matches = new ArrayList<>();
 
-  /**
-   * A set of characters that are known to cause issues with Ocr matching. These are excluded during
-   * glyph matching. Thank you to Kell and the team at OSBC for putting in all the hard work!
-   */
-  private static final Set<String> problemChars =
-      Set.of(
-          "Ì", "Í", "Î", "Ï", "ì", "í", "î", "ï", "Ĺ", "Ļ", "Ľ", "Ŀ", "Ł", "ĺ", "ļ", "ľ", "ŀ", "ł",
-          "|", "¦", "!", "ĵ", "ǰ", "ȷ", "ɉ", "Ĵ", "Ĩ", "Ī", "Ĭ", "Į", "İ", "Ɨ", "Ỉ", "Ị", "ĩ", "ī",
-          "ĭ", "į", "ı", "ƚ", "ỉ", "ị", "ˈ", "ˌ", "ʻ", "ʼ", "ʽ", "˚", "ʾ", "ʿ", "˙", "`", "¨", "¯",
-          "´", "¹", " ", "\t", "\n", "·");
+  /** Cached zero scalar to prevent CPU allocation fatigue */
+  private static final Scalar ZERO_SCALAR = new Scalar(0);
 
   /** Cache for loaded fonts to prevent disk I/O on every OCR call. */
   private static final Map<String, Map<String, Mat>> fontCache = new HashMap<>();
 
   /**
+   * Allowed characters for OCR to remove runtime overhead for unnecessary glyphs. Most common
+   * characters found.
+   */
+  private static final String ALLOWED_CHARS =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789()[],&-:/*'_\"?";
+
+  /**
    * Loads a font glyph set from disk, converts each glyph to grayscale, and stores in a map. Uses
-   * an internal cache to avoid repeated disk I/O.
+   * an internal cache to avoid repeated disk I/O. Only allows whitelisted glyphs ( please add if
+   * necessary).
    *
    * @param font Name of the font folder inside resources.
    * @return A map from character string to Mat (glyph image).
@@ -83,6 +84,15 @@ public class Ocr {
 
       String fontFileName;
       while ((fontFileName = reader.readLine()) != null) {
+
+        String fileName = fontFileName.replace(".bmp", "");
+        int codePoint = Integer.parseInt(fileName);
+        String character = String.valueOf((char) codePoint);
+
+        if (!ALLOWED_CHARS.contains(character)) {
+          continue;
+        }
+
         try (InputStream is =
             Ocr.class.getResourceAsStream("/fonts/" + font + "/" + fontFileName)) {
           if (is == null) {
@@ -90,11 +100,6 @@ public class Ocr {
           }
           Mat img = Java2DFrameUtils.toMat(ImageIO.read(is));
           cvtColor(img, img, COLOR_BGR2GRAY);
-
-          String fileName = fontFileName.replace(".bmp", "");
-          int codePoint = Integer.parseInt(fileName);
-          String character = String.valueOf((char) codePoint);
-
           fontMap.put(character, img);
         }
       }
@@ -116,83 +121,95 @@ public class Ocr {
    */
   public static String extractText(Rectangle zone, String font, ColourObj colour, boolean clean)
       throws IOException {
-    Map<String, Mat> fontMap = loadFont(font); // Loading the font as the user's input.
+    Map<String, Mat> fontMap = loadFont(font);
     matches.clear();
     BufferedImage zoneImage = ScreenManager.captureZone(zone);
-    double threshold = 0.99;
-    // Masking the zone by the colour and loading it as an 8 bit unsigned 1 channel
-    // (CV_8UC1) binary
-    // greyscale.
     Mat zoneMat = ColourContours.extractColours(zoneImage, colour);
-    try {
+    return extraction(fontMap, zoneMat, font, clean);
+  }
+
+  /**
+   * Extracts a string of text from a screen region by template-matching glyphs from a font. Note:
+   * this will not include any spaces.
+   *
+   * @param mask Mat CU81 mask to extract text from
+   * @param font Font name to use for glyph matching.
+   * @param clean Whether to clear internal match storage after use.
+   * @return The extracted text string from the zone.
+   * @throws IOException if font images cannot be read.
+   */
+  public static String extractTextFromMask(Mat mask, String font, boolean clean)
+      throws IOException {
+    Map<String, Mat> fontMap = loadFont(font);
+    matches.clear();
+    return extraction(fontMap, mask.clone(), font, clean);
+  }
+
+  /**
+   * Internal function to perform Template matched OCR. Iterates over a font map, zeroing out the
+   * convolution as it goes.
+   *
+   * @param fontMap List of glyphs, string character & Mat bitmap.
+   * @param zoneMat Mat image of the source being searched within.
+   * @param font Type of font.
+   * @param clean Delete matches?
+   * @return String of extracted letters, no spaces.
+   */
+  private static String extraction(
+      Map<String, Mat> fontMap, Mat zoneMat, String font, boolean clean) {
+    double threshold = 0.99;
+    // Supports (CV_8UC1) binary greyscale.
+    // Holds pointers and correlation as reusable memory allocation to avoid JNI overhead
+    try (DoublePointer minVal = new DoublePointer(1);
+        DoublePointer maxVal = new DoublePointer(1);
+        Point minLoc = new Point();
+        Point maxLoc = new Point();
+        Mat correlation = new Mat()) {
       // Template match each glyph in the font to the zoneMat.
       for (String glyph : fontMap.keySet()) {
-        // Make sure none of the elements are a space or a problem character.
-        if (glyph.trim().isEmpty() || problemChars.contains(glyph)) {
-          continue;
+        // These are to store the glyph sizes outside of try with resources scope.
+        int glyphImgRows;
+        int glyphImgCols;
+
+        // We are trimming the font images and template matching -
+        // Based on the font type and how the image is stored.
+        int ycropModifier = getCropModifierForFont(font);
+
+        try (Rect roi =
+                new Rect(
+                    0,
+                    ycropModifier,
+                    fontMap.get(glyph).arrayWidth(),
+                    fontMap.get(glyph).arrayHeight() - ycropModifier);
+            Mat croppedGlyph = new Mat(fontMap.get(glyph), roi)) {
+          // Match template with cropped glyph and store size outside try-with-resources.
+          matchTemplate(zoneMat, croppedGlyph, correlation, TM_CCOEFF_NORMED);
+          glyphImgRows = croppedGlyph.rows();
+          glyphImgCols = croppedGlyph.cols();
         }
+        // Call minMaxLoc repeatedly, zero out the area based on glyph size, save locations as
+        // CharMatch objs.
+        while (true) { // Loop breaks when threshold is not met.
+          minMaxLoc(correlation, minVal, maxVal, minLoc, maxLoc, null);
 
-        Mat correlation = new Mat(); // This Mat will be the output for image template matching.
-        try {
-          int glyphImgRows; // These are to store the glyph sizes outside of try with resources
-          // scope.
-          int glyphImgCols;
-
-          // We are trimming the font images and template matching -
-          // Based on the font type and how the image is stored.
-
-          int ycropModifier = getCropModifierForFont(font);
-
-          try (Rect roi =
-                  new Rect(
-                      0,
-                      ycropModifier,
-                      fontMap.get(glyph).arrayWidth(),
-                      fontMap.get(glyph).arrayHeight() - ycropModifier);
-              Mat croppedGlyph = new Mat(fontMap.get(glyph), roi)) {
-            // Match template with cropped glyph and store size outside try-with-resources.
-            matchTemplate(zoneMat, croppedGlyph, correlation, TM_CCOEFF_NORMED);
-            glyphImgRows = croppedGlyph.rows();
-            glyphImgCols = croppedGlyph.cols();
+          if (maxVal.get() < threshold) {
+            break;
           }
-          // Call minMaxLoc repeatedly, zero out the area based on glyph size, save
-          // locations as
-          // CharMatch objs.
-          while (true) { // Loop breaks when threshold is not met.
-            try (DoublePointer minVal = new DoublePointer(1);
-                DoublePointer maxVal = new DoublePointer(1);
-                Point minLoc = new Point();
-                Point maxLoc = new Point()) {
 
-              minMaxLoc(correlation, minVal, maxVal, minLoc, maxLoc, null);
+          Rectangle matchLocation =
+              new Rectangle(maxLoc.x(), maxLoc.y(), glyphImgCols, glyphImgRows);
+          matches.add(
+              new CharMatch(glyph, matchLocation.x, matchLocation.y, glyphImgCols, glyphImgRows));
 
-              if (maxVal.get() < threshold) {
-                break;
-              }
+          zeroOutRegion(correlation, matchLocation);
 
-              Rectangle matchLocation =
-                  new Rectangle(maxLoc.x(), maxLoc.y(), glyphImgCols, glyphImgRows);
-              matches.add(
-                  new CharMatch(
-                      glyph, matchLocation.x, matchLocation.y, glyphImgCols, glyphImgRows));
-
-              zeroOutRegion(correlation, matchLocation);
-
-              Mat oldZoneMat = zoneMat;
-              zoneMat = MaskZones.maskZonesMat(zoneMat.clone(), matchLocation);
-              if (oldZoneMat != null) {
-                oldZoneMat.release();
-              }
-            }
-          }
-        } finally {
-          correlation.release();
+          Mat oldZoneMat = zoneMat;
+          zoneMat = MaskZones.maskZonesMat(zoneMat.clone(), matchLocation);
+          oldZoneMat.release();
         }
       }
     } finally {
-      if (zoneMat != null) {
-        zoneMat.release();
-      }
+      zoneMat.release();
     }
 
     // Sort CharMatch objects based on left-most positions.
@@ -310,7 +327,7 @@ public class Ocr {
     Rect roi = new Rect(x, y, width, height);
     Mat subMat = new Mat(correlation, roi);
     // Set all pixels in this region to 0 (lowest confidence)
-    subMat.setTo(new Mat(new Scalar(0)));
+    subMat.setTo(new Mat(ZERO_SCALAR));
     subMat.release();
   }
 

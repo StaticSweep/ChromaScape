@@ -12,7 +12,6 @@ import com.sun.jna.platform.win32.WinDef.RECT;
 import com.sun.jna.platform.win32.WinGDI;
 import com.sun.jna.platform.win32.WinGDI.BITMAPINFO;
 import com.sun.jna.platform.win32.WinNT.HANDLE;
-import com.sun.jna.platform.win32.WinUser;
 import java.awt.Graphics;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -86,7 +85,6 @@ public class ScreenManager {
    *
    * @return A {@link BufferedImage} containing the window contents in BGR format, suitable for
    *     OpenCV processing.
-   * @throws RuntimeException if the window dimensions are invalid or the BitBlt operation fails.
    */
   public static BufferedImage captureWindow() {
     RECT bounds = new RECT();
@@ -94,98 +92,70 @@ public class ScreenManager {
     int width = bounds.right - bounds.left;
     int height = bounds.bottom - bounds.top;
 
-    if (width <= 0 || height <= 0) {
-      throw new RuntimeException("Invalid dimensions");
+    return performCapture(0, 0, width, height);
+  }
+
+  /**
+   * Captures a specific rectangular region of the screen directly from the window's Device Context.
+   *
+   * <p>This is critical for high frequency checks like OCR or HP bars, where we only need a tiny
+   * screen region.
+   *
+   * @param zone The screen-space {@link Rectangle} to capture.
+   * @return A {@link BufferedImage} containing only the requested region.
+   */
+  public static BufferedImage captureZone(Rectangle zone) {
+    Rectangle clientRect = toClientBounds(new Rectangle(zone));
+
+    return performCapture(clientRect.x, clientRect.y, clientRect.width, clientRect.height);
+  }
+
+  /** Internal helper to perform GDI BitBlt and pixel conversion. */
+  private static BufferedImage performCapture(int x, int y, int w, int h) {
+    if (w <= 0 || h <= 0) {
+      return new BufferedImage(1, 1, BufferedImage.TYPE_3BYTE_BGR);
     }
 
-    // Retrieve the Device Context for the source window and create a compatible memory DC
     HDC hdcSrc = User32.INSTANCE.GetDC(canvasHwnd);
     HDC hdcMem = GDI32.INSTANCE.CreateCompatibleDC(hdcSrc);
-    HBITMAP hBitmap = GDI32.INSTANCE.CreateCompatibleBitmap(hdcSrc, width, height);
-
+    HBITMAP hBitmap = GDI32.INSTANCE.CreateCompatibleBitmap(hdcSrc, w, h);
     HANDLE hOld = GDI32.INSTANCE.SelectObject(hdcMem, hBitmap);
 
-    // Perform the Bit Block Transfer (SRCCOPY 0x00CC0020) to copy the source DC to our memory DC
-    boolean success = GDI32.INSTANCE.BitBlt(hdcMem, 0, 0, width, height, hdcSrc, 0, 0, 0x00CC0020);
+    boolean success = GDI32.INSTANCE.BitBlt(hdcMem, 0, 0, w, h, hdcSrc, x, y, 0x00CC0020);
 
     BufferedImage bgr = null;
 
     if (success) {
-      // Configure the bitmap structure for the native data retrieval
       BITMAPINFO bmi = new BITMAPINFO();
-      bmi.bmiHeader.biWidth = width;
-      bmi.bmiHeader.biHeight = -height; // Negative height indicates a top-down bitmap
+      bmi.bmiHeader.biWidth = w;
+      bmi.bmiHeader.biHeight = -h;
       bmi.bmiHeader.biPlanes = 1;
       bmi.bmiHeader.biBitCount = 32;
       bmi.bmiHeader.biCompression = WinGDI.BI_RGB;
 
-      Memory buffer = new Memory((long) width * height * 4);
-      GDI32.INSTANCE.GetDIBits(hdcMem, hBitmap, 0, height, buffer, bmi, WinGDI.DIB_RGB_COLORS);
+      Memory buffer = new Memory((long) w * h * 4);
+      GDI32.INSTANCE.GetDIBits(hdcMem, hBitmap, 0, h, buffer, bmi, WinGDI.DIB_RGB_COLORS);
 
-      // Copy the raw pixel data from native memory to the Java image raster
-      BufferedImage argb = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-      int[] pixels = buffer.getIntArray(0, width * height);
+      BufferedImage argb = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+      int[] pixels = buffer.getIntArray(0, w * h);
       int[] targetPixels = ((DataBufferInt) argb.getRaster().getDataBuffer()).getData();
       System.arraycopy(pixels, 0, targetPixels, 0, pixels.length);
 
-      // Create the final BGR image for OpenCV compatibility
-      bgr = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
+      bgr = new BufferedImage(w, h, BufferedImage.TYPE_3BYTE_BGR);
       Graphics g = bgr.getGraphics();
       g.drawImage(argb, 0, 0, null);
       g.dispose();
     }
 
-    // Release all GDI handles to prevent resource leaks
     GDI32.INSTANCE.SelectObject(hdcMem, hOld);
     GDI32.INSTANCE.DeleteObject(hBitmap);
     GDI32.INSTANCE.DeleteDC(hdcMem);
     User32.INSTANCE.ReleaseDC(canvasHwnd, hdcSrc);
 
     if (bgr == null) {
-      throw new RuntimeException("BitBlt capture failed");
+      throw new RuntimeException("GDI Capture failed");
     }
     return bgr;
-  }
-
-  /**
-   * Captures a specific rectangular region of the screen by cropping the full window capture.
-   *
-   * <p>Since {@code BitBlt} is typically used to capture the entire window context, this method
-   * first captures the full window to ensure overlays are bypassed, and then extracts the requested
-   * zone.
-   *
-   * <p>The provided screen coordinates are automatically translated into window-relative
-   * coordinates before cropping.
-   *
-   * @param zone The screen-space {@link Rectangle} to capture.
-   * @return A {@link BufferedImage} containing the cropped region in BGR format.
-   * @throws RuntimeException if the requested zone lies entirely outside the game window bounds.
-   */
-  public static BufferedImage captureZone(Rectangle zone) {
-    // Capture the full game window to ensure a clean image without overlays
-    BufferedImage fullWindow = captureWindow();
-
-    // Translate the screen-space zone into client-space coordinates
-    Rectangle clientRect = toClientBounds(new Rectangle(zone));
-
-    // Calculate intersection to ensure valid crop bounds
-    int x = Math.max(0, clientRect.x);
-    int y = Math.max(0, clientRect.y);
-    int w = Math.min(clientRect.width, fullWindow.getWidth() - x);
-    int h = Math.min(clientRect.height, fullWindow.getHeight() - y);
-
-    if (w <= 0 || h <= 0) {
-      throw new RuntimeException("Capture zone is entirely outside the game window");
-    }
-
-    // Draw the sub-region onto a fresh image to ensure contiguous memory for OpenCV
-    BufferedImage croppedBgr = new BufferedImage(w, h, BufferedImage.TYPE_3BYTE_BGR);
-    Graphics g = croppedBgr.getGraphics();
-
-    g.drawImage(fullWindow.getSubimage(x, y, w, h), 0, 0, null);
-    g.dispose();
-
-    return croppedBgr;
   }
 
   /**
@@ -212,29 +182,6 @@ public class ScreenManager {
         clientTopLeft.y,
         dimensions.right - dimensions.left,
         dimensions.bottom - dimensions.top);
-  }
-
-  /**
-   * Checks which monitor contains the target application's top left corner and returns the
-   * monitor's {@link Rectangle} bounds.
-   *
-   * @return the monitor's bounds.
-   */
-  public static Rectangle getMonitorBounds() {
-    WinUser.HMONITOR monitor =
-        User32.INSTANCE.MonitorFromWindow(canvasHwnd, WinUser.MONITOR_DEFAULTTONEAREST);
-
-    WinUser.MONITORINFO mi = new WinUser.MONITORINFO();
-    mi.cbSize = mi.size();
-    User32.INSTANCE.GetMonitorInfo(monitor, mi);
-
-    WinDef.RECT monitorRect = mi.rcMonitor;
-
-    return new Rectangle(
-        monitorRect.left,
-        monitorRect.top,
-        monitorRect.right - monitorRect.left,
-        monitorRect.bottom - monitorRect.top);
   }
 
   /**

@@ -12,34 +12,71 @@ import org.apache.commons.math3.random.RandomGenerator;
  * region.
  *
  * <p>Instead of uniformly sampling click coordinates, this utility uses a {@link
- * MultivariateNormalDistribution} centered within the given rectangle. This approach simulates more
+ * MultivariateNormalDistribution} centered within the given rectangle. This approach simulates
  * human-like behavior by favoring points near the center while still allowing edge hits.
- *
- * <p>The standard deviation of the distribution is dynamically adjusted based on rectangle size to
- * avoid excessive clipping and out-of-bound samples in small targets.
  */
 public class ClickDistribution {
 
-  // Shared random generator with a secure, non-deterministic seed
+  /** Shared random generator with a secure, non-deterministic seed. */
   private static final RandomGenerator rng = new MersenneTwister(new SecureRandom().nextLong());
 
   /**
    * Generates a pseudo-random {@link Point} within the specified {@link Rectangle}, following a 2D
-   * normal (Gaussian) distribution biased toward the center of the rectangle.
+   * normal (Gaussian) distribution biased toward the center using internal heuristics.
    *
-   * <p>If the rectangle is smaller than 5x5 pixels, the center point is returned instead.
-   * Otherwise, the method repeatedly samples until it finds a point that falls within bounds.
+   * <p>The standard deviation is dynamically adjusted based on the rectangle's size to prevent
+   * excessive out-of-bounds sampling on small targets.
    *
    * @param rect the rectangular region to sample from
    * @return a valid Point within {@code rect} with center-biased Gaussian randomness
    */
   public static Point generateRandomPoint(Rectangle rect) {
-    if (rect.width < 5 || rect.height < 5) {
-      // Return center point if the area is too small for Gaussian sampling
-      return new Point((int) rect.getCenterX(), (int) rect.getCenterY());
+    if (isTooSmall(rect)) {
+      return getCenter(rect);
     }
 
-    MultivariateNormalDistribution mnd = getMultivariateNormalDistribution(rect);
+    // Calculate sigma based on internal heuristic
+    double stdDevX = rect.width / deviation(rect.getWidth());
+    double stdDevY = rect.height / deviation(rect.getHeight());
+
+    return samplePoint(rect, stdDevX, stdDevY);
+  }
+
+  /**
+   * Generates a pseudo-random {@link Point} within the specified {@link Rectangle}, following a 2D
+   * normal (Gaussian) distribution with a custom tightness factor.
+   *
+   * <p>The {@code tightness} parameter controls the spread of the distribution. It acts as the
+   * divisor for the rectangle's dimensions when calculating standard deviation.
+   *
+   * <ul>
+   *   <li><b>High Tightness (> 15.0):</b> Very focused in the center. Useful for Ground items.
+   *   <li><b>Low Tightness (< 3.0):</b> Broad spread. High probability of points near edges.
+   * </ul>
+   *
+   * @param rect the rectangular region to sample from
+   * @param tightness the factor by which to divide the dimension to get sigma. Must be positive.
+   * @return a valid Point within {@code rect}
+   * @throws IllegalArgumentException if tightness is less than or equal to zero
+   */
+  public static Point generateRandomPoint(Rectangle rect, double tightness) {
+    if (tightness <= 0) {
+      throw new IllegalArgumentException("Tightness factor must be greater than 0");
+    }
+
+    if (isTooSmall(rect)) {
+      return getCenter(rect);
+    }
+
+    double stdDevX = rect.width / tightness;
+    double stdDevY = rect.height / tightness;
+
+    return samplePoint(rect, stdDevX, stdDevY);
+  }
+
+  /** Internal helper to execute the sampling logic given specific standard deviations. */
+  private static Point samplePoint(Rectangle rect, double stdDevX, double stdDevY) {
+    MultivariateNormalDistribution mnd = getMultivariateNormalDistribution(rect, stdDevX, stdDevY);
 
     Point randomPoint;
     do {
@@ -51,19 +88,20 @@ public class ClickDistribution {
   }
 
   /**
-   * Constructs a {@link MultivariateNormalDistribution} centered within the given rectangle, with
-   * standard deviations dynamically derived from rectangle dimensions.
+   * Constructs a {@link MultivariateNormalDistribution} centered within the given rectangle using
+   * explicit standard deviations.
    *
-   * @param rect the rectangle to derive center and spread from
-   * @return a 2D normal distribution representing click likelihood within {@code rect}
+   * @param rect the rectangle to derive center from
+   * @param stdDevX the standard deviation for the X axis
+   * @param stdDevY the standard deviation for the Y axis
+   * @return a 2D normal distribution configured with the provided spread
    */
-  private static MultivariateNormalDistribution getMultivariateNormalDistribution(Rectangle rect) {
+  private static MultivariateNormalDistribution getMultivariateNormalDistribution(
+      Rectangle rect, double stdDevX, double stdDevY) {
+
     double meanX = rect.getX() + rect.getWidth() / 2.0;
     double meanY = rect.getY() + rect.getHeight() / 2.0;
     double[] mean = {meanX, meanY};
-
-    double stdDevX = rect.width / deviation(rect.getWidth());
-    double stdDevY = rect.height / deviation(rect.getHeight());
 
     double[][] covariance = {
       {stdDevX * stdDevX, 0}, // No correlation between X and Y
@@ -91,5 +129,25 @@ public class ClickDistribution {
       return 8.0;
     }
     return 9.0;
+  }
+
+  /**
+   * Helper method to justify whether a rectangle is too small to conduct sampling.
+   *
+   * @param rect Rectangle to test.
+   * @return {@code true} if too small, else {@code false}.
+   */
+  private static boolean isTooSmall(Rectangle rect) {
+    return rect.width < 5 || rect.height < 5;
+  }
+
+  /**
+   * Helper method to return the center of a given Rectangle.
+   *
+   * @param rect The rectangle to return the center of.
+   * @return The {@link Point} center of the given Rectangle.
+   */
+  private static Point getCenter(Rectangle rect) {
+    return new Point((int) rect.getCenterX(), (int) rect.getCenterY());
   }
 }

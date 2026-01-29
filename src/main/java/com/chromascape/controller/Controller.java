@@ -91,44 +91,8 @@ public class Controller {
   public void shutdown() {
     mouse().getMouseOverlay().eraseOverlay();
     kinput.destroy();
-    if (!killKinput()) {
-      logger.warn("Kinput failed to destroy");
-    }
     state = ControllerState.STOPPED;
     logger.info("Shutting down");
-  }
-
-  /**
-   * Uses the command prompt to forcibly delete KInput.dll and KInputCtrl.dll from the build
-   * directory. Effectively freeing up the program to rerun.
-   *
-   * @return {@code true} if successful, {@code false} if not.
-   */
-  public boolean killKinput() {
-    try {
-      String distPath = new java.io.File("build/dist").getAbsolutePath();
-      String kinputCtrl = "\"" + distPath + "\\KInputCtrl.dll\"";
-      String kinput = "\"" + distPath + "\\KInput.dll\"";
-
-      // Wait 2s, then force delete files.
-      // We use cmd /c start "" /B to ensure it runs detached/background if possible.
-      // Using ProcessBuilder to avoid Runtime.exec deprecation.
-      new ProcessBuilder(
-              "cmd.exe",
-              "/c",
-              "start",
-              "/MIN",
-              "cmd.exe",
-              "/c",
-              "timeout /t 2 /nobreak > NUL & del /f /q " + kinputCtrl + " " + kinput)
-          .start();
-
-      logger.info("Scheduled forced Kinput DLL cleanup in 2 seconds.");
-      return true;
-    } catch (Exception e) {
-      logger.error("Failed to schedule Kinput cleanup: {}", e.getMessage());
-      return false;
-    }
   }
 
   /**

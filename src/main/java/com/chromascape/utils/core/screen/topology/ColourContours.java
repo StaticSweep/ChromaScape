@@ -2,15 +2,8 @@ package com.chromascape.utils.core.screen.topology;
 
 import static org.bytedeco.opencv.global.opencv_core.CV_8UC1;
 import static org.bytedeco.opencv.global.opencv_core.inRange;
-import static org.bytedeco.opencv.global.opencv_imgproc.CHAIN_APPROX_SIMPLE;
-import static org.bytedeco.opencv.global.opencv_imgproc.COLOR_BGR2HSV;
-import static org.bytedeco.opencv.global.opencv_imgproc.CV_RETR_LIST;
-import static org.bytedeco.opencv.global.opencv_imgproc.boundingRect;
-import static org.bytedeco.opencv.global.opencv_imgproc.cvtColor;
-import static org.bytedeco.opencv.global.opencv_imgproc.findContours;
-import static org.bytedeco.opencv.global.opencv_imgproc.pointPolygonTest;
+import static org.bytedeco.opencv.global.opencv_imgproc.*;
 
-import com.chromascape.utils.core.screen.DisplayImage;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.core.screen.viewport.ViewportManager;
 import com.chromascape.utils.core.screen.window.ScreenManager;
@@ -22,10 +15,7 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 import org.bytedeco.javacv.Java2DFrameUtils;
-import org.bytedeco.opencv.opencv_core.Mat;
-import org.bytedeco.opencv.opencv_core.MatVector;
-import org.bytedeco.opencv.opencv_core.Point2f;
-import org.bytedeco.opencv.opencv_core.Rect;
+import org.bytedeco.opencv.opencv_core.*;
 
 /**
  * Utility class for extracting and processing colour-based contours from images. Uses OpenCV to
@@ -34,7 +24,12 @@ import org.bytedeco.opencv.opencv_core.Rect;
  */
 public class ColourContours {
 
-  public static boolean debug = false;
+  private static final Mat DILATE_KERNEL = getStructuringElement(MORPH_ELLIPSE, new Size(25, 25));
+  private static final Mat ERODE_KERNEL = getStructuringElement(MORPH_ELLIPSE, new Size(25, 25));
+  private static final Scalar COLOUR_WHITE = new Scalar(255);
+  private static final Mat EMPTY_HIERARCHY = new Mat();
+  private static final org.bytedeco.opencv.opencv_core.Point OFFSET_ZERO =
+      new org.bytedeco.opencv.opencv_core.Point(0, 0);
 
   /**
    * Finds and returns a list of ChromaObj instances representing contours in the given image that
@@ -46,6 +41,7 @@ public class ColourContours {
    */
   public static List<ChromaObj> getChromaObjsInColour(BufferedImage image, ColourObj colourObj) {
     Mat mask = extractColours(image, colourObj);
+    morphClose(mask);
     MatVector contours = extractContours(mask);
     mask.release();
     return createChromaObjects(contours);
@@ -84,15 +80,41 @@ public class ColourContours {
     hsvImage.release();
     hsvMin.release();
     hsvMax.release();
-
-    // if debugging, display the mask
-    if (debug) {
-      DisplayImage.display(Java2DFrameUtils.toBufferedImage(result));
-    }
-
     ViewportManager.getInstance().updateState(result);
 
     return result;
+  }
+
+  /**
+   * Uses Morphological Closing via dilation and erosion, to ensure that no breaks appear in the
+   * contour. Fills object's contours to ensure consistency and to reduce duplicate contours.
+   * Mutates the given Mat object rather than assigning separate objects.
+   *
+   * @param result The 8UC1 {@link Mat} mask which to mutate.
+   */
+  public static void morphClose(Mat result) {
+    // Dilate the contour to fix breaks e.g., C should become O
+    morphologyEx(result, result, MORPH_DILATE, DILATE_KERNEL);
+
+    // Completely fill internal space with white
+    // For consistency and improved contour calculation
+    try (MatVector contours = new MatVector()) {
+      findContours(result, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+      // Using static constants for reused variables to reduce CPU allocation fatigue
+      drawContours(
+          result,
+          contours,
+          -1,
+          COLOUR_WHITE,
+          -1,
+          LINE_8,
+          EMPTY_HIERARCHY,
+          Integer.MAX_VALUE,
+          OFFSET_ZERO);
+    }
+
+    // Restore original size through erosion whilst closing contour breaks
+    morphologyEx(result, result, MORPH_ERODE, ERODE_KERNEL);
   }
 
   /**
