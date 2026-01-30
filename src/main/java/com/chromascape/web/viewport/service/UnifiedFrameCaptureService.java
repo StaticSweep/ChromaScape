@@ -43,6 +43,11 @@ public class UnifiedFrameCaptureService {
   private volatile long lastErrorLogTimeMs = 0;
   private static final long ERROR_LOG_INTERVAL_MS = 5000;
 
+  // Jitter tracking for capture timing
+  private volatile long lastCaptureTimeMs = 0;
+  private volatile long totalCaptureJitterMs = 0;
+  private volatile long captureCount = 0;
+
   @Autowired
   public UnifiedFrameCaptureService(UnifiedCaptureConfig config) {
     this.config = config;
@@ -193,6 +198,26 @@ public class UnifiedFrameCaptureService {
       return; // No subscribers, skip capture
     }
 
+    // Track capture jitter
+    long now = System.currentTimeMillis();
+    if (lastCaptureTimeMs > 0) {
+      long actualInterval = now - lastCaptureTimeMs;
+      long expectedInterval = config.getIntervalMs();
+      long jitter = Math.abs(actualInterval - expectedInterval);
+      totalCaptureJitterMs += jitter;
+      captureCount++;
+
+      // Log jitter every 5 seconds (~150 frames at 30 FPS)
+      if (captureCount % 150 == 0) {
+        double avgJitter = (double) totalCaptureJitterMs / captureCount;
+        logger.info(
+            "Capture FPS check: expected {}ms interval, avg jitter: {:.2f}ms",
+            expectedInterval,
+            avgJitter);
+      }
+    }
+    lastCaptureTimeMs = now;
+
     try {
       BufferedImage frame = ScreenManager.captureWindow();
 
@@ -213,9 +238,9 @@ public class UnifiedFrameCaptureService {
       }
     } catch (Exception e) {
       // Rate limit error logging to avoid spam
-      long now = System.currentTimeMillis();
-      if (now - lastErrorLogTimeMs >= ERROR_LOG_INTERVAL_MS) {
-        lastErrorLogTimeMs = now;
+      long nowMs = System.currentTimeMillis();
+      if (nowMs - lastErrorLogTimeMs >= ERROR_LOG_INTERVAL_MS) {
+        lastErrorLogTimeMs = nowMs;
         logger.info("Frame capture failed (window may be unavailable): {}", e.getMessage());
       }
     }

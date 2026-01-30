@@ -58,7 +58,7 @@ public class RecordingService implements FrameListener {
   // Frame buffer for producer-consumer pattern
   private static final int FRAME_BUFFER_SIZE =
       120; // ~4 seconds at 30 FPS (increased for stability)
-  private final BlockingQueue<BufferedImage> frameBuffer =
+  private final BlockingQueue<TimestampedFrame> frameBuffer =
       new LinkedBlockingQueue<>(FRAME_BUFFER_SIZE);
   private volatile boolean encoderRunning = false;
   private long encodedFrameCount = 0; // Track encoded frames for timestamp calculation
@@ -66,6 +66,7 @@ public class RecordingService implements FrameListener {
   private FFmpegFrameRecorder recorder;
   private File currentRecordingFile;
   private long recordingStartTime;
+  private volatile long recordingStartTimeNano; // Store nano time at start
   private String currentRecordingId;
   private int initialWidth;
   private int initialHeight;
@@ -184,9 +185,10 @@ public class RecordingService implements FrameListener {
       // CAPTURE START TIME HERE - immediately before first frame queued
       // This ensures minimal drift between video timeline and log timestamps
       recordingStartTime = System.currentTimeMillis();
+      recordingStartTimeNano = System.nanoTime();
 
-      // Add first frame to buffer
-      frameBuffer.offer(normalizedFirstFrame);
+      // Add first frame to buffer (capture time is recording start time)
+      frameBuffer.offer(new TimestampedFrame(normalizedFirstFrame, recordingStartTimeNano));
       frameCount.set(1);
 
       recording.set(true);
@@ -250,9 +252,11 @@ public class RecordingService implements FrameListener {
       // Signal encoder thread to finish (it will drain remaining frames)
       encoderRunning = false;
 
-      // Wait for encoder to drain buffer (up to 5 seconds)
+      // Wait for encoder to drain buffer (dynamic timeout based on queue size)
       int waitCount = 0;
-      while (!frameBuffer.isEmpty() && waitCount < 50) {
+      long maxWaitMs =
+          Math.min(5000L, (long) (frameBuffer.size() * 2L * (1000.0 / unifiedConfig.getFps())));
+      while (!frameBuffer.isEmpty() && waitCount < (maxWaitMs / 100)) {
         Thread.sleep(100);
         waitCount++;
       }
@@ -293,13 +297,31 @@ public class RecordingService implements FrameListener {
       long frames = frameCount.get();
       long dropped = droppedFrameCount.get();
 
+      // Calculate actual FPS
+      double actualCaptureFps = (frames * 1000.0) / duration;
+      double expectedDurationSec = (double) encodedFrameCount / unifiedConfig.getFps();
+
       logger.info(
-          "Recording saved: {} ({} frames captured, {} dropped, {} ms, {} bytes)",
+          """
+        Recording saved: {}
+        Duration: {} ms (expected ~{} sec based on {} frames @ {} FPS)
+        Frames captured: {}
+        Frames dropped: {} ({:.1f}%)
+        Frames encoded: {}
+        Actual capture FPS: {:.2f}
+        Configured FPS: {}
+        """,
           currentRecordingFile.getName(),
+          duration,
+          String.format("%.1f", expectedDurationSec),
+          encodedFrameCount,
+          unifiedConfig.getFps(),
           frames,
           dropped,
-          duration,
-          currentRecordingFile.length());
+          dropped * 100.0 / (frames + dropped),
+          encodedFrameCount,
+          actualCaptureFps,
+          unifiedConfig.getFps());
 
       return new RecordingMetadata(
           currentRecordingId,
@@ -375,8 +397,12 @@ public class RecordingService implements FrameListener {
           return;
         }
 
+        // Store with capture timestamp
+        TimestampedFrame timestampedFrame =
+            new TimestampedFrame(capturedImage, event.getCaptureTimeNanos());
+
         // Try to add to buffer (non-blocking)
-        boolean added = frameBuffer.offer(capturedImage);
+        boolean added = frameBuffer.offer(timestampedFrame);
         if (added) {
           frameCount.incrementAndGet();
         } else {
@@ -419,26 +445,33 @@ public class RecordingService implements FrameListener {
   private void encoderLoop() {
     logger.info("Encoder thread started");
     encodedFrameCount = 0;
-    BufferedImage lastFrame = null;
+    TimestampedFrame lastFrame = null;
 
     while (encoderRunning || !frameBuffer.isEmpty()) {
       try {
         // Wait for frame with timeout
-        BufferedImage frame = frameBuffer.poll(100, TimeUnit.MILLISECONDS);
+        TimestampedFrame timestampedFrame = frameBuffer.poll(100, TimeUnit.MILLISECONDS);
 
-        if (frame != null) {
-          lastFrame = frame;
-        } else if (encoderRunning && lastFrame != null) {
-          // Buffer empty but still recording - duplicate last frame to maintain timeline
-          frame = lastFrame;
+        if (timestampedFrame != null) {
+          lastFrame = timestampedFrame;
         }
 
-        if (frame != null && recorder != null) {
-          // Set explicit timestamp based on frame index and FPS
-          long timestampMicros = (encodedFrameCount * 1_000_000L) / unifiedConfig.getFps();
+        if (timestampedFrame != null && recorder != null) {
+          // Use actual capture time for timestamp
+          long elapsedNanos = timestampedFrame.captureNanoTime - recordingStartTimeNano;
+          long timestampMicros = elapsedNanos / 1000L; // Convert to microseconds
           recorder.setTimestamp(timestampMicros);
-          recorder.record(frameConverter.convert(frame));
+          recorder.record(frameConverter.convert(timestampedFrame.image));
           encodedFrameCount++;
+
+          // Periodic logging (every 5 seconds ~150 frames)
+          if (encodedFrameCount % 150 == 0) {
+            logger.info(
+                "Encode progress: {} frames, queue depth: {}, dropped: {}",
+                encodedFrameCount,
+                frameBuffer.size(),
+                droppedFrameCount.get());
+          }
         }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -451,13 +484,14 @@ public class RecordingService implements FrameListener {
 
     // Drain remaining frames
     logger.info("Draining {} remaining frames from buffer", frameBuffer.size());
-    BufferedImage frame;
+    TimestampedFrame frame;
     while ((frame = frameBuffer.poll()) != null) {
       try {
         if (recorder != null) {
-          long timestampMicros = (encodedFrameCount * 1_000_000L) / unifiedConfig.getFps();
+          long elapsedNanos = frame.captureNanoTime - recordingStartTimeNano;
+          long timestampMicros = elapsedNanos / 1000L;
           recorder.setTimestamp(timestampMicros);
-          recorder.record(frameConverter.convert(frame));
+          recorder.record(frameConverter.convert(frame.image));
           encodedFrameCount++;
         }
       } catch (Exception e) {
@@ -618,13 +652,13 @@ public class RecordingService implements FrameListener {
 
     // Codec-agnostic quality settings (apply to ALL codecs)
     candidate.setPixelFormat(org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P);
-    candidate.setVideoBitrate((int) (config.getVideoQuality() * 10000));
+    candidate.setVideoBitrate((int) (config.getVideoQuality() * 8000));
     candidate.setOption("movflags", "+faststart");
 
     // Codec-specific optimizations
     if ("libx264".equals(codecName)) {
-      // Use "faster" preset instead of "ultrafast" for better quality
-      candidate.setVideoOption("preset", "faster");
+      // Use "veryfast" preset for better throughput
+      candidate.setVideoOption("preset", "veryfast");
       candidate.setVideoOption("tune", "zerolatency");
       candidate.setVideoOption("profile", "main");
     }
@@ -678,6 +712,21 @@ public class RecordingService implements FrameListener {
     } catch (InterruptedException e) {
       encoderThread.shutdownNow();
       Thread.currentThread().interrupt();
+    }
+  }
+
+  /**
+   * Inner class to store a frame with its capture timestamp.
+   *
+   * <p>This enables accurate video timing regardless of encoding speed or frame drops.
+   */
+  private static class TimestampedFrame {
+    final BufferedImage image;
+    final long captureNanoTime;
+
+    TimestampedFrame(BufferedImage image, long captureNanoTime) {
+      this.image = image;
+      this.captureNanoTime = captureNanoTime;
     }
   }
 

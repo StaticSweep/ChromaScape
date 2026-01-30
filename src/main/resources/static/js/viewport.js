@@ -42,7 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
     wrapper.appendChild(img);
     viewportContainer.appendChild(wrapper);
 
-    const socket = new WebSocket('ws://' + window.location.host + '/ws/viewport');
+    const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket = new WebSocket(`${wsProtocol}://${window.location.host}/ws/viewport`);
 
     socket.onopen = () => {
         console.log('Viewport WebSocket connected');
@@ -64,8 +65,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 img.style.display = 'inline-block';
             }
 
-            // Update the single image view
-            img.src = event.data;
+            // Parse JSON message from backend
+            const message = JSON.parse(event.data);
+
+            if (message.data && message.data.startsWith('data:image/')) {
+                img.src = message.data;
+            } else {
+                console.warn('Received invalid viewport message:', message);
+            }
         } catch (e) {
             console.error('Failed to process viewport message', e);
         }
