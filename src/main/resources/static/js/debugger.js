@@ -32,17 +32,17 @@ let draining = false;  // Prevents concurrent drain loops
 // Recording state variables
 let isRecording = false;
 let currentRecordingId = null;
+let currentSessionId = null;
 let recordingStartTime = null;
 let recordingDurationInterval = null;
 
 const elements = {};
-const MAX_LOG_ENTRIES = 10000;
+const MAX_LOG_ENTRIES = 3000;
 const liveLogHistory = [];
 const replayLogHistory = [];
 
 // Throttling for log sync to prevent request spam
 let lastSyncTimeMs = 0;
-let syncInFlight = false;
 let currentSyncAbortController = null;
 const SYNC_INTERVAL_MS = 200; // Sync every 200ms (5 FPS), reasonable for network requests
 
@@ -58,7 +58,7 @@ const discoveredPatterns = new Map(); // pattern -> count
 
 // Log type toggles
 let showTickLogs = true;
-let showExternalLogs = false;
+let showExternalLogs = true;
 let showVerboseLogs = true;
 
 // Collapsed tick state
@@ -281,6 +281,19 @@ function clearLogPlaceholder(outputContainer) {
   }
 }
 
+function isSystemSource(source) {
+  // Match framework/system sources: org.*, com.*, System, jdk.*, web.*, utils.*
+  // Exclude client sources: external, micro6, LeeuwbotClient
+  const systemPrefixes = ['org.', 'com.', 'System', 'jdk.', 'web.', 'utils.'];
+  const clientSources = ['external', 'micro6', 'LeeuwbotClient'];
+
+  // If it's a known client source, it's not a system log
+  if (clientSources.includes(source)) return false;
+
+  // Check if source starts with any system prefix
+  return systemPrefixes.some(prefix => source.startsWith(prefix));
+}
+
 function matchesCurrentFilters(entry, searchText) {
   const levelMatch =
     currentLogLevel === 'all' || entry.level.toLowerCase() === currentLogLevel.toLowerCase();
@@ -291,18 +304,19 @@ function matchesCurrentFilters(entry, searchText) {
     return false;
   }
 
-  // Client Logs toggle: Mutually exclusive behavior
-  // ON (checked): Show ONLY client logs (external/micro6), hide System/standard logs
-  // OFF (unchecked): Show ONLY System/standard logs, hide client logs
-  // Treat "micro6" as an external source
+  // Client Logs toggle: Exclusive behavior
+  // ON (checked): Show ONLY client logs (external/micro6/LeeuwbotClient), hide everything else
+  // OFF (unchecked): Show only system/standard logs, hide client logs
   const sourceForTypeCheck = entry.originalSource || entry.source;
-  const isClientSource = sourceForTypeCheck === 'external' || sourceForTypeCheck === 'micro6';
+  const isClientSource = sourceForTypeCheck === 'external' ||
+                         sourceForTypeCheck === 'micro6' ||
+                         sourceForTypeCheck === 'LeeuwbotClient';
 
   if (showExternalLogs) {
-    // Client Logs ON: Show ONLY client sources, hide System/standard
+    // Client Logs ON: Show ONLY client sources, hide everything else
     if (!isClientSource) return false;
   } else {
-    // Client Logs OFF: Show ONLY System/standard, hide client sources
+    // Client Logs OFF: Hide client sources, show everything else
     if (isClientSource) return false;
   }
 
@@ -1108,6 +1122,9 @@ function pruneLogEntries() {
 
   // Also prune history array
   clampLogHistory(getActiveLogHistory());
+
+  // Cap visible tick groups in DOM
+  pruneTickGroups();
 }
 
 // ==================== SOURCE FILTER MANAGEMENT ====================
@@ -1183,24 +1200,22 @@ function discoverSource(source, logKind = 'standard') {
 
 /**
  * Check if a source should be visible based on current log type filters.
- * Mutually exclusive behavior:
- * - When Client Logs is ON: shows ONLY client sources (external/micro6).
- * - When Client Logs is OFF: shows ONLY standard/tick sources, hides client sources.
+ * Exclusive behavior:
+ * - When Client Logs is ON: shows ONLY client sources (external, micro6, LeeuwbotClient).
+ * - When Client Logs is OFF: shows all sources EXCEPT client sources.
  */
 function isSourceVisibleByFilters(source) {
   const logTypes = sourceLogTypes.get(source);
   if (!logTypes || logTypes.size === 0) return false; // No type info = hide
 
-  const hasTick = logTypes.has('tick');
-  const hasExternal = logTypes.has('external') || source === 'external' || source === 'micro6';
-  const hasStandard = logTypes.has('standard');
+  const isClientSrc = source === 'external' || source === 'micro6' || source === 'LeeuwbotClient';
 
   if (showExternalLogs) {
-    // Client Logs ON: show ONLY client sources (external)
-    return hasExternal;
+    // Client Logs ON: Show ONLY client sources
+    return isClientSrc;
   } else {
-    // Client Logs OFF: show ONLY standard and tick, hide external
-    return hasStandard || hasTick;
+    // Client Logs OFF: Hide client sources, show everything else
+    return !isClientSrc;
   }
 }
 
@@ -1561,7 +1576,7 @@ function initLogTypeToggles() {
     if (savedPrefs) {
       const prefs = JSON.parse(savedPrefs);
       showTickLogs = prefs.showTickLogs ?? true;
-      showExternalLogs = prefs.showExternalLogs ?? false;
+      showExternalLogs = prefs.showExternalLogs ?? true;
       showVerboseLogs = prefs.showVerboseLogs ?? true;
     }
   } catch (e) {
@@ -1837,6 +1852,11 @@ function renderLogHistory(emptyMessage) {
   });
 }
 
+// Batched rendering state for live log entries
+let pendingLiveEntries = [];
+let liveRenderScheduled = false;
+const MAX_VISIBLE_TICK_GROUPS = 50;
+
 function addLiveLogEntry(entry) {
   // Guard - only add to live history in live mode to prevent replay logs from polluting live history
   if (currentMode !== 'live') return;
@@ -1847,7 +1867,7 @@ function addLiveLogEntry(entry) {
     console.log('[Tick Debug] addLiveLogEntry - tick:', entry.tick, 'source:', entry.source, 'kind:', entry.kind);
   }
 
-  // Extract actual source from external log messages
+  // Extract actual source from external log messages (lightweight, keep synchronous)
   let actualSource = entry.source;
   if (entry.source === 'external' || entry.source === 'micro6') {
     entry.originalSource = entry.source;
@@ -1855,9 +1875,12 @@ function addLiveLogEntry(entry) {
   }
 
   if (actualSource) {
-    const logKind = entry.kind === 'tick' ? 'tick' : (entry.source === 'external' || entry.source === 'micro6' ? 'external' : 'standard');
+    // Use originalSource (pre-extraction) for logKind classification
+    // This ensures TeleportOptimizer, LeeuwbotClient, etc. remain classified as 'external'
+    const kindSource = entry.originalSource || entry.source;
+    const logKind = entry.kind === 'tick' ? 'tick' : (kindSource === 'external' || kindSource === 'micro6' ? 'external' : 'standard');
     discoverSource(actualSource, logKind);
-    entry.source = actualSource;
+    entry.source = actualSource;  // Display name (e.g., "TeleportOptimizer")
   }
 
   discoverPatterns(entry.message);
@@ -1891,8 +1914,52 @@ function addLiveLogEntry(entry) {
     console.log('[Tick Debug] Entry PASSED filters - tick:', entry.tick, 'adding to tick group');
   }
 
-  // Use tick-grouped rendering
-  addLiveLogEntryToTickGroup(entry);
+  // Batch rendering: queue entry and schedule a single rAF flush
+  pendingLiveEntries.push(entry);
+  if (!liveRenderScheduled) {
+    liveRenderScheduled = true;
+    requestAnimationFrame(flushPendingLiveEntries);
+  }
+}
+
+function flushPendingLiveEntries() {
+  liveRenderScheduled = false;
+  const batch = pendingLiveEntries;
+  pendingLiveEntries = [];
+  batch.forEach(entry => addLiveLogEntryToTickGroup(entry));
+  pruneTickGroups();
+}
+
+function pruneTickGroups() {
+  const container = elements.logsContainer;
+  if (!container) return;
+  const groups = container.querySelectorAll('.tick-group');
+  const excess = groups.length - MAX_VISIBLE_TICK_GROUPS;
+  for (let i = 0; i < excess; i++) {
+    container.removeChild(groups[i]);
+  }
+}
+
+/**
+ * Safely parse structuredData which may or may not be JSON.
+ * @param {any} structuredData - Raw structured data
+ * @returns {any} Parsed object or original value
+ */
+function safeParseStructuredData(structuredData) {
+  if (!structuredData) return null;
+  if (typeof structuredData === 'object') return structuredData;
+  if (typeof structuredData !== 'string') return null;
+
+  const trimmed = structuredData.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return structuredData; // Keep as string if not JSON-like
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch (e) {
+    return structuredData; // Return original string if parse fails
+  }
 }
 
 function normalizeStandardLog(log) {
@@ -1908,9 +1975,12 @@ function normalizeStandardLog(log) {
 }
 
 function normalizeTickLog(log) {
-  const tickValue = log.tick || currentTick || '--';
+  // FIX: Use hasOwnProperty check to preserve tick=0
+  const tickValue = log.hasOwnProperty('tick') && log.tick !== null && log.tick !== undefined
+    ? log.tick
+    : (currentTick ?? null);
   // Normalize '--' or non-numeric to null for proper sorting
-  const normalizedTick = (tickValue === '--' || isNaN(parseInt(tickValue))) ? null : tickValue;
+  const normalizedTick = (tickValue === null || tickValue === '--' || isNaN(parseInt(tickValue))) ? null : tickValue;
 
   return {
     kind: 'tick',
@@ -1919,7 +1989,10 @@ function normalizeTickLog(log) {
     subsystem: log.subsystem ? String(log.subsystem) : 'tick',
     source: log.subsystem ? String(log.subsystem) : 'tick',
     message: log.message ? String(log.message) : '',
-    timestamp: log.timestamp || null
+    timestamp: log.timestamp || null,
+    // PRESERVE rich fields for UI sections
+    logType: log.logType || null,  // Preserve for Dialogue/Varbit/etc. sections
+    data: log.data || null          // Preserve for structured display
   };
 }
 
@@ -1985,9 +2058,9 @@ function handleLiveLogPayload(data) {
       console.log('[Tick Debug] Raw log - tick:', log.tick, 'source:', log.source, 'logType:', log.logType, 'message:', msg);
     }
 
-    // Detect ActionLogger format by presence of logType or type field
-    if (log.logType || (log.type && log.tick && log.data)) {
-      // Convert ActionLogger format to normalized form
+    // 3-way routing: ActionLogger first (has logType/type), then tick logs, then standard
+    if (log.logType || (log.type && log.hasOwnProperty('tick') && log.data)) {
+      // ActionLogger format: has logType or (type + tick + data)
       const actionLog = {
         level: log.level || 'INFO',
         message: log.message || `${log.logType || log.type}`,
@@ -2005,8 +2078,18 @@ function handleLiveLogPayload(data) {
       }
 
       addLiveLogEntry(normalized);
+    } else if (log.hasOwnProperty('tick') && log.tick !== null && log.tick !== undefined) {
+      // Tick log: has tick field but no logType/type
+      const normalized = normalizeTickLog(log);
+
+      // DEBUG: Log AFTER normalization
+      if (window.DEBUG_TICK) {
+        console.log('[Tick Debug] After normalizeTickLog - tick:', normalized.tick, 'kind:', normalized.kind);
+      }
+
+      addLiveLogEntry(normalized);
     } else {
-      // Standard log format
+      // Standard log format (no tick)
       const normalized = normalizeStandardLog(log);
 
       // DEBUG: Log AFTER normalization
@@ -2628,11 +2711,11 @@ function initReplayModeListeners() {
       if (currentMode === 'replay' && currentRecording) {
         updateScrubberFromVideo();
 
-        // Proper throttling with in-flight guard
+        // Throttle sync requests (AbortController handles cancellation)
         const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
         const timeSinceLastSync = currentTimeMs - lastSyncTimeMs;
 
-        if (timeSinceLastSync >= SYNC_INTERVAL_MS && !syncInFlight) {
+        if (timeSinceLastSync >= SYNC_INTERVAL_MS) {
           lastSyncTimeMs = currentTimeMs;
           syncLogsToVideo(currentTimeMs);
         }
@@ -2649,6 +2732,10 @@ function initReplayModeListeners() {
       if (currentMode !== 'replay') return;
       elements.replayVideo.currentTime = Number(elements.scrubberRange.value);
       updateScrubberFromVideo();
+      // Force immediate sync on manual scrub
+      const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
+      lastSyncTimeMs = currentTimeMs;
+      syncLogsToVideo(currentTimeMs);
     });
   }
 
@@ -2685,10 +2772,11 @@ function initReplayModeListeners() {
 
 function updateScrubberFromVideo() {
   if (!elements.replayVideo || !elements.scrubberRange) return;
-  const duration = Math.floor(elements.replayVideo.duration || 0);
-  const current = Math.floor(elements.replayVideo.currentTime || 0);
+  const duration = elements.replayVideo.duration || 0;
+  const current = elements.replayVideo.currentTime || 0;
 
   elements.scrubberRange.max = duration;
+  elements.scrubberRange.step = 0.1; // 100ms granularity
   elements.scrubberRange.value = current;
   elements.scrubberTimecode.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
 }
@@ -2799,10 +2887,14 @@ async function loadRecording(recordingId) {
     }
 
     // Load logs for this recording (using unified endpoint for tick grouping)
-    const logResponse = await fetch(`/api/debug/replay/unified?recordingId=${recordingId}&videoTimeMs=0`);
+    const logResponse = await fetch(`/api/debug/replay/unified?recordingId=${recordingId}&videoTimeMs=0&windowSeconds=5`);
     if (logResponse.ok) {
       const result = await logResponse.json();
-      renderReplayLogs(result.logs);
+      renderReplayLogs(result.logs, result.currentTick);
+      // Update tick display from initial load
+      if (result.currentTick != null) {
+        updateTickDisplay(result.currentTick);
+      }
     } else {
       console.warn('Failed to load logs for recording, status:', logResponse.status);
       // Don't block video playback for log loading failure
@@ -2815,11 +2907,9 @@ async function loadRecording(recordingId) {
 }
 
 async function syncLogsToVideo(videoMs) {
-  if (!currentRecording || syncInFlight) return;
+  if (!currentRecording) return;
 
-  syncInFlight = true;
-
-  // Abort previous request if still in flight
+  // Abort previous in-flight request (abort-and-replace pattern)
   if (currentSyncAbortController) {
     currentSyncAbortController.abort();
   }
@@ -2827,7 +2917,7 @@ async function syncLogsToVideo(videoMs) {
 
   try {
     const response = await fetch(
-      `/api/debug/replay/unified?recordingId=${currentRecording}&videoTimeMs=${Math.floor(videoMs)}`,
+      `/api/debug/replay/unified?recordingId=${currentRecording}&videoTimeMs=${Math.floor(videoMs)}&windowSeconds=5`,
       { signal: currentSyncAbortController.signal }
     );
 
@@ -2837,55 +2927,88 @@ async function syncLogsToVideo(videoMs) {
     }
 
     const result = await response.json();
-    renderReplayLogs(result.logs);
+    renderReplayLogs(result.logs, result.currentTick);
+
+    // Update tick display from backend response
+    if (result.currentTick != null) {
+      updateTickDisplay(result.currentTick);
+    }
 
   } catch (error) {
     if (error.name !== 'AbortError') {
       console.error('Failed to sync logs:', error);
     }
   } finally {
-    syncInFlight = false;
     currentSyncAbortController = null;
   }
 }
 
-function renderReplayLogs(logs) {
+function renderReplayLogs(logs, currentReplayTick = null) {
   replayLogHistory.length = 0;
   if (!logs || logs.length === 0) {
     if (currentMode === 'replay') {
       renderLogHistory('No logs for this time period');
     }
+    // Still highlight tick group if we have a tick but no logs
+    highlightCurrentTickGroup(currentReplayTick);
     return;
   }
 
+  // DEBUG: Log sample entries to understand payload shape
+  if (window.DEBUG_TICK) {
+    console.log('[Tick Debug] renderReplayLogs received', logs.length, 'entries');
+    logs.slice(0, 5).forEach((log, i) => {
+      console.log(`[Tick Debug] Entry ${i}:`, {
+        origin: log.origin,
+        source: log.source,
+        tick: log.tick,
+        logType: log.logType,
+        structuredData: log.structuredData,
+        message: log.message?.slice(0, 50)
+      });
+    });
+  }
+
   logs.forEach(log => {
-    // Detect ActionLogger format by presence of logType, structuredData, or (type, tick, data) combination
-    // FIX: Use hasOwnProperty for tick to avoid treating tick=0 as falsy
-    if (log.logType || log.structuredData || (log.type && log.hasOwnProperty('tick') && log.data)) {
+    const origin = log.origin || ''; // Backend-provided discriminator
+
+    if (origin === 'tick') {
+      // Tick log from tick_logs table - use normalizeTickLog
+      // Preserve rich fields: logType, data
+      const tickLogEntry = {
+        kind: 'tick',
+        tick: log.tick, // Must preserve even if 0
+        level: log.level || 'INFO',
+        subsystem: log.source, // Map backend 'source' to frontend 'subsystem'
+        source: log.source,
+        message: log.message,
+        timestamp: log.timestamp,
+        logType: log.logType || null,
+        // Parse structuredData ONLY if it looks like JSON
+        data: safeParseStructuredData(log.structuredData)
+      };
+      replayLogHistory.push(normalizeTickLog(tickLogEntry));
+    } else if (log.logType || log.structuredData || (log.type && log.hasOwnProperty('tick') && log.data)) {
+      // ActionLogger format logs (external/micro6 sources with structured data)
       let data = log.data;
-      // Parse structuredData if data is not available
       if (!data && log.structuredData) {
-        try {
-          data = JSON.parse(log.structuredData);
-        } catch (e) {
-          console.warn('Failed to parse structuredData:', e);
-        }
+        data = safeParseStructuredData(log.structuredData);
       }
       const actionLog = {
         level: log.level || 'INFO',
         message: log.message || log.logType || log.type,
-        source: log.source || 'micro6',
+        source: log.source || 'external',
         timestamp: log.timestamp,
         logType: log.logType || log.type,
-        tick: log.hasOwnProperty('tick') ? log.tick : null, // FIX: Use hasOwnProperty, not truthy check
+        tick: log.hasOwnProperty('tick') ? log.tick : null,
         data: data
       };
       replayLogHistory.push(normalizeActionLog(actionLog));
     } else {
-      // Ensure standard logs also have tick field
+      // Standard logs
       const stdLog = {
         ...log,
-        tick: log.hasOwnProperty('tick') ? log.tick : null // FIX: Use hasOwnProperty
+        tick: log.hasOwnProperty('tick') ? log.tick : null
       };
       replayLogHistory.push(normalizeStandardLog(stdLog));
     }
@@ -2893,7 +3016,26 @@ function renderReplayLogs(logs) {
   clampLogHistory(replayLogHistory);
   if (currentMode === 'replay') {
     renderLogHistory();
+    // Highlight current tick group after rendering
+    highlightCurrentTickGroup(currentReplayTick);
   }
+}
+
+/**
+ * Highlight the current tick group in the log view.
+ */
+function highlightCurrentTickGroup(currentReplayTick) {
+  if (currentReplayTick == null) return;
+
+  const groups = document.querySelectorAll('.tick-group');
+  groups.forEach(g => g.classList.remove('current-tick-group'));
+
+  groups.forEach(g => {
+    if (g.dataset.tick == currentReplayTick) {
+      g.classList.add('current-tick-group');
+      g.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  });
 }
 
 function formatTime(seconds) {
@@ -3645,13 +3787,13 @@ function initRecordingControls() {
  */
 async function startRecording() {
   try {
-    const response = await fetch('/api/recordings/start', {
+    const response = await fetch('/api/debug/replay/start-recording', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         accountName: currentWindowId || 'Unknown',
         scriptName: 'Debug Session',
-        windowTitle: document.getElementById('selectedWindowLabel')?.textContent || ''
+        recordingEnabled: true
       })
     });
 
@@ -3696,6 +3838,7 @@ async function startRecording() {
 
     const data = await response.json();
     currentRecordingId = data.recordingId;
+    currentSessionId = data.sessionId;
     isRecording = true;
     recordingStartTime = Date.now();
 
@@ -3727,8 +3870,13 @@ async function startRecording() {
  */
 async function stopRecording() {
   try {
-    const response = await fetch('/api/recordings/stop', {
-      method: 'POST'
+    const response = await fetch('/api/debug/replay/stop-recording', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: currentSessionId,
+        endTick: null
+      })
     });
 
     if (!response.ok) {
@@ -3751,7 +3899,7 @@ async function stopRecording() {
     // Stop duration timer
     stopRecordingDurationTimer();
 
-    console.log('✅ Recording stopped:', currentRecordingId);
+    console.log('Recording stopped:', currentRecordingId);
     showNotification('Recording saved', 'success');
 
     // Refresh sessions list if in replay mode
@@ -3760,6 +3908,7 @@ async function stopRecording() {
     }
 
     currentRecordingId = null;
+    currentSessionId = null;
     recordingStartTime = null;
 
   } catch (error) {
@@ -3789,6 +3938,7 @@ async function forceResetRecording() {
     // Reset frontend state
     isRecording = false;
     currentRecordingId = null;
+    currentSessionId = null;
     recordingStartTime = null;
 
     // Update UI
@@ -3805,7 +3955,7 @@ async function forceResetRecording() {
       recordingDurationInterval = null;
     }
 
-    console.log('✅ Recording state reset:', data);
+    console.log('Recording state reset:', data);
     showNotification(data.message, 'warning');
 
     return data.reset;
@@ -3851,10 +4001,11 @@ async function checkRecordingStatus() {
 
     } else if (!backendRecording && isRecording) {
       // Frontend thinks we're recording, but backend says no
-      console.warn('⚠️ State mismatch: Frontend thinks recording, but backend says no. Resetting frontend state.');
+      console.warn('State mismatch: Frontend thinks recording, but backend says no. Resetting frontend state.');
 
       isRecording = false;
       currentRecordingId = null;
+      currentSessionId = null;
       recordingStartTime = null;
 
       // Reset UI
@@ -4035,9 +4186,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initReplayModeListeners();
   initTickControls();
   initLogFilters();
+  initLogTypeToggles(); // Log type toggles (tick, external, verbose) - MUST be first
   initSourceFilters(); // Source filter chips
   initPatternFilterDropdown(); // Pattern filter chips
-  initLogTypeToggles(); // Log type toggles (tick, external, verbose)
   initSectionToggles(); // Section toggles for tick cards
   initActionLogFilters(); // ActionLogger type filters (Dialogue, Inventory, etc.)
   initTickReplayControls(); // New tick-based replay controls

@@ -21,6 +21,7 @@ import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -302,17 +303,35 @@ public class TickReplayController {
       List<LogEntity> standardLogs =
           standardLogRepository.findByTimestampBetween(windowStart, windowEnd);
 
-      // Try to find associated debug session for tick logs
+      // Try to find associated debug session for tick logs and current tick calculation
       List<TickLog> tickLogs = new ArrayList<>();
-      sessionRepository
-          .findByRecordingId(recordingId)
-          .ifPresent(
-              debugSession -> {
-                // Fetch tick logs within the time window
-                tickLogs.addAll(
-                    logRepository.findBySessionIdAndTimestampBetweenOrderByTickAsc(
-                        debugSession.getSessionId(), windowStart, windowEnd));
-              });
+      Long currentTick = null;
+      DebugSession debugSession = sessionRepository.findByRecordingId(recordingId).orElse(null);
+
+      if (debugSession != null) {
+        // Fetch tick logs within the time window
+        tickLogs.addAll(
+            logRepository.findBySessionIdAndTimestampBetweenOrderByTickAsc(
+                debugSession.getSessionId(), windowStart, windowEnd));
+
+        // Primary: use TickVideoSyncService for deterministic tick calculation
+        try {
+          currentTick =
+              tickVideoSyncService.getTickForVideoTime(debugSession.getSessionId(), videoTimeMs);
+        } catch (Exception e) {
+          log.debug("Could not get tick from sync service: {}", e.getMessage());
+        }
+      }
+
+      // Fallback: extract from tick logs if primary method failed
+      if (currentTick == null && !tickLogs.isEmpty()) {
+        currentTick =
+            tickLogs.stream()
+                .filter(t -> !t.getTimestamp().isAfter(videoTimestamp))
+                .reduce((a, b) -> b)
+                .map(TickLog::getTick)
+                .orElse(null);
+      }
 
       // Merge logs into unified format
       List<UnifiedLogEntry> unifiedLogs = new ArrayList<>();
@@ -328,6 +347,13 @@ public class TickReplayController {
         entry.setTick(log.getTick() != null ? log.getTick().longValue() : null);
         entry.setLogType(log.getLogType());
         entry.setStructuredData(log.getStructuredData());
+        // Set origin based on source - external/micro6 sources are external, others are standard
+        String source = log.getSource();
+        if ("external".equalsIgnoreCase(source) || "micro6".equalsIgnoreCase(source)) {
+          entry.setOrigin("external");
+        } else {
+          entry.setOrigin("standard");
+        }
         unifiedLogs.add(entry);
       }
 
@@ -343,6 +369,7 @@ public class TickReplayController {
         entry.setLogType(tickLog.getEventType());
         entry.setStructuredData(
             tickLog.getDetails() != null ? tickLog.getDetails().toString() : null);
+        entry.setOrigin("tick"); // Mark as coming from tick_logs table
         unifiedLogs.add(entry);
       }
 
@@ -353,9 +380,13 @@ public class TickReplayController {
       Map<String, Object> response = new HashMap<>();
       response.put("videoTimeMs", videoTimeMs);
       response.put("videoTimestamp", videoTimestamp);
+      response.put(
+          "videoTimestampEpochMs",
+          videoTimestamp.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
       response.put("windowStart", windowStart);
       response.put("windowEnd", windowEnd);
       response.put("logs", unifiedLogs);
+      response.put("currentTick", currentTick);
 
       log.debug(
           "Unified timeline sync for {} at {}ms: returned {} standard logs + {} tick logs = {} total",
@@ -795,6 +826,7 @@ public class TickReplayController {
     private Long tick;
     private String logType;
     private String structuredData;
+    private String origin; // "tick", "standard", or "external"
 
     public Long getId() {
       return id;
@@ -858,6 +890,14 @@ public class TickReplayController {
 
     public void setStructuredData(String structuredData) {
       this.structuredData = structuredData;
+    }
+
+    public String getOrigin() {
+      return origin;
+    }
+
+    public void setOrigin(String origin) {
+      this.origin = origin;
     }
   }
 

@@ -63,6 +63,10 @@ public class RecordingSession {
   /** Recording FPS. */
   private Integer fps;
 
+  /** Video codec used for recording (e.g., libx264, libopenh264, mpeg4). */
+  @Column(length = 50)
+  private String videoCodec;
+
   /** Default constructor required by JPA. */
   public RecordingSession() {}
 
@@ -170,5 +174,13 @@ public class RecordingSession {
 
   public void setFps(Integer fps) {
     this.fps = fps;
+  }
+
+  public String getVideoCodec() {
+    return videoCodec;
+  }
+
+  public void setVideoCodec(String videoCodec) {
+    this.videoCodec = videoCodec;
   }
 }

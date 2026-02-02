@@ -833,6 +833,13 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   overflow: hidden;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+/* Current tick group highlight during replay */
+.tick-group.current-tick-group {
+  border-left: 3px solid var(--accent-color, #0d6efd);
+  background: rgba(13, 110, 253, 0.08);
 }
 
 .tick-group-header {

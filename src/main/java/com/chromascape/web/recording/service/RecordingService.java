@@ -20,10 +20,10 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -56,10 +56,9 @@ public class RecordingService implements FrameListener {
   private final Java2DFrameConverter frameConverter = new Java2DFrameConverter();
 
   // Frame buffer for producer-consumer pattern
-  private static final int FRAME_BUFFER_SIZE =
-      120; // ~4 seconds at 30 FPS (increased for stability)
+  private static final int FRAME_BUFFER_SIZE = 60; // ~2 seconds at 30 FPS
   private final BlockingQueue<TimestampedFrame> frameBuffer =
-      new LinkedBlockingQueue<>(FRAME_BUFFER_SIZE);
+      new ArrayBlockingQueue<>(FRAME_BUFFER_SIZE);
   private volatile boolean encoderRunning = false;
   private long encodedFrameCount = 0; // Track encoded frames for timestamp calculation
 
@@ -68,6 +67,7 @@ public class RecordingService implements FrameListener {
   private long recordingStartTime;
   private volatile long recordingStartTimeNano; // Store nano time at start
   private String currentRecordingId;
+  private String currentVideoCodec; // Track which codec was successfully used
   private int initialWidth;
   private int initialHeight;
   private static final String[] VIDEO_CODEC_PREFERENCES =
@@ -329,7 +329,9 @@ public class RecordingService implements FrameListener {
           recordingStartTime,
           duration,
           frames,
-          unifiedConfig.getFps());
+          unifiedConfig.getFps(),
+          dropped,
+          currentVideoCodec);
 
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -401,20 +403,19 @@ public class RecordingService implements FrameListener {
         TimestampedFrame timestampedFrame =
             new TimestampedFrame(capturedImage, event.getCaptureTimeNanos());
 
-        // Try to add to buffer (non-blocking)
-        boolean added = frameBuffer.offer(timestampedFrame);
-        if (added) {
-          frameCount.incrementAndGet();
-        } else {
-          // Buffer full - drop frame to prevent memory issues
+        // Drop-oldest policy: if full, remove oldest then add newest
+        if (frameBuffer.remainingCapacity() == 0) {
+          frameBuffer.poll(); // Drop oldest frame
           long dropped = droppedFrameCount.incrementAndGet();
           if (dropped % 30 == 1) {
             logger.warn(
-                "Frame buffer full, dropping frames. Total dropped: {} (buffer size: {})",
+                "Frame buffer full, dropped {} total frames (buffer size: {})",
                 dropped,
                 frameBuffer.size());
           }
         }
+        frameBuffer.offer(timestampedFrame);
+        frameCount.incrementAndGet();
 
         // Check max duration
         if (config.getMaxDurationMinutes() > 0) {
@@ -512,6 +513,11 @@ public class RecordingService implements FrameListener {
     return recording.get() ? currentRecordingId : null;
   }
 
+  /** Returns the video codec used for the current recording, or null if not recording. */
+  public String getCurrentVideoCodec() {
+    return recording.get() ? currentVideoCodec : null;
+  }
+
   /** Returns the recording start time if recording, or null otherwise. */
   public Long getRecordingStartTime() {
     return recording.get() ? recordingStartTime : null;
@@ -601,6 +607,7 @@ public class RecordingService implements FrameListener {
     recording.set(false);
     currentRecordingId = null;
     currentRecordingFile = null;
+    currentVideoCodec = null;
     recordingStartTime = 0;
     frameCount.set(0);
     droppedFrameCount.set(0);
@@ -621,6 +628,7 @@ public class RecordingService implements FrameListener {
         candidate = createRecorder(codecName, width, height);
         candidate.start();
         recorder = candidate;
+        currentVideoCodec = codecName;
         logger.info("Recording codec initialized: {}", codecName);
         return;
       } catch (Exception e) {
@@ -649,18 +657,22 @@ public class RecordingService implements FrameListener {
     candidate.setVideoCodecName(codecName);
     candidate.setFormat("mp4");
     candidate.setFrameRate(unifiedConfig.getFps());
-
-    // Codec-agnostic quality settings (apply to ALL codecs)
     candidate.setPixelFormat(org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P);
-    candidate.setVideoBitrate((int) (config.getVideoQuality() * 8000));
     candidate.setOption("movflags", "+faststart");
 
-    // Codec-specific optimizations
+    // Codec-specific quality settings
     if ("libx264".equals(codecName)) {
-      // Use "veryfast" preset for better throughput
-      candidate.setVideoOption("preset", "veryfast");
-      candidate.setVideoOption("tune", "zerolatency");
-      candidate.setVideoOption("profile", "main");
+      // Use CRF for quality-based VBR (lower = better quality, 18-28 typical range)
+      // quality 70 -> CRF 14, quality 100 -> CRF 8
+      int crfValue = Math.max(0, 28 - (config.getVideoQuality() / 5));
+      candidate.setVideoOption("crf", String.valueOf(crfValue));
+      candidate.setVideoOption("preset", config.getEncodingPreset());
+      // Removed tune=zerolatency (disables B-frames, inappropriate for file recording)
+      candidate.setVideoOption("profile", "high");
+    } else {
+      // Fallback codecs: use bitrate-based encoding (80kbps per quality point for reasonable
+      // output)
+      candidate.setVideoBitrate((int) (config.getVideoQuality() * 80000));
     }
 
     return candidate;
@@ -738,15 +750,26 @@ public class RecordingService implements FrameListener {
     private final long duration;
     private final long frameCount;
     private final int fps;
+    private final long droppedFrames;
+    private final String videoCodec;
 
     public RecordingMetadata(
-        String id, String filePath, long startTime, long duration, long frameCount, int fps) {
+        String id,
+        String filePath,
+        long startTime,
+        long duration,
+        long frameCount,
+        int fps,
+        long droppedFrames,
+        String videoCodec) {
       this.id = id;
       this.filePath = filePath;
       this.startTime = startTime;
       this.duration = duration;
       this.frameCount = frameCount;
       this.fps = fps;
+      this.droppedFrames = droppedFrames;
+      this.videoCodec = videoCodec;
     }
 
     public String getId() {
@@ -771,6 +794,14 @@ public class RecordingService implements FrameListener {
 
     public int getFps() {
       return fps;
+    }
+
+    public long getDroppedFrames() {
+      return droppedFrames;
+    }
+
+    public String getVideoCodec() {
+      return videoCodec;
     }
   }
 }

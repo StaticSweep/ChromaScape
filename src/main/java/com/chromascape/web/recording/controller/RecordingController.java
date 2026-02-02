@@ -202,6 +202,7 @@ public class RecordingController {
       session.setDurationMs(metadata.getDuration());
       session.setFrameCount(metadata.getFrameCount());
       session.setFps(metadata.getFps());
+      session.setVideoCodec(metadata.getVideoCodec());
 
       // Save to database
       RecordingSession saved = recordingSessionRepository.save(session);
@@ -356,6 +357,7 @@ public class RecordingController {
                     map.put("startTime", session.getStartTime());
                     map.put("endTime", session.getEndTime());
                     map.put("triggerType", session.getTriggerType());
+                    map.put("videoCodec", session.getVideoCodec());
                     return map;
                   })
               .toList();

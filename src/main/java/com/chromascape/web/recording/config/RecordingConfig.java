@@ -30,6 +30,9 @@ public class RecordingConfig {
   /** Maximum recording duration in minutes (0 = unlimited). */
   private int maxDurationMinutes = 60;
 
+  /** Video encoding preset for libx264 (veryfast, fast, medium, slow, slower, veryslow). */
+  private String encodingPreset = "fast";
+
   /** Whether to automatically record when game starts. */
   private boolean autoRecord = false;
 
@@ -81,6 +84,14 @@ public class RecordingConfig {
     this.maxDurationMinutes = maxDurationMinutes;
   }
 
+  public String getEncodingPreset() {
+    return encodingPreset;
+  }
+
+  public void setEncodingPreset(String encodingPreset) {
+    this.encodingPreset = encodingPreset;
+  }
+
   public boolean isAutoRecord() {
     return autoRecord;
   }
@@ -101,6 +112,9 @@ public class RecordingConfig {
         + videoQuality
         + ", fps="
         + fps
+        + ", encodingPreset='"
+        + encodingPreset
+        + '\''
         + ", maxDurationMinutes="
         + maxDurationMinutes
         + ", autoRecord="

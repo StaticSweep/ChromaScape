@@ -8,6 +8,7 @@ import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.chromascape.web.recording.service.RecordingService;
+import com.chromascape.web.recording.service.RecordingService.RecordingMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -139,7 +140,21 @@ public class DebugSessionService {
     // Stop video recording if active
     if (session.getRecordingId() != null) {
       try {
-        recordingService.stopRecording();
+        RecordingMetadata metadata = recordingService.stopRecording();
+        if (metadata != null) {
+          // Update RecordingSession with video path and metadata
+          recordingSessionRepository
+              .findByRecordingId(session.getRecordingId())
+              .ifPresent(
+                  recSession -> {
+                    recSession.setVideoPath(metadata.getFilePath());
+                    recSession.setEndTime(LocalDateTime.now());
+                    recSession.setDurationMs(metadata.getDuration());
+                    recSession.setFrameCount(metadata.getFrameCount());
+                    recSession.setFps(metadata.getFps());
+                    recordingSessionRepository.save(recSession);
+                  });
+        }
         log.info("Stopped recording {} for debug session {}", session.getRecordingId(), sessionId);
       } catch (Exception e) {
         log.warn(

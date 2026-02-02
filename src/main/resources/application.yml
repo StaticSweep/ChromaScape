@@ -95,7 +95,7 @@ recording:
   # Directory where recordings are stored
   output-directory: ${RECORDING_OUTPUT_DIR:recordings}
   # Video quality (1-100, higher = better quality)
-  video-quality: ${RECORDING_QUALITY:70}
+  video-quality: ${RECORDING_QUALITY:90}
   # Frames per second for recording
   # DEPRECATED: Use unified-capture.fps instead (this is kept for backward compatibility)
   fps: ${RECORDING_FPS:15}
@@ -103,6 +103,8 @@ recording:
   record-audio: ${RECORDING_AUDIO:false}
   # Maximum recording duration in minutes (0 = unlimited)
   max-duration-minutes: ${RECORDING_MAX_DURATION:60}
+  # Video encoding preset (veryfast, fast, medium, slow, slower, veryslow)
+  encoding-preset: ${RECORDING_ENCODING_PRESET:slow}
   # Automatically record when game starts
   auto-record: ${RECORDING_AUTO:false}
 
