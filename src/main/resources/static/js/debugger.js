@@ -6,6 +6,7 @@
 let currentMode = 'live';
 let currentRecording = null;
 let currentRecordingSessionId = null;
+let currentRecordingFps = 30; // Default FPS, updated when loading recording
 let currentLogLevel = 'all';
 let logWebSocket = null;
 let overlayWebSocket = null;
@@ -156,14 +157,45 @@ function switchMode(mode) {
     replayTickSnapshots.clear();
     // Clear replay log history to prevent old replay logs from leaking
     replayLogHistory.length = 0;
+    // Reset source filter state for clean replay slate
+    discoveredSources.clear();
+    sourceLogTypes.clear();
+    const sourceFilters = document.getElementById('sourceFilters');
+    if (sourceFilters) {
+      sourceFilters.innerHTML = '';
+    }
+    updateSourceFilterSummary();
     // Clear the logs container to remove live logs from display
     clearLogs();
+    // Show replay-specific placeholder
+    if (elements.logsContainer) {
+      elements.logsContainer.innerHTML =
+        '<div class="text-muted fst-italic log-placeholder">Select a recording to view logs</div>';
+    }
   } else {
     elements.replayVideo.style.display = 'none';
     elements.viewportCanvas.style.display = 'block';
     elements.viewportLoader.style.display = 'flex';
+    currentRecordingFps = 30; // Reset to default when leaving replay
     clearOverlayCanvas();
     setScrubberEnabled(false);
+    // Re-discover sources from live history to restore filter chips
+    discoveredSources.clear();
+    sourceLogTypes.clear();
+    const sourceFilters = document.getElementById('sourceFilters');
+    if (sourceFilters) {
+      sourceFilters.innerHTML = '';
+    }
+    liveLogHistory.forEach(entry => {
+      if (entry.source) {
+        const kindSource = entry.originalSource || entry.source;
+        const logKind = entry.kind === 'tick'
+          ? 'tick'
+          : (kindSource === 'external' || kindSource === 'micro6' ? 'external' : 'standard');
+        discoverSource(entry.source, logKind);
+      }
+    });
+    updateSourceFilterSummary();
     // Re-render live logs when returning to live mode
     renderLogHistory();
   }
@@ -307,17 +339,19 @@ function matchesCurrentFilters(entry, searchText) {
   // Client Logs toggle: Exclusive behavior
   // ON (checked): Show ONLY client logs (external/micro6/LeeuwbotClient), hide everything else
   // OFF (unchecked): Show only system/standard logs, hide client logs
-  const sourceForTypeCheck = entry.originalSource || entry.source;
-  const isClientSource = sourceForTypeCheck === 'external' ||
-                         sourceForTypeCheck === 'micro6' ||
-                         sourceForTypeCheck === 'LeeuwbotClient';
+  if (entry.kind !== 'tick') {
+    const sourceForTypeCheck = entry.originalSource || entry.source;
+    const isClientSource = sourceForTypeCheck === 'external' ||
+                           sourceForTypeCheck === 'micro6' ||
+                           sourceForTypeCheck === 'LeeuwbotClient';
 
-  if (showExternalLogs) {
-    // Client Logs ON: Show ONLY client sources, hide everything else
-    if (!isClientSource) return false;
-  } else {
-    // Client Logs OFF: Hide client sources, show everything else
-    if (isClientSource) return false;
+    if (showExternalLogs) {
+      // Client Logs ON: Show ONLY client sources, hide everything else
+      if (!isClientSource) return false;
+    } else {
+      // Client Logs OFF: Hide client sources, show everything else
+      if (isClientSource) return false;
+    }
   }
 
   // Check ActionLogger log type toggles
@@ -346,8 +380,7 @@ function matchesCurrentFilters(entry, searchText) {
   if (!showVerboseLogs && entry.level.toUpperCase() === 'DEBUG') return false;
 
   // Check if source is hidden
-  const sourceHidden = hiddenSources.has(entry.source);
-  if (sourceHidden) return false;
+  if (hiddenSources.has(entry.source) && discoveredSources.has(entry.source)) return false;
 
   // Check if any hidden patterns match the message
   if (hiddenPatterns.size > 0) {
@@ -1209,13 +1242,17 @@ function isSourceVisibleByFilters(source) {
   if (!logTypes || logTypes.size === 0) return false; // No type info = hide
 
   const isClientSrc = source === 'external' || source === 'micro6' || source === 'LeeuwbotClient';
+  const hasTickLogs = logTypes.has('tick');
 
   if (showExternalLogs) {
-    // Client Logs ON: Show ONLY client sources
+    // Client Logs ON: Show client sources and tick sources if tick logs are enabled
+    if (hasTickLogs && showTickLogs) return true;
     return isClientSrc;
   } else {
-    // Client Logs OFF: Hide client sources, show everything else
-    return !isClientSrc;
+    // Client Logs OFF: Hide client sources, show everything else (respect tick toggle for tick-only sources)
+    if (isClientSrc) return false;
+    if (!showTickLogs && hasTickLogs && logTypes.size === 1) return false;
+    return true;
   }
 }
 
@@ -1279,8 +1316,12 @@ function updateSourceFilterSummary() {
   if (!summary) return;
 
   const totalSources = discoveredSources.size;
-  const hiddenCount = hiddenSources.size;
-  const visibleCount = totalSources - hiddenCount;
+  let hiddenCount = 0;
+  for (const source of hiddenSources) {
+    if (discoveredSources.has(source)) {
+      hiddenCount += 1;
+    }
+  }
 
   if (totalSources === 0) {
     summary.innerHTML = 'Sources';
@@ -1394,7 +1435,8 @@ function updateAllSourceChips() {
  */
 function saveHiddenSources() {
   try {
-    localStorage.setItem(HIDDEN_SOURCES_KEY, JSON.stringify([...hiddenSources]));
+    const relevant = [...hiddenSources].filter(source => discoveredSources.has(source));
+    localStorage.setItem(HIDDEN_SOURCES_KEY, JSON.stringify(relevant));
   } catch (e) {
     console.warn('Failed to save hidden sources:', e);
   }
@@ -1814,7 +1856,10 @@ function renderLogHistory(emptyMessage) {
 
   if (filteredEntries.length === 0) {
     if (history.length === 0) {
-      ensureLogPlaceholder(emptyMessage || 'Waiting for logs...');
+      const defaultMsg = currentMode === 'replay'
+        ? 'Select a recording to view logs'
+        : 'Waiting for logs...';
+      ensureLogPlaceholder(emptyMessage || defaultMsg);
     } else {
       ensureLogPlaceholder('No logs match the current filters.');
     }
@@ -2058,7 +2103,9 @@ function handleLiveLogPayload(data) {
       console.log('[Tick Debug] Raw log - tick:', log.tick, 'source:', log.source, 'logType:', log.logType, 'message:', msg);
     }
 
-    // 3-way routing: ActionLogger first (has logType/type), then tick logs, then standard
+    // 2-way routing: ActionLogger first (has logType/type), then standard
+    // Note: Tick-stream logs arrive via /ws/debugger/tick-stream (renderTickLogs),
+    // not here. Spring Boot logs always have tick from getCycles() but are standard logs.
     if (log.logType || (log.type && log.hasOwnProperty('tick') && log.data)) {
       // ActionLogger format: has logType or (type + tick + data)
       const actionLog = {
@@ -2078,18 +2125,8 @@ function handleLiveLogPayload(data) {
       }
 
       addLiveLogEntry(normalized);
-    } else if (log.hasOwnProperty('tick') && log.tick !== null && log.tick !== undefined) {
-      // Tick log: has tick field but no logType/type
-      const normalized = normalizeTickLog(log);
-
-      // DEBUG: Log AFTER normalization
-      if (window.DEBUG_TICK) {
-        console.log('[Tick Debug] After normalizeTickLog - tick:', normalized.tick, 'kind:', normalized.kind);
-      }
-
-      addLiveLogEntry(normalized);
     } else {
-      // Standard log format (no tick)
+      // Standard log (tick preserved as metadata for grouping)
       const normalized = normalizeStandardLog(log);
 
       // DEBUG: Log AFTER normalization
@@ -2851,6 +2888,7 @@ async function loadRecording(recordingId) {
 
     const recording = await response.json();
     currentRecordingSessionId = recording.id;
+    currentRecordingFps = recording.fps || 30;
 
     console.log('Loaded recording metadata:', recording);
 
@@ -2927,6 +2965,14 @@ async function syncLogsToVideo(videoMs) {
     }
 
     const result = await response.json();
+
+    if (window.DEBUG_TICK) {
+      console.log('[Replay] Sync response:', {
+        currentTick: result.currentTick,
+        logCount: result.logs?.length
+      });
+    }
+
     renderReplayLogs(result.logs, result.currentTick);
 
     // Update tick display from backend response
@@ -3013,7 +3059,31 @@ function renderReplayLogs(logs, currentReplayTick = null) {
       replayLogHistory.push(normalizeStandardLog(stdLog));
     }
   });
+  // Reset discovery for current replay window — prevents count inflation on scrub
+  discoveredSources.clear();
+  sourceLogTypes.clear();
+  const sourceFiltersEl = document.getElementById('sourceFilters');
+  if (sourceFiltersEl) sourceFiltersEl.innerHTML = '';
+
+  replayLogHistory.forEach(entry => {
+    let actualSource = entry.source;
+    if (entry.source === 'external' || entry.source === 'micro6') {
+      entry.originalSource = entry.source;
+      actualSource = extractSourceFromMessage(entry.message, entry.source);
+      entry.source = actualSource;
+    }
+
+    if (actualSource) {
+      const kindSource = entry.originalSource || entry.source;
+      const logKind = entry.kind === 'tick'
+        ? 'tick'
+        : (kindSource === 'external' || kindSource === 'micro6' ? 'external' : 'standard');
+      discoverSource(actualSource, logKind);
+    }
+    discoverPatterns(entry.message);
+  });
   clampLogHistory(replayLogHistory);
+  updateSourceFilterSummary();
   if (currentMode === 'replay') {
     renderLogHistory();
     // Highlight current tick group after rendering
@@ -3326,21 +3396,30 @@ function updatePanelsForTick(data) {
 function updateTickDisplay(tick) {
   const currentTickEl = document.getElementById('currentTick');
   if (currentTickEl) {
-    currentTickEl.textContent = tick;
+    currentTickEl.textContent = tick != null ? tick : '--';
   }
 
   // Calculate time from tick (600ms per tick)
-  const timeSeconds = (tick * 0.6).toFixed(1);
   const currentTimeEl = document.getElementById('currentTime');
   if (currentTimeEl) {
-    currentTimeEl.textContent = formatTickTime(timeSeconds);
+    if (tick != null) {
+      const timeSeconds = (tick * 0.6).toFixed(1);
+      currentTimeEl.textContent = formatTickTime(timeSeconds);
+    } else {
+      currentTimeEl.textContent = '--:--.-';
+    }
   }
 
-  // Calculate frame from tick (assuming 30 FPS)
-  const frame = Math.round(tick * 0.6 * 30);
+  // Calculate frame - use recording FPS if available, else default 30
   const currentFrameEl = document.getElementById('currentFrame');
   if (currentFrameEl) {
-    currentFrameEl.textContent = frame;
+    if (tick != null) {
+      const fps = currentRecordingFps || 30;
+      const frame = Math.floor(tick * 0.6 * fps);
+      currentFrameEl.textContent = frame;
+    } else {
+      currentFrameEl.textContent = '--';
+    }
   }
 }
 

@@ -198,28 +198,37 @@ public class UnifiedFrameCaptureService {
       return; // No subscribers, skip capture
     }
 
+    long captureStart = System.currentTimeMillis();
+
     // Track capture jitter
-    long now = System.currentTimeMillis();
     if (lastCaptureTimeMs > 0) {
-      long actualInterval = now - lastCaptureTimeMs;
+      long actualInterval = captureStart - lastCaptureTimeMs;
       long expectedInterval = config.getIntervalMs();
       long jitter = Math.abs(actualInterval - expectedInterval);
       totalCaptureJitterMs += jitter;
       captureCount++;
 
-      // Log jitter every 5 seconds (~150 frames at 30 FPS)
-      if (captureCount % 150 == 0) {
+      // Log jitter every ~1 second (30 frames at 30 FPS)
+      if (captureCount % 30 == 0) {
         double avgJitter = (double) totalCaptureJitterMs / captureCount;
         logger.info(
-            "Capture FPS check: expected {}ms interval, avg jitter: {:.2f}ms",
+            "Capture FPS check: expected {}ms interval, avg jitter: {:.1f}ms, count: {}",
             expectedInterval,
-            avgJitter);
+            avgJitter,
+            captureCount);
       }
     }
-    lastCaptureTimeMs = now;
+    lastCaptureTimeMs = captureStart;
 
     try {
       BufferedImage frame = ScreenManager.captureWindow();
+      long captureEnd = System.currentTimeMillis();
+      long captureMs = captureEnd - captureStart;
+
+      // Log slow captures
+      if (captureMs > 50) {
+        logger.warn("Slow frame capture: {}ms (expected <{}ms)", captureMs, config.getIntervalMs());
+      }
 
       if (frame != null) {
         // Create frame event with timestamp and dimensions

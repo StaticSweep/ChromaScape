@@ -298,6 +298,10 @@ public class TickReplayController {
       // Define the time window for logs
       LocalDateTime windowStart = videoTimestamp.minusSeconds(windowSeconds);
       LocalDateTime windowEnd = videoTimestamp.plusSeconds(windowSeconds);
+      LocalDateTime recordingStart = recordingSession.getStartTime();
+      if (windowStart.isBefore(recordingStart)) {
+        windowStart = recordingStart;
+      }
 
       // Fetch logs from standard logs table
       List<LogEntity> standardLogs =
@@ -331,6 +335,22 @@ public class TickReplayController {
                 .reduce((a, b) -> b)
                 .map(TickLog::getTick)
                 .orElse(null);
+      }
+
+      // Second fallback: derive from standard logs that have tick data
+      if (currentTick == null) {
+        currentTick =
+            standardLogs.stream()
+                .filter(l -> l.getTick() != null)
+                .filter(l -> !l.getTimestamp().isAfter(videoTimestamp))
+                .reduce((a, b) -> b)
+                .map(l -> l.getTick().longValue())
+                .orElse(null);
+      }
+
+      // Ultimate fallback: pure time-based (assumes tick 0 at video start, 600ms per tick)
+      if (currentTick == null) {
+        currentTick = videoTimeMs / 600;
       }
 
       // Merge logs into unified format

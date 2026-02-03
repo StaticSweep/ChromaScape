@@ -34,9 +34,25 @@ public class LogRecordingService {
   @Async
   @Transactional
   public void recordLog(String level, String message, String source) {
+    recordLog(level, message, source, LocalDateTime.now(), null, null, null);
+  }
+
+  /** Record a log entry asynchronously with optional tick/logType/structuredData. */
+  @Async
+  @Transactional
+  public void recordLog(
+      String level,
+      String message,
+      String source,
+      LocalDateTime timestamp,
+      String logType,
+      Integer tick,
+      String structuredData) {
     try {
+      LocalDateTime resolvedTimestamp = timestamp != null ? timestamp : LocalDateTime.now();
       LogEntity logEntity =
-          new LogEntity(LocalDateTime.now(), level, message, source, activeScript);
+          new LogEntity(
+              resolvedTimestamp, level, message, source, activeScript, logType, tick, structuredData);
       logRepository.save(logEntity);
       logger.debug("Recorded log to database: {}", message);
     } catch (Exception e) {

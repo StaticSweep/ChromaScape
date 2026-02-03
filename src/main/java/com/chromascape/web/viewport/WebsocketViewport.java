@@ -99,7 +99,12 @@ public class WebsocketViewport implements Viewport {
       while ((image = frameQueue.poll()) != null) {
         long seq = frameCounter.incrementAndGet();
         try {
+          long encodeStart = System.currentTimeMillis();
           String base64Image = encodeImageToBase64(image);
+          long encodeMs = System.currentTimeMillis() - encodeStart;
+          if (encodeMs > 30) {
+            logger.warn("Slow JPEG encode: {}ms", encodeMs);
+          }
           String jsonPayload =
               String.format(
                   "{\"seq\":%d,\"data\":\"data:image/jpeg;base64,%s\"}", seq, base64Image);
