@@ -191,7 +191,7 @@ function switchMode(mode) {
         const kindSource = entry.originalSource || entry.source;
         const logKind = entry.kind === 'tick'
           ? 'tick'
-          : (kindSource === 'external' || kindSource === 'micro6' ? 'external' : 'standard');
+          : (isSystemSource(kindSource) ? 'standard' : 'external');
         discoverSource(entry.source, logKind);
       }
     });
@@ -314,16 +314,23 @@ function clearLogPlaceholder(outputContainer) {
 }
 
 function isSystemSource(source) {
-  // Match framework/system sources: org.*, com.*, System, jdk.*, web.*, utils.*
-  // Exclude client sources: external, micro6, LeeuwbotClient
-  const systemPrefixes = ['org.', 'com.', 'System', 'jdk.', 'web.', 'utils.'];
-  const clientSources = ['external', 'micro6', 'LeeuwbotClient'];
+  if (!source) return false;
 
-  // If it's a known client source, it's not a system log
-  if (clientSources.includes(source)) return false;
+  // ChromaScape subsystems from WebSocketLogAppender.extractSource()
+  if (/^(utils|web|scripts)(\.|$)/.test(source)) return true;
+  if (source === 'System' || source === 'unknown') return true;
 
-  // Check if source starts with any system prefix
-  return systemPrefixes.some(prefix => source.startsWith(prefix));
+  // Backend/framework logs should not appear when Client Logs are enabled
+  if (
+    source.startsWith('org.') ||
+    source.startsWith('com.') ||
+    source.startsWith('jdk.') ||
+    source.startsWith('java.')
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function matchesCurrentFilters(entry, searchText) {
@@ -337,13 +344,11 @@ function matchesCurrentFilters(entry, searchText) {
   }
 
   // Client Logs toggle: Exclusive behavior
-  // ON (checked): Show ONLY client logs (external/micro6/LeeuwbotClient), hide everything else
+  // ON (checked): Show ONLY client logs (non-system), hide everything else
   // OFF (unchecked): Show only system/standard logs, hide client logs
   if (entry.kind !== 'tick') {
     const sourceForTypeCheck = entry.originalSource || entry.source;
-    const isClientSource = sourceForTypeCheck === 'external' ||
-                           sourceForTypeCheck === 'micro6' ||
-                           sourceForTypeCheck === 'LeeuwbotClient';
+    const isClientSource = !isSystemSource(sourceForTypeCheck);
 
     if (showExternalLogs) {
       // Client Logs ON: Show ONLY client sources, hide everything else
@@ -1234,14 +1239,14 @@ function discoverSource(source, logKind = 'standard') {
 /**
  * Check if a source should be visible based on current log type filters.
  * Exclusive behavior:
- * - When Client Logs is ON: shows ONLY client sources (external, micro6, LeeuwbotClient).
- * - When Client Logs is OFF: shows all sources EXCEPT client sources.
+ * - When Client Logs is ON: shows ONLY client sources (non-system).
+ * - When Client Logs is OFF: shows all system sources, hides client sources.
  */
 function isSourceVisibleByFilters(source) {
   const logTypes = sourceLogTypes.get(source);
   if (!logTypes || logTypes.size === 0) return false; // No type info = hide
 
-  const isClientSrc = source === 'external' || source === 'micro6' || source === 'LeeuwbotClient';
+  const isClientSrc = !isSystemSource(source);
   const hasTickLogs = logTypes.has('tick');
 
   if (showExternalLogs) {
@@ -1912,18 +1917,18 @@ function addLiveLogEntry(entry) {
     console.log('[Tick Debug] addLiveLogEntry - tick:', entry.tick, 'source:', entry.source, 'kind:', entry.kind);
   }
 
-  // Extract actual source from external log messages (lightweight, keep synchronous)
+  // Extract actual source from client log messages (lightweight, keep synchronous)
   let actualSource = entry.source;
-  if (entry.source === 'external' || entry.source === 'micro6') {
+  const sourceIsSystem = isSystemSource(entry.source);
+  if (!sourceIsSystem && entry.kind !== 'tick') {
     entry.originalSource = entry.source;
     actualSource = extractSourceFromMessage(entry.message, entry.source);
   }
 
   if (actualSource) {
     // Use originalSource (pre-extraction) for logKind classification
-    // This ensures TeleportOptimizer, LeeuwbotClient, etc. remain classified as 'external'
     const kindSource = entry.originalSource || entry.source;
-    const logKind = entry.kind === 'tick' ? 'tick' : (kindSource === 'external' || kindSource === 'micro6' ? 'external' : 'standard');
+    const logKind = entry.kind === 'tick' ? 'tick' : (isSystemSource(kindSource) ? 'standard' : 'external');
     discoverSource(actualSource, logKind);
     entry.source = actualSource;  // Display name (e.g., "TeleportOptimizer")
   }
@@ -1932,7 +1937,7 @@ function addLiveLogEntry(entry) {
 
   if (window.DEBUG_FILTER) {
     const msg = typeof entry.message === 'string' ? entry.message.slice(0, 50) : String(entry.message || '').slice(0, 50);
-    const isExternalSource = entry.source === 'external' || entry.source === 'micro6';
+    const isExternalSource = !isSystemSource(entry.originalSource || entry.source);
     const passesFilter = matchesCurrentFilters(entry, getLogSearchText());
 
     console.log('[Filter Debug]',
@@ -3067,7 +3072,8 @@ function renderReplayLogs(logs, currentReplayTick = null) {
 
   replayLogHistory.forEach(entry => {
     let actualSource = entry.source;
-    if (entry.source === 'external' || entry.source === 'micro6') {
+    const sourceIsSystem = isSystemSource(entry.source);
+    if (!sourceIsSystem && entry.kind !== 'tick') {
       entry.originalSource = entry.source;
       actualSource = extractSourceFromMessage(entry.message, entry.source);
       entry.source = actualSource;
@@ -3077,7 +3083,7 @@ function renderReplayLogs(logs, currentReplayTick = null) {
       const kindSource = entry.originalSource || entry.source;
       const logKind = entry.kind === 'tick'
         ? 'tick'
-        : (kindSource === 'external' || kindSource === 'micro6' ? 'external' : 'standard');
+        : (isSystemSource(kindSource) ? 'standard' : 'external');
       discoverSource(actualSource, logKind);
     }
     discoverPatterns(entry.message);
@@ -3473,6 +3479,28 @@ function renderTickBotState(snapshot) {
  * Render logs from tick batch.
  */
 function renderTickLogs(logs) {
+  if (currentMode === 'replay') {
+    replayLogHistory.length = 0;
+    discoveredSources.clear();
+    sourceLogTypes.clear();
+    const sourceFiltersEl = document.getElementById('sourceFilters');
+    if (sourceFiltersEl) sourceFiltersEl.innerHTML = '';
+
+    logs.forEach(log => {
+      const entry = normalizeTickLog(log);
+      replayLogHistory.push(entry);
+      if (entry.source) {
+        discoverSource(entry.source, 'tick');
+      }
+      discoverPatterns(entry.message);
+    });
+
+    clampLogHistory(replayLogHistory);
+    updateSourceFilterSummary();
+    renderLogHistory();
+    return;
+  }
+
   logs.forEach(log => {
     addLiveLogEntry(normalizeTickLog(log));
   });
@@ -3946,17 +3974,64 @@ async function startRecording() {
 
 /**
  * Stop the active recording session.
+ *
+ * <p>Routes to the appropriate endpoint based on whether a debug session exists:
+ * - If debug session exists: uses /api/debug/replay/stop-recording with sessionId
+ * - If no debug session (auto-recording): uses /api/recordings/stop
  */
 async function stopRecording() {
   try {
-    const response = await fetch('/api/debug/replay/stop-recording', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    let endpoint, body, headers = {};
+
+    // If we have a debug session, use the debug stop endpoint
+    if (currentSessionId) {
+      endpoint = '/api/debug/replay/stop-recording';
+      body = JSON.stringify({
         sessionId: currentSessionId,
         endTick: null
-      })
+      });
+      headers['Content-Type'] = 'application/json';
+    } else {
+      // Auto-recording scenario: use the recording-only stop endpoint
+      endpoint = '/api/recordings/stop';
+      body = undefined; // No body needed for recording-only stop
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: headers,
+      body: body
     });
+
+    // Handle "no recording in progress" gracefully
+    if (response.status === 400) {
+      const errorData = await response.json().catch(() => ({}));
+      if (errorData.message?.includes('No recording in progress') ||
+          errorData.error?.includes('No recording in progress')) {
+        console.warn('Recording already stopped, resetting UI state');
+        isRecording = false;
+        currentRecordingId = null;
+        currentSessionId = null;
+        recordingStartTime = null;
+
+        // Reset UI
+        elements.recordBtn.classList.remove('btn-success');
+        elements.recordBtn.classList.add('btn-danger');
+        elements.recordBtnText.textContent = 'Start Recording';
+
+        if (elements.recordingStatus) {
+          elements.recordingStatus.classList.add('d-none');
+        }
+
+        if (recordingDurationInterval) {
+          clearInterval(recordingDurationInterval);
+          recordingDurationInterval = null;
+        }
+
+        showNotification('Recording was already stopped', 'warning');
+        return;
+      }
+    }
 
     if (!response.ok) {
       throw new Error('Failed to stop recording');
@@ -3978,21 +4053,27 @@ async function stopRecording() {
     // Stop duration timer
     stopRecordingDurationTimer();
 
-    console.log('Recording stopped:', currentRecordingId);
-    showNotification('Recording saved', 'success');
+    currentRecordingId = null;
+    currentSessionId = null;
+    recordingStartTime = null;
+
+    console.log('Recording stopped');
+    showNotification('Recording stopped', 'success');
 
     // Refresh sessions list if in replay mode
     if (currentMode === 'replay') {
       loadRecordingSessions();
     }
 
-    currentRecordingId = null;
-    currentSessionId = null;
-    recordingStartTime = null;
-
   } catch (error) {
-    console.error('❌ Failed to stop recording:', error);
-    alert('Failed to stop recording: ' + error.message);
+    // Separate backend connectivity errors from logic errors
+    if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+      console.error('❌ Backend unreachable:', error);
+      showNotification('Backend unreachable - check if ChromaScape is running', 'error');
+    } else {
+      console.error('❌ Failed to stop recording:', error);
+      showNotification('Failed to stop recording: ' + error.message, 'error');
+    }
   }
 }
 
@@ -4064,6 +4145,20 @@ async function checkRecordingStatus() {
       isRecording = true;
       currentRecordingId = data.recordingId;
       recordingStartTime = data.startTime ? new Date(data.startTime).getTime() : Date.now();
+
+      // Try to find associated debug session
+      if (!currentSessionId) {
+        try {
+          const sessionResponse = await fetch(`/api/debug/replay/sessions/active?recordingId=${currentRecordingId}`);
+          if (sessionResponse.ok) {
+            const sessionData = await sessionResponse.json();
+            currentSessionId = sessionData.sessionId;
+            console.log('📹 Found associated debug session:', currentSessionId);
+          }
+        } catch (e) {
+          console.log('📹 No active debug session found for this recording (auto-recording)');
+        }
+      }
 
       // Update UI to recording state
       elements.recordBtn.classList.remove('btn-danger');

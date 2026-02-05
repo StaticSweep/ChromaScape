@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.tickdebugger.controller;
 
+import com.chromascape.web.debug.tickdebugger.dto.DebugSessionSummary;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.dto.TickCardData;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
@@ -521,6 +522,36 @@ public class TickReplayController {
 
     } catch (Exception e) {
       log.error("Failed to stop recording: {}", e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  /**
+   * Get active debug session by recording ID.
+   *
+   * <p>This endpoint allows the frontend to look up a debug session that's associated with an
+   * active recording. Used to restore session ID after page refresh when auto-recording is active.
+   *
+   * @param recordingId the recording ID to look up
+   * @return the active debug session if found
+   */
+  @GetMapping("/sessions/active")
+  public ResponseEntity<DebugSessionSummary> getActiveSessionByRecordingId(
+      @RequestParam String recordingId) {
+
+    try {
+      List<DebugSession> activeSessions = debugSessionService.getActiveSessions();
+
+      for (DebugSession session : activeSessions) {
+        if (recordingId.equals(session.getRecordingId())) {
+          return ResponseEntity.ok(debugSessionService.toSummary(session));
+        }
+      }
+
+      return ResponseEntity.notFound().build();
+
+    } catch (Exception e) {
+      log.error("Failed to get active session by recording ID: {}", e.getMessage(), e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
     }
   }
