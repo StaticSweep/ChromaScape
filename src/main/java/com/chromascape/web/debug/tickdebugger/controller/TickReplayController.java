@@ -527,6 +527,48 @@ public class TickReplayController {
   }
 
   /**
+   * Start a debug session without recording.
+   *
+   * <p>This endpoint creates a debug session for live tick data viewing without video recording.
+   * Used for debugging without the overhead of video capture.
+   *
+   * @param request the session start request
+   * @return session start response with sessionId and startTick
+   */
+  @PostMapping("/start-session")
+  public ResponseEntity<SessionStartResponse> startSession(
+      @RequestBody RecordingStartRequest request) {
+
+    try {
+      String accountName = request.getAccountName();
+      String scriptName = request.getScriptName();
+
+      if (accountName == null || accountName.isEmpty()) {
+        accountName = "Unknown";
+      }
+      if (scriptName == null || scriptName.isEmpty()) {
+        scriptName = "Live Debug Session";
+      }
+
+      // Create debug session without recording (recordingEnabled = false)
+      SessionStartResponse response =
+          debugSessionService.startSession(accountName, scriptName, false);
+
+      log.info(
+          "Started debug session without recording: sessionId={}, account={}, script={}",
+          response.getSessionId(),
+          accountName,
+          scriptName);
+
+      return ResponseEntity.ok(response);
+
+    } catch (Exception e) {
+      log.error("Failed to start debug session: {}", e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  /**
    * Get active debug session by recording ID.
    *
    * <p>This endpoint allows the frontend to look up a debug session that's associated with an
@@ -552,6 +594,35 @@ public class TickReplayController {
 
     } catch (Exception e) {
       log.error("Failed to get active session by recording ID: {}", e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  /**
+   * Get debug session by recording ID (for replay snapshot loading).
+   *
+   * <p>This endpoint looks up any debug session (active or completed) associated with a recording
+   * ID. Used during replay to fetch tick snapshots for completed recordings.
+   *
+   * @param recordingId the recording ID to look up
+   * @return the debug session summary if found, 404 if not found
+   */
+  @GetMapping("/sessions/by-recording")
+  public ResponseEntity<DebugSessionSummary> getSessionByRecordingId(
+      @RequestParam String recordingId) {
+
+    try {
+      Optional<DebugSession> sessionOpt = sessionRepository.findByRecordingId(recordingId);
+
+      if (sessionOpt.isEmpty()) {
+        return ResponseEntity.notFound().build();
+      }
+
+      DebugSession session = sessionOpt.get();
+      return ResponseEntity.ok(debugSessionService.toSummary(session));
+
+    } catch (Exception e) {
+      log.error("Failed to get session by recording ID: {}", e.getMessage(), e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
     }
   }

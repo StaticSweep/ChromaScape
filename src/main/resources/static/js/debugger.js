@@ -37,6 +37,10 @@ let currentSessionId = null;
 let recordingStartTime = null;
 let recordingDurationInterval = null;
 
+// Debug session state (without recording)
+let currentDebugSessionId = null;
+let isDebugSessionActive = false;
+
 const elements = {};
 const MAX_LOG_ENTRIES = 3000;
 const liveLogHistory = [];
@@ -68,6 +72,14 @@ const collapsedTicks = new Set();
 // Tick snapshot storage for structured sections
 const liveTickSnapshots = new Map();  // tick -> snapshot data
 const replayTickSnapshots = new Map(); // tick -> snapshot data
+
+// Replay snapshot state
+let currentReplayDebugSessionId = null;
+const replaySnapshotOrder = [];  // LRU tracking for snapshot cache
+const replaySnapshotFetchInFlight = new Set();
+const MAX_REPLAY_SNAPSHOTS = 600;
+let autoFollowReplay = false; // Default: Auto-follow OFF
+const AUTO_FOLLOW_KEY = 'debugger_auto_follow_replay';
 
 // Global section toggles
 const globalSectionToggles = {
@@ -132,6 +144,11 @@ function cacheElements() {
   elements.taskRecordingPanel = document.getElementById('taskRecordingPanel');
   elements.taskToggles = document.getElementById('taskToggles');
   elements.resetTasksBtn = document.getElementById('resetTasksBtn');
+  elements.autoFollowTicks = document.getElementById('autoFollowTicks');
+  // Debug session elements
+  elements.startDebugSessionBtn = document.getElementById('startDebugSessionBtn');
+  elements.debugSessionStatus = document.getElementById('debugSessionStatus');
+  elements.resetFiltersBtn = document.getElementById('resetFiltersBtn');
 }
 
 function switchMode(mode) {
@@ -153,6 +170,9 @@ function switchMode(mode) {
     clearOverlayCanvas();
     loadRecordingSessions();
     setScrubberEnabled(true);
+    currentReplayDebugSessionId = null;
+    replaySnapshotOrder.length = 0;
+    replaySnapshotFetchInFlight.clear();
     // Clear replay snapshots when entering replay mode
     replayTickSnapshots.clear();
     // Clear replay log history to prevent old replay logs from leaking
@@ -177,6 +197,9 @@ function switchMode(mode) {
     elements.viewportCanvas.style.display = 'block';
     elements.viewportLoader.style.display = 'flex';
     currentRecordingFps = 30; // Reset to default when leaving replay
+    currentReplayDebugSessionId = null;
+    replaySnapshotOrder.length = 0;
+    replaySnapshotFetchInFlight.clear();
     clearOverlayCanvas();
     setScrubberEnabled(false);
     // Re-discover sources from live history to restore filter chips
@@ -320,6 +343,16 @@ function isSystemSource(source) {
   if (/^(utils|web|scripts)(\.|$)/.test(source)) return true;
   if (source === 'System' || source === 'unknown') return true;
 
+  // Backend/ChromaScape server logs (should always be visible)
+  if (
+    source === 'chromascape' ||
+    source === 'server' ||
+    source === 'backend' ||
+    source === 'core'
+  ) {
+    return true;
+  }
+
   // Backend/framework logs should not appear when Client Logs are enabled
   if (
     source.startsWith('org.') ||
@@ -365,11 +398,21 @@ function matchesCurrentFilters(entry, searchText) {
     const showInventoryLogs = localStorage.getItem('filter_showInventory') !== 'false';
     const showVarbitLogs = localStorage.getItem('filter_showVarbit') !== 'false';
     const showAnimationLogs = localStorage.getItem('filter_showAnimation') !== 'false';
+    const showWalkhereLogs = localStorage.getItem('filter_showWalkhere') !== 'false';
+    const showMenuLogs = localStorage.getItem('filter_showMenu') !== 'false';
+    const showClickLogs = localStorage.getItem('filter_showClick') !== 'false';
+    const showNpcFirstOptionLogs = localStorage.getItem('filter_showNpcFirstOption') !== 'false';
+    const showCancelLogs = localStorage.getItem('filter_showCancel') !== 'false';
 
     if (entry.logType === 'DIALOGUE' && !showDialogueLogs) return false;
     if (entry.logType === 'INVENTORY' && !showInventoryLogs) return false;
     if (entry.logType === 'VARBIT' && !showVarbitLogs) return false;
     if (entry.logType === 'ANIMATION' && !showAnimationLogs) return false;
+    if (entry.logType === 'WALKHERE' && !showWalkhereLogs) return false;
+    if (entry.logType === 'MENU' && !showMenuLogs) return false;
+    if (entry.logType === 'CLICK' && !showClickLogs) return false;
+    if (entry.logType === 'NPC_FIRST_OPTION' && !showNpcFirstOptionLogs) return false;
+    if (entry.logType === 'CANCEL' && !showCancelLogs) return false;
   }
 
   // Filter by message content (exclude patterns)
@@ -440,6 +483,32 @@ function buildLogLine(entry) {
   return line;
 }
 
+async function copyTickGroupToClipboard(group, tickLabel) {
+  const content = group.querySelector('.tick-group-content');
+  const body = content ? content.innerText.trim() : '';
+  const text = body ? `${tickLabel}\n${body}` : tickLabel;
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'absolute';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    showNotification('Copied tick', 'success');
+  } catch (e) {
+    console.warn('Failed to copy tick', e);
+    showNotification('Copy failed', 'error');
+  }
+}
+
 function buildTickGroup(tick, entries) {
   const group = document.createElement('div');
   group.className = 'tick-group';
@@ -476,6 +545,16 @@ function buildTickGroup(tick, entries) {
   headerCount.className = 'tick-group-count';
   headerCount.textContent = entries.length;
 
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.className = 'tick-copy-btn';
+  copyBtn.title = `Copy ${tickLabel}`;
+  copyBtn.innerHTML = '<i class="bi bi-clipboard"></i>';
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    copyTickGroupToClipboard(group, tickLabel);
+  });
+
   // Per-tick section chips
   const headerChips = document.createElement('div');
   headerChips.className = 'tick-header-chips';
@@ -505,11 +584,14 @@ function buildTickGroup(tick, entries) {
 
   header.appendChild(headerLeft);
   header.appendChild(headerCount);
+  header.appendChild(copyBtn);
   header.appendChild(headerChips);
 
   header.addEventListener('click', (e) => {
     // Ignore if clicking on chips
     if (e.target.closest('.tick-header-chips')) return;
+    if (e.target.closest('.tick-copy-btn')) return;
+    if (window.getSelection && window.getSelection().toString()) return;
 
     group.classList.toggle('collapsed');
     const chevron = header.querySelector('.tick-group-chevron');
@@ -554,7 +636,8 @@ function buildTickGroup(tick, entries) {
     content.appendChild(buildDialogueSection(tick, entries, snapshot));
   }
 
-  if (isSectionVisible(tick, 'inventory') && snapshot?.inventory?.length > 0) {
+  // Always render inventory section if snapshot exists (show empty state if no inventory data)
+  if (isSectionVisible(tick, 'inventory') && snapshot) {
     content.appendChild(buildInventorySection(tick, snapshot));
   }
 
@@ -570,7 +653,8 @@ function buildTickGroup(tick, entries) {
     content.appendChild(buildPlayerSection(tick, snapshot));
   }
 
-  if (isSectionVisible(tick, 'varbits') && hasVarbitData(entries)) {
+  // Always render varbits section if visible (show empty state if no varbit data)
+  if (isSectionVisible(tick, 'varbits')) {
     content.appendChild(buildVarbitsSection(tick, entries));
   }
 
@@ -803,8 +887,10 @@ function buildInventorySection(tick, snapshot) {
   const content = document.createElement('div');
   content.className = 'tick-section-content';
 
-  const inventory = snapshot.inventory || [];
-  if (inventory.length > 0) {
+  const inventory = snapshot.inventory;
+  if (inventory === null || inventory === undefined) {
+    content.innerHTML = '<span class="section-empty">Inventory data not present</span>';
+  } else if (inventory.length > 0) {
     const grid = document.createElement('div');
     grid.className = 'inventory-grid';
 
@@ -1119,6 +1205,47 @@ function addLiveLogEntryToTickGroup(entry) {
   }
 }
 
+function ensureTickGroupForSnapshot(tick) {
+  const outputContainer = elements.logsContainer;
+  if (!outputContainer) return;
+
+  const tickSelector = tick === null ? '[data-tick="null"]' : `[data-tick="${tick}"]`;
+  let tickGroup = outputContainer.querySelector(`.tick-group${tickSelector}`);
+  if (tickGroup) return;
+
+  tickGroup = buildTickGroup(tick, []);
+  clearLogPlaceholder(outputContainer);
+
+  const allGroups = Array.from(outputContainer.querySelectorAll('.tick-group'));
+  let insertBefore = null;
+
+  for (const group of allGroups) {
+    const groupTick = group.dataset.tick;
+    const groupTickNum = groupTick === 'null' ? null : parseInt(groupTick, 10);
+
+    if (tick === null) {
+      insertBefore = group;
+      break;
+    } else if (groupTickNum === null) {
+      insertBefore = group;
+      break;
+    } else if (parseInt(tick, 10) < groupTickNum) {
+      insertBefore = group;
+      break;
+    }
+  }
+
+  if (insertBefore) {
+    outputContainer.insertBefore(tickGroup, insertBefore);
+  } else {
+    outputContainer.appendChild(tickGroup);
+  }
+
+  if (currentMode === 'live') {
+    pruneTickGroups();
+  }
+}
+
 function pruneLogEntries() {
   const outputContainer = elements.logsContainer;
   if (!outputContainer) return;
@@ -1335,6 +1462,78 @@ function updateSourceFilterSummary() {
   } else {
     summary.innerHTML = `Sources (${totalSources}) <span class="filter-badge">${hiddenCount} hidden</span>`;
   }
+}
+
+/**
+ * Reset all log filters to default state.
+ */
+function resetAllFilters() {
+  // Clear exclude patterns
+  const excludeInput = document.getElementById('logExcludePatterns');
+  if (excludeInput) {
+    excludeInput.value = '';
+  }
+
+  // Unhide all sources
+  hiddenSources.clear();
+  saveHiddenSources();
+  updateAllSourceChips();
+
+  // Unhide all patterns
+  hiddenPatterns.clear();
+  updateAllPatternChips();
+
+  // Enable all log type toggles
+  showTickLogs = true;
+  showExternalLogs = true;
+  showVerboseLogs = true;
+
+  const tickLogsCheckbox = document.getElementById('showTickLogs');
+  const externalLogsCheckbox = document.getElementById('showExternalLogs');
+  const verboseLogsCheckbox = document.getElementById('showVerboseLogs');
+
+  if (tickLogsCheckbox) tickLogsCheckbox.checked = true;
+  if (externalLogsCheckbox) externalLogsCheckbox.checked = true;
+  if (verboseLogsCheckbox) verboseLogsCheckbox.checked = true;
+
+  // Enable all ActionLogger subtypes
+  localStorage.setItem('filter_showDialogue', 'true');
+  localStorage.setItem('filter_showInventory', 'true');
+  localStorage.setItem('filter_showVarbit', 'true');
+  localStorage.setItem('filter_showAnimation', 'true');
+  localStorage.setItem('filter_showWalkhere', 'true');
+  localStorage.setItem('filter_showMenu', 'true');
+  localStorage.setItem('filter_showClick', 'true');
+  localStorage.setItem('filter_showNpcFirstOption', 'true');
+  localStorage.setItem('filter_showCancel', 'true');
+
+  const dialogueCheckbox = document.getElementById('showDialogueLogs');
+  const inventoryCheckbox = document.getElementById('showInventoryLogs');
+  const varbitCheckbox = document.getElementById('showVarbitLogs');
+  const animationCheckbox = document.getElementById('showAnimationLogs');
+  const walkhereCheckbox = document.getElementById('showWalkhereLogs');
+  const menuCheckbox = document.getElementById('showMenuLogs');
+  const clickCheckbox = document.getElementById('showClickLogs');
+  const npcFirstOptionCheckbox = document.getElementById('showNpcFirstOptionLogs');
+  const cancelCheckbox = document.getElementById('showCancelLogs');
+
+  if (dialogueCheckbox) dialogueCheckbox.checked = true;
+  if (inventoryCheckbox) inventoryCheckbox.checked = true;
+  if (varbitCheckbox) varbitCheckbox.checked = true;
+  if (animationCheckbox) animationCheckbox.checked = true;
+  if (walkhereCheckbox) walkhereCheckbox.checked = true;
+  if (menuCheckbox) menuCheckbox.checked = true;
+  if (clickCheckbox) clickCheckbox.checked = true;
+  if (npcFirstOptionCheckbox) npcFirstOptionCheckbox.checked = true;
+  if (cancelCheckbox) cancelCheckbox.checked = true;
+
+  // Save log type preferences
+  saveLogTypePrefs();
+
+  // Re-render logs
+  renderLogHistory();
+
+  showNotification('All filters reset', 'success');
 }
 
 /**
@@ -1681,6 +1880,23 @@ function initLogTypeToggles() {
 }
 
 /**
+ * Initialize replay auto-follow toggle.
+ */
+function initAutoFollowToggle() {
+  if (!elements.autoFollowTicks) return;
+
+  // Default to OFF if no saved preference
+  const saved = localStorage.getItem(AUTO_FOLLOW_KEY);
+  autoFollowReplay = saved === 'true'; // Only true if explicitly set to 'true'
+  elements.autoFollowTicks.checked = autoFollowReplay;
+
+  elements.autoFollowTicks.addEventListener('change', (e) => {
+    autoFollowReplay = e.target.checked;
+    localStorage.setItem(AUTO_FOLLOW_KEY, String(autoFollowReplay));
+  });
+}
+
+/**
  * Save log type preferences to localStorage.
  */
 function saveLogTypePrefs() {
@@ -1792,7 +2008,10 @@ function loadPerTickToggles() {
  * Initialize ActionLogger log type filters (Dialogue, Inventory, Varbit, Animation).
  */
 function initActionLogFilters() {
-  const filters = ['Dialogue', 'Inventory', 'Varbit', 'Animation'];
+  const filters = [
+    'Dialogue', 'Inventory', 'Varbit', 'Animation',
+    'Walkhere', 'Menu', 'Click', 'NpcFirstOption', 'Cancel'
+  ];
   filters.forEach(type => {
     const checkbox = document.getElementById(`show${type}Logs`);
     const storageKey = `filter_show${type}`;
@@ -1818,7 +2037,8 @@ function initActionLogFilters() {
 
   // Show action log filters section when we have action logs
   const checkForActionLogs = setInterval(() => {
-    const hasActionLogs = liveLogHistory.some(log => log.logType);
+    const activeHistory = currentMode === 'replay' ? replayLogHistory : liveLogHistory;
+    const hasActionLogs = activeHistory.some(log => log.logType);
     const filtersSection = document.getElementById('actionLogFilters');
     if (filtersSection && hasActionLogs) {
       filtersSection.style.display = 'block';
@@ -2738,6 +2958,9 @@ function initReplayModeListeners() {
         currentRecording = null;
         replayLogHistory.length = 0;
         replayTickSnapshots.clear();
+        replaySnapshotOrder.length = 0;
+        replaySnapshotFetchInFlight.clear();
+        currentReplayDebugSessionId = null;
         if (typeof perTickSectionToggles !== 'undefined') {
           perTickSectionToggles.clear();
         }
@@ -2863,6 +3086,9 @@ async function loadRecording(recordingId) {
   currentRecording = null; // Clear first to stop ongoing syncs
   replayLogHistory.length = 0;
   replayTickSnapshots.clear(); // Clear tick snapshot map
+  replaySnapshotOrder.length = 0;
+  replaySnapshotFetchInFlight.clear();
+  currentReplayDebugSessionId = null;
   if (typeof perTickSectionToggles !== 'undefined') {
     perTickSectionToggles.clear(); // Clear tick UI state
   }
@@ -2929,6 +3155,31 @@ async function loadRecording(recordingId) {
       };
     }
 
+    // Fetch debug session for snapshot loading
+    try {
+      const sessionResponse = await fetch(`/api/debug/replay/sessions/by-recording?recordingId=${recordingId}`);
+      if (sessionResponse.ok) {
+        const session = await sessionResponse.json();
+        currentReplayDebugSessionId = session.sessionId;
+        console.log('Loaded debug session for replay:', currentReplayDebugSessionId);
+      } else {
+        console.warn('No debug session found for recording (old recording or session deleted)');
+        currentReplayDebugSessionId = null;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch debug session:', e);
+      currentReplayDebugSessionId = null;
+    }
+
+    // Clear source/pattern state for new recording
+    discoveredSources.clear();
+    sourceLogTypes.clear();
+    const sourceFilters = document.getElementById('sourceFilters');
+    if (sourceFilters) {
+      sourceFilters.innerHTML = '';
+    }
+    updateSourceFilterSummary();
+
     // Load logs for this recording (using unified endpoint for tick grouping)
     const logResponse = await fetch(`/api/debug/replay/unified?recordingId=${recordingId}&videoTimeMs=0&windowSeconds=5`);
     if (logResponse.ok) {
@@ -2938,6 +3189,9 @@ async function loadRecording(recordingId) {
       if (result.currentTick != null) {
         updateTickDisplay(result.currentTick);
       }
+      if (result.currentTick != null) {
+        maybeFetchReplaySnapshot(result.currentTick);
+      }
     } else {
       console.warn('Failed to load logs for recording, status:', logResponse.status);
       // Don't block video playback for log loading failure
@@ -2946,6 +3200,55 @@ async function loadRecording(recordingId) {
   } catch (error) {
     console.error('Failed to load recording:', error);
     alert('An error occurred while loading the recording:\n' + error.message);
+  }
+}
+
+/**
+ * Fetch and cache a replay snapshot for the given tick.
+ * Uses LRU eviction to limit memory usage.
+ */
+async function maybeFetchReplaySnapshot(tick) {
+  if (!currentReplayDebugSessionId || tick === null || tick === undefined) return;
+  if (replayTickSnapshots.has(tick)) return; // Already cached
+  if (replaySnapshotFetchInFlight.has(tick)) return; // Avoid overlapping requests
+
+  replaySnapshotFetchInFlight.add(tick);
+  try {
+    const response = await fetch(`/api/debug/replay/tick/${currentReplayDebugSessionId}/${tick}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.snapshot) {
+        const raw = data.snapshot;
+        const normalized = {
+          playerState: raw.playerState,
+          inventory: raw.inventory ?? null,
+          equipment: raw.equipment ?? null,
+          threats: raw.threats ?? null,
+          projectiles: raw.projectiles ?? null,
+          cooldowns: raw.cooldowns ?? null,
+          quest: raw.quest ?? null
+        };
+        replayTickSnapshots.set(tick, normalized);
+
+        // LRU eviction
+        replaySnapshotOrder.push(tick);
+        if (replaySnapshotOrder.length > MAX_REPLAY_SNAPSHOTS) {
+          const evictTick = replaySnapshotOrder.shift();
+          replayTickSnapshots.delete(evictTick);
+        }
+
+        // Update bot state + rerender tick group
+        if (normalized.playerState) {
+          renderTickBotState(normalized);
+        }
+        ensureTickGroupForSnapshot(tick);
+        rerenderTickGroup(tick);
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to fetch replay snapshot:', error);
+  } finally {
+    replaySnapshotFetchInFlight.delete(tick);
   }
 }
 
@@ -2978,11 +3281,33 @@ async function syncLogsToVideo(videoMs) {
       });
     }
 
-    renderReplayLogs(result.logs, result.currentTick);
-
     // Update tick display from backend response
-    if (result.currentTick != null) {
-      updateTickDisplay(result.currentTick);
+    let currentTick = result.currentTick;
+
+    // Fallback: calculate tick from video time if backend didn't provide it
+    if (currentTick == null && currentReplayDebugSessionId) {
+      // Fetch session start tick
+      try {
+        const sessionResp = await fetch(`/api/debug/replay/session-info/${currentReplayDebugSessionId}`);
+        if (sessionResp.ok) {
+          const sessionInfo = await sessionResp.json();
+          const startTick = sessionInfo.startTick || 0;
+          currentTick = startTick + Math.floor(videoMs / 600);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch session info for tick calculation:', e);
+      }
+    }
+
+    if (currentTick != null) {
+      updateTickDisplay(currentTick);
+    }
+
+    renderReplayLogs(result.logs, currentTick);
+
+    if (currentTick != null) {
+      // Fetch snapshot for this tick (async, doesn't block rendering)
+      maybeFetchReplaySnapshot(currentTick);
     }
 
   } catch (error) {
@@ -3002,6 +3327,9 @@ function renderReplayLogs(logs, currentReplayTick = null) {
     }
     // Still highlight tick group if we have a tick but no logs
     highlightCurrentTickGroup(currentReplayTick);
+    if (currentReplayTick != null) {
+      maybeFetchReplaySnapshot(currentReplayTick);
+    }
     return;
   }
 
@@ -3064,12 +3392,8 @@ function renderReplayLogs(logs, currentReplayTick = null) {
       replayLogHistory.push(normalizeStandardLog(stdLog));
     }
   });
-  // Reset discovery for current replay window — prevents count inflation on scrub
-  discoveredSources.clear();
-  sourceLogTypes.clear();
-  const sourceFiltersEl = document.getElementById('sourceFilters');
-  if (sourceFiltersEl) sourceFiltersEl.innerHTML = '';
 
+  // Discover sources incrementally (don't clear existing discoveries to preserve filters)
   replayLogHistory.forEach(entry => {
     let actualSource = entry.source;
     const sourceIsSystem = isSystemSource(entry.source);
@@ -3091,7 +3415,13 @@ function renderReplayLogs(logs, currentReplayTick = null) {
   clampLogHistory(replayLogHistory);
   updateSourceFilterSummary();
   if (currentMode === 'replay') {
+    const container = elements.logsContainer;
+    const preserveScroll = container && !autoFollowReplay;
+    const previousScrollTop = preserveScroll ? container.scrollTop : 0;
     renderLogHistory();
+    if (preserveScroll) {
+      container.scrollTop = previousScrollTop;
+    }
     // Highlight current tick group after rendering
     highlightCurrentTickGroup(currentReplayTick);
   }
@@ -3109,7 +3439,9 @@ function highlightCurrentTickGroup(currentReplayTick) {
   groups.forEach(g => {
     if (g.dataset.tick == currentReplayTick) {
       g.classList.add('current-tick-group');
-      g.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      if (autoFollowReplay && currentMode === 'replay') {
+        g.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
     }
   });
 }
@@ -3169,6 +3501,11 @@ function initLogFilters() {
 
   if (clearLogsBtn) {
     clearLogsBtn.addEventListener('click', clearLiveLogHistory);
+  }
+
+  // Reset filters button
+  if (elements.resetFiltersBtn) {
+    elements.resetFiltersBtn.addEventListener('click', resetAllFilters);
   }
 
   document.getElementById('logSearchInput')?.addEventListener('keypress', (e) => {
@@ -3318,12 +3655,29 @@ function connectTickStreamWebSocket() {
   };
 
   tickStreamWebSocket.onmessage = (event) => {
-    if (currentMode !== 'live') {
-      if (window.DEBUG_TICK) console.log('[Tick Debug] Ignoring tick message - not in live mode');
-      return;
-    }
     try {
       const data = JSON.parse(event.data);
+
+      // Handle SESSION_CREATED broadcast from Micro6
+      if (data.type === 'SESSION_CREATED') {
+        // Update UI to use Micro6's sessionId
+        if (!currentDebugSessionId || !isRecording) {
+          currentDebugSessionId = data.sessionId;
+          isDebugSessionActive = true;
+          if (elements.debugSessionStatus) {
+            elements.debugSessionStatus.classList.remove('d-none');
+          }
+          console.log('✅ Micro6 session detected:', data.sessionId);
+        }
+        return;
+      }
+
+      // Ignore tick data when not in live mode
+      if (currentMode !== 'live') {
+        if (window.DEBUG_TICK) console.log('[Tick Debug] Ignoring tick message - not in live mode');
+        return;
+      }
+
       if (window.DEBUG_TICK) console.log('[Tick Debug] Received tick data:', data);
       updatePanelsForTick(data);
     } catch (e) {
@@ -3370,8 +3724,10 @@ function updatePanelsForTick(data) {
         const keysToDelete = [...liveTickSnapshots.keys()].slice(0, liveTickSnapshots.size - MAX_LOG_ENTRIES);
         keysToDelete.forEach(k => liveTickSnapshots.delete(k));
       }
+      ensureTickGroupForSnapshot(data.tick);
     } else {
       replayTickSnapshots.set(data.tick, snapshot);
+      ensureTickGroupForSnapshot(data.tick);
     }
   }
 
@@ -3497,7 +3853,14 @@ function renderTickLogs(logs) {
 
     clampLogHistory(replayLogHistory);
     updateSourceFilterSummary();
+    const container = elements.logsContainer;
+    const preserveScroll = container && !autoFollowReplay;
+    const previousScrollTop = preserveScroll ? container.scrollTop : 0;
     renderLogHistory();
+    if (preserveScroll) {
+      container.scrollTop = previousScrollTop;
+    }
+    highlightCurrentTickGroup(currentTick);
     return;
   }
 
@@ -4238,6 +4601,62 @@ function showNotification(message, type = 'info') {
   console.log(`[${type.toUpperCase()}] ${message}`);
 }
 
+// ==================== DEBUG SESSION CONTROLS ====================
+
+/**
+ * Initialize debug session button (live mode only).
+ */
+function initDebugSessionControls() {
+  if (!elements.startDebugSessionBtn) return;
+
+  elements.startDebugSessionBtn.addEventListener('click', async () => {
+    await startDebugSession();
+  });
+}
+
+/**
+ * Start a debug session without recording.
+ */
+async function startDebugSession() {
+  try {
+    const response = await fetch('/api/debug/replay/start-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountName: currentWindowId || 'Unknown',
+        scriptName: 'Live Debug'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to start debug session');
+    }
+
+    const data = await response.json();
+    currentDebugSessionId = data.sessionId;
+    isDebugSessionActive = true;
+
+    // Show debug session status badge
+    if (elements.debugSessionStatus) {
+      elements.debugSessionStatus.classList.remove('d-none');
+    }
+
+    // Disable the button to prevent duplicate sessions
+    if (elements.startDebugSessionBtn) {
+      elements.startDebugSessionBtn.disabled = true;
+      elements.startDebugSessionBtn.classList.add('btn-outline-secondary');
+      elements.startDebugSessionBtn.classList.remove('btn-outline-success');
+    }
+
+    console.log('✅ Debug session started:', currentDebugSessionId);
+    showNotification('Debug session started - tick data now visible', 'success');
+
+  } catch (error) {
+    console.error('❌ Failed to start debug session:', error);
+    showNotification('Failed to start debug session: ' + error.message, 'error');
+  }
+}
+
 // ==================== TASK RECORDING CONTROLS ====================
 
 /**
@@ -4361,12 +4780,14 @@ document.addEventListener('DOMContentLoaded', () => {
   initTickControls();
   initLogFilters();
   initLogTypeToggles(); // Log type toggles (tick, external, verbose) - MUST be first
+  initAutoFollowToggle();
   initSourceFilters(); // Source filter chips
   initPatternFilterDropdown(); // Pattern filter chips
   initSectionToggles(); // Section toggles for tick cards
   initActionLogFilters(); // ActionLogger type filters (Dialogue, Inventory, etc.)
   initTickReplayControls(); // New tick-based replay controls
   initRecordingControls(); // Recording controls
+  initDebugSessionControls(); // Debug session controls (live mode only)
   initTaskRecordingControls(); // Task recording controls
 
   // Viewport pause/resume button

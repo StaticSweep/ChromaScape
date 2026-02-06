@@ -81,9 +81,17 @@
           <i class="bi bi-record-circle me-1"></i>
           <span id="recordBtnText">Start Recording</span>
         </button>
+        <button type="button" id="startDebugSessionBtn" class="btn btn-outline-success ms-2">
+          <i class="bi bi-play-circle me-1"></i>
+          <span>Start Debug Session</span>
+        </button>
         <div id="recordingStatus" class="recording-status d-none">
           <i class="bi bi-record-fill blink"></i>
           <span id="recordingDuration">00:00</span>
+        </div>
+        <div id="debugSessionStatus" class="debug-session-status d-none">
+          <i class="bi bi-circle-fill"></i>
+          <span>Debug Session Active</span>
         </div>
       </div>
 
@@ -156,6 +164,13 @@
               <button id="clearLogsBtn" class="btn btn-outline-danger btn-sm" title="Clear logs">
                 <i class="bi bi-trash"></i>
               </button>
+              <button id="resetFiltersBtn" class="btn btn-outline-warning btn-sm" title="Reset all filters">
+                <i class="bi bi-arrow-counterclockwise"></i>
+              </button>
+              <label class="log-toggle log-toggle-compact" title="Auto-scroll to current tick in replay">
+                <input type="checkbox" id="autoFollowTicks">
+                <span>Auto-follow</span>
+              </label>
             </div>
           </div>
           <!-- Log type toggles -->
@@ -202,6 +217,26 @@
             <div class="form-check form-check-inline me-2">
               <input class="form-check-input" type="checkbox" id="showAnimationLogs" checked>
               <label class="form-check-label small" for="showAnimationLogs">Animation</label>
+            </div>
+            <div class="form-check form-check-inline me-2">
+              <input class="form-check-input" type="checkbox" id="showWalkhereLogs" checked>
+              <label class="form-check-label small" for="showWalkhereLogs">Walk Here</label>
+            </div>
+            <div class="form-check form-check-inline me-2">
+              <input class="form-check-input" type="checkbox" id="showMenuLogs" checked>
+              <label class="form-check-label small" for="showMenuLogs">Menu</label>
+            </div>
+            <div class="form-check form-check-inline me-2">
+              <input class="form-check-input" type="checkbox" id="showClickLogs" checked>
+              <label class="form-check-label small" for="showClickLogs">Click</label>
+            </div>
+            <div class="form-check form-check-inline me-2">
+              <input class="form-check-input" type="checkbox" id="showNpcFirstOptionLogs" checked>
+              <label class="form-check-label small" for="showNpcFirstOptionLogs">NPC Option</label>
+            </div>
+            <div class="form-check form-check-inline me-2">
+              <input class="form-check-input" type="checkbox" id="showCancelLogs" checked>
+              <label class="form-check-label small" for="showCancelLogs">Cancel</label>
             </div>
           </div>
           <!-- Exclude pattern input -->

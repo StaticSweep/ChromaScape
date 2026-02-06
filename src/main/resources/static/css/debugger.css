@@ -60,6 +60,16 @@ body {
   margin-left: 12px;
 }
 
+/* Debug session status indicator styles */
+.debug-session-status {
+  color: #28a745;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
+
 .blink {
   animation: blink-animation 1s infinite;
 }
@@ -218,10 +228,10 @@ body {
   font-weight: bold;
 }
 
-.log-info { color: #000000; }
-.log-warn { color: #e5c07b; }
-.log-error { color: #e06c75; }
-.log-debug { color: #98c379; }
+.log-info { color: #e5e7eb; }
+.log-warn { color: #fbbf24; }
+.log-error { color: #f87171; }
+.log-debug { color: #93c5fd; }
 
 /* Viewport loader */
 .loader-container {
@@ -641,25 +651,33 @@ body {
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: var(--text-muted);
+  color: #1f2937;
   cursor: pointer;
   padding: 3px 8px;
   border-radius: 6px;
   transition: all 0.15s ease;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
 .log-toggle:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+  color: #111827;
 }
 
 .log-toggle input[type="checkbox"] {
   cursor: pointer;
-  accent-color: #61afef;
+  accent-color: #1e3a8a;
 }
 
 .log-toggle input[type="checkbox"]:checked + span {
-  color: #61afef;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.log-toggle-compact {
+  padding: 2px 6px;
+  font-size: 10px;
 }
 
 /* ==================== SOURCE FILTER DROPDOWN ==================== */
@@ -849,7 +867,7 @@ body {
   padding: 6px 10px;
   background: rgba(255, 255, 255, 0.05);
   cursor: pointer;
-  user-select: none;
+  user-select: text;
   transition: background 0.2s;
 }
 
@@ -868,16 +886,31 @@ body {
 
 .tick-group-title {
   font-weight: 600;
-  color: #c678dd;
+  color: #f8fafc;
 }
 
 .tick-group-count {
   margin-left: auto;
   font-size: 11px;
-  color: #888;
-  background: rgba(0, 0, 0, 0.3);
+  color: #f8fafc;
+  background: rgba(0, 0, 0, 0.45);
   padding: 2px 6px;
   border-radius: 10px;
+}
+
+.tick-copy-btn {
+  margin-left: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tick-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .tick-group-content {
@@ -907,22 +940,22 @@ body {
   font-size: 0.75rem;
   padding: 3px 10px;
   border-radius: 12px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  color: #1f2937;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .section-toggle:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.3);
 }
 
 .section-toggle.active {
-  background: #2d5a87; /* Dark blue - better contrast */
-  border-color: #2d5a87;
-  color: white;
+  background: #1e3a8a;
+  border-color: #1e3a8a;
+  color: #fff;
 }
 
 /* ==================== TICK CARD SECTIONS ==================== */
@@ -937,7 +970,7 @@ body {
 .tick-section-header {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: #f1f5f9;
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -953,6 +986,7 @@ body {
 .tick-section-content {
   font-size: 0.8rem;
   line-height: 1.5;
+  color: #f1f5f9;
 }
 
 /* Section-specific colors */
@@ -999,9 +1033,9 @@ body {
   font-size: 0.65rem;
   padding: 1px 6px;
   border-radius: 8px;
-  background: var(--glass-bg);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  color: #1f2937;
   cursor: pointer;
   opacity: 0.6;
   transition: all 0.15s ease;
@@ -1009,14 +1043,14 @@ body {
 
 .tick-section-chip:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .tick-section-chip.active {
   opacity: 1;
-  background: rgba(97, 175, 239, 0.2);
-  border-color: rgba(97, 175, 239, 0.5);
-  color: #61afef;
+  background: #1e3a8a;
+  border-color: #1e3a8a;
+  color: #fff;
 }
 
 .tick-section-chip.hidden {
@@ -1061,7 +1095,7 @@ body {
   border-radius: 4px;
   text-align: center;
   font-size: 0.7rem;
-  color: #abb2bf;
+  color: #f8fafc;
 }
 
 .inventory-slot.empty {
@@ -1080,7 +1114,7 @@ body {
 }
 
 .threat-distance {
-  color: var(--text-muted);
+  color: #cbd5e1;
   font-size: 0.75rem;
 }
 
@@ -1100,7 +1134,7 @@ body {
 }
 
 .player-stat-label {
-  color: var(--text-muted);
+  color: #e2e8f0;
 }
 
 .player-stat-value {
@@ -1131,7 +1165,31 @@ body {
 
 /* Section empty state */
 .section-empty {
-  color: var(--text-muted);
+  color: #e2e8f0;
   font-style: italic;
   font-size: 0.75rem;
+}
+
+/* ==================== BUTTON CONTRAST IMPROVEMENTS ==================== */
+
+/* Improve button contrast in debugger */
+.debugger-page .btn-outline-primary,
+.debugger-page .btn-outline-secondary {
+  color: #111827 !important;
+  border-color: rgba(0, 0, 0, 0.35) !important;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.debugger-page .btn-outline-primary:hover,
+.debugger-page .btn-outline-secondary:hover {
+  background: #1e3a8a !important;
+  border-color: #1e3a8a !important;
+  color: #fff !important;
+}
+
+.debugger-page .btn-outline-primary.active,
+.debugger-page .btn-outline-secondary.active {
+  background: #1e3a8a !important;
+  border-color: #1e3a8a !important;
+  color: #fff !important;
 }

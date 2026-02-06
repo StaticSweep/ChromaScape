@@ -190,12 +190,18 @@ public class Micro6IntegrationController {
         // Derive level and message from ActionLogger format if provided
         String level = entry.getLevel();
         String message = entry.getMessage();
+        String logType = entry.getLogType();
 
-        if (entry.getLogType() != null) {
+        // Classify menu click logs if not already classified
+        if (logType == null && message != null && message.contains("Menu clicked:")) {
+          logType = classifyMenuClick(message);
+        }
+
+        if (logType != null) {
           // ActionLogger format: derive level/message from type/data
           level = level != null ? level : "INFO";
           if (message == null || message.isEmpty()) {
-            message = formatActionLogMessage(entry.getLogType(), entry.getData());
+            message = formatActionLogMessage(logType, entry.getData());
           }
         } else {
           // Standard format: normalize level
@@ -209,7 +215,7 @@ public class Micro6IntegrationController {
           }
         }
 
-        // Create LogEntity with new ActionLogger fields
+        // Create LogEntity with new ActionLogger fields (use classified logType)
         LogEntity logEntity =
             new LogEntity(
                 timestamp,
@@ -217,19 +223,19 @@ public class Micro6IntegrationController {
                 message != null ? message : "",
                 source,
                 entry.getScriptName(),
-                entry.getLogType(),
+                logType,
                 entry.getTick(),
                 entry.getData() != null ? gson.toJson(entry.getData()) : null);
 
         savedLogs.add(logRepository.save(logEntity));
 
-        // Broadcast to live WebSocket clients with new fields
+        // Broadcast to live WebSocket clients with new fields (use classified logType)
         String json =
             buildLogJson(
                 level,
                 message != null ? message : "",
                 timestamp,
-                entry.getLogType(),
+                logType,
                 entry.getTick(),
                 entry.getData(),
                 source);
@@ -333,9 +339,37 @@ public class Micro6IntegrationController {
   }
 
   /**
+   * Classify menu click logs based on message content.
+   *
+   * @param message the log message containing "Menu clicked:"
+   * @return logType classification (WALKHERE, CLICK, NPC_FIRST_OPTION, CANCEL, MENU)
+   */
+  private String classifyMenuClick(String message) {
+    if (message == null || !message.contains("Menu clicked:")) {
+      return null;
+    }
+
+    String lowerMessage = message.toLowerCase();
+
+    // Extract menu option text after "Menu clicked:"
+    if (lowerMessage.contains("walk here")) {
+      return "WALKHERE";
+    } else if (lowerMessage.contains("cancel")) {
+      return "CANCEL";
+    } else if (lowerMessage.contains("talk-to") || lowerMessage.contains("attack")) {
+      return "NPC_FIRST_OPTION";
+    } else if (lowerMessage.contains("take") || lowerMessage.contains("use") || lowerMessage.contains("examine")) {
+      return "CLICK";
+    }
+
+    // Default to generic MENU type
+    return "MENU";
+  }
+
+  /**
    * Format an ActionLogger event into a human-readable message.
    *
-   * @param logType the type of action log (DIALOGUE, INVENTORY, VARBIT, ANIMATION)
+   * @param logType the type of action log (DIALOGUE, INVENTORY, VARBIT, ANIMATION, MENU, etc.)
    * @param data the structured data from the action log
    * @return formatted message
    */

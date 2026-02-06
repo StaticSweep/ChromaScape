@@ -38,14 +38,17 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   private final ObjectMapper objectMapper;
   private final DebugSessionService sessionService;
   private final TickStreamIngestionService ingestionService;
+  private final DebuggerTickWebSocketHandler debuggerWebSocketHandler;
 
   public TickStreamWebSocketHandler(
       ObjectMapper objectMapper,
       DebugSessionService sessionService,
-      TickStreamIngestionService ingestionService) {
+      TickStreamIngestionService ingestionService,
+      DebuggerTickWebSocketHandler debuggerWebSocketHandler) {
     this.objectMapper = objectMapper;
     this.sessionService = sessionService;
     this.ingestionService = ingestionService;
+    this.debuggerWebSocketHandler = debuggerWebSocketHandler;
   }
 
   @Override
@@ -114,6 +117,9 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
       log.info("Sent SESSION_START response to Micro6: sessionId={}", response.getSessionId());
 
+      // Broadcast session creation to all debugger clients
+      broadcastSessionStartToDebugger(response);
+
     } catch (Exception e) {
       log.error("Error handling SESSION_START: {}", e.getMessage(), e);
       sendErrorResponse(wsSession, "SESSION_START failed", e.getMessage());
@@ -166,6 +172,32 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorResponse)));
     } catch (Exception e) {
       log.error("Failed to send error response: {}", e.getMessage());
+    }
+  }
+
+  /**
+   * Broadcast session creation to all debugger web UI clients.
+   *
+   * <p>This allows the UI to detect when Micro6 creates a debug session and automatically sync to
+   * it, fixing the session ID mismatch issue.
+   */
+  private void broadcastSessionStartToDebugger(SessionStartResponse session) {
+    try {
+      Map<String, Object> message =
+          Map.of(
+              "type", "SESSION_CREATED",
+              "sessionId", session.getSessionId(),
+              "startTick", session.getStartTick());
+
+      String messageJson = objectMapper.writeValueAsString(message);
+      debuggerWebSocketHandler.broadcast(new TextMessage(messageJson));
+
+      log.info(
+          "Broadcast SESSION_CREATED to {} debugger client(s): sessionId={}",
+          debuggerWebSocketHandler.getClientCount(),
+          session.getSessionId());
+    } catch (Exception e) {
+      log.error("Failed to broadcast session start to debugger: {}", e.getMessage(), e);
     }
   }
 }

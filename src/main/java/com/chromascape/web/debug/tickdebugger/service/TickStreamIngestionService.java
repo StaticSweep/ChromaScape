@@ -106,10 +106,13 @@ public class TickStreamIngestionService {
       // Parse timestamp
       LocalDateTime timestamp = parseTimestamp(batch.getTimestamp());
 
-      // 1. Save tick snapshot
+      // 1. Broadcast immediately to live debugger clients (before DB writes to reduce lag)
+      broadcastToDebuggerClients(batch);
+
+      // 2. Save tick snapshot
       saveTickSnapshot(batch, timestamp);
 
-      // 2. Save tick logs and collect errors for markers
+      // 3. Save tick logs and collect errors for markers
       List<TickLogEntry> logs = batch.getLogs();
       if (logs != null && !logs.isEmpty()) {
         List<TickLog> tickLogs = saveTickLogs(sessionId, tick, timestamp, logs);
@@ -122,17 +125,14 @@ public class TickStreamIngestionService {
         }
       }
 
-      // 3. Save tick overlays
+      // 4. Save tick overlays
       List<TickOverlayEntry> overlays = batch.getOverlays();
       if (overlays != null && !overlays.isEmpty()) {
         saveTickOverlays(sessionId, tick, overlays);
       }
 
-      // 4. Forward to Go backend if enabled
+      // 5. Forward to Go backend if enabled
       forwardToGoBackend(batch);
-
-      // 5. Broadcast to live debugger clients
-      broadcastToDebuggerClients(batch);
 
       log.info("Processed tick batch: sessionId={}, tick={}", sessionId, tick);
 
