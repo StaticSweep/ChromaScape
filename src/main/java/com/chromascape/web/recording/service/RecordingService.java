@@ -56,7 +56,7 @@ public class RecordingService implements FrameListener {
   private final Java2DFrameConverter frameConverter = new Java2DFrameConverter();
 
   // Frame buffer for producer-consumer pattern
-  private static final int FRAME_BUFFER_SIZE = 60; // ~2 seconds at 30 FPS
+  private static final int FRAME_BUFFER_SIZE = 300; // ~10 seconds at 30 FPS
   private final BlockingQueue<TimestampedFrame> frameBuffer =
       new ArrayBlockingQueue<>(FRAME_BUFFER_SIZE);
   private volatile boolean encoderRunning = false;
@@ -70,6 +70,7 @@ public class RecordingService implements FrameListener {
   private String currentVideoCodec; // Track which codec was successfully used
   private int initialWidth;
   private int initialHeight;
+  private long framesRecorded = 0; // Track total frames recorded for metrics
   private static final String[] VIDEO_CODEC_PREFERENCES =
       new String[] {"libx264", "libopenh264", "mpeg4"};
 
@@ -181,6 +182,7 @@ public class RecordingService implements FrameListener {
       // Clear any leftover frames in buffer
       frameBuffer.clear();
       droppedFrameCount.set(0);
+      framesRecorded = 0;
 
       // CAPTURE START TIME HERE - immediately before first frame queued
       // This ensures minimal drift between video timeline and log timestamps
@@ -190,6 +192,7 @@ public class RecordingService implements FrameListener {
       // Add first frame to buffer (capture time is recording start time)
       frameBuffer.offer(new TimestampedFrame(normalizedFirstFrame, recordingStartTimeNano));
       frameCount.set(1);
+      framesRecorded = 1;
 
       recording.set(true);
       encoderRunning = true;
@@ -346,6 +349,28 @@ public class RecordingService implements FrameListener {
   }
 
   /**
+   * Get current recording metrics for monitoring.
+   *
+   * <p>Exposed via /api/recording/metrics endpoint.
+   *
+   * @return Map containing recording metrics
+   */
+  public java.util.Map<String, Object> getMetrics() {
+    java.util.Map<String, Object> metrics = new java.util.HashMap<>();
+    metrics.put("isRecording", recording.get());
+    metrics.put("frameBufferSize", FRAME_BUFFER_SIZE);
+    metrics.put("frameBufferDepth", frameBuffer.size());
+    metrics.put("frameBufferCapacity", frameBuffer.remainingCapacity());
+    metrics.put("droppedFrames", droppedFrameCount.get());
+    metrics.put("framesRecorded", framesRecorded);
+    metrics.put("currentRecordingId", currentRecordingId);
+    metrics.put(
+        "recordingDurationMs",
+        recording.get() ? System.currentTimeMillis() - recordingStartTime : 0);
+    return metrics;
+  }
+
+  /**
    * Start recording with auto-start trigger (called when script starts).
    *
    * @param scriptName The name of the script that triggered recording
@@ -416,6 +441,7 @@ public class RecordingService implements FrameListener {
         }
         frameBuffer.offer(timestampedFrame);
         frameCount.incrementAndGet();
+        framesRecorded++;
 
         // Check max duration
         if (config.getMaxDurationMinutes() > 0) {
@@ -465,12 +491,22 @@ public class RecordingService implements FrameListener {
           recorder.record(frameConverter.convert(timestampedFrame.image));
           encodedFrameCount++;
 
-          // Periodic logging (every 5 seconds ~150 frames)
-          if (encodedFrameCount % 150 == 0) {
+          // Detect encoder lag
+          long queueDepth = frameBuffer.size();
+          if (queueDepth > FRAME_BUFFER_SIZE * 0.8) {
+            // Buffer >80% full - encoder is falling behind
+            logger.warn(
+                "Encoder lag detected: queue depth {} ({}% full)",
+                queueDepth,
+                Math.round((queueDepth / (double) FRAME_BUFFER_SIZE) * 100));
+          }
+
+          // Periodic logging (every 30 frames with queue depth)
+          if (encodedFrameCount % 30 == 0) {
             logger.info(
                 "Encode progress: {} frames, queue depth: {}, dropped: {}",
                 encodedFrameCount,
-                frameBuffer.size(),
+                queueDepth,
                 droppedFrameCount.get());
           }
         }
@@ -572,6 +608,7 @@ public class RecordingService implements FrameListener {
       frameCount.set(0);
       droppedFrameCount.set(0);
       encodedFrameCount = 0;
+      framesRecorded = 0;
     }
 
     return wasRecording;
@@ -612,6 +649,7 @@ public class RecordingService implements FrameListener {
     frameCount.set(0);
     droppedFrameCount.set(0);
     encodedFrameCount = 0;
+    framesRecorded = 0;
     initialWidth = 0;
     initialHeight = 0;
   }

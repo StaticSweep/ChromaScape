@@ -52,7 +52,14 @@ public class LogRecordingService {
       LocalDateTime resolvedTimestamp = timestamp != null ? timestamp : LocalDateTime.now();
       LogEntity logEntity =
           new LogEntity(
-              resolvedTimestamp, level, message, source, activeScript, logType, tick, structuredData);
+              resolvedTimestamp,
+              level,
+              message,
+              source,
+              activeScript,
+              logType,
+              tick,
+              structuredData);
       logRepository.save(logEntity);
       logger.debug("Recorded log to database: {}", message);
     } catch (Exception e) {

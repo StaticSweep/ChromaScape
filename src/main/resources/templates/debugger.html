@@ -102,6 +102,10 @@
             placeholder="Jump" />
           <button id="tickJumpBtn" class="btn btn-outline-primary btn-sm">Go</button>
         </div>
+        <!-- Feed Status Indicator -->
+        <span id="feedStatusIndicator" class="badge bg-secondary me-2">
+          <i class="bi bi-circle-fill"></i> Feed: Disconnected
+        </span>
         <button type="button" class="btn btn-primary" onclick="window.location.href='/'">
           <i class="bi bi-house-fill me-1"></i>Dashboard
         </button>
@@ -130,6 +134,36 @@
               <i class="bi bi-pause-fill" id="pauseIcon"></i>
             </button>
           </div>
+
+          <!-- Recording Diagnostics Panel -->
+          <div class="card mb-3" id="recordingDiagnosticsPanel" style="display: none;">
+            <div class="card-header">
+              <h6 class="mb-0">
+                <i class="bi bi-speedometer2"></i>
+                Recording Diagnostics
+              </h6>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-4">
+                  <small class="text-muted">Buffer Depth</small>
+                  <div><strong id="bufferDepth">-</strong> / <span id="bufferCapacity">-</span> frames</div>
+                </div>
+                <div class="col-md-4">
+                  <small class="text-muted">Dropped Frames</small>
+                  <div><strong id="droppedFrames" class="text-danger">0</strong></div>
+                </div>
+                <div class="col-md-4">
+                  <small class="text-muted">Recording Duration</small>
+                  <div><strong id="recordingDuration">00:00</strong></div>
+                </div>
+              </div>
+              <div class="progress mt-2" style="height: 20px;">
+                <div id="bufferProgressBar" class="progress-bar" role="progressbar" style="width: 0%">0%</div>
+              </div>
+            </div>
+          </div>
+
           <div class="viewport-stage" id="viewportStage">
             <div id="viewport-loader" class="loader-container">
               <div class="glass-loader"></div>
@@ -237,6 +271,14 @@
             <div class="form-check form-check-inline me-2">
               <input class="form-check-input" type="checkbox" id="showCancelLogs" checked>
               <label class="form-check-label small" for="showCancelLogs">Cancel</label>
+            </div>
+            <div class="form-check form-check-inline me-2">
+              <input class="form-check-input" type="checkbox" id="showNetworkLogs" checked>
+              <label class="form-check-label small" for="showNetworkLogs">Network</label>
+            </div>
+            <div class="form-check form-check-inline me-2">
+              <input class="form-check-input" type="checkbox" id="showRawLogs" checked>
+              <label class="form-check-label small" for="showRawLogs">Raw</label>
             </div>
           </div>
           <!-- Exclude pattern input -->

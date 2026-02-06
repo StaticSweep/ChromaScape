@@ -403,6 +403,8 @@ function matchesCurrentFilters(entry, searchText) {
     const showClickLogs = localStorage.getItem('filter_showClick') !== 'false';
     const showNpcFirstOptionLogs = localStorage.getItem('filter_showNpcFirstOption') !== 'false';
     const showCancelLogs = localStorage.getItem('filter_showCancel') !== 'false';
+    const showNetworkLogs = localStorage.getItem('filter_showNetwork') !== 'false';
+    const showRawLogs = localStorage.getItem('filter_showRaw') !== 'false';
 
     if (entry.logType === 'DIALOGUE' && !showDialogueLogs) return false;
     if (entry.logType === 'INVENTORY' && !showInventoryLogs) return false;
@@ -413,6 +415,8 @@ function matchesCurrentFilters(entry, searchText) {
     if (entry.logType === 'CLICK' && !showClickLogs) return false;
     if (entry.logType === 'NPC_FIRST_OPTION' && !showNpcFirstOptionLogs) return false;
     if (entry.logType === 'CANCEL' && !showCancelLogs) return false;
+    if (entry.logType === 'NETWORK' && !showNetworkLogs) return false;
+    if (entry.logType === 'RAW' && !showRawLogs) return false;
   }
 
   // Filter by message content (exclude patterns)
@@ -1516,6 +1520,8 @@ function resetAllFilters() {
   const clickCheckbox = document.getElementById('showClickLogs');
   const npcFirstOptionCheckbox = document.getElementById('showNpcFirstOptionLogs');
   const cancelCheckbox = document.getElementById('showCancelLogs');
+  const networkCheckbox = document.getElementById('showNetworkLogs');
+  const rawCheckbox = document.getElementById('showRawLogs');
 
   if (dialogueCheckbox) dialogueCheckbox.checked = true;
   if (inventoryCheckbox) inventoryCheckbox.checked = true;
@@ -1526,6 +1532,11 @@ function resetAllFilters() {
   if (clickCheckbox) clickCheckbox.checked = true;
   if (npcFirstOptionCheckbox) npcFirstOptionCheckbox.checked = true;
   if (cancelCheckbox) cancelCheckbox.checked = true;
+  if (networkCheckbox) networkCheckbox.checked = true;
+  if (rawCheckbox) rawCheckbox.checked = true;
+
+  localStorage.setItem('filter_showNetwork', 'true');
+  localStorage.setItem('filter_showRaw', 'true');
 
   // Save log type preferences
   saveLogTypePrefs();
@@ -2010,7 +2021,8 @@ function loadPerTickToggles() {
 function initActionLogFilters() {
   const filters = [
     'Dialogue', 'Inventory', 'Varbit', 'Animation',
-    'Walkhere', 'Menu', 'Click', 'NpcFirstOption', 'Cancel'
+    'Walkhere', 'Menu', 'Click', 'NpcFirstOption', 'Cancel',
+    'Network', 'Raw'
   ];
   filters.forEach(type => {
     const checkbox = document.getElementById(`show${type}Logs`);
@@ -4810,4 +4822,94 @@ document.addEventListener('DOMContentLoaded', () => {
 
   aiInspectorPoller = setInterval(fetchAiInspector, 5000);
   fetchAiInspector();
+
+  // Start recording diagnostics polling
+  setInterval(() => {
+    if (currentMode === 'live') {
+      updateRecordingDiagnostics();
+    }
+  }, 2000);
+  updateRecordingDiagnostics();
+
+  // Start feed status polling
+  setInterval(updateFeedStatus, 5000);
+  updateFeedStatus();
 });
+
+/**
+ * Poll recording metrics and update diagnostics panel
+ */
+async function updateRecordingDiagnostics() {
+  try {
+    const response = await fetch('/api/recordings/metrics');
+    const metrics = await response.json();
+
+    const panel = document.getElementById('recordingDiagnosticsPanel');
+    if (!panel) return;
+
+    if (metrics.isRecording) {
+      // Show panel when recording
+      panel.style.display = 'block';
+
+      // Update values
+      document.getElementById('bufferDepth').textContent = metrics.frameBufferDepth;
+      document.getElementById('bufferCapacity').textContent = metrics.frameBufferSize;
+      document.getElementById('droppedFrames').textContent = metrics.droppedFrames;
+
+      // Duration
+      const durationSec = Math.floor(metrics.recordingDurationMs / 1000);
+      const minutes = Math.floor(durationSec / 60);
+      const seconds = durationSec % 60;
+      document.getElementById('recordingDuration').textContent =
+        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+      // Buffer fill percentage
+      const fillPercent = Math.round((metrics.frameBufferDepth / metrics.frameBufferSize) * 100);
+      const progressBar = document.getElementById('bufferProgressBar');
+      progressBar.style.width = fillPercent + '%';
+      progressBar.textContent = fillPercent + '%';
+
+      // Color code: green (<50%), yellow (50-80%), red (>80%)
+      if (fillPercent < 50) {
+        progressBar.className = 'progress-bar bg-success';
+      } else if (fillPercent < 80) {
+        progressBar.className = 'progress-bar bg-warning';
+      } else {
+        progressBar.className = 'progress-bar bg-danger';
+      }
+
+    } else {
+      // Hide panel when not recording
+      panel.style.display = 'none';
+    }
+  } catch (error) {
+    console.error('Error fetching recording metrics:', error);
+  }
+}
+
+/**
+ * Update feed status indicator
+ */
+async function updateFeedStatus() {
+  try {
+    const response = await fetch('/api/debug/feed-status');
+    const status = await response.json();
+
+    const indicator = document.getElementById('feedStatusIndicator');
+    if (!indicator) return;
+
+    if (status.connected && status.lastTickReceived) {
+      indicator.className = 'badge bg-success me-2';
+      indicator.innerHTML = `<i class="bi bi-circle-fill"></i> Feed: Active (Tick ${status.lastTickReceived})`;
+    } else {
+      indicator.className = 'badge bg-warning me-2';
+      indicator.innerHTML = `<i class="bi bi-circle-fill"></i> Feed: Waiting`;
+    }
+  } catch (error) {
+    const indicator = document.getElementById('feedStatusIndicator');
+    if (indicator) {
+      indicator.className = 'badge bg-danger me-2';
+      indicator.innerHTML = `<i class="bi bi-circle-fill"></i> Feed: Error`;
+    }
+  }
+}

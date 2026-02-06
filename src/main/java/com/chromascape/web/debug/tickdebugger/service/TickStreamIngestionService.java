@@ -147,6 +147,13 @@ public class TickStreamIngestionService {
       JsonNode playerState = objectMapper.valueToTree(batch.getPlayerState());
       JsonNode inventory =
           batch.getInventory() != null ? objectMapper.valueToTree(batch.getInventory()) : null;
+
+      // Log inventory data for debugging
+      log.info(
+          "Processing tick {} inventory: {} items",
+          batch.getTick(),
+          batch.getInventory() != null ? batch.getInventory().size() : 0);
+
       JsonNode equipment =
           batch.getEquipment() != null ? objectMapper.valueToTree(batch.getEquipment()) : null;
       JsonNode threats =
@@ -157,6 +164,26 @@ public class TickStreamIngestionService {
           batch.getCooldowns() != null ? objectMapper.valueToTree(batch.getCooldowns()) : null;
       JsonNode quest = batch.getQuest() != null ? objectMapper.valueToTree(batch.getQuest()) : null;
 
+      // NEW: Convert expanded world state to JSON
+      JsonNode npcs = batch.getNpcs() != null ? objectMapper.valueToTree(batch.getNpcs()) : null;
+      JsonNode gameObjects =
+          batch.getGameObjects() != null ? objectMapper.valueToTree(batch.getGameObjects()) : null;
+      JsonNode groundObjects =
+          batch.getGroundObjects() != null
+              ? objectMapper.valueToTree(batch.getGroundObjects())
+              : null;
+      JsonNode groundItems =
+          batch.getGroundItems() != null ? objectMapper.valueToTree(batch.getGroundItems()) : null;
+
+      // Log expanded data for diagnostics
+      log.info(
+          "Processing tick {} expanded data: npcs={}, gameObjects={}, groundObjects={}, groundItems={}",
+          batch.getTick(),
+          batch.getNpcs() != null ? batch.getNpcs().size() : 0,
+          batch.getGameObjects() != null ? batch.getGameObjects().size() : 0,
+          batch.getGroundObjects() != null ? batch.getGroundObjects().size() : 0,
+          batch.getGroundItems() != null ? batch.getGroundItems().size() : 0);
+
       TickSnapshot snapshot =
           new TickSnapshot(batch.getSessionId(), batch.getTick(), timestamp, playerState);
 
@@ -166,6 +193,10 @@ public class TickStreamIngestionService {
       snapshot.setProjectiles(projectiles);
       snapshot.setCooldowns(cooldowns);
       snapshot.setQuest(quest);
+      snapshot.setNpcs(npcs);
+      snapshot.setGameObjects(gameObjects);
+      snapshot.setGroundObjects(groundObjects);
+      snapshot.setGroundItems(groundItems);
 
       snapshotRepository.save(snapshot);
 

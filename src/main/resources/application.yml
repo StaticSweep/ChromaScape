@@ -122,3 +122,19 @@ tick-debugger:
   batch-insert-size: ${TICK_DEBUGGER_BATCH_SIZE:100}
   # Tick duration in milliseconds (RuneScape standard)
   tick-duration-ms: ${TICK_DEBUGGER_TICK_DURATION:600}
+
+# Micro6 Integration Configuration
+micro6:
+  log-shipper:
+    # Enable/disable log file shipper
+    enabled: ${MICRO6_LOG_SHIPPER_ENABLED:false}
+    # Path to micro6 client log file (absolute path)
+    log-file-path: ${MICRO6_LOG_FILE_PATH:}
+    # Source identifier for shipped logs
+    source-name: ${MICRO6_SOURCE_NAME:micro6-shipper}
+    # Polling interval in milliseconds
+    polling-interval-ms: ${MICRO6_POLLING_MS:5000}
+    # Maximum logs per batch
+    max-batch-size: ${MICRO6_MAX_BATCH:100}
+    # Maximum deduplication history
+    max-history-lines: ${MICRO6_HISTORY_LINES:500}

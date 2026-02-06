@@ -261,6 +261,24 @@ public class RecordingController {
   }
 
   /**
+   * Get recording metrics for monitoring frame drops and encoder lag.
+   *
+   * <p>Returns current buffer depth, dropped frames, and recording duration.
+   *
+   * @return Response with recording metrics
+   */
+  @GetMapping("/metrics")
+  public ResponseEntity<Map<String, Object>> getMetrics() {
+    try {
+      Map<String, Object> metrics = recordingService.getMetrics();
+      return ResponseEntity.ok(metrics);
+    } catch (Exception e) {
+      logger.error("Error getting recording metrics", e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  /**
    * Force reset the recording state.
    *
    * <p>This is a recovery endpoint to reset stuck recording state. Use with caution as it may leave

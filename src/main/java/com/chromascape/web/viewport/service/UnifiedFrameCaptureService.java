@@ -130,13 +130,13 @@ public class UnifiedFrameCaptureService {
 
     logger.info("Starting unified frame capture at {} FPS", config.getFps());
 
-    // Create capture scheduler with lower priority to avoid interfering with game
+    // Create capture scheduler with normal priority to prevent game threads from starving capture
     captureScheduler =
         Executors.newSingleThreadScheduledExecutor(
             r -> {
               Thread t = new Thread(r, "UnifiedFrameCapture");
               t.setDaemon(true);
-              t.setPriority(Thread.NORM_PRIORITY - 1);
+              t.setPriority(Thread.NORM_PRIORITY);
               return t;
             });
 

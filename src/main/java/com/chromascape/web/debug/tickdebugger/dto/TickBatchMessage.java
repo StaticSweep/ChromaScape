@@ -52,6 +52,18 @@ public class TickBatchMessage {
   /** Quest state for this tick (name, stepText, changed). */
   private final Map<String, Object> quest;
 
+  /** All NPCs in render distance. */
+  private final List<Map<String, Object>> npcs;
+
+  /** Game objects (walls, doors, interactive objects). */
+  private final List<Map<String, Object>> gameObjects;
+
+  /** Ground objects (ground decoration layer). */
+  private final List<Map<String, Object>> groundObjects;
+
+  /** Ground items. */
+  private final List<Map<String, Object>> groundItems;
+
   @JsonCreator
   public TickBatchMessage(
       @JsonProperty("type") String type,
@@ -66,7 +78,11 @@ public class TickBatchMessage {
       @JsonProperty("cooldowns") Map<String, Integer> cooldowns,
       @JsonProperty("logs") List<TickLogEntry> logs,
       @JsonProperty("overlays") List<TickOverlayEntry> overlays,
-      @JsonProperty("quest") Map<String, Object> quest) {
+      @JsonProperty("quest") Map<String, Object> quest,
+      @JsonProperty("npcs") List<Map<String, Object>> npcs,
+      @JsonProperty("gameObjects") List<Map<String, Object>> gameObjects,
+      @JsonProperty("groundObjects") List<Map<String, Object>> groundObjects,
+      @JsonProperty("groundItems") List<Map<String, Object>> groundItems) {
     this.type = type;
     this.sessionId = sessionId;
     this.tick = tick;
@@ -80,6 +96,10 @@ public class TickBatchMessage {
     this.logs = logs;
     this.overlays = overlays;
     this.quest = quest;
+    this.npcs = npcs;
+    this.gameObjects = gameObjects;
+    this.groundObjects = groundObjects;
+    this.groundItems = groundItems;
   }
 
   public String getType() {
@@ -132,6 +152,22 @@ public class TickBatchMessage {
 
   public Map<String, Object> getQuest() {
     return quest;
+  }
+
+  public List<Map<String, Object>> getNpcs() {
+    return npcs;
+  }
+
+  public List<Map<String, Object>> getGameObjects() {
+    return gameObjects;
+  }
+
+  public List<Map<String, Object>> getGroundObjects() {
+    return groundObjects;
+  }
+
+  public List<Map<String, Object>> getGroundItems() {
+    return groundItems;
   }
 
   /** Individual log entry within a tick batch. */

@@ -61,6 +61,25 @@ public class TickSnapshot {
   @JdbcTypeCode(SqlTypes.JSON)
   private JsonNode quest;
 
+  /** NPCs in render distance as JSON array. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode npcs;
+
+  /** Game objects (walls, doors, interactive objects) as JSON array. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "game_objects")
+  private JsonNode gameObjects;
+
+  /** Ground objects (ground decoration layer) as JSON array. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "ground_objects")
+  private JsonNode groundObjects;
+
+  /** Ground items as JSON array. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "ground_items")
+  private JsonNode groundItems;
+
   /** Default constructor required by JPA. */
   public TickSnapshot() {}
 
@@ -160,5 +179,37 @@ public class TickSnapshot {
 
   public void setQuest(JsonNode quest) {
     this.quest = quest;
+  }
+
+  public JsonNode getNpcs() {
+    return npcs;
+  }
+
+  public void setNpcs(JsonNode npcs) {
+    this.npcs = npcs;
+  }
+
+  public JsonNode getGameObjects() {
+    return gameObjects;
+  }
+
+  public void setGameObjects(JsonNode gameObjects) {
+    this.gameObjects = gameObjects;
+  }
+
+  public JsonNode getGroundObjects() {
+    return groundObjects;
+  }
+
+  public void setGroundObjects(JsonNode groundObjects) {
+    this.groundObjects = groundObjects;
+  }
+
+  public JsonNode getGroundItems() {
+    return groundItems;
+  }
+
+  public void setGroundItems(JsonNode groundItems) {
+    this.groundItems = groundItems;
   }
 }

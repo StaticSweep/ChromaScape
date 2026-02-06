@@ -192,9 +192,9 @@ public class Micro6IntegrationController {
         String message = entry.getMessage();
         String logType = entry.getLogType();
 
-        // Classify menu click logs if not already classified
-        if (logType == null && message != null && message.contains("Menu clicked:")) {
-          logType = classifyMenuClick(message);
+        // Classify logs if not already classified
+        if (logType == null && message != null) {
+          logType = classifyLogLine(message);
         }
 
         if (logType != null) {
@@ -358,12 +358,76 @@ public class Micro6IntegrationController {
       return "CANCEL";
     } else if (lowerMessage.contains("talk-to") || lowerMessage.contains("attack")) {
       return "NPC_FIRST_OPTION";
-    } else if (lowerMessage.contains("take") || lowerMessage.contains("use") || lowerMessage.contains("examine")) {
+    } else if (lowerMessage.contains("take")
+        || lowerMessage.contains("use")
+        || lowerMessage.contains("examine")) {
       return "CLICK";
     }
 
     // Default to generic MENU type
     return "MENU";
+  }
+
+  /**
+   * Classify log line into appropriate log type. Extends menu click classification to handle
+   * network and raw types.
+   *
+   * @param message the log message to classify
+   * @return the classified log type
+   */
+  private String classifyLogLine(String message) {
+    if (message == null) {
+      return "RAW";
+    }
+
+    // Check menu clicks first
+    if (message.contains("Menu clicked:")) {
+      return classifyMenuClick(message);
+    }
+
+    // Check network patterns
+    if (isNetworkLog(message)) {
+      return "NETWORK";
+    }
+
+    // Check for other known patterns (dialogue, inventory, varbit, animation)
+    // These might come from ActionLogger in micro6 client
+    if (message.contains("Dialogue:") || message.contains("NPC says:")) {
+      return "DIALOGUE";
+    }
+    if (message.contains("Inventory changed")
+        || message.contains("Item added")
+        || message.contains("Item removed")) {
+      return "INVENTORY";
+    }
+    if (message.contains("Varbit") || message.contains("varbit")) {
+      return "VARBIT";
+    }
+    if (message.contains("Animation:") || message.contains("Playing animation")) {
+      return "ANIMATION";
+    }
+
+    // Default to RAW for unclassified
+    return "RAW";
+  }
+
+  /**
+   * Check if message indicates network activity.
+   *
+   * @param message the log message to check
+   * @return true if the message contains network-related keywords
+   */
+  private boolean isNetworkLog(String message) {
+    String lower = message.toLowerCase();
+    return lower.contains("sending")
+        || lower.contains("received")
+        || lower.contains("websocket")
+        || lower.contains("connected")
+        || lower.contains("disconnected")
+        || lower.contains("ws://")
+        || lower.contains("http://")
+        || lower.contains("tcp")
+        || lower.contains("packet");
   }
 
   /**
