@@ -82,6 +82,8 @@ const replaySnapshotFetchInFlight = new Set();
 const MAX_REPLAY_SNAPSHOTS = 600;
 let autoFollowReplay = false; // Default: Auto-follow OFF
 const AUTO_FOLLOW_KEY = 'debugger_auto_follow_replay';
+let userScrollLocked = false; // Track if user manually scrolled
+let lastUserScrollTime = 0;
 
 // Global section toggles
 const globalSectionToggles = {
@@ -760,6 +762,19 @@ function buildTickGroupWithFilter(tick, allEntries, visibleEntries) {
     headerCount.textContent = allEntries.length;
   }
 
+  const seekBtn = document.createElement('button');
+  seekBtn.type = 'button';
+  seekBtn.className = 'tick-seek-btn';
+  seekBtn.title = `Seek to ${tickLabel}`;
+  seekBtn.innerHTML = '<i class="bi bi-clock"></i>';
+  seekBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (currentMode !== 'replay' || tick === null || !elements.replayVideo) return;
+    const videoTime = (Number(tick) * 0.6);
+    elements.replayVideo.currentTime = Math.max(0, videoTime);
+    updateScrubberFromVideo();
+  });
+
   const copyBtn = document.createElement('button');
   copyBtn.type = 'button';
   copyBtn.className = 'tick-copy-btn';
@@ -824,12 +839,14 @@ function buildTickGroupWithFilter(tick, allEntries, visibleEntries) {
 
   header.appendChild(headerLeft);
   header.appendChild(headerCount);
+  header.appendChild(seekBtn);
   header.appendChild(copyBtn);
   header.appendChild(headerChips);
 
   header.addEventListener('click', (e) => {
     // Ignore if clicking on chips
     if (e.target.closest('.tick-header-chips')) return;
+    if (e.target.closest('.tick-seek-btn')) return;
     if (e.target.closest('.tick-copy-btn')) return;
     if (window.getSelection && window.getSelection().toString()) return;
 
@@ -860,63 +877,63 @@ function buildTickGroupWithFilter(tick, allEntries, visibleEntries) {
   const content = document.createElement('div');
   content.className = 'tick-group-content';
 
-  // Check if all entries are filtered out
-  if (visibleEntries.length === 0) {
-    // Show placeholder when all entries filtered
+  // Get snapshot for this tick (always, even if no visible entries)
+  const snapshot = getTickSnapshot(tick);
+
+  // Show placeholder for filtered action logs ONLY if there are no visible entries
+  if (visibleEntries.length === 0 && allEntries.length > 0) {
     const placeholder = document.createElement('div');
     placeholder.className = 'text-muted fst-italic px-3 py-2';
-    placeholder.textContent = `All ${allEntries.length} log(s) hidden by filters`;
+    placeholder.textContent = `All ${allEntries.length} action log(s) hidden by filters`;
     content.appendChild(placeholder);
-  } else {
-    // Get snapshot for this tick (using visible entries)
-    const snapshot = getTickSnapshot(tick);
+  }
 
-    // Build structured sections (using visible entries)
-    if (isSectionVisible(tick, 'actions') && visibleEntries.length > 0) {
-      content.appendChild(buildActionsSection(tick, visibleEntries));
-    }
+  // Build structured sections - ALWAYS render snapshot sections regardless of visible entries
+  // Only the "actions" section depends on visible entries
+  if (isSectionVisible(tick, 'actions') && visibleEntries.length > 0) {
+    content.appendChild(buildActionsSection(tick, visibleEntries));
+  }
 
-    if (isSectionVisible(tick, 'quest') && snapshot?.quest) {
-      content.appendChild(buildQuestSection(tick, snapshot));
-    }
+  if (isSectionVisible(tick, 'quest') && snapshot?.quest) {
+    content.appendChild(buildQuestSection(tick, snapshot));
+  }
 
-    if (isSectionVisible(tick, 'dialogue') && hasDialogueData(visibleEntries, snapshot)) {
-      content.appendChild(buildDialogueSection(tick, visibleEntries, snapshot));
-    }
+  if (isSectionVisible(tick, 'dialogue') && hasDialogueData(visibleEntries, snapshot)) {
+    content.appendChild(buildDialogueSection(tick, visibleEntries, snapshot));
+  }
 
-    // Always render inventory section if snapshot exists (show empty state if no inventory data)
-    if (isSectionVisible(tick, 'inventory') && snapshot) {
-      content.appendChild(buildInventorySection(tick, snapshot));
-    }
+  // Always render inventory section if snapshot exists (show empty state if no inventory data)
+  if (isSectionVisible(tick, 'inventory') && snapshot) {
+    content.appendChild(buildInventorySection(tick, snapshot));
+  }
 
-    if (isSectionVisible(tick, 'npcs') && snapshot) {
-      content.appendChild(buildNpcsSection(tick, snapshot));
-    }
+  if (isSectionVisible(tick, 'npcs') && snapshot) {
+    content.appendChild(buildNpcsSection(tick, snapshot));
+  }
 
-    if (isSectionVisible(tick, 'projectiles') && snapshot) {
-      content.appendChild(buildProjectilesSection(tick, snapshot));
-    }
+  if (isSectionVisible(tick, 'projectiles') && snapshot) {
+    content.appendChild(buildProjectilesSection(tick, snapshot));
+  }
 
-    if (isSectionVisible(tick, 'player') && snapshot?.playerState) {
-      content.appendChild(buildPlayerSection(tick, snapshot));
-    }
+  if (isSectionVisible(tick, 'player') && snapshot?.playerState) {
+    content.appendChild(buildPlayerSection(tick, snapshot));
+  }
 
-    // Always render varbits section if visible (show empty state if no varbit data)
-    if (isSectionVisible(tick, 'varbits')) {
-      content.appendChild(buildVarbitsSection(tick, visibleEntries));
-    }
+  // Always render varbits section if visible (show empty state if no varbit data)
+  if (isSectionVisible(tick, 'varbits')) {
+    content.appendChild(buildVarbitsSection(tick, visibleEntries));
+  }
 
-    if (isSectionVisible(tick, 'objects') && snapshot) {
-      content.appendChild(buildObjectsSection(tick, snapshot));
-    }
+  if (isSectionVisible(tick, 'objects') && snapshot) {
+    content.appendChild(buildObjectsSection(tick, snapshot));
+  }
 
-    if (isSectionVisible(tick, 'groundObjects') && snapshot) {
-      content.appendChild(buildGroundObjectsSection(tick, snapshot));
-    }
+  if (isSectionVisible(tick, 'groundObjects') && snapshot) {
+    content.appendChild(buildGroundObjectsSection(tick, snapshot));
+  }
 
-    if (isSectionVisible(tick, 'groundItems') && snapshot) {
-      content.appendChild(buildGroundItemsSection(tick, snapshot));
-    }
+  if (isSectionVisible(tick, 'groundItems') && snapshot) {
+    content.appendChild(buildGroundItemsSection(tick, snapshot));
   }
 
   group.appendChild(header);
@@ -2314,7 +2331,24 @@ function initAutoFollowToggle() {
   elements.autoFollowTicks.addEventListener('change', (e) => {
     autoFollowReplay = e.target.checked;
     localStorage.setItem(AUTO_FOLLOW_KEY, String(autoFollowReplay));
+
+    // Reset scroll lock when auto-follow is toggled on
+    if (autoFollowReplay) {
+      userScrollLocked = false;
+      lastUserScrollTime = 0;
+    }
   });
+
+  // Detect manual scrolling to suppress auto-follow
+  if (elements.logsContainer) {
+    elements.logsContainer.addEventListener('scroll', () => {
+      const now = Date.now();
+      // Only consider it a manual scroll if it's been >100ms since last auto-scroll
+      if (now - lastUserScrollTime > 100) {
+        userScrollLocked = true;
+      }
+    });
+  }
 }
 
 /**
@@ -3862,7 +3896,8 @@ function renderReplayLogs(logs, currentReplayTick = null) {
   updateSourceFilterSummary();
   if (currentMode === 'replay') {
     const container = elements.logsContainer;
-    const preserveScroll = container && !autoFollowReplay;
+    const shouldAutoScroll = autoFollowReplay && !userScrollLocked;
+    const preserveScroll = container && !shouldAutoScroll;
     const previousScrollTop = preserveScroll ? container.scrollTop : 0;
     renderLogHistory();
     if (preserveScroll) {
@@ -3870,7 +3905,8 @@ function renderReplayLogs(logs, currentReplayTick = null) {
     }
     // Highlight current tick group after rendering
     highlightCurrentTickGroup(currentReplayTick);
-    if (autoFollowReplay && currentMode === 'replay') {
+    if (shouldAutoScroll && currentMode === 'replay') {
+      lastUserScrollTime = Date.now(); // Mark as programmatic scroll
       container.scrollTop = container.scrollHeight;
     }
   }
@@ -3888,7 +3924,8 @@ function highlightCurrentTickGroup(currentReplayTick) {
   groups.forEach(g => {
     if (g.dataset.tick == currentReplayTick) {
       g.classList.add('current-tick-group');
-      if (autoFollowReplay && currentMode === 'replay') {
+      if (autoFollowReplay && !userScrollLocked && currentMode === 'replay') {
+        lastUserScrollTime = Date.now(); // Mark as programmatic scroll
         g.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
@@ -4313,11 +4350,15 @@ function renderTickLogs(logs) {
     clampLogHistory(replayLogHistory);
     updateSourceFilterSummary();
     const container = elements.logsContainer;
-    const preserveScroll = container && !autoFollowReplay;
+    const shouldAutoScroll = autoFollowReplay && !userScrollLocked;
+    const preserveScroll = container && !shouldAutoScroll;
     const previousScrollTop = preserveScroll ? container.scrollTop : 0;
     renderLogHistory();
     if (preserveScroll) {
       container.scrollTop = previousScrollTop;
+    } else if (shouldAutoScroll) {
+      lastUserScrollTime = Date.now(); // Mark as programmatic scroll
+      container.scrollTop = container.scrollHeight;
     }
     highlightCurrentTickGroup(currentTick);
     return;
