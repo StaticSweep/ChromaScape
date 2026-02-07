@@ -48,6 +48,338 @@ const MAX_LOG_ENTRIES = 3000;
 const liveLogHistory = [];
 const replayLogHistory = [];
 
+/**
+ * Manages tick state reconstruction from snapshots and diffs.
+ * Maintains baseline snapshot and applies incremental diffs to reconstruct full state.
+ */
+class TickStateManager {
+  constructor() {
+    this.baseSnapshot = null;
+    this.baseSnapshotTick = null;
+    this.currentState = null;
+    this.stateHistory = new Map(); // tick -> reconstructed state
+    this.maxHistorySize = 500;
+  }
+
+  /**
+   * Process a tick message (either TICK_SNAPSHOT or TICK_DIFF).
+   * Returns: { tick, state, events, isSnapshot } or null on error.
+   */
+  processMessage(message) {
+    if (!message || !message.type) {
+      console.error('Invalid message:', message);
+      return null;
+    }
+
+    if (message.type === 'TICK_SNAPSHOT') {
+      return this.processSnapshot(message);
+    } else if (message.type === 'TICK_DIFF') {
+      return this.processDiff(message);
+    } else {
+      console.warn('Unknown message type:', message.type);
+      return null;
+    }
+  }
+
+  /**
+   * Process a full snapshot message.
+   */
+  processSnapshot(message) {
+    // Store as new baseline
+    this.baseSnapshot = this.deepCopy(message.state);
+    this.baseSnapshotTick = message.tick;
+    this.currentState = this.deepCopy(message.state);
+
+    // Store in history
+    this.storeState(message.tick, this.currentState);
+
+    console.log(`[TickStateManager] Received full snapshot at tick ${message.tick}`);
+
+    return {
+      tick: message.tick,
+      state: this.currentState,
+      events: [],
+      isSnapshot: true
+    };
+  }
+
+  /**
+   * Process a diff message and reconstruct state.
+   */
+  processDiff(message) {
+    if (!this.currentState) {
+      console.error('Received diff without baseline snapshot, tick:', message.tick);
+      return null;
+    }
+
+    if (message.baseSnapshotTick !== this.baseSnapshotTick) {
+      console.warn(
+        `Diff base mismatch: expected ${this.baseSnapshotTick}, got ${message.baseSnapshotTick}`
+      );
+      // Could request re-sync here
+    }
+
+    // Apply changes to current state
+    if (message.changes) {
+      this.applyDiff(this.currentState, message.changes);
+    }
+
+    // Store in history
+    this.storeState(message.tick, this.currentState);
+
+    return {
+      tick: message.tick,
+      state: this.currentState,
+      events: message.events || [],
+      isSnapshot: false
+    };
+  }
+
+  /**
+   * Apply diff changes to state object.
+   */
+  applyDiff(state, changes) {
+    // Apply player changes
+    if (changes.player) {
+      if (!state.player) state.player = {};
+      for (const [key, value] of Object.entries(changes.player)) {
+        this.setNestedValue(state.player, key, value);
+      }
+    }
+
+    // Apply inventory changes
+    if (changes.inventory?.slots) {
+      if (!state.inventory) state.inventory = [];
+      changes.inventory.slots.forEach(change => {
+        // Merge change into existing slot or create new
+        const existing = state.inventory[change.slot] || {};
+        state.inventory[change.slot] = { ...existing, ...change };
+      });
+    }
+
+    // Apply NPC changes
+    if (changes.npcs) {
+      if (!state.npcs) state.npcs = [];
+
+      // Add new NPCs
+      if (changes.npcs.added) {
+        state.npcs.push(...changes.npcs.added);
+      }
+
+      // Update existing NPCs
+      if (changes.npcs.updated) {
+        changes.npcs.updated.forEach(update => {
+          const npc = state.npcs.find(n => n.index === update.index);
+          if (npc) {
+            // Apply each change field
+            for (const [key, value] of Object.entries(update.changes || update)) {
+              if (key !== 'index') {
+                this.setNestedValue(npc, key, value);
+              }
+            }
+          }
+        });
+      }
+
+      // Remove NPCs
+      if (changes.npcs.removed) {
+        state.npcs = state.npcs.filter(npc =>
+          !changes.npcs.removed.includes(npc.index)
+        );
+      }
+    }
+
+    // Apply varbit changes
+    if (changes.varbits) {
+      if (!state.varbits) state.varbits = {};
+      Object.assign(state.varbits, changes.varbits);
+    }
+
+    // Apply ground item changes
+    if (changes.groundItems) {
+      if (!state.groundItems) state.groundItems = [];
+
+      if (changes.groundItems.added) {
+        state.groundItems.push(...changes.groundItems.added);
+      }
+
+      if (changes.groundItems.removed) {
+        changes.groundItems.removed.forEach(removed => {
+          const idx = state.groundItems.findIndex(item =>
+            item.position.x === removed.position.x &&
+            item.position.y === removed.position.y &&
+            item.position.plane === removed.position.plane &&
+            item.id === removed.id
+          );
+          if (idx >= 0) {
+            state.groundItems.splice(idx, 1);
+          }
+        });
+      }
+    }
+
+    // Apply object changes
+    if (changes.objects) {
+      if (!state.objects) state.objects = [];
+
+      if (changes.objects.added) {
+        state.objects.push(...changes.objects.added);
+      }
+
+      if (changes.objects.removed) {
+        changes.objects.removed.forEach(removed => {
+          const idx = state.objects.findIndex(obj =>
+            obj.position.x === removed.position.x &&
+            obj.position.y === removed.position.y &&
+            obj.position.plane === removed.position.plane &&
+            obj.id === removed.id
+          );
+          if (idx >= 0) {
+            state.objects.splice(idx, 1);
+          }
+        });
+      }
+    }
+
+    // Apply quest changes
+    if (changes.quests) {
+      if (!state.quests) state.quests = {};
+      Object.assign(state.quests, changes.quests);
+    }
+  }
+
+  /**
+   * Set a nested value using dot notation (e.g., "hp.current").
+   */
+  setNestedValue(obj, path, value) {
+    const parts = path.split('.');
+    let current = obj;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      if (!current[part]) {
+        current[part] = {};
+      }
+      current = current[part];
+    }
+
+    current[parts[parts.length - 1]] = value;
+  }
+
+  /**
+   * Store state in history with LRU eviction.
+   */
+  storeState(tick, state) {
+    this.stateHistory.set(tick, this.deepCopy(state));
+
+    // Evict old states if over limit
+    if (this.stateHistory.size > this.maxHistorySize) {
+      const oldestTick = Array.from(this.stateHistory.keys())[0];
+      this.stateHistory.delete(oldestTick);
+    }
+  }
+
+  /**
+   * Get state for a specific tick from history.
+   */
+  getStateForTick(tick) {
+    return this.stateHistory.get(tick);
+  }
+
+  /**
+   * Deep copy an object.
+   */
+  deepCopy(obj) {
+    if (!obj) return obj;
+    return JSON.parse(JSON.stringify(obj));
+  }
+
+  /**
+   * Reset state manager (e.g., when switching sessions).
+   */
+  reset() {
+    this.baseSnapshot = null;
+    this.baseSnapshotTick = null;
+    this.currentState = null;
+    this.stateHistory.clear();
+    console.log('[TickStateManager] Reset');
+  }
+}
+
+// Global state manager instance
+let liveTickStateManager = null;
+let replayTickStateManager = null;
+
+/**
+ * Get or create the state manager for current mode.
+ */
+function getTickStateManager() {
+  if (currentMode === 'live') {
+    if (!liveTickStateManager) {
+      liveTickStateManager = new TickStateManager();
+    }
+    return liveTickStateManager;
+  } else {
+    if (!replayTickStateManager) {
+      replayTickStateManager = new TickStateManager();
+    }
+    return replayTickStateManager;
+  }
+}
+
+/**
+ * Request a full snapshot re-sync from micro6 (for drift recovery).
+ * Only works in live mode with active debug session.
+ */
+async function requestFullSnapshot() {
+  if (currentMode !== 'live' || !currentDebugSessionId) {
+    console.warn('Full snapshot request only available in live mode with active session');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/debug/request-snapshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: currentDebugSessionId })
+    });
+
+    if (response.ok) {
+      console.log('Full snapshot requested');
+      showNotification('Full snapshot requested', 'info');
+    } else {
+      throw new Error(`HTTP ${response.status}`);
+    }
+  } catch (error) {
+    console.error('Failed to request snapshot:', error);
+    showNotification('Failed to request snapshot: ' + error.message, 'error');
+  }
+}
+
+/**
+ * Get current state manager statistics for debugging.
+ */
+function getStateManagerStats() {
+  const manager = getTickStateManager();
+  return {
+    mode: currentMode,
+    baseSnapshotTick: manager.baseSnapshotTick,
+    currentTick: currentTick,
+    historySize: manager.stateHistory.size,
+    hasBaseSnapshot: manager.baseSnapshot !== null,
+    hasCurrentState: manager.currentState !== null
+  };
+}
+
+// Expose debugging functions to window for console access
+window.debugger_requestFullSnapshot = requestFullSnapshot;
+window.debugger_getStateManagerStats = getStateManagerStats;
+window.debugger_resetStateManager = () => {
+  const manager = getTickStateManager();
+  manager.reset();
+  console.log('State manager reset');
+};
+
 // Throttling for log sync to prevent request spam
 let lastSyncTimeMs = 0;
 let currentSyncAbortController = null;
@@ -165,6 +497,13 @@ function switchMode(mode) {
   currentMode = mode;
   elements.liveBtn.classList.toggle('active', mode === 'live');
   elements.replayBtn.classList.toggle('active', mode === 'replay');
+
+  // Reset state manager for the new mode
+  if (mode === 'live' && liveTickStateManager) {
+    liveTickStateManager.reset();
+  } else if (mode === 'replay' && replayTickStateManager) {
+    replayTickStateManager.reset();
+  }
 
   // Clear all frame state on mode switch
   clearFrameState();
@@ -3568,6 +3907,11 @@ async function loadRecording(recordingId) {
   if (typeof perTickSectionToggles !== 'undefined') {
     perTickSectionToggles.clear(); // Clear tick UI state
   }
+
+  // Reset replay state manager
+  if (replayTickStateManager) {
+    replayTickStateManager.reset();
+  }
   lastSyncTimeMs = 0; // Reset throttle
 
   if (currentMode === 'replay') {
@@ -4202,16 +4546,160 @@ function connectTickStreamWebSocket() {
 }
 
 /**
+ * Format tick event for display in Actions section.
+ */
+function formatTickEvent(event) {
+  if (!event || !event.type) return JSON.stringify(event);
+
+  switch (event.type) {
+    case 'DAMAGE_TAKEN':
+      return `Took ${event.amount} damage from ${event.source || 'unknown'} (${event.hitType || 'unknown'})`;
+
+    case 'DAMAGE_DEALT':
+      return `Dealt ${event.amount} damage to ${event.target || 'unknown'} (${event.hitType || 'unknown'})`;
+
+    case 'ITEM_DROPPED':
+      return `Dropped ${event.quantity || 1}x ${event.itemName || `Item ${event.itemId}`}`;
+
+    case 'ITEM_PICKED_UP':
+      return `Picked up ${event.quantity || 1}x ${event.itemName || `Item ${event.itemId}`}`;
+
+    case 'SPELL_CAST':
+      return `Cast ${event.spellName || 'spell'} on ${event.target || 'target'}`;
+
+    case 'PRAYER_ACTIVATED':
+      return `Activated prayer: ${event.prayerName || event.prayerId}`;
+
+    case 'PRAYER_DEACTIVATED':
+      return `Deactivated prayer: ${event.prayerName || event.prayerId}`;
+
+    case 'DIALOGUE':
+      const options = event.options ? `\nOptions: ${event.options.join(', ')}` : '';
+      return `${event.npc || 'NPC'}: "${event.text}"${options}`;
+
+    case 'DIALOGUE_OPTION_SELECTED':
+      return `Selected dialogue option: "${event.option}"`;
+
+    case 'ITEM_EQUIPPED':
+      return `Equipped ${event.itemName || `Item ${event.itemId}`}`;
+
+    case 'ITEM_UNEQUIPPED':
+      return `Unequipped ${event.itemName || `Item ${event.itemId}`}`;
+
+    case 'ANIMATION_STARTED':
+      return `Started animation ${event.animationId}`;
+
+    case 'PROJECTILE_SPAWNED':
+      return `Projectile spawned: ${event.projectileId} (${event.remainingCycles || 0} cycles)`;
+
+    case 'NPC_SPAWNED':
+      return `NPC spawned: ${event.npcName || `NPC ${event.npcId}`} at (${event.position?.x}, ${event.position?.y})`;
+
+    case 'NPC_DESPAWNED':
+      return `NPC despawned: ${event.npcName || `NPC ${event.npcId}`}`;
+
+    case 'QUEST_STEP_CHANGED':
+      return `Quest "${event.questName}" step changed: ${event.oldStep} → ${event.newStep}`;
+
+    case 'VARBIT_CHANGED':
+      return `Varbit ${event.varbitId} changed: ${event.oldValue} → ${event.newValue}`;
+
+    case 'PLAYER_MOVED':
+      return `Moved to (${event.position?.x}, ${event.position?.y}, plane ${event.position?.plane || 0})`;
+
+    default:
+      return `${event.type}: ${JSON.stringify(event)}`;
+  }
+}
+
+/**
  * Update all panels for a specific tick.
+ * Now supports both legacy format and new TICK_SNAPSHOT/TICK_DIFF messages.
  */
 function updatePanelsForTick(data) {
-  if (data.tick !== undefined && data.tick !== null) {
-    currentTick = data.tick;
-    updateTickDisplay(data.tick);
-  }
+  // Get state manager for current mode
+  const stateManager = getTickStateManager();
 
-  // Store snapshot for structured sections
-  if (data.tick !== undefined) {
+  // Check if this is a new-format message (TICK_SNAPSHOT or TICK_DIFF)
+  const isNewFormat = data.type === 'TICK_SNAPSHOT' || data.type === 'TICK_DIFF';
+
+  let tick, state, events;
+
+  if (isNewFormat) {
+    // Process new format message (TICK_SNAPSHOT or TICK_DIFF)
+    const result = stateManager.processMessage(data);
+    if (!result) {
+      console.error('Failed to process tick message:', data);
+      return;
+    }
+
+    tick = result.tick;
+    state = result.state;
+    events = result.events || [];
+
+    console.log(`[Tick ${tick}] Processed ${data.type}, events: ${events.length}`);
+
+    // Store snapshot in appropriate map
+    const snapshot = {
+      playerState: state.player || state.playerState,
+      inventory: state.inventory,
+      equipment: state.equipment,
+      threats: state.threats,
+      projectiles: state.projectiles,
+      cooldowns: state.cooldowns,
+      quest: state.quest || state.quests,
+      npcs: state.npcs,
+      gameObjects: state.objects || state.gameObjects,
+      groundObjects: state.groundObjects,
+      groundItems: state.groundItems,
+      varbits: state.varbits
+    };
+
+    if (currentMode === 'live') {
+      liveTickSnapshots.set(tick, snapshot);
+      // Prune old snapshots
+      if (liveTickSnapshots.size > MAX_LOG_ENTRIES) {
+        const keysToDelete = [...liveTickSnapshots.keys()].slice(0, liveTickSnapshots.size - MAX_LOG_ENTRIES);
+        keysToDelete.forEach(k => liveTickSnapshots.delete(k));
+      }
+      ensureTickGroupForSnapshot(tick);
+    } else {
+      replayTickSnapshots.set(tick, snapshot);
+      ensureTickGroupForSnapshot(tick);
+    }
+
+    // Add events to log history
+    if (events.length > 0) {
+      events.forEach(event => {
+        const logEntry = {
+          tick: tick,
+          source: event.type || 'Event',
+          level: event.level || 'INFO',
+          message: formatTickEvent(event),
+          kind: 'tick',
+          timestamp: new Date().toISOString()
+        };
+
+        if (currentMode === 'live') {
+          addLiveLogEntry(logEntry);
+        } else {
+          // For replay, add to replay log history
+          replayLogHistory.push(logEntry);
+        }
+      });
+
+      // Re-render logs to show new events
+      if (currentMode === 'live') {
+        renderLogHistory();
+      }
+    }
+
+    // Render bot state from reconstructed state
+    renderTickBotState(snapshot);
+
+  } else {
+    // Legacy format - treat as full snapshot
+    tick = data.tick;
     const snapshot = {
       playerState: data.playerState || data.snapshot?.playerState,
       inventory: data.inventory || data.snapshot?.inventory,
@@ -4227,30 +4715,38 @@ function updatePanelsForTick(data) {
     };
 
     if (currentMode === 'live') {
-      liveTickSnapshots.set(data.tick, snapshot);
+      liveTickSnapshots.set(tick, snapshot);
       // Prune old snapshots
       if (liveTickSnapshots.size > MAX_LOG_ENTRIES) {
         const keysToDelete = [...liveTickSnapshots.keys()].slice(0, liveTickSnapshots.size - MAX_LOG_ENTRIES);
         keysToDelete.forEach(k => liveTickSnapshots.delete(k));
       }
-      ensureTickGroupForSnapshot(data.tick);
+      ensureTickGroupForSnapshot(tick);
     } else {
-      replayTickSnapshots.set(data.tick, snapshot);
-      ensureTickGroupForSnapshot(data.tick);
+      replayTickSnapshots.set(tick, snapshot);
+      ensureTickGroupForSnapshot(tick);
+    }
+
+    // Render legacy format
+    if (data.snapshot) {
+      renderTickBotState(data.snapshot);
+    } else if (data.playerState) {
+      renderTickBotState({ playerState: data.playerState, threats: data.threats, projectiles: data.projectiles, cooldowns: data.cooldowns });
+    }
+
+    // Legacy logs
+    if (data.logs && data.logs.length > 0) {
+      renderTickLogs(data.logs);
     }
   }
 
-  if (data.snapshot) {
-    renderTickBotState(data.snapshot);
-  } else if (data.playerState) {
-    // Also support direct playerState in tick batch
-    renderTickBotState({ playerState: data.playerState, threats: data.threats, projectiles: data.projectiles, cooldowns: data.cooldowns });
+  // Update tick display
+  if (tick !== undefined && tick !== null) {
+    currentTick = tick;
+    updateTickDisplay(tick);
   }
 
-  if (data.logs && data.logs.length > 0) {
-    renderTickLogs(data.logs);
-  }
-
+  // Overlays (both formats)
   if (data.overlays) {
     renderTickOverlays(data.overlays);
   }
