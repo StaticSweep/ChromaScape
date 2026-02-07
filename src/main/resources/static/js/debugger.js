@@ -40,6 +40,8 @@ let recordingDurationInterval = null;
 // Debug session state (without recording)
 let currentDebugSessionId = null;
 let isDebugSessionActive = false;
+let debugFeedEnabled = false;
+const DEBUG_FEED_KEY = 'debugger_debug_feed_enabled';
 
 const elements = {};
 const MAX_LOG_ENTRIES = 3000;
@@ -90,7 +92,10 @@ const globalSectionToggles = {
   npcs: true,
   projectiles: true,
   player: true,
-  varbits: true
+  varbits: true,
+  objects: true,
+  groundObjects: true,
+  groundItems: true
 };
 
 // Per-tick section overrides: tick -> {section: boolean}
@@ -149,6 +154,7 @@ function cacheElements() {
   elements.startDebugSessionBtn = document.getElementById('startDebugSessionBtn');
   elements.debugSessionStatus = document.getElementById('debugSessionStatus');
   elements.resetFiltersBtn = document.getElementById('resetFiltersBtn');
+  elements.debugFeedToggleBtn = document.getElementById('debugFeedToggleBtn');
 }
 
 function switchMode(mode) {
@@ -549,6 +555,19 @@ function buildTickGroup(tick, entries) {
   headerCount.className = 'tick-group-count';
   headerCount.textContent = entries.length;
 
+  const seekBtn = document.createElement('button');
+  seekBtn.type = 'button';
+  seekBtn.className = 'tick-seek-btn';
+  seekBtn.title = `Seek to ${tickLabel}`;
+  seekBtn.innerHTML = '<i class="bi bi-clock"></i>';
+  seekBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (currentMode !== 'replay' || tick === null || !elements.replayVideo) return;
+    const videoTime = (Number(tick) * 0.6);
+    elements.replayVideo.currentTime = Math.max(0, videoTime);
+    updateScrubberFromVideo();
+  });
+
   const copyBtn = document.createElement('button');
   copyBtn.type = 'button';
   copyBtn.className = 'tick-copy-btn';
@@ -563,12 +582,229 @@ function buildTickGroup(tick, entries) {
   const headerChips = document.createElement('div');
   headerChips.className = 'tick-header-chips';
 
-  const sectionNames = ['actions', 'quest', 'dialogue', 'inventory', 'npcs', 'projectiles', 'player', 'varbits'];
+  const sectionNames = [
+    'actions',
+    'quest',
+    'dialogue',
+    'inventory',
+    'npcs',
+    'projectiles',
+    'player',
+    'varbits',
+    'objects',
+    'groundObjects',
+    'groundItems'
+  ];
   sectionNames.forEach(section => {
     const chip = document.createElement('span');
     chip.className = 'tick-section-chip';
     chip.dataset.section = section;
-    chip.textContent = section.charAt(0).toUpperCase();
+    const labelMap = {
+      actions: 'A',
+      quest: 'Q',
+      dialogue: 'D',
+      inventory: 'I',
+      npcs: 'N',
+      projectiles: 'P',
+      player: 'Pl',
+      varbits: 'V',
+      objects: 'O',
+      groundObjects: 'GO',
+      groundItems: 'GI'
+    };
+    chip.textContent = labelMap[section] || section.charAt(0).toUpperCase();
+    chip.title = `Toggle ${section} for this tick`;
+
+    // Set initial state
+    const isVisible = isSectionVisible(tick, section);
+    chip.classList.toggle('active', isVisible);
+    chip.classList.toggle('hidden', !isVisible);
+
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      togglePerTickSection(tick, section);
+      // Re-render this tick group
+      rerenderTickGroup(tick);
+    });
+
+    headerChips.appendChild(chip);
+  });
+
+  header.appendChild(headerLeft);
+  header.appendChild(headerCount);
+  header.appendChild(seekBtn);
+  header.appendChild(copyBtn);
+  header.appendChild(headerChips);
+
+  header.addEventListener('click', (e) => {
+    // Ignore if clicking on chips
+    if (e.target.closest('.tick-header-chips')) return;
+    if (e.target.closest('.tick-seek-btn')) return;
+    if (e.target.closest('.tick-copy-btn')) return;
+    if (window.getSelection && window.getSelection().toString()) return;
+
+    group.classList.toggle('collapsed');
+    const chevron = header.querySelector('.tick-group-chevron');
+
+    // Toggle collapsed state
+    if (tick !== null) {
+      if (group.classList.contains('collapsed')) {
+        collapsedTicks.add(tick);
+        chevron.classList.remove('bi-chevron-down');
+        chevron.classList.add('bi-chevron-right');
+      } else {
+        collapsedTicks.delete(tick);
+        chevron.classList.remove('bi-chevron-right');
+        chevron.classList.add('bi-chevron-down');
+      }
+    }
+  });
+
+  // Set initial chevron state
+  if (isCollapsed) {
+    const chevron = header.querySelector('.tick-group-chevron');
+    chevron.classList.remove('bi-chevron-down');
+    chevron.classList.add('bi-chevron-right');
+  }
+
+  const content = document.createElement('div');
+  content.className = 'tick-group-content';
+
+  // Get snapshot for this tick
+  const snapshot = getTickSnapshot(tick);
+
+  // Build structured sections
+  if (isSectionVisible(tick, 'actions') && entries.length > 0) {
+    content.appendChild(buildActionsSection(tick, entries));
+  }
+
+  if (isSectionVisible(tick, 'quest') && snapshot?.quest) {
+    content.appendChild(buildQuestSection(tick, snapshot));
+  }
+
+  if (isSectionVisible(tick, 'dialogue') && hasDialogueData(entries, snapshot)) {
+    content.appendChild(buildDialogueSection(tick, entries, snapshot));
+  }
+
+  // Always render inventory section if snapshot exists (show empty state if no inventory data)
+  if (isSectionVisible(tick, 'inventory') && snapshot) {
+    content.appendChild(buildInventorySection(tick, snapshot));
+  }
+
+  if (isSectionVisible(tick, 'npcs') && snapshot) {
+    content.appendChild(buildNpcsSection(tick, snapshot));
+  }
+
+  if (isSectionVisible(tick, 'projectiles') && snapshot) {
+    content.appendChild(buildProjectilesSection(tick, snapshot));
+  }
+
+  if (isSectionVisible(tick, 'player') && snapshot?.playerState) {
+    content.appendChild(buildPlayerSection(tick, snapshot));
+  }
+
+  // Always render varbits section if visible (show empty state if no varbit data)
+  if (isSectionVisible(tick, 'varbits')) {
+    content.appendChild(buildVarbitsSection(tick, entries));
+  }
+
+  if (isSectionVisible(tick, 'objects') && snapshot) {
+    content.appendChild(buildObjectsSection(tick, snapshot));
+  }
+
+  if (isSectionVisible(tick, 'groundObjects') && snapshot) {
+    content.appendChild(buildGroundObjectsSection(tick, snapshot));
+  }
+
+  if (isSectionVisible(tick, 'groundItems') && snapshot) {
+    content.appendChild(buildGroundItemsSection(tick, snapshot));
+  }
+
+  group.appendChild(header);
+  group.appendChild(content);
+  return group;
+}
+
+/**
+ * Build a tick group with filter awareness (shows both visible and total counts).
+ * Always renders the tick group even if all entries are filtered out.
+ */
+function buildTickGroupWithFilter(tick, allEntries, visibleEntries) {
+  const group = document.createElement('div');
+  group.className = 'tick-group';
+  group.dataset.tick = tick;
+
+  const isCollapsed = tick !== null && collapsedTicks.has(tick);
+  if (isCollapsed) {
+    group.classList.add('collapsed');
+  }
+
+  const header = document.createElement('div');
+  header.className = 'tick-group-header';
+
+  const tickLabel = tick === null ? 'Unknown' : `Tick ${tick}`;
+
+  // Build header with tick label, count, and per-tick section chips
+  const headerLeft = document.createElement('span');
+  headerLeft.innerHTML = `
+    <i class="bi bi-chevron-down tick-group-chevron"></i>
+    <span class="tick-group-title">${escapeHtml(tickLabel)}</span>
+  `;
+
+  const headerCount = document.createElement('span');
+  headerCount.className = 'tick-group-count';
+  // Show "visible / total" if different, otherwise just show count
+  if (visibleEntries.length < allEntries.length) {
+    headerCount.textContent = `${visibleEntries.length} / ${allEntries.length} logs`;
+  } else {
+    headerCount.textContent = allEntries.length;
+  }
+
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.className = 'tick-copy-btn';
+  copyBtn.title = `Copy ${tickLabel}`;
+  copyBtn.innerHTML = '<i class="bi bi-clipboard"></i>';
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    copyTickGroupToClipboard(group, tickLabel);
+  });
+
+  // Per-tick section chips
+  const headerChips = document.createElement('div');
+  headerChips.className = 'tick-header-chips';
+
+  const sectionNames = [
+    'actions',
+    'quest',
+    'dialogue',
+    'inventory',
+    'npcs',
+    'projectiles',
+    'player',
+    'varbits',
+    'objects',
+    'groundObjects',
+    'groundItems'
+  ];
+  sectionNames.forEach(section => {
+    const chip = document.createElement('span');
+    chip.className = 'tick-section-chip';
+    chip.dataset.section = section;
+    const labelMap = {
+      actions: 'A',
+      quest: 'Q',
+      dialogue: 'D',
+      inventory: 'I',
+      npcs: 'N',
+      projectiles: 'P',
+      player: 'Pl',
+      varbits: 'V',
+      objects: 'O',
+      groundObjects: 'GO',
+      groundItems: 'GI'
+    };
+    chip.textContent = labelMap[section] || section.charAt(0).toUpperCase();
     chip.title = `Toggle ${section} for this tick`;
 
     // Set initial state
@@ -624,42 +860,63 @@ function buildTickGroup(tick, entries) {
   const content = document.createElement('div');
   content.className = 'tick-group-content';
 
-  // Get snapshot for this tick
-  const snapshot = getTickSnapshot(tick);
+  // Check if all entries are filtered out
+  if (visibleEntries.length === 0) {
+    // Show placeholder when all entries filtered
+    const placeholder = document.createElement('div');
+    placeholder.className = 'text-muted fst-italic px-3 py-2';
+    placeholder.textContent = `All ${allEntries.length} log(s) hidden by filters`;
+    content.appendChild(placeholder);
+  } else {
+    // Get snapshot for this tick (using visible entries)
+    const snapshot = getTickSnapshot(tick);
 
-  // Build structured sections
-  if (isSectionVisible(tick, 'actions') && entries.length > 0) {
-    content.appendChild(buildActionsSection(tick, entries));
-  }
+    // Build structured sections (using visible entries)
+    if (isSectionVisible(tick, 'actions') && visibleEntries.length > 0) {
+      content.appendChild(buildActionsSection(tick, visibleEntries));
+    }
 
-  if (isSectionVisible(tick, 'quest') && snapshot?.quest) {
-    content.appendChild(buildQuestSection(tick, snapshot));
-  }
+    if (isSectionVisible(tick, 'quest') && snapshot?.quest) {
+      content.appendChild(buildQuestSection(tick, snapshot));
+    }
 
-  if (isSectionVisible(tick, 'dialogue') && hasDialogueData(entries, snapshot)) {
-    content.appendChild(buildDialogueSection(tick, entries, snapshot));
-  }
+    if (isSectionVisible(tick, 'dialogue') && hasDialogueData(visibleEntries, snapshot)) {
+      content.appendChild(buildDialogueSection(tick, visibleEntries, snapshot));
+    }
 
-  // Always render inventory section if snapshot exists (show empty state if no inventory data)
-  if (isSectionVisible(tick, 'inventory') && snapshot) {
-    content.appendChild(buildInventorySection(tick, snapshot));
-  }
+    // Always render inventory section if snapshot exists (show empty state if no inventory data)
+    if (isSectionVisible(tick, 'inventory') && snapshot) {
+      content.appendChild(buildInventorySection(tick, snapshot));
+    }
 
-  if (isSectionVisible(tick, 'npcs') && snapshot?.threats?.length > 0) {
-    content.appendChild(buildNpcsSection(tick, snapshot));
-  }
+    if (isSectionVisible(tick, 'npcs') && snapshot) {
+      content.appendChild(buildNpcsSection(tick, snapshot));
+    }
 
-  if (isSectionVisible(tick, 'projectiles') && snapshot?.projectiles?.length > 0) {
-    content.appendChild(buildProjectilesSection(tick, snapshot));
-  }
+    if (isSectionVisible(tick, 'projectiles') && snapshot) {
+      content.appendChild(buildProjectilesSection(tick, snapshot));
+    }
 
-  if (isSectionVisible(tick, 'player') && snapshot?.playerState) {
-    content.appendChild(buildPlayerSection(tick, snapshot));
-  }
+    if (isSectionVisible(tick, 'player') && snapshot?.playerState) {
+      content.appendChild(buildPlayerSection(tick, snapshot));
+    }
 
-  // Always render varbits section if visible (show empty state if no varbit data)
-  if (isSectionVisible(tick, 'varbits')) {
-    content.appendChild(buildVarbitsSection(tick, entries));
+    // Always render varbits section if visible (show empty state if no varbit data)
+    if (isSectionVisible(tick, 'varbits')) {
+      content.appendChild(buildVarbitsSection(tick, visibleEntries));
+    }
+
+    if (isSectionVisible(tick, 'objects') && snapshot) {
+      content.appendChild(buildObjectsSection(tick, snapshot));
+    }
+
+    if (isSectionVisible(tick, 'groundObjects') && snapshot) {
+      content.appendChild(buildGroundObjectsSection(tick, snapshot));
+    }
+
+    if (isSectionVisible(tick, 'groundItems') && snapshot) {
+      content.appendChild(buildGroundItemsSection(tick, snapshot));
+    }
   }
 
   group.appendChild(header);
@@ -942,9 +1199,9 @@ function buildNpcsSection(tick, snapshot) {
   const content = document.createElement('div');
   content.className = 'tick-section-content';
 
-  const threats = snapshot.threats || [];
-  if (threats.length > 0) {
-    threats.slice(0, 10).forEach(threat => {
+  const npcs = snapshot.npcs && snapshot.npcs.length ? snapshot.npcs : (snapshot.threats || []);
+  if (npcs.length > 0) {
+    npcs.slice(0, 10).forEach(threat => {
       const item = document.createElement('div');
       item.className = 'threat-item';
 
@@ -958,14 +1215,154 @@ function buildNpcsSection(tick, snapshot) {
       content.appendChild(item);
     });
 
-    if (threats.length > 10) {
+    if (npcs.length > 10) {
       const more = document.createElement('div');
       more.className = 'section-empty';
-      more.textContent = `...and ${threats.length - 10} more`;
+      more.textContent = `...and ${npcs.length - 10} more`;
       content.appendChild(more);
     }
   } else {
-    content.innerHTML = '<span class="section-empty">No threats</span>';
+    content.innerHTML = '<span class="section-empty">No NPCs</span>';
+  }
+
+  section.appendChild(header);
+  section.appendChild(content);
+  return section;
+}
+
+/**
+ * Build game objects section.
+ */
+function buildObjectsSection(tick, snapshot) {
+  const section = document.createElement('div');
+  section.className = 'tick-section section-objects';
+
+  const tickLabel = tick === null ? 'Unknown' : `Tick ${tick}`;
+  const header = document.createElement('div');
+  header.className = 'tick-section-header';
+  header.innerHTML = '<i class="bi bi-box-seam"></i> Objects ';
+  header.appendChild(document.createTextNode(`(${tickLabel})`));
+
+  const content = document.createElement('div');
+  content.className = 'tick-section-content';
+
+  const objects = snapshot.gameObjects || [];
+  if (objects.length > 0) {
+    objects.slice(0, 12).forEach(obj => {
+      const item = document.createElement('div');
+      item.className = 'threat-item';
+      const name = obj.name || `Object ${obj.id || '?'}`;
+      const pos = obj.position || obj.tile || obj.world || {};
+      const posText =
+        pos.x !== undefined && pos.y !== undefined ? `(${pos.x}, ${pos.y})` : '';
+      item.innerHTML = `
+        <span class="threat-name">${escapeHtml(name)}</span>
+        ${posText ? `<span class="threat-distance">${posText}</span>` : ''}
+      `;
+      content.appendChild(item);
+    });
+    if (objects.length > 12) {
+      const more = document.createElement('div');
+      more.className = 'section-empty';
+      more.textContent = `...and ${objects.length - 12} more`;
+      content.appendChild(more);
+    }
+  } else {
+    content.innerHTML = '<span class="section-empty">No objects</span>';
+  }
+
+  section.appendChild(header);
+  section.appendChild(content);
+  return section;
+}
+
+/**
+ * Build ground objects section.
+ */
+function buildGroundObjectsSection(tick, snapshot) {
+  const section = document.createElement('div');
+  section.className = 'tick-section section-ground-objects';
+
+  const tickLabel = tick === null ? 'Unknown' : `Tick ${tick}`;
+  const header = document.createElement('div');
+  header.className = 'tick-section-header';
+  header.innerHTML = '<i class="bi bi-box"></i> Ground Objects ';
+  header.appendChild(document.createTextNode(`(${tickLabel})`));
+
+  const content = document.createElement('div');
+  content.className = 'tick-section-content';
+
+  const objects = snapshot.groundObjects || [];
+  if (objects.length > 0) {
+    objects.slice(0, 12).forEach(obj => {
+      const item = document.createElement('div');
+      item.className = 'threat-item';
+      const name = obj.name || `Ground Object ${obj.id || '?'}`;
+      const pos = obj.position || obj.tile || obj.world || {};
+      const posText =
+        pos.x !== undefined && pos.y !== undefined ? `(${pos.x}, ${pos.y})` : '';
+      item.innerHTML = `
+        <span class="threat-name">${escapeHtml(name)}</span>
+        ${posText ? `<span class="threat-distance">${posText}</span>` : ''}
+      `;
+      content.appendChild(item);
+    });
+    if (objects.length > 12) {
+      const more = document.createElement('div');
+      more.className = 'section-empty';
+      more.textContent = `...and ${objects.length - 12} more`;
+      content.appendChild(more);
+    }
+  } else {
+    content.innerHTML = '<span class="section-empty">No ground objects</span>';
+  }
+
+  section.appendChild(header);
+  section.appendChild(content);
+  return section;
+}
+
+/**
+ * Build ground items section.
+ */
+function buildGroundItemsSection(tick, snapshot) {
+  const section = document.createElement('div');
+  section.className = 'tick-section section-ground-items';
+
+  const tickLabel = tick === null ? 'Unknown' : `Tick ${tick}`;
+  const header = document.createElement('div');
+  header.className = 'tick-section-header';
+  header.innerHTML = '<i class="bi bi-box2"></i> Ground Items ';
+  header.appendChild(document.createTextNode(`(${tickLabel})`));
+
+  const content = document.createElement('div');
+  content.className = 'tick-section-content';
+
+  const items = snapshot.groundItems || [];
+  if (items.length > 0) {
+    items.slice(0, 12).forEach(it => {
+      const item = document.createElement('div');
+      item.className = 'threat-item';
+      const name = it.name || `Item ${it.id || it.itemId || '?'}`;
+      const qty = it.quantity || it.amount || it.qty;
+      const pos = it.position || it.tile || it.world || {};
+      const posText =
+        pos.x !== undefined && pos.y !== undefined ? `(${pos.x}, ${pos.y})` : '';
+      const qtyText = qty !== undefined ? `x${qty}` : '';
+      item.innerHTML = `
+        <span class="threat-name">${escapeHtml(name)} ${escapeHtml(String(qtyText))}</span>
+        ${posText ? `<span class="threat-distance">${posText}</span>` : ''}
+      `;
+      content.appendChild(item);
+    });
+    if (items.length > 12) {
+      const more = document.createElement('div');
+      more.className = 'section-empty';
+      more.textContent = `...and ${items.length - 12} more`;
+      content.appendChild(more);
+    }
+  } else {
+    content.innerHTML = '<span class="section-empty">No ground items</span>';
   }
 
   section.appendChild(header);
@@ -1059,7 +1456,19 @@ function buildPlayerSection(tick, snapshot) {
 
     content.appendChild(grid);
   } else {
-    content.innerHTML = '<span class="section-empty">No player data</span>';
+    // More informative empty state
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'section-empty';
+    emptyDiv.innerHTML = `
+      <div style="color: #fbbf24; margin-bottom: 4px;">
+        <i class="bi bi-exclamation-triangle me-1"></i>Player state not available for this tick
+      </div>
+      <div style="font-size: 0.7rem; color: #94a3b8;">
+        This may indicate the tick was captured before player login,
+        or player state streaming is disabled in micro6 config.
+      </div>
+    `;
+    content.appendChild(emptyDiv);
   }
 
   section.appendChild(header);
@@ -1170,7 +1579,8 @@ function addLiveLogEntryToTickGroup(entry) {
     // Add to existing group - check if we need to re-render with snapshot data
     const snapshot = getTickSnapshot(tick);
     if (snapshot && (snapshot.playerState || snapshot.inventory || snapshot.quest ||
-        snapshot.threats || snapshot.projectiles || snapshot.cooldowns)) {
+        snapshot.threats || snapshot.projectiles || snapshot.cooldowns ||
+        snapshot.npcs || snapshot.gameObjects || snapshot.groundObjects || snapshot.groundItems)) {
       // Re-render entire tick group with all sections
       const history = getActiveLogHistory();
       const searchText = getLogSearchText();
@@ -2083,29 +2493,18 @@ function renderLogHistory(emptyMessage) {
 
   outputContainer.innerHTML = '';
 
-  // Filter logs first
-  const filteredEntries = [];
-  history.forEach(entry => {
-    if (matchesCurrentFilters(entry, searchText)) {
-      filteredEntries.push(entry);
-    }
-  });
-
-  if (filteredEntries.length === 0) {
-    if (history.length === 0) {
-      const defaultMsg = currentMode === 'replay'
-        ? 'Select a recording to view logs'
-        : 'Waiting for logs...';
-      ensureLogPlaceholder(emptyMessage || defaultMsg);
-    } else {
-      ensureLogPlaceholder('No logs match the current filters.');
-    }
+  // Handle completely empty logs
+  if (history.length === 0) {
+    const defaultMsg = currentMode === 'replay'
+      ? 'Select a recording to view logs'
+      : 'Waiting for logs...';
+    ensureLogPlaceholder(emptyMessage || defaultMsg);
     return;
   }
 
-  // Group by tick (null for unknown/non-numeric)
+  // Build tick groups from ALL entries (not filtered)
   const tickGroups = new Map();
-  filteredEntries.forEach(entry => {
+  history.forEach(entry => {
     const tick = entry.tick === null || entry.tick === undefined || isNaN(parseInt(entry.tick))
       ? null
       : entry.tick;
@@ -2122,16 +2521,34 @@ function renderLogHistory(emptyMessage) {
     console.log('[Tick Debug] Total tick groups on render:', tickGroups.size, 'ticks:', tickGroupKeys.join(', '));
   }
 
-  // Render tick groups (sorted: numeric first asc, null last)
+  // Sort ticks (numeric first asc, null last)
   const sortedTicks = [...tickGroups.keys()].sort((a, b) => {
     if (a === null) return 1;  // null goes last
     if (b === null) return -1;
     return parseInt(a) - parseInt(b);
   });
 
+  // Render tick groups with filtering applied per-group
+  let hasVisibleEntries = false;
   sortedTicks.forEach(tick => {
-    outputContainer.appendChild(buildTickGroup(tick, tickGroups.get(tick)));
+    const allEntries = tickGroups.get(tick);
+    const visibleEntries = allEntries.filter(entry => matchesCurrentFilters(entry, searchText));
+
+    if (visibleEntries.length > 0) {
+      hasVisibleEntries = true;
+    }
+
+    // Build tick group with both visible and total counts
+    outputContainer.appendChild(buildTickGroupWithFilter(tick, allEntries, visibleEntries));
   });
+
+  // Show message if NO entries are visible across ALL ticks
+  if (!hasVisibleEntries) {
+    const message = document.createElement('div');
+    message.className = 'text-warning fst-italic p-3';
+    message.textContent = 'No logs match the current filters';
+    outputContainer.insertBefore(message, outputContainer.firstChild);
+  }
 }
 
 // Batched rendering state for live log entries
@@ -3238,7 +3655,11 @@ async function maybeFetchReplaySnapshot(tick) {
           threats: raw.threats ?? null,
           projectiles: raw.projectiles ?? null,
           cooldowns: raw.cooldowns ?? null,
-          quest: raw.quest ?? null
+          quest: raw.quest ?? null,
+          npcs: raw.npcs ?? null,
+          gameObjects: raw.gameObjects ?? null,
+          groundObjects: raw.groundObjects ?? null,
+          groundItems: raw.groundItems ?? null
         };
         replayTickSnapshots.set(tick, normalized);
 
@@ -3311,6 +3732,16 @@ async function syncLogsToVideo(videoMs) {
       }
     }
 
+    // Fallback: derive from logs if still null
+    if (currentTick == null && Array.isArray(result.logs)) {
+      const ticks = result.logs
+        .map(l => (l && l.hasOwnProperty('tick') ? l.tick : null))
+        .filter(t => t !== null && t !== undefined);
+      if (ticks.length > 0) {
+        currentTick = Math.max(...ticks);
+      }
+    }
+
     if (currentTick != null) {
       updateTickDisplay(currentTick);
     }
@@ -3338,6 +3769,9 @@ function renderReplayLogs(logs, currentReplayTick = null) {
       renderLogHistory('No logs for this time period');
     }
     // Still highlight tick group if we have a tick but no logs
+    if (currentReplayTick != null) {
+      ensureTickGroupForSnapshot(currentReplayTick);
+    }
     highlightCurrentTickGroup(currentReplayTick);
     if (currentReplayTick != null) {
       maybeFetchReplaySnapshot(currentReplayTick);
@@ -3436,6 +3870,9 @@ function renderReplayLogs(logs, currentReplayTick = null) {
     }
     // Highlight current tick group after rendering
     highlightCurrentTickGroup(currentReplayTick);
+    if (autoFollowReplay && currentMode === 'replay') {
+      container.scrollTop = container.scrollHeight;
+    }
   }
 }
 
@@ -3673,13 +4110,15 @@ function connectTickStreamWebSocket() {
       // Handle SESSION_CREATED broadcast from Micro6
       if (data.type === 'SESSION_CREATED') {
         // Update UI to use Micro6's sessionId
-        if (!currentDebugSessionId || !isRecording) {
+        if (debugFeedEnabled && (!currentDebugSessionId || !isRecording)) {
           currentDebugSessionId = data.sessionId;
           isDebugSessionActive = true;
           if (elements.debugSessionStatus) {
             elements.debugSessionStatus.classList.remove('d-none');
           }
           console.log('✅ Micro6 session detected:', data.sessionId);
+        } else {
+          console.log('ℹ️ SESSION_CREATED received but debug feed is disabled');
         }
         return;
       }
@@ -3690,6 +4129,10 @@ function connectTickStreamWebSocket() {
         return;
       }
 
+      if (!debugFeedEnabled) {
+        if (window.DEBUG_TICK) console.log('[Tick Debug] Ignoring tick data - debug feed off');
+        return;
+      }
       if (window.DEBUG_TICK) console.log('[Tick Debug] Received tick data:', data);
       updatePanelsForTick(data);
     } catch (e) {
@@ -3726,7 +4169,11 @@ function updatePanelsForTick(data) {
       threats: data.threats || data.snapshot?.threats,
       projectiles: data.projectiles || data.snapshot?.projectiles,
       cooldowns: data.cooldowns || data.snapshot?.cooldowns,
-      quest: data.quest || data.snapshot?.quest
+      quest: data.quest || data.snapshot?.quest,
+      npcs: data.npcs || data.snapshot?.npcs,
+      gameObjects: data.gameObjects || data.snapshot?.gameObjects,
+      groundObjects: data.groundObjects || data.snapshot?.groundObjects,
+      groundItems: data.groundItems || data.snapshot?.groundItems
     };
 
     if (currentMode === 'live') {
@@ -4319,31 +4766,48 @@ async function startRecording() {
     }
 
     const data = await response.json();
-    currentRecordingId = data.recordingId;
     currentSessionId = data.sessionId;
-    isRecording = true;
-    recordingStartTime = Date.now();
 
-    // Update button state
-    elements.recordBtn.classList.remove('btn-danger');
-    elements.recordBtn.classList.add('btn-success');
-    elements.recordBtnText.textContent = 'Stop Recording';
+    // Validate recording actually started before updating UI
+    if (data.recordingId) {
+      // Recording started successfully
+      currentRecordingId = data.recordingId;
+      isRecording = true;
+      recordingStartTime = Date.now();
 
-    // Show recording indicator
-    if (elements.recordingStatus) {
-      elements.recordingStatus.classList.remove('d-none');
+      // Update button state
+      elements.recordBtn.classList.remove('btn-danger');
+      elements.recordBtn.classList.add('btn-success');
+      elements.recordBtnText.textContent = 'Stop Recording';
+
+      // Show recording indicator
+      if (elements.recordingStatus) {
+        elements.recordingStatus.classList.remove('d-none');
+      }
+
+      // Start duration timer
+      startRecordingDurationTimer();
+
+      console.log('✅ Recording started:', currentRecordingId);
+      showNotification('Recording started', 'success');
+    } else {
+      // Session started but recording failed
+      isRecording = false;
+      currentRecordingId = null;
+
+      console.warn('⚠️ Session started without recording:', data);
+      showNotification('Session started but recording failed - check backend logs', 'warning');
     }
-
-    // Start duration timer
-    startRecordingDurationTimer();
-
-    console.log('✅ Recording started:', currentRecordingId);
-    showNotification('Recording started', 'success');
 
   } catch (error) {
     console.error('❌ Failed to start recording:', error);
     showNotification(error.message, 'error');
     alert('Failed to start recording: ' + error.message);
+
+    // Ensure state is reset on error
+    isRecording = false;
+    currentRecordingId = null;
+    currentSessionId = null;
   }
 }
 
@@ -4627,6 +5091,65 @@ function initDebugSessionControls() {
 }
 
 /**
+ * Initialize debug feed toggle (pause/resume Micro6 tick feed).
+ */
+function initDebugFeedControls() {
+  if (!elements.debugFeedToggleBtn) return;
+
+  const saved = localStorage.getItem(DEBUG_FEED_KEY);
+  debugFeedEnabled = saved === 'true';
+  setDebugFeedEnabled(debugFeedEnabled, true);
+
+  elements.debugFeedToggleBtn.addEventListener('click', async () => {
+    const next = !debugFeedEnabled;
+    setDebugFeedEnabled(next, true);
+  });
+}
+
+function updateDebugFeedToggleUi() {
+  if (!elements.debugFeedToggleBtn) return;
+  if (debugFeedEnabled) {
+    elements.debugFeedToggleBtn.classList.remove('btn-outline-secondary');
+    elements.debugFeedToggleBtn.classList.add('btn-outline-success');
+    elements.debugFeedToggleBtn.querySelector('span').textContent = 'Debug Feed: On';
+  } else {
+    elements.debugFeedToggleBtn.classList.remove('btn-outline-success');
+    elements.debugFeedToggleBtn.classList.add('btn-outline-secondary');
+    elements.debugFeedToggleBtn.querySelector('span').textContent = 'Debug Feed: Off';
+  }
+}
+
+async function setDebugFeedEnabled(enabled, sendSignal) {
+  debugFeedEnabled = enabled;
+  localStorage.setItem(DEBUG_FEED_KEY, String(enabled));
+  updateDebugFeedToggleUi();
+
+  if (!enabled) {
+    // Hide debug session indicator when feed is off (do not stop recording)
+    if (elements.debugSessionStatus) {
+      elements.debugSessionStatus.classList.add('d-none');
+    }
+    isDebugSessionActive = false;
+  }
+
+  if (sendSignal) {
+    try {
+      const response = await fetch('/api/debug/feed-control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Failed to control debug feed:', error);
+      showNotification('Failed to control debug feed: ' + error.message, 'error');
+    }
+  }
+}
+
+/**
  * Start a debug session without recording.
  */
 async function startDebugSession() {
@@ -4647,6 +5170,11 @@ async function startDebugSession() {
     const data = await response.json();
     currentDebugSessionId = data.sessionId;
     isDebugSessionActive = true;
+
+    // Ensure debug feed is enabled when starting a session
+    if (!debugFeedEnabled) {
+      setDebugFeedEnabled(true, true);
+    }
 
     // Show debug session status badge
     if (elements.debugSessionStatus) {
@@ -4800,6 +5328,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTickReplayControls(); // New tick-based replay controls
   initRecordingControls(); // Recording controls
   initDebugSessionControls(); // Debug session controls (live mode only)
+  initDebugFeedControls(); // Debug feed toggle (pause/resume micro6)
   initTaskRecordingControls(); // Task recording controls
 
   // Viewport pause/resume button

@@ -198,10 +198,10 @@ body {
 .console-output {
   flex: 1;
   overflow-y: auto;
-  max-height: 300px;
+  max-height: 600px;
   background: rgba(0, 0, 0, 0.3);
   border-radius: 12px;
-  padding: 10px;
+  padding: 12px;
   font-family: 'Courier New', monospace;
   font-size: 13px;
   min-height: 0;
@@ -228,10 +228,10 @@ body {
   font-weight: bold;
 }
 
-.log-info { color: #e5e7eb; }
-.log-warn { color: #fbbf24; }
-.log-error { color: #f87171; }
-.log-debug { color: #93c5fd; }
+.log-info { color: #f8fafc; }
+.log-warn { color: #fde68a; }
+.log-error { color: #fecaca; }
+.log-debug { color: #cbd5f5; }
 
 /* Viewport loader */
 .loader-container {
@@ -298,8 +298,8 @@ body {
 .state-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  font-size: 12px;
+  gap: 10px;
+  font-size: 13px;
   flex: 1;
   overflow-y: auto;
   min-height: 0;
@@ -310,6 +310,7 @@ body {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
 }
 
 .state-label {
@@ -477,12 +478,12 @@ body {
 .log-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 4px 8px;
+  gap: 10px;
+  padding: 6px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-family: monospace;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.5;
   transition: background-color 0.15s ease;
 }
 
@@ -516,11 +517,11 @@ body {
 .state-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 6px 8px;
+  gap: 4px;
+  padding: 8px 10px;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .state-label {
@@ -847,7 +848,7 @@ body {
 
 /* Tick Group Styling */
 .tick-group {
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   overflow: hidden;
@@ -863,8 +864,8 @@ body {
 .tick-group-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 10px;
+  padding: 8px 12px;
   background: rgba(255, 255, 255, 0.05);
   cursor: pointer;
   user-select: text;
@@ -886,15 +887,16 @@ body {
 
 .tick-group-title {
   font-weight: 600;
+  font-size: 14px;
   color: #f8fafc;
 }
 
 .tick-group-count {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   color: #f8fafc;
   background: rgba(0, 0, 0, 0.45);
-  padding: 2px 6px;
+  padding: 3px 8px;
   border-radius: 10px;
 }
 
@@ -913,8 +915,23 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
+.tick-seek-btn {
+  margin-left: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(59, 130, 246, 0.15);
+  color: #bfdbfe;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tick-seek-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+}
+
 .tick-group-content {
-  padding: 4px 8px;
+  padding: 6px 10px;
 }
 
 .tick-group.collapsed .tick-group-content {
