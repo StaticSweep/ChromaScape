@@ -82,8 +82,9 @@ const replaySnapshotFetchInFlight = new Set();
 const MAX_REPLAY_SNAPSHOTS = 600;
 let autoFollowReplay = false; // Default: Auto-follow OFF
 const AUTO_FOLLOW_KEY = 'debugger_auto_follow_replay';
-let userScrollLocked = false; // Track if user manually scrolled
-let lastUserScrollTime = 0;
+let userScrolledRecently = false; // Track if user manually scrolled in last 2s
+let lastProgrammaticScrollTime = 0;
+let userScrollResetTimeout = null;
 
 // Global section toggles
 const globalSectionToggles = {
@@ -2334,18 +2335,30 @@ function initAutoFollowToggle() {
 
     // Reset scroll lock when auto-follow is toggled on
     if (autoFollowReplay) {
-      userScrollLocked = false;
-      lastUserScrollTime = 0;
+      userScrolledRecently = false;
+      if (userScrollResetTimeout) {
+        clearTimeout(userScrollResetTimeout);
+        userScrollResetTimeout = null;
+      }
     }
   });
 
-  // Detect manual scrolling to suppress auto-follow
+  // Detect manual scrolling to suppress auto-follow for 2 seconds
   if (elements.logsContainer) {
     elements.logsContainer.addEventListener('scroll', () => {
       const now = Date.now();
-      // Only consider it a manual scroll if it's been >100ms since last auto-scroll
-      if (now - lastUserScrollTime > 100) {
-        userScrollLocked = true;
+      // Only consider it a manual scroll if it's been >200ms since last programmatic scroll
+      if (now - lastProgrammaticScrollTime > 200) {
+        userScrolledRecently = true;
+
+        // Reset the flag after 2 seconds of no manual scrolling
+        if (userScrollResetTimeout) {
+          clearTimeout(userScrollResetTimeout);
+        }
+        userScrollResetTimeout = setTimeout(() => {
+          userScrolledRecently = false;
+          userScrollResetTimeout = null;
+        }, 2000);
       }
     });
   }
@@ -3896,7 +3909,7 @@ function renderReplayLogs(logs, currentReplayTick = null) {
   updateSourceFilterSummary();
   if (currentMode === 'replay') {
     const container = elements.logsContainer;
-    const shouldAutoScroll = autoFollowReplay && !userScrollLocked;
+    const shouldAutoScroll = autoFollowReplay && !userScrolledRecently;
     const preserveScroll = container && !shouldAutoScroll;
     const previousScrollTop = preserveScroll ? container.scrollTop : 0;
     renderLogHistory();
@@ -3906,7 +3919,7 @@ function renderReplayLogs(logs, currentReplayTick = null) {
     // Highlight current tick group after rendering
     highlightCurrentTickGroup(currentReplayTick);
     if (shouldAutoScroll && currentMode === 'replay') {
-      lastUserScrollTime = Date.now(); // Mark as programmatic scroll
+      lastProgrammaticScrollTime = Date.now(); // Mark as programmatic scroll
       container.scrollTop = container.scrollHeight;
     }
   }
@@ -3924,8 +3937,8 @@ function highlightCurrentTickGroup(currentReplayTick) {
   groups.forEach(g => {
     if (g.dataset.tick == currentReplayTick) {
       g.classList.add('current-tick-group');
-      if (autoFollowReplay && !userScrollLocked && currentMode === 'replay') {
-        lastUserScrollTime = Date.now(); // Mark as programmatic scroll
+      if (autoFollowReplay && !userScrolledRecently && currentMode === 'replay') {
+        lastProgrammaticScrollTime = Date.now(); // Mark as programmatic scroll
         g.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
@@ -4350,14 +4363,14 @@ function renderTickLogs(logs) {
     clampLogHistory(replayLogHistory);
     updateSourceFilterSummary();
     const container = elements.logsContainer;
-    const shouldAutoScroll = autoFollowReplay && !userScrollLocked;
+    const shouldAutoScroll = autoFollowReplay && !userScrolledRecently;
     const preserveScroll = container && !shouldAutoScroll;
     const previousScrollTop = preserveScroll ? container.scrollTop : 0;
     renderLogHistory();
     if (preserveScroll) {
       container.scrollTop = previousScrollTop;
     } else if (shouldAutoScroll) {
-      lastUserScrollTime = Date.now(); // Mark as programmatic scroll
+      lastProgrammaticScrollTime = Date.now(); // Mark as programmatic scroll
       container.scrollTop = container.scrollHeight;
     }
     highlightCurrentTickGroup(currentTick);
