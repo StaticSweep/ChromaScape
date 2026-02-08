@@ -85,6 +85,10 @@
           <i class="bi bi-play-circle me-1"></i>
           <span>Start Debug Session</span>
         </button>
+        <button type="button" id="debugFeedToggleBtn" class="btn btn-outline-secondary ms-2">
+          <i class="bi bi-broadcast me-1"></i>
+          <span>Debug Feed: Off</span>
+        </button>
         <div id="recordingStatus" class="recording-status d-none">
           <i class="bi bi-record-fill blink"></i>
           <span id="recordingDuration">00:00</span>
@@ -232,6 +236,9 @@
             <button class="section-toggle active" data-section="projectiles" title="Show active projectiles">Projectiles</button>
             <button class="section-toggle active" data-section="player" title="Show player state">Player</button>
             <button class="section-toggle active" data-section="varbits" title="Show varbit changes">Varbits</button>
+            <button class="section-toggle active" data-section="objects" title="Show game objects">Objects</button>
+            <button class="section-toggle active" data-section="groundObjects" title="Show ground objects">Ground Objects</button>
+            <button class="section-toggle active" data-section="groundItems" title="Show ground items">Ground Items</button>
           </div>
           <!-- ActionLogger type filters -->
           <div class="action-log-filters mb-2" style="display: none;" id="actionLogFilters">

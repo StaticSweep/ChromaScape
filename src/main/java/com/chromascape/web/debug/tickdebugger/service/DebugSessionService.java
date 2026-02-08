@@ -120,6 +120,18 @@ public class DebugSessionService {
    */
   @Transactional
   public void stopSession(String sessionId, Long endTick) {
+    stopSession(sessionId, endTick, true);
+  }
+
+  /**
+   * Stop a debug session with optional recording stop.
+   *
+   * @param sessionId the session ID to stop
+   * @param endTick the final tick number
+   * @param stopRecording whether to stop the video recording
+   */
+  @Transactional
+  public void stopSession(String sessionId, Long endTick, boolean stopRecording) {
     Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
 
     if (sessionOpt.isEmpty()) {
@@ -137,8 +149,8 @@ public class DebugSessionService {
       snapshotRepository.findMaxTickBySessionId(sessionId).ifPresent(session::setEndTick);
     }
 
-    // Stop video recording if active
-    if (session.getRecordingId() != null) {
+    // Stop video recording if active and requested
+    if (stopRecording && session.getRecordingId() != null) {
       try {
         RecordingMetadata metadata = recordingService.stopRecording();
         if (metadata != null) {

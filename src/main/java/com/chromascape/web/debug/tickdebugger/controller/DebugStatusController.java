@@ -1,11 +1,14 @@
 package com.chromascape.web.debug.tickdebugger.controller;
 
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
+import com.chromascape.web.debug.tickdebugger.websocket.TickStreamWebSocketHandler;
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,9 +25,12 @@ public class DebugStatusController {
   private static final Logger log = LoggerFactory.getLogger(DebugStatusController.class);
 
   private final DebugSessionService sessionService;
+  private final TickStreamWebSocketHandler tickStreamWebSocketHandler;
 
-  public DebugStatusController(DebugSessionService sessionService) {
+  public DebugStatusController(
+      DebugSessionService sessionService, TickStreamWebSocketHandler tickStreamWebSocketHandler) {
     this.sessionService = sessionService;
+    this.tickStreamWebSocketHandler = tickStreamWebSocketHandler;
   }
 
   /**
@@ -62,6 +68,29 @@ public class DebugStatusController {
     } catch (Exception e) {
       log.error("Error getting feed status", e);
       return ResponseEntity.status(500).build();
+    }
+  }
+
+  /**
+   * Control Micro6 tick feed (pause/resume).
+   *
+   * @param request payload with "enabled" boolean
+   * @return response with result
+   */
+  @PostMapping("/feed-control")
+  public ResponseEntity<Map<String, Object>> controlFeed(@RequestBody Map<String, Object> request) {
+    Map<String, Object> response = new HashMap<>();
+    try {
+      Object enabledValue = request.get("enabled");
+      boolean enabled = enabledValue instanceof Boolean && (Boolean) enabledValue;
+      int notified = tickStreamWebSocketHandler.broadcastFeedControl(enabled);
+      response.put("enabled", enabled);
+      response.put("clientsNotified", notified);
+      return ResponseEntity.ok(response);
+    } catch (Exception e) {
+      log.error("Error controlling feed", e);
+      response.put("error", "Failed to control feed");
+      return ResponseEntity.status(500).body(response);
     }
   }
 }

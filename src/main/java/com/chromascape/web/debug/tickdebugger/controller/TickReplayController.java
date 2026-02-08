@@ -701,8 +701,13 @@ public class TickReplayController {
           }
         }
 
-        // NPCs section
-        if (snapshot.getThreats() != null) {
+        // NPCs section (prefer full NPC list if available)
+        if (snapshot.getNpcs() != null) {
+          JsonNode npcNode = snapshot.getNpcs();
+          int npcCount = npcNode.isArray() ? npcNode.size() : 0;
+          sectionCounts.put("npcs", npcCount);
+          sectionData.put("npcs", snapshot.getNpcs());
+        } else if (snapshot.getThreats() != null) {
           JsonNode threatsNode = snapshot.getThreats();
           int threatCount = threatsNode.isArray() ? threatsNode.size() : 0;
           sectionCounts.put("npcs", threatCount);
@@ -715,6 +720,30 @@ public class TickReplayController {
           int projCount = projectilesNode.isArray() ? projectilesNode.size() : 0;
           sectionCounts.put("projectiles", projCount);
           sectionData.put("projectiles", snapshot.getProjectiles());
+        }
+
+        // Objects section
+        if (snapshot.getGameObjects() != null) {
+          JsonNode objectsNode = snapshot.getGameObjects();
+          int objectCount = objectsNode.isArray() ? objectsNode.size() : 0;
+          sectionCounts.put("objects", objectCount);
+          sectionData.put("objects", snapshot.getGameObjects());
+        }
+
+        // Ground objects section
+        if (snapshot.getGroundObjects() != null) {
+          JsonNode groundObjectsNode = snapshot.getGroundObjects();
+          int groundObjectCount = groundObjectsNode.isArray() ? groundObjectsNode.size() : 0;
+          sectionCounts.put("groundObjects", groundObjectCount);
+          sectionData.put("groundObjects", snapshot.getGroundObjects());
+        }
+
+        // Ground items section
+        if (snapshot.getGroundItems() != null) {
+          JsonNode groundItemsNode = snapshot.getGroundItems();
+          int groundItemCount = groundItemsNode.isArray() ? groundItemsNode.size() : 0;
+          sectionCounts.put("groundItems", groundItemCount);
+          sectionData.put("groundItems", snapshot.getGroundItems());
         }
 
         // Player section (always present)

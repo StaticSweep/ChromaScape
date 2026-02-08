@@ -9,6 +9,8 @@ import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -39,6 +41,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   private final DebugSessionService sessionService;
   private final TickStreamIngestionService ingestionService;
   private final DebuggerTickWebSocketHandler debuggerWebSocketHandler;
+  private final Set<WebSocketSession> micro6Clients = ConcurrentHashMap.newKeySet();
 
   public TickStreamWebSocketHandler(
       ObjectMapper objectMapper,
@@ -54,6 +57,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   @Override
   public void afterConnectionEstablished(WebSocketSession session) throws Exception {
     log.info("Micro6 tick stream client connected: {}", session.getId());
+    micro6Clients.add(session);
     super.afterConnectionEstablished(session);
   }
 
@@ -84,6 +88,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   @Override
   public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
     log.info("Micro6 tick stream client disconnected: {}, status: {}", session.getId(), status);
+    micro6Clients.remove(session);
     super.afterConnectionClosed(session, status);
   }
 
@@ -159,7 +164,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           request.getSessionId(),
           request.getEndTick());
 
-      sessionService.stopSession(request.getSessionId(), request.getEndTick());
+      // Do not stop recording automatically on Micro6 session stop
+      sessionService.stopSession(request.getSessionId(), request.getEndTick(), false);
     } catch (Exception e) {
       log.error("Error handling SESSION_STOP: {}", e.getMessage(), e);
     }
@@ -199,5 +205,35 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     } catch (Exception e) {
       log.error("Failed to broadcast session start to debugger: {}", e.getMessage(), e);
     }
+  }
+
+  /**
+   * Broadcast a feed control message to connected Micro6 clients.
+   *
+   * @param enabled true to resume sending tick data, false to pause
+   * @return number of clients notified
+   */
+  public int broadcastFeedControl(boolean enabled) {
+    if (micro6Clients.isEmpty()) {
+      return 0;
+    }
+    int sent = 0;
+    try {
+      Map<String, Object> message = Map.of("type", "FEED_CONTROL", "enabled", enabled);
+      String messageJson = objectMapper.writeValueAsString(message);
+      TextMessage textMessage = new TextMessage(messageJson);
+
+      for (WebSocketSession client : micro6Clients) {
+        if (client.isOpen()) {
+          synchronized (client) {
+            client.sendMessage(textMessage);
+          }
+          sent++;
+        }
+      }
+    } catch (Exception e) {
+      log.error("Failed to broadcast FEED_CONTROL: {}", e.getMessage(), e);
+    }
+    return sent;
   }
 }

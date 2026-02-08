@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash(cmd.exe /c \"netstat -ano | findstr :8090 | findstr LISTENING\")"
     ]
   }
 }
