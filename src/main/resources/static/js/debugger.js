@@ -383,7 +383,9 @@ window.debugger_resetStateManager = () => {
 // Throttling for log sync to prevent request spam
 let lastSyncTimeMs = 0;
 let currentSyncAbortController = null;
-const SYNC_INTERVAL_MS = 200; // Sync every 200ms (5 FPS), reasonable for network requests
+// Dynamic sync interval: slower during active playback to reduce UI overhead
+const SYNC_INTERVAL_PAUSED_MS = 200;
+const SYNC_INTERVAL_PLAYING_MS = 400;
 
 // Source filter state
 const hiddenSources = new Set();
@@ -416,6 +418,7 @@ let autoFollowReplay = false; // Default: Auto-follow OFF
 const AUTO_FOLLOW_KEY = 'debugger_auto_follow_replay';
 let userScrolledRecently = false; // Track if user manually scrolled in last 2s
 let lastProgrammaticScrollTime = 0;
+let lastHighlightedTick = null; // Track last highlighted tick to skip redundant DOM updates
 let userScrollResetTimeout = null;
 
 // Snapshot tick timeline (authoritative source for tick sync)
@@ -3775,10 +3778,12 @@ function initReplayModeListeners() {
     elements.sessionSelect.addEventListener('change', (e) => {
       const recordingId = e.target.value;
       if (recordingId) {
+        switchMode('replay');
         loadRecording(recordingId);
       } else {
         // User selected blank option - clear everything
         currentRecording = null;
+        lastHighlightedTick = null;
         replayLogHistory.length = 0;
         replayTickSnapshots.clear();
         replaySnapshotOrder.length = 0;
@@ -3803,7 +3808,8 @@ function initReplayModeListeners() {
         const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
         const timeSinceLastSync = currentTimeMs - lastSyncTimeMs;
 
-        if (timeSinceLastSync >= SYNC_INTERVAL_MS) {
+        const syncInterval = elements.replayVideo.paused ? SYNC_INTERVAL_PAUSED_MS : SYNC_INTERVAL_PLAYING_MS;
+        if (timeSinceLastSync >= syncInterval) {
           lastSyncTimeMs = currentTimeMs;
           syncLogsToVideo(currentTimeMs);
         }
@@ -3871,6 +3877,7 @@ function updateScrubberFromVideo() {
 
 async function loadRecordingSessions() {
   if (!elements.sessionSelect) return;
+  const preservedValue = elements.sessionSelect.value;
 
   try {
     const response = await fetch('/api/recordings/sessions');
@@ -3898,6 +3905,10 @@ async function loadRecordingSessions() {
       option.disabled = true;
       elements.sessionSelect.appendChild(option);
     }
+
+    if (preservedValue) {
+      elements.sessionSelect.value = preservedValue;
+    }
   } catch (error) {
     console.error('Failed to load recording sessions:', error);
     elements.sessionSelect.innerHTML = '<option value="">Error loading sessions</option>';
@@ -3907,6 +3918,7 @@ async function loadRecordingSessions() {
 async function loadRecording(recordingId) {
   // Clear ALL replay state immediately to prevent stale data
   currentRecording = null; // Clear first to stop ongoing syncs
+  lastHighlightedTick = null;
   replayLogHistory.length = 0;
   replayTickSnapshots.clear(); // Clear tick snapshot map
   replaySnapshotOrder.length = 0;
@@ -4449,16 +4461,19 @@ function renderReplayLogs(logs, currentReplayTick = null) {
  */
 function highlightCurrentTickGroup(currentReplayTick) {
   if (currentReplayTick == null) return;
+  if (currentReplayTick === lastHighlightedTick) return; // skip redundant DOM update
+  lastHighlightedTick = currentReplayTick;
 
   const groups = document.querySelectorAll('.tick-group');
   groups.forEach(g => g.classList.remove('current-tick-group'));
 
+  const isPlaying = elements.replayVideo && !elements.replayVideo.paused;
   groups.forEach(g => {
     if (g.dataset.tick == currentReplayTick) {
       g.classList.add('current-tick-group');
       if (autoFollowReplay && !userScrolledRecently && currentMode === 'replay') {
         lastProgrammaticScrollTime = Date.now(); // Mark as programmatic scroll
-        g.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        g.scrollIntoView({ block: 'nearest', behavior: isPlaying ? 'instant' : 'smooth' });
       }
     }
   });

@@ -54,6 +54,8 @@ public class RecordingService implements FrameListener {
   private final AtomicBoolean recording = new AtomicBoolean(false);
   private final AtomicLong frameCount = new AtomicLong(0);
   private final AtomicLong droppedFrameCount = new AtomicLong(0);
+  private final AtomicLong duplicatedFrameCount = new AtomicLong(0);
+  private volatile int queueHighWaterMark = 0;
   private final Java2DFrameConverter frameConverter = new Java2DFrameConverter();
 
   // Frame buffer for producer-consumer pattern
@@ -313,6 +315,7 @@ public class RecordingService implements FrameListener {
       long duration = System.currentTimeMillis() - recordingStartTime;
       long frames = frameCount.get();
       long dropped = droppedFrameCount.get();
+      long duplicated = duplicatedFrameCount.get();
 
       // Calculate actual FPS
       double actualCaptureFps = (frames * 1000.0) / duration;
@@ -324,7 +327,9 @@ public class RecordingService implements FrameListener {
         Duration: {} ms (expected ~{} sec based on {} frames @ {} FPS)
         Frames captured: {}
         Frames dropped: {} ({:.1f}%)
+        Frames duplicated (CFR fill): {} ({:.1f}%)
         Frames encoded: {}
+        Queue high-water mark: {}
         Actual capture FPS: {:.2f}
         Configured FPS: {}
         """,
@@ -336,7 +341,10 @@ public class RecordingService implements FrameListener {
           frames,
           dropped,
           dropped * 100.0 / (frames + dropped),
+          duplicated,
+          encodedFrameCount > 0 ? duplicated * 100.0 / encodedFrameCount : 0.0,
           encodedFrameCount,
+          queueHighWaterMark,
           actualCaptureFps,
           unifiedConfig.getFps());
 
@@ -376,6 +384,8 @@ public class RecordingService implements FrameListener {
     metrics.put("frameBufferDepth", frameBuffer.size());
     metrics.put("frameBufferCapacity", frameBuffer.remainingCapacity());
     metrics.put("droppedFrames", droppedFrameCount.get());
+    metrics.put("duplicatedFrames", duplicatedFrameCount.get());
+    metrics.put("queueHighWaterMark", queueHighWaterMark);
     metrics.put("framesRecorded", framesRecorded);
     metrics.put("currentRecordingId", currentRecordingId);
     metrics.put(
@@ -409,6 +419,13 @@ public class RecordingService implements FrameListener {
 
     if (!config.isEnabled()) {
       logger.info("Recording is disabled, ignoring auto-start request");
+      return null;
+    }
+    if (!config.isAutoRecord()) {
+      logger.warn(
+          "Auto-recording is disabled (recording.autoRecord=false), ignoring auto-start"
+              + " request: source={}",
+          triggerSource);
       return null;
     }
 
@@ -496,7 +513,10 @@ public class RecordingService implements FrameListener {
   private void encoderLoop() {
     logger.info("Encoder thread started");
     encodedFrameCount = 0;
+    duplicatedFrameCount.set(0);
+    queueHighWaterMark = 0;
     TimestampedFrame lastFrame = null;
+    final int targetFps = unifiedConfig.getFps();
 
     while (encoderRunning || !frameBuffer.isEmpty()) {
       try {
@@ -505,20 +525,28 @@ public class RecordingService implements FrameListener {
 
         if (timestampedFrame != null) {
           lastFrame = timestampedFrame;
+        } else if (encoderRunning && lastFrame != null) {
+          // No frame received within poll window — duplicate last frame to maintain CFR cadence
+          timestampedFrame = lastFrame;
+          duplicatedFrameCount.incrementAndGet();
         }
 
         if (timestampedFrame != null && recorder != null) {
-          // Use actual capture time for timestamp
-          long elapsedNanos = timestampedFrame.captureNanoTime - recordingStartTimeNano;
-          long timestampMicros = elapsedNanos / 1000L; // Convert to microseconds
+          // CFR timestamp: each frame slot gets an evenly-spaced timestamp regardless of
+          // actual capture wall-clock time. This prevents VFR artifacts in the output.
+          long timestampMicros = encodedFrameCount * 1_000_000L / targetFps;
           recorder.setTimestamp(timestampMicros);
           recorder.record(frameConverter.convert(timestampedFrame.image));
           encodedFrameCount++;
 
+          // Track queue high-water mark
+          int queueDepth = frameBuffer.size();
+          if (queueDepth > queueHighWaterMark) {
+            queueHighWaterMark = queueDepth;
+          }
+
           // Detect encoder lag
-          long queueDepth = frameBuffer.size();
           if (queueDepth > FRAME_BUFFER_SIZE * 0.8) {
-            // Buffer >80% full - encoder is falling behind
             logger.warn(
                 "Encoder lag detected: queue depth {} ({}% full)",
                 queueDepth,
@@ -528,10 +556,11 @@ public class RecordingService implements FrameListener {
           // Periodic logging (every 30 frames with queue depth)
           if (encodedFrameCount % 30 == 0) {
             logger.info(
-                "Encode progress: {} frames, queue depth: {}, dropped: {}",
+                "Encode progress: {} frames, queue depth: {}, dropped: {}, duplicated: {}",
                 encodedFrameCount,
                 queueDepth,
-                droppedFrameCount.get());
+                droppedFrameCount.get(),
+                duplicatedFrameCount.get());
           }
         }
       } catch (InterruptedException e) {
@@ -549,8 +578,7 @@ public class RecordingService implements FrameListener {
     while ((frame = frameBuffer.poll()) != null) {
       try {
         if (recorder != null) {
-          long elapsedNanos = frame.captureNanoTime - recordingStartTimeNano;
-          long timestampMicros = elapsedNanos / 1000L;
+          long timestampMicros = encodedFrameCount * 1_000_000L / targetFps;
           recorder.setTimestamp(timestampMicros);
           recorder.record(frameConverter.convert(frame.image));
           encodedFrameCount++;
@@ -566,6 +594,11 @@ public class RecordingService implements FrameListener {
   /** Returns whether a recording is currently in progress. */
   public boolean isRecording() {
     return recording.get();
+  }
+
+  /** Returns whether auto-recording is enabled per configuration. */
+  public boolean isAutoRecordEnabled() {
+    return config.isAutoRecord();
   }
 
   /** Returns the current recording ID if recording, or null otherwise. */
@@ -637,6 +670,8 @@ public class RecordingService implements FrameListener {
       recordingStartTime = 0;
       frameCount.set(0);
       droppedFrameCount.set(0);
+      duplicatedFrameCount.set(0);
+      queueHighWaterMark = 0;
       encodedFrameCount = 0;
       framesRecorded = 0;
     }
@@ -679,6 +714,8 @@ public class RecordingService implements FrameListener {
     recordingStartTime = 0;
     frameCount.set(0);
     droppedFrameCount.set(0);
+    duplicatedFrameCount.set(0);
+    queueHighWaterMark = 0;
     encodedFrameCount = 0;
     framesRecorded = 0;
     initialWidth = 0;
