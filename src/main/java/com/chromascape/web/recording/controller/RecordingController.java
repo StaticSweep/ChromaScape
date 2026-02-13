@@ -3,6 +3,7 @@ package com.chromascape.web.recording.controller;
 import com.chromascape.utils.core.screen.window.WindowInfo;
 import com.chromascape.utils.core.screen.window.WindowSelectionService;
 import com.chromascape.web.recording.config.RecordingConfig;
+import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.chromascape.web.recording.exception.FrameCaptureException;
@@ -85,7 +86,7 @@ public class RecordingController {
     }
 
     try {
-      String recordingId = recordingService.startRecording();
+      String recordingId = recordingService.startRecording(RecordingTriggerSource.MANUAL);
       LocalDateTime preciseStartTime = recordingService.getRecordingStartTimeAsLocalDateTime();
 
       if (preciseStartTime == null) {
@@ -253,10 +254,12 @@ public class RecordingController {
    */
   @GetMapping("/status")
   public ResponseEntity<Map<String, Object>> getStatus() {
+    RecordingTriggerSource triggerSource = recordingService.getTriggerSource();
     Map<String, Object> response = new HashMap<>();
     response.put("recording", recordingService.isRecording());
     response.put("recordingId", recordingService.getCurrentRecordingId());
     response.put("startTime", recordingService.getRecordingStartTime());
+    response.put("triggerSource", triggerSource != null ? triggerSource.name() : null);
     return ResponseEntity.ok(response);
   }
 

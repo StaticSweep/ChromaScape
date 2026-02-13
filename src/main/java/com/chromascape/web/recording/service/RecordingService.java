@@ -4,6 +4,7 @@ import com.chromascape.utils.core.screen.FrameEvent;
 import com.chromascape.utils.core.screen.FrameListener;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.web.recording.config.RecordingConfig;
+import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.exception.FrameCaptureException;
 import com.chromascape.web.recording.exception.RecordingAlreadyInProgressException;
 import com.chromascape.web.recording.exception.RecordingDisabledException;
@@ -67,6 +68,7 @@ public class RecordingService implements FrameListener {
   private long recordingStartTime;
   private volatile long recordingStartTimeNano; // Store nano time at start
   private String currentRecordingId;
+  private volatile RecordingTriggerSource currentTriggerSource;
   private String currentVideoCodec; // Track which codec was successfully used
   private int initialWidth;
   private int initialHeight;
@@ -112,6 +114,16 @@ public class RecordingService implements FrameListener {
    * @return The recording ID for this session
    */
   public String startRecording() {
+    return startRecording(RecordingTriggerSource.MANUAL);
+  }
+
+  /**
+   * Starts a new recording session with an explicit trigger source.
+   *
+   * @param triggerSource what initiated this recording
+   * @return The recording ID for this session
+   */
+  public String startRecording(RecordingTriggerSource triggerSource) {
     if (recording.get()) {
       logger.warn("Recording is already in progress: {}", currentRecordingId);
       throw new RecordingAlreadyInProgressException(currentRecordingId);
@@ -121,6 +133,8 @@ public class RecordingService implements FrameListener {
       logger.warn("Recording is disabled");
       throw new RecordingDisabledException();
     }
+
+    currentTriggerSource = triggerSource;
 
     try {
       // Generate recording ID using UUID (decouple from timestamp)
@@ -377,6 +391,17 @@ public class RecordingService implements FrameListener {
    * @return The recording ID, or null if recording failed
    */
   public String startRecordingAuto(String scriptName) {
+    return startRecordingAuto(scriptName, RecordingTriggerSource.TASK_AUTO);
+  }
+
+  /**
+   * Start recording with auto-start trigger and an explicit source.
+   *
+   * @param scriptName The name of the script that triggered recording
+   * @param triggerSource what initiated this recording
+   * @return The recording ID, or null if recording failed
+   */
+  public String startRecordingAuto(String scriptName, RecordingTriggerSource triggerSource) {
     if (recording.get()) {
       logger.warn("Recording is already in progress, ignoring auto-start request");
       return currentRecordingId;
@@ -387,10 +412,9 @@ public class RecordingService implements FrameListener {
       return null;
     }
 
-    logger.info("Auto-starting recording for script: {}", scriptName);
+    logger.info("Auto-starting recording for script: {} (source: {})", scriptName, triggerSource);
 
-    // Use the existing startRecording method
-    return startRecording();
+    return startRecording(triggerSource);
   }
 
   /**
@@ -549,6 +573,11 @@ public class RecordingService implements FrameListener {
     return recording.get() ? currentRecordingId : null;
   }
 
+  /** Returns the trigger source for the active recording, or null if not recording. */
+  public RecordingTriggerSource getTriggerSource() {
+    return recording.get() ? currentTriggerSource : null;
+  }
+
   /** Returns the video codec used for the current recording, or null if not recording. */
   public String getCurrentVideoCodec() {
     return recording.get() ? currentVideoCodec : null;
@@ -604,6 +633,7 @@ public class RecordingService implements FrameListener {
       frameBuffer.clear();
 
       currentRecordingId = null;
+      currentTriggerSource = null;
       recordingStartTime = 0;
       frameCount.set(0);
       droppedFrameCount.set(0);
@@ -645,6 +675,7 @@ public class RecordingService implements FrameListener {
     currentRecordingId = null;
     currentRecordingFile = null;
     currentVideoCodec = null;
+    currentTriggerSource = null;
     recordingStartTime = 0;
     frameCount.set(0);
     droppedFrameCount.set(0);

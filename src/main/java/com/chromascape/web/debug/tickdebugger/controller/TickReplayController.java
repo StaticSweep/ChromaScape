@@ -17,6 +17,7 @@ import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.debug.tickdebugger.service.TickVideoSyncService;
 import com.chromascape.web.logs.LogEntity;
 import com.chromascape.web.logs.LogRepository;
+import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -349,9 +350,15 @@ public class TickReplayController {
                 .orElse(null);
       }
 
-      // Ultimate fallback: pure time-based (assumes tick 0 at video start, 600ms per tick)
+      // Ultimate fallback: session-relative time-based calculation
       if (currentTick == null) {
-        currentTick = videoTimeMs / 600;
+        if (debugSession != null && debugSession.getStartTick() != null) {
+          // Session-relative: startTick + elapsed ticks (600ms per tick)
+          currentTick = debugSession.getStartTick() + (videoTimeMs / 600);
+        } else {
+          // Pure time-based fallback (assumes tick 0 at video start, 600ms per tick)
+          currentTick = videoTimeMs / 600;
+        }
       }
 
       // Merge logs into unified format
@@ -475,7 +482,8 @@ public class TickReplayController {
       }
 
       SessionStartResponse response =
-          debugSessionService.startSession(accountName, scriptName, recordingEnabled);
+          debugSessionService.startSession(
+              accountName, scriptName, recordingEnabled, RecordingTriggerSource.MANUAL);
 
       log.info(
           "Started recording via replay page: sessionId={}, recordingId={}",

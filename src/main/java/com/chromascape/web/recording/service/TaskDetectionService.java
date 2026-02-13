@@ -1,6 +1,6 @@
 package com.chromascape.web.recording.service;
 
-import com.chromascape.web.recording.config.TaskRecordingConfig;
+import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.config.TaskType;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
@@ -15,16 +15,16 @@ public class TaskDetectionService {
   private static final Logger log = LoggerFactory.getLogger(TaskDetectionService.class);
 
   private final RecordingService recordingService;
-  private final TaskRecordingConfig taskConfig;
+  private final TaskRecordingPreferenceService taskPreferenceService;
   private final RecordingSessionRepository recordingSessionRepository;
   private TaskType currentTask = null;
 
   public TaskDetectionService(
       RecordingService recordingService,
-      TaskRecordingConfig taskConfig,
+      TaskRecordingPreferenceService taskPreferenceService,
       RecordingSessionRepository recordingSessionRepository) {
     this.recordingService = recordingService;
-    this.taskConfig = taskConfig;
+    this.taskPreferenceService = taskPreferenceService;
     this.recordingSessionRepository = recordingSessionRepository;
   }
 
@@ -46,9 +46,11 @@ public class TaskDetectionService {
     }
 
     // Start new recording if this task is enabled
-    if (taskConfig.isTaskEnabled(taskType)) {
+    if (taskPreferenceService.isTaskEnabled(taskType)) {
       log.info("Auto-starting recording for task: {}", taskType);
-      String recordingId = recordingService.startRecordingAuto(taskType.getDisplayName());
+      String recordingId =
+          recordingService.startRecordingAuto(
+              taskType.getDisplayName(), RecordingTriggerSource.TASK_AUTO);
       currentTask = taskType;
 
       // Create RecordingSession entity for auto-start recording
@@ -56,16 +58,20 @@ public class TaskDetectionService {
         LocalDateTime startTime = recordingService.getRecordingStartTimeAsLocalDateTime();
 
         if (startTime != null) {
-          RecordingSession session =
-              new RecordingSession(
-                  recordingId,
-                  "auto-detected", // Account name not available in this context
-                  taskType.getDisplayName(),
-                  startTime,
-                  RecordingSession.SessionTrigger.AUTO_START,
-                  null);
-          recordingSessionRepository.save(session);
-          log.info("Created RecordingSession for auto-start: {}", recordingId);
+          if (recordingSessionRepository.findByRecordingId(recordingId).isEmpty()) {
+            RecordingSession session =
+                new RecordingSession(
+                    recordingId,
+                    "auto-detected", // Account name not available in this context
+                    taskType.getDisplayName(),
+                    startTime,
+                    RecordingSession.SessionTrigger.AUTO_START,
+                    null);
+            recordingSessionRepository.save(session);
+            log.info("Created RecordingSession for auto-start: {}", recordingId);
+          } else {
+            log.debug("RecordingSession already exists for {}, skipping insert", recordingId);
+          }
         } else {
           log.warn(
               "Could not create RecordingSession for auto-start {}: start time unavailable",

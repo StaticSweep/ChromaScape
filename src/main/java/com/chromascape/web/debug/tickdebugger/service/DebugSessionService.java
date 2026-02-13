@@ -7,6 +7,7 @@ import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
+import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.service.RecordingService;
 import com.chromascape.web.recording.service.RecordingService.RecordingMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,7 +49,8 @@ public class DebugSessionService {
   }
 
   /**
-   * Start a new debug session.
+   * Start a new debug session. Defaults to {@link RecordingTriggerSource#MICRO6_AUTO} for
+   * backward-compatibility with the Micro6 WebSocket path.
    *
    * @param accountName the account name
    * @param scriptName the script being run
@@ -58,6 +60,22 @@ public class DebugSessionService {
   @Transactional
   public SessionStartResponse startSession(
       String accountName, String scriptName, Boolean recordingEnabled) {
+    return startSession(accountName, scriptName, recordingEnabled, RecordingTriggerSource.MICRO6_AUTO);
+  }
+
+  /**
+   * Start a new debug session with an explicit trigger source.
+   *
+   * @param accountName the account name
+   * @param scriptName the script being run
+   * @param recordingEnabled whether to start video recording
+   * @param triggerSource the source that initiated this session
+   * @return response with session ID and optional recording ID
+   */
+  @Transactional
+  public SessionStartResponse startSession(
+      String accountName, String scriptName, Boolean recordingEnabled,
+      RecordingTriggerSource triggerSource) {
 
     String sessionId = "debug_" + System.currentTimeMillis();
     Long startTick = 0L; // Will be updated by first tick batch
@@ -67,7 +85,7 @@ public class DebugSessionService {
     // Optionally start video recording
     if (Boolean.TRUE.equals(recordingEnabled)) {
       try {
-        recordingId = recordingService.startRecording();
+        recordingId = recordingService.startRecording(triggerSource);
         sessionStartTime = recordingService.getRecordingStartTimeAsLocalDateTime();
 
         if (sessionStartTime == null) {
@@ -82,7 +100,7 @@ public class DebugSessionService {
                 accountName,
                 scriptName,
                 sessionStartTime,
-                RecordingSession.SessionTrigger.MANUAL, // Or could add DEBUG trigger type
+                toSessionTrigger(triggerSource),
                 null);
         recordingSessionRepository.save(recordingSession);
 
@@ -228,6 +246,15 @@ public class DebugSessionService {
         tickCount);
   }
 
+  /** Map a {@link RecordingTriggerSource} to the corresponding {@link RecordingSession.SessionTrigger}. */
+  private RecordingSession.SessionTrigger toSessionTrigger(RecordingTriggerSource src) {
+    return switch (src) {
+      case MICRO6_AUTO -> RecordingSession.SessionTrigger.MICRO6_AUTO;
+      case TASK_AUTO -> RecordingSession.SessionTrigger.AUTO_START;
+      default -> RecordingSession.SessionTrigger.MANUAL;
+    };
+  }
+
   /**
    * Delete old sessions for retention cleanup.
    *
@@ -244,5 +271,43 @@ public class DebugSessionService {
     }
 
     log.info("Deleted {} old debug sessions (ended before {})", oldSessions.size(), cutoffTime);
+  }
+
+  /**
+   * Update session tick bounds (startTick and endTick).
+   *
+   * @param sessionId the session ID to update
+   * @param tick the tick number to update bounds with
+   */
+  @Transactional
+  public void updateSessionTickBounds(String sessionId, long tick) {
+    Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
+
+    if (sessionOpt.isEmpty()) {
+      log.warn("Attempted to update tick bounds for non-existent session: {}", sessionId);
+      return;
+    }
+
+    DebugSession session = sessionOpt.get();
+    boolean updated = false;
+
+    // Set startTick if it's null or 0 (only on first tick)
+    if (session.getStartTick() == null || session.getStartTick() == 0) {
+      session.setStartTick(tick);
+      updated = true;
+      log.debug("Set startTick for session {}: {}", sessionId, tick);
+    }
+
+    // Update endTick to max(existingEndTick, tick)
+    Long currentEndTick = session.getEndTick();
+    if (currentEndTick == null || tick > currentEndTick) {
+      session.setEndTick(tick);
+      updated = true;
+      log.debug("Updated endTick for session {}: {}", sessionId, tick);
+    }
+
+    if (updated) {
+      sessionRepository.save(session);
+    }
   }
 }

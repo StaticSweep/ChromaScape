@@ -131,7 +131,10 @@ public class TickStreamIngestionService {
         saveTickOverlays(sessionId, tick, overlays);
       }
 
-      // 5. Forward to Go backend if enabled
+      // 5. Update session tick bounds
+      sessionService.updateSessionTickBounds(sessionId, tick);
+
+      // 6. Forward to Go backend if enabled
       forwardToGoBackend(batch);
 
       log.info("Processed tick batch: sessionId={}, tick={}", sessionId, tick);
@@ -183,6 +186,24 @@ public class TickStreamIngestionService {
           batch.getGameObjects() != null ? batch.getGameObjects().size() : 0,
           batch.getGroundObjects() != null ? batch.getGroundObjects().size() : 0,
           batch.getGroundItems() != null ? batch.getGroundItems().size() : 0);
+
+      // Diagnostic: Log missing major sections to identify Micro6 payload gaps
+      List<String> missingSections = new ArrayList<>();
+      if (batch.getPlayerState() == null) missingSections.add("playerState");
+      if (batch.getInventory() == null) missingSections.add("inventory");
+      if (batch.getNpcs() == null && batch.getThreats() == null) missingSections.add("npcs");
+      if (batch.getProjectiles() == null) missingSections.add("projectiles");
+      if (batch.getGameObjects() == null) missingSections.add("gameObjects");
+      if (batch.getGroundObjects() == null) missingSections.add("groundObjects");
+      if (batch.getGroundItems() == null) missingSections.add("groundItems");
+      if (batch.getQuest() == null) missingSections.add("quest");
+
+      if (!missingSections.isEmpty()) {
+        log.debug(
+            "Tick {} missing sections: {}",
+            batch.getTick(),
+            String.join(", ", missingSections));
+      }
 
       TickSnapshot snapshot =
           new TickSnapshot(batch.getSessionId(), batch.getTick(), timestamp, playerState);

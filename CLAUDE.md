@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./gradlew build
 
 # Run application (MUST use Windows, not WSL, for screen capture)
-cmd.exe /c "cd /d C:\Users\Beheerder\IdeaProjects\ChromaScape && gradlew.bat bootRun"
+cmd.exe /c 'start cmd /k "cd /d F:\Dev\IdeaProjects\ChromaScape && gradlew.bat bootRun"'
 
 # Run tests
 ./gradlew test

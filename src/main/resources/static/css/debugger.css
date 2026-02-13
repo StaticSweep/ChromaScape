@@ -145,14 +145,14 @@ body {
   min-height: 400px; /* Increased minimum height for better visibility */
 }
 
-/* Viewport canvas and video - flex items that maintain aspect ratio */
+/* Viewport canvas and video - fixed display size with letterboxing/pillarboxing */
 #viewport-canvas,
 #viewport-image,
 #replayVideo {
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
   display: none;
-  object-fit: contain; /* Maintains aspect ratio */
+  object-fit: contain; /* Maintains aspect ratio with letterboxing/pillarboxing */
 }
 
 /* Overlay canvas - absolutely positioned to cover the stage */

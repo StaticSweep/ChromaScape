@@ -112,9 +112,22 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           request.getScriptName(),
           request.getRecordingEnabled());
 
+      boolean recordingEnabled = Boolean.TRUE.equals(request.getRecordingEnabled());
+      log.info(
+          "SESSION_START: account={}, script={}, recordingEnabled={} -> recording will {}",
+          request.getAccountName(),
+          request.getScriptName(),
+          recordingEnabled,
+          recordingEnabled ? "START (MICRO6_AUTO)" : "NOT start");
+
       SessionStartResponse response =
           sessionService.startSession(
               request.getAccountName(), request.getScriptName(), request.getRecordingEnabled());
+
+      log.info(
+          "SESSION_START result: sessionId={}, recordingId={}",
+          response.getSessionId(),
+          response.getRecordingId() != null ? response.getRecordingId() : "none");
 
       // Send response back to Micro6 with the sessionId
       String responseJson = objectMapper.writeValueAsString(response);

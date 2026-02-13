@@ -19,7 +19,9 @@ public class RecordingSession {
     /** Automatic recording on script start. */
     AUTO_START,
     /** Automatic recording triggered by error event. */
-    ERROR_EVENT
+    ERROR_EVENT,
+    /** Automatic recording started by Micro6 SESSION_START message. */
+    MICRO6_AUTO
   }
 
   @Id
