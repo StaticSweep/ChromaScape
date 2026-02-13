@@ -486,7 +486,7 @@ function cacheElements() {
   elements.recordBtn = document.getElementById('recordBtn');
   elements.recordBtnText = document.getElementById('recordBtnText');
   elements.recordingStatus = document.getElementById('recordingStatus');
-  elements.recordingDuration = document.getElementById('recordingDuration');
+  elements.recordingDuration = document.getElementById('recordingStatusDuration');
   // Task recording elements
   elements.taskRecordingPanel = document.getElementById('taskRecordingPanel');
   elements.taskToggles = document.getElementById('taskToggles');
@@ -3997,73 +3997,6 @@ async function loadRecording(recordingId) {
       };
     }
 
-    // Fetch debug session for full replay history loading
-    try {
-      const sessionResponse = await fetch(`/api/debug/replay/sessions/by-recording?recordingId=${recordingId}`);
-      if (sessionResponse.ok) {
-        const session = await sessionResponse.json();
-        currentReplayDebugSessionId = session.sessionId;
-        console.log('Loaded debug session for replay:', currentReplayDebugSessionId);
-
-        // Fetch session info to get tick bounds
-        let sessionInfo = null;
-        try {
-          const infoResponse = await fetch(`/api/debug/replay/session-info/${currentReplayDebugSessionId}`);
-          if (infoResponse.ok) {
-            sessionInfo = await infoResponse.json();
-            replaySessionStartTick = sessionInfo.startTick || 0;
-            console.log('Replay session info:', {
-              startTick: sessionInfo.startTick,
-              endTick: sessionInfo.endTick,
-              minTick: sessionInfo.minTick,
-              maxTick: sessionInfo.maxTick
-            });
-          }
-        } catch (e) {
-          console.warn('Failed to fetch session info:', e);
-        }
-
-        // Load full tick history upfront (not windowed)
-        if (sessionInfo && sessionInfo.minTick != null && sessionInfo.maxTick != null) {
-          const minTick = sessionInfo.minTick;
-          const maxTick = sessionInfo.maxTick;
-
-          console.log(`Loading full tick history: ticks ${minTick} to ${maxTick} (${maxTick - minTick + 1} ticks)`);
-
-          try {
-            const tickCardsResponse = await fetch(
-              `/api/debug/replay/tick-cards/${recordingId}?start=${minTick}&end=${maxTick}`
-            );
-
-            if (tickCardsResponse.ok) {
-              const tickCards = await tickCardsResponse.json();
-              console.log(`Loaded ${tickCards.length} tick cards`);
-
-              // Build full replay history from tick cards
-              buildReplayHistoryFromTickCards(tickCards);
-
-              // Render the full history
-              if (currentMode === 'replay') {
-                renderLogHistory('Loading complete');
-              }
-            } else {
-              console.warn('Failed to load tick cards, status:', tickCardsResponse.status);
-            }
-          } catch (e) {
-            console.error('Error loading tick cards:', e);
-          }
-        } else {
-          console.warn('No tick range available for full history loading');
-        }
-      } else {
-        console.warn('No debug session found for recording (old recording or session deleted)');
-        currentReplayDebugSessionId = null;
-      }
-    } catch (e) {
-      console.warn('Failed to fetch debug session:', e);
-      currentReplayDebugSessionId = null;
-    }
-
     // Clear source/pattern state for new recording
     discoveredSources.clear();
     sourceLogTypes.clear();
@@ -4072,6 +4005,75 @@ async function loadRecording(recordingId) {
       sourceFilters.innerHTML = '';
     }
     updateSourceFilterSummary();
+
+    // Background: fetch debug session + tick cards without blocking video playback
+    (async () => {
+      try {
+        const sessionResponse = await fetch(`/api/debug/replay/sessions/by-recording?recordingId=${recordingId}`);
+        if (sessionResponse.ok) {
+          const session = await sessionResponse.json();
+          currentReplayDebugSessionId = session.sessionId;
+          console.log('Loaded debug session for replay:', currentReplayDebugSessionId);
+
+          // Fetch session info to get tick bounds
+          let sessionInfo = null;
+          try {
+            const infoResponse = await fetch(`/api/debug/replay/session-info/${currentReplayDebugSessionId}`);
+            if (infoResponse.ok) {
+              sessionInfo = await infoResponse.json();
+              replaySessionStartTick = sessionInfo.startTick || 0;
+              console.log('Replay session info:', {
+                startTick: sessionInfo.startTick,
+                endTick: sessionInfo.endTick,
+                minTick: sessionInfo.minTick,
+                maxTick: sessionInfo.maxTick
+              });
+            }
+          } catch (e) {
+            console.warn('Failed to fetch session info:', e);
+          }
+
+          // Load full tick history upfront (not windowed)
+          if (sessionInfo && sessionInfo.minTick != null && sessionInfo.maxTick != null) {
+            const minTick = sessionInfo.minTick;
+            const maxTick = sessionInfo.maxTick;
+
+            console.log(`Loading full tick history: ticks ${minTick} to ${maxTick} (${maxTick - minTick + 1} ticks)`);
+
+            try {
+              const tickCardsResponse = await fetch(
+                `/api/debug/replay/tick-cards/${recordingId}?start=${minTick}&end=${maxTick}`
+              );
+
+              if (tickCardsResponse.ok) {
+                const tickCards = await tickCardsResponse.json();
+                console.log(`Loaded ${tickCards.length} tick cards`);
+
+                // Build full replay history from tick cards
+                buildReplayHistoryFromTickCards(tickCards);
+
+                // Render the full history
+                if (currentMode === 'replay') {
+                  renderLogHistory('Loading complete');
+                }
+              } else {
+                console.warn('Failed to load tick cards, status:', tickCardsResponse.status);
+              }
+            } catch (e) {
+              console.error('Error loading tick cards:', e);
+            }
+          } else {
+            console.warn('No tick range available for full history loading');
+          }
+        } else {
+          console.warn('No debug session found for recording (old recording or session deleted)');
+          currentReplayDebugSessionId = null;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch debug session:', e);
+        currentReplayDebugSessionId = null;
+      }
+    })();
 
   } catch (error) {
     console.error('Failed to load recording:', error);
@@ -4519,6 +4521,25 @@ function initTickControls() {
       console.error('Failed to jump tick', error);
     }
   });
+
+  const scrubberJumpBtn = document.getElementById('scrubberTickJumpBtn');
+  const scrubberJumpInput = document.getElementById('scrubberTickJumpInput');
+  if (scrubberJumpBtn && scrubberJumpInput) {
+    scrubberJumpBtn.addEventListener('click', async () => {
+      const value = Number(scrubberJumpInput.value);
+      if (Number.isNaN(value)) return;
+
+      try {
+        await fetch('/api/debug/tick/jump', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tick: value })
+        });
+      } catch (error) {
+        console.error('Failed to jump tick', error);
+      }
+    });
+  }
 }
 
 // ==================== LOG FILTER ====================
@@ -5632,6 +5653,7 @@ async function stopRecording() {
     // Stop duration timer
     stopRecordingDurationTimer();
 
+    const savedRecordingId = currentRecordingId;
     currentRecordingId = null;
     currentSessionId = null;
     recordingStartTime = null;
@@ -5639,9 +5661,12 @@ async function stopRecording() {
     console.log('Recording stopped');
     showNotification('Recording stopped', 'success');
 
-    // Refresh sessions list if in replay mode
-    if (currentMode === 'replay') {
-      loadRecordingSessions();
+    // Refresh sessions list and auto-open the just-stopped recording
+    await loadRecordingSessions();
+    if (savedRecordingId && elements.sessionSelect) {
+      elements.sessionSelect.value = savedRecordingId;
+      switchMode('replay');
+      loadRecording(savedRecordingId);
     }
 
   } catch (error) {
@@ -6111,54 +6136,80 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * Poll recording metrics and update diagnostics panel
+ * Poll recording metrics and update diagnostics strip
  */
 async function updateRecordingDiagnostics() {
+  const PINNED_KEY = 'debuggerDiagnosticsPinnedFull';
+
+  // Initialise expand/pin state once on first call
+  if (!updateRecordingDiagnostics._initialised) {
+    updateRecordingDiagnostics._initialised = true;
+    const pinToggle = document.getElementById('diagnosticsPinToggle');
+    const pinned = localStorage.getItem(PINNED_KEY) === 'true';
+    if (pinToggle) pinToggle.checked = pinned;
+    if (pinned) _rdsSetExpanded(true);
+
+    // Expand button handler
+    document.getElementById('diagnosticsExpandBtn')?.addEventListener('click', () => {
+      const expanded = document.getElementById('diagnosticsFullDetails').style.display !== 'none';
+      _rdsSetExpanded(!expanded);
+    });
+
+    // Pin toggle handler
+    pinToggle?.addEventListener('change', () => {
+      localStorage.setItem(PINNED_KEY, pinToggle.checked);
+      if (pinToggle.checked) _rdsSetExpanded(true);
+    });
+  }
+
   try {
     const response = await fetch('/api/recordings/metrics');
     const metrics = await response.json();
 
-    const panel = document.getElementById('recordingDiagnosticsPanel');
-    if (!panel) return;
-
     if (metrics.isRecording) {
-      // Show panel when recording
-      panel.style.display = 'block';
-
-      // Update values
       document.getElementById('bufferDepth').textContent = metrics.frameBufferDepth;
       document.getElementById('bufferCapacity').textContent = metrics.frameBufferSize;
       document.getElementById('droppedFrames').textContent = metrics.droppedFrames;
 
-      // Duration
       const durationSec = Math.floor(metrics.recordingDurationMs / 1000);
-      const minutes = Math.floor(durationSec / 60);
-      const seconds = durationSec % 60;
-      document.getElementById('recordingDuration').textContent =
-        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      const mm = Math.floor(durationSec / 60);
+      const ss = durationSec % 60;
+      document.getElementById('diagnosticsRecordingDuration').textContent =
+        `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 
-      // Buffer fill percentage
-      const fillPercent = Math.round((metrics.frameBufferDepth / metrics.frameBufferSize) * 100);
+      const fillPercent = Math.round(
+        (metrics.frameBufferDepth / metrics.frameBufferSize) * 100
+      );
       const progressBar = document.getElementById('bufferProgressBar');
       progressBar.style.width = fillPercent + '%';
       progressBar.textContent = fillPercent + '%';
-
-      // Color code: green (<50%), yellow (50-80%), red (>80%)
-      if (fillPercent < 50) {
-        progressBar.className = 'progress-bar bg-success';
-      } else if (fillPercent < 80) {
-        progressBar.className = 'progress-bar bg-warning';
-      } else {
-        progressBar.className = 'progress-bar bg-danger';
-      }
-
+      progressBar.className =
+        fillPercent < 50 ? 'progress-bar bg-success' :
+        fillPercent < 80 ? 'progress-bar bg-warning' :
+                           'progress-bar bg-danger';
     } else {
-      // Hide panel when not recording
-      panel.style.display = 'none';
+      // Idle placeholders
+      document.getElementById('bufferDepth').textContent = '0';
+      document.getElementById('bufferCapacity').textContent = '-';
+      document.getElementById('droppedFrames').textContent = '0';
+      document.getElementById('diagnosticsRecordingDuration').textContent = '00:00';
+      const progressBar = document.getElementById('bufferProgressBar');
+      progressBar.style.width = '0%';
+      progressBar.textContent = '0%';
+      progressBar.className = 'progress-bar bg-success';
     }
   } catch (error) {
     console.error('Error fetching recording metrics:', error);
   }
+}
+
+function _rdsSetExpanded(expand) {
+  const details = document.getElementById('diagnosticsFullDetails');
+  const chevron = document.getElementById('diagnosticsChevron');
+  if (!details) return;
+  details.style.display = expand ? 'block' : 'none';
+  chevron?.classList.toggle('bi-chevron-down', !expand);
+  chevron?.classList.toggle('bi-chevron-up', expand);
 }
 
 /**

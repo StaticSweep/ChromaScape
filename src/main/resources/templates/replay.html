@@ -431,8 +431,12 @@
                     recordingStatus.classList.remove('bg-danger');
                     recordingStatus.classList.add('bg-secondary');
 
-                    // Refresh the list
-                    await loadRecordings();
+                    // Refresh the list and auto-open newest recording
+                    const recordings = await loadRecordings();
+                    if (recordings && recordings.length > 0) {
+                        const newest = recordings[0];
+                        loadRecording(newest.url, newest.id);
+                    }
                 }
             } catch (error) {
                 console.error('Failed to stop recording:', error);
@@ -475,6 +479,8 @@
                         loadRecording(url, recordingId);
                     });
                 });
+
+                return recordings;
             } catch (error) {
                 console.error('Failed to load recordings:', error);
             }
@@ -485,14 +491,11 @@
             playerSection.style.display = 'block';
             playerSection.scrollIntoView({ behavior: 'smooth' });
             currentRecordingId = recordingId;
-
-            // Load sync info for accurate tick mapping
-            await loadSyncInfo(recordingId);
-
-            // Load tick data for this recording
-            await loadTickCardsForRecording(recordingId);
-
             videoPlayer.play();
+
+            // Background: fetch sync info and tick data without blocking playback
+            loadSyncInfo(recordingId);
+            loadTickCardsForRecording(recordingId);
         }
 
         async function loadSyncInfo(recordingId) {
