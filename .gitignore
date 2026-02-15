@@ -62,8 +62,8 @@ Thumbs.db
 output/*
 !output/.gitkeep
 
-# chromascape runtime cache
-.chromascape/
+# chromascape secrets for individual developers
+secrets.properties
 
 # custom user scripts
 /src/main/java/com/chromascape/scripts/*/

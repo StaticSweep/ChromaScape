@@ -1,6 +1,5 @@
 package com.chromascape.utils.core.screen.window;
 
-import com.chromascape.utils.core.AccountManager;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.WinDef.HWND;
@@ -17,7 +16,7 @@ import org.slf4j.LoggerFactory;
  */
 public class WindowHandler {
   private static final Logger logger = LoggerFactory.getLogger(WindowHandler.class);
-  private static final String _windowName = "RuneLite";
+  private static final String WINDOW_NAME = "RuneLite";
 
   /**
    * JNA interface for accessing low-level Win32 User32 functions that are not provided by the
@@ -79,7 +78,7 @@ public class WindowHandler {
   }
 
   /**
-   * Attempts to locate the window whose title matches the {@code windowName}.
+   * Attempts to locate the window whose title matches the {@code WINDOW_NAME}.
    *
    * @return The {@link HWND} handle of the target window, or {@code null} if not found.
    */
@@ -87,22 +86,13 @@ public class WindowHandler {
     AtomicReference<HWND> targetHwnd = new AtomicReference<>();
     User32 user32 = User32.INSTANCE;
 
-    // Get the selected account from AccountManager (loaded during startup)
-    String selectedAccount = AccountManager.getSelectedAccount();
-
-    // Build the resolved window name - make it effectively final
-    final String resolvedWindowName =
-        (selectedAccount != null && !selectedAccount.trim().isEmpty())
-            ? _windowName + " - " + selectedAccount
-            : _windowName;
-
     user32.EnumWindows(
         (hwnd, arg) -> {
           byte[] buffer = new byte[512];
           user32.GetWindowTextA(hwnd, buffer, 512);
           String title = Native.toString(buffer);
 
-          if (title.trim().equals(resolvedWindowName)) {
+          if (title.trim().equals(WINDOW_NAME)) {
             targetHwnd.set(hwnd);
             return false; // stop enumeration
           }

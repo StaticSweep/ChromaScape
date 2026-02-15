@@ -1,7 +1,6 @@
 package com.chromascape.base;
 
 import com.chromascape.controller.Controller;
-import com.chromascape.utils.core.runtime.HotkeyListener;
 import com.chromascape.utils.core.runtime.ScriptStoppedException;
 import com.chromascape.utils.core.state.BotState;
 import com.chromascape.utils.core.state.StateManager;
@@ -13,38 +12,35 @@ import org.apache.logging.log4j.Logger;
 /**
  * Abstract base class representing a generic automation script with lifecycle management.
  *
- * <p>Provides a timed execution framework where the script runs cycles until a specified duration
- * elapses or the script is stopped externally.
+ * <p>Provides a timed execution framework where the script runs cycles until the script is stopped
+ * externally.
  *
- * <p>Manages the underlying Controller instance and logging. Subclasses should override {@link
- * #cycle()} to define the script's main logic.
+ * <p>Manages the underlying Controller instance. Subclasses should override {@link #cycle()} to
+ * define the script's main logic.
  */
 public abstract class BaseScript {
   private final Controller controller;
   private static final Logger logger = LogManager.getLogger(BaseScript.class);
-  private final HotkeyListener hotkeyListener;
   private volatile boolean running = true;
   private Thread scriptThread;
 
   /** Constructs a BaseScript. */
   public BaseScript() {
     controller = new Controller();
-    hotkeyListener = new HotkeyListener(this);
   }
 
   /**
    * Runs the script lifecycle.
    *
    * <p>Initializes the controller, logs start and stop events, then continuously invokes the {@link
-   * #cycle()} method until the specified duration elapses or the script is stopped. Checks for
-   * thread interruption and stops gracefully if detected.
+   * #cycle()} method until the script is stopped. Checks for thread interruption and stops
+   * gracefully if detected.
    *
    * <p>This method blocks until completion.
    */
   public final void run() {
     scriptThread = Thread.currentThread();
     controller.init();
-    hotkeyListener.start();
     StatisticsManager.reset();
 
     try {
@@ -61,7 +57,7 @@ public abstract class BaseScript {
           break;
         } catch (Exception e) {
           StateManager.setState(BotState.ERROR);
-          logger.error("Exception in cycle: {}", e.getMessage());
+          logger.error("Exception in cycle: {}, {}", e.getMessage(), e.getStackTrace());
           break;
         }
       }
@@ -84,7 +80,6 @@ public abstract class BaseScript {
     }
     logger.info("Stop requested");
     running = false;
-    hotkeyListener.stop();
 
     // Interrupt the script thread instead of throwing exception
     if (scriptThread != null) {

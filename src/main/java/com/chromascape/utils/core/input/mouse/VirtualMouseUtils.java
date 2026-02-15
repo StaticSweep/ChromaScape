@@ -200,7 +200,7 @@ public class VirtualMouseUtils {
     performClick(
         (p) -> {
           synchronized (kinputLock) {
-            kinput.clickLeft(p.x, p.y);
+            kinput.clickMouse(p.x, p.y, Kinput.MouseButton.LEFT.id);
             // Redundant move ensures OS registers click at correct coords if jitter occurred
             kinput.moveMouse(p.x, p.y);
           }
@@ -212,7 +212,7 @@ public class VirtualMouseUtils {
     performClick(
         (p) -> {
           synchronized (kinputLock) {
-            kinput.clickRight(p.x, p.y);
+            kinput.clickMouse(p.x, p.y, Kinput.MouseButton.RIGHT.id);
             kinput.moveMouse(p.x, p.y);
           }
         });

@@ -44,11 +44,6 @@ public class DemoFishingScript extends BaseScript {
 
   private static String lastMessage;
 
-  /** Constructs a BaseScript. */
-  public DemoFishingScript() {
-    super();
-  }
-
   /**
    * Overridden cycle. Repeats all tasks within, until stop() is called from either the Web UI, or
    * from within the script.

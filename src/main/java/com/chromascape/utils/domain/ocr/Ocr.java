@@ -29,8 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import javax.imageio.ImageIO;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
@@ -47,7 +45,7 @@ public class Ocr {
   /** Stores successful character matches during Ocr extraction. */
   private static final List<CharMatch> matches = new ArrayList<>();
 
-  /** Cached zero scalar to prevent CPU allocation fatigue */
+  /** Cached zero scalar to prevent CPU allocation fatigue. */
   private static final Scalar ZERO_SCALAR = new Scalar(0);
 
   /** Cache for loaded fonts to prevent disk I/O on every OCR call. */
@@ -58,7 +56,7 @@ public class Ocr {
    * characters found.
    */
   private static final String ALLOWED_CHARS =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789()[],&-:/*'_\"?";
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789()[],&-:/*'_\"?<>";
 
   /**
    * Loads a font glyph set from disk, converts each glyph to grayscale, and stores in a map. Uses

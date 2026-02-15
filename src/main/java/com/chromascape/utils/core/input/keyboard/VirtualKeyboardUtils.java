@@ -34,7 +34,17 @@ public class VirtualKeyboardUtils {
     BaseScript.checkInterrupted();
     StateManager.setState(BotState.ACTING);
     StatisticsManager.incrementInputs();
-    kinput.sendKeyEvent(400, keyChar);
+    kinput.sendCharEvent(keyChar);
+  }
+
+  /**
+   * Updates the necessary states of the bot for the {@link BaseScript}'s stop() function and
+   * updates the BotState for the UI.
+   */
+  private void prepareInput() {
+    BaseScript.checkInterrupted();
+    StateManager.setState(BotState.ACTING);
+    StatisticsManager.incrementInputs();
   }
 
   /**
@@ -46,9 +56,7 @@ public class VirtualKeyboardUtils {
    * @throws IllegalArgumentException if the key name is invalid.
    */
   public synchronized void sendModifierKey(int eventId, String key) {
-    BaseScript.checkInterrupted();
-    StateManager.setState(BotState.ACTING);
-    StatisticsManager.incrementInputs();
+    prepareInput();
     int keyId =
         switch (key.toLowerCase()) {
           case "shift" -> 16;
@@ -59,7 +67,19 @@ public class VirtualKeyboardUtils {
           case "space" -> 32;
           default -> throw new IllegalArgumentException("Invalid modifier key: " + key);
         };
-    kinput.sendModifierKey(eventId, key, keyId);
+    kinput.sendVirtualKeyEvent(eventId, keyId, key);
+  }
+
+  /**
+   * Sends a function key (F1-F12) using the KeyCode slot.
+   *
+   * @param eventId 401 to simulate a key press, or 402 to simulate a key release.
+   * @param functionKeyNumber The number of the F key (e.g., 6 for F6 or 1 for F1).
+   */
+  public synchronized void sendFunctionKey(int eventId, int functionKeyNumber) {
+    prepareInput();
+    int keyId = 111 + functionKeyNumber; // F1 starts at 112
+    kinput.sendVirtualKeyEvent(eventId, keyId, "F" + functionKeyNumber);
   }
 
   /**
@@ -70,17 +90,15 @@ public class VirtualKeyboardUtils {
    * @throws IllegalArgumentException if the arrow direction is invalid.
    */
   public synchronized void sendArrowKey(int eventId, String key) {
-    BaseScript.checkInterrupted();
-    StateManager.setState(BotState.ACTING);
-    StatisticsManager.incrementInputs();
+    prepareInput();
     int keyId =
         switch (key.toLowerCase()) {
           case "left" -> 37;
-          case "right" -> 39;
           case "up" -> 38;
+          case "right" -> 39;
           case "down" -> 40;
           default -> throw new IllegalArgumentException("Invalid arrow key: " + key);
         };
-    kinput.sendArrowKey(eventId, key, keyId);
+    kinput.sendVirtualKeyEvent(eventId, keyId, key);
   }
 }

@@ -227,7 +227,8 @@ public class PointSelector {
       return null;
     }
 
-    ChromaObj obj = objs.get(0);
+    // Use the closest object to screen centre since only one object is desired
+    ChromaObj obj = ColourContours.getChromaObjClosestToCentre(objs);
     try {
       int attempts = 0;
       // Generate initial point using the function provided (Heuristic or Tightness)

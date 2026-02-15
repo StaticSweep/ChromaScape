@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initSliders();
     initSubmitButton();
     fetchSliderState(); // Restore state from server
+    initNameInput();
     updateImages().catch(console.error);
 });
 
@@ -184,13 +185,7 @@ const pendingUpdates = new Map();
 
 /**
  * Sends a slider value update to the server using a conflating queue loop.
- *
- * <p>This implementation solves the "backend overload" problem by ensuring that only one request
- * is ever in flight per slider. If the user moves the slider repeatedly while a request is processing,
- * intermediate values are locally overwritten (conflated). As soon as the active request finishes,
- * the loop immediately picks up the current latest value and sends it.
- *
- * <p>This guarantees the server always receives the final state eventually without lag accumulation.
+ * To ensure that the slider state doesn't overload the backend.
  *
  * @param {string} sliderName - The ID/name of the slider being updated.
  * @param {string|number} value - The new value of the slider.
@@ -283,4 +278,16 @@ function toCamelCase(str) {
     return str.replace(/(?:^\w|[A-Z]|\b\w)/g, (word, index) => {
         return index === 0 ? word.toLowerCase() : word.toUpperCase();
     }).replace(/\s+/g, '');
+}
+/**
+ * Initializes the colour name input listener to update the code snippet in real-time.
+ */
+function initNameInput() {
+    const nameInput = document.getElementById("colourNameInput");
+    if (nameInput) {
+        // 'input' fires on every keystroke, 'change' only when focus is lost
+        nameInput.addEventListener("input", () => {
+            updateCodeSnippet();
+        });
+    }
 }

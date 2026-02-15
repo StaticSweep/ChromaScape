@@ -36,18 +36,10 @@ public class DemoWineScript extends BaseScript {
 
   private boolean bankFlag = true;
 
-  /** Constructs a BaseScript. */
-  public DemoWineScript() {
-    super();
-  }
-
   /**
-   * The core logic of the script.
-   *
-   * <p>This method is called repeatedly in a loop by {@link #run()} for the specified duration.
-   * Subclasses must override this method to implement their specific bot behavior.
-   *
-   * <p>Note: This method is called synchronously on the running thread.
+   * The core logic of the script. This function will loop repeatedly until {@link #stop()} is
+   * called. You should avoid putting all your script logic directly inside this function, instead
+   * split it up into other functions as shown below.
    */
   @Override
   protected void cycle() {

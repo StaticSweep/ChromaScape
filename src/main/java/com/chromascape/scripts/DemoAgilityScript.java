@@ -1,20 +1,18 @@
 package com.chromascape.scripts;
 
+import com.chromascape.api.DiscordNotification;
 import com.chromascape.base.BaseScript;
+import com.chromascape.utils.actions.Minimap;
 import com.chromascape.utils.actions.MovingObject;
 import com.chromascape.utils.actions.PointSelector;
-import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.core.screen.topology.ColourContours;
-import com.chromascape.utils.domain.ocr.Ocr;
 import java.awt.Point;
-import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -67,7 +65,7 @@ public class DemoAgilityScript extends BaseScript {
   private static final Point RESET_TILE = ROOFTOP_RESET_TILES.get("Canifis");
 
   private static final int TIMEOUT_XP_CHANGE = 15;
-  private static final int TIMEOUT_GREEN_APPEAR = 10;
+  private static final int TIMEOUT_OBSTACLE_APPEAR = 10;
 
   // Colour Definitions
   // These are instantiated as final fields to prevent unnecessary memory allocation during cycles
@@ -76,16 +74,8 @@ public class DemoAgilityScript extends BaseScript {
   private static final ColourObj MARK_COLOUR =
       new ColourObj("red", new Scalar(0, 254, 254, 0), new Scalar(1, 255, 255, 0));
 
-  // Cached OCR colour object to reduce lookup overhead in repetitive loops
-  private static ColourObj TEXT_COLOUR_WHITE = null;
-
   // Random used in randomising break times between obstacles
   private final Random random = new Random();
-
-  /** Initializes the script and pre-loads necessary colour instances. */
-  public DemoAgilityScript() {
-    TEXT_COLOUR_WHITE = ColourInstances.getByName("White");
-  }
 
   /**
    * The main execution loop of the script.
@@ -101,13 +91,29 @@ public class DemoAgilityScript extends BaseScript {
    */
   @Override
   protected void cycle() {
-    String previousXp = getXp();
+    // Log the current XP before clicking obstacle for comparison later
+    // The idea is to click the obstacle then wait for XP change then loop
+    int previousXp = -1;
+    try {
+      // Read XP
+      previousXp = Minimap.getXp(this);
+      // Make sure it's read properly
+      if (previousXp == -1) {
+        stop();
+        DiscordNotification.send("Xp could not be read.");
+      }
+    } catch (IOException e) {
+      logger.error(e);
+      stop();
+      DiscordNotification.send(
+          "Bot couldn't read XP bar because of OCR font library load, stopping and logging :(");
+    }
 
     // Check the state of the course
     if (!isObstacleVisible()) {
       if (handleMarkOrLost()) {
         // If we clicked a mark, wait for the course to reset and the Green highlight to appear
-        waitForObstacleToAppear(TIMEOUT_GREEN_APPEAR);
+        waitForObstacleToAppear();
         return;
       }
     }
@@ -119,10 +125,12 @@ public class DemoAgilityScript extends BaseScript {
     } catch (Exception e) {
       logger.error("Mouse movement interrupted while clicking moving object: {}", e.getMessage());
       stop();
+      DiscordNotification.send(
+          "Mouse movement interrupted while clicking moving object: " + e.getMessage());
     }
 
     // Wait for the action to complete via XP update
-    waitUntilXpChange(previousXp, TIMEOUT_XP_CHANGE);
+    waitUntilXpChange(previousXp);
 
     // Humanizing sleep to mimic natural player behavior
     // And to prevent overloading moving object logic
@@ -151,7 +159,7 @@ public class DemoAgilityScript extends BaseScript {
     waitRandomMillis(600, 800);
     if (!isObstacleVisible()) {
       try {
-        logger.info("Lost detected. Walking to reset tile.");
+        logger.info("We are lost. Walking to reset tile.");
         controller().walker().pathTo(RESET_TILE, true);
         waitRandomMillis(4000, 6000);
       } catch (Exception e) {
@@ -160,21 +168,6 @@ public class DemoAgilityScript extends BaseScript {
       }
     }
     return false;
-  }
-
-  /**
-   * Extracts the current Total XP from beside the minimap UI element using OCR.
-   *
-   * @return the XP string
-   */
-  private String getXp() {
-    Rectangle xpZone = controller().zones().getMinimap().get("totalXP");
-    try {
-      return Ocr.extractText(xpZone, "Plain 12", TEXT_COLOUR_WHITE, true);
-    } catch (IOException e) {
-      logger.error("Images could not be read from disk {}", e.getMessage());
-    }
-    return "";
   }
 
   /**
@@ -207,25 +200,24 @@ public class DemoAgilityScript extends BaseScript {
    * Blocks execution until the Total XP value changes or the timeout is reached.
    *
    * @param previousXp the XP value captured before the action started
-   * @param timeoutSeconds the maximum duration to wait in seconds
    */
-  private void waitUntilXpChange(String previousXp, int timeoutSeconds) {
-    LocalDateTime endTime = LocalDateTime.now().plusSeconds(timeoutSeconds);
+  private void waitUntilXpChange(int previousXp) {
+    LocalDateTime endTime = LocalDateTime.now().plusSeconds(TIMEOUT_XP_CHANGE);
     // Ensure we do not hang if the initial OCR read failed and returned an empty string
-    while (!previousXp.isEmpty()
-        && Objects.equals(previousXp, getXp())
-        && LocalDateTime.now().isBefore(endTime)) {
-      waitMillis(300);
+    try {
+      while (previousXp == Minimap.getXp(this) && LocalDateTime.now().isBefore(endTime)) {
+        waitMillis(300);
+      }
+    } catch (Exception e) {
+      logger.error(e);
+      stop();
+      DiscordNotification.send("Bot couldn't read XP bar, stopping");
     }
   }
 
-  /**
-   * Blocks execution until the obstacle highlight appears or the timeout is reached.
-   *
-   * @param timeoutSeconds the maximum duration to wait in seconds
-   */
-  private void waitForObstacleToAppear(int timeoutSeconds) {
-    LocalDateTime endTime = LocalDateTime.now().plusSeconds(timeoutSeconds);
+  /** Blocks execution until the obstacle highlight appears or the timeout is reached. */
+  private void waitForObstacleToAppear() {
+    LocalDateTime endTime = LocalDateTime.now().plusSeconds(TIMEOUT_OBSTACLE_APPEAR);
     while (!isObstacleVisible() && LocalDateTime.now().isBefore(endTime)) {
       waitMillis(300);
     }

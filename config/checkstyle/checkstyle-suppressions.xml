@@ -12,4 +12,5 @@
     <suppress files=".*WindMouse\.java" checks=".*"/>
     <suppress files=".*TemplateMatching\.java" checks="AvoidStarImport"/>
     <suppress files=".*ScreenManager\.java" checks="LocalVariableName"/>
+    <suppress files=".*ColourContours\.java" checks=".*"/>
 </suppressions>

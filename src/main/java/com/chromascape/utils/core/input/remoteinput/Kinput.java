@@ -175,11 +175,6 @@ public class Kinput {
     }
   }
 
-  /** Returns the current system time in milliseconds. */
-  private long now() {
-    return System.currentTimeMillis();
-  }
-
   /** Sleeps briefly to simulate human-like click timing. */
   private void sleepHumanClick() {
     try {
@@ -196,38 +191,48 @@ public class Kinput {
     }
   }
 
-  /** Sends a left mouse click at the specified screen coordinate. */
-  public synchronized void clickLeft(int x, int y) {
+  /**
+   * Sends a mouse press and release to a specified screen co-ordinate. This operates in client
+   * relative co-ordinates, not screen relative co-ordinates.
+   *
+   * @param x the x co-ordinate of the action.
+   * @param y the y co-ordinate of the action.
+   * @param button which {@link MouseButton} to use.
+   */
+  public synchronized void clickMouse(int x, int y, int button) {
     focus();
     if (!kinput.KInput_MouseEvent(
-        pid, MouseEventType.MOUSE_PRESS.id, now(), 1, x, y, 1, false, MouseButton.LEFT.id)) {
-      throw new RuntimeException("Left mouse press failed");
+        pid,
+        MouseEventType.MOUSE_PRESS.id,
+        System.currentTimeMillis(),
+        1,
+        x,
+        y,
+        1,
+        false,
+        button)) {
+      throw new RuntimeException(button + " press failed");
     }
     sleepHumanClick();
     if (!kinput.KInput_MouseEvent(
-        pid, MouseEventType.MOUSE_RELEASE.id, now(), 1, x, y, 1, false, MouseButton.LEFT.id)) {
-      throw new RuntimeException("Left mouse release failed");
-    }
-  }
-
-  /** Sends a right mouse click at the specified screen coordinate. */
-  public synchronized void clickRight(int x, int y) {
-    focus();
-    if (!kinput.KInput_MouseEvent(
-        pid, MouseEventType.MOUSE_PRESS.id, now(), 0, x, y, 1, false, MouseButton.RIGHT.id)) {
-      throw new RuntimeException("Right mouse press failed");
-    }
-    sleepHumanClick();
-    if (!kinput.KInput_MouseEvent(
-        pid, MouseEventType.MOUSE_RELEASE.id, now(), 0, x, y, 1, false, MouseButton.RIGHT.id)) {
-      throw new RuntimeException("Right mouse release failed");
+        pid,
+        MouseEventType.MOUSE_RELEASE.id,
+        System.currentTimeMillis(),
+        1,
+        x,
+        y,
+        1,
+        false,
+        button)) {
+      throw new RuntimeException(button + " release failed");
     }
   }
 
   /** Sends a middle mouse button input. */
   public synchronized void middleInput(int x, int y, int eventID) {
     focus();
-    if (!kinput.KInput_MouseEvent(pid, eventID, now(), 1, x, y, 1, false, MouseButton.MIDDLE.id)) {
+    if (!kinput.KInput_MouseEvent(
+        pid, eventID, System.currentTimeMillis(), 1, x, y, 1, false, MouseButton.MIDDLE.id)) {
       throw new RuntimeException("Middle mouse event failed");
     }
   }
@@ -236,11 +241,27 @@ public class Kinput {
   public synchronized void moveMouse(int x, int y) {
     focus();
     if (!kinput.KInput_MouseEvent(
-        pid, MouseEventType.MOUSE_ENTER.id, now(), 0, x, y, 0, false, MouseButton.NONE.id)) {
+        pid,
+        MouseEventType.MOUSE_ENTER.id,
+        System.currentTimeMillis(),
+        0,
+        x,
+        y,
+        0,
+        false,
+        MouseButton.NONE.id)) {
       throw new RuntimeException("Mouse enter failed");
     }
     if (!kinput.KInput_MouseEvent(
-        pid, MouseEventType.MOUSE_MOVE.id, now(), 0, x, y, 0, false, MouseButton.NONE.id)) {
+        pid,
+        MouseEventType.MOUSE_MOVE.id,
+        System.currentTimeMillis(),
+        0,
+        x,
+        y,
+        0,
+        false,
+        MouseButton.NONE.id)) {
       throw new RuntimeException("Mouse move failed");
     }
   }
@@ -253,34 +274,48 @@ public class Kinput {
    */
   public synchronized void sendKeyEvent(int eventID, char keyChar) {
     focus();
-    if (!kinput.KInput_KeyEvent(pid, eventID, now(), 0, 0, (short) keyChar, 0)) {
+    if (!kinput.KInput_KeyEvent(
+        pid, eventID, System.currentTimeMillis(), 0, 0, (short) keyChar, 0)) {
       throw new RuntimeException("Key event failed for char: " + keyChar);
     }
   }
 
-  /** Sends a key event for a modifier (e.g. Shift, Ctrl, Alt). */
-  public synchronized void sendModifierKey(int eventID, String key, int keyID) {
+  /**
+   * Types a character to the client window.
+   *
+   * @param keyChar The character to send.
+   */
+  public synchronized void sendCharEvent(char keyChar) {
     focus();
-    if (!kinput.KInput_KeyEvent(pid, eventID, now(), 0, keyID, (short) 0, 0)) {
-      throw new RuntimeException("Modifier key event failed for key: " + key);
-    }
-  }
-
-  /** Sends a directional arrow key event. */
-  public synchronized void sendArrowKey(int eventID, String key, int keyID) {
-    focus();
-    if (!kinput.KInput_KeyEvent(pid, eventID, now(), 0, keyID, (short) 0, 0)) {
-      throw new RuntimeException("Arrow key event failed for key: " + key);
+    // Passes keyChar into the 'short' parameter (arg5)
+    if (!kinput.KInput_KeyEvent(pid, 400, System.currentTimeMillis(), 0, 0, (short) keyChar, 0)) {
+      throw new RuntimeException("Character event failed for char: '" + keyChar + "'");
     }
   }
 
   /**
-   * Destroys the active Kinput instance. Should be called on shutdown to free memory and close
+   * Sends a virtual key event (Arrow, Modifier, F-Key) to the client window's SunAwtCanvas.
+   *
+   * @param eventID 401 for press, 402 for release.
+   * @param keyCode The virtual key code.
+   * @param keyName A descriptive name used purely for error logging.
+   */
+  public synchronized void sendVirtualKeyEvent(int eventID, int keyCode, String keyName) {
+    focus();
+    // Passes keyCode into the integer parameter (arg4)
+    if (!kinput.KInput_KeyEvent(
+        pid, eventID, System.currentTimeMillis(), 0, keyCode, (short) 0, 0)) {
+      throw new RuntimeException("Virtual key event failed for: " + keyName);
+    }
+  }
+
+  /**
+   * Destroys the active KInput instance. Should be called on shutdown to free memory and close
    * resources.
    */
   public synchronized void destroy() {
     if (!kinput.KInput_Delete(pid)) {
-      throw new RuntimeException("Failed to delete Kinput instance");
+      throw new RuntimeException("Failed to delete KInput instance");
     }
   }
 }

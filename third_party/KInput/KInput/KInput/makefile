@@ -11,14 +11,14 @@ AR = ar.exe
 LD = g++.exe
 WINDRES = windres.exe
 
-INC = -I"..\..\..\minhook\include"
-CFLAGS = 
-RESINC = 
-LIBDIR = -L"..\..\..\minhook\build\MinGW"
-LIB = -l"MinHook"
+INC =
+CFLAGS =
+RESINC =
+LIBDIR =
+LIB =
 LDFLAGS =
 
-INC_RELEASE = $(INC) -I"C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot\include" -I"C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot\include\win32"
+INC_RELEASE = -I"C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot\include" -I"C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot\include\win32"
 CFLAGS_RELEASE = $(CFLAGS) -Os -Wall -std=c++1z -DBUILD_DLL
 RESINC_RELEASE = $(RESINC)
 RCFLAGS_RELEASE = $(RCFLAGS)
@@ -35,16 +35,16 @@ all: release
 
 clean: clean_release
 
-before_release: 
+before_release:
 	cmd /c if not exist bin\\Release md bin\\Release
 	cmd /c if not exist $(OBJDIR_RELEASE) md $(OBJDIR_RELEASE)
 
-after_release: 
+after_release:
 
 release: before_release out_release after_release
 
 out_release: before_release $(OBJ_RELEASE) $(DEP_RELEASE)
-	$(LD) -shared $(LIBDIR_RELEASE) $(OBJ_RELEASE)  -o $(OUT_RELEASE) $(LDFLAGS_RELEASE) $(LIB_RELEASE)
+	$(LD) -shared $(OBJ_RELEASE) -o $(OUT_RELEASE) $(LDFLAGS_RELEASE)
 
 $(OBJDIR_RELEASE)\\KInput.o: KInput.cpp
 	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c KInput.cpp -o $(OBJDIR_RELEASE)\\KInput.o
@@ -52,7 +52,7 @@ $(OBJDIR_RELEASE)\\KInput.o: KInput.cpp
 $(OBJDIR_RELEASE)\\main.o: main.cpp
 	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c main.cpp -o $(OBJDIR_RELEASE)\\main.o
 
-clean_release: 
+clean_release:
 	cmd /c del /f $(OBJ_RELEASE) $(OUT_RELEASE)
 	cmd /c rd bin\\Release
 	cmd /c rd $(OBJDIR_RELEASE)

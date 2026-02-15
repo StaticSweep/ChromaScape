@@ -30,13 +30,10 @@ import org.bytedeco.opencv.opencv_core.Point;
  *
  * <p>This class provides a single static method, {@link #match}, which uses the TM_SQDIFF_NORMED
  * algorithm to locate a template image within a larger base image. It uses an alpha mask to ignore
- * transparent pixels in the template, allowing for accurate matching even with irregular shapes.
+ * transparent pixels in the template.
  *
- * <p>This is commonly used in ChromaScape to locate UI elements or patterns in the client window,
- * based on screen captures and template assets.
- *
- * <p>All memory allocated in native OpenCV (Mats and pointers) is explicitly released before
- * return.
+ * <p>This is commonly to locate UI elements or sprites in the client window, based on screen
+ * captures and template assets.
  */
 public class TemplateMatching {
 
@@ -56,19 +53,16 @@ public class TemplateMatching {
    * <p>The method returns the bounding rectangle of the best match if its matching score is below
    * the given threshold. If no match satisfies the threshold, the method returns {@code null}.
    *
-   * <p>Note: The method releases the native OpenCV memory of the input and intermediate matrices,
-   * so the caller should not use the input Mats after this call.
-   *
-   * @param templateImg The template image (smaller), expected as a BufferedImage in BGRA format or
-   *     convertible to it.
-   * @param baseImg The base image (larger) where the template is searched, expected as a
-   *     BufferedImage in BGRA format or convertible to it.
+   * @param templateImg The template image (smaller), expected as a {@link BufferedImage} in BGRA
+   *     format or convertible to it.
+   * @param baseImg The base image (larger) where the template is searched, expected as a {@link
+   *     BufferedImage} in BGRA format or convertible to it.
    * @param threshold The maximum allowed normalized squared difference score for a valid match.
    *     Lower values mean better matches.
    * @param debugMsg Set this to true if you want detailed messages useful when debugging.
    * @return A {@link Rectangle} representing the position and size of the matching area in the base
    *     image, or {@code null} if no match meets the threshold criteria.
-   * @throws IllegalArgumentException If either input Mat is empty (not loaded).
+   * @throws IllegalArgumentException If either input image is empty (not loaded).
    * @throws Exception If the template is larger than the base image.
    */
   public static Rectangle match(

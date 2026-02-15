@@ -24,8 +24,8 @@ import org.bytedeco.opencv.opencv_core.*;
  */
 public class ColourContours {
 
-  private static final Mat DILATE_KERNEL = getStructuringElement(MORPH_ELLIPSE, new Size(25, 25));
-  private static final Mat ERODE_KERNEL = getStructuringElement(MORPH_ELLIPSE, new Size(25, 25));
+  private static final Mat DILATE_KERNEL = getStructuringElement(MORPH_ELLIPSE, new Size(20, 20));
+  private static final Mat ERODE_KERNEL = getStructuringElement(MORPH_ELLIPSE, new Size(20, 20));
   private static final Scalar COLOUR_WHITE = new Scalar(255);
   private static final Mat EMPTY_HIERARCHY = new Mat();
   private static final org.bytedeco.opencv.opencv_core.Point OFFSET_ZERO =
@@ -42,9 +42,48 @@ public class ColourContours {
   public static List<ChromaObj> getChromaObjsInColour(BufferedImage image, ColourObj colourObj) {
     Mat mask = extractColours(image, colourObj);
     morphClose(mask);
+    ViewportManager.getInstance().updateState(mask);
     MatVector contours = extractContours(mask);
     mask.release();
     return createChromaObjects(contours);
+  }
+
+  /**
+   * Iterates over a list of ChromaObjs to calculate and return whichever is closest to the
+   * player/screen centre. Useful in a wide range of activities and preferred over arbitrary choice
+   * by detection.
+   *
+   * @param chromaObjs {@code List<ChromaObj>} of which to iterate over.
+   * @return a single {@link ChromaObj} which is closest to the player.
+   */
+  public static ChromaObj getChromaObjClosestToCentre(List<ChromaObj> chromaObjs) {
+    if (chromaObjs == null || chromaObjs.isEmpty()) {
+      return null;
+    }
+
+    Point screenCentre =
+        new Point(
+            (int) ScreenManager.getWindowBounds().getCenterX(),
+            (int) ScreenManager.getWindowBounds().getCenterY());
+
+    double minDistance = Double.MAX_VALUE;
+    ChromaObj closestChromaObj = null;
+
+    for (ChromaObj chromaObj : chromaObjs) {
+      Point objCentre =
+          new Point(
+              (int) chromaObj.boundingBox().getCenterX(),
+              (int) chromaObj.boundingBox().getCenterY());
+
+      double currentDistance = objCentre.distance(screenCentre);
+
+      if (currentDistance < minDistance) {
+        minDistance = currentDistance;
+        closestChromaObj = chromaObj;
+      }
+    }
+
+    return closestChromaObj;
   }
 
   /**
@@ -80,7 +119,6 @@ public class ColourContours {
     hsvImage.release();
     hsvMin.release();
     hsvMax.release();
-    ViewportManager.getInstance().updateState(result);
 
     return result;
   }
