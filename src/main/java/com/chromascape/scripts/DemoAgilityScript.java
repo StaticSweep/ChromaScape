@@ -111,11 +111,12 @@ public class DemoAgilityScript extends BaseScript {
 
     // Check the state of the course
     if (!isObstacleVisible()) {
-      if (handleMarkOrLost()) {
-        // If we clicked a mark, wait for the course to reset and the Green highlight to appear
+      if (clickMarkOfGraceIfPresent()) {
         waitForObstacleToAppear();
-        return;
+      } else {
+        recoverToResetTile();
       }
+      return;
     }
 
     // Interact with the detected obstacle
@@ -144,30 +145,24 @@ public class DemoAgilityScript extends BaseScript {
   }
 
   /**
-   * Manages the scenario when the agility obstacle is not visible. It first tries to find a Mark of
-   * Grace. If no mark is found, it enters a fail-safe check to confirm the player is truly lost
-   * before finally attempting to walk to the RESET tile.
-   *
-   * @return true if a Mark of Grace was successfully clicked, false otherwise
+   * Manages the scenario when nothing is visible.
+   * Firstly, confirms that it's really lost, if so -> uses the walker to path back to the reset tile.
+   * Finally, waits for the player's animation to settle after reaching the true tile.
    */
-  private boolean handleMarkOrLost() {
-    if (clickMarkOfGraceIfPresent()) {
-      return true;
-    }
-
+  private void recoverToResetTile() {
     // Double check we are actually lost to protect against lag or rendering delays
     waitRandomMillis(600, 800);
     if (!isObstacleVisible()) {
       try {
         logger.info("We are lost. Walking to reset tile.");
         controller().walker().pathTo(RESET_TILE, true);
+        // wait for camera to stabilise and walking animation to finish at true tile.
         waitRandomMillis(4000, 6000);
       } catch (Exception e) {
         logger.error("Walker error {}", e.getMessage());
         stop();
       }
     }
-    return false;
   }
 
   /**
