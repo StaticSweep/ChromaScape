@@ -2,6 +2,8 @@ package com.chromascape.web.debug.tickdebugger.entity;
 
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /** Repository for accessing {@link TimelineMarker} entities. */
@@ -42,4 +44,11 @@ public interface TimelineMarkerRepository extends JpaRepository<TimelineMarker, 
 
   /** Count markers by type for a session. */
   long countBySessionIdAndMarkerType(String sessionId, String markerType);
+
+  /** Count only failure/error markers for a session. */
+  @Query(
+      "SELECT COUNT(m) FROM TimelineMarker m WHERE m.sessionId = :sessionId"
+          + " AND (UPPER(m.markerType) IN ('ERROR', 'DAMAGE', 'DEATH')"
+          + " OR UPPER(m.severity) = 'ERROR')")
+  long countFailuresBySessionId(@Param("sessionId") String sessionId);
 }

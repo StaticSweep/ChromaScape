@@ -5,6 +5,7 @@
 
 let currentMode = 'live';
 let currentRecording = null;
+let sessionHealthMap = {};
 let currentRecordingSessionId = null;
 let currentRecordingFps = 30; // Default FPS, updated when loading recording
 let currentLogLevel = 'all';
@@ -418,6 +419,7 @@ let autoFollowReplay = false; // Default: Auto-follow OFF
 const AUTO_FOLLOW_KEY = 'debugger_auto_follow_replay';
 let userScrolledRecently = false; // Track if user manually scrolled in last 2s
 let lastProgrammaticScrollTime = 0;
+let programmaticScrollUntil = 0; // Timestamp until which scroll events are considered programmatic
 let lastHighlightedTick = null; // Track last highlighted tick to skip redundant DOM updates
 let userScrollResetTimeout = null;
 
@@ -437,7 +439,16 @@ const globalSectionToggles = {
   varbits: true,
   objects: true,
   groundObjects: true,
-  groundItems: true
+  groundItems: true,
+  // Action-log type filters
+  animation: true,
+  walkhere: true,
+  menu: true,
+  click: true,
+  npcFirstOption: true,
+  cancel: true,
+  network: true,
+  raw: true
 };
 
 // Per-tick section overrides: tick -> {section: boolean}
@@ -550,6 +561,7 @@ function switchMode(mode) {
         '<div class="text-muted fst-italic log-placeholder">Select a recording to view logs</div>';
     }
   } else {
+    history.replaceState({}, '', '/debugger');
     elements.replayVideo.style.display = 'none';
     elements.viewportCanvas.style.display = 'block';
     elements.viewportLoader.style.display = 'flex';
@@ -749,31 +761,25 @@ function matchesCurrentFilters(entry, searchText) {
     }
   }
 
-  // Check ActionLogger log type toggles
+  // Check ActionLogger log type toggles via unified section toggles
   if (entry.logType) {
-    const showDialogueLogs = localStorage.getItem('filter_showDialogue') !== 'false';
-    const showInventoryLogs = localStorage.getItem('filter_showInventory') !== 'false';
-    const showVarbitLogs = localStorage.getItem('filter_showVarbit') !== 'false';
-    const showAnimationLogs = localStorage.getItem('filter_showAnimation') !== 'false';
-    const showWalkhereLogs = localStorage.getItem('filter_showWalkhere') !== 'false';
-    const showMenuLogs = localStorage.getItem('filter_showMenu') !== 'false';
-    const showClickLogs = localStorage.getItem('filter_showClick') !== 'false';
-    const showNpcFirstOptionLogs = localStorage.getItem('filter_showNpcFirstOption') !== 'false';
-    const showCancelLogs = localStorage.getItem('filter_showCancel') !== 'false';
-    const showNetworkLogs = localStorage.getItem('filter_showNetwork') !== 'false';
-    const showRawLogs = localStorage.getItem('filter_showRaw') !== 'false';
-
-    if (entry.logType === 'DIALOGUE' && !showDialogueLogs) return false;
-    if (entry.logType === 'INVENTORY' && !showInventoryLogs) return false;
-    if (entry.logType === 'VARBIT' && !showVarbitLogs) return false;
-    if (entry.logType === 'ANIMATION' && !showAnimationLogs) return false;
-    if (entry.logType === 'WALKHERE' && !showWalkhereLogs) return false;
-    if (entry.logType === 'MENU' && !showMenuLogs) return false;
-    if (entry.logType === 'CLICK' && !showClickLogs) return false;
-    if (entry.logType === 'NPC_FIRST_OPTION' && !showNpcFirstOptionLogs) return false;
-    if (entry.logType === 'CANCEL' && !showCancelLogs) return false;
-    if (entry.logType === 'NETWORK' && !showNetworkLogs) return false;
-    if (entry.logType === 'RAW' && !showRawLogs) return false;
+    const logTypeMap = {
+      DIALOGUE: 'dialogue',
+      INVENTORY: 'inventory',
+      VARBIT: 'varbits',
+      QUEST: 'quest',
+      QUEST_STEP_CHANGED: 'quest',
+      ANIMATION: 'animation',
+      WALKHERE: 'walkhere',
+      MENU: 'menu',
+      CLICK: 'click',
+      NPC_FIRST_OPTION: 'npcFirstOption',
+      CANCEL: 'cancel',
+      NETWORK: 'network',
+      RAW: 'raw'
+    };
+    const toggleKey = logTypeMap[entry.logType];
+    if (toggleKey !== undefined && !globalSectionToggles[toggleKey]) return false;
   }
 
   // Filter by message content (exclude patterns)
@@ -1056,7 +1062,7 @@ function buildTickGroup(tick, entries) {
 
   // Always render varbits section if visible (show empty state if no varbit data)
   if (isSectionVisible(tick, 'varbits')) {
-    content.appendChild(buildVarbitsSection(tick, entries));
+    content.appendChild(buildVarbitsSection(tick, entries, snapshot));
   }
 
   if (isSectionVisible(tick, 'objects') && snapshot) {
@@ -1270,7 +1276,7 @@ function buildTickGroupWithFilter(tick, allEntries, visibleEntries) {
 
   // Always render varbits section if visible (show empty state if no varbit data)
   if (isSectionVisible(tick, 'varbits')) {
-    content.appendChild(buildVarbitsSection(tick, visibleEntries));
+    content.appendChild(buildVarbitsSection(tick, visibleEntries, snapshot));
   }
 
   if (isSectionVisible(tick, 'objects') && snapshot) {
@@ -1371,14 +1377,20 @@ function rerenderTickGroup(tick) {
  * Check if entries contain dialogue data.
  */
 function hasDialogueData(entries, snapshot) {
-  return entries.some(e => e.logType === 'DIALOGUE' || (e.message && e.message.toLowerCase().includes('dialogue')));
+  return entries.some(e =>
+    e.logType === 'DIALOGUE' || e.logType === 'DIALOGUE_OPTION_SELECTED'
+    || (e.message && e.message.toLowerCase().includes('dialogue'))
+  );
 }
 
 /**
  * Check if entries contain varbit data.
  */
 function hasVarbitData(entries) {
-  return entries.some(e => e.logType === 'VARBIT' || (e.message && e.message.toLowerCase().includes('varbit')));
+  return entries.some(e =>
+    e.logType === 'VARBIT' || e.logType === 'VARBIT_CHANGED' || e.logType === 'VARBIT_CHANGE'
+    || (e.message && e.message.toLowerCase().includes('varbit'))
+  );
 }
 
 /**
@@ -1407,7 +1419,7 @@ function buildActionsSection(tick, entries) {
 }
 
 /**
- * Build quest section showing quest step.
+ * Build quest section showing quest step, helper state, and current varbits.
  */
 function buildQuestSection(tick, snapshot) {
   const section = document.createElement('div');
@@ -1427,15 +1439,76 @@ function buildQuestSection(tick, snapshot) {
     const questName = quest.name || 'Unknown Quest';
     const stepText = quest.stepText || 'No active step';
     const changed = quest.changed === true;
+    const active = quest.active === true;
+    const questHelperState = quest.questHelperState || null;
+    const questVarbits = quest.questVarbits || null;
+    const varbitCount = questVarbits ? Object.keys(questVarbits).length : 0;
+
+    const nameRow = document.createElement('div');
+    nameRow.style.cssText = 'display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;';
+
+    if (active) {
+      const activeDot = document.createElement('span');
+      activeDot.className = 'quest-active-indicator';
+      activeDot.title = 'Quest is active';
+      nameRow.appendChild(activeDot);
+    }
+
+    const nameSpan = document.createElement('strong');
+    nameSpan.textContent = questName;
+    nameRow.appendChild(nameSpan);
+
+    if (questHelperState) {
+      const badge = document.createElement('span');
+      badge.className = 'quest-state-badge ' + getQuestStateBadgeClass(questHelperState);
+      badge.textContent = questHelperState.replace(/_/g, ' ');
+      nameRow.appendChild(badge);
+    }
+
+    content.appendChild(nameRow);
 
     const stepDiv = document.createElement('div');
     stepDiv.className = changed ? 'quest-step-changed' : '';
-    stepDiv.innerHTML = `
-      <strong>${escapeHtml(questName)}</strong><br>
-      <span>${escapeHtml(stepText)}</span>
-      ${changed ? ' <span style="color: #98c379;">(Step Changed)</span>' : ''}
-    `;
+    stepDiv.style.fontSize = '0.8rem';
+    let stepHtml = `<span>${escapeHtml(stepText)}</span>`;
+    if (changed) {
+      stepHtml += ' <span style="color: #98c379; font-size: 0.7rem;">(Step Changed)</span>';
+    }
+    stepDiv.innerHTML = stepHtml;
     content.appendChild(stepDiv);
+
+    if (varbitCount > 0) {
+      const toggleRow = document.createElement('div');
+      toggleRow.className = 'quest-varbits-toggle';
+      toggleRow.innerHTML = `<i class="bi bi-chevron-right"></i> Quest Varbits <span style="color: #abb2bf;">(${varbitCount})</span>`;
+
+      const varbitList = document.createElement('div');
+      varbitList.className = 'quest-varbits-list';
+      varbitList.style.display = 'none';
+
+      Object.entries(questVarbits).forEach(([id, value]) => {
+        const entry = document.createElement('div');
+        entry.className = 'quest-varbit-entry';
+        entry.innerHTML = `
+          <span class="varbit-id">${escapeHtml(String(id))}</span>
+          <span class="varbit-value">${escapeHtml(String(value))}</span>
+        `;
+        varbitList.appendChild(entry);
+      });
+
+      toggleRow.addEventListener('click', () => {
+        const isHidden = varbitList.style.display === 'none';
+        varbitList.style.display = isHidden ? 'block' : 'none';
+        const chevron = toggleRow.querySelector('i');
+        if (chevron) {
+          chevron.classList.toggle('bi-chevron-right', !isHidden);
+          chevron.classList.toggle('bi-chevron-down', isHidden);
+        }
+      });
+
+      content.appendChild(toggleRow);
+      content.appendChild(varbitList);
+    }
   } else {
     content.innerHTML = '<span class="section-empty">No quest data</span>';
   }
@@ -1443,6 +1516,18 @@ function buildQuestSection(tick, snapshot) {
   section.appendChild(header);
   section.appendChild(content);
   return section;
+}
+
+/**
+ * Map questHelperState string to CSS badge modifier class.
+ */
+function getQuestStateBadgeClass(state) {
+  switch ((state || '').toUpperCase()) {
+    case 'IN_PROGRESS': return 'state-in-progress';
+    case 'FINISHED':    return 'state-finished';
+    case 'NOT_STARTED': return 'state-not-started';
+    default:            return 'state-other';
+  }
 }
 
 /**
@@ -1462,7 +1547,9 @@ function buildDialogueSection(tick, entries, snapshot) {
   content.className = 'tick-section-content';
 
   // Find dialogue entries
-  const dialogueEntries = entries.filter(e => e.logType === 'DIALOGUE');
+  const dialogueEntries = entries.filter(e =>
+    e.logType === 'DIALOGUE' || e.logType === 'DIALOGUE_OPTION_SELECTED'
+  );
 
   if (dialogueEntries.length > 0) {
     dialogueEntries.forEach(entry => {
@@ -1799,11 +1886,14 @@ function buildPlayerSection(tick, snapshot) {
 
     const hp = player.hp || {};
     const prayer = player.prayer || {};
-    const position = player.position || {};
+    const position = player.position || player.worldPosition || player.worldPoint
+      || (player.tile ? player.tile : null) || {};
+    const prayerCurrent = prayer.current ?? prayer.points;
+    const prayerMax     = prayer.max    ?? prayer.maxPoints;
 
     const stats = [
       { label: 'HP', value: hp.current !== undefined ? `${hp.current}/${hp.max}` : '--' },
-      { label: 'Prayer', value: prayer.current !== undefined ? `${prayer.current}/${prayer.max}` : '--' },
+      { label: 'Prayer', value: prayerCurrent !== undefined ? `${prayerCurrent}/${prayerMax}` : '--' },
       { label: 'Energy', value: player.energy !== undefined ? `${player.energy}%` : '--' },
       { label: 'Animation', value: player.animation || '--' },
       { label: 'Position', value: position.x !== undefined ? `(${position.x}, ${position.y})` : '--' },
@@ -1845,7 +1935,7 @@ function buildPlayerSection(tick, snapshot) {
 /**
  * Build varbits section.
  */
-function buildVarbitsSection(tick, entries) {
+function buildVarbitsSection(tick, entries, snapshot) {
   const section = document.createElement('div');
   section.className = 'tick-section section-varbits';
 
@@ -1858,7 +1948,44 @@ function buildVarbitsSection(tick, entries) {
   const content = document.createElement('div');
   content.className = 'tick-section-content';
 
-  const varbitEntries = entries.filter(e => e.logType === 'VARBIT');
+  const varbitEntries = entries.filter(e =>
+    e.logType === 'VARBIT' || e.logType === 'VARBIT_CHANGED' || e.logType === 'VARBIT_CHANGE'
+  );
+
+  // Build set of event varbit IDs for cross-tagging
+  const eventVarbitIds = new Set(
+    varbitEntries.map(e => String((e.data || {}).varbitId || (e.data || {}).id || ''))
+  );
+
+  // Subsection 1: Current Quest Varbits (from snapshot)
+  const questVarbits = snapshot?.quest?.questVarbits;
+  if (questVarbits && Object.keys(questVarbits).length > 0) {
+    const snapshotHeader = document.createElement('div');
+    snapshotHeader.className = 'varbits-subsection-header quest-varbits-header';
+    snapshotHeader.textContent = 'Current Quest Varbits';
+    content.appendChild(snapshotHeader);
+
+    Object.entries(questVarbits).forEach(([id, value]) => {
+      const item = document.createElement('div');
+      item.className = 'varbit-item';
+      const changedTag = eventVarbitIds.has(String(id))
+        ? '<span class="varbit-quest-tag">changed</span>' : '';
+      item.innerHTML = `
+        <span class="varbit-id">${escapeHtml(String(id))}${changedTag}</span>
+        <span class="varbit-value">${escapeHtml(String(value))}</span>
+      `;
+      content.appendChild(item);
+    });
+  }
+
+  // Subsection 2: Change Events header (only shown when both subsections present)
+  if (varbitEntries.length > 0 && questVarbits && Object.keys(questVarbits).length > 0) {
+    const eventsHeader = document.createElement('div');
+    eventsHeader.className = 'varbits-subsection-header';
+    eventsHeader.style.marginTop = '8px';
+    eventsHeader.textContent = 'Change Events';
+    content.appendChild(eventsHeader);
+  }
 
   if (varbitEntries.length > 0) {
     varbitEntries.forEach(entry => {
@@ -1869,22 +1996,24 @@ function buildVarbitsSection(tick, entries) {
       const varbitId = data.varbitId || data.id || '?';
       const oldValue = data.oldValue;
       const newValue = data.newValue || data.value;
+      const questTag = questVarbits && questVarbits.hasOwnProperty(String(varbitId))
+        ? '<span class="varbit-quest-tag">quest</span>' : '';
 
       if (oldValue !== undefined && newValue !== undefined) {
         item.innerHTML = `
-          <span class="varbit-id">${escapeHtml(String(varbitId))}</span>
+          <span class="varbit-id">${escapeHtml(String(varbitId))}${questTag}</span>
           <span class="varbit-changed">${oldValue} → ${newValue}</span>
         `;
       } else {
         item.innerHTML = `
-          <span class="varbit-id">${escapeHtml(String(varbitId))}</span>
+          <span class="varbit-id">${escapeHtml(String(varbitId))}${questTag}</span>
           <span class="varbit-value">${escapeHtml(String(newValue || '--'))}</span>
         `;
       }
 
       content.appendChild(item);
     });
-  } else {
+  } else if (!questVarbits || Object.keys(questVarbits).length === 0) {
     content.innerHTML = '<span class="section-empty">No varbit changes</span>';
   }
 
@@ -2276,46 +2405,17 @@ function resetAllFilters() {
   if (externalLogsCheckbox) externalLogsCheckbox.checked = true;
   if (verboseLogsCheckbox) verboseLogsCheckbox.checked = true;
 
-  // Enable all ActionLogger subtypes
-  localStorage.setItem('filter_showDialogue', 'true');
-  localStorage.setItem('filter_showInventory', 'true');
-  localStorage.setItem('filter_showVarbit', 'true');
-  localStorage.setItem('filter_showAnimation', 'true');
-  localStorage.setItem('filter_showWalkhere', 'true');
-  localStorage.setItem('filter_showMenu', 'true');
-  localStorage.setItem('filter_showClick', 'true');
-  localStorage.setItem('filter_showNpcFirstOption', 'true');
-  localStorage.setItem('filter_showCancel', 'true');
-
-  const dialogueCheckbox = document.getElementById('showDialogueLogs');
-  const inventoryCheckbox = document.getElementById('showInventoryLogs');
-  const varbitCheckbox = document.getElementById('showVarbitLogs');
-  const animationCheckbox = document.getElementById('showAnimationLogs');
-  const walkhereCheckbox = document.getElementById('showWalkhereLogs');
-  const menuCheckbox = document.getElementById('showMenuLogs');
-  const clickCheckbox = document.getElementById('showClickLogs');
-  const npcFirstOptionCheckbox = document.getElementById('showNpcFirstOptionLogs');
-  const cancelCheckbox = document.getElementById('showCancelLogs');
-  const networkCheckbox = document.getElementById('showNetworkLogs');
-  const rawCheckbox = document.getElementById('showRawLogs');
-
-  if (dialogueCheckbox) dialogueCheckbox.checked = true;
-  if (inventoryCheckbox) inventoryCheckbox.checked = true;
-  if (varbitCheckbox) varbitCheckbox.checked = true;
-  if (animationCheckbox) animationCheckbox.checked = true;
-  if (walkhereCheckbox) walkhereCheckbox.checked = true;
-  if (menuCheckbox) menuCheckbox.checked = true;
-  if (clickCheckbox) clickCheckbox.checked = true;
-  if (npcFirstOptionCheckbox) npcFirstOptionCheckbox.checked = true;
-  if (cancelCheckbox) cancelCheckbox.checked = true;
-  if (networkCheckbox) networkCheckbox.checked = true;
-  if (rawCheckbox) rawCheckbox.checked = true;
-
-  localStorage.setItem('filter_showNetwork', 'true');
-  localStorage.setItem('filter_showRaw', 'true');
-
-  // Save log type preferences
-  saveLogTypePrefs();
+  // Reset all action-type section toggles
+  ['animation', 'walkhere', 'menu', 'click', 'npcFirstOption', 'cancel', 'network', 'raw',
+    'dialogue', 'inventory', 'varbits', 'quest'].forEach(key => {
+    globalSectionToggles[key] = true;
+  });
+  saveSectionToggles();
+  // Re-sync button active states
+  document.querySelectorAll('#sectionToggles .section-toggle').forEach(btn => {
+    const section = btn.dataset.section;
+    if (section) btn.classList.toggle('active', globalSectionToggles[section]);
+  });
 
   // Re-render logs
   renderLogHistory();
@@ -2690,6 +2790,26 @@ function initAutoFollowToggle() {
         clearTimeout(userScrollResetTimeout);
         userScrollResetTimeout = null;
       }
+
+      // Immediately jump to current tick
+      let jumpTick = null;
+      if (elements.replayVideo && currentRecording) {
+        jumpTick = calculateTickFromVideoTime(elements.replayVideo.currentTime * 1000);
+      }
+      if (jumpTick == null) {
+        // Fallback: highest rendered tick group
+        const groups = elements.logsContainer
+          ? [...elements.logsContainer.querySelectorAll('.tick-group[data-tick]')]
+          : [];
+        if (groups.length) {
+          jumpTick = Math.max(...groups.map(g => parseInt(g.dataset.tick)));
+        }
+      }
+      if (jumpTick != null) {
+        lastHighlightedTick = null; // Force re-highlight
+        highlightCurrentTickGroup(jumpTick);
+        scrollToCurrentTick(jumpTick);
+      }
     }
   });
 
@@ -2697,8 +2817,14 @@ function initAutoFollowToggle() {
   if (elements.logsContainer) {
     elements.logsContainer.addEventListener('scroll', () => {
       const now = Date.now();
-      // Only consider it a manual scroll if it's been >200ms since last programmatic scroll
-      if (now - lastProgrammaticScrollTime > 200) {
+      // Only consider it a manual scroll if outside both the legacy threshold and the explicit programmatic window
+      const isProgrammatic = now <= programmaticScrollUntil || now - lastProgrammaticScrollTime <= 200;
+      if (window.DEBUG_TICK) {
+        console.log('[AutoFollow] scroll event isProgrammatic:', isProgrammatic,
+          'until:', programmaticScrollUntil - now, 'ms remaining',
+          'sinceLastProg:', now - lastProgrammaticScrollTime, 'ms');
+      }
+      if (!isProgrammatic) {
         userScrolledRecently = true;
 
         // Reset the flag after 2 seconds of no manual scrolling
@@ -2760,6 +2886,11 @@ function initSectionToggles() {
       filterLogs(); // Re-render with new toggle states
     });
   });
+
+  const excludePatternsInput = document.getElementById('logExcludePatterns');
+  if (excludePatternsInput) {
+    excludePatternsInput.addEventListener('input', debounce(filterLogs, 300));
+  }
 }
 
 /**
@@ -2780,12 +2911,37 @@ function loadSectionToggles() {
   try {
     const saved = localStorage.getItem('debugger_globalSectionToggles');
     if (saved) {
-      const prefs = JSON.parse(saved);
-      Object.keys(prefs).forEach(key => {
+      const parsed = JSON.parse(saved);
+      Object.keys(parsed).forEach(key => {
         if (globalSectionToggles.hasOwnProperty(key)) {
-          globalSectionToggles[key] = prefs[key];
+          globalSectionToggles[key] = parsed[key];
         }
       });
+
+      // One-time migration from legacy filter_show* keys
+      const legacyMap = {
+        filter_showDialogue: 'dialogue',
+        filter_showInventory: 'inventory',
+        filter_showVarbit: 'varbits',
+        filter_showAnimation: 'animation',
+        filter_showWalkhere: 'walkhere',
+        filter_showMenu: 'menu',
+        filter_showClick: 'click',
+        filter_showNpcFirstOption: 'npcFirstOption',
+        filter_showCancel: 'cancel',
+        filter_showNetwork: 'network',
+        filter_showRaw: 'raw'
+      };
+      const newKeys = Object.values(legacyMap);
+      const hasAnyNewKey = newKeys.some(k => k in parsed);
+      if (!hasAnyNewKey) {
+        for (const [legacyKey, newKey] of Object.entries(legacyMap)) {
+          const legacyVal = localStorage.getItem(legacyKey);
+          if (legacyVal !== null) {
+            globalSectionToggles[newKey] = legacyVal !== 'false';
+          }
+        }
+      }
     }
   } catch (e) {
     console.warn('Failed to load section toggles:', e);
@@ -2822,49 +2978,6 @@ function loadPerTickToggles() {
   }
 }
 
-/**
- * Initialize ActionLogger log type filters (Dialogue, Inventory, Varbit, Animation).
- */
-function initActionLogFilters() {
-  const filters = [
-    'Dialogue', 'Inventory', 'Varbit', 'Animation',
-    'Walkhere', 'Menu', 'Click', 'NpcFirstOption', 'Cancel',
-    'Network', 'Raw'
-  ];
-  filters.forEach(type => {
-    const checkbox = document.getElementById(`show${type}Logs`);
-    const storageKey = `filter_show${type}`;
-
-    // Load saved preference
-    const saved = localStorage.getItem(storageKey);
-    if (saved !== null) {
-      checkbox.checked = saved === 'true';
-    }
-
-    // Save preference on change
-    checkbox.addEventListener('change', (e) => {
-      localStorage.setItem(storageKey, e.target.checked);
-      filterLogs();
-    });
-  });
-
-  // Add exclude pattern input listener
-  const excludePatternsInput = document.getElementById('logExcludePatterns');
-  if (excludePatternsInput) {
-    excludePatternsInput.addEventListener('input', debounce(filterLogs, 300));
-  }
-
-  // Show action log filters section when we have action logs
-  const checkForActionLogs = setInterval(() => {
-    const activeHistory = currentMode === 'replay' ? replayLogHistory : liveLogHistory;
-    const hasActionLogs = activeHistory.some(log => log.logType);
-    const filtersSection = document.getElementById('actionLogFilters');
-    if (filtersSection && hasActionLogs) {
-      filtersSection.style.display = 'block';
-      clearInterval(checkForActionLogs);
-    }
-  }, 5000);
-}
 
 /**
  * Debounce helper for input handlers.
@@ -3078,18 +3191,84 @@ function normalizeTickLog(log) {
   // Normalize '--' or non-numeric to null for proper sorting
   const normalizedTick = (tickValue === null || tickValue === '--' || isNaN(parseInt(tickValue))) ? null : tickValue;
 
+  // Support both logType/data (batch) and eventType/details (live DTO) field names
+  const resolvedLogType = log.logType || log.eventType || null;
+  const resolvedData    = log.data    || log.details    || null;
+
+  let resolvedMessage = log.message ? String(log.message) : '';
+  if (!resolvedMessage && resolvedLogType && resolvedData) {
+    resolvedMessage = formatEventFromTypeAndData(resolvedLogType, resolvedData);
+  }
+  if (!resolvedMessage && resolvedLogType) {
+    resolvedMessage = resolvedLogType;
+  }
+
   return {
     kind: 'tick',
     tick: normalizedTick,
     level: String(log.severity || log.level || 'INFO').toUpperCase(),
     subsystem: log.subsystem ? String(log.subsystem) : 'tick',
     source: log.subsystem ? String(log.subsystem) : 'tick',
-    message: log.message ? String(log.message) : '',
+    message: resolvedMessage,
     timestamp: log.timestamp || null,
     // PRESERVE rich fields for UI sections
-    logType: log.logType || null,  // Preserve for Dialogue/Varbit/etc. sections
-    data: log.data || null          // Preserve for structured display
+    logType: resolvedLogType,  // Preserve for Dialogue/Varbit/etc. sections
+    data: resolvedData          // Preserve for structured display
   };
+}
+
+/**
+ * Format a tick event message from a type string and data object.
+ * Used by normalizeTickLog and formatTickEvent to share formatting logic.
+ * @param {string} type - The event type
+ * @param {Object} data - The event data
+ * @returns {string} Formatted message
+ */
+function formatEventFromTypeAndData(type, data) {
+  if (!type) return '';
+  const d = data || {};
+  switch (type) {
+    case 'DAMAGE_TAKEN':
+      return `Took ${d.damage ?? d.amount ?? '?'} damage from ${d.source ?? '?'}${d.type || d.hitType ? ` (${d.type || d.hitType})` : ''}`;
+    case 'DAMAGE_DEALT':
+      return `Dealt ${d.damage ?? d.amount ?? '?'} damage to ${d.target ?? '?'}${d.type || d.hitType ? ` (${d.type || d.hitType})` : ''}`;
+    case 'ITEM_DROPPED':
+      return `Dropped ${d.quantity != null ? d.quantity + 'x ' : ''}${d.itemName ?? d.item ?? '?'}`;
+    case 'ITEM_PICKED_UP':
+      return `Picked up ${d.quantity != null ? d.quantity + 'x ' : ''}${d.itemName ?? d.item ?? '?'}`;
+    case 'PRAYER_ACTIVATED':
+      return `Activated prayer: ${d.prayerName ?? d.name ?? d.prayerId ?? '?'}`;
+    case 'PRAYER_DEACTIVATED':
+      return `Deactivated prayer: ${d.prayerName ?? d.name ?? d.prayerId ?? '?'}`;
+    case 'PLAYER_MOVED': {
+      const x = d.x ?? d.position?.x ?? '?';
+      const y = d.y ?? d.position?.y ?? '?';
+      const plane = d.plane ?? d.position?.plane;
+      return `Moved to (${x}, ${y}${plane != null ? `, ${plane}` : ''})`;
+    }
+    case 'VARBIT_CHANGED':
+    case 'VARBIT_CHANGE':
+    case 'VARBIT':
+      return `Varbit ${d.varbitId ?? d.id ?? '?'}: ${d.oldValue ?? '?'} → ${d.newValue ?? d.value ?? '?'}`;
+    case 'QUEST':
+    case 'QUEST_STEP_CHANGED': {
+      const name = d.name ?? d.questName ?? '?';
+      const step = d.stepText ?? d.step ?? d.newStep ?? d.message ?? '?';
+      const state = d.questHelperState ?? null;
+      const oldStep = d.oldStep ?? null;
+      if (oldStep != null && d.newStep != null) {
+        return `Quest "${name}" step changed: ${oldStep} → ${d.newStep}`;
+      }
+      return `Quest "${name}": ${step}${state ? ` [${state.replace(/_/g, ' ')}]` : ''}`;
+    }
+    case 'DIALOGUE':
+      return `Dialogue: ${d.speaker ?? d.npcName ?? d.npc ?? ''}: "${d.text ?? ''}"`;
+    case 'DIALOGUE_OPTION_SELECTED':
+      return `Selected dialogue option: "${d.option ?? d.text ?? ''}"`;
+    default:
+      if (Object.keys(d).length > 0) return `${type}: ${JSON.stringify(d)}`;
+      return type;
+  }
 }
 
 /**
@@ -3780,6 +3959,12 @@ function initReplayModeListeners() {
       if (recordingId) {
         switchMode('replay');
         loadRecording(recordingId);
+        const health = sessionHealthMap[recordingId];
+        if (health) renderSessionHealthPreview(health);
+        else {
+          const preview = document.getElementById('sessionHealthPreview');
+          if (preview) preview.style.display = 'none';
+        }
       } else {
         // User selected blank option - clear everything
         currentRecording = null;
@@ -3795,6 +3980,8 @@ function initReplayModeListeners() {
         if (currentMode === 'replay') {
           renderLogHistory('Select a recording to view logs');
         }
+        const preview = document.getElementById('sessionHealthPreview');
+        if (preview) preview.style.display = 'none';
       }
     });
   }
@@ -3875,17 +4062,56 @@ function updateScrubberFromVideo() {
   elements.scrubberTimecode.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
 }
 
+function renderSessionHealthPreview(health) {
+  const preview = document.getElementById('sessionHealthPreview');
+  if (!preview) return;
+
+  const eventsChip = document.getElementById('healthHasEvents');
+  const eventCountChip = document.getElementById('healthEventCount');
+  const failureChip = document.getElementById('healthFailureCount');
+
+  if (health.hasEvents) {
+    eventsChip.textContent = 'Has Events';
+    eventsChip.className = 'health-chip health-ok';
+  } else {
+    eventsChip.textContent = 'No Events';
+    eventsChip.className = 'health-chip health-muted';
+  }
+
+  eventCountChip.textContent = `Events: ${health.eventCount ?? 0}`;
+  eventCountChip.className = 'health-chip';
+
+  const failures = health.failureMarkerCount ?? 0;
+  failureChip.textContent = `Failures: ${failures}`;
+  failureChip.className = failures > 0 ? 'health-chip health-error' : 'health-chip health-ok';
+
+  preview.style.display = 'flex';
+}
+
 async function loadRecordingSessions() {
   if (!elements.sessionSelect) return;
   const preservedValue = elements.sessionSelect.value;
 
   try {
-    const response = await fetch('/api/recordings/sessions');
-    if (!response.ok) {
+    const [recordingRes, debugRes] = await Promise.all([
+      fetch('/api/recordings/sessions'),
+      fetch('/api/debug/replay/recording-health')
+    ]);
+
+    if (!recordingRes.ok) {
       throw new Error('Failed to load sessions');
     }
 
-    const sessions = await response.json();
+    // Build health map keyed by recordingId
+    sessionHealthMap = {};
+    if (debugRes.ok) {
+      const debugSessions = await debugRes.json();
+      debugSessions.forEach(ds => {
+        if (ds.recordingId) sessionHealthMap[ds.recordingId] = ds;
+      });
+    }
+
+    const sessions = await recordingRes.json();
     elements.sessionSelect.innerHTML = '<option value="">-- Select a recording session --</option>';
 
     sessions.forEach(session => {
@@ -3895,7 +4121,11 @@ async function loadRecordingSessions() {
       const duration = session.endTime
         ? Math.round((new Date(session.endTime) - new Date(session.startTime)) / 1000 / 60) + ' min'
         : 'In progress';
-      option.textContent = `${session.accountName || 'Unknown'} - ${startTime} (${duration})`;
+      const base = `${session.accountName || 'Unknown'} - ${startTime} (${duration})`;
+      const h = sessionHealthMap[session.recordingId];
+      const eventPart = h ? ` · Events ${h.eventCount ?? 0}` : '';
+      const failPart = h && (h.failureMarkerCount ?? 0) > 0 ? ` · Fail ${h.failureMarkerCount}` : '';
+      option.textContent = `${base}${eventPart}${failPart}`;
       elements.sessionSelect.appendChild(option);
     });
 
@@ -3958,6 +4188,7 @@ async function loadRecording(recordingId) {
 
     // Only set currentRecording after successful fetch
     currentRecording = recordingId;
+    history.replaceState({}, '', `/debugger?recordingId=${recordingId}`);
 
     const recording = await response.json();
     currentRecordingSessionId = recording.id;
@@ -4321,11 +4552,7 @@ async function syncLogsToVideo(videoMs) {
     if (currentTick != null) {
       updateTickDisplay(currentTick);
       highlightCurrentTickGroup(currentTick);
-
-      // Auto-scroll to current tick if enabled
-      if (autoFollowReplay && !userScrolledRecently) {
-        scrollToCurrentTick(currentTick);
-      }
+      maybeAutoFollowTick(currentTick);
     }
 
   } catch (error) {
@@ -4446,6 +4673,7 @@ function renderReplayLogs(logs, currentReplayTick = null) {
     const preserveScroll = container && !shouldAutoScroll;
     const previousScrollTop = preserveScroll ? container.scrollTop : 0;
     renderLogHistory();
+    lastHighlightedTick = null; // DOM was rebuilt; force re-highlight on next sync
     if (preserveScroll) {
       container.scrollTop = previousScrollTop;
     }
@@ -4463,22 +4691,69 @@ function renderReplayLogs(logs, currentReplayTick = null) {
  */
 function highlightCurrentTickGroup(currentReplayTick) {
   if (currentReplayTick == null) return;
-  if (currentReplayTick === lastHighlightedTick) return; // skip redundant DOM update
+  if (currentReplayTick === lastHighlightedTick) {
+    // Only skip if the group is actually highlighted in the DOM
+    const alreadyHighlighted = document.querySelector(
+      `.tick-group[data-tick="${currentReplayTick}"].current-tick-group`
+    );
+    if (alreadyHighlighted) return;
+  }
   lastHighlightedTick = currentReplayTick;
 
   const groups = document.querySelectorAll('.tick-group');
   groups.forEach(g => g.classList.remove('current-tick-group'));
 
-  const isPlaying = elements.replayVideo && !elements.replayVideo.paused;
   groups.forEach(g => {
     if (g.dataset.tick == currentReplayTick) {
       g.classList.add('current-tick-group');
-      if (autoFollowReplay && !userScrolledRecently && currentMode === 'replay') {
-        lastProgrammaticScrollTime = Date.now(); // Mark as programmatic scroll
-        g.scrollIntoView({ block: 'nearest', behavior: isPlaying ? 'instant' : 'smooth' });
-      }
     }
   });
+}
+
+function scrollToCurrentTick(tick) {
+  const container = elements.logsContainer;
+  if (!container) return;
+
+  // Find exact group or nearest by numeric distance
+  let target = container.querySelector(`.tick-group[data-tick="${tick}"]`);
+  if (!target) {
+    let minDiff = Infinity;
+    container.querySelectorAll('.tick-group[data-tick]').forEach(g => {
+      const diff = Math.abs(parseInt(g.dataset.tick) - tick);
+      if (diff < minDiff) { minDiff = diff; target = g; }
+    });
+  }
+  if (!target) return;
+
+  const isPlaying = elements.replayVideo && !elements.replayVideo.paused;
+  const isLive = currentMode === 'live';
+  const now = Date.now();
+  lastProgrammaticScrollTime = now;
+  programmaticScrollUntil = now + 1200;
+  const behavior = (isLive || isPlaying) ? 'instant' : 'smooth';
+  if (window.DEBUG_TICK) {
+    console.log('[AutoFollow] scrollToCurrentTick tick:', tick, 'behavior:', behavior, 'isLive:', isLive);
+  }
+  target.scrollIntoView({ block: 'nearest', behavior });
+}
+
+/**
+ * Auto-follow the given tick in the logs panel if the toggle is enabled and the user
+ * has not manually scrolled recently. Works in both live and replay modes.
+ */
+function maybeAutoFollowTick(tick) {
+  if (window.DEBUG_TICK) {
+    if (!autoFollowReplay) console.log('[AutoFollow] skip: autoFollowReplay=false');
+    else if (tick == null) console.log('[AutoFollow] skip: tick=null');
+    else if (userScrolledRecently) console.log('[AutoFollow] skip: userScrolledRecently=true');
+  }
+  if (!autoFollowReplay || tick == null || userScrolledRecently) return;
+  if (!elements.logsContainer) return;
+  if (window.DEBUG_TICK) {
+    console.log('[AutoFollow] maybeAutoFollowTick tick:', tick, 'mode:', currentMode);
+  }
+  highlightCurrentTickGroup(tick);
+  scrollToCurrentTick(tick);
 }
 
 function formatTime(seconds) {
@@ -4882,14 +5157,16 @@ function updatePanelsForTick(data) {
     // Add events to log history
     if (events.length > 0) {
       events.forEach(event => {
-        const logEntry = {
+        const syntheticLog = {
           tick: tick,
-          source: event.type || 'Event',
+          subsystem: event.type || 'Event',
           level: event.level || 'INFO',
+          eventType: event.type,   // maps to logType via normalizeTickLog
+          details: event,          // maps to data via normalizeTickLog
           message: formatTickEvent(event),
-          kind: 'tick',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
+        const logEntry = normalizeTickLog(syntheticLog);
 
         if (currentMode === 'live') {
           addLiveLogEntry(logEntry);
@@ -4955,6 +5232,9 @@ function updatePanelsForTick(data) {
   if (tick !== undefined && tick !== null) {
     currentTick = tick;
     updateTickDisplay(tick);
+    if (currentMode === 'live') {
+      maybeAutoFollowTick(currentTick);
+    }
   }
 
   // Overlays (both formats)
@@ -5018,14 +5298,18 @@ function renderTickBotState(snapshot) {
   if (!container || !snapshot.playerState) return;
 
   const player = snapshot.playerState;
-  const position = player.position || {};
+  const position = player.position || player.worldPosition || player.worldPoint
+    || (player.tile ? player.tile : null) || {};
   const hp = player.hp || {};
   const prayer = player.prayer || {};
+  const prayerCurrent = prayer.current ?? prayer.points;
+  const prayerMax     = prayer.max    ?? prayer.maxPoints;
 
   const items = [
-    { label: 'Position', value: position.x && position.y ? `(${position.x}, ${position.y}, ${position.plane || 0})` : '--' },
+    { label: 'Position', value: position.x !== undefined && position.y !== undefined
+        ? `(${position.x}, ${position.y}, ${position.plane ?? 0})` : '--' },
     { label: 'HP', value: hp.current !== undefined ? `${hp.current} / ${hp.max}` : '--' },
-    { label: 'Prayer', value: prayer.current !== undefined ? `${prayer.current} / ${prayer.max}` : '--' },
+    { label: 'Prayer', value: prayerCurrent !== undefined ? `${prayerCurrent} / ${prayerMax}` : '--' },
     { label: 'Animation', value: player.animation || '--' },
     { label: 'Energy', value: player.energy !== undefined ? `${player.energy}%` : '--' },
     { label: 'Threats', value: snapshot.threats ? snapshot.threats.length : 0 },
@@ -6094,7 +6378,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initSourceFilters(); // Source filter chips
   initPatternFilterDropdown(); // Pattern filter chips
   initSectionToggles(); // Section toggles for tick cards
-  initActionLogFilters(); // ActionLogger type filters (Dialogue, Inventory, etc.)
   initTickReplayControls(); // New tick-based replay controls
   initRecordingControls(); // Recording controls
   initDebugSessionControls(); // Debug session controls (live mode only)
@@ -6133,6 +6416,46 @@ document.addEventListener('DOMContentLoaded', () => {
   // Start feed status polling
   setInterval(updateFeedStatus, 5000);
   updateFeedStatus();
+
+  // Deep-link: auto-open a recording via ?recordingId=, ?recording= (legacy), ?sessionId=, or ?mode=replay
+  (async () => {
+    const params = new URLSearchParams(window.location.search);
+    const modeParam = params.get('mode');
+    const recordingIdParam = params.get('recordingId') || params.get('recording'); // legacy fallback
+    const sessionIdParam = params.get('sessionId');
+
+    if (!recordingIdParam && !sessionIdParam && modeParam !== 'replay') return;
+
+    switchMode('replay');
+    await loadRecordingSessions();
+
+    let targetRecordingId = recordingIdParam;
+
+    // Resolve sessionId → recordingId if needed
+    if (!targetRecordingId && sessionIdParam) {
+      try {
+        const res = await fetch(`/api/debug/replay/recording-by-session?sessionId=${encodeURIComponent(sessionIdParam)}`);
+        if (res.ok) {
+          const data = await res.json();
+          targetRecordingId = data.recordingId;
+        } else {
+          console.warn('[deep-link] Could not resolve sessionId to recordingId');
+        }
+      } catch (e) {
+        console.warn('[deep-link] recording-by-session request failed:', e);
+      }
+    }
+
+    if (targetRecordingId) {
+      if (elements.sessionSelect) elements.sessionSelect.value = targetRecordingId;
+      const health = sessionHealthMap[targetRecordingId];
+      if (health) renderSessionHealthPreview(health);
+      await loadRecording(targetRecordingId);
+    } else if (modeParam === 'replay') {
+      // mode=replay only: stay in replay mode with selector usable, no auto-load
+      console.info('[deep-link] mode=replay, no recording resolved; leaving selector open');
+    }
+  })();
 });
 
 /**
