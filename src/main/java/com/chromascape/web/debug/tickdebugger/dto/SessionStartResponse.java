@@ -2,7 +2,17 @@ package com.chromascape.web.debug.tickdebugger.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-/** Response DTO for session start requests. */
+/**
+ * Response DTO for session start requests.
+ *
+ * <p>Note: {@code recordingEnabled} can be {@code false} for two reasons:
+ *
+ * <ul>
+ *   <li>Recording was not requested by the client
+ *   <li>Recording was requested but failed to start (check session lifecycle via {@code
+ *       /api/debug/replay/session-info/{sessionId}} for FAILED state)
+ * </ul>
+ */
 public class SessionStartResponse {
 
   @JsonProperty("sessionId")
