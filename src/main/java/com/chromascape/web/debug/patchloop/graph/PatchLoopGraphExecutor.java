@@ -3,18 +3,16 @@ package com.chromascape.web.debug.patchloop.graph;
 import com.chromascape.web.debug.patchloop.dto.EvidenceConfigDto;
 import com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest;
 import com.chromascape.web.debug.patchloop.entity.*;
+import com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotService;
 import com.chromascape.web.debug.patchloop.service.GraphExecutionContext;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutor;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutorRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +33,7 @@ public class PatchLoopGraphExecutor {
   private final PatchLoopIterationRepository iterationRepository;
   private final GraphNodeExecutorRegistry executorRegistry;
   private final ObjectMapper objectMapper;
+  private final ExecutionRuntimeSnapshotService snapshotService;
 
   public PatchLoopGraphExecutor(
       PatchLoopGraphExecutionRepository executionRepository,
@@ -42,13 +41,15 @@ public class PatchLoopGraphExecutor {
       PatchLoopAttemptRepository attemptRepository,
       PatchLoopIterationRepository iterationRepository,
       GraphNodeExecutorRegistry executorRegistry,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      ExecutionRuntimeSnapshotService snapshotService) {
     this.executionRepository = executionRepository;
     this.nodeRepository = nodeRepository;
     this.attemptRepository = attemptRepository;
     this.iterationRepository = iterationRepository;
     this.executorRegistry = executorRegistry;
     this.objectMapper = objectMapper;
+    this.snapshotService = snapshotService;
   }
 
   /**
@@ -111,10 +112,8 @@ public class PatchLoopGraphExecutor {
         }
 
         // Execute the node
-        NodeExecutionResult result = executeNode(execution, graph, graphNode, context, attemptNumber);
-
-        // Persist the node state
-        nodeRepository.save(result.nodeState());
+        NodeExecutionResult result =
+            executeNode(execution, graph, graphNode, context, attemptNumber);
 
         // Check for cancellation during execution
         execution = executionRepository.findById(execution.getId()).orElseThrow();
@@ -161,9 +160,7 @@ public class PatchLoopGraphExecutor {
     }
   }
 
-  /**
-   * Executes a single graph node.
-   */
+  /** Executes a single graph node. */
   private NodeExecutionResult executeNode(
       PatchLoopGraphExecution execution,
       LoopGraph graph,
@@ -174,7 +171,8 @@ public class PatchLoopGraphExecutor {
     logger.debug("Executing node: {} ({})", graphNode.id(), graphNode.type());
 
     // Create or update node state
-    PatchLoopGraphNode nodeState = getOrCreateNodeState(execution.getExecutionId(), graphNode, attemptNumber);
+    PatchLoopGraphNode nodeState =
+        getOrCreateNodeState(execution.getExecutionId(), graphNode, attemptNumber);
     nodeState.markStarted();
     nodeRepository.save(nodeState);
 
@@ -204,6 +202,9 @@ public class PatchLoopGraphExecutor {
           result.outputData());
       nodeRepository.save(nodeState);
 
+      // Save runtime snapshot after node completes (for resume/retry)
+      snapshotService.saveSnapshot(execution.getExecutionId(), context.getRuntimeData(), context);
+
       return result;
 
     } catch (Exception e) {
@@ -214,9 +215,7 @@ public class PatchLoopGraphExecutor {
     }
   }
 
-  /**
-   * Determines the next node to execute based on the current node and execution result.
-   */
+  /** Determines the next node to execute based on the current node and execution result. */
   private String determineNextNode(
       LoopGraph graph, String currentNodeId, NodeExecutionResult result) {
 
@@ -239,9 +238,7 @@ public class PatchLoopGraphExecutor {
     return edges.get(0).to();
   }
 
-  /**
-   * Determines if an edge should be followed based on the execution result.
-   */
+  /** Determines if an edge should be followed based on the execution result. */
   private boolean shouldFollowEdge(GraphEdge edge, NodeExecutionResult result) {
     return switch (edge.condition()) {
       case SUCCESS -> result.success();
@@ -253,9 +250,7 @@ public class PatchLoopGraphExecutor {
     };
   }
 
-  /**
-   * Evaluates a conditional edge based on result data.
-   */
+  /** Evaluates a conditional edge based on result data. */
   private boolean evaluateConditionalEdge(GraphEdge edge, NodeExecutionResult result) {
     // Check if the result has output data with a 'success' field
     if (result.outputData() != null && result.outputData().has("success")) {
@@ -281,13 +276,12 @@ public class PatchLoopGraphExecutor {
     return false;
   }
 
-  /**
-   * Gets or creates a node state entity.
-   */
+  /** Gets or creates a node state entity. */
   private PatchLoopGraphNode getOrCreateNodeState(
       String executionId, GraphNode graphNode, int attemptNumber) {
 
-    PatchLoopGraphNode existing = nodeRepository.findByExecutionIdAndNodeId(executionId, graphNode.id());
+    PatchLoopGraphNode existing =
+        nodeRepository.findByExecutionIdAndNodeId(executionId, graphNode.id());
 
     if (existing != null && existing.getAttemptNumber().equals(attemptNumber)) {
       return existing;
@@ -301,9 +295,7 @@ public class PatchLoopGraphExecutor {
     return nodeState;
   }
 
-  /**
-   * Creates a new attempt record.
-   */
+  /** Creates a new attempt record. */
   private PatchLoopAttempt createAttempt(String executionId, int attemptNumber) {
     PatchLoopAttempt attempt = new PatchLoopAttempt();
     attempt.setExecutionId(executionId);
@@ -312,11 +304,9 @@ public class PatchLoopGraphExecutor {
     return attempt;
   }
 
-  /**
-   * Pauses an active execution.
-   */
+  /** Pauses an active execution. */
   @Transactional
-  public void pauseExecution(String executionId) {
+  public void pauseExecution(String executionId) throws GraphExecutionException {
     PatchLoopGraphExecution execution =
         executionRepository
             .findByExecutionId(executionId)
@@ -331,9 +321,7 @@ public class PatchLoopGraphExecutor {
     executionRepository.save(execution);
   }
 
-  /**
-   * Resumes a paused execution.
-   */
+  /** Resumes a paused execution. */
   @Transactional
   public void resumeExecution(String executionId) throws GraphExecutionException {
     PatchLoopGraphExecution execution =
@@ -362,9 +350,7 @@ public class PatchLoopGraphExecutor {
     continueExecution(execution, graph, context);
   }
 
-  /**
-   * Retries execution from a specific node.
-   */
+  /** Retries execution from a specific node. */
   @Transactional
   public void retryFromNode(String executionId, String nodeId) throws GraphExecutionException {
     PatchLoopGraphExecution execution =
@@ -390,11 +376,9 @@ public class PatchLoopGraphExecutor {
     executeFromNode(execution, graph, context, nodeId);
   }
 
-  /**
-   * Cancels an active or paused execution.
-   */
+  /** Cancels an active or paused execution. */
   @Transactional
-  public void cancelExecution(String executionId, String reason) {
+  public void cancelExecution(String executionId, String reason) throws GraphExecutionException {
     PatchLoopGraphExecution execution =
         executionRepository
             .findByExecutionId(executionId)
@@ -410,9 +394,7 @@ public class PatchLoopGraphExecutor {
     executionRepository.save(execution);
   }
 
-  /**
-   * Loads a graph from JSON.
-   */
+  /** Loads a graph from JSON. */
   private LoopGraph loadGraph(com.fasterxml.jackson.databind.JsonNode graphJson) {
     try {
       return objectMapper.treeToValue(graphJson, LoopGraph.class);
@@ -422,13 +404,12 @@ public class PatchLoopGraphExecutor {
     }
   }
 
-  /**
-   * Rebuilds the execution context from persisted execution data.
-   */
-  private GraphExecutionContext rebuildContext(PatchLoopGraphExecution execution) {
+  /** Rebuilds the execution context from persisted execution data. */
+  private GraphExecutionContext rebuildContext(PatchLoopGraphExecution execution)
+      throws GraphExecutionException {
     // Load the iteration to get context data
-    PatchLoopIteration iteration = iterationRepository.findByIterationId(execution.getIterationId())
-        .orElse(null);
+    PatchLoopIteration iteration =
+        iterationRepository.findByIterationId(execution.getIterationId()).orElse(null);
 
     if (iteration == null) {
       throw new GraphExecutionException("Iteration not found: " + execution.getIterationId());
@@ -443,24 +424,25 @@ public class PatchLoopGraphExecutor {
         .context(iteration.getContext())
         .maxAttempts(iteration.getMaxAttempts() != null ? iteration.getMaxAttempts() : 3)
         .successCriteria(iteration.getSuccessCriteria())
-        .policy(execution.getPolicyJson() != null
-            ? objectMapper.valueToTree(execution.getPolicyJson(), GraphExecuteRequest.PatchPolicyConfig.class)
-            : null)
-        .executionMode(iteration.getExecutionMode() != null ? iteration.getExecutionMode() : "analysis_only")
-        .evidenceConfig(iteration.getEvidenceConfig() != null
-            ? objectMapper.valueToTree(iteration.getEvidenceConfig(), EvidenceConfigDto.class)
-            : null)
-        .runtimeData(new HashMap<>())
+        .policy(
+            execution.getPolicyJson() != null
+                ? objectMapper.convertValue(
+                    execution.getPolicyJson(), GraphExecuteRequest.PatchPolicyConfig.class)
+                : null)
+        .executionMode(
+            iteration.getExecutionMode() != null ? iteration.getExecutionMode() : "analysis_only")
+        .evidenceConfig(
+            iteration.getEvidenceConfig() != null
+                ? objectMapper.convertValue(iteration.getEvidenceConfig(), EvidenceConfigDto.class)
+                : null)
+        .runtimeData(snapshotService.loadRuntimeData(execution.getExecutionId()))
         .build();
   }
 
-  /**
-   * Continues execution from the current node.
-   */
+  /** Continues execution from the current node. */
   private void continueExecution(
-      PatchLoopGraphExecution execution,
-      LoopGraph graph,
-      GraphExecutionContext context) throws GraphExecutionException {
+      PatchLoopGraphExecution execution, LoopGraph graph, GraphExecutionContext context)
+      throws GraphExecutionException {
 
     logger.info("Continuing execution from node: {}", execution.getCurrentNodeId());
 
@@ -472,8 +454,9 @@ public class PatchLoopGraphExecutor {
       int attemptNumber = execution.getAttemptCount() != null ? execution.getAttemptCount() : 1;
 
       // Load or create attempt
-      PatchLoopAttempt attempt = attemptRepository.findByExecutionIdAndAttemptNumber(
-          execution.getExecutionId(), attemptNumber);
+      PatchLoopAttempt attempt =
+          attemptRepository.findByExecutionIdAndAttemptNumber(
+              execution.getExecutionId(), attemptNumber);
       if (attempt == null) {
         attempt = createAttempt(execution.getExecutionId(), attemptNumber);
         attemptRepository.save(attempt);
@@ -508,10 +491,8 @@ public class PatchLoopGraphExecutor {
         }
 
         // Execute the node
-        NodeExecutionResult result = executeNode(execution, graph, graphNode, context, attemptNumber);
-
-        // Persist the node state
-        nodeRepository.save(result.nodeState());
+        NodeExecutionResult result =
+            executeNode(execution, graph, graphNode, context, attemptNumber);
 
         // Check for cancellation during execution
         execution = executionRepository.findById(execution.getId()).orElseThrow();
@@ -560,14 +541,13 @@ public class PatchLoopGraphExecutor {
     }
   }
 
-  /**
-   * Executes from a specific node (for retry).
-   */
+  /** Executes from a specific node (for retry). */
   private void executeFromNode(
       PatchLoopGraphExecution execution,
       LoopGraph graph,
       GraphExecutionContext context,
-      String startNodeId) throws GraphExecutionException {
+      String startNodeId)
+      throws GraphExecutionException {
 
     logger.info("Executing from node: {}", startNodeId);
 
@@ -575,8 +555,9 @@ public class PatchLoopGraphExecutor {
       int attemptNumber = execution.getAttemptCount() != null ? execution.getAttemptCount() : 1;
 
       // Load or create attempt
-      PatchLoopAttempt attempt = attemptRepository.findByExecutionIdAndAttemptNumber(
-          execution.getExecutionId(), attemptNumber);
+      PatchLoopAttempt attempt =
+          attemptRepository.findByExecutionIdAndAttemptNumber(
+              execution.getExecutionId(), attemptNumber);
       if (attempt == null) {
         attempt = createAttempt(execution.getExecutionId(), attemptNumber);
         attemptRepository.save(attempt);
@@ -603,10 +584,8 @@ public class PatchLoopGraphExecutor {
         }
 
         // Execute the node
-        NodeExecutionResult result = executeNode(execution, graph, graphNode, context, attemptNumber);
-
-        // Persist the node state
-        nodeRepository.save(result.nodeState());
+        NodeExecutionResult result =
+            executeNode(execution, graph, graphNode, context, attemptNumber);
 
         // Check for cancellation
         execution = executionRepository.findById(execution.getId()).orElseThrow();

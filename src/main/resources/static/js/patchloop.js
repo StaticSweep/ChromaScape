@@ -14,23 +14,50 @@ class PatchLoopManager {
     this.patches = [];
     this.validations = [];
     this.retests = [];
+    this.analyses = [];
+    this.evidence = [];
+    this.artifactManager = null;
   }
 
   /**
    * Connects to the patch loop WebSocket.
+   * @param {string} executionId - The execution ID to subscribe to
    */
-  connect() {
+  connect(executionId) {
     const wsBase = this.getWebSocketBase();
-    this.ws = new WebSocket(`${wsBase}/ws/debug/patch-loop`);
+
+    // Store the executionId for later use
+    if (executionId) {
+      this.executionId = executionId;
+    }
+
+    // Include executionId in the WebSocket URL for server-side filtering
+    const wsUrl = this.executionId
+      ? `${wsBase}/ws/debug/patch-loop/${this.executionId}`
+      : `${wsBase}/ws/debug/patch-loop`;
+
+    this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
       console.log('PatchLoop WebSocket connected');
       this.onConnected();
+
+      // Send subscription message if not using URL-based filtering
+      if (!this.executionId && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          action: "subscribe",
+          executionId: this.executionId
+        }));
+      }
     };
 
     this.ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        // Filter messages by executionId if needed
+        if (this.executionId && msg.executionId && msg.executionId !== this.executionId) {
+          return; // Ignore messages for other executions
+        }
         this.handleMessage(msg);
       } catch (e) {
         console.error('Failed to parse WebSocket message:', e);
@@ -365,7 +392,292 @@ class PatchLoopManager {
   }
 }
 
+/**
+ * Manages artifact display and interaction for the patch loop.
+ *
+ * Handles loading, rendering, and updating of patch, validation, retest,
+ * analysis, and evidence artifacts.
+ */
+class PatchLoopArtifactManager {
+  constructor(executionId) {
+    this.executionId = executionId;
+    this.artifactsUrl = `/api/debug/patch-loop/${executionId}/artifacts`;
+    this.artifacts = {
+      patches: [],
+      validations: [],
+      retests: [],
+      analyses: [],
+      evidence: []
+    };
+  }
+
+  /**
+   * Loads all artifacts from the server.
+   */
+  async loadArtifacts() {
+    try {
+      const response = await fetch(this.artifactsUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+
+      this.artifacts.patches = data.patches || [];
+      this.artifacts.validations = data.validations || [];
+      this.artifacts.retests = data.retests || [];
+      this.artifacts.analyses = data.analyses || [];
+      this.artifacts.evidence = data.evidence || [];
+
+      this.renderAll();
+    } catch (error) {
+      console.error('Failed to load artifacts:', error);
+    }
+  }
+
+  /**
+   * Refreshes artifacts by reloading from the server.
+   */
+  async refresh() {
+    await this.loadArtifacts();
+  }
+
+  /**
+   * Renders all artifact tabs.
+   */
+  renderAll() {
+    this.renderPatches();
+    this.renderValidations();
+    this.renderRetests();
+    this.renderAnalyses();
+    this.renderEvidence();
+  }
+
+  /**
+   * Renders patches tab content.
+   */
+  renderPatches() {
+    const container = document.getElementById('patchContent');
+    if (!container) return;
+
+    if (!this.artifacts.patches || this.artifacts.patches.length === 0) {
+      container.innerHTML = '<p class="text-muted small">No patches generated yet</p>';
+      return;
+    }
+
+    container.innerHTML = this.artifacts.patches.map(patch => `
+      <div class="artifact-card mb-2 p-2 border rounded">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <h6 class="mb-0">
+            <i class="bi bi-code-slash me-1"></i>Patch ${patch.patchId}
+          </h6>
+          <span class="badge bg-${patch.confidence === 'HIGH' ? 'success' : patch.confidence === 'MEDIUM' ? 'warning' : 'secondary'}">
+            ${patch.confidence || 'UNKNOWN'}
+          </span>
+        </div>
+        ${patch.rationale ? `<p class="small text-muted mb-1">${this.escapeHtml(patch.rationale)}</p>` : ''}
+        ${patch.diffText ? `
+          <details class="mb-1">
+            <summary class="small cursor-pointer">View diff</summary>
+            <pre class="diff-view small bg-light p-2 mt-1 rounded">${this.escapeHtml(patch.diffText)}</pre>
+          </details>
+        ` : ''}
+        <div class="small text-muted">
+          <span><i class="bi bi-file-earmark-code me-1"></i>${patch.filesChanged || 0} files</span>
+          <span class="ms-2"><i class="bi bi-type me-1"></i>${patch.linesChanged || 0} lines</span>
+          <span class="ms-2"><i class="bi bi-git me-1"></i>${patch.gitBranch || 'N/A'}</span>
+        </div>
+        ${patch.validationPassed !== undefined ? `
+          <div class="mt-1">
+            <span class="badge bg-${patch.validationPassed ? 'success' : 'danger'}">
+              ${patch.validationPassed ? 'Validated' : 'Failed Validation'}
+            </span>
+          </div>
+        ` : ''}
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Renders validations tab content.
+   */
+  renderValidations() {
+    const container = document.getElementById('validationContent');
+    if (!container) return;
+
+    if (!this.artifacts.validations || this.artifacts.validations.length === 0) {
+      container.innerHTML = '<p class="text-muted small">No validation results yet</p>';
+      return;
+    }
+
+    container.innerHTML = this.artifacts.validations.map(validation => `
+      <div class="artifact-card mb-2 p-2 border rounded">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <h6 class="mb-0">
+            <i class="bi bi-check-circle me-1"></i>Validation
+            ${validation.patchId ? `for ${validation.patchId}` : `Attempt ${validation.attemptNumber || 1}`}
+          </h6>
+          <span class="badge bg-${validation.passed ? 'success' : 'danger'}">
+            ${validation.passed ? 'PASSED' : 'FAILED'}
+          </span>
+        </div>
+        ${validation.output ? `
+          <details class="mb-1">
+            <summary class="small cursor-pointer">View output</summary>
+            <pre class="small bg-light p-2 mt-1 rounded">${this.escapeHtml(validation.output)}</pre>
+          </details>
+        ` : ''}
+        <div class="small text-muted">
+          <span>Exit code: ${validation.exitCode || 'N/A'}</span>
+          ${validation.durationMs ? `<span class="ms-2">Duration: ${this.formatDuration(validation.durationMs)}</span>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Renders retests tab content.
+   */
+  renderRetests() {
+    const container = document.getElementById('retestContent');
+    if (!container) return;
+
+    if (!this.artifacts.retests || this.artifacts.retests.length === 0) {
+      container.innerHTML = '<p class="text-muted small">No retest results yet</p>';
+      return;
+    }
+
+    container.innerHTML = this.artifacts.retests.map(retest => `
+      <div class="artifact-card mb-2 p-2 border rounded">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <h6 class="mb-0">
+            <i class="bi bi-arrow-repeat me-1"></i>Retest Attempt ${retest.attemptNumber || 1}
+          </h6>
+          <span class="badge bg-${retest.success ? 'success' : 'warning'}">
+            ${retest.success ? 'SUCCESS' : 'NO_CHANGE'}
+          </span>
+        </div>
+        ${retest.comparisonSummary ? `<p class="small mb-1">${this.escapeHtml(retest.comparisonSummary)}</p>` : ''}
+        ${retest.improvements && retest.improvements.length > 0 ? `
+          <div class="mb-1">
+            <small class="text-success"><i class="bi bi-arrow-up-right me-1"></i>Improvements:</small>
+            <ul class="small mb-0 ps-3">
+              ${retest.improvements.map(i => `<li>${this.escapeHtml(i)}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+        ${retest.regressions && retest.regressions.length > 0 ? `
+          <div class="mb-1">
+            <small class="text-danger"><i class="bi bi-arrow-down-right me-1"></i>Regressions:</small>
+            <ul class="small mb-0 ps-3">
+              ${retest.regressions.map(r => `<li>${this.escapeHtml(r)}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Renders analyses tab content.
+   */
+  renderAnalyses() {
+    const container = document.getElementById('analysisContent');
+    if (!container) return;
+
+    if (!this.artifacts.analyses || this.artifacts.analyses.length === 0) {
+      container.innerHTML = '<p class="text-muted small">No analysis results yet</p>';
+      return;
+    }
+
+    container.innerHTML = this.artifacts.analyses.map(analysis => `
+      <div class="artifact-card mb-2 p-2 border rounded">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <h6 class="mb-0">
+            <i class="bi bi-lightbulb me-1"></i>Analysis ${analysis.analysisId || ''}
+          </h6>
+          <span class="badge bg-${analysis.confidence === 'HIGH' ? 'success' : analysis.confidence === 'MEDIUM' ? 'warning' : 'secondary'}">
+            ${analysis.confidence || 'UNKNOWN'}
+          </span>
+        </div>
+        ${analysis.diagnosisSummary ? `<p class="small mb-1">${this.escapeHtml(analysis.diagnosisSummary)}</p>` : ''}
+        ${analysis.rootCause ? `
+          <div class="mb-1">
+            <small class="text-muted">Root Cause:</small>
+            <p class="small mb-0">${this.escapeHtml(analysis.rootCause)}</p>
+          </div>
+        ` : ''}
+        ${analysis.recommendationCount !== undefined ? `
+          <small class="text-muted"><i class="bi bi-list-check me-1"></i>${analysis.recommendationCount} recommendations</small>
+        ` : ''}
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Renders evidence tab content (new tab to be added to UI).
+   */
+  renderEvidence() {
+    const container = document.getElementById('evidenceContent');
+    if (!container) return;
+
+    if (!this.artifacts.evidence || this.artifacts.evidence.length === 0) {
+      container.innerHTML = '<p class="text-muted small">No evidence collected yet</p>';
+      return;
+    }
+
+    // Group by evidence type
+    const grouped = {};
+    this.artifacts.evidence.forEach(e => {
+      if (!grouped[e.evidenceType]) {
+        grouped[e.evidenceType] = [];
+      }
+      grouped[e.evidenceType].push(e);
+    });
+
+    container.innerHTML = Object.entries(grouped).map(([type, items]) => `
+      <div class="artifact-card mb-2 p-2 border rounded">
+        <h6 class="mb-1">
+          <i class="bi bi-box-seam me-1"></i>${this.formatEvidenceType(type)}
+          <span class="badge bg-secondary ms-1">${items.length}</span>
+        </h6>
+        ${items.map(item => `
+          <div class="small mb-1">
+            <span class="text-muted">Count: ${item.count || 0}</span>
+            ${item.summary ? `<span class="ms-2">${this.escapeHtml(item.summary)}</span>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Formats evidence type for display.
+   */
+  formatEvidenceType(type) {
+    return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  }
+
+  /**
+   * Escapes HTML to prevent XSS.
+   */
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
+   * Formats duration for display.
+   */
+  formatDuration(ms) {
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${(ms / 60000).toFixed(1)}m`;
+  }
+}
+
 // Export for use in debugger.js or other scripts
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = PatchLoopManager;
+  module.exports = { PatchLoopManager, PatchLoopArtifactManager };
 }

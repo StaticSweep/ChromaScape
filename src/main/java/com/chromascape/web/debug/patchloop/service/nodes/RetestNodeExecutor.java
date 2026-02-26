@@ -1,15 +1,16 @@
 package com.chromascape.web.debug.patchloop.service.nodes;
 
 import com.chromascape.web.debug.patchloop.entity.NodeType;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopRetestArtifact;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopRetestArtifactRepository;
 import com.chromascape.web.debug.patchloop.graph.GraphNode;
 import com.chromascape.web.debug.patchloop.graph.NodeExecutionResult;
-import com.chromascape.web.debug.patchloop.service.GraphExecutionContext;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutor;
 import com.chromascape.web.debug.patchloop.service.RetestOrchestrator;
 import com.chromascape.web.debug.patchloop.service.RetestOrchestrator.RetestResult;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -25,9 +26,13 @@ public class RetestNodeExecutor implements GraphNodeExecutor {
   private static final Logger logger = LoggerFactory.getLogger(RetestNodeExecutor.class);
 
   private final RetestOrchestrator retestOrchestrator;
+  private final PatchLoopRetestArtifactRepository retestArtifactRepository;
 
-  public RetestNodeExecutor(RetestOrchestrator retestOrchestrator) {
+  public RetestNodeExecutor(
+      RetestOrchestrator retestOrchestrator,
+      PatchLoopRetestArtifactRepository retestArtifactRepository) {
     this.retestOrchestrator = retestOrchestrator;
+    this.retestArtifactRepository = retestArtifactRepository;
   }
 
   @Override
@@ -55,6 +60,18 @@ public class RetestNodeExecutor implements GraphNodeExecutor {
       // Store the result
       context.context().setRuntimeValue("retest_" + attemptNumber, result);
 
+      // Persist retest artifact to database
+      PatchLoopRetestArtifact artifact = new PatchLoopRetestArtifact();
+      artifact.setExecutionId(executionId);
+      artifact.setAttemptNumber(attemptNumber);
+      artifact.setBaselineAttemptNumber(baselineAttempt);
+      artifact.setSuccess(result.success());
+      artifact.setComparisonSummary(result.comparisonSummary());
+      artifact.setImprovements(result.improvements() != null ? String.join("|", result.improvements()) : "");
+      artifact.setRegressions(result.regressions() != null ? String.join("|", result.regressions()) : "");
+      artifact.setTimestamp(LocalDateTime.now());
+      retestArtifactRepository.save(artifact);
+
       ObjectNode outputData = JsonNodeFactory.instance.objectNode();
       outputData.put("success", result.success());
       outputData.put("improvements", result.improvements());
@@ -68,8 +85,7 @@ public class RetestNodeExecutor implements GraphNodeExecutor {
             outputData);
       } else {
         return NodeExecutionResult.failure(
-            node.id(),
-            String.format("Retest failed: %s", result.comparisonSummary()));
+            node.id(), String.format("Retest failed: %s", result.comparisonSummary()));
       }
 
     } catch (Exception e) {

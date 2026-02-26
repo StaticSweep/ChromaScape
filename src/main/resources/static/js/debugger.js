@@ -6396,6 +6396,202 @@ async function updatePauseButtonState() {
   }
 }
 
+// ==================== PATCH LOOP CONTROLS ====================
+
+/**
+ * Initialize Patch Loop UI controls and event listeners.
+ */
+function initPatchLoopControls() {
+  // Compile graph button
+  const compileGraphBtn = document.getElementById('compileGraphBtn');
+  if (compileGraphBtn) {
+    compileGraphBtn.addEventListener('click', async () => {
+      const mermaidInput = document.getElementById('mermaidInput');
+      if (!mermaidInput) return;
+
+      const mermaid = mermaidInput.value;
+      if (!mermaid.trim()) {
+        console.warn('No Mermaid graph provided');
+        return;
+      }
+
+      try {
+        // Disable button during compilation
+        compileGraphBtn.disabled = true;
+        compileGraphBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Compiling...';
+
+        // Call compile endpoint (or validate)
+        const response = await fetch('/api/debug/patch-loop/compile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mermaid })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Graph compiled successfully:', result);
+
+          // Enable execute button
+          const executeLoopBtn = document.getElementById('executeLoopBtn');
+          if (executeLoopBtn) {
+            executeLoopBtn.disabled = false;
+          }
+
+          compileGraphBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Compiled';
+          setTimeout(() => {
+            compileGraphBtn.innerHTML = '<i class="bi bi-code-slash me-2"></i>Compile Graph';
+            compileGraphBtn.disabled = false;
+          }, 2000);
+        } else {
+          const error = await response.json();
+          console.error('Compilation failed:', error);
+          compileGraphBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Failed';
+          setTimeout(() => {
+            compileGraphBtn.innerHTML = '<i class="bi bi-code-slash me-2"></i>Compile Graph';
+            compileGraphBtn.disabled = false;
+          }, 2000);
+        }
+      } catch (error) {
+        console.error('Failed to compile graph:', error);
+        compileGraphBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Error';
+        setTimeout(() => {
+          compileGraphBtn.innerHTML = '<i class="bi bi-code-slash me-2"></i>Compile Graph';
+          compileGraphBtn.disabled = false;
+        }, 2000);
+      }
+    });
+  }
+
+  // Execute button
+  const executeLoopBtn = document.getElementById('executeLoopBtn');
+  if (executeLoopBtn) {
+    executeLoopBtn.addEventListener('click', async () => {
+      const mermaidInput = document.getElementById('mermaidInput');
+      const scriptSelect = document.getElementById('patchScriptSelect');
+      const goalPromptInput = document.getElementById('goalPromptInput');
+
+      if (!mermaidInput) return;
+
+      const mermaid = mermaidInput.value;
+      const scriptName = scriptSelect ? scriptSelect.value : null;
+      const goalPrompt = goalPromptInput ? goalPromptInput.value : '';
+
+      if (!mermaid.trim()) {
+        console.warn('No Mermaid graph provided');
+        return;
+      }
+
+      try {
+        // Disable button during execution
+        executeLoopBtn.disabled = true;
+        executeLoopBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Executing...';
+
+        // Execute the graph
+        const result = await window.patchLoopManager.executeGraph(mermaid, scriptName, goalPrompt);
+
+        console.log('Graph execution started:', result);
+
+        // Enable control buttons
+        const pauseLoopBtn = document.getElementById('pauseLoopBtn');
+        const cancelLoopBtn = document.getElementById('cancelLoopBtn');
+        if (pauseLoopBtn) pauseLoopBtn.disabled = false;
+        if (cancelLoopBtn) cancelLoopBtn.disabled = false;
+
+        // Reconnect WebSocket with executionId
+        if (window.patchLoopManager && result.executionId) {
+          window.patchLoopManager.disconnect();
+          window.patchLoopManager.connect(result.executionId);
+        }
+
+        executeLoopBtn.innerHTML = '<i class="bi bi-play-fill me-2"></i>Execute';
+      } catch (error) {
+        console.error('Failed to execute graph:', error);
+        executeLoopBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Failed';
+        setTimeout(() => {
+          executeLoopBtn.innerHTML = '<i class="bi bi-play-fill me-2"></i>Execute';
+          executeLoopBtn.disabled = false;
+        }, 2000);
+      }
+    });
+  }
+
+  // Pause button
+  const pauseLoopBtn = document.getElementById('pauseLoopBtn');
+  if (pauseLoopBtn) {
+    pauseLoopBtn.addEventListener('click', async () => {
+      if (!window.patchLoopManager || !window.patchLoopManager.iterationId) {
+        console.warn('No active execution to pause');
+        return;
+      }
+
+      try {
+        await window.patchLoopManager.controlExecution(window.patchLoopManager.iterationId, 'PAUSE');
+
+        // Update button states
+        pauseLoopBtn.disabled = true;
+        const resumeLoopBtn = document.getElementById('resumeLoopBtn');
+        if (resumeLoopBtn) resumeLoopBtn.disabled = false;
+      } catch (error) {
+        console.error('Failed to pause execution:', error);
+      }
+    });
+  }
+
+  // Resume button
+  const resumeLoopBtn = document.getElementById('resumeLoopBtn');
+  if (resumeLoopBtn) {
+    resumeLoopBtn.addEventListener('click', async () => {
+      if (!window.patchLoopManager || !window.patchLoopManager.iterationId) {
+        console.warn('No active execution to resume');
+        return;
+      }
+
+      try {
+        await window.patchLoopManager.controlExecution(window.patchLoopManager.iterationId, 'RESUME');
+
+        // Update button states
+        resumeLoopBtn.disabled = true;
+        const pauseLoopBtn = document.getElementById('pauseLoopBtn');
+        if (pauseLoopBtn) pauseLoopBtn.disabled = false;
+      } catch (error) {
+        console.error('Failed to resume execution:', error);
+      }
+    });
+  }
+
+  // Cancel button
+  const cancelLoopBtn = document.getElementById('cancelLoopBtn');
+  if (cancelLoopBtn) {
+    cancelLoopBtn.addEventListener('click', async () => {
+      if (!window.patchLoopManager || !window.patchLoopManager.iterationId) {
+        console.warn('No active execution to cancel');
+        return;
+      }
+
+      if (!confirm('Are you sure you want to cancel the patch loop execution?')) {
+        return;
+      }
+
+      try {
+        await window.patchLoopManager.controlExecution(window.patchLoopManager.iterationId, 'CANCEL', 'User cancelled');
+
+        // Disable all control buttons
+        const pauseLoopBtn = document.getElementById('pauseLoopBtn');
+        const resumeLoopBtn = document.getElementById('resumeLoopBtn');
+        if (pauseLoopBtn) pauseLoopBtn.disabled = true;
+        if (resumeLoopBtn) resumeLoopBtn.disabled = true;
+        cancelLoopBtn.disabled = true;
+
+        // Enable execute button
+        const executeLoopBtn = document.getElementById('executeLoopBtn');
+        if (executeLoopBtn) executeLoopBtn.disabled = false;
+      } catch (error) {
+        console.error('Failed to cancel execution:', error);
+      }
+    });
+  }
+}
+
 // ==================== INIT ====================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -6415,6 +6611,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof PatchLoopManager !== 'undefined') {
     window.patchLoopManager = new PatchLoopManager();
     window.patchLoopManager.connect();
+
+    // Initialize Patch Loop UI controls
+    initPatchLoopControls();
   }
 
   loadCurrentFps(); // Load current FPS setting

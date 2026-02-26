@@ -3,17 +3,19 @@ package com.chromascape.web.debug.patchloop.service;
 import com.chromascape.web.debug.patchloop.dto.*;
 import com.chromascape.web.debug.patchloop.entity.*;
 import com.chromascape.web.debug.patchloop.graph.*;
+import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,7 +43,12 @@ public class PatchLoopGraphOrchestratorService {
   private final PatchLoopAnalysisClient analysisClient;
   private final PatchLoopEvidenceService evidenceService;
   private final PatchLoopWebSocketHandler webSocketHandler;
+  private final PatchLoopValidationArtifactRepository validationRepository;
+  private final PatchLoopRetestArtifactRepository retestRepository;
+  private final PatchLoopAnalysisArtifactRepository analysisArtifactRepository;
+  private final PatchLoopEvidenceArtifactRepository evidenceArtifactRepository;
   private final ObjectMapper objectMapper;
+  private final PatchLoopAsyncWorker patchLoopAsyncWorker;
 
   @Autowired
   public PatchLoopGraphOrchestratorService(
@@ -56,7 +63,12 @@ public class PatchLoopGraphOrchestratorService {
       PatchLoopAnalysisClient analysisClient,
       PatchLoopEvidenceService evidenceService,
       PatchLoopWebSocketHandler webSocketHandler,
-      ObjectMapper objectMapper) {
+      PatchLoopValidationArtifactRepository validationRepository,
+      PatchLoopRetestArtifactRepository retestRepository,
+      PatchLoopAnalysisArtifactRepository analysisArtifactRepository,
+      PatchLoopEvidenceArtifactRepository evidenceArtifactRepository,
+      ObjectMapper objectMapper,
+      PatchLoopAsyncWorker patchLoopAsyncWorker) {
     this.orchestratorService = orchestratorService;
     this.compiler = compiler;
     this.executor = executor;
@@ -68,7 +80,12 @@ public class PatchLoopGraphOrchestratorService {
     this.analysisClient = analysisClient;
     this.evidenceService = evidenceService;
     this.webSocketHandler = webSocketHandler;
+    this.validationRepository = validationRepository;
+    this.retestRepository = retestRepository;
+    this.analysisArtifactRepository = analysisArtifactRepository;
+    this.evidenceArtifactRepository = evidenceArtifactRepository;
     this.objectMapper = objectMapper;
+    this.patchLoopAsyncWorker = patchLoopAsyncWorker;
   }
 
   /**
@@ -134,8 +151,8 @@ public class PatchLoopGraphOrchestratorService {
     // Broadcast execution started
     webSocketHandler.broadcastStatusChange(executionId, "CREATED");
 
-    // Execute the graph asynchronously
-    executeGraphAsync(executionId, graph, context);
+    // Execute the graph asynchronously via PatchLoopAsyncWorker (cross-bean call for proper @Async)
+    patchLoopAsyncWorker.executeGraphAsync(executionId, graph, context);
 
     // Build response
     GraphExecuteResponse response = new GraphExecuteResponse();
@@ -149,9 +166,7 @@ public class PatchLoopGraphOrchestratorService {
     return response;
   }
 
-  /**
-   * Gets the state of a graph execution.
-   */
+  /** Gets the state of a graph execution. */
   public GraphStateResponse getGraphState(String iterationId) {
     PatchLoopIteration iteration = iterationRepository.findByIterationId(iterationId).orElse(null);
     if (iteration == null) {
@@ -163,7 +178,8 @@ public class PatchLoopGraphOrchestratorService {
       return null;
     }
 
-    PatchLoopGraphExecution execution = executionRepository.findByExecutionId(executionId).orElse(null);
+    PatchLoopGraphExecution execution =
+        executionRepository.findByExecutionId(executionId).orElse(null);
     if (execution == null) {
       return null;
     }
@@ -179,25 +195,20 @@ public class PatchLoopGraphOrchestratorService {
     response.setFinalStatus(execution.getFinalStatus());
 
     // Load nodes
-    List<PatchLoopGraphNode> nodeEntities = nodeRepository.findByExecutionIdOrderByStartedAtAsc(executionId);
-    response.setNodes(
-        nodeEntities.stream()
-            .map(this::mapNodeState)
-            .collect(Collectors.toList()));
+    List<PatchLoopGraphNode> nodeEntities =
+        nodeRepository.findByExecutionIdOrderByStartedAtAsc(executionId);
+    response.setNodes(nodeEntities.stream().map(this::mapNodeState).collect(Collectors.toList()));
 
     // Load attempts
-    List<PatchLoopAttempt> attemptEntities = attemptRepository.findByExecutionIdOrderByAttemptNumberAsc(executionId);
+    List<PatchLoopAttempt> attemptEntities =
+        attemptRepository.findByExecutionIdOrderByAttemptNumberAsc(executionId);
     response.setAttempts(
-        attemptEntities.stream()
-            .map(this::mapAttempt)
-            .collect(Collectors.toList()));
+        attemptEntities.stream().map(this::mapAttempt).collect(Collectors.toList()));
 
     // Load patches
-    List<PatchLoopPatchArtifact> patchEntities = patchRepository.findByExecutionIdOrderByCreatedAtAsc(executionId);
-    response.setPatches(
-        patchEntities.stream()
-            .map(this::mapPatch)
-            .collect(Collectors.toList()));
+    List<PatchLoopPatchArtifact> patchEntities =
+        patchRepository.findByExecutionIdOrderByCreatedAtAsc(executionId);
+    response.setPatches(patchEntities.stream().map(this::mapPatch).collect(Collectors.toList()));
 
     // Build timeline
     GraphStateResponse.ExecutionTimeline timeline = new GraphStateResponse.ExecutionTimeline();
@@ -206,7 +217,8 @@ public class PatchLoopGraphOrchestratorService {
     timeline.setCompletedAt(execution.getCompletedAt());
     if (execution.getCreatedAt() != null && execution.getCompletedAt() != null) {
       timeline.setTotalDurationMs(
-          java.time.Duration.between(execution.getCreatedAt(), execution.getCompletedAt()).toMillis());
+          java.time.Duration.between(execution.getCreatedAt(), execution.getCompletedAt())
+              .toMillis());
     }
     response.setTimeline(timeline);
 
@@ -224,9 +236,7 @@ public class PatchLoopGraphOrchestratorService {
     return response;
   }
 
-  /**
-   * Controls a running graph execution.
-   */
+  /** Controls a running graph execution. */
   @Transactional
   public void controlExecution(String iterationId, GraphControlRequest request)
       throws GraphExecutionException {
@@ -243,21 +253,69 @@ public class PatchLoopGraphOrchestratorService {
 
     switch (request.getAction()) {
       case PAUSE -> {
+        PatchLoopGraphExecution execution =
+            executionRepository
+                .findByExecutionId(executionId)
+                .orElseThrow(
+                    () -> new GraphExecutionException("Execution not found: " + executionId));
+
+        if (execution.getExecutionStatus() != GraphExecutionStatus.RUNNING) {
+          throw new GraphExecutionException(
+              "Cannot pause execution in state: " + execution.getExecutionStatus()
+                  + ". PAUSE only allowed from RUNNING state.");
+        }
+
         executor.pauseExecution(executionId);
         webSocketHandler.broadcastStatusChange(executionId, "PAUSED");
       }
       case RESUME -> {
+        PatchLoopGraphExecution execution =
+            executionRepository
+                .findByExecutionId(executionId)
+                .orElseThrow(
+                    () -> new GraphExecutionException("Execution not found: " + executionId));
+
+        if (execution.getExecutionStatus() != GraphExecutionStatus.PAUSED) {
+          throw new GraphExecutionException(
+              "Cannot resume execution in state: " + execution.getExecutionStatus()
+                  + ". RESUME only allowed from PAUSED state.");
+        }
+
         executor.resumeExecution(executionId);
         webSocketHandler.broadcastStatusChange(executionId, "RUNNING");
       }
       case CANCEL -> {
+        PatchLoopGraphExecution execution =
+            executionRepository
+                .findByExecutionId(executionId)
+                .orElseThrow(
+                    () -> new GraphExecutionException("Execution not found: " + executionId));
+
+        if (execution.getExecutionStatus().isTerminal()) {
+          throw new GraphExecutionException(
+              "Cannot cancel execution in terminal state: " + execution.getExecutionStatus());
+        }
+
         executor.cancelExecution(executionId, request.getReason());
         webSocketHandler.broadcastStatusChange(executionId, "CANCELLED");
       }
       case RETRY_FROM_NODE -> {
-        String nodeId = request.getNodeId();
-        PatchLoopGraphExecution execution = executionRepository.findByExecutionId(executionId)
-            .orElseThrow(() -> new GraphExecutionException("Execution not found: " + executionId));
+        String nodeId = request.getRetryFromNodeId();
+        if (nodeId == null || nodeId.isBlank()) {
+          throw new IllegalArgumentException("retryFromNodeId required for RETRY_FROM_NODE action");
+        }
+
+        PatchLoopGraphExecution execution =
+            executionRepository
+                .findByExecutionId(executionId)
+                .orElseThrow(
+                    () -> new GraphExecutionException("Execution not found: " + executionId));
+
+        // Only allow retry from PAUSED or terminal states
+        if (execution.getExecutionStatus() == GraphExecutionStatus.RUNNING) {
+          throw new GraphExecutionException(
+              "Cannot retry from node while execution is RUNNING. Pause first.");
+        }
 
         // Clear node results from this node onward
         clearNodeResults(executionId, nodeId);
@@ -277,6 +335,11 @@ public class PatchLoopGraphOrchestratorService {
 
   /**
    * Gets artifacts from a graph execution.
+   *
+   * <p>Loads all artifact types including patches, validations, retests, analyses, and evidence.
+   *
+   * @param iterationId the iteration ID
+   * @return the artifacts response, or null if iteration not found
    */
   public ArtifactsResponse getArtifacts(String iterationId) {
     PatchLoopIteration iteration = iterationRepository.findByIterationId(iterationId).orElse(null);
@@ -293,20 +356,37 @@ public class PatchLoopGraphOrchestratorService {
     response.setExecutionId(executionId);
 
     // Load patches
-    List<PatchLoopPatchArtifact> patches = patchRepository.findByExecutionIdOrderByCreatedAtAsc(executionId);
-    response.setPatches(
-        patches.stream()
-            .map(this::mapPatchDetail)
-            .collect(Collectors.toList()));
+    List<PatchLoopPatchArtifact> patches =
+        patchRepository.findByExecutionIdOrderByCreatedAtAsc(executionId);
+    response.setPatches(patches.stream().map(this::mapPatchDetail).collect(Collectors.toList()));
 
-    // TODO: Load validations, retests, analyses, evidence
+    // Load validations
+    List<PatchLoopValidationArtifact> validations =
+        validationRepository.findByExecutionIdOrderByTimestampAsc(executionId);
+    response.setValidations(
+        validations.stream().map(this::mapValidationArtifact).collect(Collectors.toList()));
+
+    // Load retests
+    List<PatchLoopRetestArtifact> retests =
+        retestRepository.findByExecutionIdOrderByTimestampAsc(executionId);
+    response.setRetests(retests.stream().map(this::mapRetestArtifact).collect(Collectors.toList()));
+
+    // Load analyses
+    List<PatchLoopAnalysisArtifact> analyses =
+        analysisArtifactRepository.findByExecutionIdOrderByTimestampAsc(executionId);
+    response.setAnalyses(
+        analyses.stream().map(this::mapAnalysisArtifact).collect(Collectors.toList()));
+
+    // Load evidence
+    List<PatchLoopEvidenceArtifact> evidence =
+        evidenceArtifactRepository.findByExecutionIdOrderByTimestampAsc(executionId);
+    response.setEvidence(
+        evidence.stream().map(this::mapEvidenceArtifact).collect(Collectors.toList()));
 
     return response;
   }
 
-  /**
-   * Gets active graph executions.
-   */
+  /** Gets active graph executions. */
   public List<GraphStateResponse> getActiveGraphExecutions() {
     List<PatchLoopGraphExecution> executions = executionRepository.findActiveExecutions();
     return executions.stream()
@@ -335,31 +415,84 @@ public class PatchLoopGraphOrchestratorService {
     return iteration;
   }
 
-  private void executeGraphAsync(String executionId, LoopGraph graph, GraphExecutionContext context) {
-    // In real implementation, would use @Async or a message queue
-    // For now, execute synchronously
-    try {
-      executor.executeGraph(executionId, graph, context);
-    } catch (GraphExecutionException e) {
-      logger.error("Async graph execution failed: {}", executionId, e);
-      webSocketHandler.broadcastIterationFailed(executionId, e.getMessage());
-    }
-  }
+  /**
+   * Clears node results from the specified node onwards using selective downstream pruning.
+   *
+   * <p>Traverses the graph to find all downstream nodes from the specified node and only clears
+   * those, preserving upstream artifacts.
+   *
+   * @param executionId the execution ID
+   * @param fromNodeId the node ID to start clearing from
+   * @throws GraphExecutionException if execution not found
+   */
+  private void clearNodeResults(String executionId, String fromNodeId)
+      throws GraphExecutionException {
+    PatchLoopGraphExecution execution =
+        executionRepository
+            .findByExecutionId(executionId)
+            .orElseThrow(() -> new GraphExecutionException("Execution not found: " + executionId));
 
-  private void clearNodeResults(String executionId, String fromNodeId) {
-    // Delete node states from the specified node onwards
-    List<PatchLoopGraphNode> nodes = nodeRepository.findByExecutionIdOrderByStartedAtAsc(executionId);
+    LoopGraph graph = loadGraph(execution.getGraphJson());
+    Set<String> downstreamNodes = computeDownstreamNodes(graph, fromNodeId);
+    downstreamNodes.add(fromNodeId); // Include the node itself for retry
+
+    List<PatchLoopGraphNode> nodes =
+        nodeRepository.findByExecutionIdOrderByStartedAtAsc(executionId);
     for (PatchLoopGraphNode node : nodes) {
-      if (shouldClearNode(node.getNodeId(), fromNodeId)) {
+      if (downstreamNodes.contains(node.getNodeId())) {
         nodeRepository.delete(node);
       }
     }
+
+    logger.debug("Cleared {} nodes (including retry node) from {}", downstreamNodes.size(), fromNodeId);
   }
 
-  private boolean shouldClearNode(String nodeId, String fromNodeId) {
-    // Simple implementation: clear all nodes
-    // In real implementation, would traverse graph to determine which nodes to clear
-    return true;
+  /**
+   * Computes all downstream nodes from a given starting node.
+   *
+   * <p>Performs a breadth-first traversal of the graph starting from the outgoing edges of the
+   * specified node to find all nodes that would be affected by retrying from it.
+   *
+   * @param graph the compiled graph
+   * @param fromNodeId the starting node ID
+   * @return set of all downstream node IDs
+   */
+  private Set<String> computeDownstreamNodes(LoopGraph graph, String fromNodeId) {
+    Set<String> downstream = new HashSet<>();
+    Queue<String> queue = new LinkedList<>();
+
+    // Start with all immediate successors of the from node
+    queue.addAll(
+        graph.getOutgoingEdges(fromNodeId).stream()
+            .map(GraphEdge::to)
+            .collect(Collectors.toList()));
+
+    // BFS to find all reachable nodes
+    while (!queue.isEmpty()) {
+      String nodeId = queue.poll();
+      if (!downstream.add(nodeId)) {
+        continue; // Already visited
+      }
+      queue.addAll(
+          graph.getOutgoingEdges(nodeId).stream().map(GraphEdge::to).collect(Collectors.toList()));
+    }
+
+    return downstream;
+  }
+
+  /**
+   * Loads a graph from persisted JSON.
+   *
+   * @param graphJson the graph JSON node
+   * @return the loaded LoopGraph, or null if loading fails
+   */
+  private LoopGraph loadGraph(JsonNode graphJson) {
+    try {
+      return objectMapper.treeToValue(graphJson, LoopGraph.class);
+    } catch (Exception e) {
+      logger.error("Failed to load graph from JSON", e);
+      return null;
+    }
   }
 
   private JsonNode serializeGraph(LoopGraph graph) {
@@ -386,8 +519,7 @@ public class PatchLoopGraphOrchestratorService {
   private GraphExecuteResponse.CompiledGraphInfo buildCompiledGraphInfo(LoopGraph graph) {
     GraphExecuteResponse.CompiledGraphInfo info = new GraphExecuteResponse.CompiledGraphInfo();
     info.setNodeCount(graph.getNodes().size());
-    info.setEdgeCount(
-        graph.getEdges().values().stream().mapToInt(List::size).sum());
+    info.setEdgeCount(graph.getEdges().values().stream().mapToInt(List::size).sum());
     info.setEntryNodeId(graph.getEntryNodeId());
     info.setTerminalNodeIds(new ArrayList<>(graph.getTerminalNodeIds()));
 
@@ -482,5 +614,59 @@ public class PatchLoopGraphOrchestratorService {
 
   private String formatDateTime(LocalDateTime dt) {
     return dt != null ? dt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : null;
+  }
+
+  private ArtifactsResponse.ValidationArtifact mapValidationArtifact(
+      PatchLoopValidationArtifact entity) {
+    ArtifactsResponse.ValidationArtifact artifact = new ArtifactsResponse.ValidationArtifact();
+    artifact.setPatchId(entity.getPatchId());
+    artifact.setAttemptNumber(entity.getAttemptNumber());
+    artifact.setPassed(entity.getPassed());
+    artifact.setOutput(entity.getOutput());
+    artifact.setExitCode(entity.getExitCode());
+    artifact.setDurationMs(entity.getDurationMs());
+    artifact.setTimestamp(formatDateTime(entity.getTimestamp()));
+    return artifact;
+  }
+
+  private ArtifactsResponse.RetestArtifact mapRetestArtifact(PatchLoopRetestArtifact entity) {
+    ArtifactsResponse.RetestArtifact artifact = new ArtifactsResponse.RetestArtifact();
+    artifact.setAttemptNumber(entity.getAttemptNumber());
+    artifact.setBaselineAttemptNumber(entity.getBaselineAttemptNumber());
+    artifact.setSuccess(entity.getSuccess());
+    artifact.setComparisonSummary(entity.getComparisonSummary());
+
+    // Parse improvements and regressions from stored strings
+    if (entity.getImprovements() != null && !entity.getImprovements().isBlank()) {
+      artifact.setImprovements(Arrays.asList(entity.getImprovements().split("\\|")));
+    }
+    if (entity.getRegressions() != null && !entity.getRegressions().isBlank()) {
+      artifact.setRegressions(Arrays.asList(entity.getRegressions().split("\\|")));
+    }
+
+    artifact.setTimestamp(formatDateTime(entity.getTimestamp()));
+    return artifact;
+  }
+
+  private ArtifactsResponse.AnalysisArtifact mapAnalysisArtifact(PatchLoopAnalysisArtifact entity) {
+    ArtifactsResponse.AnalysisArtifact artifact = new ArtifactsResponse.AnalysisArtifact();
+    artifact.setAttemptNumber(entity.getAttemptNumber());
+    artifact.setAnalysisId(entity.getAnalysisId());
+    artifact.setDiagnosisSummary(entity.getDiagnosisSummary());
+    artifact.setRootCause(entity.getRootCause());
+    artifact.setConfidence(entity.getConfidence());
+    artifact.setRecommendationCount(entity.getRecommendationCount());
+    artifact.setTimestamp(formatDateTime(entity.getTimestamp()));
+    return artifact;
+  }
+
+  private ArtifactsResponse.EvidenceArtifact mapEvidenceArtifact(PatchLoopEvidenceArtifact entity) {
+    ArtifactsResponse.EvidenceArtifact artifact = new ArtifactsResponse.EvidenceArtifact();
+    artifact.setAttemptNumber(entity.getAttemptNumber());
+    artifact.setEvidenceType(entity.getEvidenceType());
+    artifact.setCount(entity.getCount());
+    artifact.setSummary(entity.getSummary());
+    artifact.setTimestamp(formatDateTime(entity.getTimestamp()));
+    return artifact;
   }
 }

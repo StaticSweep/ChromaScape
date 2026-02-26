@@ -3,6 +3,10 @@ package com.chromascape.web.debug.patchloop.service;
 import com.chromascape.web.debug.patchloop.dto.*;
 import com.chromascape.web.debug.patchloop.entity.*;
 import com.chromascape.web.debug.patchloop.exception.AnalysisException;
+import com.chromascape.web.debug.patchloop.graph.GraphExecutionContext;
+import com.chromascape.web.debug.patchloop.graph.GraphExecutionException;
+import com.chromascape.web.debug.patchloop.graph.LoopGraph;
+import com.chromascape.web.debug.patchloop.graph.PatchLoopGraphExecutor;
 import com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
@@ -15,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +47,8 @@ public class PatchLoopAsyncWorker {
   private final ScriptControl scriptControl;
   private final ObjectMapper objectMapper;
   private final PatchLoopPersistenceService persistenceService;
+  private final PatchLoopGraphExecutor graphExecutor;
+  private final PatchLoopWebSocketHandler webSocketHandler;
 
   public PatchLoopAsyncWorker(
       PatchLoopIterationRepository iterationRepository,
@@ -51,7 +58,9 @@ public class PatchLoopAsyncWorker {
       DebugSessionRepository debugSessionRepository,
       ScriptControl scriptControl,
       ObjectMapper objectMapper,
-      PatchLoopPersistenceService persistenceService) {
+      PatchLoopPersistenceService persistenceService,
+      PatchLoopGraphExecutor graphExecutor,
+      PatchLoopWebSocketHandler webSocketHandler) {
     this.iterationRepository = iterationRepository;
     this.eventRepository = eventRepository;
     this.evidenceService = evidenceService;
@@ -60,6 +69,8 @@ public class PatchLoopAsyncWorker {
     this.scriptControl = scriptControl;
     this.objectMapper = objectMapper;
     this.persistenceService = persistenceService;
+    this.graphExecutor = graphExecutor;
+    this.webSocketHandler = webSocketHandler;
 
     logger.info(
         "PatchLoopAsyncWorker initialized with analysis provider: {}",
@@ -189,6 +200,33 @@ public class PatchLoopAsyncWorker {
                   ? iteration.getFailureReason()
                   : e.getMessage()),
           "ERROR");
+    }
+  }
+
+  /**
+   * Executes a graph asynchronously with true async behavior.
+   *
+   * <p>Uses @Async annotation to run in a separate thread pool, allowing the HTTP response to
+   * return immediately while execution continues.
+   *
+   * @param executionId the execution ID
+   * @param graph the compiled graph
+   * @param context the execution context
+   * @return CompletableFuture that completes when execution finishes
+   */
+  @Async("patchLoopExecutor")
+  public CompletableFuture<Void> executeGraphAsync(
+      String executionId, LoopGraph graph, GraphExecutionContext context) {
+    try {
+      logger.info(
+          "[{}] Starting async graph execution",
+          Thread.currentThread().getName());
+      graphExecutor.executeGraph(executionId, graph, context);
+      return CompletableFuture.completedFuture(null);
+    } catch (GraphExecutionException e) {
+      logger.error("Async graph execution failed: {}", executionId, e);
+      webSocketHandler.broadcastIterationFailed(executionId, e.getMessage());
+      return CompletableFuture.failedFuture(e);
     }
   }
 
