@@ -1,9 +1,12 @@
 package com.chromascape.web.debug.tickdebugger.entity;
 
+import com.chromascape.web.debug.tickdebugger.dto.SessionCounts;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /** Repository for accessing {@link DebugSession} entities. */
@@ -22,6 +25,14 @@ public interface DebugSessionRepository extends JpaRepository<DebugSession, Long
   /** Find all sessions, ordered by start time (newest first). */
   List<DebugSession> findAllByOrderByStartTimeDesc();
 
+  /**
+   * Find the most recent debug session for a specific script name.
+   *
+   * @param scriptName the script name
+   * @return the most recent session if found
+   */
+  Optional<DebugSession> findFirstByScriptNameOrderByStartTimeDesc(String scriptName);
+
   /** Find sessions linked to a specific recording ID. */
   Optional<DebugSession> findByRecordingId(String recordingId);
 
@@ -34,4 +45,34 @@ public interface DebugSessionRepository extends JpaRepository<DebugSession, Long
 
   /** Delete sessions older than the specified timestamp (for retention cleanup). */
   void deleteByEndTimeBefore(LocalDateTime cutoff);
+
+  /**
+   * Fetch aggregate counts for multiple sessions in a single query.
+   *
+   * <p>Reduces N+1 query problem by fetching tick counts, event counts, and failure marker counts
+   * for all requested sessions in one JOIN query.
+   *
+   * @param sessionIds list of session IDs to fetch counts for
+   * @return list of SessionCounts (convert to map in service layer if needed)
+   */
+  @Query(
+      """
+      SELECT new com.chromascape.web.debug.tickdebugger.dto.SessionCounts(
+        s.sessionId,
+        COUNT(DISTINCT snap.id),
+        COUNT(DISTINCT log.id),
+        COUNT(DISTINCT CASE
+          WHEN (UPPER(m.markerType) IN ('ERROR', 'DAMAGE', 'DEATH') OR UPPER(m.severity) = 'ERROR')
+          THEN m.id
+          ELSE NULL
+        END)
+      )
+      FROM DebugSession s
+      LEFT JOIN TickSnapshot snap ON snap.sessionId = s.sessionId
+      LEFT JOIN TickLog log ON log.sessionId = s.sessionId
+      LEFT JOIN TimelineMarker m ON m.sessionId = s.sessionId
+      WHERE s.sessionId IN :sessionIds
+      GROUP BY s.sessionId
+      """)
+  List<SessionCounts> findCountsBySessionIds(@Param("sessionIds") List<String> sessionIds);
 }

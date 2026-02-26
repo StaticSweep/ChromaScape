@@ -2,6 +2,7 @@ package com.chromascape.web.config;
 
 import com.chromascape.web.debug.BotStateWebSocketHandler;
 import com.chromascape.web.debug.OverlayWebSocketHandler;
+import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
 import com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler;
 import com.chromascape.web.debug.tickdebugger.websocket.TickStreamWebSocketHandler;
 import com.chromascape.web.instance.WebSocketStateHandler;
@@ -62,6 +63,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
   /** The shared handler for broadcasting tick data to debugger UI. */
   private final DebuggerTickWebSocketHandler debuggerTickWebSocketHandler;
 
+  /** The shared handler for patch loop graph execution updates. */
+  private final PatchLoopWebSocketHandler patchLoopWebSocketHandler;
+
   /**
    * Constructs the configuration with the injected handlers.
    *
@@ -71,6 +75,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
    * @param semanticWebSocketHandler handler for semantic state updates
    * @param tickStreamWebSocketHandler handler for Micro6 tick stream
    * @param debuggerTickWebSocketHandler handler for debugger tick broadcast
+   * @param patchLoopWebSocketHandler handler for patch loop updates
    */
   @Autowired
   public WebSocketConfig(
@@ -82,7 +87,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
       OverlayWebSocketHandler overlayWebSocketHandler,
       BotStateWebSocketHandler botStateWebSocketHandler,
       TickStreamWebSocketHandler tickStreamWebSocketHandler,
-      DebuggerTickWebSocketHandler debuggerTickWebSocketHandler) {
+      DebuggerTickWebSocketHandler debuggerTickWebSocketHandler,
+      PatchLoopWebSocketHandler patchLoopWebSocketHandler) {
     this.logWebSocketHandler = logWebSocketHandler;
     this.stateWebSocketHandler = stateWebSocketHandler;
     this.viewportWebSocketHandler = viewportWebSocketHandler;
@@ -92,6 +98,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
     this.botStateWebSocketHandler = botStateWebSocketHandler;
     this.tickStreamWebSocketHandler = tickStreamWebSocketHandler;
     this.debuggerTickWebSocketHandler = debuggerTickWebSocketHandler;
+    this.patchLoopWebSocketHandler = patchLoopWebSocketHandler;
   }
 
   /**
@@ -146,6 +153,11 @@ public class WebSocketConfig implements WebSocketConfigurer {
     // Debugger tick stream broadcast to UI
     registry
         .addHandler(debuggerTickWebSocketHandler, "/ws/debugger/tick-stream")
+        .setAllowedOrigins("*");
+
+    // Patch loop graph execution updates
+    registry
+        .addHandler(patchLoopWebSocketHandler, "/ws/debug/patch-loop")
         .setAllowedOrigins("*");
   }
 }

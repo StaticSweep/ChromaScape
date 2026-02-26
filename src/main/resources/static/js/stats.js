@@ -11,7 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!timeEl || !cyclesEl || !inputsEl || !objectsEl) return;
 
-    const socket = new WebSocket('ws://' + window.location.host + '/ws/stats');
+    const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket = new WebSocket(`${wsProtocol}://${window.location.host}/ws/stats`);
 
     socket.onopen = () => {
         console.log('Connected to Statistics WebSocket');

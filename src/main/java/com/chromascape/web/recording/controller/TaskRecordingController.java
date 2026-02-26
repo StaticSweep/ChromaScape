@@ -35,8 +35,8 @@ public class TaskRecordingController {
   /**
    * Enable or disable auto-recording for a specific task type.
    *
-   * <p>Change is persisted immediately. Returns HTTP 400 if {@code taskType} is not a valid
-   * {@link TaskType} value.
+   * <p>Change is persisted immediately. Returns HTTP 400 if {@code taskType} is not a valid {@link
+   * TaskType} value.
    */
   @PostMapping("/{taskType}")
   public ResponseEntity<?> setTaskState(
@@ -46,8 +46,7 @@ public class TaskRecordingController {
       preferenceService.setTaskEnabled(type, enabled);
       return ResponseEntity.ok(preferenceService.getEffectiveTaskMap());
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest()
-          .body(Map.of("error", "Invalid task type: " + taskType));
+      return ResponseEntity.badRequest().body(Map.of("error", "Invalid task type: " + taskType));
     }
   }
 

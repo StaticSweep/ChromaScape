@@ -1180,6 +1180,101 @@ body {
   color: #e5c07b;
 }
 
+/* Quest state badge */
+.quest-state-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.quest-state-badge.state-in-progress {
+  background: rgba(229, 192, 123, 0.2);
+  border: 1px solid #e5c07b;
+  color: #e5c07b;
+}
+.quest-state-badge.state-finished {
+  background: rgba(152, 195, 121, 0.2);
+  border: 1px solid #98c379;
+  color: #98c379;
+}
+.quest-state-badge.state-not-started {
+  background: rgba(171, 178, 191, 0.2);
+  border: 1px solid #abb2bf;
+  color: #abb2bf;
+}
+.quest-state-badge.state-other {
+  background: rgba(97, 175, 239, 0.2);
+  border: 1px solid #61afef;
+  color: #61afef;
+}
+
+/* Quest active indicator dot */
+.quest-active-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #98c379;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* Quest varbits collapsible toggle row inside quest section */
+.quest-varbits-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 3px 0;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: #c678dd;
+  user-select: none;
+  border-top: 1px solid rgba(198, 120, 221, 0.2);
+}
+.quest-varbits-toggle:hover { color: #d898f0; }
+.quest-varbits-list { margin-top: 4px; padding-left: 4px; }
+.quest-varbit-entry {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+/* Varbits section subsection dividers */
+.varbits-subsection-header {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #abb2bf;
+  padding: 4px 0 2px 0;
+  border-bottom: 1px solid rgba(171, 178, 191, 0.25);
+  margin-bottom: 4px;
+}
+.varbits-subsection-header.quest-varbits-header {
+  color: #c678dd;
+  border-bottom-color: rgba(198, 120, 221, 0.25);
+}
+
+/* [quest] / [changed] cross-reference tag on varbit items */
+.varbit-quest-tag {
+  font-size: 0.65rem;
+  color: #c678dd;
+  background: rgba(198, 120, 221, 0.12);
+  border: 1px solid rgba(198, 120, 221, 0.3);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* Section empty state */
 .section-empty {
   color: #e2e8f0;
@@ -1209,4 +1304,325 @@ body {
   background: #1e3a8a !important;
   border-color: #1e3a8a !important;
   color: #fff !important;
+}
+
+/* ── Recording Diagnostics Strip ──────────────────────────── */
+.recording-diagnostics-strip {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  color: var(--text-muted, #aaa);
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 0 0 12px 12px;
+  flex-shrink: 0;
+}
+
+.rds-compact-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.rds-metric {
+  white-space: nowrap;
+}
+
+.rds-label {
+  margin-right: 4px;
+  opacity: 0.7;
+}
+
+.rds-dropped {
+  color: var(--bs-danger);
+}
+
+.rds-controls {
+  display: flex;
+  align-items: center;
+}
+
+.rds-pin-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  opacity: 0.75;
+  font-size: 0.75rem;
+}
+
+.rds-expand-btn {
+  color: inherit;
+  opacity: 0.7;
+  line-height: 1;
+}
+
+.rds-expand-btn:hover {
+  opacity: 1;
+}
+
+.rds-full-details {
+  padding-top: 4px;
+}
+
+/* Mobile: allow controls to wrap cleanly */
+@media (max-width: 768px) {
+  .rds-compact-row {
+    gap: 8px;
+  }
+  .rds-controls {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 2px;
+  }
+}
+
+/* ==================== SESSION HEALTH INDICATORS ==================== */
+
+.session-health-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.health-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted, #aaa);
+}
+
+.health-chip.health-ok {
+  background: rgba(40, 167, 69, 0.15);
+  border-color: rgba(40, 167, 69, 0.35);
+  color: #6fcf97;
+}
+
+.health-chip.health-warn {
+  background: rgba(255, 193, 7, 0.15);
+  border-color: rgba(255, 193, 7, 0.35);
+  color: #f8d24e;
+}
+
+.health-chip.health-error {
+  background: rgba(220, 53, 69, 0.15);
+  border-color: rgba(220, 53, 69, 0.35);
+  color: #f08080;
+}
+
+.health-chip.health-muted {
+  opacity: 0.5;
+}
+
+.health-chip.health-active {
+  background: rgba(13, 110, 253, 0.15);
+  border-color: rgba(13, 110, 253, 0.35);
+  color: #6ea8fe;
+}
+
+/* Patch Loop Panel Styles */
+.patch-loop-panel {
+  position: fixed;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  width: 380px;
+  max-height: 80vh;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.patch-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+}
+
+.patch-panel-header h6 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.patch-panel-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.patch-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.patch-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.patch-section label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary, rgba(255,255,255,0.7));
+}
+
+.patch-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.node-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 8px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px;
+}
+
+.node-timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  background: rgba(255,255,255,0.05);
+  transition: all 0.2s;
+}
+
+.node-timeline-item.running {
+  background: rgba(13, 110, 253, 0.2);
+  border-left: 3px solid #6ea8fe;
+}
+
+.node-timeline-item.completed {
+  background: rgba(40, 167, 69, 0.2);
+  border-left: 3px solid #6fcf97;
+}
+
+.node-timeline-item.failed {
+  background: rgba(220, 53, 69, 0.2);
+  border-left: 3px solid #f08080;
+}
+
+.node-timeline-item .node-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #aaa;
+}
+
+.node-timeline-item.running .node-status {
+  background: #6ea8fe;
+  animation: pulse 1s infinite;
+}
+
+.node-timeline-item.completed .node-status {
+  background: #6fcf97;
+}
+
+.node-timeline-item.failed .node-status {
+  background: #f08080;
+}
+
+.node-timeline-item .node-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.node-timeline-item .node-duration {
+  font-size: 0.7rem;
+  color: var(--text-muted, #aaa);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-muted, #aaa);
+}
+
+.status-indicator.active {
+  background: #6ea8fe;
+  animation: pulse 1s infinite;
+}
+
+.status-indicator.success {
+  background: #6fcf97;
+}
+
+.status-indicator.error {
+  background: #f08080;
+}
+
+.status-indicator.warning {
+  background: #f8d24e;
+}
+
+.patch-preview {
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: monospace;
+  font-size: 0.75rem;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.artifact-item {
+  padding: 8px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.artifact-item .artifact-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.artifact-item .artifact-title {
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.artifact-item .artifact-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.artifact-item .artifact-content {
+  font-size: 0.75rem;
+  color: var(--text-muted, #aaa);
+}
+
+.nav-tabs-sm .nav-link {
+  font-size: 0.75rem;
+  padding: 4px 8px;
 }

@@ -31,9 +31,9 @@ public class TaskRecordingPreferenceService {
   }
 
   /**
-   * Ensure every {@link TaskType} has a persisted row. Missing entries are created with
-   * {@code enabled=false}. Runs after the full application context is ready so JPA/transactions
-   * are fully available.
+   * Ensure every {@link TaskType} has a persisted row. Missing entries are created with {@code
+   * enabled=false}. Runs after the full application context is ready so JPA/transactions are fully
+   * available.
    */
   @EventListener(ApplicationReadyEvent.class)
   @Transactional
@@ -89,9 +89,7 @@ public class TaskRecordingPreferenceService {
   public void setTaskEnabled(TaskType taskType, boolean enabled) {
     String key = taskType.name().toLowerCase();
     TaskRecordingPreference pref =
-        repository
-            .findByTaskType(key)
-            .orElseGet(() -> new TaskRecordingPreference(key, false));
+        repository.findByTaskType(key).orElseGet(() -> new TaskRecordingPreference(key, false));
     pref.setEnabled(enabled);
     repository.save(pref);
     log.info("Task recording preference updated: {} -> {}", key, enabled);

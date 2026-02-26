@@ -61,8 +61,11 @@ public class LogLineParser {
         LocalDateTime localTimestamp = LocalDateTime.parse(ts, TIMESTAMP_FORMATTER);
         ZoneId zone = parseZone(tz);
         ZonedDateTime zoned = localTimestamp.atZone(zone);
-        return new ParsedLogLine(zoned.withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime(),
-            level, loggerName, message);
+        return new ParsedLogLine(
+            zoned.withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime(),
+            level,
+            loggerName,
+            message);
       }
 
       Matcher simpleMatcher = LOG_PATTERN_SIMPLE.matcher(line);

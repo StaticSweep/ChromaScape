@@ -138,3 +138,33 @@ micro6:
     max-batch-size: ${MICRO6_MAX_BATCH:100}
     # Maximum deduplication history
     max-history-lines: ${MICRO6_HISTORY_LINES:500}
+
+# Analysis Provider Configuration - For BMAD (Bot Metric Analysis & Diagnostics)
+analysis:
+  # Provider selection: claude-api (default) or claude-mcp
+  # Set via ANALYSIS_PROVIDER environment variable
+  provider: ${ANALYSIS_PROVIDER:claude-api}
+
+  # MCP-specific configuration (only used if provider=claude-mcp)
+  mcp:
+    # MCP server URL
+    server-url: ${MCP_SERVER_URL:http://localhost:8765}
+    # Request timeout in seconds
+    timeout-seconds: ${MCP_TIMEOUT:120}
+    # Maximum retry attempts
+    max-retries: ${MCP_MAX_RETRIES:3}
+
+# Claude API Configuration - For BMAD (Bot Metric Analysis & Diagnostics)
+# Only used when analysis.provider=claude-api (default)
+claude:
+  api:
+    # Claude API key (set via CLAUDE_API_KEY environment variable)
+    key: ${CLAUDE_API_KEY:}
+    # Claude API endpoint URL
+    url: ${CLAUDE_API_URL:https://api.anthropic.com/v1/messages}
+    # Model to use for analysis (claude-opus-4-6, claude-sonnet-4-5, etc.)
+    model: ${CLAUDE_API_MODEL:claude-opus-4-6}
+    # Request timeout in seconds
+    timeout-seconds: ${CLAUDE_API_TIMEOUT:120}
+    # Maximum tokens in API response
+    max-tokens: ${CLAUDE_API_MAX_TOKENS:4096}

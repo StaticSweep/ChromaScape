@@ -200,9 +200,7 @@ public class TickStreamIngestionService {
 
       if (!missingSections.isEmpty()) {
         log.debug(
-            "Tick {} missing sections: {}",
-            batch.getTick(),
-            String.join(", ", missingSections));
+            "Tick {} missing sections: {}", batch.getTick(), String.join(", ", missingSections));
       }
 
       TickSnapshot snapshot =

@@ -549,8 +549,7 @@ public class RecordingService implements FrameListener {
           if (queueDepth > FRAME_BUFFER_SIZE * 0.8) {
             logger.warn(
                 "Encoder lag detected: queue depth {} ({}% full)",
-                queueDepth,
-                Math.round((queueDepth / (double) FRAME_BUFFER_SIZE) * 100));
+                queueDepth, Math.round((queueDepth / (double) FRAME_BUFFER_SIZE) * 100));
           }
 
           // Periodic logging (every 30 frames with queue depth)

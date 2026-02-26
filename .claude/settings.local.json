@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(powershell.exe:*)",
-      "Bash(cmd.exe /c \"netstat -ano | findstr :8090 | findstr LISTENING\")"
+      "Bash(cmd.exe /c \"netstat -ano | findstr :8090 | findstr LISTENING\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

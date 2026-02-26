@@ -51,6 +51,26 @@ public class DebugSession {
   @Column(nullable = false)
   private LocalDateTime createdAt;
 
+  /** Current lifecycle state of this session (nullable for backward compatibility). */
+  @Enumerated(EnumType.STRING)
+  @Column(length = 20)
+  private DebugSessionLifecycleState lifecycleState;
+
+  /** Failure code if session failed (null for successful sessions). */
+  @Column(length = 50)
+  private String failureCode;
+
+  /** Human-readable failure reason (null for successful sessions). */
+  @Column(length = 500)
+  private String failureReason;
+
+  /** Additional failure context (e.g., exception message, stack trace summary). */
+  @Column(length = 2000)
+  private String failureContext;
+
+  /** Timestamp of last lifecycle state change (nullable for backward compatibility). */
+  @Column private LocalDateTime lastStateAt;
+
   /** Default constructor required by JPA. */
   public DebugSession() {}
 
@@ -67,6 +87,8 @@ public class DebugSession {
     this.startTime = startTime;
     this.startTick = startTick;
     this.createdAt = LocalDateTime.now();
+    this.lifecycleState = DebugSessionLifecycleState.STARTING;
+    this.lastStateAt = LocalDateTime.now();
   }
 
   // Getters and Setters
@@ -154,5 +176,83 @@ public class DebugSession {
   /** Returns true if this session is still active (no end time set). */
   public boolean isActive() {
     return endTime == null;
+  }
+
+  public DebugSessionLifecycleState getLifecycleState() {
+    return lifecycleState;
+  }
+
+  public void setLifecycleState(DebugSessionLifecycleState lifecycleState) {
+    this.lifecycleState = lifecycleState;
+  }
+
+  public String getFailureCode() {
+    return failureCode;
+  }
+
+  public void setFailureCode(String failureCode) {
+    this.failureCode = failureCode;
+  }
+
+  public String getFailureReason() {
+    return failureReason;
+  }
+
+  public void setFailureReason(String failureReason) {
+    this.failureReason = failureReason;
+  }
+
+  public String getFailureContext() {
+    return failureContext;
+  }
+
+  public void setFailureContext(String failureContext) {
+    this.failureContext = failureContext;
+  }
+
+  public LocalDateTime getLastStateAt() {
+    return lastStateAt;
+  }
+
+  public void setLastStateAt(LocalDateTime lastStateAt) {
+    this.lastStateAt = lastStateAt;
+  }
+
+  /**
+   * Transition to a new lifecycle state with timestamp update.
+   *
+   * @param newState the target state
+   */
+  public void transitionTo(DebugSessionLifecycleState newState) {
+    this.lifecycleState = newState;
+    this.lastStateAt = LocalDateTime.now();
+  }
+
+  /**
+   * Mark this session as failed with error details.
+   *
+   * @param code standardized failure code
+   * @param reason human-readable failure reason
+   * @param context additional context (e.g., exception message)
+   */
+  public void markFailed(String code, String reason, String context) {
+    this.lifecycleState = DebugSessionLifecycleState.FAILED;
+    this.failureCode = code;
+    // Limit reason to 500 chars to match DB column limit
+    this.failureReason =
+        reason != null && reason.length() > 500 ? reason.substring(0, 497) + "..." : reason;
+    // Limit context to first 1500 chars to prevent bloat
+    this.failureContext =
+        context != null && context.length() > 1500 ? context.substring(0, 1500) + "..." : context;
+    this.lastStateAt = LocalDateTime.now();
+  }
+
+  /**
+   * Get lifecycle state with fallback to RECORDING for null values (legacy sessions).
+   *
+   * @return lifecycle state or RECORDING if null
+   */
+  public DebugSessionLifecycleState getLifecycleStateOrDefault() {
+    return lifecycleState != null ? lifecycleState : DebugSessionLifecycleState.RECORDING;
   }
 }

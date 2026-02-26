@@ -6,7 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusPill = document.getElementById('bot-status-pill');
     if (!statusPill) return;
 
-    const socket = new WebSocket('ws://' + window.location.host + '/ws/semantic-state');
+    const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket = new WebSocket(`${wsProtocol}://${window.location.host}/ws/semantic-state`);
 
     socket.onopen = () => {
         console.log('Connected to Semantic State WebSocket');

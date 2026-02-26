@@ -241,6 +241,9 @@ public class TickReplayController {
                 info.startTick = session.getStartTick();
                 info.endTick = session.getEndTick();
                 info.scriptName = session.getScriptName();
+                info.lifecycleState = session.getLifecycleStateOrDefault().name();
+                info.failureCode = session.getFailureCode();
+                info.failureReason = session.getFailureReason();
 
                 snapshotRepository
                     .findMinTickBySessionId(sessionId)
@@ -636,6 +639,56 @@ public class TickReplayController {
   }
 
   /**
+   * Get compact health summary for all sessions that have a recording.
+   *
+   * <p>Returns {@link DebugSessionSummary} for every debug session with a recording ID, suitable
+   * for populating the replay selector with event/failure counts.
+   *
+   * <p>Uses bulk count query to reduce N+1 query problem (1 query instead of 3N queries).
+   *
+   * @return list of session summaries with health metadata
+   */
+  @GetMapping("/recording-health")
+  public ResponseEntity<List<DebugSessionSummary>> getRecordingHealth() {
+    try {
+      List<DebugSession> sessions =
+          debugSessionService.getAllSessions().stream()
+              .filter(s -> s.getRecordingId() != null)
+              .toList();
+
+      // Use bulk query - reduces 3N queries to 1 query
+      List<DebugSessionSummary> summaries = debugSessionService.toSummaries(sessions);
+
+      return ResponseEntity.ok(summaries);
+    } catch (Exception e) {
+      log.error("Failed to get recording health: {}", e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  /**
+   * Resolve a sessionId to its associated recordingId.
+   *
+   * <p>Used for deep-link navigation via {@code ?sessionId=} URL parameter.
+   *
+   * @param sessionId the debug session ID
+   * @return map containing {@code recordingId}, or 404 if not found / no recording attached
+   */
+  @GetMapping("/recording-by-session")
+  public ResponseEntity<Map<String, String>> getRecordingBySession(@RequestParam String sessionId) {
+    try {
+      return debugSessionService
+          .getSession(sessionId)
+          .filter(s -> s.getRecordingId() != null)
+          .map(s -> ResponseEntity.ok(Map.of("recordingId", s.getRecordingId())))
+          .orElse(ResponseEntity.notFound().build());
+    } catch (Exception e) {
+      log.error("Failed to resolve sessionId {} to recordingId: {}", sessionId, e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  /**
    * Get tick cards for a recording.
    *
    * <p>Returns tick-organized data with section counts and player summaries for replay page
@@ -973,6 +1026,9 @@ public class TickReplayController {
     public Long endTick;
     public Long minTick;
     public Long maxTick;
+    public String lifecycleState;
+    public String failureCode;
+    public String failureReason;
   }
 
   /** Unified log entry DTO that combines fields from both LogEntity and TickLog. */

@@ -27,6 +27,10 @@ public interface DecisionRepository extends JpaRepository<DecisionEntity, Long> 
   /** Find decisions within timestamp range. */
   List<DecisionEntity> findByTimestampBetween(LocalDateTime start, LocalDateTime end);
 
+  /** Find decisions by script name and timestamp range. */
+  List<DecisionEntity> findByScriptNameAndTimestampBetween(
+      String scriptName, LocalDateTime start, LocalDateTime end);
+
   /** Find decisions by recording session and timestamp range. */
   List<DecisionEntity> findByRecordingSessionIdAndTimestampBetweenOrderByTimestampAsc(
       Long recordingSessionId, LocalDateTime start, LocalDateTime end);
@@ -48,6 +52,17 @@ public interface DecisionRepository extends JpaRepository<DecisionEntity, Long> 
 
   /** Count failed decisions by recording session. */
   long countByRecordingSessionIdAndSuccessFalse(Long recordingSessionId);
+
+  /**
+   * Count failed decisions for a specific script within a time range.
+   *
+   * @param scriptName the script name
+   * @param start start of time window
+   * @param end end of time window
+   * @return count of failed decisions
+   */
+  long countByScriptNameAndTimestampBetweenAndSuccessFalse(
+      String scriptName, LocalDateTime start, LocalDateTime end);
 
   /** Find all decisions ordered by timestamp descending. */
   List<DecisionEntity> findAllByOrderByTimestampDesc();
