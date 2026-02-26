@@ -4069,6 +4069,32 @@ function renderSessionHealthPreview(health) {
   const eventsChip = document.getElementById('healthHasEvents');
   const eventCountChip = document.getElementById('healthEventCount');
   const failureChip = document.getElementById('healthFailureCount');
+  const lifecycleChip = document.getElementById('healthLifecycleState');
+
+  // Lifecycle state chip
+  if (lifecycleChip && health.lifecycleState) {
+    const state = health.lifecycleState;
+    if (state === 'STARTING') {
+      lifecycleChip.textContent = 'Starting';
+      lifecycleChip.className = 'health-chip health-muted';
+      lifecycleChip.title = 'Session is initializing';
+    } else if (state === 'RECORDING') {
+      lifecycleChip.textContent = 'Recording';
+      lifecycleChip.className = 'health-chip health-active';
+      lifecycleChip.title = 'Session is actively recording';
+    } else if (state === 'FINALIZED') {
+      lifecycleChip.textContent = 'Finalized';
+      lifecycleChip.className = 'health-chip health-ok';
+      lifecycleChip.title = 'Session completed successfully';
+    } else if (state === 'FAILED') {
+      lifecycleChip.textContent = 'Failed';
+      lifecycleChip.className = 'health-chip health-error';
+      lifecycleChip.title = health.failureReason || 'Session failed';
+    }
+    lifecycleChip.style.display = '';
+  } else if (lifecycleChip) {
+    lifecycleChip.style.display = 'none';
+  }
 
   if (health.hasEvents) {
     eventsChip.textContent = 'Has Events';
@@ -4123,9 +4149,26 @@ async function loadRecordingSessions() {
         : 'In progress';
       const base = `${session.accountName || 'Unknown'} - ${startTime} (${duration})`;
       const h = sessionHealthMap[session.recordingId];
+
+      // Add lifecycle state badge
+      let lifecycleBadge = '';
+      if (h && h.lifecycleState) {
+        const state = h.lifecycleState;
+        if (state === 'STARTING') {
+          lifecycleBadge = ' [Starting]';
+        } else if (state === 'RECORDING') {
+          lifecycleBadge = ' [Recording]';
+        } else if (state === 'FINALIZED') {
+          lifecycleBadge = ' [OK]';
+        } else if (state === 'FAILED') {
+          const reason = h.failureReason ? `: ${h.failureReason}` : '';
+          lifecycleBadge = ` [FAILED${reason}]`;
+        }
+      }
+
       const eventPart = h ? ` · Events ${h.eventCount ?? 0}` : '';
       const failPart = h && (h.failureMarkerCount ?? 0) > 0 ? ` · Fail ${h.failureMarkerCount}` : '';
-      option.textContent = `${base}${eventPart}${failPart}`;
+      option.textContent = `${base}${lifecycleBadge}${eventPart}${failPart}`;
       elements.sessionSelect.appendChild(option);
     });
 
@@ -6367,6 +6410,12 @@ document.addEventListener('DOMContentLoaded', () => {
   connectOverlayWebSocket();
   connectBotStateWebSocket();
   connectTickStreamWebSocket(); // New tick stream WebSocket
+
+  // Initialize patch loop manager
+  if (typeof PatchLoopManager !== 'undefined') {
+    window.patchLoopManager = new PatchLoopManager();
+    window.patchLoopManager.connect();
+  }
 
   loadCurrentFps(); // Load current FPS setting
 
