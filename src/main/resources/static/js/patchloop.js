@@ -42,8 +42,9 @@ class PatchLoopManager {
       console.log('PatchLoop WebSocket connected');
       this.onConnected();
 
-      // Send subscription message if not using URL-based filtering
-      if (!this.executionId && this.ws.readyState === WebSocket.OPEN) {
+      // Send subscription message if not using URL-based filtering AND we have an executionId
+      // Don't send subscribe with null executionId - rely on URL-based subscription instead
+      if (this.executionId && this.ws.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({
           action: "subscribe",
           executionId: this.executionId
@@ -146,13 +147,23 @@ class PatchLoopManager {
 
   /**
    * Controls execution (pause/resume/cancel).
+   * @param {string} iterationId - The iteration ID
+   * @param {string} action - The control action (PAUSE, RESUME, CANCEL, RETRY_FROM_NODE)
+   * @param {string} reasonOrNodeId - The reason for cancel OR nodeId for RETRY_FROM_NODE
    */
-  async controlExecution(iterationId, action, reason = '') {
+  async controlExecution(iterationId, action, reasonOrNodeId = '') {
     try {
+      const requestBody = { action };
+      if (action === 'RETRY_FROM_NODE') {
+        requestBody.retryFromNodeId = reasonOrNodeId;
+      } else {
+        requestBody.reason = reasonOrNodeId;
+      }
+
       const response = await fetch(`/api/debug/patch-loop/${iterationId}/control`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, reason })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -280,6 +291,36 @@ class PatchLoopManager {
       outputSummary: data.outputSummary
     });
     this.renderNodeTimeline();
+    // Populate retry dropdown when nodes complete
+    this.populateRetryDropdown();
+    // Refresh artifacts on node completion
+    this.refreshArtifacts();
+  }
+
+  /**
+   * Populates the retry from node dropdown with completed nodes.
+   */
+  populateRetryDropdown() {
+    const retrySelect = document.getElementById('retryFromNodeSelect');
+    if (!retrySelect) return;
+
+    // Clear existing options except the first one
+    while (retrySelect.options.length > 1) {
+      retrySelect.remove(1);
+    }
+
+    // Add completed nodes to the dropdown
+    for (const [nodeId, state] of this.nodeStates.entries()) {
+      if (state.status === 'completed' || state.status === 'failed') {
+        const option = document.createElement('option');
+        option.value = nodeId;
+        option.textContent = `${nodeId} (${state.status})`;
+        retrySelect.appendChild(option);
+      }
+    }
+
+    // Enable the dropdown if there are nodes to retry
+    retrySelect.disabled = retrySelect.options.length <= 1;
   }
 
   handleNodeFailed(data) {
@@ -299,6 +340,8 @@ class PatchLoopManager {
       timestamp: data.timestamp
     });
     this.renderPatchPreview(data);
+    // Refresh artifacts when patch is generated
+    this.refreshArtifacts();
   }
 
   handlePatchApplied(data) {
@@ -310,6 +353,8 @@ class PatchLoopManager {
       patch.linesChanged = data.linesChanged;
     }
     this.renderPatchApplied(data);
+    // Refresh artifacts when patch is applied
+    this.refreshArtifacts();
   }
 
   handleValidationResult(data) {
@@ -319,6 +364,8 @@ class PatchLoopManager {
       timestamp: data.timestamp
     });
     this.renderValidationResult(data);
+    // Refresh artifacts on validation result
+    this.refreshArtifacts();
   }
 
   handleRetestResult(data) {
@@ -328,14 +375,22 @@ class PatchLoopManager {
       timestamp: data.timestamp
     });
     this.renderRetestResult(data);
+    // Refresh artifacts on retest result
+    this.refreshArtifacts();
   }
 
   handleIterationCompleted(data) {
     this.onGraphCompleted(data);
+    // Refresh artifacts on completion
+    this.refreshArtifacts();
   }
 
   handleIterationFailed(data) {
     this.onError('Iteration failed: ' + data.error);
+    // Update status to failed
+    this.onStatusChanged('FAILED');
+    // Refresh artifacts on failure
+    this.refreshArtifacts();
   }
 
   handleStatusChanged(data) {
@@ -370,13 +425,105 @@ class PatchLoopManager {
   }
 
   onGraphCompleted(data) {
-    // Override to handle completion
     console.log('Graph completed:', data);
+    // Update UI elements for completion
+    const statusIndicator = document.getElementById('loopStatusIndicator');
+    const statusText = document.getElementById('loopStatusText');
+    const progressBar = document.getElementById('loopProgressBar');
+
+    if (statusIndicator) {
+      statusIndicator.className = 'status-indicator status-completed';
+    }
+    if (statusText) {
+      statusText.textContent = data.finalStatus || 'Completed';
+    }
+    if (progressBar) {
+      progressBar.style.width = '100%';
+      progressBar.className = 'progress-bar bg-success';
+    }
+
+    // Disable controls
+    this.updateControlButtons('COMPLETED');
   }
 
   onStatusChanged(status) {
-    // Override to handle status changes
     console.log('Status changed:', status);
+    // Update UI elements for status change
+    const statusIndicator = document.getElementById('loopStatusIndicator');
+    const statusText = document.getElementById('loopStatusText');
+    const progressBar = document.getElementById('loopProgressBar');
+
+    if (!statusIndicator || !statusText) return;
+
+    // Map status to indicator class
+    const statusClasses = {
+      'READY': 'status-ready',
+      'RUNNING': 'status-running',
+      'PAUSED': 'status-paused',
+      'COMPLETED': 'status-completed',
+      'FAILED': 'status-failed',
+      'CANCELLED': 'status-cancelled'
+    };
+
+    const statusLabels = {
+      'READY': 'Ready',
+      'RUNNING': 'Running',
+      'PAUSED': 'Paused',
+      'COMPLETED': 'Completed',
+      'FAILED': 'Failed',
+      'CANCELLED': 'Cancelled'
+    };
+
+    statusIndicator.className = 'status-indicator ' + (statusClasses[status] || 'status-ready');
+    statusText.textContent = statusLabels[status] || status;
+
+    // Update controls based on status
+    this.updateControlButtons(status);
+
+    // Refresh artifacts on certain status changes
+    if (['COMPLETED', 'FAILED', 'CANCELLED'].includes(status)) {
+      this.refreshArtifacts();
+    }
+  }
+
+  /**
+   * Updates control button states based on execution status.
+   */
+  updateControlButtons(status) {
+    const pauseBtn = document.getElementById('pauseLoopBtn');
+    const resumeBtn = document.getElementById('resumeLoopBtn');
+    const cancelBtn = document.getElementById('cancelLoopBtn');
+    const executeBtn = document.getElementById('executeLoopBtn');
+    const retrySelect = document.getElementById('retryFromNodeSelect');
+
+    const canPause = ['RUNNING'].includes(status);
+    const canResume = ['PAUSED'].includes(status);
+    const canCancel = ['RUNNING', 'PAUSED'].includes(status);
+    const canExecute = ['READY', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(status);
+
+    if (pauseBtn) pauseBtn.disabled = !canPause;
+    if (resumeBtn) resumeBtn.disabled = !canResume;
+    if (cancelBtn) cancelBtn.disabled = !canCancel;
+    if (executeBtn) executeBtn.disabled = !canExecute;
+    if (retrySelect) retrySelect.disabled = !canExecute;
+  }
+
+  /**
+   * Refreshes artifacts from the server.
+   */
+  async refreshArtifacts() {
+    if (!this.iterationId) return;
+
+    try {
+      // Use iterationId for artifact retrieval
+      const response = await fetch(`/api/debug/patch-loop/${this.iterationId}/artifacts`);
+      if (response.ok) {
+        const artifacts = await response.json();
+        this.onArtifactsLoaded(artifacts);
+      }
+    } catch (error) {
+      console.error('Failed to refresh artifacts:', error);
+    }
   }
 
   // Utility methods
@@ -401,9 +548,9 @@ class PatchLoopManager {
  * analysis, and evidence artifacts.
  */
 class PatchLoopArtifactManager {
-  constructor(executionId) {
-    this.executionId = executionId;
-    this.artifactsUrl = `/api/debug/patch-loop/${executionId}/artifacts`;
+  constructor(iterationId) {
+    this.iterationId = iterationId;
+    this.artifactsUrl = `/api/debug/patch-loop/${iterationId}/artifacts`;
     this.artifacts = {
       patches: [],
       validations: [],

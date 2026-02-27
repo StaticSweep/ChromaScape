@@ -1,16 +1,22 @@
 package com.chromascape.web.debug.patchloop.graph;
 
+import com.chromascape.web.debug.patchloop.dto.AnalysisV1EvidenceBundle;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV1Response.DiagnosisSection;
 import com.chromascape.web.debug.patchloop.dto.EvidenceConfigDto;
 import com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest;
+import com.chromascape.web.debug.patchloop.dto.PatchProposal;
 import com.chromascape.web.debug.patchloop.entity.*;
 import com.chromascape.web.debug.patchloop.service.ExecutionPauseService;
 import com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotService;
 import com.chromascape.web.debug.patchloop.service.GraphExecutionContext;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutor;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutorRegistry;
+import com.chromascape.web.debug.patchloop.service.RetestOrchestrator;
+import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +42,7 @@ public class PatchLoopGraphExecutor {
   private final ObjectMapper objectMapper;
   private final ExecutionRuntimeSnapshotService snapshotService;
   private final ExecutionPauseService pauseService;
+  private final PatchLoopWebSocketHandler webSocketHandler;
 
   public PatchLoopGraphExecutor(
       PatchLoopGraphExecutionRepository executionRepository,
@@ -45,7 +52,8 @@ public class PatchLoopGraphExecutor {
       GraphNodeExecutorRegistry executorRegistry,
       ObjectMapper objectMapper,
       ExecutionRuntimeSnapshotService snapshotService,
-      ExecutionPauseService pauseService) {
+      ExecutionPauseService pauseService,
+      PatchLoopWebSocketHandler webSocketHandler) {
     this.executionRepository = executionRepository;
     this.nodeRepository = nodeRepository;
     this.attemptRepository = attemptRepository;
@@ -54,6 +62,7 @@ public class PatchLoopGraphExecutor {
     this.objectMapper = objectMapper;
     this.snapshotService = snapshotService;
     this.pauseService = pauseService;
+    this.webSocketHandler = webSocketHandler;
   }
 
   /**
@@ -104,7 +113,10 @@ public class PatchLoopGraphExecutor {
           execution.transitionTo(GraphExecutionStatus.COMPLETED);
           execution.setFinalStatus("SUCCESS");
           execution.setStopReason("Reached terminal node");
+          execution.setCompletedAt(LocalDateTime.now());
           executionRepository.save(execution);
+          // Clear pause flag on terminal transition
+          pauseService.clearPaused(execution.getExecutionId());
           break;
         }
 
@@ -143,7 +155,10 @@ public class PatchLoopGraphExecutor {
             execution.transitionTo(GraphExecutionStatus.COMPLETED);
             execution.setFinalStatus("MAX_ATTEMPTS_REACHED");
             execution.setStopReason("Maximum attempts exceeded");
+            execution.setCompletedAt(LocalDateTime.now());
             executionRepository.save(execution);
+            // Clear pause flag on terminal transition
+            pauseService.clearPaused(execution.getExecutionId());
             break;
           }
 
@@ -158,7 +173,10 @@ public class PatchLoopGraphExecutor {
       logger.error("Graph execution failed: {}", executionId, e);
       execution.transitionTo(GraphExecutionStatus.FAILED);
       execution.setStopReason(e.getMessage());
+      execution.setCompletedAt(LocalDateTime.now());
       executionRepository.save(execution);
+      // Clear pause flag on terminal transition
+      pauseService.clearPaused(execution.getExecutionId());
       throw new GraphExecutionException("Graph execution failed", e);
     }
   }
@@ -179,6 +197,10 @@ public class PatchLoopGraphExecutor {
     nodeState.markStarted();
     nodeRepository.save(nodeState);
 
+    // Broadcast node started event
+    webSocketHandler.broadcastNodeStarted(
+        execution.getExecutionId(), graphNode.id(), graphNode.type().name());
+
     try {
       // Get the executor for this node type
       GraphNodeExecutor executor = executorRegistry.getExecutor(graphNode.type());
@@ -197,13 +219,22 @@ public class PatchLoopGraphExecutor {
               graph,
               context);
 
+      long startTime = System.currentTimeMillis();
       NodeExecutionResult result = executor.execute(graphNode, execContext);
+      long duration = System.currentTimeMillis() - startTime;
 
       // Update node state with result
       nodeState.markCompleted(
           result.outputSummary() != null ? result.outputSummary() : "Completed",
           result.outputData());
       nodeRepository.save(nodeState);
+
+      // Broadcast node completed event
+      webSocketHandler.broadcastNodeCompleted(
+          execution.getExecutionId(),
+          graphNode.id(),
+          duration,
+          result.outputSummary());
 
       // Save runtime snapshot after node completes (for resume/retry)
       snapshotService.saveSnapshot(execution.getExecutionId(), context.getRuntimeData(), context);
@@ -214,6 +245,14 @@ public class PatchLoopGraphExecutor {
       logger.error("Node execution failed: {} ({})", graphNode.id(), graphNode.type(), e);
       nodeState.markFailed(e.getMessage());
       nodeRepository.save(nodeState);
+
+      // Broadcast node failed event
+      webSocketHandler.broadcastNodeFailed(
+          execution.getExecutionId(),
+          graphNode.id(),
+          e.getMessage(),
+          nodeState.getRetryCount() != null ? nodeState.getRetryCount() : 0);
+
       return NodeExecutionResult.failure(graphNode.id(), e.getMessage());
     }
   }
@@ -380,6 +419,9 @@ public class PatchLoopGraphExecutor {
     execution.transitionTo(GraphExecutionStatus.RUNNING);
     executionRepository.save(execution);
 
+    // Clear any stale pause state before retry
+    pauseService.clearPaused(executionId);
+
     // Execute from the specified node
     executeFromNode(execution, graph, context, nodeId);
   }
@@ -399,7 +441,11 @@ public class PatchLoopGraphExecutor {
 
     execution.transitionTo(GraphExecutionStatus.CANCELLED);
     execution.setStopReason(reason != null ? reason : "Cancelled by user");
+    execution.setCompletedAt(LocalDateTime.now());
     executionRepository.save(execution);
+
+    // Clear pause state on cancel
+    pauseService.clearPaused(executionId);
   }
 
   /** Loads a graph from JSON. */
@@ -423,7 +469,51 @@ public class PatchLoopGraphExecutor {
       throw new GraphExecutionException("Iteration not found: " + execution.getIterationId());
     }
 
-    // Build context from persisted data
+    // Load runtime data and apply typed rehydration for known types
+    Map<String, Object> runtimeData = snapshotService.loadRuntimeData(execution.getExecutionId());
+    Map<String, Object> typedRuntimeData = new HashMap<>();
+
+    for (Map.Entry<String, Object> entry : runtimeData.entrySet()) {
+      String key = entry.getKey();
+      Object value = entry.getValue();
+
+      // Use typed rehydration for known value types based on key prefixes
+      if (key.startsWith("patch_")) {
+        PatchProposal patch = snapshotService.getRuntimeValue(execution.getExecutionId(), key, PatchProposal.class);
+        if (patch != null) {
+          typedRuntimeData.put(key, patch);
+        }
+      } else if (key.startsWith("analysis_")) {
+        DiagnosisSection section = snapshotService.getRuntimeValue(execution.getExecutionId(), key, DiagnosisSection.class);
+        if (section != null) {
+          typedRuntimeData.put(key, section);
+        }
+      } else if (key.startsWith("retest_")) {
+        RetestOrchestrator.RetestResult retest = snapshotService.getRuntimeValue(
+            execution.getExecutionId(), key, RetestOrchestrator.RetestResult.class);
+        if (retest != null) {
+          typedRuntimeData.put(key, retest);
+        }
+      } else if (key.startsWith("evidence_")) {
+        AnalysisV1EvidenceBundle evidence = snapshotService.getRuntimeValue(
+            execution.getExecutionId(), key, AnalysisV1EvidenceBundle.class);
+        if (evidence != null) {
+          typedRuntimeData.put(key, evidence);
+        }
+      } else if (key.startsWith("baseline_")) {
+        // For baseline evidence, rehydrate to appropriate type
+        AnalysisV1EvidenceBundle baseline = snapshotService.getRuntimeValue(
+            execution.getExecutionId(), key, AnalysisV1EvidenceBundle.class);
+        if (baseline != null) {
+          typedRuntimeData.put(key, baseline);
+        }
+      } else {
+        // For unknown keys, use the raw value
+        typedRuntimeData.put(key, value);
+      }
+    }
+
+    // Build context from persisted data with typed runtime data
     return GraphExecutionContext.builder()
         .executionId(execution.getExecutionId())
         .iterationId(execution.getIterationId())
@@ -443,7 +533,7 @@ public class PatchLoopGraphExecutor {
             iteration.getEvidenceConfig() != null
                 ? objectMapper.convertValue(iteration.getEvidenceConfig(), EvidenceConfigDto.class)
                 : null)
-        .runtimeData(snapshotService.loadRuntimeData(execution.getExecutionId()))
+        .runtimeData(typedRuntimeData)
         .build();
   }
 
@@ -489,6 +579,8 @@ public class PatchLoopGraphExecutor {
           execution.setStopReason("Reached terminal node");
           execution.setCompletedAt(LocalDateTime.now());
           executionRepository.save(execution);
+          // Clear pause flag on terminal transition
+          pauseService.clearPaused(execution.getExecutionId());
           break;
         }
 
@@ -529,6 +621,8 @@ public class PatchLoopGraphExecutor {
             execution.setStopReason("Maximum attempts exceeded");
             execution.setCompletedAt(LocalDateTime.now());
             executionRepository.save(execution);
+            // Clear pause flag on terminal transition
+            pauseService.clearPaused(execution.getExecutionId());
             break;
           }
 
@@ -545,6 +639,8 @@ public class PatchLoopGraphExecutor {
       execution.setStopReason(e.getMessage());
       execution.setCompletedAt(LocalDateTime.now());
       executionRepository.save(execution);
+      // Clear pause flag on terminal transition
+      pauseService.clearPaused(execution.getExecutionId());
       throw new GraphExecutionException("Graph execution failed", e);
     }
   }
@@ -558,6 +654,8 @@ public class PatchLoopGraphExecutor {
       throws GraphExecutionException {
 
     logger.info("Executing from node: {}", startNodeId);
+
+    AtomicBoolean cancelled = new AtomicBoolean(false);
 
     try {
       int attemptNumber = execution.getAttemptCount() != null ? execution.getAttemptCount() : 1;
@@ -573,7 +671,15 @@ public class PatchLoopGraphExecutor {
 
       String currentNodeId = startNodeId;
 
-      while (currentNodeId != null) {
+      while (currentNodeId != null && !cancelled.get()) {
+        // Check for pause from shared pause service
+        if (pauseService.isPaused(execution.getExecutionId())) {
+          logger.info("Execution paused at node: {}", currentNodeId);
+          execution.transitionTo(GraphExecutionStatus.PAUSED);
+          executionRepository.save(execution);
+          break;
+        }
+
         // Check if we've hit a terminal node
         if (graph.isTerminalNode(currentNodeId)) {
           logger.info("Reached terminal node: {}", currentNodeId);
@@ -582,6 +688,8 @@ public class PatchLoopGraphExecutor {
           execution.setStopReason("Reached terminal node");
           execution.setCompletedAt(LocalDateTime.now());
           executionRepository.save(execution);
+          // Clear pause flag on terminal transition
+          pauseService.clearPaused(execution.getExecutionId());
           break;
         }
 
@@ -595,9 +703,10 @@ public class PatchLoopGraphExecutor {
         NodeExecutionResult result =
             executeNode(execution, graph, graphNode, context, attemptNumber);
 
-        // Check for cancellation
+        // Check for cancellation during execution
         execution = executionRepository.findById(execution.getId()).orElseThrow();
         if (execution.getExecutionStatus() == GraphExecutionStatus.CANCELLED) {
+          cancelled.set(true);
           break;
         }
 
@@ -607,6 +716,30 @@ public class PatchLoopGraphExecutor {
         // Update current node pointer
         execution.setCurrentNode(currentNodeId);
         executionRepository.save(execution);
+
+        // Check if we should continue looping (e.g., evaluate_success says retry)
+        if (currentNodeId != null && currentNodeId.equals(graph.getEntryNodeId())) {
+          // Starting a new attempt
+          attempt.markCompleted(AttemptOutcome.FAILURE, "Looping back for retry");
+          attemptRepository.save(attempt);
+
+          if (attemptNumber >= (context.getMaxAttempts() != null ? context.getMaxAttempts() : 3)) {
+            logger.info("Max attempts reached: {}", attemptNumber);
+            execution.transitionTo(GraphExecutionStatus.COMPLETED);
+            execution.setFinalStatus("MAX_ATTEMPTS_REACHED");
+            execution.setStopReason("Maximum attempts exceeded");
+            execution.setCompletedAt(LocalDateTime.now());
+            executionRepository.save(execution);
+            // Clear pause flag on terminal transition
+            pauseService.clearPaused(execution.getExecutionId());
+            break;
+          }
+
+          attemptNumber++;
+          execution.incrementAttempt();
+          attempt = createAttempt(execution.getExecutionId(), attemptNumber);
+          attemptRepository.save(attempt);
+        }
       }
 
     } catch (Exception e) {
@@ -615,6 +748,8 @@ public class PatchLoopGraphExecutor {
       execution.setStopReason(e.getMessage());
       execution.setCompletedAt(LocalDateTime.now());
       executionRepository.save(execution);
+      // Clear pause flag on terminal transition
+      pauseService.clearPaused(execution.getExecutionId());
       throw new GraphExecutionException("Graph execution failed", e);
     }
   }

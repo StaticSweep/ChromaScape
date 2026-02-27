@@ -47,6 +47,9 @@ public class ValidateNodeExecutor implements GraphNodeExecutor {
     int attemptNumber = context.attemptNumber();
 
     try {
+      // Get the current patch ID from runtime data early (needed for artifact and rollback)
+      String patchId = extractPatchId(context, attemptNumber);
+
       // Run validation
       ValidationResult result = validationService.validate(executionId, attemptNumber);
 
@@ -57,6 +60,7 @@ public class ValidateNodeExecutor implements GraphNodeExecutor {
       PatchLoopValidationArtifact artifact = new PatchLoopValidationArtifact();
       artifact.setExecutionId(executionId);
       artifact.setAttemptNumber(attemptNumber);
+      artifact.setPatchId(patchId); // Set patch ID from runtime data
       artifact.setPassed(result.passed());
       artifact.setOutput(result.outputSummary());
       artifact.setExitCode(result.exitCode());
@@ -81,28 +85,14 @@ public class ValidateNodeExecutor implements GraphNodeExecutor {
         // Validation failed - check if we should rollback
         boolean autoRollback = context.context().isAutoRollbackEnabled();
 
-        if (autoRollback) {
-          // Get the current patch ID from runtime data
-          Object patchObj = context.context().getRuntimeValue("patch_" + attemptNumber);
-          if (patchObj != null) {
-            String patchId = null;
-            // Extract patchId from the patch object
-            if (patchObj instanceof com.chromascape.web.debug.patchloop.dto.PatchProposal) {
-              patchId = ((com.chromascape.web.debug.patchloop.dto.PatchProposal) patchObj).getPatchId();
-            } else if (patchObj instanceof String) {
-              patchId = (String) patchObj;
-            }
+        if (autoRollback && patchId != null) {
+          logger.warn("Validation failed, triggering rollback for patch: {}", patchId);
+          patchApplyService.rollbackPatch(patchId, "Validation failed with exit code " + result.exitCode());
 
-            if (patchId != null) {
-              logger.warn("Validation failed, triggering rollback for patch: {}", patchId);
-              patchApplyService.rollbackPatch(patchId, "Validation failed with exit code " + result.exitCode());
-
-              // Update the artifact with rollback status
-              artifact.setRolledBack(true);
-              artifact.setRollbackReason("Validation failed");
-              validationArtifactRepository.save(artifact);
-            }
-          }
+          // Update the artifact with rollback status (same record)
+          artifact.setRolledBack(true);
+          artifact.setRollbackReason("Validation failed");
+          validationArtifactRepository.save(artifact);
         }
 
         return NodeExecutionResult.failure(
@@ -113,6 +103,25 @@ public class ValidateNodeExecutor implements GraphNodeExecutor {
       logger.error("Failed to validate patch", e);
       return NodeExecutionResult.failure(node.id(), "Validation failed: " + e.getMessage());
     }
+  }
+
+  /**
+   * Extracts the patch ID from runtime data for the current attempt.
+   */
+  private String extractPatchId(ExecutionContext context, int attemptNumber) {
+    Object patchObj = context.context().getRuntimeValue("patch_" + attemptNumber);
+    if (patchObj == null) {
+      return null;
+    }
+
+    // Extract patchId from the patch object
+    if (patchObj instanceof com.chromascape.web.debug.patchloop.dto.PatchProposal) {
+      return ((com.chromascape.web.debug.patchloop.dto.PatchProposal) patchObj).getPatchId();
+    } else if (patchObj instanceof String) {
+      return (String) patchObj;
+    }
+
+    return null;
   }
 
   @Override

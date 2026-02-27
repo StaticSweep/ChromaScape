@@ -10,6 +10,7 @@ import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteRequest;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopIterationResponse;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
+import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -30,12 +31,13 @@ import org.springframework.http.ResponseEntity;
 class PatchLoopControllerTest {
 
   @Mock private PatchLoopOrchestratorService orchestratorService;
+  @Mock private PatchLoopGraphOrchestratorService graphOrchestratorService;
 
   private PatchLoopController controller;
 
   @BeforeEach
   void setUp() {
-    controller = new PatchLoopController(orchestratorService);
+    controller = new PatchLoopController(orchestratorService, graphOrchestratorService);
   }
 
   @Test
@@ -339,6 +341,81 @@ class PatchLoopControllerTest {
 
     // Assert
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+  }
+
+  // ========== Graph-based Endpoint Tests ==========
+
+  @Test
+  @DisplayName("POST /compile returns 200 OK with compiled graph info")
+  void testCompileGraphReturns200() {
+    // Arrange
+    com.chromascape.web.debug.patchloop.dto.CompileRequest request =
+        new com.chromascape.web.debug.patchloop.dto.CompileRequest();
+    request.setMermaid("graph TD\n  A[start] --> B[end]");
+
+    com.chromascape.web.debug.patchloop.dto.GraphExecuteResponse.CompiledGraphInfo graphInfo =
+        mock(com.chromascape.web.debug.patchloop.dto.GraphExecuteResponse.CompiledGraphInfo.class);
+    when(graphOrchestratorService.compileGraph(anyString())).thenReturn(graphInfo);
+
+    // Act
+    ResponseEntity<Object> response = controller.compileGraph(request);
+
+    // Assert
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    verify(graphOrchestratorService, times(1)).compileGraph(request.getMermaid());
+  }
+
+  @Test
+  @DisplayName("POST /compile returns 400 Bad Request for invalid Mermaid")
+  void testCompileGraphReturns400ForInvalidMermaid() {
+    // Arrange
+    com.chromascape.web.debug.patchloop.dto.CompileRequest request =
+        new com.chromascape.web.debug.patchloop.dto.CompileRequest();
+    request.setMermaid("invalid mermaid syntax");
+
+    when(graphOrchestratorService.compileGraph(anyString()))
+        .thenThrow(new com.chromascape.web.debug.patchloop.graph.GraphCompilationException("Invalid syntax"));
+
+    // Act
+    ResponseEntity<Object> response = controller.compileGraph(request);
+
+    // Assert
+    assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    assertTrue(response.getBody().toString().contains("Graph compilation failed"));
+  }
+
+  @Test
+  @DisplayName("POST /compile returns 500 on unexpected exception")
+  void testCompileGraphReturns500OnException() {
+    // Arrange
+    com.chromascape.web.debug.patchloop.dto.CompileRequest request =
+        new com.chromascape.web.debug.patchloop.dto.CompileRequest();
+    request.setMermaid("graph TD\n  A[start] --> B[end]");
+
+    when(graphOrchestratorService.compileGraph(anyString()))
+        .thenThrow(new RuntimeException("Internal error"));
+
+    // Act
+    ResponseEntity<Object> response = controller.compileGraph(request);
+
+    // Assert
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+  }
+
+  @Test
+  @DisplayName("GET /{iterationId}/artifacts uses iterationId path contract")
+  void testGetArtifactsUsesIterationIdPath() {
+    // Arrange
+    String iterationId = "iter-123";
+    when(orchestratorService.getArtifacts(iterationId)).thenReturn(Collections.emptyMap());
+
+    // Act
+    ResponseEntity<Object> response = controller.getArtifacts(iterationId);
+
+    // Assert
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    verify(orchestratorService, times(1)).getArtifacts(iterationId);
   }
 
   // ========== Helper Methods ==========
