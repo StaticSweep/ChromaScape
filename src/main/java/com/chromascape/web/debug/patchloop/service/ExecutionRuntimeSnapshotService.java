@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.patchloop.service;
 
+import com.chromascape.web.debug.patchloop.dto.PatchProposal;
 import com.chromascape.web.debug.patchloop.entity.ExecutionRuntimeSnapshot;
 import com.chromascape.web.debug.patchloop.entity.ExecutionRuntimeSnapshotRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -87,7 +88,7 @@ public class ExecutionRuntimeSnapshotService {
   public Map<String, Object> loadRuntimeData(String executionId) {
     return repository
         .findByExecutionId(executionId)
-        .map(
+        .<Map<String, Object>>map(
             snapshot -> {
               try {
                 return parseJson(snapshot.getRuntimeDataJson());
@@ -112,7 +113,7 @@ public class ExecutionRuntimeSnapshotService {
   public Map<String, Object> loadContextData(String executionId) {
     return repository
         .findByExecutionId(executionId)
-        .map(
+        .<Map<String, Object>>map(
             snapshot -> {
               try {
                 return parseJson(snapshot.getContextDataJson());
@@ -126,6 +127,50 @@ public class ExecutionRuntimeSnapshotService {
               logger.debug("No runtime snapshot found for execution: {}", executionId);
               return new HashMap<>();
             });
+  }
+
+  /**
+   * Gets a type-safe runtime value from the snapshot.
+   *
+   * <p>Rehydrates the value from Map to the requested type using Jackson conversion.
+   *
+   * @param <T> the type of the value
+   * @param executionId the execution ID
+   * @param key the runtime data key
+   * @param type the class of the type
+   * @return the rehydrated value, or null if not found
+   */
+  public <T> T getRuntimeValue(String executionId, String key, Class<T> type) {
+    Map<String, Object> data = loadRuntimeData(executionId);
+    Object value = data.get(key);
+
+    if (value == null) {
+      return null;
+    }
+
+    // Rehydrate from Map to specific types
+    if (value instanceof Map && type == PatchProposal.class) {
+      return objectMapper.convertValue((Map) value, type);
+    }
+    if (value instanceof Map && type == GraphExecutionContext.class) {
+      return objectMapper.convertValue((Map) value, type);
+    }
+    // Add more type mappings as needed
+
+    // Try direct cast for simple types
+    try {
+      return type.cast(value);
+    } catch (ClassCastException e) {
+      logger.warn(
+          "Failed to cast runtime value {} to type {}, attempting Jackson conversion",
+          key,
+          type.getSimpleName());
+      // Fallback to Jackson conversion
+      if (value instanceof Map) {
+        return objectMapper.convertValue((Map) value, type);
+      }
+      return null;
+    }
   }
 
   /**

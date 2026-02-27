@@ -5,8 +5,8 @@ import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteRequest;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopIterationResponse;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
-import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
+import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -170,6 +170,36 @@ public class PatchLoopController {
     }
   }
 
+  /**
+   * Compiles a Mermaid graph without executing it.
+   *
+   * <p>Validates the Mermaid syntax and returns the compiled graph structure.
+   *
+   * @param request compile request with mermaid source
+   * @return compiled graph info
+   */
+  @PostMapping("/compile")
+  public ResponseEntity<Object> compileGraph(
+      @RequestBody com.chromascape.web.debug.patchloop.dto.CompileRequest request) {
+    logger.debug("POST /api/debug/patch-loop/compile");
+
+    try {
+      com.chromascape.web.debug.patchloop.dto.GraphExecuteResponse.CompiledGraphInfo response =
+          graphOrchestratorService.compileGraph(request.getMermaid());
+
+      return ResponseEntity.ok(response);
+
+    } catch (com.chromascape.web.debug.patchloop.graph.GraphCompilationException e) {
+      logger.warn("Graph compilation failed: {}", e.getMessage());
+      return ResponseEntity.badRequest().body("Graph compilation failed: " + e.getMessage());
+
+    } catch (Exception e) {
+      logger.error("Failed to compile graph", e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body("Failed to compile graph: " + e.getMessage());
+    }
+  }
+
   // ========== Graph-based Loop Execution Endpoints ==========
 
   /**
@@ -245,9 +275,7 @@ public class PatchLoopController {
       @PathVariable String iterationId,
       @RequestBody com.chromascape.web.debug.patchloop.dto.GraphControlRequest request) {
     logger.info(
-        "POST /api/debug/patch-loop/{}/control - action: {}",
-        iterationId,
-        request.getAction());
+        "POST /api/debug/patch-loop/{}/control - action: {}", iterationId, request.getAction());
 
     try {
       graphOrchestratorService.controlExecution(iterationId, request);

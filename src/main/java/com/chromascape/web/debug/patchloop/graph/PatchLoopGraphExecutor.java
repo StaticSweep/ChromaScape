@@ -3,6 +3,7 @@ package com.chromascape.web.debug.patchloop.graph;
 import com.chromascape.web.debug.patchloop.dto.EvidenceConfigDto;
 import com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest;
 import com.chromascape.web.debug.patchloop.entity.*;
+import com.chromascape.web.debug.patchloop.service.ExecutionPauseService;
 import com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotService;
 import com.chromascape.web.debug.patchloop.service.GraphExecutionContext;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutor;
@@ -34,6 +35,7 @@ public class PatchLoopGraphExecutor {
   private final GraphNodeExecutorRegistry executorRegistry;
   private final ObjectMapper objectMapper;
   private final ExecutionRuntimeSnapshotService snapshotService;
+  private final ExecutionPauseService pauseService;
 
   public PatchLoopGraphExecutor(
       PatchLoopGraphExecutionRepository executionRepository,
@@ -42,7 +44,8 @@ public class PatchLoopGraphExecutor {
       PatchLoopIterationRepository iterationRepository,
       GraphNodeExecutorRegistry executorRegistry,
       ObjectMapper objectMapper,
-      ExecutionRuntimeSnapshotService snapshotService) {
+      ExecutionRuntimeSnapshotService snapshotService,
+      ExecutionPauseService pauseService) {
     this.executionRepository = executionRepository;
     this.nodeRepository = nodeRepository;
     this.attemptRepository = attemptRepository;
@@ -50,6 +53,7 @@ public class PatchLoopGraphExecutor {
     this.executorRegistry = executorRegistry;
     this.objectMapper = objectMapper;
     this.snapshotService = snapshotService;
+    this.pauseService = pauseService;
   }
 
   /**
@@ -71,7 +75,6 @@ public class PatchLoopGraphExecutor {
             .findByExecutionId(executionId)
             .orElseThrow(() -> new GraphExecutionException("Execution not found: " + executionId));
 
-    AtomicBoolean paused = new AtomicBoolean(false);
     AtomicBoolean cancelled = new AtomicBoolean(false);
 
     try {
@@ -87,8 +90,8 @@ public class PatchLoopGraphExecutor {
       attemptRepository.save(attempt);
 
       while (currentNodeId != null && !cancelled.get()) {
-        // Check for pause
-        if (paused.get()) {
+        // Check for pause from shared pause service
+        if (pauseService.isPaused(execution.getExecutionId())) {
           logger.info("Execution paused at node: {}", currentNodeId);
           execution.transitionTo(GraphExecutionStatus.PAUSED);
           executionRepository.save(execution);
@@ -317,6 +320,8 @@ public class PatchLoopGraphExecutor {
           "Cannot pause execution in state: " + execution.getExecutionStatus());
     }
 
+    // Set the shared pause flag for the executor loop to check
+    pauseService.setPaused(executionId, true);
     execution.transitionTo(GraphExecutionStatus.PAUSED);
     executionRepository.save(execution);
   }
@@ -333,6 +338,9 @@ public class PatchLoopGraphExecutor {
       throw new GraphExecutionException(
           "Cannot resume execution in state: " + execution.getExecutionStatus());
     }
+
+    // Clear the shared pause flag
+    pauseService.setPaused(executionId, false);
 
     // Load the graph from JSON
     LoopGraph graph = loadGraph(execution.getGraphJson());
@@ -465,8 +473,8 @@ public class PatchLoopGraphExecutor {
       String currentNodeId = execution.getCurrentNodeId();
 
       while (currentNodeId != null && !cancelled.get()) {
-        // Check for pause
-        if (paused.get()) {
+        // Check for pause from shared pause service
+        if (pauseService.isPaused(execution.getExecutionId())) {
           logger.info("Execution paused at node: {}", currentNodeId);
           execution.transitionTo(GraphExecutionStatus.PAUSED);
           executionRepository.save(execution);

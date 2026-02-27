@@ -49,6 +49,14 @@ public class PatchLoopValidationArtifact {
   @Column(name = "timestamp", nullable = false)
   private LocalDateTime timestamp;
 
+  /** Whether this patch was rolled back after validation failure */
+  @Column(name = "rolled_back")
+  private Boolean rolledBack;
+
+  /** Reason for rollback */
+  @Column(name = "rollback_reason", length = 500)
+  private String rollbackReason;
+
   public PatchLoopValidationArtifact() {
     this.timestamp = LocalDateTime.now();
   }
@@ -123,6 +131,22 @@ public class PatchLoopValidationArtifact {
 
   public void setTimestamp(LocalDateTime timestamp) {
     this.timestamp = timestamp;
+  }
+
+  public Boolean getRolledBack() {
+    return rolledBack;
+  }
+
+  public void setRolledBack(Boolean rolledBack) {
+    this.rolledBack = rolledBack;
+  }
+
+  public String getRollbackReason() {
+    return rollbackReason;
+  }
+
+  public void setRollbackReason(String rollbackReason) {
+    this.rollbackReason = rollbackReason;
   }
 
   @Override

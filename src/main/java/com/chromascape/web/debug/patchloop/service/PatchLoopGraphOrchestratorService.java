@@ -166,6 +166,23 @@ public class PatchLoopGraphOrchestratorService {
     return response;
   }
 
+  /**
+   * Compiles a Mermaid graph without executing it.
+   *
+   * <p>Validates the Mermaid syntax and returns the compiled graph structure.
+   *
+   * @param mermaid the Mermaid graph source
+   * @return the compiled graph info
+   * @throws GraphCompilationException if compilation fails
+   */
+  public GraphExecuteResponse.CompiledGraphInfo compileGraph(String mermaid)
+      throws GraphCompilationException {
+    logger.debug("Compiling Mermaid graph");
+
+    LoopGraph graph = compiler.compile(mermaid);
+    return buildCompiledGraphInfo(graph);
+  }
+
   /** Gets the state of a graph execution. */
   public GraphStateResponse getGraphState(String iterationId) {
     PatchLoopIteration iteration = iterationRepository.findByIterationId(iterationId).orElse(null);
@@ -433,6 +450,11 @@ public class PatchLoopGraphOrchestratorService {
             .orElseThrow(() -> new GraphExecutionException("Execution not found: " + executionId));
 
     LoopGraph graph = loadGraph(execution.getGraphJson());
+    if (graph == null) {
+      logger.warn("Cannot clear node results: graph is null for execution {}", executionId);
+      throw new GraphExecutionException("Graph is null for execution: " + executionId);
+    }
+
     Set<String> downstreamNodes = computeDownstreamNodes(graph, fromNodeId);
     downstreamNodes.add(fromNodeId); // Include the node itself for retry
 

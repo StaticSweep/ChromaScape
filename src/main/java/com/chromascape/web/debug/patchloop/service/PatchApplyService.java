@@ -4,7 +4,6 @@ import com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest;
 import com.chromascape.web.debug.patchloop.entity.PatchApplyStatus;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopPatchArtifact;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopPatchArtifactRepository;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
@@ -12,8 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -51,6 +48,7 @@ public class PatchApplyService {
    * @param diffText the unified diff text
    * @param attemptNumber the attempt number
    * @param policy the policy to apply (uses default if null)
+   * @param patchId the patch ID to use (optional, generates random if null)
    * @return the apply result
    */
   @Transactional
@@ -58,9 +56,13 @@ public class PatchApplyService {
       String executionId,
       String diffText,
       int attemptNumber,
-      GraphExecuteRequest.PatchPolicyConfig policy) {
+      GraphExecuteRequest.PatchPolicyConfig policy,
+      String patchId) {
 
-    String patchId = "patch_" + UUID.randomUUID().toString().substring(0, 8);
+    // Use provided patchId or generate a random one
+    if (patchId == null || patchId.isEmpty()) {
+      patchId = "patch_" + UUID.randomUUID().toString().substring(0, 8);
+    }
 
     logger.info("Applying patch {} for execution {}", patchId, executionId);
 
@@ -74,12 +76,7 @@ public class PatchApplyService {
       if (!policyValidation.isValid()) {
         logger.warn("Patch {} rejected by policy: {}", patchId, policyValidation.errorMessage());
         return new PatchApplyResult(
-            PatchApplyStatus.FAILED,
-            null,
-            null,
-            0,
-            0,
-            policyValidation.errorMessage());
+            PatchApplyStatus.FAILED, null, null, 0, 0, policyValidation.errorMessage());
       }
 
       // Create the patch artifact record
@@ -95,7 +92,12 @@ public class PatchApplyService {
 
       // Store affected files as JSON
       ObjectNode affectedFilesJson = JsonNodeFactory.instance.objectNode();
-      affectedFilesJson.put("files", JsonNodeFactory.instance.arrayNode().addAll(diffInfo.files()));
+      com.fasterxml.jackson.databind.node.ArrayNode filesArray =
+          JsonNodeFactory.instance.arrayNode();
+      for (String file : diffInfo.files()) {
+        filesArray.add(file);
+      }
+      affectedFilesJson.set("files", filesArray);
       artifact.setAffectedFiles(affectedFilesJson);
 
       patchArtifactRepository.save(artifact);
@@ -138,13 +140,10 @@ public class PatchApplyService {
     }
   }
 
-  /**
-   * Rolls back a patch by restoring from backup.
-   */
+  /** Rolls back a patch by restoring from backup. */
   @Transactional
   public void rollbackPatch(String patchId, String reason) {
-    PatchLoopPatchArtifact artifact =
-        patchArtifactRepository.findByPatchId(patchId).orElse(null);
+    PatchLoopPatchArtifact artifact = patchArtifactRepository.findByPatchId(patchId).orElse(null);
 
     if (artifact == null) {
       logger.warn("Cannot rollback patch {}: not found", patchId);
@@ -161,11 +160,38 @@ public class PatchApplyService {
     try {
       // Restore files from backup
       Path backupPath =
-          Paths.get(BACKUP_DIR, artifact.getExecutionId(), String.valueOf(artifact.getAttemptNumber()));
+          Paths.get(
+              BACKUP_DIR, artifact.getExecutionId(), String.valueOf(artifact.getAttemptNumber()));
 
       if (Files.exists(backupPath)) {
-        // TODO: Implement actual file restoration
-        // For now, just mark as rolled back
+        // Get the affected files from the artifact
+        List<String> affectedFiles = extractAffectedFiles(artifact);
+
+        // Restore each file from backup
+        int restoredCount = 0;
+        for (String file : affectedFiles) {
+          Path backup = backupPath.resolve(file.replace("/", "_"));
+          Path original = Paths.get(file);
+
+          if (Files.exists(backup)) {
+            try {
+              // Create parent directories if needed
+              if (original.getParent() != null) {
+                Files.createDirectories(original.getParent());
+              }
+              Files.copy(backup, original, StandardCopyOption.REPLACE_EXISTING);
+              restoredCount++;
+              logger.debug("Restored file from backup: {} -> {}", backup, original);
+            } catch (IOException e) {
+              logger.error("Failed to restore file: {} -> {}", backup, original, e);
+            }
+          } else {
+            logger.warn("Backup file not found: {}", backup);
+          }
+        }
+        logger.info("Restored {} files from backup", restoredCount);
+      } else {
+        logger.warn("Backup directory not found: {}", backupPath);
       }
 
       artifact.markRolledBack(reason);
@@ -176,28 +202,30 @@ public class PatchApplyService {
     }
   }
 
-  /**
-   * Validates a diff against the safety policy.
-   */
+  /** Validates a diff against the safety policy. */
   private PolicyValidationResult validateAgainstPolicy(
       DiffInfo diffInfo, GraphExecuteRequest.PatchPolicyConfig policyConfig) {
 
     // Use provided config or default
-    int maxFiles = policyConfig != null && policyConfig.getMaxFilesChanged() != null
-        ? policyConfig.getMaxFilesChanged()
-        : defaultPolicy.getMaxFilesChanged();
+    int maxFiles =
+        policyConfig != null && policyConfig.getMaxFilesChanged() != null
+            ? policyConfig.getMaxFilesChanged()
+            : defaultPolicy.getMaxFilesChanged();
 
-    int maxLines = policyConfig != null && policyConfig.getMaxLinesChanged() != null
-        ? policyConfig.getMaxLinesChanged()
-        : defaultPolicy.getMaxLinesChanged();
+    int maxLines =
+        policyConfig != null && policyConfig.getMaxLinesChanged() != null
+            ? policyConfig.getMaxLinesChanged()
+            : defaultPolicy.getMaxLinesChanged();
 
-    List<String> blockedPaths = policyConfig != null && policyConfig.getBlockedPaths() != null
-        ? policyConfig.getBlockedPaths()
-        : defaultPolicy.getBlockedPaths();
+    List<String> blockedPaths =
+        policyConfig != null && policyConfig.getBlockedPaths() != null
+            ? policyConfig.getBlockedPaths()
+            : defaultPolicy.getBlockedPaths();
 
-    List<String> forbiddenPatterns = policyConfig != null && policyConfig.getForbiddenPatterns() != null
-        ? policyConfig.getForbiddenPatterns()
-        : defaultPolicy.getForbiddenPatterns();
+    List<String> forbiddenPatterns =
+        policyConfig != null && policyConfig.getForbiddenPatterns() != null
+            ? policyConfig.getForbiddenPatterns()
+            : defaultPolicy.getForbiddenPatterns();
 
     // Check file count
     if (diffInfo.filesChanged() > maxFiles) {
@@ -226,8 +254,7 @@ public class PatchApplyService {
     if (diffText != null) {
       for (String pattern : forbiddenPatterns) {
         if (diffText.contains(pattern)) {
-          return new PolicyValidationResult(
-              false, "Forbidden pattern detected: " + pattern);
+          return new PolicyValidationResult(false, "Forbidden pattern detected: " + pattern);
         }
       }
     }
@@ -235,9 +262,7 @@ public class PatchApplyService {
     return new PolicyValidationResult(true, null);
   }
 
-  /**
-   * Parses a unified diff to extract file and line information.
-   */
+  /** Parses a unified diff to extract file and line information. */
   private DiffInfo parseDiff(String diffText) {
     List<String> files = new ArrayList<>();
     int filesChanged = 0;
@@ -262,9 +287,7 @@ public class PatchApplyService {
     return new DiffInfo(files, filesChanged, linesChanged, diffText);
   }
 
-  /**
-   * Creates backups of files before patching.
-   */
+  /** Creates backups of files before patching. */
   private void createBackups(List<String> files, String executionId, int attemptNumber)
       throws IOException {
 
@@ -280,9 +303,7 @@ public class PatchApplyService {
     }
   }
 
-  /**
-   * Creates a feature branch for the patch.
-   */
+  /** Creates a feature branch for the patch. */
   private String createFeatureBranch(String executionId, int attemptNumber) {
     String branchName = String.format("patchloop/%s/%d", executionId, attemptNumber);
 
@@ -303,9 +324,7 @@ public class PatchApplyService {
     }
   }
 
-  /**
-   * Applies a patch file using git apply.
-   */
+  /** Applies a patch file using git apply. */
   private void applyPatchWithGit(java.io.File patchFile) throws Exception {
     ProcessBuilder pb = new ProcessBuilder("git", "apply", patchFile.getAbsolutePath());
     pb.redirectErrorStream(true);
@@ -327,9 +346,7 @@ public class PatchApplyService {
     }
   }
 
-  /**
-   * Commits the applied patch changes.
-   */
+  /** Commits the applied patch changes. */
   private String commitChanges(String patchId, DiffInfo diffInfo, String executionId)
       throws Exception {
 
@@ -357,13 +374,27 @@ public class PatchApplyService {
     return commitHash;
   }
 
-  /**
-   * Checks if a file path matches an Ant-style pattern.
-   */
+  /** Checks if a file path matches an Ant-style pattern. */
   private boolean matchesPattern(String path, String pattern) {
     // Simple glob matching (enhance with AntPathMatcher if needed)
     String regex = pattern.replace(".", "\\.").replace("*", ".*").replace("?", ".");
     return path.matches(regex);
+  }
+
+  /** Extracts the list of affected files from a patch artifact. */
+  private List<String> extractAffectedFiles(PatchLoopPatchArtifact artifact) {
+    List<String> files = new ArrayList<>();
+    if (artifact.getAffectedFiles() != null) {
+      com.fasterxml.jackson.databind.JsonNode filesNode = artifact.getAffectedFiles().get("files");
+      if (filesNode != null && filesNode.isArray()) {
+        for (com.fasterxml.jackson.databind.JsonNode fileNode : filesNode) {
+          if (fileNode.isTextual()) {
+            files.add(fileNode.asText());
+          }
+        }
+      }
+    }
+    return files;
   }
 
   /** Result of a patch apply operation. */

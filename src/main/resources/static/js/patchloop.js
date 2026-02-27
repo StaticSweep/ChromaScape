@@ -55,7 +55,9 @@ class PatchLoopManager {
       try {
         const msg = JSON.parse(event.data);
         // Filter messages by executionId if needed
-        if (this.executionId && msg.executionId && msg.executionId !== this.executionId) {
+        // Server wraps data in a "data" property
+        const msgExecutionId = msg.data ? msg.data.executionId : msg.executionId;
+        if (this.executionId && msgExecutionId && msgExecutionId !== this.executionId) {
           return; // Ignore messages for other executions
         }
         this.handleMessage(msg);

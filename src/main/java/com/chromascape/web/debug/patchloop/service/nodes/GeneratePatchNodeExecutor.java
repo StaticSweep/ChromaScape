@@ -88,7 +88,7 @@ public class GeneratePatchNodeExecutor implements GraphNodeExecutor {
       artifact.setFilesChanged(patch.getFilesChanged());
       artifact.setLinesChanged(patch.getLinesChanged());
       artifact.setConfidence(patch.getConfidence());
-      artifact.setApplyStatus(PatchApplyStatus.GENERATED);
+      artifact.setApplyStatus(PatchApplyStatus.STAGED);
       artifact.setCreatedAt(LocalDateTime.now());
 
       // Set affected files as JSON

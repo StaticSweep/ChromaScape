@@ -67,8 +67,8 @@ public class RetestNodeExecutor implements GraphNodeExecutor {
       artifact.setBaselineAttemptNumber(baselineAttempt);
       artifact.setSuccess(result.success());
       artifact.setComparisonSummary(result.comparisonSummary());
-      artifact.setImprovements(result.improvements() != null ? String.join("|", result.improvements()) : "");
-      artifact.setRegressions(result.regressions() != null ? String.join("|", result.regressions()) : "");
+      artifact.setImprovements(String.valueOf(result.improvements()));
+      artifact.setRegressions(String.valueOf(result.regressions()));
       artifact.setTimestamp(LocalDateTime.now());
       retestArtifactRepository.save(artifact);
 

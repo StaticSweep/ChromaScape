@@ -1,15 +1,13 @@
 package com.chromascape.web.debug.patchloop.service.nodes;
 
-import com.chromascape.web.debug.patchloop.dto.PatchProposal;
 import com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest;
+import com.chromascape.web.debug.patchloop.dto.PatchProposal;
 import com.chromascape.web.debug.patchloop.entity.NodeType;
 import com.chromascape.web.debug.patchloop.entity.PatchApplyStatus;
 import com.chromascape.web.debug.patchloop.graph.GraphNode;
 import com.chromascape.web.debug.patchloop.graph.NodeExecutionResult;
-import com.chromascape.web.debug.patchloop.service.GraphExecutionContext;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutor;
 import com.chromascape.web.debug.patchloop.service.PatchApplyService;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
@@ -51,17 +49,19 @@ public class ApplyPatchNodeExecutor implements GraphNodeExecutor {
       // Get the policy config
       GraphExecuteRequest.PatchPolicyConfig policy = context.context().getPolicy();
 
-      // Apply the patch
+      // Apply the patch, passing the patchId for consistency
       PatchApplyService.PatchApplyResult result =
           patchApplyService.stageAndApply(
               executionId,
               patch.getDiffText(),
               attemptNumber,
-              policy != null ? policy : createDefaultPolicy());
+              policy != null ? policy : createDefaultPolicy(),
+              patch.getPatchId());
 
       // Check if application succeeded
       if (result.status() != PatchApplyStatus.APPLIED) {
-        return NodeExecutionResult.failure(node.id(), "Patch application failed: " + result.errorMessage());
+        return NodeExecutionResult.failure(
+            node.id(), "Patch application failed: " + result.errorMessage());
       }
 
       // Store the result
@@ -76,8 +76,8 @@ public class ApplyPatchNodeExecutor implements GraphNodeExecutor {
 
       return NodeExecutionResult.success(
           node.id(),
-          String.format("Patch applied: %d files on branch %s",
-              result.filesChanged(), result.gitBranch()),
+          String.format(
+              "Patch applied: %d files on branch %s", result.filesChanged(), result.gitBranch()),
           outputData);
 
     } catch (Exception e) {

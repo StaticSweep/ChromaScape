@@ -63,7 +63,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
   /** The shared handler for broadcasting tick data to debugger UI. */
   private final DebuggerTickWebSocketHandler debuggerTickWebSocketHandler;
 
-  /** The shared handler for patch loop graph execution updates. */
+  /** The shared handler for broadcasting patch loop execution updates. */
   private final PatchLoopWebSocketHandler patchLoopWebSocketHandler;
 
   /**
@@ -75,7 +75,6 @@ public class WebSocketConfig implements WebSocketConfigurer {
    * @param semanticWebSocketHandler handler for semantic state updates
    * @param tickStreamWebSocketHandler handler for Micro6 tick stream
    * @param debuggerTickWebSocketHandler handler for debugger tick broadcast
-   * @param patchLoopWebSocketHandler handler for patch loop updates
    */
   @Autowired
   public WebSocketConfig(
@@ -155,9 +154,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
         .addHandler(debuggerTickWebSocketHandler, "/ws/debugger/tick-stream")
         .setAllowedOrigins("*");
 
-    // Patch loop graph execution updates
+    // Patch loop execution updates
     registry
-        .addHandler(patchLoopWebSocketHandler, "/ws/debug/patch-loop")
+        .addHandler(patchLoopWebSocketHandler, "/ws/debug/patch-loop", "/ws/debug/patch-loop/{executionId}")
         .setAllowedOrigins("*");
   }
 }
