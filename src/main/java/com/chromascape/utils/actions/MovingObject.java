@@ -9,7 +9,6 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -59,7 +58,7 @@ public class MovingObject {
 
   /**
    * Attempts to click a moving target defined by a ColourObj and verifies the action by looking for
-   * a rec click.
+   * a red click.
    *
    * <ul>
    *   <li>Finds a random point within the current screen position of the colour
@@ -72,11 +71,10 @@ public class MovingObject {
    * @param colour The colour of the moving object
    * @param baseScript The active script instance
    * @return true if the interaction was verified with a Red X or false otherwise
-   * @throws InterruptedException When mouse movement is interrupted.
    */
   public static boolean clickMovingObjectByColourObjUntilRedClick(
-      ColourObj colour, BaseScript baseScript) throws InterruptedException {
-
+      ColourObj colour, BaseScript baseScript) {
+    BaseScript.checkInterrupted();
     // Initial Calculation and Click
     BufferedImage gameView = baseScript.controller().zones().getGameView();
     Point clickLocation = PointSelector.getRandomPointByColourObj(gameView, colour, 15);
@@ -85,7 +83,8 @@ public class MovingObject {
       return false;
     }
 
-    clickMovingPointOnce(baseScript, clickLocation);
+    baseScript.controller().mouse().moveTo(clickLocation, "fast");
+    baseScript.controller().mouse().leftClick();
 
     int attempts = 10;
     int safetyCounter = 0;
@@ -117,13 +116,8 @@ public class MovingObject {
       }
 
       // Failure detected so retrieve the backup point
-      try {
-        // This should return almost instantly
-        clickLocation = nextPointFuture.get();
-      } catch (InterruptedException | ExecutionException e) {
-        logger.error("Async point calculation failed {}", e.getMessage());
-        break;
-      }
+      // This should return almost instantly
+      clickLocation = nextPointFuture.join();
 
       if (clickLocation == null) {
         logger.warn("Could not find fallback point for colour {}", colour.name());
@@ -131,7 +125,8 @@ public class MovingObject {
       }
 
       // Instant Retry
-      clickMovingPointOnce(baseScript, clickLocation);
+      baseScript.controller().mouse().moveTo(clickLocation, "fast");
+      baseScript.controller().mouse().leftClick();
       safetyCounter++;
     }
 
@@ -173,29 +168,8 @@ public class MovingObject {
     }
 
     for (String redClickImage : RED_CLICK_IMAGES) {
-      try {
-        if (TemplateMatching.match(redClickImage, clickImage, 0.15, false) != null) {
-          return true;
-        }
-      } catch (Exception ignored) {
-        // ignore to prevent throwing
-      }
+      return TemplateMatching.match(redClickImage, clickImage, 0.15).success();
     }
     return false;
-  }
-
-  /**
-   * Executes the mouse input on the BaseScript's Controller object.
-   *
-   * <p>Moves the mouse to the target using the fast speed profile and performs a left click.
-   *
-   * @param baseScript The active script instance containing the Controller
-   * @param clickPoint The exact screen coordinate to click
-   * @throws InterruptedException When mouse movement is interrupted.
-   */
-  private static void clickMovingPointOnce(BaseScript baseScript, Point clickPoint)
-      throws InterruptedException {
-    baseScript.controller().mouse().moveTo(clickPoint, "fast");
-    baseScript.controller().mouse().leftClick();
   }
 }

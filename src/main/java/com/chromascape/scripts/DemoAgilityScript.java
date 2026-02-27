@@ -93,20 +93,12 @@ public class DemoAgilityScript extends BaseScript {
   protected void cycle() {
     // Log the current XP before clicking obstacle for comparison later
     // The idea is to click the obstacle then wait for XP change then loop
-    int previousXp = -1;
-    try {
-      // Read XP
-      previousXp = Minimap.getXp(this);
-      // Make sure it's read properly
-      if (previousXp == -1) {
-        stop();
-        DiscordNotification.send("Xp could not be read.");
-      }
-    } catch (IOException e) {
-      logger.error(e);
+    int previousXp = Minimap.getXp(this);
+
+    // Make sure it's read properly
+    if (previousXp == -1) {
       stop();
-      DiscordNotification.send(
-          "Bot couldn't read XP bar because of OCR font library load, stopping and logging :(");
+      DiscordNotification.send("Xp could not be read.");
     }
 
     // Check the state of the course
@@ -121,14 +113,7 @@ public class DemoAgilityScript extends BaseScript {
 
     // Interact with the detected obstacle
     // Clicking continuously until the Red X animation is detected
-    try {
-      MovingObject.clickMovingObjectByColourObjUntilRedClick(OBSTACLE_COLOUR, this);
-    } catch (Exception e) {
-      logger.error("Mouse movement interrupted while clicking moving object: {}", e.getMessage());
-      stop();
-      DiscordNotification.send(
-          "Mouse movement interrupted while clicking moving object: " + e.getMessage());
-    }
+    MovingObject.clickMovingObjectByColourObjUntilRedClick(OBSTACLE_COLOUR, this);
 
     // Wait for the action to complete via XP update
     waitUntilXpChange(previousXp);
@@ -145,22 +130,38 @@ public class DemoAgilityScript extends BaseScript {
   }
 
   /**
-   * Manages the scenario when nothing is visible.
-   * Firstly, confirms that it's really lost, if so -> uses the walker to path back to the reset tile.
-   * Finally, waits for the player's animation to settle after reaching the true tile.
+   * Manages the scenario when nothing is visible. Firstly, confirms that it's really lost, if so ->
+   * uses the walker to path back to the reset tile. Finally, waits for the player's animation to
+   * settle after reaching the true tile.
    */
   private void recoverToResetTile() {
     // Double check we are actually lost to protect against lag or rendering delays
     waitRandomMillis(600, 800);
+
     if (!isObstacleVisible()) {
-      try {
-        logger.info("We are lost. Walking to reset tile.");
-        controller().walker().pathTo(RESET_TILE, true);
-        // wait for camera to stabilise and walking animation to finish at true tile.
-        waitRandomMillis(4000, 6000);
-      } catch (Exception e) {
-        logger.error("Walker error {}", e.getMessage());
-        stop();
+
+      int attempts = 0;
+      int allowedAttempts = 5;
+
+      while (attempts < allowedAttempts) {
+        try {
+          logger.info("We are lost. Walking to reset tile.");
+          controller().walker().pathTo(RESET_TILE, true);
+          // wait for camera to stabilise and walking animation to finish at true tile.
+          waitRandomMillis(4000, 6000);
+          break;
+
+        } catch (IOException e) {
+          // This exception refers to Timeout or transport error
+          logger.error("Walker error {}", e.getMessage());
+          attempts++;
+
+        } catch (InterruptedException e) {
+          // This error means that the thread was interrupted while calling Dax
+          DiscordNotification.send("Walker thread interrupted, catastrophic failure.");
+          logger.error("Walker thread interrupted, catastrophic failure.");
+          stop();
+        }
       }
     }
   }
@@ -179,14 +180,9 @@ public class DemoAgilityScript extends BaseScript {
     Point clickLocation = PointSelector.getRandomPointByColourObj(gameView, MARK_COLOUR, 15, 15.0);
 
     if (clickLocation != null) {
-      try {
-        controller().mouse().moveTo(clickLocation, "medium");
-        controller().mouse().leftClick();
-        return true;
-      } catch (Exception e) {
-        logger.error("Mouse failed while moving to mark of grace {}", e.getMessage());
-        stop();
-      }
+      controller().mouse().moveTo(clickLocation, "medium");
+      controller().mouse().leftClick();
+      return true;
     }
     return false;
   }
@@ -199,14 +195,8 @@ public class DemoAgilityScript extends BaseScript {
   private void waitUntilXpChange(int previousXp) {
     LocalDateTime endTime = LocalDateTime.now().plusSeconds(TIMEOUT_XP_CHANGE);
     // Ensure we do not hang if the initial OCR read failed and returned an empty string
-    try {
-      while (previousXp == Minimap.getXp(this) && LocalDateTime.now().isBefore(endTime)) {
-        waitMillis(300);
-      }
-    } catch (Exception e) {
-      logger.error(e);
-      stop();
-      DiscordNotification.send("Bot couldn't read XP bar, stopping");
+    while (previousXp == Minimap.getXp(this) && LocalDateTime.now().isBefore(endTime)) {
+      waitMillis(300);
     }
   }
 

@@ -1,11 +1,11 @@
 package com.chromascape.utils.actions;
 
 import com.chromascape.base.BaseScript;
-import com.chromascape.controller.Controller;
 import com.chromascape.utils.core.input.distribution.ClickDistribution;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -44,20 +44,21 @@ public class ItemDropper {
   /**
    * Drops all items in the inventory using the default ZigZag (2-Row Strip) pattern.
    *
-   * @param controller The BaseScript's {@link Controller} object.
+   * @param baseScript The script that's running (Keyword: {@code this}).
    */
-  public static void dropAll(Controller controller) {
-    dropAll(controller, DropPattern.ZIGZAG);
+  public static void dropAll(BaseScript baseScript) {
+    dropAll(baseScript, DropPattern.ZIGZAG, new int[0]);
   }
 
   /**
    * Drops all items in the inventory using a specified pattern.
    *
-   * @param controller The BaseScript's {@link Controller} object.
+   * @param baseScript The script that's running (Keyword: {@code this}).
    * @param pattern The {@link DropPattern} to use for index generation.
+   * @param exclude An int array with indexes NOT to be dropped.
    */
-  public static void dropAll(Controller controller, DropPattern pattern) {
-    if (controller == null) {
+  public static void dropAll(BaseScript baseScript, DropPattern pattern, int[] exclude) {
+    if (baseScript.controller() == null) {
       logger.error("Controller is null, cannot drop items.");
       return;
     }
@@ -67,24 +68,29 @@ public class ItemDropper {
     List<Integer> slotsToDrop = generateSlotIndices(pattern);
 
     // Start Shift-Drop
-    controller.keyboard().sendModifierKey(KEY_PRESS, "shift");
+    baseScript.controller().keyboard().sendModifierKey(KEY_PRESS, "shift");
     BaseScript.waitRandomMillis(100, 250);
 
     try {
       for (int slotIndex : slotsToDrop) {
-        if (slotIndex >= controller.zones().getInventorySlots().size()) {
+        if (slotIndex >= baseScript.controller().zones().getInventorySlots().size()) {
           continue;
         }
 
-        Rectangle slotZone = controller.zones().getInventorySlots().get(slotIndex);
+        if (Arrays.stream(exclude).anyMatch(x -> x == slotIndex)) {
+          continue;
+        }
+
+        Rectangle slotZone = baseScript.controller().zones().getInventorySlots().get(slotIndex);
         Point clickPoint = ClickDistribution.generateRandomPoint(slotZone);
 
-        clickPoint(clickPoint, controller);
+        baseScript.controller().mouse().moveTo(clickPoint, "fast");
+        baseScript.controller().mouse().leftClick();
         BaseScript.waitRandomMillis(40, 90);
       }
     } finally {
       BaseScript.waitRandomMillis(100, 200);
-      controller.keyboard().sendModifierKey(KEY_RELEASE, "shift");
+      baseScript.controller().keyboard().sendModifierKey(KEY_RELEASE, "shift");
     }
   }
 
@@ -120,21 +126,5 @@ public class ItemDropper {
         break;
     }
     return indices;
-  }
-
-  /**
-   * Helper method to left-click a {@link Point} location on-screen.
-   *
-   * @param clickPoint The point to click.
-   * @param controller The controller instance.
-   */
-  private static void clickPoint(Point clickPoint, Controller controller) {
-    try {
-      controller.mouse().moveTo(clickPoint, "fast");
-      controller.mouse().leftClick();
-    } catch (InterruptedException e) {
-      logger.error("Mouse interrupted during drop operation", e);
-      Thread.currentThread().interrupt();
-    }
   }
 }

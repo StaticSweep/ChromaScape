@@ -1,7 +1,7 @@
 package com.chromascape.base;
 
 import com.chromascape.controller.Controller;
-import com.chromascape.utils.core.runtime.ScriptStoppedException;
+import com.chromascape.utils.core.runtime.exception.ScriptStoppedException;
 import com.chromascape.utils.core.state.BotState;
 import com.chromascape.utils.core.state.StateManager;
 import com.chromascape.utils.core.statistics.StatisticsManager;

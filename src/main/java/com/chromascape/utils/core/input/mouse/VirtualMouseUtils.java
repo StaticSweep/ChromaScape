@@ -58,12 +58,6 @@ public class VirtualMouseUtils {
   private final AtomicBoolean isMoving = new AtomicBoolean(false);
 
   /**
-   * Background thread that consumes points from {@code pendingInputPoint} and sends them to
-   * hardware.
-   */
-  private final Thread inputConsumerThread;
-
-  /**
    * Lock object to ensure Kinput is accessed by only one thread at a time.
    *
    * <p>Required because the underlying WebSocket/Connection in Kinput is not thread-safe and cannot
@@ -99,7 +93,7 @@ public class VirtualMouseUtils {
     overlay.setLocation(bounds.x, bounds.y); // keep overlay frame aligned with window
 
     // Start the background Input Consumer thread
-    inputConsumerThread = new Thread(this::consumeInputLoop, "VirtualMouse-Input-Consumer");
+    Thread inputConsumerThread = new Thread(this::consumeInputLoop, "VirtualMouse-Input-Consumer");
     inputConsumerThread.setDaemon(true); // Ensure thread dies when JVM shuts down
     inputConsumerThread.start();
   }
@@ -144,9 +138,8 @@ public class VirtualMouseUtils {
    *
    * @param target The destination point.
    * @param speed Speed profile: "slow", "medium", "fast".
-   * @throws InterruptedException If movement is externally interrupted.
    */
-  public void moveTo(final Point target, final String speed) throws InterruptedException {
+  public void moveTo(final Point target, final String speed) {
     BaseScript.checkInterrupted();
     StateManager.setState(BotState.ACTING);
     StatisticsManager.incrementInputs();

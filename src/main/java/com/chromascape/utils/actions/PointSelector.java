@@ -6,6 +6,7 @@ import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.core.screen.topology.ChromaObj;
 import com.chromascape.utils.core.screen.topology.ColourContours;
+import com.chromascape.utils.core.screen.topology.MatchResult;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -187,20 +188,14 @@ public class PointSelector {
       double threshold,
       Function<Rectangle, Point> pointGenerator) {
     BaseScript.checkInterrupted();
-    try {
-      Rectangle boundingBox = TemplateMatching.match(templatePath, image, threshold, false);
+    MatchResult result = TemplateMatching.match(templatePath, image, threshold);
 
-      if (boundingBox == null || boundingBox.isEmpty()) {
-        logger.error("getRandomPointInImage failed: No valid bounding box.");
-        return null;
-      }
-      // Applying the desired function parameter onto the bounding box and returning it
-      return pointGenerator.apply(boundingBox);
-    } catch (Exception e) {
-      logger.error("getRandomPointInImage failed: {}", e.getMessage());
-      logger.error(e.getStackTrace());
+    if (!result.success()) {
+      logger.error("getRandomPointInImage failed: {}", result.message());
+      return null;
     }
-    return null;
+    // Applying the desired function parameter onto the bounding box and returning it
+    return pointGenerator.apply(result.bounds());
   }
 
   /**

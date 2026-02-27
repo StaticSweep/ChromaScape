@@ -8,6 +8,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.bytedeco.opencv.opencv_core.Scalar;
 
 /**
@@ -21,6 +23,8 @@ import org.bytedeco.opencv.opencv_core.Scalar;
  * structure, so only the first three channels (H, S, V) are meaningful.
  */
 public class ColourInstances {
+
+  private static final Logger logger = LogManager.getLogger(ColourInstances.class);
 
   /** The cached list of all colour definitions loaded from the configuration file. */
   private static List<ColourObj> COLOURS;
@@ -57,8 +61,8 @@ public class ColourInstances {
               .toList();
 
     } catch (IOException e) {
-      System.err.println(
-          "Could not load colours.json from path '" + COLOURS_JSON_PATH + "': " + e.getMessage());
+      logger.error(
+          "Could not load colours.json from path '" + COLOURS_JSON_PATH + "': {}", e.getMessage());
       COLOURS = List.of(); // Initialize as empty list to avoid null pointer issues
     }
   }

@@ -12,7 +12,6 @@ import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.domain.ocr.Ocr;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -50,9 +49,8 @@ public class MouseOver {
    *
    * @param baseScript Your script instance, typically {@code this}.
    * @return The string found within the MouseOverText zone (No spaces).
-   * @throws IOException If font loading failed within OCR.
    */
-  public static String getText(BaseScript baseScript) throws IOException {
+  public static String getText(BaseScript baseScript) {
     // Get image of MouseOverText
     Rectangle zone = baseScript.controller().zones().getMouseOver();
     BufferedImage capture = ScreenManager.captureZone(zone);
