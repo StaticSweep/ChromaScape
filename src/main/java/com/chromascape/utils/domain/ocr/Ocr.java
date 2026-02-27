@@ -14,7 +14,6 @@ import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.core.screen.topology.ColourContours;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.domain.zones.MaskZones;
-import java.awt.AWTException;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
@@ -22,6 +21,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -65,60 +65,88 @@ public class Ocr {
    *
    * @param font Name of the font folder inside resources.
    * @return A map from character string to Mat (glyph image).
-   * @throws IOException if font data cannot be read.
    */
-  public static synchronized Map<String, Mat> loadFont(String font) throws IOException {
-    if (fontCache.containsKey(font)) {
-      return fontCache.get(font);
-    }
+  public static synchronized Map<String, Mat> loadFont(String font) {
+    // computeIfAbsent allows for the calculation of a value if it doesn't exist in a Map
+    return fontCache.computeIfAbsent(
+        font,
+        f -> {
+          Map<String, Mat> fontMap = new HashMap<>();
+          String basePath = "/fonts/" + f + "/";
+          String indexPath = basePath + f + ".index";
 
-    Map<String, Mat> fontMap = new HashMap<>();
+          try (InputStream indexStream = Ocr.class.getResourceAsStream(indexPath)) {
+            if (indexStream == null) {
+              // Throw runtime unchecked exception to fail if fonts are downloaded incorrectly and
+              // are unavailable
+              throw new UncheckedIOException(new IOException("Font index not found: " + indexPath));
+            }
 
-    try (BufferedReader reader =
-        new BufferedReader(
-            new InputStreamReader(
-                Objects.requireNonNull(
-                    Ocr.class.getResourceAsStream("/fonts/" + font + "/" + font + ".index"))))) {
-
-      String fontFileName;
-      while ((fontFileName = reader.readLine()) != null) {
-
-        String fileName = fontFileName.replace(".bmp", "");
-        int codePoint = Integer.parseInt(fileName);
-        String character = String.valueOf((char) codePoint);
-
-        if (!ALLOWED_CHARS.contains(character)) {
-          continue;
-        }
-
-        try (InputStream is =
-            Ocr.class.getResourceAsStream("/fonts/" + font + "/" + fontFileName)) {
-          if (is == null) {
-            throw new FileNotFoundException("Missing font image: " + fontFileName);
+            // Stream the index file and load the files listed into the fontMap
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(indexStream))) {
+              String fontFileName;
+              while ((fontFileName = reader.readLine()) != null) {
+                processFontFile(basePath, fontFileName, fontMap);
+              }
+            }
+          } catch (IOException e) {
+            // It's necessary for the project files to exist, so fail fast
+            throw new RuntimeException(
+                "Failed to load font library "
+                    + f
+                    + " essential for runtime execution with error: "
+                    + e);
           }
-          Mat img = Java2DFrameUtils.toMat(ImageIO.read(is));
-          cvtColor(img, img, COLOR_BGR2GRAY);
-          fontMap.put(character, img);
-        }
-      }
-    }
-    fontCache.put(font, fontMap);
-    return fontMap;
+          return fontMap;
+        });
   }
 
   /**
-   * Extracts a string of text from a screen region by template-matching glyphs from a font. Note:
-   * this will not include any spaces.
+   * Private helper for loading a specified font bitmap into a font library. Mutates the given map,
+   * does not return anything, intended to be called in a loop. Expects the bitmap to be named as
+   * ascii codepoints and to be stored as resources. Loads each glyph as a greyscale mat with its
+   * corresponding character in String form.
+   *
+   * @param path {@link String} path of the font bitmap inside resources
+   * @param fileName the name of the file including type (e.g., 68.bmp)
+   * @param map the map to mutate and add the name + Mat object to
+   * @throws IOException In the case that a glyph fails to load
+   */
+  private static void processFontFile(String path, String fileName, Map<String, Mat> map)
+      throws IOException {
+    // Get the name ASCII codepoint from the filename
+    String cleanName = fileName.replace(".bmp", "");
+    int codePoint = Integer.parseInt(cleanName);
+    String character = Character.toString(codePoint);
+
+    if (!ALLOWED_CHARS.contains(character)) {
+      return;
+    }
+
+    try (InputStream is = Ocr.class.getResourceAsStream(path + fileName)) {
+      if (is == null) {
+        // It's necessary for the project files to exist, so fail fast
+        throw new FileNotFoundException("Font file not found: " + fileName);
+      }
+
+      // Add the character and Mat to the map
+      Mat img = Java2DFrameUtils.toMat(ImageIO.read(is));
+      cvtColor(img, img, COLOR_BGR2GRAY);
+      map.put(character, img);
+    }
+  }
+
+  /**
+   * Extracts a string of text from a screen region ({@link Rectangle} zone) by template-matching
+   * glyphs from a font. Note: this will not include any spaces.
    *
    * @param zone Rectangle on screen to extract text from.
    * @param font Font name to use for glyph matching.
    * @param colour ColourObj specifying the color to isolate.
    * @param clean Whether to clear internal match storage after use.
    * @return The extracted text string from the zone.
-   * @throws IOException if font images cannot be read.
    */
-  public static String extractText(Rectangle zone, String font, ColourObj colour, boolean clean)
-      throws IOException {
+  public static String extractText(Rectangle zone, String font, ColourObj colour, boolean clean) {
     Map<String, Mat> fontMap = loadFont(font);
     matches.clear();
     BufferedImage zoneImage = ScreenManager.captureZone(zone);
@@ -134,10 +162,8 @@ public class Ocr {
    * @param font Font name to use for glyph matching.
    * @param clean Whether to clear internal match storage after use.
    * @return The extracted text string from the zone.
-   * @throws IOException if font images cannot be read.
    */
-  public static String extractTextFromMask(Mat mask, String font, boolean clean)
-      throws IOException {
+  public static String extractTextFromMask(Mat mask, String font, boolean clean) {
     Map<String, Mat> fontMap = loadFont(font);
     matches.clear();
     return extraction(fontMap, mask.clone(), font, clean);
@@ -235,11 +261,9 @@ public class Ocr {
    * @param text Expected string result; skips mask generation if mismatched.
    * @param colour ColourObj specifying the color to isolate.
    * @return A BufferedImage mask of the matched character zones, or null if text doesn't match.
-   * @throws IOException if font images cannot be read.
-   * @throws AWTException if screen capture fails.
    */
   public static BufferedImage extractTextLocationMask(
-      Rectangle zone, String font, String text, ColourObj colour) throws IOException, AWTException {
+      Rectangle zone, String font, String text, ColourObj colour) {
     // Get the full window bounds (this must match the screen capture bounds)
     Rectangle window = ScreenManager.getWindowBounds();
 

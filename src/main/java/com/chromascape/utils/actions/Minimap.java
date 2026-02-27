@@ -4,7 +4,6 @@ import com.chromascape.base.BaseScript;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.domain.ocr.Ocr;
 import java.awt.Rectangle;
-import java.io.IOException;
 import org.bytedeco.opencv.opencv_core.Scalar;
 
 /**
@@ -23,9 +22,8 @@ public class Minimap {
    * Returns the character's current hitpoints, or -1 if not found.
    *
    * @param script The current running script (typically pass {@code this})
-   * @throws IOException if the OCR failed to load the font
    */
-  public static int getHp(BaseScript script) throws IOException {
+  public static int getHp(BaseScript script) {
     Rectangle textArea = script.controller().zones().getMinimap().get("hpText");
     String hpText = Ocr.extractText(textArea, "Plain 11", textColour, true);
     if (hpText.isEmpty()) {
@@ -38,9 +36,8 @@ public class Minimap {
    * Returns the character's current prayer, or -1 if not found.
    *
    * @param script The current running script (typically pass {@code this})
-   * @throws IOException if the OCR failed to load the font
    */
-  public static int getPrayer(BaseScript script) throws IOException {
+  public static int getPrayer(BaseScript script) {
     Rectangle textArea = script.controller().zones().getMinimap().get("prayerText");
     String prayerText = Ocr.extractText(textArea, "Plain 11", textColour, true);
     if (prayerText.isEmpty()) {
@@ -53,9 +50,8 @@ public class Minimap {
    * Returns the character's current run energy, or -1 if not found.
    *
    * @param script The current running script (typically pass {@code this})
-   * @throws IOException if the OCR failed to load the font
    */
-  public static int getRun(BaseScript script) throws IOException {
+  public static int getRun(BaseScript script) {
     Rectangle textArea = script.controller().zones().getMinimap().get("runText");
     String runText = Ocr.extractText(textArea, "Plain 11", textColour, true);
     if (runText.isEmpty()) {
@@ -68,9 +64,8 @@ public class Minimap {
    * Returns the character's current special attack energy, or -1 if not found.
    *
    * @param script The current running script (typically pass {@code this})
-   * @throws IOException if the OCR failed to load the font
    */
-  public static int getSpec(BaseScript script) throws IOException {
+  public static int getSpec(BaseScript script) {
     Rectangle textArea = script.controller().zones().getMinimap().get("specText");
     String specText = Ocr.extractText(textArea, "Plain 11", textColour, true);
     if (specText.isEmpty()) {
@@ -82,14 +77,13 @@ public class Minimap {
   /**
    * Retrieves the current XP from beside the minimap UI element.
    *
-   * <p>It is highly recommended to set the XP bar to permanent, as seen here:
-   * https://github.com/StaticSweep/ChromaScape/wiki/Requirements
+   * <p>It is highly recommended to set the XP bar to permanent, as seen here: <a
+   * href="https://github.com/StaticSweep/ChromaScape/wiki/Requirements">see Requirements</a>
    *
    * @param script The current running script (typically pass {@code this})
    * @return the XP integer, or empty if not found
-   * @throws IOException if the OCR failed to load the font
    */
-  public static int getXp(BaseScript script) throws IOException {
+  public static int getXp(BaseScript script) {
     Rectangle xpZone = script.controller().zones().getMinimap().get("totalXP");
     String xpText = Ocr.extractText(xpZone, "Plain 12", white, true);
     return Integer.parseInt(xpText.trim().replace(",", ""));

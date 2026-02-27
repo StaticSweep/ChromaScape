@@ -3,6 +3,7 @@ package com.chromascape.scripts;
 import com.chromascape.base.BaseScript;
 import com.chromascape.utils.actions.PointSelector;
 import com.chromascape.utils.core.input.distribution.ClickDistribution;
+import com.chromascape.utils.core.screen.topology.MatchResult;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import java.awt.Point;
@@ -28,7 +29,7 @@ public class DemoWineScript extends BaseScript {
   private static final String grapes = "/images/user/Grapes.png";
   private static final String jugs = "/images/user/Jug_of_water.png";
   private static final String dumpBank = "/images/user/Dump_bank.png";
-  private static final String unfermented = "/images/user/Unfermented.png";
+  private static final String unfermented = "/images/user/Unfermented_wine.png";
 
   private static final int MAX_ATTEMPTS = 15;
   private static final int INVENT_SLOT_GRAPES = 13;
@@ -59,10 +60,10 @@ public class DemoWineScript extends BaseScript {
     pressEscape(); // Exit bank UI
     waitRandomMillis(600, 800);
 
-    clickInventSlot(INVENT_SLOT_JUGS, "fast"); // Click the jugs of water in the inventory
+    clickInvSlot(INVENT_SLOT_JUGS, "fast"); // Click the jugs of water in the inventory
     waitRandomMillis(400, 500);
 
-    clickInventSlot(INVENT_SLOT_GRAPES, "slow"); // Use the jugs on the grapes to start making wine
+    clickInvSlot(INVENT_SLOT_GRAPES, "medium"); // Use the jugs on the grapes to start making wine
     waitRandomMillis(800, 900);
 
     pressSpace(); // Accept the start button
@@ -74,7 +75,7 @@ public class DemoWineScript extends BaseScript {
     clickImage(dumpBank, "medium", 0.055); // Put the fermenting wines in the bank to repeat
     waitRandomMillis(650, 750);
 
-    if (checkIfImageInv(unfermented, 0.055)) { // Repeating because bank is weird
+    if (checkIfImageInvSlot1(unfermented, 0.055)) { // Repeating because bank is weird
       controller().mouse().leftClick();
       waitRandomMillis(600, 800);
     }
@@ -107,29 +108,19 @@ public class DemoWineScript extends BaseScript {
    * click successfully.
    */
   private void clickBank() {
-    Point clickLocation = new Point();
-    try {
-      clickLocation =
-          PointSelector.getRandomPointInColour(
-              controller().zones().getGameView(), "Purple", MAX_ATTEMPTS);
-    } catch (Exception e) {
-      logger.error("Failed while generating bank click location: {}", String.valueOf(e));
-      stop();
-    }
+    Point clickLocation =
+        PointSelector.getRandomPointInColour(
+            controller().zones().getGameView(), "Cyan", MAX_ATTEMPTS);
 
     if (clickLocation == null) {
       logger.error("clickBank click location is null");
       stop();
     }
 
-    try {
-      controller().mouse().moveTo(clickLocation, "medium");
-      controller().mouse().leftClick();
-      logger.info("Clicked on purple bank object at {}", clickLocation);
-    } catch (Exception e) {
-      logger.error(e.getMessage());
-      stop();
-    }
+    controller().mouse().moveTo(clickLocation, "medium");
+    logger.info("Clicked on purple bank object at {}", clickLocation);
+
+    controller().mouse().leftClick();
   }
 
   /**
@@ -141,23 +132,18 @@ public class DemoWineScript extends BaseScript {
    * @param threshold the openCV threshold to decide if a match exists
    */
   private void clickImage(String imagePath, String speed, double threshold) {
-    try {
-      BufferedImage gameView = controller().zones().getGameView();
-      Point clickLocation = PointSelector.getRandomPointInImage(imagePath, gameView, threshold);
+    BufferedImage gameView = controller().zones().getGameView();
+    Point clickLocation = PointSelector.getRandomPointInImage(imagePath, gameView, threshold);
 
-      if (clickLocation == null) {
-        logger.error("clickImage click location is null");
-        stop();
-      }
-
-      controller().mouse().moveTo(clickLocation, speed);
-      controller().mouse().leftClick();
-      logger.info("Clicked on image at {}", clickLocation);
-
-    } catch (Exception e) {
-      logger.error("clickImage failed: {}", e.getMessage());
+    if (clickLocation == null) {
+      logger.error("clickImage click location is null");
       stop();
     }
+
+    controller().mouse().moveTo(clickLocation, speed);
+
+    controller().mouse().leftClick();
+    logger.info("Clicked on image at {}", clickLocation);
   }
 
   /**
@@ -166,56 +152,40 @@ public class DemoWineScript extends BaseScript {
    * @param slot the index of the inventory slot to click (0-27)
    * @param speed the speed that the mouse moves to click the image
    */
-  private void clickInventSlot(int slot, String speed) {
-    try {
-      Rectangle boundingBox = controller().zones().getInventorySlots().get(slot);
-      if (boundingBox == null || boundingBox.isEmpty()) {
-        logger.info("Inventory slot {} not found.", slot);
-        stop();
-        return;
-      }
+  private void clickInvSlot(int slot, String speed) {
+    Rectangle boundingBox = controller().zones().getInventorySlots().get(slot);
+    if (boundingBox == null || boundingBox.isEmpty()) {
+      logger.info("Inventory slot {} not found.", slot);
+      stop();
+      return;
+    }
 
-      Point clickLocation = ClickDistribution.generateRandomPoint(boundingBox);
+    Point clickLocation = ClickDistribution.generateRandomPoint(boundingBox);
 
-      if (clickLocation == null) {
-        logger.error("clickInventSlot click location is null");
-        stop();
-      }
-
-      controller().mouse().moveTo(clickLocation, speed);
-      controller().mouse().leftClick();
-      logger.info("Clicked inventory slot {} at {}", slot, clickLocation);
-
-    } catch (Exception e) {
-      logger.error("clickInventSlot failed: {}", e.getMessage());
+    if (clickLocation == null) {
+      logger.error("clickInventSlot click location is null");
       stop();
     }
+
+    controller().mouse().moveTo(clickLocation, speed);
+
+    controller().mouse().leftClick();
+    logger.info("Clicked inventory slot {} at {}", slot, clickLocation);
   }
 
   /**
-   * Checks if an image exists on the screen and returns a boolean referring to if it was detected.
+   * Checks if an image exists in the first inventory slot.
    *
    * @param imagePath the path to the image being searched
    * @param threshold the openCV threshold to decide if a match exists
    * @return true if the image exists in the inventory slot 1, else false
    */
-  private boolean checkIfImageInv(String imagePath, double threshold) {
-    try {
-      BufferedImage inventorySlot1 =
-          ScreenManager.captureZone(controller().zones().getInventorySlots().get(0));
-      Rectangle boundingBox = TemplateMatching.match(imagePath, inventorySlot1, threshold, false);
+  private boolean checkIfImageInvSlot1(String imagePath, double threshold) {
+    BufferedImage inventorySlot1 =
+        ScreenManager.captureZone(controller().zones().getInventorySlots().get(0));
 
-      if (boundingBox == null || boundingBox.isEmpty()) {
-        logger.error("Template match failed: No valid inventory bounding box.");
-        return false;
-      }
+    MatchResult result = TemplateMatching.match(imagePath, inventorySlot1, threshold);
 
-      return true;
-
-    } catch (Exception e) {
-      logger.error("checkIfImageInv failed: {}", e.getMessage());
-      stop();
-    }
-    return false;
+    return result.success();
   }
 }

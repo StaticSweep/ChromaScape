@@ -36,21 +36,17 @@ Due to the separation of domain, core and actions utilities it provides a greate
 ## Mouse input
 Here's a very simple scripting example from the [DemoMiningScript](https://github.com/StaticSweep/ChromaScape/blob/main/src/main/java/com/chromascape/scripts/DemoMiningScript.java) that you'll see working below.
 ```java
-  private void clickOre() {
-    try {
-      BufferedImage gameView = controller().zones().getGameView();
-      Point clickLoc = PointSelector.getRandomPointInColour(gameView, "Cyan", 15);
-      if (clickLoc == null) {
-        stop();
-        return;
-      }
-      controller().mouse().moveTo(clickLoc, "medium");
-      controller().mouse().leftClick();
-    } catch (Exception e) {
-      logger.error(e);
-      logger.error(e.getStackTrace());
-    }
+private void clickOre() {
+  BufferedImage gameView = controller().zones().getGameView();
+  Point clickLoc = PointSelector.getRandomPointInColour(gameView, "Cyan", 15);
+  if (clickLoc == null) {
+    logger.error("Click location is null");
+    stop();
+    return;
   }
+  controller().mouse().moveTo(clickLoc, "medium");
+  controller().mouse().leftClick();
+}
 ```
 
 
@@ -99,4 +95,4 @@ ChromaScape includes functionality for identifying images or sprites by comparin
 ChromaScape utilises template matching for accurate and fast OCR. This solution - as opposed to machine learning - provides for ocr at runtime. This was inspired by SRL and OSBC.
 
 ### Note on dependencies:
-This project downloads specific fonts and UI elements from the [OSBC](https://github.com/kelltom/OS-Bot-COLOR/tree/main), [RuneDark](https://github.com/cemenenkoff/runedark-public) and [SRL-dev](https://github.com/Villavu/SRL-Development/tree/master) projects to enable accurate template matching, OCR, and UI consistency. These resources are used solely for educational and research purposes and they are not packaged directly within this repository.
+This project downloads specific fonts and UI elements from the [OSBC](https://github.com/kelltom/OS-Bot-COLOR/tree/main) and [SRL-dev](https://github.com/Villavu/SRL-Development/tree/master) projects to enable accurate template matching, OCR, and UI consistency. These resources are used solely for educational and research purposes and they are not packaged directly within this repository.

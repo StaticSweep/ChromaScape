@@ -5,6 +5,9 @@ import static com.chromascape.base.BaseScript.waitRandomMillis;
 import com.chromascape.api.Dax;
 import com.chromascape.base.BaseScript;
 import com.chromascape.controller.Controller;
+import com.chromascape.utils.core.runtime.exception.DaxAuthException;
+import com.chromascape.utils.core.runtime.exception.DaxException;
+import com.chromascape.utils.core.runtime.exception.DaxRateLimitException;
 import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.domain.ocr.Ocr;
@@ -18,7 +21,6 @@ import java.util.Random;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -87,9 +89,8 @@ public class Walker {
    * Gets the player's position by using runtime OCR on the GridInfo's "Tile" zone.
    *
    * @return An integer array with 3 elements - x, y and z.
-   * @throws IOException Due to runtime OCR and font-loading.
    */
-  public Tile getPlayerPosition() throws IOException {
+  public Tile getPlayerPosition() {
     Rectangle zone = controller.zones().getGridInfo().get("Tile");
     ColourObj colour = ColourInstances.getByName("White");
     // Extracts the position using OCR and splits it into a 3 value list (x, y, z)
@@ -109,33 +110,39 @@ public class Walker {
    * @param isMembers A boolean dictating whether your character is a member or free to play.
    * @return A {@link List} list of {@link Tile} objects with the first tile being your current
    *     position.
-   * @throws IOException Due to runtime OCR, font-loading and calling the API
-   * @throws InterruptedException If interrupted during the API call.
+   * @throws IOException If a transport error occurs during calling a path from the Dax API.
+   * @throws InterruptedException If the thread is interrupted or the watchdog freezes the thread.
    */
   private List<Tile> getPath(Point destination, boolean isMembers)
       throws IOException, InterruptedException {
     Tile position = getPlayerPosition();
-    String rawPath;
     DaxPath daxPath = null;
     int retries = 20;
     int attempt = 0;
 
     while (attempt < retries) {
-      attempt++;
-      // Call DAX API
-      rawPath = dax.generatePath(new Point(position.x(), position.y()), destination, isMembers);
-      if ("RATE_LIMIT_EXCEEDED".equals(rawPath)) {
-        // Wait a bit before retrying to avoid hammering the API
-        waitRandomMillis(600, 700);
-        continue; // retry
-      }
       try {
-        // Deserialize the raw JSON
+        String rawPath =
+            dax.generatePath(new Point(position.x(), position.y()), destination, isMembers);
         daxPath = objectMapper.readValue(rawPath, DaxPath.class);
-        break; // success
-      } catch (IOException e) {
-        // Log and retry on deserialization failure
-        logger.error("Failed to deserialize DAX response: {}", e.getMessage());
+        break;
+
+      } catch (DaxRateLimitException e) {
+        // Handle the rate limit exception by waiting and retrying
+        attempt++;
+        logger.warn("Dax Rate Limit reached (Attempt {}/{}). Waiting...", attempt, retries);
+        waitRandomMillis(600, 1200);
+
+      } catch (DaxAuthException e) {
+        // Throw RuntimeException if the API key is invalid
+        logger.error("Dax Authentication Failed: {}", e.getMessage());
+        throw new IOException("Invalid DAX credentials. Check your API key: ", e);
+
+      } catch (DaxException e) {
+        // Retry if server error
+        attempt++;
+        logger.error("Dax API error: {}. Retrying...", e.getMessage());
+        waitRandomMillis(1000, 2000);
       }
     }
     if (daxPath == null) {
@@ -155,12 +162,11 @@ public class Walker {
    *
    * @param destination the destination {@link Point} to walk to
    * @param isMembers whether the player is a members account, affecting path calculation
-   * @throws IOException if OCR or path retrieval from DAX fails
-   * @throws InterruptedException if the thread is interrupted while waiting for player movement
-   * @throws ExecutionException if the asynchronous computation of the next click point fails
+   * @throws IOException if path retrieval from DAX fails due to transport error
+   * @throws InterruptedException if the thread is interrupted while in the process of calling DAX
    */
   public void pathTo(Point destination, boolean isMembers)
-      throws IOException, InterruptedException, ExecutionException {
+      throws IOException, InterruptedException {
     List<Tile> path = getPath(destination, isMembers);
     // How far away from the current tile the bot should click
     int maxHorizon = 10;
@@ -204,7 +210,7 @@ public class Walker {
         }
         clickpoint = getClickLocation(target, getPlayerPosition());
       } else {
-        clickpoint = pointFuture.get();
+        clickpoint = pointFuture.join();
         // Update target
         target = newTarget;
       }
@@ -231,8 +237,13 @@ public class Walker {
    * @return the {@link Tile} selected as the next click target
    */
   private Tile chooseNextTarget(List<Tile> path, int minHorizon, int maxHorizon) {
+    if (path == null || path.isEmpty()) {
+      return getPlayerPosition();
+    }
+
     int targetPos = random.nextInt(minHorizon, maxHorizon + 1);
     Tile target;
+
     // If we're about to overshoot the last tile, just click the last tile
     if (path.size() > targetPos) {
       target = path.get(targetPos);
@@ -281,14 +292,18 @@ public class Walker {
 
   /**
    * Polls the player's position to check if the player has stopped moving. Exits out when stopped.
-   *
-   * @throws IOException Due to runtime OCR and font-loading.
    */
-  private void waitToStop() throws IOException {
+  private void waitToStop() {
     // Ticks on some worlds can vary, it's usual on world 302 to be 0.618 per tick
     long tick = 650;
     Tile position = getPlayerPosition();
-    BaseScript.waitMillis(tick);
+    // Wait to start moving
+    int attempts = 0;
+    while (position.equals(getPlayerPosition()) && attempts < 3) {
+      BaseScript.waitMillis(tick);
+      attempts++;
+    }
+    // Wait to stop moving
     while (true) {
       if (position.equals(getPlayerPosition())) {
         return;

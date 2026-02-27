@@ -1,19 +1,19 @@
 package com.chromascape.scripts;
 
 import com.chromascape.base.BaseScript;
+import com.chromascape.utils.actions.Idler;
+import com.chromascape.utils.actions.ItemDropper;
 import com.chromascape.utils.actions.PointSelector;
-import com.chromascape.utils.core.input.distribution.ClickDistribution;
 import com.chromascape.utils.core.screen.colour.ColourInstances;
 import com.chromascape.utils.core.screen.colour.ColourObj;
+import com.chromascape.utils.core.screen.topology.MatchResult;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.domain.ocr.Ocr;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.time.Duration;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -22,11 +22,11 @@ import org.apache.logging.log4j.Logger;
  *
  * <ul>
  *   <li>Ocr and how to read text in screen regions.
- *   <li>How to use the Idler (although a modified version)
- *   <li>Dropping items in a human-like way using the mouse
- *   <li>Template matching, its use of thresholds and how to search for images on-screen
+ *   <li>How to use the Idler
+ *   <li>Dropping items in a human like manner using the mouse
+ *   <li>Template matching, how to use the MatchResult, and how to search for images on-screen
  *   <li>Colour detection within the gameView
- *   <li>The use of {@link PointSelector} the new actions utility
+ *   <li>The use of the {@link PointSelector} actions utility
  * </ul>
  *
  * <p>This is a DEMO script. It's not intended to be used, but rather as a reference. ChromaScape is
@@ -34,15 +34,13 @@ import org.apache.logging.log4j.Logger;
  */
 public class DemoFishingScript extends BaseScript {
 
-  // Only one type of rod and one bait is necessary to be downloaded
-  private static final String fishingRod = "/images/user/Fishing_rod.png";
   private static final String flyFishingRod = "/images/user/Fly_fishing_rod.png";
-  private static final String bait = "/images/user/Fishing_bait.png";
   private static final String feather = "/images/user/Feather.png";
 
   private static final Logger logger = LogManager.getLogger(DemoFishingScript.class);
 
-  private static String lastMessage;
+  private static final int IDLE_TIMEOUT_SECONDS = 300;
+  private static final int WALK_TIMEOUT_SECONDS = 17;
 
   /**
    * Overridden cycle. Repeats all tasks within, until stop() is called from either the Web UI, or
@@ -51,19 +49,17 @@ public class DemoFishingScript extends BaseScript {
   @Override
   protected void cycle() {
     if (!checkIfCorrectInventoryLayout()) {
-      logger.warn("Normal or fly-fishing rod must be in inventory slot 27");
-      logger.warn("Bait/feathers must be in inventory slot 28");
+      logger.warn("Fly-fishing rod must be in inventory slot 27 / idx 26");
+      logger.warn("Feathers must be in inventory slot 28 / idx 27");
       logger.info("The top of your bait or feather images should be cropped by 10 px");
       stop();
     }
 
     clickFishingSpot();
 
-    // Waiting, if the player needs to walk - adjust as needed
-    waitRandomMillis(5000, 6000);
+    waitUntilStoppedMoving();
 
-    // Check if stopped fishing
-    waitUntilStoppedFishing(300);
+    waitUntilStoppedFishing();
     logger.info("Is idle");
 
     // If ran out of bait, stop
@@ -80,43 +76,63 @@ public class DemoFishingScript extends BaseScript {
   }
 
   /**
+   * Queries {@link DemoFishingScript#getCurrentWorldPos()} every tick until the player has stopped
+   * moving or the WALK_TIMEOUT_SECONDS is reached. Blocks execution of the script until either
+   * condition is met.
+   */
+  private void waitUntilStoppedMoving() {
+    LocalDateTime end = LocalDateTime.now().plusSeconds(WALK_TIMEOUT_SECONDS);
+    String currentTile = getCurrentWorldPos();
+    while (LocalDateTime.now().isBefore(end)) {
+      waitMillis(650);
+      if (currentTile.equals(getCurrentWorldPos())) {
+        return;
+      }
+      currentTile = getCurrentWorldPos();
+    }
+  }
+
+  /**
+   * Uses Ocr on the Grid Info box's Tile subzone.
+   *
+   * @return the tile position as a String.
+   */
+  private String getCurrentWorldPos() {
+    Rectangle zone = controller().zones().getGridInfo().get("Tile");
+    ColourObj colour = ColourInstances.getByName("White");
+    return Ocr.extractText(zone, "Plain 12", colour, true);
+  }
+
+  /**
    * Checks if the inventory layout is as expected. The inventory layout needs to be in a specific
-   * format to ensure that the dropping of items looks human.
+   * format to ensure that the dropping of items looks human. Will check for a fly-fishing rod in
+   * index 26 and feathers in index 27.
    *
    * @return {@code boolean} true if correct, false if not.
    */
   private boolean checkIfCorrectInventoryLayout() {
     logger.info("Checking if inventory layout is valid");
+
     Rectangle invSlot27 = controller().zones().getInventorySlots().get(26);
     Rectangle invSlot28 = controller().zones().getInventorySlots().get(27);
+
     BufferedImage invSlot27Image = ScreenManager.captureZone(invSlot27);
     BufferedImage invSlot28Image = ScreenManager.captureZone(invSlot28);
-    Rectangle slot27Match;
-    Rectangle slot28Match;
 
-    try {
-      slot27Match = TemplateMatching.match(fishingRod, invSlot27Image, 0.15, false);
-      slot28Match = TemplateMatching.match(bait, invSlot28Image, 0.15, false);
+    MatchResult slot27Match = TemplateMatching.match(flyFishingRod, invSlot27Image, 0.15);
+    MatchResult slot28Match = TemplateMatching.match(feather, invSlot28Image, 0.15);
 
-      if (slot27Match != null && slot28Match != null) {
-        logger.info("Inventory layout matched");
-        return true;
-      }
-
-      slot27Match = TemplateMatching.match(flyFishingRod, invSlot27Image, 0.05, false);
-      slot28Match = TemplateMatching.match(feather, invSlot28Image, 0.05, false);
-
-      if (slot27Match != null && slot28Match != null) {
-        logger.info("Inventory layout matched");
-        return true;
-      } else {
-        return false;
-      }
-    } catch (Exception e) {
-      logger.error(
-          "checkIfCorrectInventoryLayout() template matching failed: {}", String.valueOf(e));
+    if (!slot27Match.success()) {
+      logger.error("Slot 27 / idx 26 does not contain a fly fishing rod.");
+      return false;
     }
-    return false;
+
+    if (!slot28Match.success()) {
+      logger.error("Slot 28 / idx 27 does not contain feathers.");
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -125,47 +141,9 @@ public class DemoFishingScript extends BaseScript {
    */
   private void dropAllFish() {
     logger.info("Dropping all fish");
-    int currentSlot = 0;
-    int alternateSlot = 4;
-    controller().keyboard().sendModifierKey(401, "shift");
-    waitRandomMillis(100, 250);
-    for (int i = 0; i < 3; i++) {
-      for (int j = 0; j < 4; j++) {
-        clickPoint(
-            ClickDistribution.generateRandomPoint(
-                controller().zones().getInventorySlots().get(currentSlot)));
-        waitRandomMillis(20, 50);
-        clickPoint(
-            ClickDistribution.generateRandomPoint(
-                controller().zones().getInventorySlots().get(alternateSlot)));
-        waitRandomMillis(40, 80);
-        currentSlot++;
-        alternateSlot = currentSlot + 4;
-      }
-      waitRandomMillis(100, 200);
-      currentSlot = currentSlot + 4;
-      alternateSlot = currentSlot + 4;
-    }
-    clickPoint(
-        ClickDistribution.generateRandomPoint(controller().zones().getInventorySlots().get(24)));
-    clickPoint(
-        ClickDistribution.generateRandomPoint(controller().zones().getInventorySlots().get(25)));
-    waitRandomMillis(100, 250);
-    controller().keyboard().sendModifierKey(402, "shift");
-  }
 
-  /**
-   * Helper method to left-click a {@link Point} location on-screen.
-   *
-   * @param clickPoint The point to click.
-   */
-  private void clickPoint(Point clickPoint) {
-    try {
-      controller().mouse().moveTo(clickPoint, "medium");
-    } catch (InterruptedException e) {
-      logger.error("Mouse interrupted: {}", String.valueOf(e));
-    }
-    controller().mouse().leftClick();
+    int[] excludeSlots = {26, 27};
+    ItemDropper.dropAll(this, ItemDropper.DropPattern.ZIGZAG, excludeSlots);
   }
 
   /**
@@ -178,13 +156,8 @@ public class DemoFishingScript extends BaseScript {
   private boolean checkChatPopup(String phrase) {
     Rectangle chat = controller().zones().getChatTabs().get("Chat");
     ColourObj black = ColourInstances.getByName("Black");
-    String extraction = null;
-    try {
-      extraction = Ocr.extractText(chat, "Quill 8", black, true);
-    } catch (IOException e) {
-      logger.error("OCR failed while loading font: {}", String.valueOf(e));
-    }
-    return extraction != null && extraction.contains(phrase);
+    String extraction = Ocr.extractText(chat, "Quill 8", black, true);
+    return extraction.contains(phrase);
   }
 
   /**
@@ -194,52 +167,34 @@ public class DemoFishingScript extends BaseScript {
    */
   private void clickFishingSpot() {
     logger.info("Clicking fishing spot");
-    BufferedImage gameView = null;
-    try {
-      gameView = controller().zones().getGameView();
-    } catch (Exception e) {
-      logger.error("gameView not found: {}", String.valueOf(e));
-    }
+    BufferedImage gameView = controller().zones().getGameView();
 
     Point clickLocation = PointSelector.getRandomPointInColour(gameView, "Cyan", 15);
     if (clickLocation == null) {
       logger.error("clickLocation is null!");
       stop();
     }
-    clickPoint(clickLocation);
+    controller().mouse().moveTo(clickLocation, "medium");
+    controller().mouse().leftClick();
   }
 
   /**
-   * A modified version of the {@link com.chromascape.utils.actions.Idler#waitUntilIdle(BaseScript,
-   * int) waitUntilIdle} method. Altered to also check if the inventory is full and or if the user
-   * has run out of bait/feathers.
-   *
-   * @param timeoutSeconds The maximum number of seconds to remain idle before continuing.
+   * Iterates over checking for idle, if the player can't carry any more fish, and if the player has
+   * run out of bait. Blocks the main thread until one of these events occurs or the TIMEOUT_SECONDS
+   * have elapsed.
    */
-  private void waitUntilStoppedFishing(int timeoutSeconds) {
-    logger.info("Waiting until stopped fishing");
-    checkInterrupted();
-    try {
-      Instant start = Instant.now();
-      Instant deadline = start.plus(Duration.ofSeconds(timeoutSeconds));
-      while (Instant.now().isBefore(deadline)) {
-        Rectangle latestMessage = controller().zones().getChatTabs().get("Latest Message");
-        ColourObj red = ColourInstances.getByName("ChatRed");
-        ColourObj black = ColourInstances.getByName("Black");
-        String idleText = Ocr.extractText(latestMessage, "Plain 12", red, true);
-        String timeStamp = Ocr.extractText(latestMessage, "Plain 12", black, true);
-        if ((idleText.contains("moving") || idleText.contains("idle"))
-            && !timeStamp.equals(lastMessage)) {
-          lastMessage = timeStamp;
-          return;
-        } else if (checkChatPopup("carry")) {
-          return;
-        } else if (checkChatPopup("have")) {
-          return;
-        }
+  private void waitUntilStoppedFishing() {
+    LocalDateTime end = LocalDateTime.now().plusSeconds(IDLE_TIMEOUT_SECONDS);
+    while (LocalDateTime.now().isBefore(end)) {
+      if (Idler.waitUntilIdle(this, 3)) {
+        return;
       }
-    } catch (Exception e) {
-      logger.error("Error while waiting for idle", e);
+      if (checkChatPopup("carry")) {
+        return;
+      }
+      if (checkChatPopup("have")) {
+        return;
+      }
     }
   }
 }

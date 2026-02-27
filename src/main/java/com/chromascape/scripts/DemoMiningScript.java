@@ -40,7 +40,7 @@ public class DemoMiningScript extends BaseScript {
   @Override
   protected void cycle() {
     if (isInventoryFull()) {
-      ItemDropper.dropAll(controller());
+      ItemDropper.dropAll(this);
     }
     clickOre();
     waitRandomMillis(800, 1000);
@@ -53,19 +53,15 @@ public class DemoMiningScript extends BaseScript {
    * <p>If no suitable rock is found, the script stops.
    */
   private void clickOre() {
-    try {
-      BufferedImage gameView = controller().zones().getGameView();
-      Point clickLoc = PointSelector.getRandomPointInColour(gameView, "Cyan", 15);
-      if (clickLoc == null) {
-        stop();
-        return;
-      }
-      controller().mouse().moveTo(clickLoc, "medium");
-      controller().mouse().leftClick();
-    } catch (Exception e) {
-      logger.error(e);
-      logger.error(e.getStackTrace());
+    BufferedImage gameView = controller().zones().getGameView();
+    Point clickLoc = PointSelector.getRandomPointInColour(gameView, "Cyan", 15);
+    if (clickLoc == null) {
+      logger.error("Click location is null");
+      stop();
+      return;
     }
+    controller().mouse().moveTo(clickLoc, "medium");
+    controller().mouse().leftClick();
   }
 
   /**
@@ -75,14 +71,9 @@ public class DemoMiningScript extends BaseScript {
    * @return {@code true} if the inventory is full, otherwise {@code false}
    */
   private boolean isInventoryFull() {
-    try {
-      Rectangle invSlot = controller().zones().getInventorySlots().get(27);
-      BufferedImage invSlotImg = ScreenManager.captureZone(invSlot);
-      Rectangle match = TemplateMatching.match(ironOre, invSlotImg, 0.05, false);
-      return match != null;
-    } catch (Exception e) {
-      logger.error(e);
-    }
-    return false;
+    Rectangle invSlot = controller().zones().getInventorySlots().get(27);
+    BufferedImage invSlotImg = ScreenManager.captureZone(invSlot);
+    Rectangle match = TemplateMatching.match(ironOre, invSlotImg, 0.05).bounds();
+    return match != null;
   }
 }

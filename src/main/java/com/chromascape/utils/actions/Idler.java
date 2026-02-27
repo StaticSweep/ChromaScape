@@ -36,28 +36,26 @@ public class Idler {
    *
    * @param base the active {@link BaseScript} instance, usually passed as {@code this}
    * @param timeoutSeconds the maximum number of seconds to remain idle before continuing
+   * @return {@code true} if the idle message was found, {@code false} if the timeout was reached
    */
-  public static void waitUntilIdle(BaseScript base, int timeoutSeconds) {
+  public static boolean waitUntilIdle(BaseScript base, int timeoutSeconds) {
     // Initial wait to prevent race condition to previous idle message.
     BaseScript.waitMillis(600);
     BaseScript.checkInterrupted();
-    try {
-      Instant start = Instant.now();
-      Instant deadline = start.plus(Duration.ofSeconds(timeoutSeconds));
-      while (Instant.now().isBefore(deadline)) {
-        // Throttle wait to reduce lag, this is enough.
-        BaseScript.waitMillis(300);
-        Rectangle latestMessage = base.controller().zones().getChatTabs().get("Latest Message");
-        String idleText = Ocr.extractText(latestMessage, "Plain 12", chatRed, true);
-        String timeStamp = Ocr.extractText(latestMessage, "Plain 12", black, true);
-        if ((idleText.contains("moving") || idleText.contains("idle"))
-            && !timeStamp.equals(lastMessage)) {
-          lastMessage = timeStamp;
-          return;
-        }
+    Instant start = Instant.now();
+    Instant deadline = start.plus(Duration.ofSeconds(timeoutSeconds));
+    while (Instant.now().isBefore(deadline)) {
+      // Throttle wait to reduce lag, this is enough.
+      BaseScript.waitMillis(300);
+      Rectangle latestMessage = base.controller().zones().getChatTabs().get("Latest Message");
+      String idleText = Ocr.extractText(latestMessage, "Plain 12", chatRed, true);
+      String timeStamp = Ocr.extractText(latestMessage, "Plain 12", black, true);
+      if ((idleText.contains("moving") || idleText.contains("idle"))
+          && !timeStamp.equals(lastMessage)) {
+        lastMessage = timeStamp;
+        return true;
       }
-    } catch (Exception e) {
-      logger.error("Error while waiting for idle", e);
     }
+    return false;
   }
 }

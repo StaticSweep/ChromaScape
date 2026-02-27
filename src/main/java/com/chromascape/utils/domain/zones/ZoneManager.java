@@ -1,5 +1,6 @@
 package com.chromascape.utils.domain.zones;
 
+import com.chromascape.utils.core.screen.topology.MatchResult;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import java.awt.Rectangle;
@@ -69,34 +70,29 @@ public class ZoneManager {
    * <p>Any exceptions during mapping are caught and logged to standard error.
    */
   public void mapper() {
-    try {
-      // Cache the bounds first
-      chatBounds = locateUiElement(zoneTemplates[2]);
-      ctrlPanelBounds = locateUiElement(zoneTemplates[1]);
+    // Cache the bounds first
+    chatBounds = locateUiElement(zoneTemplates[2]);
+    ctrlPanelBounds = locateUiElement(zoneTemplates[1]);
 
-      chatTabs = SubZoneMapper.mapChat(chatBounds);
-      ctrlPanel = SubZoneMapper.mapCtrlPanel(ctrlPanelBounds);
-      inventorySlots = SubZoneMapper.mapInventory(ctrlPanelBounds);
+    chatTabs = SubZoneMapper.mapChat(chatBounds);
+    ctrlPanel = SubZoneMapper.mapCtrlPanel(ctrlPanelBounds);
+    inventorySlots = SubZoneMapper.mapInventory(ctrlPanelBounds);
 
-      Rectangle windowBounds = ScreenManager.getWindowBounds();
-      mouseOver = new Rectangle(windowBounds.x, windowBounds.y, 407, 26);
+    Rectangle windowBounds = ScreenManager.getWindowBounds();
+    mouseOver = new Rectangle(windowBounds.x, windowBounds.y, 407, 26);
 
-      if (isFixed) {
-        minimapBounds = locateUiElement(zoneTemplates[3]);
-        minimap = SubZoneMapper.mapFixedMinimap(minimapBounds);
-        gridInfo =
-            SubZoneMapper.mapGridInfo(
-                new Rectangle(windowBounds.x + 9, windowBounds.y + 24, 129, 56));
-      } else {
-        minimapBounds = locateUiElement(zoneTemplates[0]);
-        minimap = SubZoneMapper.mapMinimap(minimapBounds);
-        gridInfo =
-            SubZoneMapper.mapGridInfo(
-                new Rectangle(windowBounds.x + 5, windowBounds.y + 20, 129, 56));
-      }
-    } catch (Exception e) {
-      logger.error("[ZoneManager] Mapping failed: {}", e.getMessage());
-      logger.debug(e.getStackTrace());
+    if (isFixed) {
+      minimapBounds = locateUiElement(zoneTemplates[3]);
+      minimap = SubZoneMapper.mapFixedMinimap(minimapBounds);
+      gridInfo =
+          SubZoneMapper.mapGridInfo(
+              new Rectangle(windowBounds.x + 9, windowBounds.y + 24, 129, 56));
+    } else {
+      minimapBounds = locateUiElement(zoneTemplates[0]);
+      minimap = SubZoneMapper.mapMinimap(minimapBounds);
+      gridInfo =
+          SubZoneMapper.mapGridInfo(
+              new Rectangle(windowBounds.x + 5, windowBounds.y + 20, 129, 56));
     }
   }
 
@@ -107,16 +103,13 @@ public class ZoneManager {
    */
   private boolean checkIfFixed() {
     BufferedImage screen = ScreenManager.captureWindow();
-    double fixedMinVal = 0;
-    double resizableMinVal = 0;
-    try {
-      TemplateMatching.match(zoneTemplates[0], screen, THRESHOLD, false);
-      resizableMinVal = TemplateMatching.getMinVal();
-      TemplateMatching.match(zoneTemplates[3], screen, THRESHOLD, false);
-      fixedMinVal = TemplateMatching.getMinVal();
-    } catch (Exception e) {
-      logger.error("[ZoneManager] Check if fixed failed: {}", e.getMessage());
-    }
+
+    MatchResult result = TemplateMatching.match(zoneTemplates[0], screen, THRESHOLD);
+    double resizableMinVal = result.score();
+
+    result = TemplateMatching.match(zoneTemplates[3], screen, THRESHOLD);
+    double fixedMinVal = result.score();
+
     return fixedMinVal < resizableMinVal;
   }
 
@@ -157,10 +150,9 @@ public class ZoneManager {
    *
    * @param templatePath The file path to the template image to match.
    * @return A {@link Rectangle} representing the bounds of the matched UI element.
-   * @throws Exception if the template matching fails or no match is found.
    */
-  public Rectangle locateUiElement(String templatePath) throws Exception {
-    return TemplateMatching.match(templatePath, ScreenManager.captureWindow(), THRESHOLD, false);
+  public Rectangle locateUiElement(String templatePath) {
+    return TemplateMatching.match(templatePath, ScreenManager.captureWindow(), THRESHOLD).bounds();
   }
 
   /**
