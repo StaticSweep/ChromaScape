@@ -2,7 +2,6 @@ package com.chromascape.web.debug.patchloop.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -314,6 +313,12 @@ public class ArtifactsResponse {
     @JsonProperty("timestamp")
     private String timestamp;
 
+    @JsonProperty("rolledBack")
+    private Boolean rolledBack;
+
+    @JsonProperty("rollbackReason")
+    private String rollbackReason;
+
     public String getPatchId() {
       return patchId;
     }
@@ -369,6 +374,22 @@ public class ArtifactsResponse {
     public void setTimestamp(String timestamp) {
       this.timestamp = timestamp;
     }
+
+    public Boolean getRolledBack() {
+      return rolledBack;
+    }
+
+    public void setRolledBack(Boolean rolledBack) {
+      this.rolledBack = rolledBack;
+    }
+
+    public String getRollbackReason() {
+      return rollbackReason;
+    }
+
+    public void setRollbackReason(String rollbackReason) {
+      this.rollbackReason = rollbackReason;
+    }
   }
 
   /** Retest artifact. */
@@ -389,8 +410,14 @@ public class ArtifactsResponse {
     @JsonProperty("improvements")
     private List<String> improvements;
 
+    @JsonProperty("improvementsCount")
+    private Integer improvementsCount;
+
     @JsonProperty("regressions")
     private List<String> regressions;
+
+    @JsonProperty("regressionsCount")
+    private Integer regressionsCount;
 
     @JsonProperty("timestamp")
     private String timestamp;
@@ -435,12 +462,28 @@ public class ArtifactsResponse {
       this.improvements = improvements;
     }
 
+    public Integer getImprovementsCount() {
+      return improvementsCount;
+    }
+
+    public void setImprovementsCount(Integer improvementsCount) {
+      this.improvementsCount = improvementsCount;
+    }
+
     public List<String> getRegressions() {
       return regressions;
     }
 
     public void setRegressions(List<String> regressions) {
       this.regressions = regressions;
+    }
+
+    public Integer getRegressionsCount() {
+      return regressionsCount;
+    }
+
+    public void setRegressionsCount(Integer regressionsCount) {
+      this.regressionsCount = regressionsCount;
     }
 
     public String getTimestamp() {

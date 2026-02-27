@@ -3,11 +3,9 @@ package com.chromascape.web.debug.patchloop.service.nodes;
 import com.chromascape.web.debug.patchloop.entity.NodeType;
 import com.chromascape.web.debug.patchloop.graph.GraphNode;
 import com.chromascape.web.debug.patchloop.graph.NodeExecutionResult;
-import com.chromascape.web.debug.patchloop.service.GraphExecutionContext;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutor;
 import com.chromascape.web.debug.patchloop.service.SuccessEvaluator;
 import com.chromascape.web.debug.patchloop.service.SuccessEvaluator.EvaluationResult;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
@@ -37,7 +35,8 @@ public class EvaluateSuccessNodeExecutor implements GraphNodeExecutor {
     String executionId = context.executionId();
     String iterationId = context.iterationId();
     int attemptNumber = context.attemptNumber();
-    int maxAttempts = context.context().getMaxAttempts() != null ? context.context().getMaxAttempts() : 3;
+    int maxAttempts =
+        context.context().getMaxAttempts() != null ? context.context().getMaxAttempts() : 3;
 
     try {
       // Get the retest result
@@ -62,20 +61,18 @@ public class EvaluateSuccessNodeExecutor implements GraphNodeExecutor {
       if (result.success()) {
         // Success! Stop the loop
         return NodeExecutionResult.success(
-            node.id(),
-            String.format("Success criteria met: %s", result.stopReason()),
-            outputData);
+            node.id(), String.format("Success criteria met: %s", result.stopReason()), outputData);
       } else if (result.shouldContinue()) {
         // Should retry - return failure but with retry flag
         return NodeExecutionResult.failureWithRetry(
             node.id(),
-            String.format("Continue: %s (%d attempts remaining)",
+            String.format(
+                "Continue: %s (%d attempts remaining)",
                 result.stopReason(), result.attemptsRemaining()));
       } else {
         // Should stop (max attempts, policy violation, etc.)
         return NodeExecutionResult.failure(
-            node.id(),
-            String.format("Stop: %s", result.stopReason()));
+            node.id(), String.format("Stop: %s", result.stopReason()));
       }
 
     } catch (Exception e) {

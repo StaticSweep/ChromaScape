@@ -3,11 +3,11 @@ package com.chromascape.web.debug.patchloop.service;
 import com.chromascape.web.debug.patchloop.dto.*;
 import com.chromascape.web.debug.patchloop.entity.*;
 import com.chromascape.web.debug.patchloop.exception.AnalysisException;
-import com.chromascape.web.debug.patchloop.graph.GraphExecutionContext;
 import com.chromascape.web.debug.patchloop.graph.GraphExecutionException;
 import com.chromascape.web.debug.patchloop.graph.LoopGraph;
 import com.chromascape.web.debug.patchloop.graph.PatchLoopGraphExecutor;
 import com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider;
+import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.instance.RunConfig;
@@ -225,6 +225,51 @@ public class PatchLoopAsyncWorker {
       return CompletableFuture.completedFuture(null);
     } catch (GraphExecutionException e) {
       logger.error("Async graph execution failed: {}", executionId, e);
+      webSocketHandler.broadcastIterationFailed(executionId, e.getMessage());
+      return CompletableFuture.failedFuture(e);
+    }
+  }
+
+  /**
+   * Resumes a paused execution asynchronously.
+   *
+   * <p>Uses @Async annotation to run in a separate thread pool, allowing the HTTP response to
+   * return immediately while execution continues.
+   *
+   * @param executionId the execution ID
+   * @return CompletableFuture that completes when resume finishes
+   */
+  @Async("patchLoopExecutor")
+  public CompletableFuture<Void> resumeExecutionAsync(String executionId) {
+    try {
+      logger.info("[{}] Starting async resume execution", Thread.currentThread().getName());
+      graphExecutor.resumeExecution(executionId);
+      return CompletableFuture.completedFuture(null);
+    } catch (GraphExecutionException e) {
+      logger.error("Async resume execution failed: {}", executionId, e);
+      webSocketHandler.broadcastIterationFailed(executionId, e.getMessage());
+      return CompletableFuture.failedFuture(e);
+    }
+  }
+
+  /**
+   * Retries execution from a specific node asynchronously.
+   *
+   * <p>Uses @Async annotation to run in a separate thread pool, allowing the HTTP response to
+   * return immediately while execution continues.
+   *
+   * @param executionId the execution ID
+   * @param nodeId the node ID to retry from
+   * @return CompletableFuture that completes when retry finishes
+   */
+  @Async("patchLoopExecutor")
+  public CompletableFuture<Void> retryFromNodeAsync(String executionId, String nodeId) {
+    try {
+      logger.info("[{}] Starting async retry from node: {}", Thread.currentThread().getName(), nodeId);
+      graphExecutor.retryFromNode(executionId, nodeId);
+      return CompletableFuture.completedFuture(null);
+    } catch (GraphExecutionException e) {
+      logger.error("Async retry from node failed: {}, node: {}", executionId, nodeId, e);
       webSocketHandler.broadcastIterationFailed(executionId, e.getMessage());
       return CompletableFuture.failedFuture(e);
     }

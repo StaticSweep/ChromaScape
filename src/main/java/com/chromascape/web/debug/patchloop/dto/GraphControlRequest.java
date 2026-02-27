@@ -63,7 +63,57 @@ public class GraphControlRequest {
 
   @Override
   public String toString() {
-    return "GraphControlRequest{" + "action=" + action + ", retryFromNodeId='" + retryFromNodeId + '\'' + '}';
+    return "GraphControlRequest{"
+        + "action="
+        + action
+        + ", retryFromNodeId='"
+        + retryFromNodeId
+        + '\''
+        + '}';
+  }
+
+  /** Creates a RESUME control request. */
+  public static GraphControlRequest resume() {
+    GraphControlRequest request = new GraphControlRequest();
+    request.setAction(ControlAction.RESUME);
+    return request;
+  }
+
+  /** Creates a PAUSE control request. */
+  public static GraphControlRequest pause() {
+    GraphControlRequest request = new GraphControlRequest();
+    request.setAction(ControlAction.PAUSE);
+    return request;
+  }
+
+  /** Creates a CANCEL control request with optional reason. */
+  public static GraphControlRequest cancel(String reason) {
+    GraphControlRequest request = new GraphControlRequest();
+    request.setAction(ControlAction.CANCEL);
+    request.setReason(reason);
+    return request;
+  }
+
+  /** Creates a RETRY_FROM_NODE control request. */
+  public static GraphControlRequest retryFromNode(String nodeId) {
+    GraphControlRequest request = new GraphControlRequest();
+    request.setAction(ControlAction.RETRY_FROM_NODE);
+    request.setRetryFromNodeId(nodeId);
+    return request;
+  }
+
+  /** Creates a SKIP control request. */
+  public static GraphControlRequest skip() {
+    GraphControlRequest request = new GraphControlRequest();
+    request.setAction(ControlAction.SKIP);
+    return request;
+  }
+
+  /** Creates a FORCE_STOP control request. */
+  public static GraphControlRequest forceStop() {
+    GraphControlRequest request = new GraphControlRequest();
+    request.setAction(ControlAction.FORCE_STOP);
+    return request;
   }
 
   /** Control actions for graph execution. */

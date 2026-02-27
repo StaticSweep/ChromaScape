@@ -11,7 +11,8 @@ import org.springframework.stereotype.Repository;
  * <p>Provides CRUD operations and custom queries for patch artifact management.
  */
 @Repository
-public interface PatchLoopPatchArtifactRepository extends JpaRepository<PatchLoopPatchArtifact, Long> {
+public interface PatchLoopPatchArtifactRepository
+    extends JpaRepository<PatchLoopPatchArtifact, Long> {
 
   /**
    * Finds a patch artifact by its unique patch ID.

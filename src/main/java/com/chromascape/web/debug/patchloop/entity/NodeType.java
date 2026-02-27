@@ -1,8 +1,6 @@
 package com.chromascape.web.debug.patchloop.entity;
 
-/**
- * Types of nodes in a patch loop graph workflow.
- */
+/** Types of nodes in a patch loop graph workflow. */
 public enum NodeType {
   /** Execute the target script */
   RUN_SCRIPT,

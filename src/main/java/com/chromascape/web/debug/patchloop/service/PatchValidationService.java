@@ -2,8 +2,6 @@ package com.chromascape.web.debug.patchloop.service;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -64,8 +62,7 @@ public class PatchValidationService {
 
       Process process = pb.start();
 
-      BufferedReader reader =
-          new BufferedReader(new InputStreamReader(process.getInputStream()));
+      BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
       String line;
       while ((line = reader.readLine()) != null) {
         output.append(line).append("\n");
@@ -109,9 +106,7 @@ public class PatchValidationService {
     }
   }
 
-  /**
-   * Generates a summary of validation output.
-   */
+  /** Generates a summary of validation output. */
   private String generateSummary(String output, boolean passed) {
     if (passed) {
       int testCount = countMatches(output, "test");

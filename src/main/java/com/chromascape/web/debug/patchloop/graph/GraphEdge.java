@@ -105,6 +105,15 @@ public record GraphEdge(
 
   @Override
   public String toString() {
-    return "GraphEdge{" + "from='" + from + '\'' + ", to='" + to + '\'' + ", condition=" + condition + '}';
+    return "GraphEdge{"
+        + "from='"
+        + from
+        + '\''
+        + ", to='"
+        + to
+        + '\''
+        + ", condition="
+        + condition
+        + '}';
   }
 }

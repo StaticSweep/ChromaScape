@@ -10,8 +10,8 @@ import org.hibernate.type.SqlTypes;
 /**
  * Entity representing the execution of a Mermaid-defined patch loop graph.
  *
- * <p>Tracks the metadata and current execution state of a graph-based workflow, including
- * the compiled graph structure, current node pointer, and execution status.
+ * <p>Tracks the metadata and current execution state of a graph-based workflow, including the
+ * compiled graph structure, current node pointer, and execution status.
  */
 @Entity
 @Table(name = "patch_loop_graph_execution")

@@ -19,12 +19,13 @@ import org.springframework.stereotype.Component;
  * <p>Parses a constrained subset of Mermaid syntax into a {@link LoopGraph} IR.
  *
  * <p>Supported syntax:
+ *
  * <ul>
- *   <li>graph TD; - declares a top-down graph</li>
- *   <li>A[run_script] - declares a node with type</li>
- *   <li>A --> B - declares a success edge</li>
- *   <li>A -.failure.-> B - declares a failure edge</li>
- *   <li>A -.retry.-> A - declares a retry edge</li>
+ *   <li>graph TD; - declares a top-down graph
+ *   <li>A[run_script] - declares a node with type
+ *   <li>A --> B - declares a success edge
+ *   <li>A -.failure.-> B - declares a failure edge
+ *   <li>A -.retry.-> A - declares a retry edge
  * </ul>
  *
  * <p>Supported node types: run_script, collect_evidence, analyze, generate_patch, apply_patch,
@@ -37,12 +38,11 @@ public class PatchLoopGraphCompiler {
 
   /** Pattern for matching a node declaration: A[run_script] or A[run_script config] */
   private static final Pattern NODE_PATTERN =
-      Pattern.compile(
-          "\\b([A-Za-z0-9_]+)\\[([A-Za-z0-9_]+)(?:\\s+(.+?))?\\]");
+      Pattern.compile("\\b([A-Za-z0-9_]+)\\[([A-Za-z0-9_]+)(?:\\s+(.+?))?\\]");
 
-  /** Pattern for matching an edge: A --> B or A -.label.-> B */
+  /** Pattern for matching an edge: A --> B, A -.label.-> B, or A -->|label| B */
   private static final Pattern EDGE_PATTERN =
-      Pattern.compile("\\b([A-Za-z0-9_]+)\\s*(\\.-([^\\-]+)\\.->|-->|->)\\s*([A-Za-z0-9_]+)");
+      Pattern.compile("\\b([A-Za-z0-9_]+)\\s*(\\.-([^\\-]+)\\.->|-->\\|([^\\|]+)\\||-->|->)\\s*([A-Za-z0-9_]+)");
 
   /** Pattern for matching the graph declaration */
   private static final Pattern GRAPH_DECLARATION = Pattern.compile("graph\\s+(TD|LR);?");
@@ -92,10 +92,10 @@ public class PatchLoopGraphCompiler {
 
     // Update metadata
     graph.getMetadata().setNodeCount(graph.getNodes().size());
-    graph.getMetadata().setEdgeCount(
-        graph.getEdges().values().stream().mapToInt(List::size).sum());
-    graph.getMetadata().setCompiledAt(
-        LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+    graph.getMetadata().setEdgeCount(graph.getEdges().values().stream().mapToInt(List::size).sum());
+    graph
+        .getMetadata()
+        .setCompiledAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
 
     // Validate the graph
     try {
@@ -146,16 +146,14 @@ public class PatchLoopGraphCompiler {
       // Try to parse as node
       Matcher nodeMatcher = NODE_PATTERN.matcher(line);
       if (nodeMatcher.find()) {
-        statements.add(
-            new MermaidStatement(StatementType.NODE, nodeMatcher.group(0), nodeMatcher));
+        statements.add(new MermaidStatement(StatementType.NODE, nodeMatcher.group(0), nodeMatcher));
         continue;
       }
 
       // Try to parse as edge
       Matcher edgeMatcher = EDGE_PATTERN.matcher(line);
       if (edgeMatcher.find()) {
-        statements.add(
-            new MermaidStatement(StatementType.EDGE, edgeMatcher.group(0), edgeMatcher));
+        statements.add(new MermaidStatement(StatementType.EDGE, edgeMatcher.group(0), edgeMatcher));
         continue;
       }
 
@@ -165,14 +163,9 @@ public class PatchLoopGraphCompiler {
     return statements;
   }
 
-  /**
-   * Parses a node statement and adds it to the graph.
-   */
+  /** Parses a node statement and adds it to the graph. */
   private void parseAndAddNode(
-      MermaidStatement stmt,
-      LoopGraph graph,
-      Set<String> nodeIds,
-      List<String> warnings) {
+      MermaidStatement stmt, LoopGraph graph, Set<String> nodeIds, List<String> warnings) {
     Matcher matcher = stmt.matcher();
     String nodeId = matcher.group(1);
     String nodeTypeLabel = matcher.group(2);
@@ -195,19 +188,15 @@ public class PatchLoopGraphCompiler {
     nodeIds.add(nodeId);
   }
 
-  /**
-   * Parses an edge statement and adds it to the graph.
-   */
+  /** Parses an edge statement and adds it to the graph. */
   private void parseAndAddEdge(
-      MermaidStatement stmt,
-      LoopGraph graph,
-      Set<String> nodeIds,
-      List<String> warnings) {
+      MermaidStatement stmt, LoopGraph graph, Set<String> nodeIds, List<String> warnings) {
     Matcher matcher = stmt.matcher();
     String from = matcher.group(1);
     String edgeSyntax = matcher.group(2);
-    String edgeLabel = matcher.group(3); // May be null for -->
-    String to = matcher.group(4);
+    String edgeLabel = matcher.group(3); // For -.label.-> syntax
+    String altEdgeLabel = matcher.group(4); // For -->|label| syntax (new)
+    String to = matcher.group(5);
 
     // Auto-declare nodes if they don't exist
     if (!nodeIds.contains(from)) {
@@ -223,17 +212,20 @@ public class PatchLoopGraphCompiler {
 
     // Determine edge condition
     EdgeCondition condition = EdgeCondition.SUCCESS;
-    if (edgeLabel != null) {
-      String label = edgeLabel.trim().toLowerCase();
-      condition = switch (label) {
-        case "failure", "fail" -> EdgeCondition.FAILURE;
-        case "retry" -> EdgeCondition.RETRY;
-        case "timeout" -> EdgeCondition.TIMEOUT;
-        default -> {
-          warnings.add("Unknown edge label: " + edgeLabel + ", using SUCCESS");
-          yield EdgeCondition.SUCCESS;
-        }
-      };
+    String label = edgeLabel != null ? edgeLabel : altEdgeLabel;
+    if (label != null) {
+      String normalizedLabel = label.trim().toLowerCase();
+      condition =
+          switch (normalizedLabel) {
+            case "failure", "fail" -> EdgeCondition.FAILURE;
+            case "retry" -> EdgeCondition.RETRY;
+            case "timeout" -> EdgeCondition.TIMEOUT;
+            case "success" -> EdgeCondition.SUCCESS;
+            default -> {
+              warnings.add("Unknown edge label: " + label + ", using SUCCESS");
+              yield EdgeCondition.SUCCESS;
+            }
+          };
     }
 
     GraphEdge edge = new GraphEdge(from, to, condition);
@@ -309,6 +301,5 @@ public class PatchLoopGraphCompiler {
   }
 
   /** A parsed Mermaid statement. */
-  private record MermaidStatement(
-      StatementType type, String source, Matcher matcher) {}
+  private record MermaidStatement(StatementType type, String source, Matcher matcher) {}
 }

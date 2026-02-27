@@ -5,10 +5,12 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.chromascape.web.debug.patchloop.entity.*;
+import com.chromascape.web.debug.patchloop.graph.PatchLoopGraphExecutor;
 import com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker;
 import com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopPersistenceService;
 import com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider;
+import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.instance.ScriptControl;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,6 +37,8 @@ class PatchLoopAsyncWorkerTest {
   @Mock private DebugSessionRepository debugSessionRepository;
   @Mock private ScriptControl scriptControl;
   @Mock private PatchLoopPersistenceService persistenceService;
+  @Mock private PatchLoopGraphExecutor graphExecutor;
+  @Mock private PatchLoopWebSocketHandler webSocketHandler;
 
   private PatchLoopAsyncWorker asyncWorker;
   private ObjectMapper objectMapper;
@@ -55,7 +59,9 @@ class PatchLoopAsyncWorkerTest {
             debugSessionRepository,
             scriptControl,
             objectMapper,
-            persistenceService);
+            persistenceService,
+            graphExecutor,
+            webSocketHandler);
   }
 
   @Test

@@ -6402,6 +6402,67 @@ async function updatePauseButtonState() {
  * Initialize Patch Loop UI controls and event listeners.
  */
 function initPatchLoopControls() {
+  // Toggle patch loop panel collapse/expand
+  const togglePatchLoopBtn = document.getElementById('togglePatchLoopBtn');
+  if (togglePatchLoopBtn) {
+    togglePatchLoopBtn.addEventListener('click', function() {
+      const panel = document.getElementById('patchLoopPanel');
+      const content = document.getElementById('patchPanelContent');
+      const icon = togglePatchLoopBtn.querySelector('i');
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.classList.remove('bi-chevron-down');
+        icon.classList.add('bi-chevron-up');
+      } else {
+        content.style.display = 'none';
+        icon.classList.remove('bi-chevron-up');
+        icon.classList.add('bi-chevron-down');
+      }
+    });
+  }
+
+  // Load template button
+  const loadTemplateBtn = document.getElementById('loadTemplateBtn');
+  if (loadTemplateBtn) {
+    loadTemplateBtn.addEventListener('click', function() {
+      const template = `graph TD;
+A[start] --> B[run_script]
+B --> C[collect_evidence]
+C --> D[analyze]
+D --> E[generate_patch]
+E --> F[apply_patch]
+F --> G[validate]
+G --> H[retest]
+H --> I[evaluate_success]
+I -.success.-> J[end]
+I -.failure.-> D`;
+      const mermaidInput = document.getElementById('mermaidInput');
+      if (mermaidInput) {
+        mermaidInput.value = template;
+      }
+    });
+  }
+
+  // Retry from node select
+  const retryFromNodeSelect = document.getElementById('retryFromNodeSelect');
+  if (retryFromNodeSelect) {
+    retryFromNodeSelect.addEventListener('change', async function() {
+      const nodeId = this.value;
+      if (nodeId && window.patchLoopManager && window.patchLoopManager.iterationId) {
+        try {
+          await window.patchLoopManager.controlExecution(
+            window.patchLoopManager.iterationId,
+            'RETRY_FROM_NODE',
+            nodeId
+          );
+          console.log('Retrying from node:', nodeId);
+        } catch (error) {
+          console.error('Failed to retry from node:', error);
+        }
+      }
+    });
+  }
+
   // Compile graph button
   const compileGraphBtn = document.getElementById('compileGraphBtn');
   if (compileGraphBtn) {

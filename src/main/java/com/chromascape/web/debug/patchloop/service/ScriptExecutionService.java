@@ -3,6 +3,7 @@ package com.chromascape.web.debug.patchloop.service;
 import com.chromascape.web.instance.RunConfig;
 import com.chromascape.web.instance.ScriptInstance;
 import com.chromascape.web.instance.ScriptInstanceManager;
+import com.chromascape.web.instance.WebSocketStateHandler;
 import com.chromascape.web.recording.service.TaskDetectionService;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -12,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.socket.WebSocketSession;
 
 /**
  * Service for executing scripts and tracking their completion.
@@ -30,20 +30,14 @@ public class ScriptExecutionService {
 
   @Autowired
   public ScriptExecutionService(
-      WebSocketStateHandler stateHandler,
-      TaskDetectionService taskDetectionService) {
+      WebSocketStateHandler stateHandler, TaskDetectionService taskDetectionService) {
     this.instanceManager = ScriptInstanceManager.getInstance();
     this.stateHandler = stateHandler;
     this.taskDetectionService = taskDetectionService;
   }
 
-  /**
-   * Result of a script execution.
-   */
-  public record ScriptExecutionResult(
-      boolean success,
-      String errorMessage,
-      long durationMs) {
+  /** Result of a script execution. */
+  public record ScriptExecutionResult(boolean success, String errorMessage, long durationMs) {
 
     public static ScriptExecutionResult success(long durationMs) {
       return new ScriptExecutionResult(true, null, durationMs);
@@ -80,22 +74,24 @@ public class ScriptExecutionService {
       instanceManager.setInstance(instance);
 
       // Create a custom thread wrapper to track completion
-      Thread executionThread = new Thread(() -> {
-        try {
-          instance.start();
-          // Wait for the script thread to complete
-          Thread scriptThread = getScriptThread(instance);
-          if (scriptThread != null) {
-            scriptThread.join();
-          }
-        } catch (Exception e) {
-          logger.error("Script execution error", e);
-          scriptSuccess.set(false);
-          errorMessage.set(e.getMessage());
-        } finally {
-          completionLatch.countDown();
-        }
-      });
+      Thread executionThread =
+          new Thread(
+              () -> {
+                try {
+                  instance.start();
+                  // Wait for the script thread to complete
+                  Thread scriptThread = getScriptThread(instance);
+                  if (scriptThread != null) {
+                    scriptThread.join();
+                  }
+                } catch (Exception e) {
+                  logger.error("Script execution error", e);
+                  scriptSuccess.set(false);
+                  errorMessage.set(e.getMessage());
+                } finally {
+                  completionLatch.countDown();
+                }
+              });
 
       executionThread.start();
 
@@ -129,16 +125,12 @@ public class ScriptExecutionService {
     }
   }
 
-  /**
-   * Gets the current script instance if running.
-   */
+  /** Gets the current script instance if running. */
   public ScriptInstance getCurrentInstance() {
     return instanceManager.getInstanceRef();
   }
 
-  /**
-   * Stops the currently running script.
-   */
+  /** Stops the currently running script. */
   public void stopCurrentScript() {
     ScriptInstance instance = instanceManager.getInstanceRef();
     if (instance != null) {
@@ -146,9 +138,7 @@ public class ScriptExecutionService {
     }
   }
 
-  /**
-   * Checks if a script is currently running.
-   */
+  /** Checks if a script is currently running. */
   public boolean isScriptRunning() {
     ScriptInstance instance = instanceManager.getInstanceRef();
     if (instance == null) {
@@ -161,8 +151,8 @@ public class ScriptExecutionService {
   }
 
   /**
-   * Tries to get the internal thread from the script instance.
-   * This uses reflection to access the private thread field.
+   * Tries to get the internal thread from the script instance. This uses reflection to access the
+   * private thread field.
    */
   private Thread getScriptThread(ScriptInstance instance) {
     try {

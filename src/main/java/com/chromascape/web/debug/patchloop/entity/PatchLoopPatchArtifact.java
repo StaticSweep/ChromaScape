@@ -10,8 +10,8 @@ import org.hibernate.type.SqlTypes;
 /**
  * Entity representing a generated patch artifact.
  *
- * <p>Tracks AI-generated patches including their diff content, rationale, apply status,
- * and validation results.
+ * <p>Tracks AI-generated patches including their diff content, rationale, apply status, and
+ * validation results.
  */
 @Entity
 @Table(name = "patch_loop_patch_artifact")

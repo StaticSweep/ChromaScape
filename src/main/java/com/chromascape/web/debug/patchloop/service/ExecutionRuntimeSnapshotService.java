@@ -148,14 +148,19 @@ public class ExecutionRuntimeSnapshotService {
       return null;
     }
 
-    // Rehydrate from Map to specific types
-    if (value instanceof Map && type == PatchProposal.class) {
-      return objectMapper.convertValue((Map) value, type);
+    // Rehydrate from Map to specific types using Jackson conversion
+    // This handles all complex types that were serialized to JSON
+    if (value instanceof Map) {
+      try {
+        return objectMapper.convertValue((Map) value, type);
+      } catch (IllegalArgumentException e) {
+        logger.warn(
+            "Failed to convert runtime value {} to type {} via Jackson",
+            key,
+            type.getSimpleName());
+        return null;
+      }
     }
-    if (value instanceof Map && type == GraphExecutionContext.class) {
-      return objectMapper.convertValue((Map) value, type);
-    }
-    // Add more type mappings as needed
 
     // Try direct cast for simple types
     try {
@@ -165,11 +170,8 @@ public class ExecutionRuntimeSnapshotService {
           "Failed to cast runtime value {} to type {}, attempting Jackson conversion",
           key,
           type.getSimpleName());
-      // Fallback to Jackson conversion
-      if (value instanceof Map) {
-        return objectMapper.convertValue((Map) value, type);
-      }
-      return null;
+      // Fallback to Jackson conversion for non-Map values
+      return objectMapper.convertValue(value, type);
     }
   }
 

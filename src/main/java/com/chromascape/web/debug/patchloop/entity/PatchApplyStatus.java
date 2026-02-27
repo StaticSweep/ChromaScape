@@ -1,8 +1,6 @@
 package com.chromascape.web.debug.patchloop.entity;
 
-/**
- * Status of a patch application.
- */
+/** Status of a patch application. */
 public enum PatchApplyStatus {
   /** Patch generated and staged, ready to apply */
   STAGED,

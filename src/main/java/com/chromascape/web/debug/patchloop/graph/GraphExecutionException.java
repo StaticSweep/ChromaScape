@@ -1,8 +1,6 @@
 package com.chromascape.web.debug.patchloop.graph;
 
-/**
- * Exception thrown when graph execution fails.
- */
+/** Exception thrown when graph execution fails. */
 public class GraphExecutionException extends Exception {
 
   private final String executionId;
@@ -32,7 +30,8 @@ public class GraphExecutionException extends Exception {
     this.nodeId = nodeId;
   }
 
-  public GraphExecutionException(String message, String executionId, String nodeId, Throwable cause) {
+  public GraphExecutionException(
+      String message, String executionId, String nodeId, Throwable cause) {
     super(message, cause);
     this.executionId = executionId;
     this.nodeId = nodeId;

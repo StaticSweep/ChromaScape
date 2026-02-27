@@ -347,7 +347,7 @@ class PatchLoopControllerTest {
 
   @Test
   @DisplayName("POST /compile returns 200 OK with compiled graph info")
-  void testCompileGraphReturns200() {
+  void testCompileGraphReturns200() throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException {
     // Arrange
     com.chromascape.web.debug.patchloop.dto.CompileRequest request =
         new com.chromascape.web.debug.patchloop.dto.CompileRequest();
@@ -368,7 +368,7 @@ class PatchLoopControllerTest {
 
   @Test
   @DisplayName("POST /compile returns 400 Bad Request for invalid Mermaid")
-  void testCompileGraphReturns400ForInvalidMermaid() {
+  void testCompileGraphReturns400ForInvalidMermaid() throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException {
     // Arrange
     com.chromascape.web.debug.patchloop.dto.CompileRequest request =
         new com.chromascape.web.debug.patchloop.dto.CompileRequest();
@@ -387,7 +387,7 @@ class PatchLoopControllerTest {
 
   @Test
   @DisplayName("POST /compile returns 500 on unexpected exception")
-  void testCompileGraphReturns500OnException() {
+  void testCompileGraphReturns500OnException() throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException {
     // Arrange
     com.chromascape.web.debug.patchloop.dto.CompileRequest request =
         new com.chromascape.web.debug.patchloop.dto.CompileRequest();
@@ -408,14 +408,14 @@ class PatchLoopControllerTest {
   void testGetArtifactsUsesIterationIdPath() {
     // Arrange
     String iterationId = "iter-123";
-    when(orchestratorService.getArtifacts(iterationId)).thenReturn(Collections.emptyMap());
+    when(graphOrchestratorService.getArtifacts(iterationId)).thenReturn(null);
 
     // Act
     ResponseEntity<Object> response = controller.getArtifacts(iterationId);
 
     // Assert
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    verify(orchestratorService, times(1)).getArtifacts(iterationId);
+    assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+    verify(graphOrchestratorService, times(1)).getArtifacts(iterationId);
   }
 
   // ========== Helper Methods ==========

@@ -298,7 +298,8 @@ public class PatchLoopGraphOrchestratorService {
                   + ". RESUME only allowed from PAUSED state.");
         }
 
-        executor.resumeExecution(executionId);
+        // Use async worker to avoid blocking the HTTP response
+        patchLoopAsyncWorker.resumeExecutionAsync(executionId);
         webSocketHandler.broadcastStatusChange(executionId, "RUNNING");
       }
       case CANCEL -> {
@@ -328,10 +329,13 @@ public class PatchLoopGraphOrchestratorService {
                 .orElseThrow(
                     () -> new GraphExecutionException("Execution not found: " + executionId));
 
-        // Only allow retry from PAUSED or terminal states
-        if (execution.getExecutionStatus() == GraphExecutionStatus.RUNNING) {
+        // Only allow retry from PAUSED or terminal states (COMPLETED, FAILED, CANCELLED)
+        GraphExecutionStatus status = execution.getExecutionStatus();
+        if (status == GraphExecutionStatus.RUNNING
+            || status == GraphExecutionStatus.CREATED) {
           throw new GraphExecutionException(
-              "Cannot retry from node while execution is RUNNING. Pause first.");
+              "Cannot retry from node in state: " + status
+                  + ". RETRY_FROM_NODE only allowed from PAUSED or terminal states.");
         }
 
         // Clear node results from this node onward
@@ -342,8 +346,8 @@ public class PatchLoopGraphOrchestratorService {
         execution.setCurrentNodeId(nodeId);
         executionRepository.save(execution);
 
-        // Re-execute from node
-        executor.retryFromNode(executionId, nodeId);
+        // Use async worker to avoid blocking the HTTP response
+        patchLoopAsyncWorker.retryFromNodeAsync(executionId, nodeId);
         webSocketHandler.broadcastStatusChange(executionId, "RETRYING");
       }
       default -> throw new IllegalArgumentException("Unsupported action: " + request.getAction());
@@ -648,6 +652,8 @@ public class PatchLoopGraphOrchestratorService {
     artifact.setExitCode(entity.getExitCode());
     artifact.setDurationMs(entity.getDurationMs());
     artifact.setTimestamp(formatDateTime(entity.getTimestamp()));
+    artifact.setRolledBack(entity.getRolledBack());
+    artifact.setRollbackReason(entity.getRollbackReason());
     return artifact;
   }
 
@@ -658,12 +664,24 @@ public class PatchLoopGraphOrchestratorService {
     artifact.setSuccess(entity.getSuccess());
     artifact.setComparisonSummary(entity.getComparisonSummary());
 
-    // Parse improvements and regressions from stored strings
+    // Parse improvements and regressions as numeric counts (stored as string representations of integers)
     if (entity.getImprovements() != null && !entity.getImprovements().isBlank()) {
-      artifact.setImprovements(Arrays.asList(entity.getImprovements().split("\\|")));
+      try {
+        int improvementsCount = Integer.parseInt(entity.getImprovements().trim());
+        artifact.setImprovementsCount(improvementsCount);
+      } catch (NumberFormatException e) {
+        // Fallback to list parsing if it's actually a pipe-delimited string
+        artifact.setImprovements(Arrays.asList(entity.getImprovements().split("\\|")));
+      }
     }
     if (entity.getRegressions() != null && !entity.getRegressions().isBlank()) {
-      artifact.setRegressions(Arrays.asList(entity.getRegressions().split("\\|")));
+      try {
+        int regressionsCount = Integer.parseInt(entity.getRegressions().trim());
+        artifact.setRegressionsCount(regressionsCount);
+      } catch (NumberFormatException e) {
+        // Fallback to list parsing if it's actually a pipe-delimited string
+        artifact.setRegressions(Arrays.asList(entity.getRegressions().split("\\|")));
+      }
     }
 
     artifact.setTimestamp(formatDateTime(entity.getTimestamp()));

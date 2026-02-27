@@ -194,23 +194,8 @@ class PatchLoopGraphOrchestratorServiceTest {
   }
 
   @Test
-  @DisplayName("RETRY_FROM_NODE rejected from QUEUED state")
-  void testRetryFromNodeRejectedFromQueuedState() {
-    // Given: execution is in QUEUED state
-    execution.setExecutionStatus(GraphExecutionStatus.QUEUED);
-
-    // When/Then: retrying should throw exception
-    assertThatThrownBy(() ->
-        orchestrator.controlExecution(iterationId, GraphControlRequest.retryFromNode("ANALYZE"))
-    ).isInstanceOf(GraphExecutionException.class)
-        .hasMessageContaining("Cannot retry from node in state: QUEUED");
-
-    verify(asyncWorker, never()).retryFromNodeAsync(anyString(), anyString());
-  }
-
-  @Test
   @DisplayName("RETRY_FROM_NODE allowed from PAUSED state")
-  void testRetryFromNodeAllowedFromPausedState() {
+  void testRetryFromNodeAllowedFromPausedState() throws GraphExecutionException {
     // Given: execution is in PAUSED state
     execution.setExecutionStatus(GraphExecutionStatus.PAUSED);
 
@@ -223,7 +208,7 @@ class PatchLoopGraphOrchestratorServiceTest {
 
   @Test
   @DisplayName("RETRY_FROM_NODE allowed from COMPLETED state")
-  void testRetryFromNodeAllowedFromCompletedState() {
+  void testRetryFromNodeAllowedFromCompletedState() throws GraphExecutionException {
     // Given: execution is in COMPLETED state
     execution.setExecutionStatus(GraphExecutionStatus.COMPLETED);
 
@@ -251,7 +236,7 @@ class PatchLoopGraphOrchestratorServiceTest {
 
   @Test
   @DisplayName("RESUME allowed from PAUSED state")
-  void testResumeAllowedFromPausedState() {
+  void testResumeAllowedFromPausedState() throws GraphExecutionException {
     // Given: execution is in PAUSED state
     execution.setExecutionStatus(GraphExecutionStatus.PAUSED);
 

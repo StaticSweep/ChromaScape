@@ -37,8 +37,7 @@ public interface PatchLoopGraphNodeRepository extends JpaRepository<PatchLoopGra
    * @param nodeId the node ID
    * @return the node if found
    */
-  default PatchLoopGraphNode findByExecutionIdAndNodeId(
-      String executionId, String nodeId) {
+  default PatchLoopGraphNode findByExecutionIdAndNodeId(String executionId, String nodeId) {
     return findByExecutionIdOrderByStartedAtAsc(executionId).stream()
         .filter(n -> nodeId.equals(n.getNodeId()))
         .findFirst()

@@ -10,8 +10,8 @@ import org.hibernate.type.SqlTypes;
 /**
  * Entity representing the runtime state of a single graph node execution.
  *
- * <p>Tracks the status, retry count, timing, and output of each node as it executes
- * within a graph workflow.
+ * <p>Tracks the status, retry count, timing, and output of each node as it executes within a graph
+ * workflow.
  */
 @Entity
 @Table(name = "patch_loop_graph_node")

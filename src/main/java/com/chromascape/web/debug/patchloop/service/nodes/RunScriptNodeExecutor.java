@@ -3,7 +3,6 @@ package com.chromascape.web.debug.patchloop.service.nodes;
 import com.chromascape.web.debug.patchloop.entity.NodeType;
 import com.chromascape.web.debug.patchloop.graph.GraphNode;
 import com.chromascape.web.debug.patchloop.graph.NodeExecutionResult;
-import com.chromascape.web.debug.patchloop.service.GraphExecutionContext;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutor;
 import com.chromascape.web.debug.patchloop.service.ScriptExecutionService;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -31,7 +30,10 @@ public class RunScriptNodeExecutor implements GraphNodeExecutor {
 
   @Override
   public NodeExecutionResult execute(GraphNode node, ExecutionContext context) throws Exception {
-    logger.info("Executing RUN_SCRIPT node: {} for script: {}", node.id(), context.context().getScriptName());
+    logger.info(
+        "Executing RUN_SCRIPT node: {} for script: {}",
+        node.id(),
+        context.context().getScriptName());
 
     String scriptName = context.context().getScriptName();
     String executionId = context.executionId();
@@ -81,8 +83,11 @@ public class RunScriptNodeExecutor implements GraphNodeExecutor {
   }
 
   private long getTimeoutFromConfig(GraphNode node, long defaultTimeout) {
-    if (node.config() != null && node.config().has("timeoutMs")) {
-      return node.config().path("timeoutMs").asLong(defaultTimeout);
+    if (node.config() != null && node.config().containsKey("timeoutMs")) {
+      Object timeoutMs = node.config().get("timeoutMs");
+      if (timeoutMs instanceof Number n) {
+        return n.longValue();
+      }
     }
     return defaultTimeout;
   }

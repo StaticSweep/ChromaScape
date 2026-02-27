@@ -1,9 +1,8 @@
 package com.chromascape.web.debug.patchloop.service;
 
-import com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService.EvidenceBundle;
-import com.chromascape.web.instance.ScriptControl;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV1EvidenceBundle;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopIteration;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopIterationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -18,13 +17,17 @@ public class RetestOrchestrator {
 
   private static final Logger logger = LoggerFactory.getLogger(RetestOrchestrator.class);
 
-  private final ScriptControl scriptControl;
+  private final ScriptExecutionService scriptExecutionService;
   private final PatchLoopEvidenceService evidenceService;
+  private final PatchLoopIterationRepository iterationRepository;
 
   public RetestOrchestrator(
-      ScriptControl scriptControl, PatchLoopEvidenceService evidenceService) {
-    this.scriptControl = scriptControl;
+      ScriptExecutionService scriptExecutionService,
+      PatchLoopEvidenceService evidenceService,
+      PatchLoopIterationRepository iterationRepository) {
+    this.scriptExecutionService = scriptExecutionService;
     this.evidenceService = evidenceService;
+    this.iterationRepository = iterationRepository;
   }
 
   /**
@@ -51,45 +54,23 @@ public class RetestOrchestrator {
         currentAttempt);
 
     try {
-      // Run the script again
-      ObjectNode runConfig = JsonNodeFactory.instance.objectNode();
-      runConfig.put("scriptName", scriptName);
-      runConfig.put("iterationId", iterationId);
-      runConfig.put("attemptNumber", currentAttempt);
+      // Run the script again using ScriptExecutionService
+      ScriptExecutionService.ScriptExecutionResult execResult =
+          scriptExecutionService.runScriptAndWait(scriptName, 300000); // 5 min timeout
 
-      ObjectNode response = scriptControl.runScript(runConfig);
+      boolean runSuccess = execResult.success();
 
-      String runSessionId = response.has("sessionId") ? response.get("sessionId").asText() : null;
-
-      if (runSessionId == null) {
+      // Load iteration to collect evidence
+      PatchLoopIteration iteration =
+          iterationRepository.findByIterationId(iterationId).orElse(null);
+      if (iteration == null) {
+        logger.warn("Iteration not found for retest evidence collection: {}", iterationId);
         return new RetestResult(
-            false,
-            0,
-            0,
-            "Failed to start retest: no session ID",
-            "Script failed to start");
+            false, 0, 0, "Failed to collect evidence: iteration not found", "Iteration not found");
       }
-
-      // Wait for completion
-      boolean completed = scriptControl.waitForCompletion(runSessionId, 300000);
-
-      if (!completed) {
-        return new RetestResult(
-            false,
-            0,
-            0,
-            "Retest timed out",
-            "Script execution timed out");
-      }
-
-      boolean runSuccess = scriptControl.getRunSuccess(runSessionId);
 
       // Collect new evidence
-      PatchLoopEvidenceService.EvidenceRequest request =
-          new PatchLoopEvidenceService.EvidenceRequest(
-              iterationId, new com.chromascape.web.debug.patchloop.dto.EvidenceConfigDto());
-
-      EvidenceBundle newEvidence = evidenceService.collectEvidence(request);
+      AnalysisV1EvidenceBundle newEvidence = evidenceService.collectEvidence(iteration);
 
       // Compare with baseline
       return compareWithBaseline(baselineData, newEvidence, runSuccess);
@@ -97,51 +78,48 @@ public class RetestOrchestrator {
     } catch (Exception e) {
       logger.error("Retest failed", e);
       return new RetestResult(
-          false,
-          0,
-          0,
-          "Retest error: " + e.getMessage(),
-          "Exception during retest");
+          false, 0, 0, "Retest error: " + e.getMessage(), "Exception during retest");
     }
   }
 
-  /**
-   * Compares new evidence with baseline.
-   */
+  /** Compares new evidence with baseline. */
   private RetestResult compareWithBaseline(
-      Object baselineData, EvidenceBundle newEvidence, boolean runSuccess) {
+      Object baselineData, AnalysisV1EvidenceBundle newEvidence, boolean runSuccess) {
 
     int improvements = 0;
     int regressions = 0;
     StringBuilder summary = new StringBuilder();
 
-    if (baselineData instanceof EvidenceBundle baseline) {
+    if (baselineData instanceof AnalysisV1EvidenceBundle baseline) {
       // Compare log counts
-      int logDiff = newEvidence.logCount() - baseline.logCount();
+      int logDiff = newEvidence.getLogs().size() - baseline.getLogs().size();
       if (logDiff < 0) {
         improvements++;
-        summary.append("Fewer errors (logs: ")
-            .append(newEvidence.logCount())
+        summary
+            .append("Fewer errors (logs: ")
+            .append(newEvidence.getLogs().size())
             .append(" vs ")
-            .append(baseline.logCount())
+            .append(baseline.getLogs().size())
             .append("). ");
       } else if (logDiff > 0) {
         regressions++;
-        summary.append("More errors (logs: ")
-            .append(newEvidence.logCount())
+        summary
+            .append("More errors (logs: ")
+            .append(newEvidence.getLogs().size())
             .append(" vs ")
-            .append(baseline.logCount())
+            .append(baseline.getLogs().size())
             .append("). ");
       }
 
       // Compare tick counts
-      int tickDiff = newEvidence.tickLogCount() - baseline.tickLogCount();
+      int tickDiff = newEvidence.getTickLogs().size() - baseline.getTickLogs().size();
       if (tickDiff > 0) {
         improvements++;
-        summary.append("Longer execution (ticks: ")
-            .append(newEvidence.tickLogCount())
+        summary
+            .append("Longer execution (ticks: ")
+            .append(newEvidence.getTickLogs().size())
             .append(" vs ")
-            .append(baseline.tickLogCount())
+            .append(baseline.getTickLogs().size())
             .append("). ");
       }
     }

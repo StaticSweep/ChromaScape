@@ -1,8 +1,10 @@
 package com.chromascape.web.debug.patchloop.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -14,6 +16,8 @@ import org.springframework.stereotype.Service;
 public class SuccessEvaluator {
 
   private static final Logger logger = LoggerFactory.getLogger(SuccessEvaluator.class);
+
+  @Autowired private PredicateEvaluator predicateEvaluator;
 
   /**
    * Evaluates whether the loop should stop.
@@ -43,11 +47,7 @@ public class SuccessEvaluator {
     // Check if we've reached max attempts
     if (currentAttempt >= maxAttempts) {
       return new EvaluationResult(
-          false,
-          false,
-          "Maximum attempts reached",
-          0,
-          StopReason.MAX_ATTEMPTS);
+          false, false, "Maximum attempts reached", 0, StopReason.MAX_ATTEMPTS);
     }
 
     // Check success criteria if provided
@@ -78,16 +78,10 @@ public class SuccessEvaluator {
 
     // Default: continue retrying
     return new EvaluationResult(
-        false,
-        true,
-        "Continue retrying",
-        maxAttempts - currentAttempt,
-        StopReason.CONTINUE_RETRY);
+        false, true, "Continue retrying", maxAttempts - currentAttempt, StopReason.CONTINUE_RETRY);
   }
 
-  /**
-   * Evaluates the success criteria against the retest result.
-   */
+  /** Evaluates the success criteria against the retest result. */
   private boolean evaluateSuccessCriteria(JsonNode criteria, Object retestResult) {
     // Check for specific criteria types
     if (criteria.has("scriptSuccess")) {
@@ -100,18 +94,89 @@ public class SuccessEvaluator {
     // Check for custom predicate
     if (criteria.has("predicate")) {
       String predicate = criteria.get("predicate").asText();
-      // TODO: Implement predicate evaluation (e.g., using a simple DSL)
-      logger.debug("Predicate evaluation not yet implemented: {}", predicate);
+      JsonNode context = buildContextFromResult(retestResult);
+      boolean result = predicateEvaluator.evaluate(predicate, context);
+      logger.debug("Predicate evaluation: '{}' = {}", predicate, result);
+      return result;
     }
 
     // Check for specific state conditions
     if (criteria.has("stateConditions")) {
       JsonNode stateConditions = criteria.get("stateConditions");
-      // TODO: Implement state condition checking
-      logger.debug("State condition checking not yet implemented");
+      return evaluateStateConditions(stateConditions, retestResult);
     }
 
     return false;
+  }
+
+  /**
+   * Builds a JSON context from a retest result for predicate evaluation.
+   *
+   * @param retestResult the retest result
+   * @return JSON context node
+   */
+  private JsonNode buildContextFromResult(Object retestResult) {
+    com.fasterxml.jackson.databind.ObjectMapper mapper =
+        new com.fasterxml.jackson.databind.ObjectMapper();
+    ObjectNode context = mapper.createObjectNode();
+
+    if (retestResult instanceof RetestOrchestrator.RetestResult retest) {
+      context.put("success", retest.success());
+      context.put("hasImprovements", retest.improvements() > 0);
+      context.put("improvementCount", retest.improvements());
+      context.put("hasRegressions", retest.regressions() > 0);
+      context.put("regressionCount", retest.regressions());
+      context.put(
+          "comparisonSummary",
+          retest.comparisonSummary() != null ? retest.comparisonSummary() : "");
+    }
+
+    return context;
+  }
+
+  /**
+   * Evaluates state conditions against the retest result.
+   *
+   * @param stateConditions the state conditions to check
+   * @param retestResult the retest result
+   * @return true if all state conditions are met
+   */
+  private boolean evaluateStateConditions(JsonNode stateConditions, Object retestResult) {
+    if (!stateConditions.isObject()) {
+      return false;
+    }
+
+    JsonNode context = buildContextFromResult(retestResult);
+
+    // Check all conditions
+    java.util.Iterator<String> fieldNames = stateConditions.fieldNames();
+    while (fieldNames.hasNext()) {
+      String fieldName = fieldNames.next();
+      JsonNode expectedValue = stateConditions.get(fieldName);
+      if (!context.has(fieldName)) {
+        logger.debug("State condition field not found: {}", fieldName);
+        return false;
+      }
+
+      JsonNode actualValue = context.get(fieldName);
+
+      // Compare based on expected value type
+      if (expectedValue.isBoolean()) {
+        if (!actualValue.isBoolean() || actualValue.asBoolean() != expectedValue.asBoolean()) {
+          return false;
+        }
+      } else if (expectedValue.isNumber()) {
+        if (!actualValue.isNumber() || actualValue.asDouble() != expectedValue.asDouble()) {
+          return false;
+        }
+      } else if (expectedValue.isTextual()) {
+        if (!actualValue.isTextual() || !actualValue.asText().equals(expectedValue.asText())) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   /** Result of success evaluation. */

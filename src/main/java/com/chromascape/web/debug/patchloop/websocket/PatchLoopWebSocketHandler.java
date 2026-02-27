@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -21,8 +23,8 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 /**
  * WebSocket handler for patch loop graph execution updates.
  *
- * <p>Broadcasts real-time updates during graph execution including node status changes,
- * patch generation, validation results, and completion events.
+ * <p>Broadcasts real-time updates during graph execution including node status changes, patch
+ * generation, validation results, and completion events.
  *
  * <p>Supports execution-scoped broadcasting where clients subscribe to specific executions.
  */
@@ -31,9 +33,15 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
 
   private static final Logger logger = LoggerFactory.getLogger(PatchLoopWebSocketHandler.class);
 
+  private static final int MAX_REPLAY_EVENTS = 100;
+
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final Map<String, WebSocketSession> allSessions = new ConcurrentHashMap<>();
   private final Map<String, Set<WebSocketSession>> sessionsByExecution = new ConcurrentHashMap<>();
+  private final Map<String, Queue<RecentEvent>> replayBuffer = new ConcurrentHashMap<>();
+
+  /** Record of a recent WebSocket event for replay to late-joining clients. */
+  private record RecentEvent(String type, String data, LocalDateTime timestamp) {}
 
   @Override
   public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -43,8 +51,22 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     // Extract executionId from URI if present
     String executionId = extractExecutionId(session.getUri().toString());
     if (executionId != null) {
-      sessionsByExecution.computeIfAbsent(executionId, k -> new CopyOnWriteArraySet<>()).add(session);
+      sessionsByExecution
+          .computeIfAbsent(executionId, k -> new CopyOnWriteArraySet<>())
+          .add(session);
       logger.debug("Session {} subscribed to execution {}", session.getId(), executionId);
+
+      // Send replay buffer to late joiners
+      Queue<RecentEvent> recentEvents = replayBuffer.get(executionId);
+      if (recentEvents != null && !recentEvents.isEmpty()) {
+        logger.debug(
+            "Sending replay buffer with {} events to session {}",
+            recentEvents.size(),
+            session.getId());
+        for (RecentEvent event : recentEvents) {
+          sendMessage(session, event.data());
+        }
+      }
     }
 
     // Send welcome message
@@ -57,7 +79,14 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     allSessions.remove(session.getId());
 
     // Remove from execution-scoped subscriptions
-    sessionsByExecution.forEach((execId, sessions) -> sessions.remove(session));
+    sessionsByExecution.forEach(
+        (execId, sessions) -> {
+          sessions.remove(session);
+          // Clean up replay buffer if no more sessions for this execution
+          if (sessions.isEmpty()) {
+            replayBuffer.remove(execId);
+          }
+        });
     // Clean up empty sets
     sessionsByExecution.entrySet().removeIf(entry -> entry.getValue().isEmpty());
   }
@@ -72,8 +101,14 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     try {
       JsonNode json = objectMapper.readTree(payload);
       if (json.has("action") && "subscribe".equals(json.get("action").asText())) {
-        String executionId = json.get("executionId").asText();
-        sessionsByExecution.computeIfAbsent(executionId, k -> new CopyOnWriteArraySet<>()).add(session);
+        String executionId = json.has("executionId") ? json.get("executionId").asText() : null;
+        if (executionId == null || executionId.isBlank()) {
+          logger.warn("Rejecting subscription with null or blank executionId from session {}", session.getId());
+          return;
+        }
+        sessionsByExecution
+            .computeIfAbsent(executionId, k -> new CopyOnWriteArraySet<>())
+            .add(session);
         logger.debug("Session {} subscribed to execution {}", session.getId(), executionId);
       }
     } catch (Exception e) {
@@ -88,16 +123,15 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     sessionsByExecution.forEach((execId, sessions) -> sessions.remove(session));
   }
 
-  /**
-   * Extracts execution ID from WebSocket URI.
-   */
+  /** Extracts execution ID from WebSocket URI. */
   private String extractExecutionId(String uri) {
     if (uri == null) {
       return null;
     }
 
     // Extract from path pattern: /ws/debug/patch-loop/{executionId}
-    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("/ws/debug/patch-loop/([^/?]+)");
+    java.util.regex.Pattern pattern =
+        java.util.regex.Pattern.compile("/ws/debug/patch-loop/([^/?]+)");
     java.util.regex.Matcher matcher = pattern.matcher(uri);
     if (matcher.find()) {
       return matcher.group(1);
@@ -113,9 +147,7 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     return null;
   }
 
-  /**
-   * Broadcasts a node started event.
-   */
+  /** Broadcasts a node started event. */
   public void broadcastNodeStarted(String executionId, String nodeId, String nodeType) {
     Map<String, Object> data = new HashMap<>();
     data.put("executionId", executionId);
@@ -126,9 +158,7 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     broadcastToExecution(executionId, "NODE_STARTED", data);
   }
 
-  /**
-   * Broadcasts a node completed event.
-   */
+  /** Broadcasts a node completed event. */
   public void broadcastNodeCompleted(
       String executionId, String nodeId, long duration, String outputSummary) {
     Map<String, Object> data = new HashMap<>();
@@ -141,9 +171,7 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     broadcastToExecution(executionId, "NODE_COMPLETED", data);
   }
 
-  /**
-   * Broadcasts a node failed event.
-   */
+  /** Broadcasts a node failed event. */
   public void broadcastNodeFailed(String executionId, String nodeId, String error, int retryCount) {
     Map<String, Object> data = new HashMap<>();
     data.put("executionId", executionId);
@@ -155,9 +183,7 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     broadcastToExecution(executionId, "NODE_FAILED", data);
   }
 
-  /**
-   * Broadcasts a patch generated event.
-   */
+  /** Broadcasts a patch generated event. */
   public void broadcastPatchGenerated(
       String executionId,
       String patchId,
@@ -173,9 +199,7 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     broadcastToExecution(executionId, "PATCH_GENERATED", data);
   }
 
-  /**
-   * Broadcasts a patch applied event.
-   */
+  /** Broadcasts a patch applied event. */
   public void broadcastPatchApplied(
       String executionId, String patchId, int filesChanged, int linesChanged, String gitBranch) {
     Map<String, Object> data = new HashMap<>();
@@ -189,11 +213,8 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     broadcastToExecution(executionId, "PATCH_APPLIED", data);
   }
 
-  /**
-   * Broadcasts a validation result event.
-   */
-  public void broadcastValidationResult(
-      String executionId, boolean passed, String outputSummary) {
+  /** Broadcasts a validation result event. */
+  public void broadcastValidationResult(String executionId, boolean passed, String outputSummary) {
     Map<String, Object> data = new HashMap<>();
     data.put("executionId", executionId);
     data.put("passed", passed);
@@ -203,11 +224,8 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     broadcastToExecution(executionId, "VALIDATION_RESULT", data);
   }
 
-  /**
-   * Broadcasts a retest result event.
-   */
-  public void broadcastRetestResult(
-      String executionId, boolean success, String comparisonSummary) {
+  /** Broadcasts a retest result event. */
+  public void broadcastRetestResult(String executionId, boolean success, String comparisonSummary) {
     Map<String, Object> data = new HashMap<>();
     data.put("executionId", executionId);
     data.put("success", success);
@@ -217,9 +235,7 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     broadcastToExecution(executionId, "RETEST_RESULT", data);
   }
 
-  /**
-   * Broadcasts an iteration completed event.
-   */
+  /** Broadcasts an iteration completed event. */
   public void broadcastIterationCompleted(
       String executionId, String finalStatus, String stopReason, int totalAttempts) {
     Map<String, Object> data = new HashMap<>();
@@ -232,9 +248,7 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     broadcastToExecution(executionId, "ITERATION_COMPLETED", data);
   }
 
-  /**
-   * Broadcasts an iteration failed event.
-   */
+  /** Broadcasts an iteration failed event. */
   public void broadcastIterationFailed(String executionId, String error) {
     Map<String, Object> data = new HashMap<>();
     data.put("executionId", executionId);
@@ -244,9 +258,7 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     broadcastToExecution(executionId, "ITERATION_FAILED", data);
   }
 
-  /**
-   * Broadcasts a status change event.
-   */
+  /** Broadcasts a status change event. */
   public void broadcastStatusChange(String executionId, String newStatus) {
     Map<String, Object> data = new HashMap<>();
     data.put("executionId", executionId);
@@ -257,11 +269,24 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
   }
 
   /**
-   * Broadcasts a message to all sessions subscribed to an execution.
-   * Falls back to broadcasting to all sessions if no execution-specific subscribers.
+   * Broadcasts a message to all sessions subscribed to an execution. Falls back to broadcasting to
+   * all sessions if no execution-specific subscribers.
+   *
+   * <p>Also stores events in the replay buffer for late-joining clients.
    */
   private void broadcastToExecution(String executionId, String type, Map<String, Object> data) {
     String message = createMessage(type, null, data);
+
+    // Add to replay buffer for late joiners
+    replayBuffer.computeIfAbsent(executionId, k -> new LinkedList<>());
+    Queue<RecentEvent> buffer = replayBuffer.get(executionId);
+    synchronized (buffer) {
+      buffer.offer(new RecentEvent(type, message, LocalDateTime.now()));
+      // Keep buffer at max size
+      while (buffer.size() > MAX_REPLAY_EVENTS) {
+        buffer.poll();
+      }
+    }
 
     // Try execution-scoped broadcasting first
     Set<WebSocketSession> executionSessions = sessionsByExecution.get(executionId);
@@ -283,9 +308,7 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     broadcast(message);
   }
 
-  /**
-   * Broadcasts a message to all connected sessions.
-   */
+  /** Broadcasts a message to all connected sessions. */
   private void broadcast(String message) {
     TextMessage textMessage = new TextMessage(message);
 
@@ -300,18 +323,14 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
     }
   }
 
-  /**
-   * Sends a message to a specific session.
-   */
+  /** Sends a message to a specific session. */
   private void sendMessage(WebSocketSession session, String message) throws IOException {
     if (session.isOpen()) {
       session.sendMessage(new TextMessage(message));
     }
   }
 
-  /**
-   * Creates a JSON message for WebSocket transmission.
-   */
+  /** Creates a JSON message for WebSocket transmission. */
   private String createMessage(String type, String message, Map<String, Object> data) {
     try {
       Map<String, Object> msg = new HashMap<>();

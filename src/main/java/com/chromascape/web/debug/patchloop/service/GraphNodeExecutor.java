@@ -4,7 +4,6 @@ import com.chromascape.web.debug.patchloop.entity.NodeType;
 import com.chromascape.web.debug.patchloop.graph.GraphNode;
 import com.chromascape.web.debug.patchloop.graph.LoopGraph;
 import com.chromascape.web.debug.patchloop.graph.NodeExecutionResult;
-import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * Interface for executing a graph node.

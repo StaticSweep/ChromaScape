@@ -1,8 +1,6 @@
 package com.chromascape.web.debug.patchloop.entity;
 
-/**
- * Outcome of a patch loop attempt.
- */
+/** Outcome of a patch loop attempt. */
 public enum AttemptOutcome {
   /** Script is still running */
   RUNNING,

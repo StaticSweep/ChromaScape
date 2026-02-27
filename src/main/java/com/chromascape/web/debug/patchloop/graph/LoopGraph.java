@@ -84,9 +84,7 @@ public class LoopGraph {
    * @return list of matching edges (empty if none)
    */
   public List<GraphEdge> getOutgoingEdges(String nodeId, EdgeCondition condition) {
-    return getOutgoingEdges(nodeId).stream()
-        .filter(e -> e.condition() == condition)
-        .toList();
+    return getOutgoingEdges(nodeId).stream().filter(e -> e.condition() == condition).toList();
   }
 
   /**

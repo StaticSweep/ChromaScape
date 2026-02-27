@@ -3,7 +3,6 @@ package com.chromascape.web.debug.patchloop.service.nodes;
 import com.chromascape.web.debug.patchloop.entity.NodeType;
 import com.chromascape.web.debug.patchloop.graph.GraphNode;
 import com.chromascape.web.debug.patchloop.graph.NodeExecutionResult;
-import com.chromascape.web.debug.patchloop.service.GraphExecutionContext;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

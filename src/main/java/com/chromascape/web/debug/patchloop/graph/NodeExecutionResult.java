@@ -21,65 +21,53 @@ public record NodeExecutionResult(
     String outputSummary,
     JsonNode outputData) {
 
-  /**
-   * Creates a successful result.
-   */
+  /** Creates a successful result. */
   public static NodeExecutionResult success(String nodeId) {
     return new NodeExecutionResult(nodeId, true, false, false, null, null);
   }
 
-  /**
-   * Creates a successful result with output.
-   */
-  public static NodeExecutionResult success(String nodeId, String outputSummary, JsonNode outputData) {
+  /** Creates a successful result with output. */
+  public static NodeExecutionResult success(
+      String nodeId, String outputSummary, JsonNode outputData) {
     return new NodeExecutionResult(nodeId, true, false, false, outputSummary, outputData);
   }
 
-  /**
-   * Creates a failure result.
-   */
+  /** Creates a successful result with output summary (no output data). */
+  public static NodeExecutionResult success(String nodeId, String outputSummary) {
+    return new NodeExecutionResult(nodeId, true, false, false, outputSummary, null);
+  }
+
+  /** Creates a failure result. */
   public static NodeExecutionResult failure(String nodeId, String errorMessage) {
     return new NodeExecutionResult(nodeId, false, false, false, errorMessage, null);
   }
 
-  /**
-   * Creates a failure result with retry.
-   */
+  /** Creates a failure result with retry. */
   public static NodeExecutionResult failureWithRetry(String nodeId, String errorMessage) {
     return new NodeExecutionResult(nodeId, false, true, false, errorMessage, null);
   }
 
-  /**
-   * Creates a timeout result.
-   */
+  /** Creates a timeout result. */
   public static NodeExecutionResult timeout(String nodeId) {
     return new NodeExecutionResult(nodeId, false, false, true, "Execution timed out", null);
   }
 
-  /**
-   * Creates a retry result.
-   */
+  /** Creates a retry result. */
   public static NodeExecutionResult retry(String nodeId, String reason) {
     return new NodeExecutionResult(nodeId, false, true, false, reason, null);
   }
 
-  /**
-   * Returns a result with output summary added.
-   */
+  /** Returns a result with output summary added. */
   public NodeExecutionResult withOutput(String outputSummary) {
     return new NodeExecutionResult(nodeId, success, retry, timedOut, outputSummary, outputData);
   }
 
-  /**
-   * Returns a result with output data added.
-   */
+  /** Returns a result with output data added. */
   public NodeExecutionResult withOutputData(JsonNode outputData) {
     return new NodeExecutionResult(nodeId, success, retry, timedOut, outputSummary, outputData);
   }
 
-  /**
-   * Returns a result with retry flag changed.
-   */
+  /** Returns a result with retry flag changed. */
   public NodeExecutionResult withRetry(boolean retry) {
     return new NodeExecutionResult(nodeId, success, retry, timedOut, outputSummary, outputData);
   }

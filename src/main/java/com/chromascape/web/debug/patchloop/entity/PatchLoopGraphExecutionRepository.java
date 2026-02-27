@@ -12,7 +12,8 @@ import org.springframework.stereotype.Repository;
  * <p>Provides CRUD operations and custom queries for graph execution management.
  */
 @Repository
-public interface PatchLoopGraphExecutionRepository extends JpaRepository<PatchLoopGraphExecution, Long> {
+public interface PatchLoopGraphExecutionRepository
+    extends JpaRepository<PatchLoopGraphExecution, Long> {
 
   /**
    * Finds a graph execution by its unique execution ID.

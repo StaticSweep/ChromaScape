@@ -1,8 +1,6 @@
 package com.chromascape.web.debug.patchloop.graph;
 
-/**
- * Exception thrown when graph compilation fails.
- */
+/** Exception thrown when graph compilation fails. */
 public class GraphCompilationException extends Exception {
 
   private final int lineNumber;

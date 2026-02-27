@@ -1,8 +1,6 @@
 package com.chromascape.web.debug.patchloop.entity;
 
-/**
- * Execution status of a graph node.
- */
+/** Execution status of a graph node. */
 public enum NodeExecutionStatus {
   /** Node is waiting to be executed */
   PENDING,
