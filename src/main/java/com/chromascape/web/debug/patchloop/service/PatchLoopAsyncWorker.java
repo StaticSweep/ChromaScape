@@ -218,9 +218,7 @@ public class PatchLoopAsyncWorker {
   public CompletableFuture<Void> executeGraphAsync(
       String executionId, LoopGraph graph, GraphExecutionContext context) {
     try {
-      logger.info(
-          "[{}] Starting async graph execution",
-          Thread.currentThread().getName());
+      logger.info("[{}] Starting async graph execution", Thread.currentThread().getName());
       graphExecutor.executeGraph(executionId, graph, context);
       return CompletableFuture.completedFuture(null);
     } catch (GraphExecutionException e) {
@@ -265,7 +263,8 @@ public class PatchLoopAsyncWorker {
   @Async("patchLoopExecutor")
   public CompletableFuture<Void> retryFromNodeAsync(String executionId, String nodeId) {
     try {
-      logger.info("[{}] Starting async retry from node: {}", Thread.currentThread().getName(), nodeId);
+      logger.info(
+          "[{}] Starting async retry from node: {}", Thread.currentThread().getName(), nodeId);
       graphExecutor.retryFromNode(executionId, nodeId);
       return CompletableFuture.completedFuture(null);
     } catch (GraphExecutionException e) {
@@ -383,7 +382,7 @@ public class PatchLoopAsyncWorker {
     }
   }
 
-  /** Analyzes evidence with Claude API (long-running, outside transaction). */
+  /** Analyzes evidence with Claude API using V2 contract (long-running, outside transaction). */
   private void analyzeEvidence(PatchLoopIteration iteration, AnalysisV1EvidenceBundle evidence) {
     logger.info(
         "Analyzing evidence for iteration: {} using provider: {}",
@@ -391,20 +390,17 @@ public class PatchLoopAsyncWorker {
         analysisProvider.getProviderName());
 
     try {
-      // Build analysis request
-      AnalysisV1Request request = new AnalysisV1Request();
-      request.setPrompt(iteration.getPrompt());
-      request.setContext(iteration.getContext());
-      request.setEvidence(evidence);
+      // Build V2 analysis request from V1 evidence bundle
+      AnalysisV2Request request = buildV2Request(iteration, evidence);
 
       // Store request JSON
       JsonNode requestNode = objectMapper.valueToTree(request);
       persistenceService.saveAnalysisRequest(iteration, requestNode);
 
       // Call analysis provider (long-running, outside any transaction)
-      AnalysisV1Response response = analysisProvider.analyzeEvidence(request);
+      AnalysisV2Response response = analysisProvider.analyzeEvidence(request);
 
-      // Store response JSON and extract diagnosis fields
+      // Store response JSON and extract V2 diagnosis fields
       JsonNode responseNode = objectMapper.valueToTree(response);
       persistenceService.saveAnalysisResults(iteration, response, responseNode);
 
@@ -423,6 +419,77 @@ public class PatchLoopAsyncWorker {
           stackTraceToString(e));
       throw e;
     }
+  }
+
+  /** Builds a V2 analysis request from iteration and V1 evidence bundle. */
+  private AnalysisV2Request buildV2Request(
+      PatchLoopIteration iteration, AnalysisV1EvidenceBundle evidence) {
+
+    AnalysisV2Request request = new AnalysisV2Request();
+
+    // Set prompt type based on iteration goal
+    request.setPromptType(
+        iteration.getPrompt() != null && iteration.getPrompt().toLowerCase().contains("feature")
+            ? PromptType.FEATURE
+            : PromptType.ISSUE);
+
+    // Build target
+    AnalysisV2Target target = new AnalysisV2Target();
+    target.setScriptName(iteration.getScriptName());
+    target.setRunId(iteration.getIterationId());
+
+    // Set session bounds from evidence time window
+    if (evidence.getTimeWindow() != null) {
+      AnalysisV2Target.SessionBounds bounds = new AnalysisV2Target.SessionBounds();
+      bounds.setStart(evidence.getTimeWindow().getStart());
+      bounds.setEnd(evidence.getTimeWindow().getEnd());
+      target.setSessionBounds(bounds);
+    }
+    request.setTarget(target);
+
+    // Set prompt and context
+    request.setPrompt(iteration.getPrompt());
+    request.setContext(iteration.getContext());
+
+    // Build evidence selectors from V1 evidence bundle types
+    java.util.List<AnalysisV2EvidenceSelector> selectors = new java.util.ArrayList<>();
+
+    // Add log selector if logs present
+    if (!evidence.getLogs().isEmpty()) {
+      AnalysisV2EvidenceSelector logSelector =
+          new AnalysisV2EvidenceSelector(EvidenceType.GENERAL_LOGS);
+      logSelector.setMaxCount(evidence.getLogs().size());
+      if (evidence.getTimeWindow() != null) {
+        logSelector.setTimeWindow(evidence.getTimeWindow());
+      }
+      selectors.add(logSelector);
+    }
+
+    // Add tick log selector if tick logs present
+    if (!evidence.getTickLogs().isEmpty()) {
+      AnalysisV2EvidenceSelector tickSelector =
+          new AnalysisV2EvidenceSelector(EvidenceType.TICK_LOGS);
+      tickSelector.setMaxCount(evidence.getTickLogs().size());
+      if (evidence.getTickWindow() != null) {
+        tickSelector.setTickWindow(evidence.getTickWindow());
+      }
+      selectors.add(tickSelector);
+    }
+
+    // Add decision selector if decisions present
+    if (!evidence.getDecisions().isEmpty()) {
+      AnalysisV2EvidenceSelector decisionSelector =
+          new AnalysisV2EvidenceSelector(EvidenceType.DECISIONS);
+      decisionSelector.setMaxCount(evidence.getDecisions().size());
+      if (evidence.getTimeWindow() != null) {
+        decisionSelector.setTimeWindow(evidence.getTimeWindow());
+      }
+      selectors.add(decisionSelector);
+    }
+
+    request.setEvidenceSelectors(selectors);
+
+    return request;
   }
 
   // ==================== Non-Transactional Helper Methods ====================

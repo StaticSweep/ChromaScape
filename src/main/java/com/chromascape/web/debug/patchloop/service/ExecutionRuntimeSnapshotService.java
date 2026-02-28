@@ -1,6 +1,5 @@
 package com.chromascape.web.debug.patchloop.service;
 
-import com.chromascape.web.debug.patchloop.dto.PatchProposal;
 import com.chromascape.web.debug.patchloop.entity.ExecutionRuntimeSnapshot;
 import com.chromascape.web.debug.patchloop.entity.ExecutionRuntimeSnapshotRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -8,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -46,9 +44,7 @@ public class ExecutionRuntimeSnapshotService {
       String executionId, Map<String, Object> runtimeData, GraphExecutionContext context) {
     try {
       ExecutionRuntimeSnapshot snapshot =
-          repository
-              .findByExecutionId(executionId)
-              .orElse(new ExecutionRuntimeSnapshot());
+          repository.findByExecutionId(executionId).orElse(new ExecutionRuntimeSnapshot());
 
       snapshot.setExecutionId(executionId);
       snapshot.setRuntimeDataJson(objectMapper.writeValueAsString(runtimeData));
@@ -155,9 +151,7 @@ public class ExecutionRuntimeSnapshotService {
         return objectMapper.convertValue((Map) value, type);
       } catch (IllegalArgumentException e) {
         logger.warn(
-            "Failed to convert runtime value {} to type {} via Jackson",
-            key,
-            type.getSimpleName());
+            "Failed to convert runtime value {} to type {} via Jackson", key, type.getSimpleName());
         return null;
       }
     }

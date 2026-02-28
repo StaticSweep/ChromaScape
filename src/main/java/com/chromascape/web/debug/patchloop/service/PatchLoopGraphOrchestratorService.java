@@ -10,12 +10,10 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -278,7 +276,8 @@ public class PatchLoopGraphOrchestratorService {
 
         if (execution.getExecutionStatus() != GraphExecutionStatus.RUNNING) {
           throw new GraphExecutionException(
-              "Cannot pause execution in state: " + execution.getExecutionStatus()
+              "Cannot pause execution in state: "
+                  + execution.getExecutionStatus()
                   + ". PAUSE only allowed from RUNNING state.");
         }
 
@@ -294,7 +293,8 @@ public class PatchLoopGraphOrchestratorService {
 
         if (execution.getExecutionStatus() != GraphExecutionStatus.PAUSED) {
           throw new GraphExecutionException(
-              "Cannot resume execution in state: " + execution.getExecutionStatus()
+              "Cannot resume execution in state: "
+                  + execution.getExecutionStatus()
                   + ". RESUME only allowed from PAUSED state.");
         }
 
@@ -331,10 +331,10 @@ public class PatchLoopGraphOrchestratorService {
 
         // Only allow retry from PAUSED or terminal states (COMPLETED, FAILED, CANCELLED)
         GraphExecutionStatus status = execution.getExecutionStatus();
-        if (status == GraphExecutionStatus.RUNNING
-            || status == GraphExecutionStatus.CREATED) {
+        if (status == GraphExecutionStatus.RUNNING || status == GraphExecutionStatus.CREATED) {
           throw new GraphExecutionException(
-              "Cannot retry from node in state: " + status
+              "Cannot retry from node in state: "
+                  + status
                   + ". RETRY_FROM_NODE only allowed from PAUSED or terminal states.");
         }
 
@@ -470,7 +470,8 @@ public class PatchLoopGraphOrchestratorService {
       }
     }
 
-    logger.debug("Cleared {} nodes (including retry node) from {}", downstreamNodes.size(), fromNodeId);
+    logger.debug(
+        "Cleared {} nodes (including retry node) from {}", downstreamNodes.size(), fromNodeId);
   }
 
   /**
@@ -664,7 +665,8 @@ public class PatchLoopGraphOrchestratorService {
     artifact.setSuccess(entity.getSuccess());
     artifact.setComparisonSummary(entity.getComparisonSummary());
 
-    // Parse improvements and regressions as numeric counts (stored as string representations of integers)
+    // Parse improvements and regressions as numeric counts (stored as string representations of
+    // integers)
     if (entity.getImprovements() != null && !entity.getImprovements().isBlank()) {
       try {
         int improvementsCount = Integer.parseInt(entity.getImprovements().trim());

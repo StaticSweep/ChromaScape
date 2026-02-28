@@ -207,6 +207,24 @@ class PatchLoopManager {
 
   onGraphExecuted(response) {
     console.log('Graph executed:', response);
+    this.executionId = response.executionId;
+    this.iterationId = response.iterationId;
+    this.currentStatus = 'RUNNING';
+    this.updateControlButtons();
+
+    // Reset node states for fresh run
+    this.nodeStates.clear();
+    this.currentNode = null;
+
+    // Initialize artifact manager and load initial artifacts
+    if (!this.artifactManager) {
+      this.artifactManager = new PatchLoopArtifactManager(this.iterationId);
+    } else {
+      this.artifactManager.iterationId = this.iterationId;
+    }
+
+    // Trigger initial artifact refresh
+    this.refreshArtifacts();
   }
 
   onGraphStateUpdate(state) {
@@ -219,6 +237,18 @@ class PatchLoopManager {
 
   onArtifactsLoaded(artifacts) {
     console.log('Artifacts loaded:', artifacts);
+    if (!this.artifactManager) {
+      this.artifactManager = new PatchLoopArtifactManager(this.iterationId);
+    }
+    // Update artifacts and render
+    this.artifactManager.artifacts = {
+      patches: artifacts.patches || [],
+      validations: artifacts.validations || [],
+      retests: artifacts.retests || [],
+      analyses: artifacts.analyses || [],
+      evidence: artifacts.evidence || []
+    };
+    this.artifactManager.renderAll();
   }
 
   onError(error) {
@@ -512,8 +542,9 @@ class PatchLoopManager {
    * Refreshes artifacts from the server.
    */
   async refreshArtifacts() {
-    if (!this.iterationId) return;
+    if (!this.iterationId || this._artifactRefreshInProgress) return;
 
+    this._artifactRefreshInProgress = true;
     try {
       // Use iterationId for artifact retrieval
       const response = await fetch(`/api/debug/patch-loop/${this.iterationId}/artifacts`);
@@ -523,6 +554,8 @@ class PatchLoopManager {
       }
     } catch (error) {
       console.error('Failed to refresh artifacts:', error);
+    } finally {
+      this._artifactRefreshInProgress = false;
     }
   }
 

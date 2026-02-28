@@ -8,9 +8,9 @@ import org.springframework.stereotype.Service;
 /**
  * Service for managing execution pause/resume state.
  *
- * <p>Provides a shared flag mechanism for coordinating pause state between HTTP controllers
- * (which set pause state via API) and graph executor (which checks pause state during loop).
- * Uses in-memory ConcurrentHashMap for thread-safe pause flag storage.
+ * <p>Provides a shared flag mechanism for coordinating pause state between HTTP controllers (which
+ * set pause state via API) and graph executor (which checks pause state during loop). Uses
+ * in-memory ConcurrentHashMap for thread-safe pause flag storage.
  */
 @Service
 public class ExecutionPauseService {

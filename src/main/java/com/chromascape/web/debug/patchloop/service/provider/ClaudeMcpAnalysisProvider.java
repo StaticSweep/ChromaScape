@@ -1,8 +1,8 @@
 package com.chromascape.web.debug.patchloop.service.provider;
 
-import com.chromascape.web.debug.patchloop.constants.AnalysisV1ErrorCode;
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1Request;
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1Response;
+import com.chromascape.web.debug.patchloop.constants.AnalysisV2ErrorCode;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV2Request;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV2Response;
 import com.chromascape.web.debug.patchloop.exception.AnalysisException;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpConfigProperties;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
@@ -15,15 +15,19 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
- * Claude MCP (Model Context Protocol) provider for bot failure analysis.
+ * Claude MCP (Model Context Protocol) provider for V2 analysis.
  *
  * <p>This provider uses the MCP protocol to communicate with Claude instead of direct API calls.
  * MCP provides a standardized protocol for LLM interactions with better tool integration.
+ *
+ * <p><b>V2 Changes:</b> Updated to use V2 request/response contracts.
  *
  * <p>Activated when {@code analysis.provider=claude-mcp}.
  *
  * <p><strong>Note:</strong> The {@code analyzeEvidence()} method is pending implementation in issue
  * #516. Currently, only the availability check via health check is implemented.
+ *
+ * @since 2.0.0
  */
 @Service
 @ConditionalOnProperty(name = "analysis.provider", havingValue = "claude-mcp")
@@ -46,27 +50,27 @@ public class ClaudeMcpAnalysisProvider implements AnalysisProvider {
     this.config = config;
 
     logger.info(
-        "ClaudeMcpAnalysisProvider initialized - serverUrl: {}, timeout: {}s, maxRetries: {}",
+        "ClaudeMcpAnalysisProvider initialized (V2) - serverUrl: {}, timeout: {}s, maxRetries: {}",
         config.getServerUrl(),
         config.getTimeoutSeconds(),
         config.getMaxRetries());
   }
 
   @Override
-  public AnalysisV1Response analyzeEvidence(AnalysisV1Request request) throws AnalysisException {
+  public AnalysisV2Response analyzeEvidence(AnalysisV2Request request) throws AnalysisException {
     logger.error(
-        "[{}] MCP analyzeEvidence() pending implementation (#516). Health check available.",
+        "[{}] MCP V2 analyzeEvidence() pending implementation (#516). Health check available.",
         getProviderName());
     throw new AnalysisException(
-        AnalysisV1ErrorCode.INTERNAL_ERROR,
-        "MCP analyzeEvidence() pending implementation (#516). Use health check for availability"
+        AnalysisV2ErrorCode.INTERNAL_ERROR,
+        "MCP V2 analyzeEvidence() pending implementation (#516). Use health check for availability"
             + " testing.");
 
     // TODO: Implement MCP protocol integration (#516)
-    // 1. Build MCP request from AnalysisV1Request
+    // 1. Build MCP request from AnalysisV2Request
     // 2. Call MCP server with timeout and retry logic
-    // 3. Parse MCP response to AnalysisV1Response
-    // 4. Validate response schema
+    // 3. Parse MCP response to AnalysisV2Response (with patchDraft, retestPlan)
+    // 4. Validate response schema using AnalysisV2Validator
     // 5. Map MCP errors to AnalysisException error codes
   }
 

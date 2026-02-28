@@ -1,12 +1,10 @@
 package com.chromascape.web.debug.patchloop.service.provider;
 
-import com.chromascape.web.debug.patchloop.constants.AnalysisV1ErrorCode;
+import com.chromascape.web.debug.patchloop.constants.AnalysisV2ErrorCode;
 import com.chromascape.web.debug.patchloop.dto.*;
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1Response.AnalysisMetadata;
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1Response.DiagnosisSection;
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1Response.FixRecommendation;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV2Response.AnalysisMetadata;
 import com.chromascape.web.debug.patchloop.exception.AnalysisException;
-import com.chromascape.web.debug.patchloop.validation.AnalysisV1Validator;
+import com.chromascape.web.debug.patchloop.validation.AnalysisV2Validator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,12 +23,21 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
- * Claude API provider for bot failure analysis.
+ * Claude API provider for V2 analysis.
  *
- * <p>Uses Java HttpClient to make direct requests to the Anthropic Claude API. This is the default
- * analysis provider when no specific provider is configured.
+ * <p><b>V2 Changes:</b>
+ *
+ * <ul>
+ *   <li>Updated to use V2 request/response contracts
+ *   <li>Implements parse-hardening pipeline with up to 2 retries on validation failure
+ *   <li>Generates V2-specific prompt demanding patchDraft, retestPlan, impactedModules, and
+ *       evidenceReferences
+ *   <li>Maps V1 evidence bundle to V2 request format for backward compatibility
+ * </ul>
  *
  * <p>Activated when {@code analysis.provider=claude-api} or when no provider is specified.
+ *
+ * @since 2.0.0
  */
 @Service
 @ConditionalOnProperty(
@@ -40,6 +47,9 @@ import org.springframework.stereotype.Service;
 public class ClaudeApiAnalysisProvider implements AnalysisProvider {
 
   private static final Logger logger = LoggerFactory.getLogger(ClaudeApiAnalysisProvider.class);
+
+  /** Maximum retries for parse repair on validation failure. */
+  private static final int MAX_PARSE_RETRIES = 2;
 
   private final HttpClient httpClient;
   private final ObjectMapper objectMapper;
@@ -55,7 +65,7 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
       @Value("${claude.api.url:https://api.anthropic.com/v1/messages}") String apiUrl,
       @Value("${claude.api.model:claude-opus-4-6}") String model,
       @Value("${claude.api.timeout-seconds:120}") int timeoutSeconds,
-      @Value("${claude.api.max-tokens:4096}") int maxTokens) {
+      @Value("${claude.api.max-tokens:8192}") int maxTokens) {
     this.objectMapper = objectMapper;
     this.apiKey = apiKey;
     this.apiUrl = apiUrl;
@@ -67,50 +77,85 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
   }
 
   @Override
-  public AnalysisV1Response analyzeEvidence(AnalysisV1Request request) throws AnalysisException {
+  public AnalysisV2Response analyzeEvidence(AnalysisV2Request request) throws AnalysisException {
     logger.info(
-        "[{}] Starting evidence analysis for prompt: {}", getProviderName(), request.getPrompt());
+        "[{}] Starting V2 evidence analysis for prompt: {}",
+        getProviderName(),
+        request.getPrompt());
 
     long startTime = System.currentTimeMillis();
 
     // Validate request
-    AnalysisV1Validator.validateRequest(request);
+    AnalysisV2Validator.validateRequest(request);
 
     // Build prompts
     String systemPrompt = buildSystemPrompt();
     String userMessage = buildUserMessage(request);
 
-    try {
-      // Call Claude API
-      String responseText = callClaudeApi(systemPrompt, userMessage);
+    // Parse-hardening pipeline: retry with repair prompt on validation failure
+    for (int attempt = 0; attempt <= MAX_PARSE_RETRIES; attempt++) {
+      try {
+        // Call Claude API
+        String responseText = callClaudeApi(systemPrompt, userMessage, attempt > 0);
 
-      // Parse response
-      AnalysisV1Response response = parseAnalysisResponse(responseText, request);
+        // Parse response
+        AnalysisV2Response response = parseAnalysisResponse(responseText, request);
 
-      // Set metadata
-      long analysisTime = System.currentTimeMillis() - startTime;
-      if (response.getMetadata() == null) {
-        response.setMetadata(new AnalysisMetadata());
+        // Set metadata
+        long analysisTime = System.currentTimeMillis() - startTime;
+        if (response.getMetadata() == null) {
+          response.setMetadata(new AnalysisMetadata());
+        }
+        response.getMetadata().setModel(model);
+        response.getMetadata().setAnalysisTimeMs(analysisTime);
+        response
+            .getMetadata()
+            .setEvidenceCount(
+                request.getEvidenceSelectors() != null ? request.getEvidenceSelectors().size() : 0);
+
+        // Validate response
+        AnalysisV2Validator.validateResponse(response);
+
+        logger.info("[{}] Analysis completed in {}ms", getProviderName(), analysisTime);
+        return response;
+
+      } catch (AnalysisException e) {
+        // If validation failed and we have retries left, add repair instruction
+        if (e.getErrorCode().equals(AnalysisV2ErrorCode.INVALID_RESPONSE_SCHEMA)
+            || e.getErrorCode().equals(AnalysisV2ErrorCode.MISSING_SUCCESS_FIELDS)
+            || e.getErrorCode().equals(AnalysisV2ErrorCode.PARSE_ERROR)) {
+          if (attempt < MAX_PARSE_RETRIES) {
+            logger.warn(
+                "[{}] Validation attempt {} failed: {}. Retrying with repair prompt...",
+                getProviderName(),
+                attempt,
+                e.getMessage());
+            userMessage = addRepairInstruction(userMessage, e.getMessage());
+            continue;
+          }
+        }
+
+        // Re-throw if no retries left or different error
+        logger.error(
+            "[{}] Analysis failed after {} attempts: {} - {}",
+            getProviderName(),
+            attempt + 1,
+            e.getErrorCode(),
+            e.getMessage());
+        throw e;
+
+      } catch (Exception e) {
+        logger.error("[" + getProviderName() + "] Unexpected error during analysis", e);
+        // Return deterministic FAILURE response
+        return createFailureResponse(
+            AnalysisV2ErrorCode.INTERNAL_ERROR, "Unexpected error: " + e.getMessage());
       }
-      response.getMetadata().setModel(model);
-      response.getMetadata().setAnalysisTimeMs(analysisTime);
-      response.getMetadata().setEvidenceCount(request.getEvidence().getTotalEvidenceCount());
-
-      // Validate response
-      AnalysisV1Validator.validateResponse(response);
-
-      logger.info("[{}] Analysis completed in {}ms", getProviderName(), analysisTime);
-      return response;
-
-    } catch (AnalysisException e) {
-      logger.error(
-          "[{}] Analysis failed: {} - {}", getProviderName(), e.getErrorCode(), e.getMessage());
-      throw e;
-    } catch (Exception e) {
-      logger.error("[" + getProviderName() + "] Unexpected error during analysis", e);
-      throw new AnalysisException(
-          AnalysisV1ErrorCode.INTERNAL_ERROR, "Unexpected error: " + e.getMessage(), e);
     }
+
+    // Should not reach here, but return FAILURE if exhausted retries
+    return createFailureResponse(
+        AnalysisV2ErrorCode.PARSE_ERROR,
+        "Failed to parse valid response after " + (MAX_PARSE_RETRIES + 1) + " attempts");
   }
 
   @Override
@@ -123,39 +168,69 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
     return apiKey != null && !apiKey.trim().isEmpty();
   }
 
-  /** Builds the system prompt that instructs Claude on how to respond. */
+  /** Builds the V2 system prompt with explicit V2 schema requirements. */
   private String buildSystemPrompt() {
     return """
         You are an expert bot debugging assistant for ChromaScape, a colour-based game automation framework.
 
-        Your task is to analyze bot failure evidence and provide structured diagnosis with actionable recommendations.
+        Your task is to analyze bot failure evidence and provide structured diagnosis with a complete patch draft and retest plan.
 
-        You will receive:
-        1. A user's question/prompt about a bot failure
-        2. Evidence from the bot run: logs, tick logs, and decision records
-        3. Context about the script and failure
-
-        You MUST respond with a valid JSON object matching this schema:
+        You MUST respond with a valid JSON object matching this exact schema:
         {
-          "summary": "1-2 sentence summary of the root cause",
-          "rootCause": "Detailed explanation of why the failure occurred",
-          "confidence": "HIGH" | "MEDIUM" | "LOW",
-          "recommendations": [
-            {
-              "priority": 1,
-              "title": "Short recommendation title",
-              "description": "Detailed description of the fix",
-              "confidence": "HIGH" | "MEDIUM" | "LOW",
-              "affectedFiles": ["file/path1.java", "file/path2.java"],
-              "expectedImpact": "What this fix will accomplish"
-            }
-          ]
+          "diagnosis": {
+            "summary": "1-2 sentence summary of the root cause",
+            "rootCause": "Detailed explanation of why the failure occurred",
+            "confidence": "HIGH" | "MEDIUM" | "LOW",
+            "recommendations": [
+              {
+                "priority": 1,
+                "title": "Short recommendation title",
+                "description": "Detailed description of the fix",
+                "confidence": "HIGH" | "MEDIUM" | "LOW",
+                "affectedFiles": ["file/path1.java", "file/path2.java"],
+                "expectedImpact": "What this fix will accomplish"
+              }
+            ]
+          },
+          "impactedModules": ["module1", "module2"],
+          "patchDraft": {
+            "patchId": "unique-patch-id",
+            "description": "Human-readable description of the patch",
+            "affectedFiles": ["file/path1.java", "file/path2.java"],
+            "changes": [
+              {
+                "filePath": "file/path1.java",
+                "oldText": "exact code to replace",
+                "newText": "exact new code",
+                "lineNumber": 123,
+                "changeType": "MODIFY" | "INSERT" | "DELETE" | "REPLACE"
+              }
+            ],
+            "confidence": "HIGH" | "MEDIUM" | "LOW",
+            "rationale": "Why this patch will fix the issue"
+          },
+          "retestPlan": {
+            "testSteps": [
+              {
+                "stepNumber": 1,
+                "description": "What to do",
+                "expectedResult": "What should happen",
+                "actionType": "RUN_SCRIPT" | "VERIFY_BEHAVIOR" | "CHECK_LOGS" | "INSPECT_STATE" | "MANUAL_VERIFY",
+                "target": "target entity (optional)"
+              }
+            ],
+            "successCriteria": ["criteria1", "criteria2"],
+            "rollbackPlan": "How to rollback if patch fails",
+            "estimatedDuration": "5 minutes"
+          },
+          "evidenceReferences": ["ref1", "ref2"]
         }
 
         Guidelines:
         - Focus on ROOT CAUSE, not symptoms
-        - Provide 1-5 prioritized recommendations (highest priority = 1)
-        - Reference specific evidence (logs, decisions, tick data) in your analysis
+        - Provide concrete, copy-pasteable code changes in patchDraft.changes
+        - Include at least one PatchChange with exact oldText/newText
+        - Reference specific evidence (logs, decisions, tick data) in evidenceReferences
         - Consider colour detection failures, state machine issues, timing problems, and coordinate drift
         - Be concise but thorough
         - Assign confidence levels honestly based on evidence quality
@@ -168,32 +243,28 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
         - Mouse coordinate drift over time
         - OCR failures due to font/rendering changes
 
-        Return ONLY the JSON object, no additional text.
+        CRITICAL: Return ONLY the JSON object. No markdown formatting, no additional text.
         """;
   }
 
-  /** Builds the user message with evidence and prompt. */
-  private String buildUserMessage(AnalysisV1Request request) {
+  /** Builds the V2 user message from request. */
+  private String buildUserMessage(AnalysisV2Request request) {
     StringBuilder msg = new StringBuilder();
 
-    msg.append("## Script Failure Analysis Request\n\n");
+    msg.append("## Script Failure Analysis Request (V2)\n\n");
 
-    // Script and context
-    msg.append(String.format("**Script:** %s\n", request.getEvidence().getScriptName()));
-    msg.append(
-        String.format(
-            "**Time Window:** %s to %s (%.1f seconds)\n",
-            request.getEvidence().getTimeWindow().getStart(),
-            request.getEvidence().getTimeWindow().getEnd(),
-            (double) request.getEvidence().getTimeWindow().getDurationSeconds()));
-
-    if (request.getEvidence().getTickWindow() != null) {
+    // Target info
+    msg.append(String.format("**Script:** %s\n", request.getTarget().getScriptName()));
+    if (request.getTarget().getRunId() != null) {
+      msg.append(String.format("**Run ID:** %s\n", request.getTarget().getRunId()));
+    }
+    if (request.getTarget().getSessionBounds() != null) {
       msg.append(
           String.format(
-              "**Tick Window:** %d to %d (%d ticks)\n",
-              request.getEvidence().getTickWindow().getStartTick(),
-              request.getEvidence().getTickWindow().getEndTick(),
-              request.getEvidence().getTickWindow().getTickCount()));
+              "**Session:** %s to %s (%.1f seconds)\n",
+              request.getTarget().getSessionBounds().getStart(),
+              request.getTarget().getSessionBounds().getEnd(),
+              (double) request.getTarget().getSessionBounds().getDurationSeconds()));
     }
 
     if (request.getContext() != null && !request.getContext().isEmpty()) {
@@ -202,77 +273,56 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
 
     msg.append(String.format("\n**Question:** %s\n\n", request.getPrompt()));
 
-    // Evidence summary
-    msg.append("## Evidence Summary\n\n");
-    msg.append(String.format("- %d general logs\n", request.getEvidence().getLogs().size()));
-    msg.append(String.format("- %d tick logs\n", request.getEvidence().getTickLogs().size()));
-    msg.append(
-        String.format("- %d decision records\n\n", request.getEvidence().getDecisions().size()));
-
-    // Logs
-    if (!request.getEvidence().getLogs().isEmpty()) {
-      msg.append("### General Logs\n\n");
-      for (AnalysisV1EvidenceBundle.LogEvidence log : request.getEvidence().getLogs()) {
+    // Evidence selectors summary
+    msg.append("## Evidence Selectors\n\n");
+    for (var selector : request.getEvidenceSelectors()) {
+      msg.append(String.format("- %s (required: %s)", selector.getType(), selector.getRequired()));
+      if (selector.getTimeWindow() != null) {
         msg.append(
             String.format(
-                "[%s] [%s] %s (source: %s)\n",
-                log.getTimestamp(), log.getLevel(), log.getMessage(), log.getSource()));
+                " time: %s to %s",
+                selector.getTimeWindow().getStart(), selector.getTimeWindow().getEnd()));
+      }
+      if (selector.getTickWindow() != null) {
+        msg.append(
+            String.format(
+                " ticks: %d to %d",
+                selector.getTickWindow().getStartTick(), selector.getTickWindow().getEndTick()));
       }
       msg.append("\n");
     }
-
-    // Tick logs
-    if (!request.getEvidence().getTickLogs().isEmpty()) {
-      msg.append("### Tick Logs\n\n");
-      for (AnalysisV1EvidenceBundle.TickLogEvidence log : request.getEvidence().getTickLogs()) {
-        msg.append(
-            String.format(
-                "[Tick %d] [%s] [%s] %s",
-                log.getTick(), log.getSubsystem(), log.getSeverity(), log.getMessage()));
-        if (log.getDetails() != null && !log.getDetails().isEmpty()) {
-          msg.append(String.format(" | Details: %s", log.getDetails()));
-        }
-        msg.append("\n");
-      }
-      msg.append("\n");
-    }
-
-    // Decisions
-    if (!request.getEvidence().getDecisions().isEmpty()) {
-      msg.append("### Decision Records\n\n");
-      for (AnalysisV1EvidenceBundle.DecisionEvidence dec : request.getEvidence().getDecisions()) {
-        msg.append(
-            String.format(
-                "[%s] %s - %s",
-                dec.getTimestamp(),
-                dec.getDecisionType(),
-                dec.getSuccess() ? "SUCCESS" : "FAILED"));
-        if (!dec.getSuccess() && dec.getFailureCode() != null) {
-          msg.append(String.format(" (code: %s)", dec.getFailureCode()));
-        }
-        if (dec.getTargetEntity() != null) {
-          msg.append(String.format(" | Target: %s", dec.getTargetEntity()));
-        }
-        if (dec.getContext() != null && !dec.getContext().isEmpty()) {
-          msg.append(String.format(" | Context: %s", dec.getContext()));
-        }
-        msg.append("\n");
-      }
-      msg.append("\n");
-    }
+    msg.append("\n");
 
     msg.append(
-        "Please analyze this evidence and provide a structured diagnosis in JSON format as"
-            + " specified.");
+        "Please analyze this request and provide a complete V2 response in JSON format as specified.");
 
     return msg.toString();
   }
 
+  /** Adds repair instruction to the user message after validation failure. */
+  private String addRepairInstruction(String originalMessage, String errorMessage) {
+    return originalMessage
+        + "\n\n"
+        + "IMPORTANT: Your previous response failed validation. "
+        + "Error: "
+        + errorMessage
+        + "\n\n"
+        + "Please fix your response to match the exact schema specified above. "
+        + "Ensure all REQUIRED fields for SUCCESS status are present:\n"
+        + "- diagnosis (with summary, rootCause, confidence)\n"
+        + "- impactedModules (non-empty array)\n"
+        + "- patchDraft (with patchId, description, affectedFiles, changes)\n"
+        + "- retestPlan (with testSteps, successCriteria)\n"
+        + "- evidenceReferences (non-empty array)\n\n"
+        + "Return ONLY the valid JSON object.";
+  }
+
   /** Calls Claude API and returns the response text. */
-  private String callClaudeApi(String systemPrompt, String userMessage) throws AnalysisException {
+  private String callClaudeApi(String systemPrompt, String userMessage, boolean isRetry)
+      throws AnalysisException {
     if (apiKey == null || apiKey.trim().isEmpty()) {
       throw new AnalysisException(
-          AnalysisV1ErrorCode.API_AUTH_FAILED,
+          AnalysisV2ErrorCode.API_AUTH_FAILED,
           "Claude API key not configured (set CLAUDE_API_KEY environment variable)");
     }
 
@@ -297,7 +347,7 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
               .POST(HttpRequest.BodyPublishers.ofString(requestJson))
               .build();
 
-      logger.debug("[{}] Calling Claude API: {}", getProviderName(), apiUrl);
+      logger.debug("[{}] Calling Claude API: {} (retry: {})", getProviderName(), apiUrl, isRetry);
 
       // Send request
       HttpResponse<String> response =
@@ -315,52 +365,71 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
           return content.get(0).path("text").asText();
         } else {
           throw new AnalysisException(
-              AnalysisV1ErrorCode.PARSE_ERROR, "Unexpected API response format: " + responseBody);
+              AnalysisV2ErrorCode.PARSE_ERROR, "Unexpected API response format: " + responseBody);
         }
       } else if (statusCode == 401 || statusCode == 403) {
         throw new AnalysisException(
-            AnalysisV1ErrorCode.API_AUTH_FAILED, "API authentication failed: " + responseBody);
+            AnalysisV2ErrorCode.API_AUTH_FAILED, "API authentication failed: " + responseBody);
       } else if (statusCode == 429) {
         throw new AnalysisException(
-            AnalysisV1ErrorCode.API_RATE_LIMIT, "API rate limit exceeded: " + responseBody);
+            AnalysisV2ErrorCode.API_RATE_LIMIT, "API rate limit exceeded: " + responseBody);
       } else {
         throw new AnalysisException(
-            AnalysisV1ErrorCode.API_ERROR, "API error (HTTP " + statusCode + "): " + responseBody);
+            AnalysisV2ErrorCode.API_ERROR, "API error (HTTP " + statusCode + "): " + responseBody);
       }
 
     } catch (AnalysisException e) {
       throw e;
     } catch (java.net.http.HttpTimeoutException e) {
       throw new AnalysisException(
-          AnalysisV1ErrorCode.API_TIMEOUT,
+          AnalysisV2ErrorCode.API_TIMEOUT,
           "API request timed out after " + timeoutSeconds + " seconds",
           e);
     } catch (InterruptedException e) {
       // Restore interrupt flag for cooperative cancellation
       Thread.currentThread().interrupt();
       throw new AnalysisException(
-          AnalysisV1ErrorCode.API_ERROR, "API request interrupted: " + e.getMessage(), e);
+          AnalysisV2ErrorCode.API_ERROR, "API request interrupted: " + e.getMessage(), e);
     } catch (IOException e) {
       throw new AnalysisException(
-          AnalysisV1ErrorCode.API_ERROR, "API request failed: " + e.getMessage(), e);
+          AnalysisV2ErrorCode.API_ERROR, "API request failed: " + e.getMessage(), e);
     }
   }
 
-  /** Parses the Claude API response and builds AnalysisV1Response. */
-  private AnalysisV1Response parseAnalysisResponse(String responseText, AnalysisV1Request request)
+  /** Parses the Claude API response and builds AnalysisV2Response. */
+  private AnalysisV2Response parseAnalysisResponse(String responseText, AnalysisV2Request request)
       throws AnalysisException {
     try {
+      // Extract JSON from potential markdown code blocks
+      String jsonText = extractJson(responseText);
+
       // Parse JSON from Claude's response
-      JsonNode diagnosisNode = objectMapper.readTree(responseText);
+      JsonNode root = objectMapper.readTree(jsonText);
 
       // Build response
-      AnalysisV1Response response = new AnalysisV1Response();
+      AnalysisV2Response response = new AnalysisV2Response();
       response.setAnalysisId(UUID.randomUUID().toString());
       response.setTimestamp(LocalDateTime.now());
+
+      // Determine status - default to SUCCESS if we have diagnosis
+      JsonNode diagnosisNode = root.path("diagnosis");
+      if (diagnosisNode.isMissingNode() || diagnosisNode.isNull()) {
+        // Check if there's an error node
+        JsonNode errorNode = root.path("error");
+        if (!errorNode.isMissingNode() && !errorNode.isNull()) {
+          response.setStatus(AnalysisStatus.FAILURE);
+          response.setMetadata(new AnalysisMetadata());
+          return response; // Minimal error response
+        } else {
+          throw new AnalysisException(
+              AnalysisV2ErrorCode.INVALID_RESPONSE_SCHEMA, "Missing required 'diagnosis' field");
+        }
+      }
+
       response.setStatus(AnalysisStatus.SUCCESS);
 
-      // Build diagnosis section
-      DiagnosisSection diagnosis = new DiagnosisSection();
+      // Parse diagnosis
+      AnalysisV2Diagnosis diagnosis = new AnalysisV2Diagnosis();
       diagnosis.setSummary(diagnosisNode.path("summary").asText());
       diagnosis.setRootCause(diagnosisNode.path("rootCause").asText());
 
@@ -371,12 +440,12 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
         diagnosis.setConfidence(ConfidenceLevel.MEDIUM);
       }
 
-      // Parse recommendations
-      List<FixRecommendation> recommendations = new ArrayList<>();
+      // Parse recommendations (optional in V2)
+      List<AnalysisV2Diagnosis.FixRecommendation> recommendations = new ArrayList<>();
       JsonNode recsNode = diagnosisNode.path("recommendations");
       if (recsNode.isArray()) {
         for (JsonNode recNode : recsNode) {
-          FixRecommendation rec = new FixRecommendation();
+          AnalysisV2Diagnosis.FixRecommendation rec = new AnalysisV2Diagnosis.FixRecommendation();
           rec.setPriority(recNode.path("priority").asInt(1));
           rec.setTitle(recNode.path("title").asText());
           rec.setDescription(recNode.path("description").asText());
@@ -388,7 +457,6 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
             rec.setConfidence(ConfidenceLevel.MEDIUM);
           }
 
-          // Parse affected files
           List<String> affectedFiles = new ArrayList<>();
           JsonNode filesNode = recNode.path("affectedFiles");
           if (filesNode.isArray()) {
@@ -397,13 +465,116 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
           rec.setAffectedFiles(affectedFiles);
 
           rec.setExpectedImpact(recNode.path("expectedImpact").asText());
-
           recommendations.add(rec);
         }
       }
       diagnosis.setRecommendations(recommendations);
-
       response.setDiagnosis(diagnosis);
+
+      // Parse impactedModules
+      List<String> impactedModules = new ArrayList<>();
+      JsonNode modulesNode = root.path("impactedModules");
+      if (modulesNode.isArray()) {
+        modulesNode.forEach(m -> impactedModules.add(m.asText()));
+      }
+      response.setImpactedModules(impactedModules);
+
+      // Parse patchDraft
+      JsonNode patchNode = root.path("patchDraft");
+      if (!patchNode.isMissingNode() && !patchNode.isNull()) {
+        AnalysisV2PatchDraft patchDraft = new AnalysisV2PatchDraft();
+        patchDraft.setPatchId(patchNode.path("patchId").asText());
+        patchDraft.setDescription(patchNode.path("description").asText());
+
+        List<String> affectedFiles = new ArrayList<>();
+        JsonNode patchFilesNode = patchNode.path("affectedFiles");
+        if (patchFilesNode.isArray()) {
+          patchFilesNode.forEach(f -> affectedFiles.add(f.asText()));
+        }
+        patchDraft.setAffectedFiles(affectedFiles);
+
+        List<AnalysisV2PatchDraft.PatchChange> changes = new ArrayList<>();
+        JsonNode changesNode = patchNode.path("changes");
+        if (changesNode.isArray()) {
+          for (JsonNode changeNode : changesNode) {
+            AnalysisV2PatchDraft.PatchChange change = new AnalysisV2PatchDraft.PatchChange();
+            change.setFilePath(changeNode.path("filePath").asText());
+            change.setOldText(changeNode.path("oldText").asText());
+            change.setNewText(changeNode.path("newText").asText());
+            if (changeNode.has("lineNumber")) {
+              change.setLineNumber(changeNode.path("lineNumber").asInt());
+            }
+            if (changeNode.has("changeType")) {
+              try {
+                change.setChangeType(
+                    AnalysisV2PatchDraft.ChangeType.valueOf(
+                        changeNode.path("changeType").asText()));
+              } catch (IllegalArgumentException e) {
+                change.setChangeType(AnalysisV2PatchDraft.ChangeType.MODIFY);
+              }
+            }
+            changes.add(change);
+          }
+        }
+        patchDraft.setChanges(changes);
+
+        String patchConfStr = patchNode.path("confidence").asText();
+        try {
+          patchDraft.setConfidence(ConfidenceLevel.valueOf(patchConfStr));
+        } catch (IllegalArgumentException e) {
+          patchDraft.setConfidence(ConfidenceLevel.MEDIUM);
+        }
+
+        patchDraft.setRationale(patchNode.path("rationale").asText());
+        response.setPatchDraft(patchDraft);
+      }
+
+      // Parse retestPlan
+      JsonNode retestNode = root.path("retestPlan");
+      if (!retestNode.isMissingNode() && !retestNode.isNull()) {
+        AnalysisV2RetestPlan retestPlan = new AnalysisV2RetestPlan();
+
+        List<AnalysisV2RetestPlan.TestStep> testSteps = new ArrayList<>();
+        JsonNode stepsNode = retestNode.path("testSteps");
+        if (stepsNode.isArray()) {
+          for (JsonNode stepNode : stepsNode) {
+            AnalysisV2RetestPlan.TestStep step = new AnalysisV2RetestPlan.TestStep();
+            step.setStepNumber(stepNode.path("stepNumber").asInt());
+            step.setDescription(stepNode.path("description").asText());
+            step.setExpectedResult(stepNode.path("expectedResult").asText());
+            if (stepNode.has("actionType")) {
+              try {
+                step.setActionType(
+                    AnalysisV2RetestPlan.ActionType.valueOf(stepNode.path("actionType").asText()));
+              } catch (IllegalArgumentException e) {
+                step.setActionType(AnalysisV2RetestPlan.ActionType.VERIFY_BEHAVIOR);
+              }
+            }
+            step.setTarget(stepNode.path("target").asText());
+            testSteps.add(step);
+          }
+        }
+        retestPlan.setTestSteps(testSteps);
+
+        List<String> successCriteria = new ArrayList<>();
+        JsonNode criteriaNode = retestNode.path("successCriteria");
+        if (criteriaNode.isArray()) {
+          criteriaNode.forEach(c -> successCriteria.add(c.asText()));
+        }
+        retestPlan.setSuccessCriteria(successCriteria);
+
+        retestPlan.setRollbackPlan(retestNode.path("rollbackPlan").asText());
+        retestPlan.setEstimatedDuration(retestNode.path("estimatedDuration").asText());
+        response.setRetestPlan(retestPlan);
+      }
+
+      // Parse evidenceReferences
+      List<String> evidenceReferences = new ArrayList<>();
+      JsonNode refsNode = root.path("evidenceReferences");
+      if (refsNode.isArray()) {
+        refsNode.forEach(r -> evidenceReferences.add(r.asText()));
+      }
+      response.setEvidenceReferences(evidenceReferences);
 
       return response;
 
@@ -411,9 +582,39 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
       logger.error(
           "[{}] Failed to parse analysis response: {}", getProviderName(), responseText, e);
       throw new AnalysisException(
-          AnalysisV1ErrorCode.PARSE_ERROR,
+          AnalysisV2ErrorCode.PARSE_ERROR,
           "Failed to parse Claude response as JSON: " + e.getMessage(),
           e);
     }
+  }
+
+  /** Extracts JSON from potential markdown code blocks. */
+  private String extractJson(String responseText) {
+    // Check if wrapped in markdown code blocks
+    if (responseText.trim().startsWith("```")) {
+      int start = responseText.indexOf('{');
+      int end = responseText.lastIndexOf('}');
+      if (start >= 0 && end > start) {
+        return responseText.substring(start, end + 1);
+      }
+    }
+    return responseText;
+  }
+
+  /** Creates a deterministic FAILURE response. */
+  private AnalysisV2Response createFailureResponse(String errorCode, String message) {
+    AnalysisV2Response response = new AnalysisV2Response();
+    response.setAnalysisId(UUID.randomUUID().toString());
+    response.setTimestamp(LocalDateTime.now());
+    response.setStatus(AnalysisStatus.FAILURE);
+
+    AnalysisV1Error error = new AnalysisV1Error(errorCode, message);
+    response.setError(error);
+
+    AnalysisMetadata metadata = new AnalysisMetadata();
+    metadata.setModel(model);
+    response.setMetadata(metadata);
+
+    return response;
   }
 }

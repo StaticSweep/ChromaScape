@@ -1,5 +1,15 @@
 # Analysis V1 Contract
 
+> **DEPRECATION NOTICE:** This contract has been superseded by **Analysis V2** ([analysis-v2-contract.md](analysis-v2-contract.md)).
+>
+> **V1 Status:** Deprecated - No new implementations should use V1.
+>
+> **Migration Path:** See [Analysis V2 Contract](analysis-v2-contract.md) for breaking changes and migration guide.
+>
+> **Compatibility:** Historical V1 records remain readable through the V1/V2 compatibility layer in `PatchLoopPersistenceService`.
+>
+> **Planned Removal:** V1 runtime dependencies will be removed in Phase B (PR2) after V2 verification. V1 DTOs will be temporarily preserved for test compatibility.
+
 ## Overview
 
 The Analysis V1 contract defines the request/response schema for the BMAD (Bot Metric Analysis & Diagnostics) system. It provides a structured way to send bot failure evidence to Claude API and receive actionable recommendations.

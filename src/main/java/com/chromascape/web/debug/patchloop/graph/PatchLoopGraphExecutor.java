@@ -231,10 +231,7 @@ public class PatchLoopGraphExecutor {
 
       // Broadcast node completed event
       webSocketHandler.broadcastNodeCompleted(
-          execution.getExecutionId(),
-          graphNode.id(),
-          duration,
-          result.outputSummary());
+          execution.getExecutionId(), graphNode.id(), duration, result.outputSummary());
 
       // Save runtime snapshot after node completes (for resume/retry)
       snapshotService.saveSnapshot(execution.getExecutionId(), context.getRuntimeData(), context);
@@ -479,31 +476,37 @@ public class PatchLoopGraphExecutor {
 
       // Use typed rehydration for known value types based on key prefixes
       if (key.startsWith("patch_")) {
-        PatchProposal patch = snapshotService.getRuntimeValue(execution.getExecutionId(), key, PatchProposal.class);
+        PatchProposal patch =
+            snapshotService.getRuntimeValue(execution.getExecutionId(), key, PatchProposal.class);
         if (patch != null) {
           typedRuntimeData.put(key, patch);
         }
       } else if (key.startsWith("analysis_")) {
-        DiagnosisSection section = snapshotService.getRuntimeValue(execution.getExecutionId(), key, DiagnosisSection.class);
+        DiagnosisSection section =
+            snapshotService.getRuntimeValue(
+                execution.getExecutionId(), key, DiagnosisSection.class);
         if (section != null) {
           typedRuntimeData.put(key, section);
         }
       } else if (key.startsWith("retest_")) {
-        RetestOrchestrator.RetestResult retest = snapshotService.getRuntimeValue(
-            execution.getExecutionId(), key, RetestOrchestrator.RetestResult.class);
+        RetestOrchestrator.RetestResult retest =
+            snapshotService.getRuntimeValue(
+                execution.getExecutionId(), key, RetestOrchestrator.RetestResult.class);
         if (retest != null) {
           typedRuntimeData.put(key, retest);
         }
       } else if (key.startsWith("evidence_")) {
-        AnalysisV1EvidenceBundle evidence = snapshotService.getRuntimeValue(
-            execution.getExecutionId(), key, AnalysisV1EvidenceBundle.class);
+        AnalysisV1EvidenceBundle evidence =
+            snapshotService.getRuntimeValue(
+                execution.getExecutionId(), key, AnalysisV1EvidenceBundle.class);
         if (evidence != null) {
           typedRuntimeData.put(key, evidence);
         }
       } else if (key.startsWith("baseline_")) {
         // For baseline evidence, rehydrate to appropriate type
-        AnalysisV1EvidenceBundle baseline = snapshotService.getRuntimeValue(
-            execution.getExecutionId(), key, AnalysisV1EvidenceBundle.class);
+        AnalysisV1EvidenceBundle baseline =
+            snapshotService.getRuntimeValue(
+                execution.getExecutionId(), key, AnalysisV1EvidenceBundle.class);
         if (baseline != null) {
           typedRuntimeData.put(key, baseline);
         }

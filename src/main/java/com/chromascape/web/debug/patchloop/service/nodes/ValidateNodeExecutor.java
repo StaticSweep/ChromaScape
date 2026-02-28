@@ -87,7 +87,8 @@ public class ValidateNodeExecutor implements GraphNodeExecutor {
 
         if (autoRollback && patchId != null) {
           logger.warn("Validation failed, triggering rollback for patch: {}", patchId);
-          patchApplyService.rollbackPatch(patchId, "Validation failed with exit code " + result.exitCode());
+          patchApplyService.rollbackPatch(
+              patchId, "Validation failed with exit code " + result.exitCode());
 
           // Update the artifact with rollback status (same record)
           artifact.setRolledBack(true);
@@ -105,9 +106,7 @@ public class ValidateNodeExecutor implements GraphNodeExecutor {
     }
   }
 
-  /**
-   * Extracts the patch ID from runtime data for the current attempt.
-   */
+  /** Extracts the patch ID from runtime data for the current attempt. */
   private String extractPatchId(ExecutionContext context, int attemptNumber) {
     Object patchObj = context.context().getRuntimeValue("patch_" + attemptNumber);
     if (patchObj == null) {
