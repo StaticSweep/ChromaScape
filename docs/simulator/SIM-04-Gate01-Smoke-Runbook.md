@@ -243,6 +243,57 @@ POST /api/simulator/verify/{jobId}/cancel
 
 ---
 
+### TC7b: ExitCode 2 Error Report Retrieval
+
+**Description**: Verify that error reports are consumable when verification exits with code 2 (SIM-04-DEF-001 fix validation).
+
+**Steps**:
+1. Trigger verification that will fail with exitCode=2 (e.g., invalid bridge URL, no active session)
+2. Wait for job to complete with FAILED status
+3. Verify `reportAvailable: true` in job status
+4. Retrieve report via `/api/simulator/verify/{jobId}/report`
+5. Verify report JSON contains `error` field
+
+**Expected Result**:
+- Job status: FAILED
+- Exit code: 2
+- `reportAvailable: true`
+- Report endpoint returns 200 (not 404)
+- Report contains `error` field with specific failure reason
+
+**Evidence to Capture**:
+- Job status showing exitCode=2
+- Report endpoint response (200 with error report JSON)
+- Error field content
+
+**Sample Request (Invalid Bridge URL)**:
+```http
+POST /api/simulator/verify
+Content-Type: application/json
+
+{
+  "session": "latest",
+  "scenario": null,
+  "bridgeUrl": "http://localhost:9999",
+  "apiKey": null
+}
+```
+
+**Expected Error Report Response**:
+```json
+{
+  "sessionId": "latest",
+  "timestamp": "2026-03-31T...",
+  "scenario": null,
+  "passed": false,
+  "summary": {...},
+  "violations": [],
+  "error": "Verification failed: Cannot connect to bridge at http://localhost:9999"
+}
+```
+
+---
+
 ## Test Execution Checklist
 
 Use this checklist when executing the smoke tests:
@@ -258,6 +309,7 @@ Use this checklist when executing the smoke tests:
 - [ ] TC5: Invalid session error handling - PASSED / FAILED
 - [ ] TC6: Cancel active job - PASSED / FAILED
 - [ ] TC7: Invalid bridge key - PASSED / FAILED / SKIPPED (auth disabled)
+- [ ] TC7b: ExitCode 2 error report retrieval - PASSED / FAILED
 
 ## Notes
 

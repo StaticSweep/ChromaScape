@@ -238,6 +238,68 @@ POST /api/simulator/verify/{jobId}/cancel
 
 ---
 
+### TC7b: ExitCode 2 Error Report Retrieval (SIM-04-DEF-001 Fix Validation)
+
+**Status**: SKIPPED - PENDING EXECUTION
+
+**Objective**: Verify that error reports are consumable when verification exits with code 2.
+
+**Steps Executed**:
+1. Trigger verification with invalid bridge URL: `http://localhost:9999`
+2. Wait for job to complete with FAILED status
+3. Verify `exitCode: 2` and `reportAvailable: true` in job status
+4. Execute GET `/api/simulator/verify/{jobId}/report`
+5. Verify report contains `error` field
+
+**Actual Result**: SKIPPED
+
+**API Request**:
+```json
+// TO BE CAPTURED
+POST /api/simulator/verify
+{
+  "session": "latest",
+  "scenario": null,
+  "bridgeUrl": "http://localhost:9999",
+  "apiKey": null
+}
+```
+
+**Job Status Response**:
+```json
+// TO BE CAPTURED - Expected:
+{
+  "status": "FAILED",
+  "exitCode": 2,
+  "reportAvailable": true,
+  "error": "Verification failed: Cannot connect to bridge..."
+}
+```
+
+**Report Endpoint Response**:
+```
+// TO BE CAPTURED - Expected: HTTP 200 OK (NOT 404)
+```
+
+**Report JSON**:
+```json
+// TO BE CAPTURED - Expected:
+{
+  "sessionId": "latest",
+  "passed": false,
+  "error": "Verification failed: Cannot connect to bridge at http://localhost:9999",
+  ...
+}
+```
+
+**Evidence**:
+- [ ] Job status showing exitCode=2 captured
+- [ ] reportAvailable=true verified
+- [ ] Report endpoint returned 200 (not 404) **CRITICAL**
+- [ ] Report JSON contains error field captured
+
+---
+
 ## Acceptance Criteria Summary
 
 | AC | Description | Expected | Actual | Status |
@@ -246,20 +308,34 @@ POST /api/simulator/verify/{jobId}/cancel
 | AC2 | Report endpoint returns valid JSON | GET /report returns 200 with valid JSON | TO BE VERIFIED | SKIPPED |
 | AC3 | Cancel remains in stable terminal state | Cancelled job stays FAILED, no status changes | TO BE VERIFIED | SKIPPED |
 | AC4 | Invalid inputs handled cleanly | Invalid session/key returns FAILED with clear error | TO BE VERIFIED | SKIPPED |
+| AC5 | ExitCode=2 error reports are consumable | exitCode=2 jobs have reportAvailable=true, GET /report returns 200 | TO BE VERIFIED | SKIPPED |
 
 ---
 
 ## Gate Verdict
 
-**Current Status**: FAIL
+**Current Status**: PENDING - Code fixes implemented, smoke tests pending execution
 
-**Reason**: Smoke tests not yet executed. All TCs show SKIPPED status.
+**Reason**:
+- Code fixes for SIM-04-DEF-001 have been implemented:
+  - exitCode=2 branch added to `SimulatorVerifyService.java:244-261`
+  - Error reports are now parsed and accessible via `/report` endpoint
+  - Tests strengthened with strict exitCode=2 assertions
+- Unit tests pass (SimulatorVerifyServiceTest)
+- Integration tests updated (cannot run in WSL due to resource constraints)
+
+**Remaining Work**:
+1. Execute smoke tests TC1-TC7b on Windows environment
+2. Capture TC7b results to validate exitCode=2 fix (critical)
+3. Update this document with actual results
+4. Final gate verdict
 
 **Next Steps**:
-1. Execute smoke tests TC1-TC7 on Windows environment
-2. Capture API responses and evidence
-3. Update this document with actual results
-4. Re-evaluate gate verdict
+1. Switch to Windows environment
+2. Start ChromaScape: `gradlew.bat bootRun`
+3. Execute smoke tests using `docs/simulator/SIM-04-Windows-Smoke-Commands.md`
+4. Capture and paste results into this document
+5. Update gate verdict based on results
 
 ---
 
@@ -269,30 +345,32 @@ POST /api/simulator/verify/{jobId}/cancel
 |-------|-------|
 | **Defect ID** | SIM-04-DEF-001 |
 | **Title** | "Report file not found and no JSON in output" |
-| **Status** | OPEN |
-| **Resolution** | PENDING |
+| **Status** | FIX IMPLEMENTED - Pending smoke test validation |
+| **Resolution** | Code complete, awaiting Windows smoke test execution |
 
 ### Resolution Notes
 
-**Root Cause Identified**:
-- The OpenRune verifier exits with code 2 (error) WITHOUT creating a report file when any exception occurs:
-  - Bridge API unreachable (network errors)
-  - JSON parsing failures
-  - Missing scenarios
-  - No active session found
+**Root Cause**:
+- The OpenRune verifier exits with code 2 (error) AFTER writing error reports to disk
+- ChromaScape's `SimulatorVerifyService` only parsed reports for exitCode 0 or 1
+- exitCode=2 branch didn't call `parseReport()`, leaving `reportPath` null
+- This caused GET `/report` to return 404 even though the report file existed
 
-**Fixes Applied**:
-1. **Pre-flight check added** (SimulatorVerifyService.java:230-240):
-   - Added `isBridgeReachable()` method to check bridge connectivity before invoking verifier
-   - Fail-fast with clear error: "Bridge service unreachable at {bridgeUrl}. Please start the ChromaScape backend."
+**Fixes Applied** (2026-03-31):
+1. **exitCode=2 branch added** (`SimulatorVerifyService.java:244-261`):
+   - Added else-if branch for exitCode=2 that calls `parseReport()` when report file exists
+   - Job status remains FAILED (correct behavior)
+   - `reportPath` is now populated, making reports accessible via `/report` endpoint
 
-2. **Integration test added** (SimulatorVerifyServiceTest.java):
-   - New test class `ExitCodeTwoFailureTests` documents the exitCode 2 failure path
-   - Tests verify error message extraction for network errors, missing sessions, and JSON parsing failures
+2. **Tests strengthened**:
+   - Integration test: Strict assertions for exitCode=2 behavior (`SimulatorVerifyServiceIntegrationTest.java:256-290`)
+   - Unit test: New `ExitCodeTwoJobOutcomeTests` class validates observable job payload (`SimulatorVerifyServiceTest.java:480-545`)
+   - Fixed `ExitCodeReportParsingTests` to use configured properties
 
-**Remaining Work**:
-- Execute smoke tests to verify fixes in real environment
-- Update gate verdict based on test results
+**Verification Required**:
+- [ ] TC7b smoke test: Confirm exitCode=2 jobs return 200 (not 404) for `/report`
+- [ ] Verify `reportAvailable: true` for exitCode=2 jobs
+- [ ] Confirm error reports contain `error` field with specific failure reason
 
 ---
 
