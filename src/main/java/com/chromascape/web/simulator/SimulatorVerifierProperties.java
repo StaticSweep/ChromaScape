@@ -91,8 +91,8 @@ public class SimulatorVerifierProperties {
   /**
    * Resolves the reports directory as an absolute path.
    *
-   * <p>If {@code reportsDir} is relative, it is resolved against {@code openruneRoot}.
-   * If it is already absolute, it is returned unchanged.
+   * <p>If {@code reportsDir} is relative, it is resolved against {@code openruneRoot}. If it is
+   * already absolute, it is returned unchanged.
    *
    * @return The resolved absolute path for the reports directory
    */

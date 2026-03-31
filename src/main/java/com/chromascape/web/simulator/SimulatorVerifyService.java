@@ -242,6 +242,10 @@ public class SimulatorVerifyService {
       }
 
       // Parse report
+      String reportPath = getReportPath(jobId);
+      Path reportFile = Paths.get(reportPath);
+      boolean reportExists = Files.exists(reportFile);
+
       if (exitCode == 0 || exitCode == 1) {
         parseReport(job, output.toString());
         job.setStatus(JobStatus.SUCCEEDED);
@@ -250,6 +254,22 @@ public class SimulatorVerifyService {
             jobId,
             exitCode,
             job.getSummary() != null && job.getSummary().isPassed());
+      } else if (exitCode == 2 && reportExists) {
+        // OpenRune writes error reports before exitProcess(2) - consume them
+        try {
+          parseReport(job, output.toString());
+          job.setStatus(JobStatus.FAILED); // Keep FAILED for exitCode=2
+          job.setError(extractErrorMessage(output.toString()));
+          logger.warn(
+              "Verification job {} failed with exit code 2, error report available at {}",
+              jobId,
+              reportPath);
+        } catch (IOException e) {
+          job.setStatus(JobStatus.FAILED);
+          job.setError(
+              "Verifier exited with code 2, but failed to parse error report: " + e.getMessage());
+          logger.error("Failed to parse error report for job {}: {}", jobId, e.getMessage(), e);
+        }
       } else {
         job.setStatus(JobStatus.FAILED);
         job.setError(
@@ -507,7 +527,7 @@ public class SimulatorVerifyService {
       java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
       conn.setConnectTimeout(5000);
       conn.setReadTimeout(5000);
-      conn.setRequestMethod("GET");  // Changed from HEAD - some bridges don't support HEAD
+      conn.setRequestMethod("GET"); // Changed from HEAD - some bridges don't support HEAD
       int responseCode = conn.getResponseCode();
       conn.disconnect();
       // Accept any 2xx-3xx response as reachable
