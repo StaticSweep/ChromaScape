@@ -260,27 +260,28 @@ class SimulatorVerifyServiceIntegrationTest {
                 Object exitCode = statusResponse.getBody().get("exitCode");
                 Object reportAvailable = statusResponse.getBody().get("reportAvailable");
 
-                // When exitCode=2, reportAvailable must be true
-                if (exitCode != null && exitCode.equals(2)) {
-                  assertTrue(
-                      (Boolean) reportAvailable, "ExitCode=2 jobs must have reportAvailable=true");
+                // First assert: this test scenario must produce exitCode=2
+                assertEquals(2, exitCode, "Test scenario must produce exitCode=2");
 
-                  // Verify report endpoint returns 200 with valid error report
-                  ResponseEntity<Map> reportResponse =
-                      restTemplate.getForEntity(baseUrl + "/" + jobId + "/report", Map.class);
-                  assertEquals(
-                      HttpStatus.OK,
-                      reportResponse.getStatusCode(),
-                      "Report endpoint must return 200 for exitCode=2 jobs");
+                // Second assert: exitCode=2 jobs must have reportAvailable=true
+                assertTrue(
+                    (Boolean) reportAvailable, "ExitCode=2 jobs must have reportAvailable=true");
 
-                  Map reportBody = reportResponse.getBody();
-                  assertFalse(
-                      (Boolean) reportBody.get("passed"), "Error report must show passed=false");
-                  assertNotNull(reportBody.get("error"), "Error report must contain error field");
-                  assertFalse(
-                      reportBody.get("error").toString().isBlank(),
-                      "Error field must not be empty");
-                }
+                // Third assert: verify report endpoint returns 200 with valid error report
+                ResponseEntity<Map> reportResponse =
+                    restTemplate.getForEntity(baseUrl + "/" + jobId + "/report", Map.class);
+                assertEquals(
+                    HttpStatus.OK,
+                    reportResponse.getStatusCode(),
+                    "Report endpoint must return 200 for exitCode=2 jobs");
+
+                Map reportBody = reportResponse.getBody();
+                assertFalse(
+                    (Boolean) reportBody.get("passed"), "Error report must show passed=false");
+                assertNotNull(reportBody.get("error"), "Error report must contain error field");
+                assertFalse(
+                    reportBody.get("error").toString().isBlank(),
+                    "Error field must not be empty");
               });
     }
 
