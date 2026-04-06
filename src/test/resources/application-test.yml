@@ -1,0 +1,54 @@
+# ChromaScape Test Profile
+# Portable defaults for integration tests - no Windows-only paths
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/chromascape_test
+    username: chromascape
+    password: chromascape123
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+server:
+  port: 0
+
+# Simulator verifier - portable paths for WSL/Linux CI
+simulator:
+  verifier:
+    enabled: true
+    openrune-root: ${SIMULATOR_OPENRUNE_ROOT:/mnt/f/Dev/IdeaProjects/OpenRune-Server}
+    invocation-mode: jar
+    verifier-jar-path: simulator-verifier/build/libs/simulator-verifier-all.jar
+    reports-dir: ${SIMULATOR_REPORTS_DIR:/tmp/simulator-test-reports}
+    max-concurrent-jobs: 1
+    job-timeout-seconds: 60
+    auto-create-reports-dir: true
+
+# Disable noisy subsystems during tests
+screencapture:
+  enabled: false
+
+recording:
+  enabled: false
+
+unified-capture:
+  enabled: false
+
+tick-debugger:
+  enabled: false
+
+leeuwbot:
+  integration:
+    enabled: false
+    stream:
+      enabled: false
+
+micro6:
+  log-shipper:
+    enabled: false
+
+analysis:
+  provider: claude-mcp
+  mcp:
+    auto-start: false

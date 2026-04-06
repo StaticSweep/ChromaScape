@@ -141,12 +141,18 @@ micro6:
 
 # Analysis Provider Configuration - For BMAD (Bot Metric Analysis & Diagnostics)
 analysis:
-  # Provider selection: claude-api (default) or claude-mcp
+  # Provider selection: claude-api or claude-mcp
   # Set via ANALYSIS_PROVIDER environment variable
-  provider: ${ANALYSIS_PROVIDER:claude-api}
+  # Default changed to claude-mcp for auto-start convenience
+  provider: ${ANALYSIS_PROVIDER:claude-mcp}
 
   # MCP-specific configuration (only used if provider=claude-mcp)
   mcp:
+    # Auto-start configuration
+    auto-start: ${MCP_AUTO_START:true}
+    bridge-directory: ${MCP_BRIDGE_DIR:scripts/mcp-bridge}
+    startup-timeout: ${MCP_STARTUP_TIMEOUT:30}
+
     # MCP server URL
     server-url: ${MCP_SERVER_URL:http://localhost:8765}
     # Request timeout in seconds
@@ -168,3 +174,39 @@ claude:
     timeout-seconds: ${CLAUDE_API_TIMEOUT:120}
     # Maximum tokens in API response
     max-tokens: ${CLAUDE_API_MAX_TOKENS:4096}
+
+# Simulator Verifier Integration Configuration
+simulator:
+  verifier:
+    # Enable/disable simulator verifier integration
+    enabled: ${SIMULATOR_VERIFIER_ENABLED:true}
+
+    # Root directory of the OpenRune-Server project
+    openrune-root: ${SIMULATOR_OPENRUNE_ROOT:F:\\Dev\\IdeaProjects\\OpenRune-Server}
+
+    # Gradle command to execute (relative to openrune-root)
+    gradle-cmd: ${SIMULATOR_GRADLE_CMD:gradlew.bat}
+
+    # Invocation mode: jar (default) or gradle (fallback)
+    invocation-mode: ${SIMULATOR_INVOCATION_MODE:jar}
+
+    # Verifier jar path (relative to openrune-root if not absolute)
+    verifier-jar-path: ${SIMULATOR_VERIFIER_JAR:simulator-verifier/build/libs/simulator-verifier-all.jar}
+
+    # Default bridge URL for fetching the latest deterministic session
+    default-bridge-url: ${SIMULATOR_DEFAULT_BRIDGE_URL:http://localhost:8092}
+
+    # API key for authenticating with the bridge service
+    api-key: ${CHROMASCAPE_API_KEY:dev-token}
+
+    # Directory where simulator verification reports will be stored
+    reports-dir: ${SIMULATOR_REPORTS_DIR:output/simulator-reports}
+
+    # Maximum number of concurrent verification jobs allowed
+    max-concurrent-jobs: ${SIMULATOR_MAX_CONCURRENT_JOBS:2}
+
+    # Maximum time (in seconds) a verification job is allowed to run
+    job-timeout-seconds: ${SIMULATOR_JOB_TIMEOUT:300}
+
+    # Automatically create the reports directory if it doesn't exist
+    auto-create-reports-dir: ${SIMULATOR_AUTO_CREATE_DIR:true}

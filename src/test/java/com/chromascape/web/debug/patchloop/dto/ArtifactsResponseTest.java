@@ -75,7 +75,8 @@ class ArtifactsResponseTest {
 
   @Test
   @DisplayName("ValidationArtifact serialization includes null rollback fields")
-  void testValidationArtifactSerializationIncludesNullRollbackFields() throws JsonProcessingException {
+  void testValidationArtifactSerializationIncludesNullRollbackFields()
+      throws JsonProcessingException {
     // Arrange
     ArtifactsResponse.ValidationArtifact artifact = new ArtifactsResponse.ValidationArtifact();
     artifact.setPatchId("patch-123");
@@ -91,7 +92,8 @@ class ArtifactsResponseTest {
     assertTrue(json.contains("\"patchId\":\"patch-123\""), "JSON should contain patchId");
     // Jackson includes null fields when @JsonProperty is used
     assertTrue(json.contains("\"rolledBack\":null"), "JSON should contain null rolledBack field");
-    assertTrue(json.contains("\"rollbackReason\":null"), "JSON should contain null rollbackReason field");
+    assertTrue(
+        json.contains("\"rollbackReason\":null"), "JSON should contain null rollbackReason field");
   }
 
   @Test
@@ -123,8 +125,7 @@ class ArtifactsResponseTest {
     assertEquals(2, artifact.getAttemptNumber());
     assertFalse(artifact.getPassed());
     assertTrue(artifact.getRolledBack(), "rolledBack should be true");
-    assertEquals(
-        "Automated rollback due to test failure", artifact.getRollbackReason());
+    assertEquals("Automated rollback due to test failure", artifact.getRollbackReason());
   }
 
   @Test

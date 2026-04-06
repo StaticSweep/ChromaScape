@@ -95,6 +95,10 @@ public class PatchLoopIteration {
   @Column(columnDefinition = "jsonb")
   private JsonNode analysisResponseJson;
 
+  /** Patch ID from V2 analysis response (stored separately for clean queries) */
+  @Column(name = "patch_id", length = 100)
+  private String patchId;
+
   /** Diagnosis summary from analysis */
   @Column(columnDefinition = "TEXT")
   private String diagnosisSummary;
@@ -164,6 +168,40 @@ public class PatchLoopIteration {
   /** Graph execution ID if using graph-based workflow */
   @Column(name = "graph_execution_id", length = 100)
   private String graphExecutionId;
+
+  /** Execution ID from graph execution (links simple API to graph execution) */
+  @Column(name = "execution_id", length = 100)
+  private String executionId;
+
+  /** Prompt type: ISSUE or FEATURE */
+  @Column(name = "prompt_type", length = 20)
+  private String promptType;
+
+  /** Session context JSON (debug session, recording, tick window) */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "session_context", columnDefinition = "jsonb")
+  private JsonNode sessionContext;
+
+  /** Timestamp of the latest lifecycle event */
+  @Column(name = "latest_event_at")
+  private LocalDateTime latestEventAt;
+
+  // V2 Analysis Output Fields
+  /** Patch draft summary from V2 analysis */
+  @Column(name = "patch_draft_summary", columnDefinition = "TEXT")
+  private String patchDraftSummary;
+
+  /** Retest plan summary from V2 analysis */
+  @Column(name = "retest_plan_summary", columnDefinition = "TEXT")
+  private String retestPlanSummary;
+
+  /** Number of impacted modules from diagnosis */
+  @Column(name = "impacted_modules_count")
+  private Integer impactedModulesCount;
+
+  /** Result type: SUCCESS, PARTIAL_SUCCESS, FAILURE, INSUFFICIENT_EVIDENCE */
+  @Column(name = "result_type", length = 50)
+  private String resultType;
 
   public PatchLoopIteration() {
     this.createdAt = LocalDateTime.now();
@@ -368,6 +406,14 @@ public class PatchLoopIteration {
     this.analysisResponseJson = analysisResponseJson;
   }
 
+  public String getPatchId() {
+    return patchId;
+  }
+
+  public void setPatchId(String patchId) {
+    this.patchId = patchId;
+  }
+
   public String getDiagnosisSummary() {
     return diagnosisSummary;
   }
@@ -510,6 +556,70 @@ public class PatchLoopIteration {
 
   public void setGraphExecutionId(String graphExecutionId) {
     this.graphExecutionId = graphExecutionId;
+  }
+
+  public String getExecutionId() {
+    return executionId;
+  }
+
+  public void setExecutionId(String executionId) {
+    this.executionId = executionId;
+  }
+
+  public String getPromptType() {
+    return promptType;
+  }
+
+  public void setPromptType(String promptType) {
+    this.promptType = promptType;
+  }
+
+  public JsonNode getSessionContext() {
+    return sessionContext;
+  }
+
+  public void setSessionContext(JsonNode sessionContext) {
+    this.sessionContext = sessionContext;
+  }
+
+  public LocalDateTime getLatestEventAt() {
+    return latestEventAt;
+  }
+
+  public void setLatestEventAt(LocalDateTime latestEventAt) {
+    this.latestEventAt = latestEventAt;
+  }
+
+  public String getPatchDraftSummary() {
+    return patchDraftSummary;
+  }
+
+  public void setPatchDraftSummary(String patchDraftSummary) {
+    this.patchDraftSummary = patchDraftSummary;
+  }
+
+  public String getRetestPlanSummary() {
+    return retestPlanSummary;
+  }
+
+  public void setRetestPlanSummary(String retestPlanSummary) {
+    this.retestPlanSummary = retestPlanSummary;
+  }
+
+  public Integer getImpactedModulesCount() {
+    return impactedModulesCount;
+  }
+
+  public void setImpactedModulesCount(Integer impactedModulesCount) {
+    this.impactedModulesCount = impactedModulesCount;
+  }
+
+  public String getResultType() {
+    return resultType;
+  }
+
+  public void setResultType(String resultType) {
+    this.resultType = resultType;
   }
 
   /** Increments the current attempt counter. */

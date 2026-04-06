@@ -6399,9 +6399,112 @@ async function updatePauseButtonState() {
 // ==================== PATCH LOOP CONTROLS ====================
 
 /**
+ * Loads available scripts from /api/scripts and populates the patch loop dropdown.
+ */
+async function loadPatchLoopScripts() {
+  try {
+    const response = await fetch('/api/scripts');
+    if (!response.ok) {
+      console.warn('Failed to load scripts:', response.statusText);
+      return;
+    }
+    const scripts = await response.json();
+    const select = document.getElementById('patchScriptSelect');
+    if (!select) return;
+
+    // Clear existing options (keep first "Select script..." option)
+    select.innerHTML = '<option value="">Select script...</option>';
+
+    // Add script options
+    scripts.forEach(script => {
+      const option = document.createElement('option');
+      option.value = script;
+      option.textContent = script;
+      select.appendChild(option);
+    });
+
+    console.log(`Loaded ${scripts.length} scripts for patch loop`);
+  } catch (error) {
+    console.error('Error loading patch loop scripts:', error);
+  }
+}
+
+/**
+ * Polls provider status and updates UI badge.
+ */
+async function updateProviderStatus() {
+  try {
+    const response = await fetch('/api/debug/patch-loop/provider/status');
+    if (!response.ok) return;
+
+    const status = await response.json();
+    const badge = document.getElementById('providerStatusBadge');
+    const nameText = document.getElementById('providerNameText');
+
+    if (!badge || !nameText) return;
+
+    if (status.available) {
+      badge.className = 'badge bg-success';
+      badge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Available';
+    } else {
+      badge.className = 'badge bg-danger';
+      badge.innerHTML = '<i class="bi bi-x-circle me-1"></i>Unavailable';
+    }
+
+    nameText.textContent = `Provider: ${status.providerName}`;
+  } catch (error) {
+    console.error('Error fetching provider status:', error);
+  }
+}
+
+/**
+ * Validates preflight conditions before executing patch loop.
+ * Returns { valid: boolean, message: string }
+ */
+async function validatePatchLoopPreflight() {
+  const script = document.getElementById('patchScriptSelect')?.value;
+  const prompt = document.getElementById('goalPromptInput')?.value;
+  const compiled = window.patchLoopCompiledGraph;
+
+  if (!script) {
+    return { valid: false, message: 'Please select a script' };
+  }
+
+  if (!prompt || prompt.trim().length === 0) {
+    return { valid: false, message: 'Please enter a goal prompt' };
+  }
+
+  if (!compiled) {
+    return { valid: false, message: 'Please compile the graph first' };
+  }
+
+  // Check provider availability
+  try {
+    const response = await fetch('/api/debug/patch-loop/provider/status');
+    if (response.ok) {
+      const status = await response.json();
+      if (!status.available) {
+        return { valid: false, message: `Provider (${status.providerName}) is unavailable` };
+      }
+    }
+  } catch (error) {
+    console.warn('Could not verify provider status:', error);
+  }
+
+  return { valid: true };
+}
+
+/**
  * Initialize Patch Loop UI controls and event listeners.
  */
 function initPatchLoopControls() {
+  // Load scripts and provider status on initialization
+  loadPatchLoopScripts();
+  updateProviderStatus();
+
+  // Poll provider status every 15 seconds
+  setInterval(updateProviderStatus, 15000);
+
   // Toggle patch loop panel collapse/expand
   const togglePatchLoopBtn = document.getElementById('togglePatchLoopBtn');
   if (togglePatchLoopBtn) {
@@ -6492,6 +6595,9 @@ I -.failure.-> D`;
           const result = await response.json();
           console.log('Graph compiled successfully:', result);
 
+          // Store compiled graph for preflight validation
+          window.patchLoopCompiledGraph = true;
+
           // Enable execute button
           const executeLoopBtn = document.getElementById('executeLoopBtn');
           if (executeLoopBtn) {
@@ -6530,15 +6636,24 @@ I -.failure.-> D`;
       const mermaidInput = document.getElementById('mermaidInput');
       const scriptSelect = document.getElementById('patchScriptSelect');
       const goalPromptInput = document.getElementById('goalPromptInput');
+      const executionModeSelect = document.getElementById('executionModeSelect');
 
       if (!mermaidInput) return;
 
       const mermaid = mermaidInput.value;
       const scriptName = scriptSelect ? scriptSelect.value : null;
       const goalPrompt = goalPromptInput ? goalPromptInput.value : '';
+      const executionMode = executionModeSelect ? executionModeSelect.value : 'analysis_only';
 
       if (!mermaid.trim()) {
         console.warn('No Mermaid graph provided');
+        return;
+      }
+
+      // Preflight validation
+      const preflight = await validatePatchLoopPreflight();
+      if (!preflight.valid) {
+        alert(preflight.message);
         return;
       }
 
@@ -6547,8 +6662,11 @@ I -.failure.-> D`;
         executeLoopBtn.disabled = true;
         executeLoopBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Executing...';
 
-        // Execute the graph
-        const result = await window.patchLoopManager.executeGraph(mermaid, scriptName, goalPrompt);
+        // Refresh provider status right before execute
+        await updateProviderStatus();
+
+        // Execute using the simple API (which internally delegates to graph orchestrator)
+        const result = await window.patchLoopManager.execute(scriptName, goalPrompt, { executionMode });
 
         console.log('Graph execution started:', result);
 

@@ -3,12 +3,14 @@ package com.chromascape.web.config;
 import com.chromascape.utils.core.AccountManager;
 import com.chromascape.utils.core.constants.CacheFolderConstants;
 import com.chromascape.utils.core.runtime.profile.ProfileManager;
+import com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import java.io.File;
 import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 
 /**
@@ -23,6 +25,17 @@ import org.springframework.context.annotation.Configuration;
 public class StartupConfiguration {
 
   private static Logger logger = LoggerFactory.getLogger(StartupConfiguration.class);
+
+  private final AnalysisProvider analysisProvider;
+  private final McpBridgeLifecycleManager bridgeManager;
+
+  @Autowired
+  public StartupConfiguration(
+      AnalysisProvider analysisProvider,
+      @Autowired(required = false) McpBridgeLifecycleManager bridgeManager) {
+    this.analysisProvider = analysisProvider;
+    this.bridgeManager = bridgeManager;
+  }
 
   /**
    * Initializes application infrastructure after Spring context is fully loaded.
@@ -55,6 +68,9 @@ public class StartupConfiguration {
       profileManager.loadBotProfile();
 
       logger.info("CHROMASCAPE STARTUP CONFIGURATION COMPLETED");
+
+      // Report MCP bridge and analysis provider status
+      reportAnalysisProviderStatus();
 
     } catch (Exception e) {
       logger.error("Error during infrastructure initialization: {}", e.getMessage());
@@ -172,5 +188,49 @@ public class StartupConfiguration {
     } catch (Exception e) {
       logger.error("Unexpected error during account loading: {}", e.getMessage());
     }
+  }
+
+  /**
+   * Reports the status of the MCP bridge and analysis provider.
+   *
+   * <p>Logs diagnostic information about the bridge process and provider availability to help with
+   * debugging and configuration verification.
+   */
+  private void reportAnalysisProviderStatus() {
+    logger.info("===========================================");
+    logger.info("Analysis Provider Status");
+    logger.info("===========================================");
+
+    // Report MCP bridge status
+    if (bridgeManager != null) {
+      boolean bridgeRunning = bridgeManager.isBridgeProcessRunning();
+      logger.info("MCP Bridge Auto-Start: ENABLED");
+      logger.info("MCP Bridge Process: {}", bridgeRunning ? "RUNNING" : "NOT RUNNING");
+
+      if (bridgeRunning) {
+        logger.info("Provider Mode: Auto-Start Bridge (ChromaScape-managed)");
+        logger.info("  → Bridge auto-detects: codex → claude → opencode → API");
+      }
+    } else {
+      logger.info("MCP Bridge Auto-Start: DISABLED");
+    }
+
+    // Report MCP client registration status
+    logger.info("MCP Client Registration: Optional BYO subscription mode");
+    logger.info("  → Register with: scripts/mcp-bridge/register-mcp-clients.{bat|sh}");
+    logger.info("  → Verify with: scripts/test-mcp-registration.{bat|sh}");
+
+    // Report analysis provider status
+    logger.info("Analysis Provider: {}", analysisProvider.getProviderName());
+    boolean available = analysisProvider.isAvailable();
+    logger.info("Provider Available: {}", available ? "YES" : "NO");
+
+    if (!available) {
+      logger.warn(
+          "⚠️  Analysis provider unavailable - check MCP bridge logs or API key configuration");
+      logger.warn("⚠️  BMAD (Bot Metric Analysis & Diagnostics) features may not work");
+    }
+
+    logger.info("===========================================");
   }
 }

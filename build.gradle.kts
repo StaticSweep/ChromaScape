@@ -68,11 +68,15 @@ dependencies {
 	testImplementation("org.springframework:spring-test:6.1.6")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	testImplementation("org.awaitility:awaitility:4.2.0")
 
 }
 
 tasks.test {
 	useJUnitPlatform()
+	// Required for Mockito inline mock-maker to attach to running JVM
+	// Used by tests that mock final classes and static methods
+	jvmArgs("-Djdk.attach.allowAttachSelf=true")
 }
 
 checkstyle {

@@ -1,14 +1,12 @@
 package com.chromascape.web.debug.patchloop.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-/**
- * Tests for {@link ExecutionPauseService} focusing on pause lifecycle.
- */
+/** Tests for {@link ExecutionPauseService} focusing on pause lifecycle. */
 class ExecutionPauseServiceTest {
 
   private ExecutionPauseService pauseService;

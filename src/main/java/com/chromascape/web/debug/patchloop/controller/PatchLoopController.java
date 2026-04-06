@@ -5,6 +5,7 @@ import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteRequest;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopIterationResponse;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
+import com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import java.util.List;
@@ -30,13 +31,16 @@ public class PatchLoopController {
 
   private final PatchLoopOrchestratorService orchestratorService;
   private final PatchLoopGraphOrchestratorService graphOrchestratorService;
+  private final PatchLoopAnalysisClient analysisClient;
 
   @Autowired
   public PatchLoopController(
       PatchLoopOrchestratorService orchestratorService,
-      PatchLoopGraphOrchestratorService graphOrchestratorService) {
+      PatchLoopGraphOrchestratorService graphOrchestratorService,
+      PatchLoopAnalysisClient analysisClient) {
     this.orchestratorService = orchestratorService;
     this.graphOrchestratorService = graphOrchestratorService;
+    this.analysisClient = analysisClient;
   }
 
   /**
@@ -339,6 +343,30 @@ public class PatchLoopController {
       logger.error("Failed to get active graph executions", e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body("Failed to get active graph executions: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Gets the current analysis provider status.
+   *
+   * @return provider status with name and availability
+   */
+  @GetMapping("/provider/status")
+  public ResponseEntity<Object> getProviderStatus() {
+    logger.debug("GET /api/debug/patch-loop/provider/status");
+
+    try {
+      java.util.Map<String, Object> status = new java.util.HashMap<>();
+      status.put("providerName", analysisClient.getProviderName());
+      status.put("available", analysisClient.isProviderAvailable());
+      status.put("defaultMode", "analysis_only"); // Current default
+
+      return ResponseEntity.ok(status);
+
+    } catch (Exception e) {
+      logger.error("Failed to get provider status", e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body("Failed to get provider status: " + e.getMessage());
     }
   }
 }

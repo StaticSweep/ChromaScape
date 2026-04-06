@@ -281,6 +281,7 @@ public class PatchLoopGraphExecutor {
   private boolean shouldFollowEdge(GraphEdge edge, NodeExecutionResult result) {
     return switch (edge.condition()) {
       case SUCCESS -> result.success();
+      case PARTIAL_SUCCESS -> result.success(); // PARTIAL_SUCCESS continues like SUCCESS
       case FAILURE -> !result.success();
       case RETRY -> result.success() == false && result.retry();
       case TIMEOUT -> result.timedOut();

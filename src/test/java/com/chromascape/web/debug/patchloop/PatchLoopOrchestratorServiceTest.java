@@ -4,14 +4,22 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest;
+import com.chromascape.web.debug.patchloop.dto.GraphExecuteResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteRequest;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopIterationResponse;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopAnalysisArtifact;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopAnalysisArtifactRepository;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopEventRepository;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopEvidenceArtifactRepository;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIteration;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIterationRepository;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopPatchArtifactRepository;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopRetestArtifactRepository;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
-import com.chromascape.web.debug.patchloop.event.PatchLoopIterationCreatedEvent;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopValidationArtifactRepository;
+import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
@@ -34,6 +42,12 @@ class PatchLoopOrchestratorServiceTest {
   @Mock private PatchLoopIterationRepository iterationRepository;
   @Mock private PatchLoopEventRepository eventRepository;
   @Mock private ApplicationEventPublisher eventPublisher;
+  @Mock private PatchLoopGraphOrchestratorService graphOrchestratorService;
+  @Mock private PatchLoopAnalysisArtifactRepository analysisArtifactRepository;
+  @Mock private PatchLoopPatchArtifactRepository patchArtifactRepository;
+  @Mock private PatchLoopValidationArtifactRepository validationArtifactRepository;
+  @Mock private PatchLoopRetestArtifactRepository retestArtifactRepository;
+  @Mock private PatchLoopEvidenceArtifactRepository evidenceArtifactRepository;
 
   private PatchLoopOrchestratorService orchestratorService;
   private ObjectMapper objectMapper;
@@ -43,12 +57,23 @@ class PatchLoopOrchestratorServiceTest {
     objectMapper = new ObjectMapper();
     orchestratorService =
         new PatchLoopOrchestratorService(
-            iterationRepository, eventRepository, eventPublisher, objectMapper);
+            iterationRepository,
+            eventRepository,
+            eventPublisher,
+            objectMapper,
+            graphOrchestratorService,
+            analysisArtifactRepository,
+            patchArtifactRepository,
+            validationArtifactRepository,
+            retestArtifactRepository,
+            evidenceArtifactRepository);
   }
 
   @Test
-  @DisplayName("Execute iteration creates iteration and returns response immediately")
-  void testExecuteIterationCreatesAndReturns() {
+  @DisplayName("Execute iteration creates iteration and delegates to graph orchestrator (E6.5)")
+  void testExecuteIterationCreatesAndReturns()
+      throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException,
+          com.chromascape.web.debug.patchloop.graph.GraphExecutionException {
     // Arrange
     PatchLoopExecuteRequest request = new PatchLoopExecuteRequest();
     request.setScriptName("TestScript");
@@ -61,6 +86,18 @@ class PatchLoopOrchestratorServiceTest {
 
     when(iterationRepository.save(any(PatchLoopIteration.class))).thenReturn(savedIteration);
 
+    // Mock graph orchestrator response
+    when(graphOrchestratorService.executeGraph(any(GraphExecuteRequest.class)))
+        .thenAnswer(
+            invocation -> {
+              GraphExecuteResponse response = new GraphExecuteResponse();
+              response.setExecutionId("graph_exec_xyz");
+              response.setIterationId("patchloop_test123");
+              response.setWsUrl("/ws/debug/patch-loop/graph_exec_xyz");
+              response.setApiUrl("/api/debug/patch-loop/patchloop_test123/graph");
+              return response;
+            });
+
     // Act
     PatchLoopExecuteResponse response = orchestratorService.executeIteration(request);
 
@@ -68,15 +105,10 @@ class PatchLoopOrchestratorServiceTest {
     assertNotNull(response);
     assertEquals("patchloop_test123", response.getIterationId());
     assertEquals("QUEUED", response.getStatus());
+    assertEquals("graph_exec_xyz", response.getExecutionId());
+    assertEquals("/ws/debug/patch-loop/graph_exec_xyz", response.getWsUrl());
+    assertEquals("/api/debug/patch-loop/patchloop_test123/graph", response.getApiUrl());
     assertTrue(response.getMessage().contains("asynchronously"));
-
-    // Verify event was published (Fix #1: event-based async launch)
-    ArgumentCaptor<PatchLoopIterationCreatedEvent> eventCaptor =
-        ArgumentCaptor.forClass(PatchLoopIterationCreatedEvent.class);
-    verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
-
-    PatchLoopIterationCreatedEvent capturedEvent = eventCaptor.getValue();
-    assertEquals("patchloop_test123", capturedEvent.getIterationId());
 
     // Verify iteration was saved with QUEUED status
     ArgumentCaptor<PatchLoopIteration> captor = ArgumentCaptor.forClass(PatchLoopIteration.class);
@@ -86,6 +118,9 @@ class PatchLoopOrchestratorServiceTest {
     assertEquals(PatchLoopStatus.QUEUED, captured.getStatus());
     assertEquals("TestScript", captured.getScriptName());
     assertEquals("Why did it fail?", captured.getPrompt());
+
+    // Verify graph orchestrator was called
+    verify(graphOrchestratorService, times(1)).executeGraph(any(GraphExecuteRequest.class));
   }
 
   @Test
@@ -138,7 +173,9 @@ class PatchLoopOrchestratorServiceTest {
 
   @Test
   @DisplayName("Execute iteration stores evidence config if provided")
-  void testExecuteIterationStoresEvidenceConfig() {
+  void testExecuteIterationStoresEvidenceConfig()
+      throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException,
+          com.chromascape.web.debug.patchloop.graph.GraphExecutionException {
     // Arrange
     PatchLoopExecuteRequest request = new PatchLoopExecuteRequest();
     request.setScriptName("TestScript");
@@ -152,18 +189,32 @@ class PatchLoopOrchestratorServiceTest {
 
     when(iterationRepository.save(any(PatchLoopIteration.class))).thenReturn(savedIteration);
 
+    // Mock graph orchestrator response (E6.5)
+    when(graphOrchestratorService.executeGraph(any(GraphExecuteRequest.class)))
+        .thenAnswer(
+            invocation -> {
+              GraphExecuteResponse response = new GraphExecuteResponse();
+              response.setExecutionId("graph_exec_xyz");
+              response.setIterationId("patchloop_test456");
+              response.setWsUrl("/ws/debug/patch-loop/graph_exec_xyz");
+              response.setApiUrl("/api/debug/patch-loop/patchloop_test456/graph");
+              return response;
+            });
+
     // Act
     PatchLoopExecuteResponse response = orchestratorService.executeIteration(request);
 
     // Assert
     assertNotNull(response);
 
-    // Verify evidence config was stored
+    // Verify evidence config was stored with numeric value fidelity
     ArgumentCaptor<PatchLoopIteration> captor = ArgumentCaptor.forClass(PatchLoopIteration.class);
     verify(iterationRepository, times(1)).save(captor.capture());
 
     PatchLoopIteration captured = captor.getValue();
     assertNotNull(captured.getEvidenceConfig());
+    // Assert serialized value fidelity (maxLogEntries == 100)
+    assertEquals(100, captured.getEvidenceConfig().get("maxLogEntries").asInt());
   }
 
   @Test
@@ -313,6 +364,131 @@ class PatchLoopOrchestratorServiceTest {
     assertTrue(completedResponse.isPresent());
     assertFalse(completedResponse.get().getIsActive());
     assertTrue(completedResponse.get().getIsComplete());
+  }
+
+  @Test
+  @DisplayName("executeIteration returns consistent iterationId and executionId (E6.5)")
+  void testIterationIdConsistency()
+      throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException,
+          com.chromascape.web.debug.patchloop.graph.GraphExecutionException {
+    // Arrange
+    PatchLoopExecuteRequest request = new PatchLoopExecuteRequest();
+    request.setScriptName("TestScript");
+    request.setPrompt("Test prompt");
+
+    PatchLoopIteration savedIteration = new PatchLoopIteration();
+    savedIteration.setIterationId("patchloop_test123");
+    savedIteration.setStatus(PatchLoopStatus.QUEUED);
+    savedIteration.setScriptName("TestScript");
+
+    when(iterationRepository.save(any(PatchLoopIteration.class))).thenReturn(savedIteration);
+
+    // Capture the GraphExecuteRequest to verify iterationId forwarding
+    ArgumentCaptor<GraphExecuteRequest> graphRequestCaptor =
+        ArgumentCaptor.forClass(GraphExecuteRequest.class);
+
+    // Mock graph orchestrator response
+    when(graphOrchestratorService.executeGraph(graphRequestCaptor.capture()))
+        .thenAnswer(
+            invocation -> {
+              GraphExecuteResponse response = new GraphExecuteResponse();
+              response.setExecutionId("graph_exec_xyz");
+              response.setIterationId("patchloop_test123");
+              response.setWsUrl("/ws/debug/patch-loop/graph_exec_xyz");
+              response.setApiUrl("/api/debug/patch-loop/patchloop_test123/graph");
+              return response;
+            });
+
+    // Act
+    PatchLoopExecuteResponse response = orchestratorService.executeIteration(request);
+
+    // Assert - response fields are consistent
+    assertEquals("patchloop_test123", response.getIterationId());
+    assertTrue(response.getApiUrl().contains("patchloop_test123"));
+
+    // Assert - iterationId was correctly forwarded to graph orchestrator (NEW)
+    GraphExecuteRequest capturedGraphRequest = graphRequestCaptor.getValue();
+    assertEquals(
+        "patchloop_test123",
+        capturedGraphRequest.getIterationId(),
+        "GraphExecuteRequest should contain the same iterationId as the saved iteration");
+
+    // Verify only ONE iteration was saved (no duplicate)
+    verify(iterationRepository, times(1)).save(any(PatchLoopIteration.class));
+  }
+
+  @Test
+  @DisplayName("getIteration includes summary fields when execution exists (E6.5)")
+  void testGetIterationIncludesSummaryFields() {
+    // Arrange
+    String iterationId = "iter_summary";
+    String executionId = "exec_summary_123";
+
+    PatchLoopIteration iteration = createTestIteration(iterationId, PatchLoopStatus.COMPLETED);
+    iteration.setGraphExecutionId(executionId);
+
+    when(iterationRepository.findByIterationId(iterationId)).thenReturn(Optional.of(iteration));
+
+    // Mock artifact repositories with sample data
+    PatchLoopAnalysisArtifact analysis = new PatchLoopAnalysisArtifact();
+    analysis.setAnalysisId("analysis_id_1");
+    when(analysisArtifactRepository.findByExecutionIdOrderByTimestampAsc(executionId))
+        .thenReturn(List.of(analysis));
+
+    // Mock other repositories with empty lists
+    when(patchArtifactRepository.findByExecutionIdOrderByCreatedAtAsc(executionId))
+        .thenReturn(List.of());
+    when(validationArtifactRepository.findByExecutionIdOrderByTimestampAsc(executionId))
+        .thenReturn(List.of());
+    when(retestArtifactRepository.findByExecutionIdOrderByTimestampAsc(executionId))
+        .thenReturn(List.of());
+    when(evidenceArtifactRepository.findByExecutionIdOrderByTimestampAsc(executionId))
+        .thenReturn(List.of());
+
+    // Act
+    Optional<PatchLoopIterationResponse> response = orchestratorService.getIteration(iterationId);
+
+    // Assert
+    assertTrue(response.isPresent());
+    assertNotNull(response.get().getArtifactSummary());
+    assertEquals(1, response.get().getArtifactSummary().getAnalysisCount());
+    assertEquals("analysis_id_1", response.get().getArtifactSummary().getLatestAnalysisId());
+    assertEquals(0, response.get().getArtifactSummary().getPatchCount());
+    assertEquals(0, response.get().getArtifactSummary().getValidationCount());
+    assertEquals(0, response.get().getArtifactSummary().getRetestCount());
+    assertEquals(0, response.get().getArtifactSummary().getEvidenceCount());
+
+    // Verify retest summary is present with zero values
+    assertNotNull(response.get().getRetestSummary());
+    assertEquals(0, response.get().getRetestSummary().getTotalRetests());
+  }
+
+  @Test
+  @DisplayName("getIteration includes empty summaries when no execution exists (E6.5)")
+  void testGetIterationIncludesEmptySummariesWhenNoExecution() {
+    // Arrange
+    String iterationId = "iter_no_exec";
+
+    PatchLoopIteration iteration = createTestIteration(iterationId, PatchLoopStatus.COMPLETED);
+    iteration.setGraphExecutionId(null); // No execution ID
+
+    when(iterationRepository.findByIterationId(iterationId)).thenReturn(Optional.of(iteration));
+
+    // Act
+    Optional<PatchLoopIterationResponse> response = orchestratorService.getIteration(iterationId);
+
+    // Assert
+    assertTrue(response.isPresent());
+    // Summaries should still be present (not null) with zero values
+    assertNotNull(response.get().getArtifactSummary());
+    assertEquals(0, response.get().getArtifactSummary().getAnalysisCount());
+    assertEquals(0, response.get().getArtifactSummary().getPatchCount());
+    assertEquals(0, response.get().getArtifactSummary().getValidationCount());
+    assertEquals(0, response.get().getArtifactSummary().getRetestCount());
+    assertEquals(0, response.get().getArtifactSummary().getEvidenceCount());
+
+    assertNotNull(response.get().getRetestSummary());
+    assertEquals(0, response.get().getRetestSummary().getTotalRetests());
   }
 
   // ========== Helper Methods ==========

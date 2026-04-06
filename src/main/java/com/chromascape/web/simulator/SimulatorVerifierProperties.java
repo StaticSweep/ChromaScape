@@ -24,6 +24,12 @@ public class SimulatorVerifierProperties {
   /** Gradle command to execute (relative to openrune-root). */
   private String gradleCmd = "./gradlew";
 
+  /** Invocation mode for verifier execution: jar (default) or gradle. */
+  private String invocationMode = "jar";
+
+  /** Path to the standalone simulator verifier jar (relative to openruneRoot if not absolute). */
+  private String verifierJarPath = "simulator-verifier/build/libs/simulator-verifier-all.jar";
+
   /** Default bridge URL for fetching the latest deterministic session. */
   private String defaultBridgeUrl = "http://localhost:8092";
 
@@ -68,6 +74,22 @@ public class SimulatorVerifierProperties {
     this.gradleCmd = gradleCmd;
   }
 
+  public String getInvocationMode() {
+    return invocationMode;
+  }
+
+  public void setInvocationMode(String invocationMode) {
+    this.invocationMode = invocationMode;
+  }
+
+  public String getVerifierJarPath() {
+    return verifierJarPath;
+  }
+
+  public void setVerifierJarPath(String verifierJarPath) {
+    this.verifierJarPath = verifierJarPath;
+  }
+
   public String getDefaultBridgeUrl() {
     return defaultBridgeUrl;
   }
@@ -102,6 +124,29 @@ public class SimulatorVerifierProperties {
       return reportsPath;
     }
     return Paths.get(openruneRoot).resolve(reportsPath);
+  }
+
+  /**
+   * Resolves the verifier jar as an absolute path.
+   *
+   * <p>If {@code verifierJarPath} is relative, it is resolved against {@code openruneRoot}. If it
+   * is already absolute, it is returned unchanged.
+   *
+   * @return The resolved absolute path for the verifier jar
+   */
+  public Path getResolvedVerifierJarPath() {
+    Path jarPath = Paths.get(verifierJarPath);
+    if (jarPath.isAbsolute()) {
+      return jarPath;
+    }
+    return Paths.get(openruneRoot).resolve(jarPath);
+  }
+
+  /**
+   * @return true when configured to use the standalone jar invocation mode.
+   */
+  public boolean isJarInvocation() {
+    return !"gradle".equalsIgnoreCase(invocationMode);
   }
 
   public void setReportsDir(String reportsDir) {
@@ -139,6 +184,12 @@ public class SimulatorVerifierProperties {
         + enabled
         + ", openruneRoot='"
         + openruneRoot
+        + '\''
+        + ", invocationMode='"
+        + invocationMode
+        + '\''
+        + ", verifierJarPath='"
+        + verifierJarPath
         + '\''
         + ", defaultBridgeUrl='"
         + defaultBridgeUrl

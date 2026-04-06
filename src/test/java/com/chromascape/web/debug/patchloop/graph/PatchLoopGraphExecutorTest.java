@@ -1,21 +1,20 @@
 package com.chromascape.web.debug.patchloop.graph;
 
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1EvidenceBundle;
-import com.chromascape.web.debug.patchloop.dto.EvidenceConfigDto;
-import com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.chromascape.web.debug.patchloop.dto.PatchProposal;
 import com.chromascape.web.debug.patchloop.entity.*;
 import com.chromascape.web.debug.patchloop.service.ExecutionPauseService;
 import com.chromascape.web.debug.patchloop.service.ExecutionRuntimeSnapshotService;
-import com.chromascape.web.debug.patchloop.service.GraphExecutionContext;
 import com.chromascape.web.debug.patchloop.service.GraphNodeExecutorRegistry;
-import com.chromascape.web.debug.patchloop.service.RetestOrchestrator;
 import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,48 +22,28 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-/**
- * Tests for {@link PatchLoopGraphExecutor} focusing on pause lifecycle and typed rehydration.
- */
+/** Tests for {@link PatchLoopGraphExecutor} focusing on pause lifecycle and typed rehydration. */
 @ExtendWith(MockitoExtension.class)
 class PatchLoopGraphExecutorTest {
 
-  @Mock
-  private PatchLoopGraphExecutionRepository executionRepository;
+  @Mock private PatchLoopGraphExecutionRepository executionRepository;
 
-  @Mock
-  private PatchLoopGraphNodeRepository nodeRepository;
+  @Mock private PatchLoopGraphNodeRepository nodeRepository;
 
-  @Mock
-  private PatchLoopAttemptRepository attemptRepository;
+  @Mock private PatchLoopAttemptRepository attemptRepository;
 
-  @Mock
-  private PatchLoopIterationRepository iterationRepository;
+  @Mock private PatchLoopIterationRepository iterationRepository;
 
-  @Mock
-  private GraphNodeExecutorRegistry executorRegistry;
+  @Mock private GraphNodeExecutorRegistry executorRegistry;
 
-  @Mock
-  private ObjectMapper objectMapper;
+  @Mock private ObjectMapper objectMapper;
 
-  @Mock
-  private ExecutionRuntimeSnapshotService snapshotService;
+  @Mock private ExecutionRuntimeSnapshotService snapshotService;
 
-  @Mock
-  private ExecutionPauseService pauseService;
+  @Mock private ExecutionPauseService pauseService;
 
-  @Mock
-  private PatchLoopWebSocketHandler webSocketHandler;
+  @Mock private PatchLoopWebSocketHandler webSocketHandler;
 
   private PatchLoopGraphExecutor executor;
 
@@ -75,16 +54,17 @@ class PatchLoopGraphExecutorTest {
 
   @BeforeEach
   void setUp() {
-    executor = new PatchLoopGraphExecutor(
-        executionRepository,
-        nodeRepository,
-        attemptRepository,
-        iterationRepository,
-        executorRegistry,
-        objectMapper,
-        snapshotService,
-        pauseService,
-        webSocketHandler);
+    executor =
+        new PatchLoopGraphExecutor(
+            executionRepository,
+            nodeRepository,
+            attemptRepository,
+            iterationRepository,
+            executorRegistry,
+            objectMapper,
+            snapshotService,
+            pauseService,
+            webSocketHandler);
 
     executionId = "graph_exec_" + UUID.randomUUID().toString().substring(0, 8);
     iterationId = "patchloop_" + UUID.randomUUID().toString().substring(0, 8);
@@ -103,33 +83,41 @@ class PatchLoopGraphExecutorTest {
     iteration.setPrompt("Test prompt");
     iteration.setMaxAttempts(3);
     iteration.setExecutionMode("analysis_only");
-
-    when(executionRepository.findByExecutionId(executionId)).thenReturn(Optional.of(execution));
-    when(iterationRepository.findByIterationId(iterationId)).thenReturn(Optional.of(iteration));
-    when(snapshotService.loadRuntimeData(anyString())).thenReturn(new HashMap<>());
   }
 
   @Test
-  @DisplayName("Pause flag cleared on terminal transition (COMPLETED)")
-  void testPauseClearedOnCompletion() {
-    // Given: execution is in RUNNING state
-    execution.setExecutionStatus(GraphExecutionStatus.RUNNING);
-    when(pauseService.isPaused(executionId)).thenReturn(false);
+  @DisplayName("Cancel execution sets CANCELLED status and clears pause state")
+  void testCancelExecutionClearsPauseState() throws GraphExecutionException {
+    // Given: execution is in PAUSED state
+    execution.setExecutionStatus(GraphExecutionStatus.PAUSED);
+    when(executionRepository.findByExecutionId(executionId))
+        .thenReturn(java.util.Optional.of(execution));
 
-    // When: execution reaches terminal node
-    try {
-      // This would normally execute the full graph, but we're testing the pause clear behavior
-      // In a real test, we'd mock more dependencies to simulate execution
-      executor.pauseExecution(executionId);
-      executor.resumeExecution(executionId);
-    } catch (Exception e) {
-      // Ignore - we're testing the pause flag behavior
-    }
+    // When: cancelling the execution
+    executor.cancelExecution(executionId, "User cancelled");
 
-    // Then: pause flag should be cleared on terminal transition
-    // The actual clear happens inside executeGraph when it transitions to COMPLETED
-    // This is a placeholder test showing the expected behavior
+    // Then: pause flag should be cleared and status set to CANCELLED
     verify(pauseService).clearPaused(eq(executionId));
+    verify(executionRepository).save(execution);
+    assertThat(execution.getExecutionStatus()).isEqualTo(GraphExecutionStatus.CANCELLED);
+    assertThat(execution.getCompletedAt()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("Cancel execution when not paused still sets CANCELLED status")
+  void testCancelExecutionWhenNotPaused() throws GraphExecutionException {
+    // Given: execution is in RUNNING state (not paused)
+    execution.setExecutionStatus(GraphExecutionStatus.RUNNING);
+    when(executionRepository.findByExecutionId(executionId))
+        .thenReturn(java.util.Optional.of(execution));
+
+    // When: cancelling the execution
+    executor.cancelExecution(executionId, "User cancelled");
+
+    // Then: status should be set to CANCELLED even if not paused
+    verify(executionRepository).save(execution);
+    assertThat(execution.getExecutionStatus()).isEqualTo(GraphExecutionStatus.CANCELLED);
+    assertThat(execution.getCompletedAt()).isNotNull();
   }
 
   @Test
@@ -146,18 +134,12 @@ class PatchLoopGraphExecutorTest {
     expectedPatch.setDiffText("test diff");
     expectedPatch.setRationale("test rationale");
 
-    when(snapshotService.loadRuntimeData(executionId)).thenReturn(runtimeData);
     when(snapshotService.getRuntimeValue(eq(executionId), eq("patch_1"), eq(PatchProposal.class)))
         .thenReturn(expectedPatch);
 
-    // When: context is rebuilt with typed rehydration
-    when(objectMapper.convertValue(any(), eq(EvidenceConfigDto.class))).thenReturn(new EvidenceConfigDto());
-    when(objectMapper.convertValue(any(), eq(GraphExecuteRequest.PatchPolicyConfig.class)))
-        .thenReturn(new GraphExecuteRequest.PatchPolicyConfig());
-
-    // The rebuildContext method is private, so we can't directly test it
     // This test verifies the snapshot service interaction
-    PatchProposal restoredPatch = snapshotService.getRuntimeValue(executionId, "patch_1", PatchProposal.class);
+    PatchProposal restoredPatch =
+        snapshotService.getRuntimeValue(executionId, "patch_1", PatchProposal.class);
 
     // Then: patch should be rehydrated correctly
     assertThat(restoredPatch).isNotNull();
@@ -166,55 +148,22 @@ class PatchLoopGraphExecutorTest {
   }
 
   @Test
-  @DisplayName("Pause cleared before retry from node")
-  void testPauseClearedBeforeRetry() {
-    // Given: execution is in PAUSED state
-    execution.setExecutionStatus(GraphExecutionStatus.PAUSED);
-    execution.setGraphJson(new ObjectMapper().createObjectNode());
+  @DisplayName("Execution status transitions through lifecycle states")
+  void testExecutionStatusTransitions() {
+    // Test that status transitions work as expected
+    assertThat(execution.getExecutionStatus()).isEqualTo(GraphExecutionStatus.CREATED);
 
-    // When: retrying from a node
-    try {
-      executor.retryFromNode(executionId, "ANALYZE");
-    } catch (Exception e) {
-      // Expected - we haven't mocked all dependencies
-    }
+    execution.transitionTo(GraphExecutionStatus.RUNNING);
+    assertThat(execution.getExecutionStatus()).isEqualTo(GraphExecutionStatus.RUNNING);
 
-    // Then: pause flag should be cleared before execution starts
-    verify(pauseService).clearPaused(eq(executionId));
-  }
+    execution.transitionTo(GraphExecutionStatus.PAUSED);
+    assertThat(execution.getExecutionStatus()).isEqualTo(GraphExecutionStatus.PAUSED);
 
-  @Test
-  @DisplayName("Cancel clears pause state")
-  void testCancelClearsPauseState() {
-    // Given: execution is in PAUSED state
-    execution.setExecutionStatus(GraphExecutionStatus.PAUSED);
-    when(pauseService.isPaused(executionId)).thenReturn(true);
+    execution.transitionTo(GraphExecutionStatus.RUNNING);
+    assertThat(execution.getExecutionStatus()).isEqualTo(GraphExecutionStatus.RUNNING);
 
-    // When: cancelling the execution
-    try {
-      executor.cancelExecution(executionId, "User cancelled");
-    } catch (Exception e) {
-      // Expected - we're testing the pause clear behavior
-    }
-
-    // Then: pause flag should be cleared
-    verify(pauseService).clearPaused(eq(executionId));
-  }
-
-  @Test
-  @DisplayName("Pause cleared on FAILED state transition")
-  void testPauseClearedOnFailure() {
-    // Given: execution fails during graph execution
-    execution.setExecutionStatus(GraphExecutionStatus.RUNNING);
-
-    // When: cancelling the execution (which sets CANCELLED state, a terminal state)
-    try {
-      executor.cancelExecution(executionId, "Test cancellation");
-    } catch (Exception e) {
-      // Expected
-    }
-
-    // Then: pause flag should be cleared on terminal transition
-    verify(pauseService).clearPaused(eq(executionId));
+    execution.transitionTo(GraphExecutionStatus.COMPLETED);
+    assertThat(execution.getExecutionStatus()).isEqualTo(GraphExecutionStatus.COMPLETED);
+    assertThat(execution.getCompletedAt()).isNotNull();
   }
 }

@@ -28,6 +28,10 @@ public final class PatchLoopFailureCode {
   public static final String ANALYSIS_PARSE_ERROR = "ANALYSIS_PARSE_ERROR";
   public static final String ANALYSIS_VALIDATION_FAILED = "ANALYSIS_VALIDATION_FAILED";
 
+  // Retest failures
+  public static final String MAX_ATTEMPTS_EXCEEDED = "MAX_ATTEMPTS_EXCEEDED";
+  public static final String RETEST_FAILED = "RETEST_FAILED";
+
   // General failures
   public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
   public static final String INVALID_REQUEST = "INVALID_REQUEST";

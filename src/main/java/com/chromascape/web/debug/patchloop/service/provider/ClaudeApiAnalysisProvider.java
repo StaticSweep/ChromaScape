@@ -123,7 +123,9 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
         // If validation failed and we have retries left, add repair instruction
         if (e.getErrorCode().equals(AnalysisV2ErrorCode.INVALID_RESPONSE_SCHEMA)
             || e.getErrorCode().equals(AnalysisV2ErrorCode.MISSING_SUCCESS_FIELDS)
-            || e.getErrorCode().equals(AnalysisV2ErrorCode.PARSE_ERROR)) {
+            || e.getErrorCode().equals(AnalysisV2ErrorCode.PARSE_ERROR)
+            || e.getErrorCode().equals(AnalysisV2ErrorCode.MISSING_REQUIRED_FIELD)
+            || e.getErrorCode().equals(AnalysisV2ErrorCode.MISSING_ERROR_ON_FAILURE)) {
           if (attempt < MAX_PARSE_RETRIES) {
             logger.warn(
                 "[{}] Validation attempt {} failed: {}. Retrying with repair prompt...",
@@ -411,24 +413,59 @@ public class ClaudeApiAnalysisProvider implements AnalysisProvider {
       response.setAnalysisId(UUID.randomUUID().toString());
       response.setTimestamp(LocalDateTime.now());
 
-      // Determine status - default to SUCCESS if we have diagnosis
+      // Determine status - check if we have minimum viable diagnosis
       JsonNode diagnosisNode = root.path("diagnosis");
       if (diagnosisNode.isMissingNode() || diagnosisNode.isNull()) {
-        // Check if there's an error node
+        // Check error path
         JsonNode errorNode = root.path("error");
         if (!errorNode.isMissingNode() && !errorNode.isNull()) {
           response.setStatus(AnalysisStatus.FAILURE);
+
+          // Populate error object properly (V2 contract requirement)
+          AnalysisV1Error error = new AnalysisV1Error();
+          error.setCode(errorNode.path("code").asText());
+          error.setMessage(errorNode.path("message").asText());
+          if (errorNode.has("details")) {
+            error.setDetails(errorNode.path("details").toString());
+          }
+          response.setError(error);
+
           response.setMetadata(new AnalysisMetadata());
-          return response; // Minimal error response
+          return response;
         } else {
           throw new AnalysisException(
               AnalysisV2ErrorCode.INVALID_RESPONSE_SCHEMA, "Missing required 'diagnosis' field");
         }
       }
 
-      response.setStatus(AnalysisStatus.SUCCESS);
+      // We have diagnosis - check if we have all SUCCESS requirements
+      JsonNode impactedModulesNode = root.path("impactedModules");
+      JsonNode patchDraftNode = root.path("patchDraft");
+      JsonNode retestPlanNode = root.path("retestPlan");
+      JsonNode evidenceRefsNode = root.path("evidenceReferences");
 
-      // Parse diagnosis
+      boolean hasAllSuccessFields =
+          !impactedModulesNode.isMissingNode()
+              && !impactedModulesNode.isNull()
+              && impactedModulesNode.isArray()
+              && impactedModulesNode.size() > 0
+              && !patchDraftNode.isMissingNode()
+              && !patchDraftNode.isNull()
+              && !retestPlanNode.isMissingNode()
+              && !retestPlanNode.isNull()
+              && !evidenceRefsNode.isMissingNode()
+              && !evidenceRefsNode.isNull()
+              && evidenceRefsNode.isArray()
+              && evidenceRefsNode.size() > 0;
+
+      if (hasAllSuccessFields) {
+        response.setStatus(AnalysisStatus.SUCCESS);
+      } else {
+        // Emit PARTIAL_SUCCESS when diagnosis exists but some success fields are missing
+        response.setStatus(AnalysisStatus.PARTIAL_SUCCESS);
+      }
+
+      // Parse diagnosis (continues for both SUCCESS and PARTIAL_SUCCESS)
       AnalysisV2Diagnosis diagnosis = new AnalysisV2Diagnosis();
       diagnosis.setSummary(diagnosisNode.path("summary").asText());
       diagnosis.setRootCause(diagnosisNode.path("rootCause").asText());

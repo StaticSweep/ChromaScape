@@ -155,8 +155,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
         .setAllowedOrigins("*");
 
     // Patch loop execution updates
+    // Uses wildcard routing for execution-scoped connections (e.g., /ws/debug/patch-loop/exec-123)
     registry
-        .addHandler(patchLoopWebSocketHandler, "/ws/debug/patch-loop", "/ws/debug/patch-loop/{executionId}")
+        .addHandler(patchLoopWebSocketHandler, "/ws/debug/patch-loop", "/ws/debug/patch-loop/*")
         .setAllowedOrigins("*");
   }
 }

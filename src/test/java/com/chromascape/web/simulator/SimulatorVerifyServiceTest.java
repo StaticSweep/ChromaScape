@@ -643,5 +643,59 @@ class SimulatorVerifyServiceTest {
           extractedError.contains("active session") || extractedError.contains("Unknown error"),
           "Extracted error should contain session failure details");
     }
+
+    @Test
+    @DisplayName("Should build synthetic error report when report file missing and no JSON in output")
+    void shouldBuildSyntheticReportWhenNoFileAndNoJson() throws Exception {
+      // This validates the SIM-04 fix: parseReport no longer throws for missing files.
+      // Instead it builds a synthetic JSON report so reportAvailable stays true.
+
+      java.nio.file.Path tempDir =
+          java.nio.file.Files.createTempDirectory("synthetic-report-test");
+      java.nio.file.Path reportsDir = tempDir.resolve("reports");
+      java.nio.file.Files.createDirectories(reportsDir);
+
+      SimulatorVerifierProperties props = new SimulatorVerifierProperties();
+      ReflectionTestUtils.setField(props, "reportsDir", "reports");
+      ReflectionTestUtils.setField(props, "openruneRoot", tempDir.toString());
+      SimulatorVerifyService testService = new SimulatorVerifyService(props, jobStore);
+
+      String jobId = "synthetic-test";
+      SimulatorVerifyJobStore.VerifyJob job =
+          new SimulatorVerifyJobStore.VerifyJob(
+              jobId,
+              new SimulatorVerifyJobStore.VerifyArgs(
+                  "test-session", null, "http://localhost:8092", null));
+
+      // Act: parseReport with output containing no JSON and no report file
+      // Before SIM-04 fix, this would throw IOException
+      // After fix, it builds synthetic report and sets reportPath
+      String output = "Verification failed: Cannot connect to bridge at http://localhost:8092";
+      parseReportMethod.invoke(testService, job, output);
+
+      // Assert: synthetic report was written and job has reportPath
+      assertNotNull(job.getReportPath(), "Job should have reportPath after synthetic fallback");
+      assertNotNull(job.getSummary(), "Job should have summary from synthetic report");
+      assertFalse(job.getSummary().isPassed(), "Synthetic report must show passed=false");
+
+      // Verify the report file exists and is valid JSON
+      java.nio.file.Path reportFile = java.nio.file.Paths.get(job.getReportPath());
+      assertTrue(java.nio.file.Files.exists(reportFile), "Synthetic report file should exist");
+      String content = java.nio.file.Files.readString(reportFile);
+      assertTrue(content.contains("\"passed\": false"), "Report must contain passed=false");
+      assertTrue(content.contains("\"error\""), "Report must contain error field");
+
+      // Cleanup
+      java.nio.file.Files.walk(tempDir)
+          .sorted(java.util.Comparator.reverseOrder())
+          .forEach(
+              p -> {
+                try {
+                  java.nio.file.Files.deleteIfExists(p);
+                } catch (IOException e) {
+                  // ignore
+                }
+              });
+    }
   }
 }

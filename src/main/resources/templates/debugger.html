@@ -176,6 +176,27 @@
           </div>
         </div>
 
+        <!-- Provider Status -->
+        <div class="patch-section">
+          <div class="d-flex justify-content-between align-items-center">
+            <label class="form-label mb-0">Provider</label>
+            <span id="providerStatusBadge" class="badge bg-secondary">
+              <i class="bi bi-question-circle me-1"></i>Checking...
+            </span>
+          </div>
+          <small id="providerNameText" class="text-muted">Loading provider info...</small>
+        </div>
+
+        <!-- Execution Mode -->
+        <div class="patch-section">
+          <label class="form-label">Execution Mode</label>
+          <select id="executionModeSelect" class="form-select form-select-sm">
+            <option value="analysis_only" selected>Analysis Only</option>
+            <option value="autofix_loop">Full Loop (Apply + Retest)</option>
+          </select>
+          <small class="text-muted">Analysis only generates patches without applying them.</small>
+        </div>
+
         <!-- Node Timeline -->
         <div class="patch-section">
           <div class="d-flex justify-content-between align-items-center mb-1">

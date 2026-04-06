@@ -26,6 +26,7 @@ public class McpTransportClient {
   private static final Logger logger = LoggerFactory.getLogger(McpTransportClient.class);
 
   private static final String HEALTH_ENDPOINT = "/health";
+  private static final String ANALYZE_ENDPOINT = "/analyze";
 
   private final McpConfigProperties config;
   private final HttpClient httpClient;
@@ -171,6 +172,132 @@ public class McpTransportClient {
   }
 
   /**
+   * Performs an analysis request to the MCP server.
+   *
+   * <p>This method will retry on transient failures up to the configured max-retries limit with
+   * exponential backoff.
+   *
+   * @param request the analyze request
+   * @return the analyze response
+   * @throws McpTransportException if the analysis fails after all retries
+   */
+  public McpAnalyzeResponse analyze(McpAnalyzeRequest request) throws McpTransportException {
+    String analyzeUrl = buildAnalyzeUrl();
+
+    logger.debug("Performing MCP analysis: {}", analyzeUrl);
+
+    int attempt = 0;
+    int maxAttempts = config.getMaxRetries() + 1; // Initial attempt + retries
+
+    while (attempt < maxAttempts) {
+      attempt++;
+
+      try {
+        // Serialize request
+        String requestBody;
+        try {
+          requestBody = objectMapper.writeValueAsString(request);
+        } catch (Exception e) {
+          throw new McpTransportException(
+              McpTransportException.McpErrorType.SERIALIZATION_ERROR,
+              "Failed to serialize MCP analyze request: " + e.getMessage(),
+              e,
+              false);
+        }
+
+        HttpRequest httpRequest =
+            HttpRequest.newBuilder()
+                .uri(URI.create(analyzeUrl))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofMillis(config.getRequestTimeoutMs()))
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .build();
+
+        HttpResponse<String> response =
+            httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+          logger.debug(
+              "MCP analyze successful (attempt {}): status {}", attempt, response.statusCode());
+          return parseAnalyzeResponse(response.body());
+        } else {
+          logger.warn("MCP analyze failed (attempt {}): HTTP {}", attempt, response.statusCode());
+
+          McpTransportException.McpErrorType errorType =
+              determineHttpErrorType(response.statusCode());
+          boolean isRetryable = isRetryableHttpError(response.statusCode());
+
+          if (!isRetryable || attempt >= maxAttempts) {
+            throw new McpTransportException(
+                errorType,
+                "MCP server returned HTTP " + response.statusCode() + ": " + response.body(),
+                isRetryable);
+          }
+        }
+
+      } catch (java.net.ConnectException e) {
+        logger.warn("MCP analyze failed (attempt {}): Connection refused", attempt);
+
+        if (attempt >= maxAttempts) {
+          throw new McpTransportException(
+              McpTransportException.McpErrorType.CONNECTION_REFUSED,
+              "Cannot connect to MCP server at " + analyzeUrl + ": " + e.getMessage(),
+              e,
+              false);
+        }
+
+      } catch (java.net.http.HttpTimeoutException e) {
+        logger.warn("MCP analyze failed (attempt {}): Timeout", attempt);
+
+        if (attempt >= maxAttempts) {
+          throw new McpTransportException(
+              McpTransportException.McpErrorType.TIMEOUT,
+              "MCP server request timed out after " + config.getRequestTimeoutMs() + "ms",
+              e,
+              true);
+        }
+
+      } catch (McpTransportException e) {
+        // Re-throw our own exceptions without modification
+        throw e;
+
+      } catch (Exception e) {
+        logger.warn("MCP analyze failed (attempt {}): {}", attempt, e.getMessage());
+
+        if (attempt >= maxAttempts) {
+          throw new McpTransportException(
+              McpTransportException.McpErrorType.UNKNOWN,
+              "Unexpected error during MCP analyze: " + e.getMessage(),
+              e,
+              false);
+        }
+      }
+
+      // Exponential backoff before retry
+      if (attempt < maxAttempts) {
+        long backoffMs = calculateBackoff(attempt);
+        logger.debug("Retrying MCP analyze in {}ms", backoffMs);
+        try {
+          Thread.sleep(backoffMs);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new McpTransportException(
+              McpTransportException.McpErrorType.UNKNOWN,
+              "Analyze interrupted during backoff",
+              ie,
+              false);
+        }
+      }
+    }
+
+    // Should never reach here, but for completeness
+    throw new McpTransportException(
+        McpTransportException.McpErrorType.UNKNOWN,
+        "Analyze failed after " + maxAttempts + " attempts",
+        false);
+  }
+
+  /**
    * Builds the full health check URL from server URL.
    *
    * @return the health check URL
@@ -181,6 +308,19 @@ public class McpTransportClient {
       return baseUrl + HEALTH_ENDPOINT.substring(1);
     }
     return baseUrl + HEALTH_ENDPOINT;
+  }
+
+  /**
+   * Builds the full analyze URL from server URL.
+   *
+   * @return the analyze URL
+   */
+  private String buildAnalyzeUrl() {
+    String baseUrl = config.getServerUrl();
+    if (baseUrl.endsWith("/")) {
+      return baseUrl + ANALYZE_ENDPOINT.substring(1);
+    }
+    return baseUrl + ANALYZE_ENDPOINT;
   }
 
   /**
@@ -246,13 +386,36 @@ public class McpTransportClient {
   }
 
   /**
+   * Parses the analyze response body.
+   *
+   * @param body the response body
+   * @return the parsed analyze response
+   * @throws McpTransportException if parsing fails
+   */
+  private McpAnalyzeResponse parseAnalyzeResponse(String body) throws McpTransportException {
+    try {
+      return objectMapper.readValue(body, McpAnalyzeResponse.class);
+    } catch (Exception e) {
+      throw new McpTransportException(
+          McpTransportException.McpErrorType.INVALID_RESPONSE,
+          "Failed to parse MCP analyze response: " + e.getMessage(),
+          e,
+          false); // NOT retryable - server is broken
+    }
+  }
+
+  /**
    * Determines the error type from an HTTP status code.
    *
    * @param statusCode the HTTP status code
    * @return the corresponding error type
    */
   private McpTransportException.McpErrorType determineHttpErrorType(int statusCode) {
-    if (statusCode >= 500 || statusCode == 429) {
+    if (statusCode == 401 || statusCode == 403) {
+      return McpTransportException.McpErrorType.AUTH_FAILED;
+    } else if (statusCode == 429) {
+      return McpTransportException.McpErrorType.RATE_LIMIT;
+    } else if (statusCode >= 500) {
       return McpTransportException.McpErrorType.HTTP_ERROR;
     } else if (statusCode >= 400) {
       return McpTransportException.McpErrorType.CONFIGURATION_ERROR;

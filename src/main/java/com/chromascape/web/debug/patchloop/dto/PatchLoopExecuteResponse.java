@@ -6,13 +6,19 @@ import java.util.Objects;
 /**
  * Response from executing a patch loop iteration.
  *
- * <p>Returns the iteration ID and initial status.
+ * <p>Returns the iteration ID, execution ID, initial status, and connection URLs.
+ *
+ * @since 2.1.0
  */
 public class PatchLoopExecuteResponse {
 
   /** Unique iteration ID */
   @JsonProperty("iterationId")
   private String iterationId;
+
+  /** Graph execution ID (links iteration to graph execution) */
+  @JsonProperty("executionId")
+  private String executionId;
 
   /** Current status */
   @JsonProperty("status")
@@ -21,6 +27,14 @@ public class PatchLoopExecuteResponse {
   /** Status message */
   @JsonProperty("message")
   private String message;
+
+  /** WebSocket URL for real-time updates */
+  @JsonProperty("wsUrl")
+  private String wsUrl;
+
+  /** REST API URL for this execution */
+  @JsonProperty("apiUrl")
+  private String apiUrl;
 
   public PatchLoopExecuteResponse() {}
 
@@ -38,6 +52,14 @@ public class PatchLoopExecuteResponse {
     this.iterationId = iterationId;
   }
 
+  public String getExecutionId() {
+    return executionId;
+  }
+
+  public void setExecutionId(String executionId) {
+    this.executionId = executionId;
+  }
+
   public String getStatus() {
     return status;
   }
@@ -52,6 +74,22 @@ public class PatchLoopExecuteResponse {
 
   public void setMessage(String message) {
     this.message = message;
+  }
+
+  public String getWsUrl() {
+    return wsUrl;
+  }
+
+  public void setWsUrl(String wsUrl) {
+    this.wsUrl = wsUrl;
+  }
+
+  public String getApiUrl() {
+    return apiUrl;
+  }
+
+  public void setApiUrl(String apiUrl) {
+    this.apiUrl = apiUrl;
   }
 
   @Override
@@ -74,6 +112,9 @@ public class PatchLoopExecuteResponse {
     return "PatchLoopExecuteResponse{"
         + "iterationId='"
         + iterationId
+        + '\''
+        + ", executionId='"
+        + executionId
         + '\''
         + ", status='"
         + status

@@ -184,6 +184,31 @@ All of the following are **required**:
 ### FAILURE Status
 - `error` (with `code`, `message`) - **required**
 
+## PARTIAL_SUCCESS Handling
+
+The PARTIAL_SUCCESS status indicates the analysis completed but with limitations:
+- Some evidence types may be missing
+- The diagnosis may be incomplete
+- patchDraft may not be provided
+
+**Behavior:**
+- PARTIAL_SUCCESS allows the flow to continue (unlike FAILURE)
+- Downstream nodes should handle missing patchDraft gracefully
+- GeneratePatchNodeExecutor falls back to recommendations when patchDraft is missing
+- The UI will display "(PARTIAL)" indicator in the analysis message
+
+**Provider Requirements:**
+- API providers: Return FAILURE if critical analysis fails
+- MCP providers: Return PARTIAL_SUCCESS for incomplete but useful results
+- PARTIAL_SUCCESS requires at least a diagnosis with summary and rootCause
+
+**Runtime Semantics:**
+- `AnalyzeNodeExecutor`: Allows both SUCCESS and PARTIAL_SUCCESS to proceed
+- `PatchLoopAsyncWorker`: Only FAILURE stops the async flow immediately
+- `GeneratePatchNodeExecutor`:
+  - SUCCESS requires patchDraft with changes (fails if missing)
+  - PARTIAL_SUCCESS uses recommendations fallback (no patchDraft required)
+
 ## Error Codes
 
 | Code | Description | HTTP Equivalent |

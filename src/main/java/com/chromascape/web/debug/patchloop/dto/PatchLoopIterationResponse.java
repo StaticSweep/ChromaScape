@@ -91,6 +91,25 @@ public class PatchLoopIterationResponse {
   @JsonProperty("isComplete")
   private Boolean isComplete;
 
+  // E6.5+: Execution configuration fields
+  @JsonProperty("executionMode")
+  private String executionMode;
+
+  @JsonProperty("maxAttempts")
+  private Integer maxAttempts;
+
+  @JsonProperty("currentAttempt")
+  private Integer currentAttempt;
+
+  @JsonProperty("sessionContext")
+  private SessionContextDto sessionContext;
+
+  @JsonProperty("artifactSummary")
+  private ArtifactSummaryDto artifactSummary;
+
+  @JsonProperty("retestSummary")
+  private RetestSummaryDto retestSummary;
+
   public PatchLoopIterationResponse() {}
 
   // Getters and setters
@@ -295,6 +314,56 @@ public class PatchLoopIterationResponse {
     this.isComplete = isComplete;
   }
 
+  // E6.5+: Getters and setters for new fields
+
+  public String getExecutionMode() {
+    return executionMode;
+  }
+
+  public void setExecutionMode(String executionMode) {
+    this.executionMode = executionMode;
+  }
+
+  public Integer getMaxAttempts() {
+    return maxAttempts;
+  }
+
+  public void setMaxAttempts(Integer maxAttempts) {
+    this.maxAttempts = maxAttempts;
+  }
+
+  public Integer getCurrentAttempt() {
+    return currentAttempt;
+  }
+
+  public void setCurrentAttempt(Integer currentAttempt) {
+    this.currentAttempt = currentAttempt;
+  }
+
+  public SessionContextDto getSessionContext() {
+    return sessionContext;
+  }
+
+  public void setSessionContext(SessionContextDto sessionContext) {
+    this.sessionContext = sessionContext;
+  }
+
+  public ArtifactSummaryDto getArtifactSummary() {
+    return artifactSummary;
+  }
+
+  public void setArtifactSummary(ArtifactSummaryDto artifactSummary) {
+    this.artifactSummary = artifactSummary;
+  }
+
+  public RetestSummaryDto getRetestSummary() {
+    return retestSummary;
+  }
+
+  public void setRetestSummary(RetestSummaryDto retestSummary) {
+    this.retestSummary = retestSummary;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;
@@ -320,6 +389,13 @@ public class PatchLoopIterationResponse {
         + ", scriptName='"
         + scriptName
         + '\''
+        + ", executionMode='"
+        + executionMode
+        + '\''
+        + ", maxAttempts="
+        + maxAttempts
+        + ", currentAttempt="
+        + currentAttempt
         + ", createdAt="
         + createdAt
         + ", completedAt="

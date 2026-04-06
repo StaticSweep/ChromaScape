@@ -1,21 +1,12 @@
 package com.chromascape.web.debug.patchloop;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import com.chromascape.web.debug.patchloop.constants.AnalysisV1ErrorCode;
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1EvidenceBundle;
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1Request;
-import com.chromascape.web.debug.patchloop.dto.TimeWindow;
+import com.chromascape.web.debug.patchloop.dto.*;
 import com.chromascape.web.debug.patchloop.exception.AnalysisException;
 import com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,145 +16,202 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** Test suite for PatchLoopAnalysisClient. */
+/** Test suite for PatchLoopAnalysisClient (V2 contract). */
 @ExtendWith(MockitoExtension.class)
 class PatchLoopAnalysisClientTest {
 
-  @Mock private HttpClient mockHttpClient;
+  @Mock private AnalysisProvider mockAnalysisProvider;
 
   private PatchLoopAnalysisClient analysisClient;
-  private ObjectMapper objectMapper;
 
   @BeforeEach
-  void setUp() throws Exception {
-    objectMapper = new ObjectMapper();
-    analysisClient =
-        new PatchLoopAnalysisClient(
-            objectMapper,
-            "test-api-key",
-            "https://api.anthropic.com/v1/messages",
-            "claude-opus-4-6",
-            120,
-            4096);
+  void setUp() {
+    analysisClient = new PatchLoopAnalysisClient(mockAnalysisProvider);
+  }
 
-    // Use reflection to inject mock HttpClient
-    Field httpClientField = PatchLoopAnalysisClient.class.getDeclaredField("httpClient");
-    httpClientField.setAccessible(true);
-    httpClientField.set(analysisClient, mockHttpClient);
+  // ========== V2 Delegation Tests ==========
+
+  @Test
+  @DisplayName("analyzeEvidence delegates to provider")
+  void testDelegatesToProvider() throws AnalysisException {
+    // Arrange
+    AnalysisV2Request request = createValidRequest();
+    AnalysisV2Response expectedResponse = createMockResponse();
+
+    when(mockAnalysisProvider.analyzeEvidence(request)).thenReturn(expectedResponse);
+
+    // Act
+    AnalysisV2Response actualResponse = analysisClient.analyze(request);
+
+    // Assert
+    assertEquals(expectedResponse, actualResponse);
+    verify(mockAnalysisProvider).analyzeEvidence(request);
   }
 
   @Test
-  @DisplayName("Fix #4: InterruptedException restores interrupt flag before throwing")
-  void testInterruptedExceptionRestoresInterruptFlag() throws Exception {
+  @DisplayName("analyzeEvidence propagates AnalysisException")
+  void testPropagatesAnalysisException() throws AnalysisException {
     // Arrange
-    AnalysisV1Request request = createValidRequest();
+    AnalysisV2Request request = createValidRequest();
 
-    // Mock HttpClient to throw InterruptedException
-    when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-        .thenThrow(new InterruptedException("Request interrupted"));
-
-    // Clear interrupt flag before test
-    Thread.interrupted();
+    when(mockAnalysisProvider.analyzeEvidence(request))
+        .thenThrow(new AnalysisException("Provider error", "API_ERROR"));
 
     // Act & Assert
-    AnalysisException ex =
-        assertThrows(AnalysisException.class, () -> analysisClient.analyzeEvidence(request));
-
-    // Verify exception details
-    assertEquals(AnalysisV1ErrorCode.API_ERROR, ex.getErrorCode());
-    assertTrue(ex.getMessage().contains("interrupted"), "Error message should mention interrupt");
-
-    // Verify interrupt flag was restored
-    assertTrue(Thread.interrupted(), "Thread interrupt flag should have been restored");
+    assertThrows(AnalysisException.class, () -> analysisClient.analyze(request));
   }
 
   @Test
-  @DisplayName("Fix #4: InterruptedException throws AnalysisException with API_ERROR code")
-  void testInterruptedExceptionThrowsAnalysisException() throws Exception {
+  @DisplayName("getProviderName delegates to provider")
+  void testGetProviderName() {
     // Arrange
-    AnalysisV1Request request = createValidRequest();
+    when(mockAnalysisProvider.getProviderName()).thenReturn("claude-mcp");
 
-    when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-        .thenThrow(new InterruptedException("Interrupted during send"));
+    // Act
+    String providerName = analysisClient.getProviderName();
 
-    // Clear interrupt flag
-    Thread.interrupted();
-
-    // Act & Assert
-    AnalysisException ex =
-        assertThrows(AnalysisException.class, () -> analysisClient.analyzeEvidence(request));
-
-    assertEquals(AnalysisV1ErrorCode.API_ERROR, ex.getErrorCode());
-    assertNotNull(ex.getCause());
-    assertTrue(ex.getCause() instanceof InterruptedException);
-
-    // Clean up interrupt flag
-    Thread.interrupted();
+    // Assert
+    assertEquals("claude-mcp", providerName);
   }
 
   @Test
-  @DisplayName("IOException does not affect interrupt flag")
-  void testIOExceptionDoesNotAffectInterruptFlag() throws Exception {
+  @DisplayName("isProviderAvailable delegates to provider")
+  void testIsProviderAvailable() {
     // Arrange
-    AnalysisV1Request request = createValidRequest();
+    when(mockAnalysisProvider.isAvailable()).thenReturn(true);
 
-    when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-        .thenThrow(new IOException("Network error"));
+    // Act
+    boolean available = analysisClient.isProviderAvailable();
 
-    // Clear interrupt flag
-    Thread.interrupted();
-
-    // Act & Assert
-    AnalysisException ex =
-        assertThrows(AnalysisException.class, () -> analysisClient.analyzeEvidence(request));
-
-    assertEquals(AnalysisV1ErrorCode.API_ERROR, ex.getErrorCode());
-    assertTrue(ex.getMessage().contains("failed"), "Error message should indicate failure");
-
-    // Verify interrupt flag was NOT set (IOException doesn't set it)
-    assertFalse(Thread.interrupted(), "Thread interrupt flag should NOT be set for IOException");
+    // Assert
+    assertTrue(available);
   }
 
   @Test
-  @DisplayName("Separate catch blocks for InterruptedException and IOException")
-  void testSeparateCatchBlocksExist() throws Exception {
-    // This test verifies the fix by checking behavior difference
+  @DisplayName("isProviderAvailable returns false when provider unavailable")
+  void testIsProviderUnavailable() {
+    // Arrange
+    when(mockAnalysisProvider.isAvailable()).thenReturn(false);
 
-    AnalysisV1Request request = createValidRequest();
+    // Act
+    boolean available = analysisClient.isProviderAvailable();
 
-    // Test InterruptedException path
-    when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-        .thenThrow(new InterruptedException("Interrupted"));
+    // Assert
+    assertFalse(available);
+  }
 
-    Thread.interrupted(); // Clear flag
-    assertThrows(AnalysisException.class, () -> analysisClient.analyzeEvidence(request));
-    assertTrue(
-        Thread.interrupted(),
-        "InterruptedException path should restore interrupt flag"); // Clears it again
+  @Test
+  @DisplayName("analyzeEvidence returns response with SUCCESS status")
+  void testSuccessResponse() throws AnalysisException {
+    // Arrange
+    AnalysisV2Request request = createValidRequest();
+    AnalysisV2Response response = createMockResponse();
+    response.setStatus(AnalysisStatus.SUCCESS);
 
-    // Test IOException path
-    when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-        .thenThrow(new IOException("IO error"));
+    when(mockAnalysisProvider.analyzeEvidence(request)).thenReturn(response);
 
-    assertThrows(AnalysisException.class, () -> analysisClient.analyzeEvidence(request));
-    assertFalse(Thread.interrupted(), "IOException path should NOT set interrupt flag");
+    // Act
+    AnalysisV2Response actualResponse = analysisClient.analyze(request);
+
+    // Assert
+    assertEquals(AnalysisStatus.SUCCESS, actualResponse.getStatus());
+    assertNotNull(actualResponse.getDiagnosis());
+    assertEquals("Test diagnosis", actualResponse.getDiagnosis().getSummary());
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence returns response with PARTIAL_SUCCESS status")
+  void testPartialSuccessResponse() throws AnalysisException {
+    // Arrange
+    AnalysisV2Request request = createValidRequest();
+    AnalysisV2Response response = createMockResponse();
+    response.setStatus(AnalysisStatus.PARTIAL_SUCCESS);
+
+    when(mockAnalysisProvider.analyzeEvidence(request)).thenReturn(response);
+
+    // Act
+    AnalysisV2Response actualResponse = analysisClient.analyze(request);
+
+    // Assert
+    assertEquals(AnalysisStatus.PARTIAL_SUCCESS, actualResponse.getStatus());
+    assertNotNull(actualResponse.getDiagnosis());
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence returns response with FAILURE status")
+  void testFailureResponse() throws AnalysisException {
+    // Arrange
+    AnalysisV2Request request = createValidRequest();
+    AnalysisV2Response response = new AnalysisV2Response();
+    response.setStatus(AnalysisStatus.FAILURE);
+    response.setError(new AnalysisV1Error("API_TIMEOUT", "Request timed out"));
+
+    when(mockAnalysisProvider.analyzeEvidence(request)).thenReturn(response);
+
+    // Act
+    AnalysisV2Response actualResponse = analysisClient.analyze(request);
+
+    // Assert
+    assertEquals(AnalysisStatus.FAILURE, actualResponse.getStatus());
+    assertNotNull(actualResponse.getError());
+    assertEquals("API_TIMEOUT", actualResponse.getError().getCode());
   }
 
   // ========== Helper Methods ==========
 
-  private AnalysisV1Request createValidRequest() {
-    AnalysisV1Request request = new AnalysisV1Request();
-    request.setPrompt("Why did the bot fail?");
+  /**
+   * Creates a valid V2 analysis request for testing.
+   *
+   * @return a valid AnalysisV2Request
+   */
+  private AnalysisV2Request createValidRequest() {
+    AnalysisV2Request request = new AnalysisV2Request();
 
-    AnalysisV1EvidenceBundle evidence = new AnalysisV1EvidenceBundle();
-    evidence.setScriptName("TestScript");
+    request.setPromptType(PromptType.ISSUE);
+
+    AnalysisV2Target target = new AnalysisV2Target();
+    target.setScriptName("TestScript");
+
+    AnalysisV2Target.SessionBounds bounds = new AnalysisV2Target.SessionBounds();
     LocalDateTime now = LocalDateTime.now();
-    evidence.setTimeWindow(new TimeWindow(now.minusMinutes(5), now));
-    evidence.setLogs(
-        Collections.singletonList(
-            new AnalysisV1EvidenceBundle.LogEvidence(now, "ERROR", "Test error", "TestScript")));
+    bounds.setStart(now.minusMinutes(5));
+    bounds.setEnd(now);
+    target.setSessionBounds(bounds);
 
-    request.setEvidence(evidence);
+    request.setTarget(target);
+    request.setPrompt("Why did the bot fail?");
+    request.setContext("Testing V2 contract");
+
+    AnalysisV2EvidenceSelector logSelector =
+        new AnalysisV2EvidenceSelector(EvidenceType.GENERAL_LOGS);
+    logSelector.setMaxCount(100);
+    logSelector.setTimeWindow(new TimeWindow(bounds.getStart(), bounds.getEnd()));
+
+    request.setEvidenceSelectors(Collections.singletonList(logSelector));
+
     return request;
+  }
+
+  /**
+   * Creates a mock V2 analysis response with SUCCESS status.
+   *
+   * @return a mock AnalysisV2Response
+   */
+  private AnalysisV2Response createMockResponse() {
+    AnalysisV2Response response = new AnalysisV2Response();
+    response.setStatus(AnalysisStatus.SUCCESS);
+    response.setAnalysisId("test-analysis-id");
+
+    AnalysisV2Diagnosis diagnosis = new AnalysisV2Diagnosis();
+    diagnosis.setSummary("Test diagnosis");
+    diagnosis.setRootCause("Test root cause");
+    diagnosis.setConfidence(ConfidenceLevel.HIGH);
+    diagnosis.setRecommendations(Collections.emptyList());
+
+    response.setDiagnosis(diagnosis);
+    response.setImpactedModules(Collections.singletonList("TestScript"));
+    response.setEvidenceReferences(Collections.singletonList("log-entry-1"));
+
+    return response;
   }
 }

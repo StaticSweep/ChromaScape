@@ -59,10 +59,18 @@ public class GeneratePatchNodeExecutor implements GraphNodeExecutor {
 
       AnalysisV2PatchDraft patchDraft = response.getPatchDraft();
 
-      // Primary path: Use patchDraft if available (SUCCESS status)
-      if (patchDraft != null
-          && patchDraft.getChanges() != null
-          && !patchDraft.getChanges().isEmpty()) {
+      // Enforce strict patch source semantics based on status
+      com.chromascape.web.debug.patchloop.dto.AnalysisStatus status = response.getStatus();
+
+      // SUCCESS: require patchDraft with changes
+      if (status == com.chromascape.web.debug.patchloop.dto.AnalysisStatus.SUCCESS) {
+        if (patchDraft == null
+            || patchDraft.getChanges() == null
+            || patchDraft.getChanges().isEmpty()) {
+          return NodeExecutionResult.failure(
+              node.id(), "SUCCESS status requires patchDraft with changes");
+        }
+        // Use patchDraft path
         logger.info(
             "Using patchDraft.changes as primary source ({} changes)",
             patchDraft.getChanges().size());
@@ -95,14 +103,15 @@ public class GeneratePatchNodeExecutor implements GraphNodeExecutor {
             outputData);
       }
 
-      // Fallback path: PARTIAL_SUCCESS - derive from recommendations
+      // PARTIAL_SUCCESS or other: derive from recommendations (fallback path)
       AnalysisV2Diagnosis diagnosis = response.getDiagnosis();
       if (diagnosis != null
           && diagnosis.getRecommendations() != null
           && !diagnosis.getRecommendations().isEmpty()) {
 
         logger.warn(
-            "patchDraft not available or incomplete. Falling back to recommendations (PARTIAL_SUCCESS)");
+            "patchDraft not available or incomplete (status: {}). Falling back to recommendations",
+            status);
 
         PatchProposal patch = generatePatchFromRecommendations(diagnosis, context);
 

@@ -226,6 +226,141 @@
             </div>
         </div>
 
+        <!-- Simulator Certification -->
+        <div class="row" id="simulatorSection">
+            <div class="col-12">
+                <div class="glass-panel">
+                    <h6><i class="bi bi-badge-hd me-2"></i>Simulator Certification</h6>
+
+                    <div th:if="${simulatorConfig != null and simulatorConfig.enabled}">
+                        <div class="row align-items-end mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Session</label>
+                                <input type="text" id="simSession" class="form-control form-control-sm" placeholder="latest" value="latest">
+                                <small class="text-muted">"latest" or session ID</small>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Scenario</label>
+                                <select id="simScenario" class="form-select form-select-sm">
+                                    <option value="">None</option>
+                                    <option value="S1-happy-path">S1: Happy Path</option>
+                                    <option value="S2-input-heavy">S2: Input Heavy</option>
+                                    <option value="S3-reconnect">S3: Reconnect</option>
+                                    <option value="S4-out-of-order">S4: Out of Order</option>
+                                    <option value="S5-low-activity">S5: Low Activity</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Bridge URL</label>
+                                <input type="text" id="simBridgeUrl" class="form-control form-control-sm"
+                                       th:value="${simulatorConfig.defaultBridgeUrl}">
+                            </div>
+                            <div class="col-md-3">
+                                <button id="runCertBtn" class="btn btn-primary w-100">
+                                    <i class="bi bi-play-fill me-1"></i>Run Certification
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Results Panel -->
+                        <div id="simResults" style="display:none;">
+                            <div class="p-3 rounded mb-3" id="simStatusBadge">
+                                <div class="d-flex align-items-center">
+                                    <div id="simStatusIcon" class="me-2"></div>
+                                    <div>
+                                        <h6 class="mb-0" id="simStatusTitle"></h6>
+                                        <small id="simStatusDetail"></small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="simSummary" class="mb-3" style="display:none;">
+                                <div class="row text-center">
+                                    <div class="col-6 col-md-3 mb-2">
+                                        <div class="p-2 rounded bg-dark bg-opacity-25">
+                                            <div class="small text-muted">Actions</div>
+                                            <div class="h5 mb-0" id="simTotalActions">-</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3 mb-2">
+                                        <div class="p-2 rounded bg-dark bg-opacity-25">
+                                            <div class="small text-muted">Ticks</div>
+                                            <div class="h5 mb-0" id="simTickRange">-</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3 mb-2">
+                                        <div class="p-2 rounded bg-dark bg-opacity-25">
+                                            <div class="small text-muted">Players</div>
+                                            <div class="h5 mb-0" id="simPlayerCount">-</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3 mb-2">
+                                        <div class="p-2 rounded bg-dark bg-opacity-25">
+                                            <div class="small text-muted">Duration</div>
+                                            <div class="h5 mb-0" id="simDuration">-</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Violations -->
+                                <div class="mt-3">
+                                    <div class="d-flex justify-content-around text-center">
+                                        <div>
+                                            <div class="badge bg-danger me-1">HARD</div>
+                                            <span id="simViolationsHard" class="h5">0</span>
+                                        </div>
+                                        <div>
+                                            <div class="badge bg-warning text-dark me-1">SOFT</div>
+                                            <span id="simViolationsSoft" class="h5">0</span>
+                                        </div>
+                                        <div>
+                                            <div class="badge bg-info text-dark me-1">WARN</div>
+                                            <span id="simViolationsWarn" class="h5">0</span>
+                                        </div>
+                                        <div>
+                                            <div class="badge bg-secondary me-1">N/E</div>
+                                            <span id="simViolationsNe" class="h5">0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="d-flex gap-2">
+                                <button id="simDownloadReport" class="btn btn-sm btn-outline-light" style="display:none;">
+                                    <i class="bi bi-download me-1"></i>Download JSON
+                                </button>
+                                <button id="simViewReport" class="btn btn-sm btn-outline-info" style="display:none;">
+                                    <i class="bi bi-code-slash me-1"></i>View Report
+                                </button>
+                                <button id="simRunAgain" class="btn btn-sm btn-outline-secondary ms-auto" style="display:none;">
+                                    <i class="bi bi-arrow-clockwise me-1"></i>Run Again
+                                </button>
+                            </div>
+
+                            <!-- Report JSON Viewer -->
+                            <div id="simReportViewer" class="mt-3" style="display:none;">
+                                <pre id="simReportJson" class="p-3 rounded bg-dark bg-opacity-50" style="max-height: 300px; overflow-y: auto; font-size: 12px;"></pre>
+                            </div>
+                        </div>
+
+                        <!-- Progress -->
+                        <div id="simProgress" style="display:none;" class="text-center p-3">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            <span class="ms-2">Running certification...</span>
+                        </div>
+                    </div>
+
+                    <div th:if="${simulatorConfig == null or !simulatorConfig.enabled}">
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Simulator certification is currently disabled. Enable it in application.yml with <code>simulator.verifier.enabled=true</code>.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Video Player -->
         <div class="row" id="playerSection" style="display:none;">
             <div class="col-lg-8">
@@ -826,6 +961,220 @@
 
         // Load recordings on page load
         loadRecordings();
+
+        // ==================== Simulator Certification ====================
+        const SIMULATOR_API_BASE = '/api/simulator/verify';
+        let currentSimJobId = null;
+        let simPollInterval = null;
+
+        const runCertBtn = document.getElementById('runCertBtn');
+        const simResults = document.getElementById('simResults');
+        const simProgress = document.getElementById('simProgress');
+        const simSummary = document.getElementById('simSummary');
+        const simStatusBadge = document.getElementById('simStatusBadge');
+        const simStatusIcon = document.getElementById('simStatusIcon');
+        const simStatusTitle = document.getElementById('simStatusTitle');
+        const simStatusDetail = document.getElementById('simStatusDetail');
+        const simDownloadReport = document.getElementById('simDownloadReport');
+        const simViewReport = document.getElementById('simViewReport');
+        const simRunAgain = document.getElementById('simRunAgain');
+        const simReportViewer = document.getElementById('simReportViewer');
+        const simReportJson = document.getElementById('simReportJson');
+
+        runCertBtn?.addEventListener('click', startCertification);
+
+        async function startCertification() {
+            const session = document.getElementById('simSession').value.trim() || 'latest';
+            const scenario = document.getElementById('simScenario').value;
+            const bridgeUrl = document.getElementById('simBridgeUrl').value.trim();
+
+            // Reset UI
+            simResults.style.display = 'none';
+            simReportViewer.style.display = 'none';
+            simProgress.style.display = 'block';
+            runCertBtn.disabled = true;
+
+            try {
+                const response = await fetch(SIMULATOR_API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session, scenario, bridgeUrl })
+                });
+
+                const data = await response.json();
+
+                if (data.jobId) {
+                    currentSimJobId = data.jobId;
+                    pollJobStatus();
+                } else if (data.error) {
+                    showError(data.error);
+                    runCertBtn.disabled = false;
+                    simProgress.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to start certification:', error);
+                showError('Failed to start certification: ' + error.message);
+                runCertBtn.disabled = false;
+                simProgress.style.display = 'none';
+            }
+        }
+
+        function pollJobStatus() {
+            // Clear any existing interval
+            if (simPollInterval) {
+                clearInterval(simPollInterval);
+            }
+
+            // Poll every 1.5 seconds
+            simPollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${SIMULATOR_API_BASE}/${currentSimJobId}`);
+                    const data = await response.json();
+
+                    if (data.error) {
+                        showError(data.error);
+                        stopPolling();
+                        return;
+                    }
+
+                    const status = data.status;
+
+                    if (status === 'QUEUED' || status === 'RUNNING') {
+                        // Still running, continue polling
+                        return;
+                    }
+
+                    // Job completed
+                    stopPolling();
+                    simProgress.style.display = 'none';
+                    simResults.style.display = 'block';
+                    runCertBtn.disabled = false;
+
+                    if (status === 'SUCCEEDED') {
+                        showResults(data);
+                    } else if (status === 'FAILED') {
+                        showError(data.error || 'Verification failed');
+                    }
+                } catch (error) {
+                    console.error('Failed to poll job status:', error);
+                    showError('Failed to get job status');
+                    stopPolling();
+                }
+            }, 1500);
+        }
+
+        function stopPolling() {
+            if (simPollInterval) {
+                clearInterval(simPollInterval);
+                simPollInterval = null;
+            }
+        }
+
+        function showResults(data) {
+            const summary = data.summary;
+            const passed = summary?.passed ?? false;
+
+            // Set status badge
+            if (passed) {
+                simStatusBadge.className = 'p-3 rounded mb-3 bg-success bg-opacity-25 border border-success';
+                simStatusIcon.innerHTML = '<i class="bi bi-check-circle-fill text-success fs-4"></i>';
+                simStatusTitle.textContent = 'PASSED';
+                simStatusTitle.className = 'mb-0 text-success';
+            } else {
+                simStatusBadge.className = 'p-3 rounded mb-3 bg-danger bg-opacity-25 border border-danger';
+                simStatusIcon.innerHTML = '<i class="bi bi-x-circle-fill text-danger fs-4"></i>';
+                simStatusTitle.textContent = 'FAILED';
+                simStatusTitle.className = 'mb-0 text-danger';
+            }
+
+            simStatusDetail.textContent = `Exit code: ${data.exitCode} | Job: ${data.jobId.substring(0, 8)}`;
+
+            // Show summary
+            if (summary) {
+                simSummary.style.display = 'block';
+                document.getElementById('simTotalActions').textContent = summary.totalActions;
+                document.getElementById('simTickRange').textContent = `${summary.startTick}-${summary.endTick}`;
+                document.getElementById('simPlayerCount').textContent = summary.playerCount;
+                document.getElementById('simDuration').textContent = formatDuration(summary.durationMs);
+
+                // Violations
+                document.getElementById('simViolationsHard').textContent = summary.violations.hard;
+                document.getElementById('simViolationsSoft').textContent = summary.violations.soft;
+                document.getElementById('simViolationsWarn').textContent = summary.violations.warn;
+                document.getElementById('simViolationsNe').textContent = summary.violations.notEvaluated;
+            }
+
+            // Show action buttons - only Download/View when report is available
+            if (data.reportAvailable) {
+                simDownloadReport.style.display = 'inline-block';
+                simViewReport.style.display = 'inline-block';
+            } else {
+                simDownloadReport.style.display = 'none';
+                simViewReport.style.display = 'none';
+            }
+            simRunAgain.style.display = 'inline-block';
+
+            // Setup action buttons
+            simDownloadReport.onclick = () => downloadReport();
+            simViewReport.onclick = () => viewReport();
+            simRunAgain.onclick = () => {
+                simResults.style.display = 'none';
+                simReportViewer.style.display = 'none';
+            };
+        }
+
+        function showError(message) {
+            simProgress.style.display = 'none';
+            simResults.style.display = 'block';
+            simSummary.style.display = 'none';
+            simDownloadReport.style.display = 'none';
+            simViewReport.style.display = 'none';
+            simRunAgain.style.display = 'inline-block';
+
+            simStatusBadge.className = 'p-3 rounded mb-3 bg-danger bg-opacity-25 border border-danger';
+            simStatusIcon.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger fs-4"></i>';
+            simStatusTitle.textContent = 'ERROR';
+            simStatusTitle.className = 'mb-0 text-danger';
+            simStatusDetail.textContent = message;
+
+            simRunAgain.onclick = () => {
+                simResults.style.display = 'none';
+            };
+            runCertBtn.disabled = false;
+        }
+
+        async function downloadReport() {
+            try {
+                const response = await fetch(`${SIMULATOR_API_BASE}/${currentSimJobId}/report`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `simulator-report-${currentSimJobId}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }
+            } catch (error) {
+                console.error('Failed to download report:', error);
+            }
+        }
+
+        async function viewReport() {
+            try {
+                const response = await fetch(`${SIMULATOR_API_BASE}/${currentSimJobId}/report`);
+                if (response.ok) {
+                    const json = await response.text();
+                    simReportJson.textContent = json;
+                    simReportViewer.style.display = 'block';
+                    simReportViewer.scrollIntoView({ behavior: 'smooth' });
+                }
+            } catch (error) {
+                console.error('Failed to view report:', error);
+            }
+        }
     </script>
 </body>
 </html>

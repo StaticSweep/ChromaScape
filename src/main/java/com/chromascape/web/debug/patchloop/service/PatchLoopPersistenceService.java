@@ -177,12 +177,9 @@ public class PatchLoopPersistenceService {
               : 0);
     }
 
-    // V2: Store patchDraft metadata in existing diagnosisSummary (as additional info)
+    // V2: Store patchDraft metadata in separate field (no mutation of diagnosisSummary)
     if (response.getPatchDraft() != null) {
-      String existingSummary = iteration.getDiagnosisSummary();
-      String patchInfo = " [Patch: " + response.getPatchDraft().getPatchId() + "]";
-      iteration.setDiagnosisSummary(
-          existingSummary != null ? existingSummary + patchInfo : patchInfo.substring(2));
+      iteration.setPatchId(response.getPatchDraft().getPatchId());
     }
 
     // V2: impactedModules stored in JSONB response, not separate column

@@ -50,6 +50,15 @@ public class GraphExecuteRequest {
   @JsonProperty("evidenceConfig")
   private EvidenceConfigDto evidenceConfig;
 
+  /**
+   * Optional iteration ID to reuse an existing iteration.
+   *
+   * <p>When provided, the graph orchestrator will reuse the existing iteration instead of creating
+   * a new one. This is used by the simple API wrapper to avoid creating duplicate iterations.
+   */
+  @JsonProperty("iterationId")
+  private String iterationId;
+
   public GraphExecuteRequest() {
     this.maxAttempts = 3;
     this.executionMode = "analysis_only";
@@ -116,6 +125,24 @@ public class GraphExecuteRequest {
     return executionMode;
   }
 
+  /**
+   * Returns the normalized execution mode.
+   *
+   * <p>Handles legacy mode values for backward compatibility. For example, {@code "full_loop"} is
+   * normalized to {@code "autofix_loop"}.
+   *
+   * @return the normalized execution mode, or {@code "analysis_only"} if null
+   */
+  public String getNormalizedExecutionMode() {
+    if (executionMode == null) {
+      return "analysis_only";
+    }
+    if ("full_loop".equals(executionMode)) {
+      return "autofix_loop";
+    }
+    return executionMode;
+  }
+
   public void setExecutionMode(String executionMode) {
     this.executionMode = executionMode;
   }
@@ -126,6 +153,14 @@ public class GraphExecuteRequest {
 
   public void setEvidenceConfig(EvidenceConfigDto evidenceConfig) {
     this.evidenceConfig = evidenceConfig;
+  }
+
+  public String getIterationId() {
+    return iterationId;
+  }
+
+  public void setIterationId(String iterationId) {
+    this.iterationId = iterationId;
   }
 
   @Override
@@ -154,6 +189,9 @@ public class GraphExecuteRequest {
         + '\''
         + ", maxAttempts="
         + maxAttempts
+        + ", iterationId='"
+        + iterationId
+        + '\''
         + '}';
   }
 

@@ -103,7 +103,9 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
       if (json.has("action") && "subscribe".equals(json.get("action").asText())) {
         String executionId = json.has("executionId") ? json.get("executionId").asText() : null;
         if (executionId == null || executionId.isBlank()) {
-          logger.warn("Rejecting subscription with null or blank executionId from session {}", session.getId());
+          logger.warn(
+              "Rejecting subscription with null or blank executionId from session {}",
+              session.getId());
           return;
         }
         sessionsByExecution

@@ -1,6 +1,10 @@
 package com.chromascape.web.debug.patchloop.service;
 
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1EvidenceBundle;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.chromascape.web.debug.patchloop.dto.PatchProposal;
 import com.chromascape.web.debug.patchloop.entity.ExecutionRuntimeSnapshot;
 import com.chromascape.web.debug.patchloop.entity.ExecutionRuntimeSnapshotRepository;
@@ -17,20 +21,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-/**
- * Tests for {@link ExecutionRuntimeSnapshotService} focusing on typed rehydration.
- */
+/** Tests for {@link ExecutionRuntimeSnapshotService} focusing on typed rehydration. */
 @ExtendWith(MockitoExtension.class)
 class ExecutionRuntimeSnapshotServiceTest {
 
-  @Mock
-  private ExecutionRuntimeSnapshotRepository repository;
+  @Mock private ExecutionRuntimeSnapshotRepository repository;
 
   private ObjectMapper objectMapper;
 
@@ -66,7 +61,8 @@ class ExecutionRuntimeSnapshotServiceTest {
     when(repository.findByExecutionId(executionId)).thenReturn(Optional.of(snapshot));
 
     // When: getting the runtime value with typed rehydration
-    PatchProposal result = snapshotService.getRuntimeValue(executionId, "patch_1", PatchProposal.class);
+    PatchProposal result =
+        snapshotService.getRuntimeValue(executionId, "patch_1", PatchProposal.class);
 
     // Then: should rehydrate to PatchProposal with correct fields
     assertThat(result).isNotNull();
@@ -88,7 +84,8 @@ class ExecutionRuntimeSnapshotServiceTest {
     when(repository.findByExecutionId(executionId)).thenReturn(Optional.of(snapshot));
 
     // When: getting a non-existent key
-    PatchProposal result = snapshotService.getRuntimeValue(executionId, "nonexistent", PatchProposal.class);
+    PatchProposal result =
+        snapshotService.getRuntimeValue(executionId, "nonexistent", PatchProposal.class);
 
     // Then: should return null
     assertThat(result).isNull();
@@ -101,7 +98,8 @@ class ExecutionRuntimeSnapshotServiceTest {
     when(repository.findByExecutionId(executionId)).thenReturn(Optional.empty());
 
     // When: getting any runtime value
-    PatchProposal result = snapshotService.getRuntimeValue(executionId, "patch_1", PatchProposal.class);
+    PatchProposal result =
+        snapshotService.getRuntimeValue(executionId, "patch_1", PatchProposal.class);
 
     // Then: should return null
     assertThat(result).isNull();
@@ -128,20 +126,22 @@ class ExecutionRuntimeSnapshotServiceTest {
     Map<String, Object> runtimeData = new HashMap<>();
     runtimeData.put("key1", "value1");
 
-    GraphExecutionContext context = GraphExecutionContext.builder()
-        .executionId(executionId)
-        .iterationId("iter_1")
-        .scriptName("TestScript")
-        .goalPrompt("Test goal")
-        .maxAttempts(3)
-        .runtimeData(runtimeData)
-        .build();
+    GraphExecutionContext context =
+        GraphExecutionContext.builder()
+            .executionId(executionId)
+            .iterationId("iter_1")
+            .scriptName("TestScript")
+            .goalPrompt("Test goal")
+            .maxAttempts(3)
+            .runtimeData(runtimeData)
+            .build();
 
     ExecutionRuntimeSnapshot snapshot = new ExecutionRuntimeSnapshot();
     snapshot.setExecutionId(executionId);
 
     when(repository.findByExecutionId(executionId)).thenReturn(Optional.of(snapshot));
-    when(repository.save(any(ExecutionRuntimeSnapshot.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(repository.save(any(ExecutionRuntimeSnapshot.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     // When: saving snapshot
     snapshotService.saveSnapshot(executionId, runtimeData, context);

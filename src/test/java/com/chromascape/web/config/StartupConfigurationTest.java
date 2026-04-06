@@ -7,6 +7,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider;
 import java.io.File;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,7 +26,9 @@ class StartupConfigurationTest {
 
   @BeforeEach
   void setUp() {
-    startupConfiguration = new StartupConfiguration();
+    AnalysisProvider mockAnalysisProvider = mock(AnalysisProvider.class);
+    McpBridgeLifecycleManager mockBridgeManager = mock(McpBridgeLifecycleManager.class);
+    startupConfiguration = new StartupConfiguration(mockAnalysisProvider, mockBridgeManager);
     mockLogger = mock(Logger.class); // This will now create an SLF4J mock
     ReflectionTestUtils.setField(startupConfiguration, "logger", mockLogger);
   }

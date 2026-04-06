@@ -53,14 +53,14 @@ public class AnalyzeNodeExecutor implements GraphNodeExecutor {
       // Send to analysis provider via V2 gateway
       AnalysisV2Response response = analysisClient.analyze(request);
 
-      // Check if analysis succeeded
-      if (response.getStatus() != AnalysisStatus.SUCCESS) {
+      // Check if analysis failed (both SUCCESS and PARTIAL_SUCCESS continue)
+      if (response.getStatus() == AnalysisStatus.FAILURE) {
         String error =
             response.getError() != null ? response.getError().getMessage() : "Unknown error";
         return NodeExecutionResult.failure(node.id(), "Analysis failed: " + error);
       }
 
-      // Extract V2 diagnosis (required for SUCCESS)
+      // Extract V2 diagnosis (required for SUCCESS and PARTIAL_SUCCESS)
       AnalysisV2Diagnosis diagnosis = response.getDiagnosis();
       if (diagnosis == null) {
         return NodeExecutionResult.failure(node.id(), "No diagnosis returned");
@@ -118,10 +118,15 @@ public class AnalyzeNodeExecutor implements GraphNodeExecutor {
                 : 0);
       }
 
+      // Indicate PARTIAL_SUCCESS in message for transparency
+      String statusIndicator =
+          response.getStatus() == AnalysisStatus.PARTIAL_SUCCESS ? "(PARTIAL)" : "";
+
       return NodeExecutionResult.success(
           node.id(),
           String.format(
-              "Analysis complete (V2): %s, confidence: %s, patch: %s",
+              "Analysis complete (V2%s): %s, confidence: %s, patch: %s",
+              statusIndicator,
               diagnosis.getSummary(),
               diagnosis.getConfidence(),
               response.getPatchDraft() != null ? response.getPatchDraft().getPatchId() : "none"),

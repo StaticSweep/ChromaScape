@@ -3,29 +3,45 @@ package com.chromascape.web.debug.patchloop.service.provider;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.chromascape.web.debug.patchloop.constants.AnalysisV1ErrorCode;
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1EvidenceBundle;
-import com.chromascape.web.debug.patchloop.dto.AnalysisV1Request;
-import com.chromascape.web.debug.patchloop.dto.TimeWindow;
+import com.chromascape.web.debug.patchloop.constants.AnalysisV2ErrorCode;
+import com.chromascape.web.debug.patchloop.dto.AnalysisStatus;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV2Diagnosis;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV2EvidenceSelector;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV2PatchDraft;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV2Request;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV2Response;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV2RetestPlan;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV2Target;
+import com.chromascape.web.debug.patchloop.dto.ConfidenceLevel;
+import com.chromascape.web.debug.patchloop.dto.EvidenceType;
+import com.chromascape.web.debug.patchloop.dto.PromptType;
 import com.chromascape.web.debug.patchloop.exception.AnalysisException;
+import com.chromascape.web.debug.patchloop.service.provider.mcp.McpAnalyzeRequest;
+import com.chromascape.web.debug.patchloop.service.provider.mcp.McpAnalyzeResponse;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpConfigProperties;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportException;
-import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Test suite for {@link ClaudeMcpAnalysisProvider}.
  *
- * <p>Verifies that the MCP provider correctly reports availability based on MCP server health check
- * and that analyzeEvidence() throws a clear error about pending implementation (#516).
+ * <p>Verifies that the MCP provider correctly:
+ *
+ * <ul>
+ *   <li>Builds MCP requests from V2 requests
+ *   <li>Calls the transport with proper configuration
+ *   <li>Maps transport errors to V2 error codes
+ *   <li>Reports availability based on health check
+ * </ul>
  */
 @ExtendWith(MockitoExtension.class)
 class ClaudeMcpAnalysisProviderTest {
@@ -137,120 +153,368 @@ class ClaudeMcpAnalysisProviderTest {
   }
 
   @Test
-  @DisplayName("isAvailable() returns false when transport throws INVALID_RESPONSE")
-  void testIsAvailableReturnsFalseOnInvalidResponse() throws Exception {
-    // Arrange: transport throws invalid response exception
-    McpTransportException invalidResponse =
-        new McpTransportException(
-            McpTransportException.McpErrorType.INVALID_RESPONSE,
-            "Failed to parse MCP health response",
-            false);
-    when(transport.healthCheck()).thenThrow(invalidResponse);
+  @DisplayName("analyzeEvidence() returns V2 response on successful analysis")
+  void testAnalyzeEvidenceReturnsValidResponse() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    AnalysisV2Response v2Response = createValidV2SuccessResponse();
+
+    McpAnalyzeResponse mcpResponse = new McpAnalyzeResponse(v2Response, null, null);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenReturn(mcpResponse);
 
     // Act
-    boolean result = provider.isAvailable();
+    AnalysisV2Response result = provider.analyzeEvidence(v2Request);
 
     // Assert
-    assertFalse(result, "Provider should be unavailable on invalid response");
-    verify(transport).healthCheck();
+    assertNotNull(result, "Should return non-null response");
+    assertEquals("test-analysis-123", result.getAnalysisId());
+    assertEquals("2.0.0", result.getSchemaVersion());
+
+    // Verify the transport was called with proper request structure
+    ArgumentCaptor<McpAnalyzeRequest> requestCaptor =
+        ArgumentCaptor.forClass(McpAnalyzeRequest.class);
+    verify(transport).analyze(requestCaptor.capture());
+
+    McpAnalyzeRequest capturedRequest = requestCaptor.getValue();
+    assertEquals(v2Request, capturedRequest.getAnalysisRequest());
+    assertNotNull(capturedRequest.getOptions());
+    assertEquals(120, capturedRequest.getOptions().getTimeoutSeconds());
   }
 
   @Test
-  @DisplayName("analyzeEvidence() throws AnalysisException with INTERNAL_ERROR code")
-  void testAnalyzeEvidenceThrowsException() throws Exception {
-    // Arrange: Create minimal valid request
-    AnalysisV1Request request = createMinimalRequest();
+  @DisplayName("analyzeEvidence() maps TIMEOUT to API_TIMEOUT")
+  void testAnalyzeEvidenceMapsTimeoutToApiTimeout() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    McpTransportException timeoutException =
+        new McpTransportException(
+            McpTransportException.McpErrorType.TIMEOUT, "Request timed out", true);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenThrow(timeoutException);
 
-    // Act & Verify exception
+    // Act & Assert
     AnalysisException exception =
-        assertThrows(
-            AnalysisException.class,
-            () -> provider.analyzeEvidence(request),
-            "analyzeEvidence() should throw AnalysisException");
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
 
-    assertEquals(
-        AnalysisV1ErrorCode.INTERNAL_ERROR,
-        exception.getErrorCode(),
-        "Error code should be INTERNAL_ERROR");
+    assertEquals(AnalysisV2ErrorCode.API_TIMEOUT, exception.getErrorCode());
+    assertTrue(exception.getMessage().contains("MCP analysis failed"));
   }
 
   @Test
-  @DisplayName("analyzeEvidence() exception message clearly states pending implementation (#516)")
-  void testAnalyzeEvidenceExceptionMessage() throws Exception {
-    // Arrange: Create minimal valid request
-    AnalysisV1Request request = createMinimalRequest();
+  @DisplayName("analyzeEvidence() maps AUTH_FAILED to API_AUTH_FAILED")
+  void testAnalyzeEvidenceMapsAuthFailedToApiAuthFailed() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    McpTransportException authException =
+        new McpTransportException(
+            McpTransportException.McpErrorType.AUTH_FAILED, "Authentication failed", false);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenThrow(authException);
 
-    // Act & Verify exception message
+    // Act & Assert
     AnalysisException exception =
-        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(request));
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
 
-    String message = exception.getMessage();
-    assertNotNull(message, "Exception message should not be null");
-    assertTrue(
-        message.contains("pending implementation"),
-        "Exception message should mention pending implementation");
-    assertTrue(message.contains("516"), "Exception message should reference issue #516");
-    assertTrue(
-        message.contains("health check"),
-        "Exception message should mention health check is available");
+    assertEquals(AnalysisV2ErrorCode.API_AUTH_FAILED, exception.getErrorCode());
   }
 
   @Test
-  @DisplayName("analyzeEvidence() fails immediately without attempting MCP call")
-  void testAnalyzeEvidenceFailsFast() throws Exception {
-    // Arrange: Create minimal valid request
-    AnalysisV1Request request = createMinimalRequest();
+  @DisplayName("analyzeEvidence() maps HTTP_ERROR to API_ERROR")
+  void testAnalyzeEvidenceMapsHttpErrorToApiError() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    McpTransportException httpException =
+        new McpTransportException(
+            McpTransportException.McpErrorType.HTTP_ERROR, "HTTP 500 error", true);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenThrow(httpException);
 
-    // Note: No stubbing needed since transport should never be called
+    // Act & Assert
+    AnalysisException exception =
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
 
-    // Measure execution time to verify it fails fast (should be < 100ms)
-    long startTime = System.currentTimeMillis();
-
-    assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(request));
-
-    long executionTime = System.currentTimeMillis() - startTime;
-
-    assertTrue(
-        executionTime < 100,
-        "Should fail fast without network calls (actual: " + executionTime + "ms)");
-    verify(transport, never()).healthCheck();
+    assertEquals(AnalysisV2ErrorCode.API_ERROR, exception.getErrorCode());
   }
 
   @Test
-  @DisplayName("analyzeEvidence() throws exception immediately without transport dependency")
-  void testAnalyzeEvidenceDoesNotRequireTransport() {
-    // Arrange: Create minimal valid request, null transport (simulating unavailable)
-    ClaudeMcpAnalysisProvider providerWithNullTransport =
-        new ClaudeMcpAnalysisProvider(null, config);
-    AnalysisV1Request request = createMinimalRequest();
+  @DisplayName("analyzeEvidence() maps INVALID_RESPONSE to PARSE_ERROR")
+  void testAnalyzeEvidenceMapsInvalidResponseToParseError() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    McpTransportException invalidResponse =
+        new McpTransportException(
+            McpTransportException.McpErrorType.INVALID_RESPONSE, "Malformed JSON", false);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenThrow(invalidResponse);
 
-    // Act & Assert: Should still throw AnalysisException immediately
-    assertThrows(
-        AnalysisException.class,
-        () -> providerWithNullTransport.analyzeEvidence(request),
-        "Should throw AnalysisException even with null transport");
+    // Act & Assert
+    AnalysisException exception =
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
+
+    assertEquals(AnalysisV2ErrorCode.PARSE_ERROR, exception.getErrorCode());
   }
 
-  // Helper method to create minimal valid request for testing
-  private AnalysisV1Request createMinimalRequest() {
-    AnalysisV1Request request = new AnalysisV1Request();
+  @Test
+  @DisplayName("analyzeEvidence() maps SERIALIZATION_ERROR to PARSE_ERROR")
+  void testAnalyzeEvidenceMapsSerializationErrorToParseError() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    McpTransportException serializationError =
+        new McpTransportException(
+            McpTransportException.McpErrorType.SERIALIZATION_ERROR,
+            "Failed to serialize request",
+            false);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenThrow(serializationError);
+
+    // Act & Assert
+    AnalysisException exception =
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
+
+    assertEquals(AnalysisV2ErrorCode.PARSE_ERROR, exception.getErrorCode());
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence() maps CONFIGURATION_ERROR to INVALID_REQUEST")
+  void testAnalyzeEvidenceMapsConfigurationErrorToInvalidRequest() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    McpTransportException configError =
+        new McpTransportException(
+            McpTransportException.McpErrorType.CONFIGURATION_ERROR, "Invalid configuration", false);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenThrow(configError);
+
+    // Act & Assert
+    AnalysisException exception =
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
+
+    assertEquals(AnalysisV2ErrorCode.INVALID_REQUEST, exception.getErrorCode());
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence() maps CONNECTION_REFUSED to API_ERROR")
+  void testAnalyzeEvidenceMapsConnectionRefusedToApiError() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    McpTransportException connectionRefused =
+        new McpTransportException(
+            McpTransportException.McpErrorType.CONNECTION_REFUSED, "Connection refused", false);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenThrow(connectionRefused);
+
+    // Act & Assert
+    AnalysisException exception =
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
+
+    assertEquals(AnalysisV2ErrorCode.API_ERROR, exception.getErrorCode());
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence() maps UNKNOWN to INTERNAL_ERROR")
+  void testAnalyzeEvidenceMapsUnknownToInternalError() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    McpTransportException unknown =
+        new McpTransportException(
+            McpTransportException.McpErrorType.UNKNOWN, "Unknown error", false);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenThrow(unknown);
+
+    // Act & Assert
+    AnalysisException exception =
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
+
+    assertEquals(AnalysisV2ErrorCode.INTERNAL_ERROR, exception.getErrorCode());
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence() throws INVALID_RESPONSE_SCHEMA when response is null")
+  void testAnalyzeEvidenceThrowsOnNullAnalysisResponse() throws Exception {
+    // Arrange: MCP response with null analysisResponse
+    McpAnalyzeResponse mcpResponse = new McpAnalyzeResponse(null, null, null);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenReturn(mcpResponse);
+
+    AnalysisV2Request v2Request = createMinimalV2Request();
+
+    // Act & Assert
+    AnalysisException exception =
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
+
+    assertEquals(AnalysisV2ErrorCode.INVALID_RESPONSE_SCHEMA, exception.getErrorCode());
+    assertTrue(exception.getMessage().contains("null analysisResponse"));
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence() throws API_ERROR when response contains error field")
+  void testAnalyzeEvidenceThrowsOnErrorInResponse() throws Exception {
+    // Arrange: MCP response with error field populated
+    McpAnalyzeResponse mcpResponse =
+        new McpAnalyzeResponse(null, null, "MCP server internal error");
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenReturn(mcpResponse);
+
+    AnalysisV2Request v2Request = createMinimalV2Request();
+
+    // Act & Assert
+    AnalysisException exception =
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
+
+    assertEquals(AnalysisV2ErrorCode.API_ERROR, exception.getErrorCode());
+    assertTrue(exception.getMessage().contains("MCP server error: MCP server internal error"));
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence() includes timeout in request options")
+  void testAnalyzeEvidenceIncludesTimeoutInOptions() throws Exception {
+    // Arrange
+    when(config.getTimeoutSeconds()).thenReturn(60);
+
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    AnalysisV2Response v2Response = createValidV2SuccessResponse();
+    McpAnalyzeResponse mcpResponse = new McpAnalyzeResponse(v2Response, null, null);
+
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenReturn(mcpResponse);
+
+    // Recreate provider with updated config
+    provider = new ClaudeMcpAnalysisProvider(transport, config);
+
+    // Act
+    provider.analyzeEvidence(v2Request);
+
+    // Assert: verify timeout was included in request options
+    ArgumentCaptor<McpAnalyzeRequest> requestCaptor =
+        ArgumentCaptor.forClass(McpAnalyzeRequest.class);
+    verify(transport).analyze(requestCaptor.capture());
+
+    McpAnalyzeRequest capturedRequest = requestCaptor.getValue();
+    assertEquals(60, capturedRequest.getOptions().getTimeoutSeconds());
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence() preserves V2 request in MCP wrapper")
+  void testAnalyzeEvidencePreservesV2Request() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    v2Request.setPrompt("Test custom prompt");
+    v2Request.setPromptType(PromptType.FEATURE);
+
+    AnalysisV2Response v2Response = createValidV2SuccessResponse();
+    McpAnalyzeResponse mcpResponse = new McpAnalyzeResponse(v2Response, null, null);
+
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenReturn(mcpResponse);
+
+    // Act
+    provider.analyzeEvidence(v2Request);
+
+    // Assert: verify V2 request was preserved
+    ArgumentCaptor<McpAnalyzeRequest> requestCaptor =
+        ArgumentCaptor.forClass(McpAnalyzeRequest.class);
+    verify(transport).analyze(requestCaptor.capture());
+
+    McpAnalyzeRequest capturedRequest = requestCaptor.getValue();
+    assertEquals(v2Request, capturedRequest.getAnalysisRequest());
+    assertEquals("Test custom prompt", capturedRequest.getAnalysisRequest().getPrompt());
+    assertEquals(PromptType.FEATURE, capturedRequest.getAnalysisRequest().getPromptType());
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence() validates request before calling transport")
+  void testAnalyzeEvidenceValidatesRequest() throws McpTransportException {
+    // Arrange: Create invalid request (missing required fields)
+    AnalysisV2Request invalidRequest = new AnalysisV2Request();
+    // Missing: schemaVersion, promptType, target, prompt, evidenceSelectors
+
+    // Act & Assert
+    assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(invalidRequest));
+
+    // Verify transport was never called (validation failed first)
+    verify(transport, never()).analyze(any());
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence() validates response from MCP server")
+  void testAnalyzeEvidenceValidatesResponse() throws Exception {
+    // Arrange: Create SUCCESS response missing required fields
+    AnalysisV2Response incompleteResponse = new AnalysisV2Response();
+    incompleteResponse.setSchemaVersion("2.0.0");
+    incompleteResponse.setStatus(AnalysisStatus.SUCCESS);
+    incompleteResponse.setDiagnosis(null); // Missing required field
+
+    McpAnalyzeResponse mcpResponse = new McpAnalyzeResponse(incompleteResponse, null, null);
+    when(transport.analyze(any())).thenReturn(mcpResponse);
+
+    // Act & Assert
+    assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(createValidV2Request()));
+  }
+
+  @Test
+  @DisplayName("analyzeEvidence() maps RATE_LIMIT to API_RATE_LIMIT")
+  void testAnalyzeEvidenceMapsRateLimitToApiRateLimit() throws Exception {
+    // Arrange
+    AnalysisV2Request v2Request = createMinimalV2Request();
+    McpTransportException rateLimitException =
+        new McpTransportException(
+            McpTransportException.McpErrorType.RATE_LIMIT, "Rate limit exceeded", true);
+    when(transport.analyze(any(McpAnalyzeRequest.class))).thenThrow(rateLimitException);
+
+    // Act & Assert
+    AnalysisException exception =
+        assertThrows(AnalysisException.class, () -> provider.analyzeEvidence(v2Request));
+
+    assertEquals(AnalysisV2ErrorCode.API_RATE_LIMIT, exception.getErrorCode());
+  }
+
+  // Helper methods
+
+  private AnalysisV2Request createMinimalV2Request() {
+    AnalysisV2Request request = new AnalysisV2Request();
+    request.setSchemaVersion("2.0.0");
     request.setPrompt("Test prompt");
-    request.setContext("Test context");
-
-    AnalysisV1EvidenceBundle evidence = new AnalysisV1EvidenceBundle();
-    evidence.setScriptName("TestScript");
-
-    TimeWindow timeWindow = new TimeWindow();
-    timeWindow.setStart(LocalDateTime.now().minusMinutes(1));
-    timeWindow.setEnd(LocalDateTime.now());
-    evidence.setTimeWindow(timeWindow);
-
-    evidence.setLogs(List.of());
-    evidence.setTickLogs(List.of());
-    evidence.setDecisions(List.of());
-
-    request.setEvidence(evidence);
-
+    request.setPromptType(PromptType.ISSUE);
+    request.setTarget(new AnalysisV2Target("test-script", null, null));
+    request.setEvidenceSelectors(
+        List.of(new AnalysisV2EvidenceSelector(EvidenceType.GENERAL_LOGS)));
     return request;
+  }
+
+  private AnalysisV2Request createValidV2Request() {
+    return createMinimalV2Request();
+  }
+
+  private AnalysisV2Response createValidV2SuccessResponse() {
+    AnalysisV2Response response = new AnalysisV2Response();
+    response.setSchemaVersion("2.0.0");
+    response.setAnalysisId("test-analysis-123");
+    response.setStatus(AnalysisStatus.SUCCESS);
+
+    // Required for SUCCESS status
+    response.setDiagnosis(createMockDiagnosis());
+    response.setImpactedModules(List.of("ModuleA", "ModuleB"));
+    response.setPatchDraft(createMockPatchDraft());
+    response.setRetestPlan(createMockRetestPlan());
+    response.setEvidenceReferences(List.of("log:123", "tick:456"));
+
+    return response;
+  }
+
+  private AnalysisV2Diagnosis createMockDiagnosis() {
+    AnalysisV2Diagnosis diagnosis = new AnalysisV2Diagnosis();
+    diagnosis.setSummary("Test summary");
+    diagnosis.setRootCause("Test root cause");
+    diagnosis.setConfidence(ConfidenceLevel.HIGH);
+    return diagnosis;
+  }
+
+  private AnalysisV2PatchDraft createMockPatchDraft() {
+    AnalysisV2PatchDraft patch = new AnalysisV2PatchDraft();
+    patch.setPatchId("test-patch-123");
+    patch.setDescription("Test patch");
+    patch.setAffectedFiles(List.of("com/example/Test.java"));
+    patch.setChanges(
+        List.of(
+            new AnalysisV2PatchDraft.PatchChange("com/example/Test.java", "old code", "new code")));
+    return patch;
+  }
+
+  private AnalysisV2RetestPlan createMockRetestPlan() {
+    AnalysisV2RetestPlan plan = new AnalysisV2RetestPlan();
+    plan.setTestSteps(
+        List.of(
+            new AnalysisV2RetestPlan.TestStep(
+                1, "Run the script", AnalysisV2RetestPlan.ActionType.RUN_SCRIPT)));
+    plan.setSuccessCriteria(List.of("Script runs successfully", "No errors in logs"));
+    return plan;
   }
 }

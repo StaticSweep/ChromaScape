@@ -30,6 +30,11 @@ public enum PatchLoopEventType {
   ANALYSIS_FAILED,
   ANALYSIS_TIMEOUT,
 
+  // Retest events
+  RETEST_STARTED,
+  RETEST_COMPLETED,
+  RETEST_FAILED,
+
   // State transition events
   STATE_TRANSITION,
 

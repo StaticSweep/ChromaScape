@@ -10,12 +10,14 @@ import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteRequest;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopIterationResponse;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
+import com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,24 +34,31 @@ class PatchLoopControllerTest {
 
   @Mock private PatchLoopOrchestratorService orchestratorService;
   @Mock private PatchLoopGraphOrchestratorService graphOrchestratorService;
+  @Mock private PatchLoopAnalysisClient analysisClient;
 
   private PatchLoopController controller;
 
   @BeforeEach
   void setUp() {
-    controller = new PatchLoopController(orchestratorService, graphOrchestratorService);
+    controller =
+        new PatchLoopController(orchestratorService, graphOrchestratorService, analysisClient);
   }
 
   @Test
-  @DisplayName("POST /execute returns 200 OK with iteration ID")
+  @DisplayName("POST /execute returns 200 OK with iteration ID and E6.5 fields")
   void testExecuteIterationReturns200() {
     // Arrange
     PatchLoopExecuteRequest request = new PatchLoopExecuteRequest();
     request.setScriptName("TestScript");
     request.setPrompt("Why failed?");
 
-    PatchLoopExecuteResponse serviceResponse =
-        new PatchLoopExecuteResponse("iter-123", "QUEUED", "Started");
+    PatchLoopExecuteResponse serviceResponse = new PatchLoopExecuteResponse();
+    serviceResponse.setIterationId("iter-123");
+    serviceResponse.setExecutionId("graph_exec_abc");
+    serviceResponse.setStatus("QUEUED");
+    serviceResponse.setMessage("Started");
+    serviceResponse.setWsUrl("/ws/debug/patch-loop/graph_exec_abc");
+    serviceResponse.setApiUrl("/api/debug/patch-loop/iter-123/graph");
 
     when(orchestratorService.executeIteration(any())).thenReturn(serviceResponse);
 
@@ -64,6 +73,9 @@ class PatchLoopControllerTest {
     PatchLoopExecuteResponse body = (PatchLoopExecuteResponse) response.getBody();
     assertEquals("iter-123", body.getIterationId());
     assertEquals("QUEUED", body.getStatus());
+    assertEquals("graph_exec_abc", body.getExecutionId());
+    assertEquals("/ws/debug/patch-loop/graph_exec_abc", body.getWsUrl());
+    assertEquals("/api/debug/patch-loop/iter-123/graph", body.getApiUrl());
 
     verify(orchestratorService, times(1)).executeIteration(request);
   }
@@ -347,7 +359,8 @@ class PatchLoopControllerTest {
 
   @Test
   @DisplayName("POST /compile returns 200 OK with compiled graph info")
-  void testCompileGraphReturns200() throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException {
+  void testCompileGraphReturns200()
+      throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException {
     // Arrange
     com.chromascape.web.debug.patchloop.dto.CompileRequest request =
         new com.chromascape.web.debug.patchloop.dto.CompileRequest();
@@ -368,14 +381,17 @@ class PatchLoopControllerTest {
 
   @Test
   @DisplayName("POST /compile returns 400 Bad Request for invalid Mermaid")
-  void testCompileGraphReturns400ForInvalidMermaid() throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException {
+  void testCompileGraphReturns400ForInvalidMermaid()
+      throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException {
     // Arrange
     com.chromascape.web.debug.patchloop.dto.CompileRequest request =
         new com.chromascape.web.debug.patchloop.dto.CompileRequest();
     request.setMermaid("invalid mermaid syntax");
 
     when(graphOrchestratorService.compileGraph(anyString()))
-        .thenThrow(new com.chromascape.web.debug.patchloop.graph.GraphCompilationException("Invalid syntax"));
+        .thenThrow(
+            new com.chromascape.web.debug.patchloop.graph.GraphCompilationException(
+                "Invalid syntax"));
 
     // Act
     ResponseEntity<Object> response = controller.compileGraph(request);
@@ -387,7 +403,8 @@ class PatchLoopControllerTest {
 
   @Test
   @DisplayName("POST /compile returns 500 on unexpected exception")
-  void testCompileGraphReturns500OnException() throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException {
+  void testCompileGraphReturns500OnException()
+      throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException {
     // Arrange
     com.chromascape.web.debug.patchloop.dto.CompileRequest request =
         new com.chromascape.web.debug.patchloop.dto.CompileRequest();
@@ -416,6 +433,122 @@ class PatchLoopControllerTest {
     // Assert
     assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     verify(graphOrchestratorService, times(1)).getArtifacts(iterationId);
+  }
+
+  @Test
+  @DisplayName("POST /execute-graph creates graph execution (E6.5 non-regression)")
+  void testExecuteGraphCreatesExecution()
+      throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException,
+          com.chromascape.web.debug.patchloop.graph.GraphExecutionException {
+    // Arrange
+    com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest request =
+        new com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest();
+    request.setMermaid("graph TD; A-->B;");
+    request.setScriptName("TestScript");
+    request.setGoalPrompt("Test prompt");
+
+    com.chromascape.web.debug.patchloop.dto.GraphExecuteResponse graphResponse =
+        new com.chromascape.web.debug.patchloop.dto.GraphExecuteResponse();
+    graphResponse.setExecutionId("graph_exec_test");
+    graphResponse.setIterationId("patchloop_test");
+    graphResponse.setWsUrl("/ws/debug/patch-loop/graph_exec_test");
+    graphResponse.setApiUrl("/api/debug/patch-loop/patchloop_test/graph");
+
+    when(graphOrchestratorService.executeGraph(any())).thenReturn(graphResponse);
+
+    // Act
+    ResponseEntity<Object> response = controller.executeGraph(request);
+
+    // Assert
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    verify(graphOrchestratorService, times(1)).executeGraph(request);
+  }
+
+  @Test
+  @DisplayName("POST /execute-graph returns 400 when iterationId not found (E6.5)")
+  void testExecuteGraphReturns400ForMissingIteration()
+      throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException,
+          com.chromascape.web.debug.patchloop.graph.GraphExecutionException {
+    // Arrange
+    com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest request =
+        new com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest();
+    request.setMermaid("graph TD; A-->B;");
+    request.setScriptName("TestScript");
+    request.setIterationId("nonexistent_iter");
+
+    when(graphOrchestratorService.executeGraph(any()))
+        .thenThrow(new IllegalArgumentException("Iteration not found: nonexistent_iter"));
+
+    // Act
+    ResponseEntity<Object> response = controller.executeGraph(request);
+
+    // Assert
+    assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody().toString().contains("Iteration not found"));
+  }
+
+  @Test
+  @DisplayName("POST /execute-graph returns 400 for blank iterationId (E6.5)")
+  void testExecuteGraphReturns400ForBlankIterationId()
+      throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException,
+          com.chromascape.web.debug.patchloop.graph.GraphExecutionException {
+    // Arrange
+    com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest request =
+        new com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest();
+    request.setMermaid("graph TD; A-->B;");
+    request.setScriptName("TestScript");
+    request.setIterationId("   ");
+
+    when(graphOrchestratorService.executeGraph(any()))
+        .thenThrow(new IllegalArgumentException("iterationId must not be blank"));
+
+    // Act
+    ResponseEntity<Object> response = controller.executeGraph(request);
+
+    // Assert
+    assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody().toString().contains("iterationId must not be blank"));
+  }
+
+  @Test
+  @DisplayName("GET /provider/status returns provider status")
+  void testGetProviderStatusReturns200() {
+    // Arrange
+    when(analysisClient.getProviderName()).thenReturn("claude-mcp");
+    when(analysisClient.isProviderAvailable()).thenReturn(true);
+
+    // Act
+    ResponseEntity<Object> response = controller.getProviderStatus();
+
+    // Assert
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody() instanceof Map);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals("claude-mcp", body.get("providerName"));
+    assertEquals(true, body.get("available"));
+    assertEquals("analysis_only", body.get("defaultMode"));
+
+    verify(analysisClient, times(1)).getProviderName();
+    verify(analysisClient, times(1)).isProviderAvailable();
+  }
+
+  @Test
+  @DisplayName("GET /provider/status returns 500 on exception")
+  void testGetProviderStatusReturns500OnException() {
+    // Arrange
+    when(analysisClient.getProviderName()).thenThrow(new RuntimeException("Provider error"));
+
+    // Act
+    ResponseEntity<Object> response = controller.getProviderStatus();
+
+    // Assert
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
   }
 
   // ========== Helper Methods ==========

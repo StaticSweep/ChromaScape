@@ -9,6 +9,9 @@ public enum EdgeCondition {
   /** Node executed successfully */
   SUCCESS,
 
+  /** Node executed with partial success - continue with warnings */
+  PARTIAL_SUCCESS,
+
   /** Node execution failed */
   FAILURE,
 

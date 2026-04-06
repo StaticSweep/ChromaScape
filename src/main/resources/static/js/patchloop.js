@@ -128,6 +128,59 @@ class PatchLoopManager {
   }
 
   /**
+   * Executes a patch loop using the simple API.
+   *
+   * <p>This internally delegates to the graph orchestrator using the default BMAD template,
+   * providing a clean, simple interface for common use cases.
+   *
+   * @param {string} scriptName - The script to run
+   * @param {string} goalPrompt - The analysis prompt
+   * @param {Object} options - Additional options
+   * @param {string} options.context - Additional context (optional)
+   * @param {string} options.executionMode - Execution mode: 'analysis_only' or 'autofix_loop' (default: 'analysis_only')
+   * @param {number} options.maxAttempts - Maximum number of attempts (default: 3)
+   * @param {Object} options.successCriteria - Success criteria for loop termination (optional)
+   * @param {Object} options.sessionContext - Debugger session context (optional)
+   * @param {Object} options.evidenceConfig - Evidence collection configuration (optional)
+   * @returns {Promise<Object>} The execution result with executionId, iterationId, wsUrl, apiUrl
+   */
+  async execute(scriptName, goalPrompt, options = {}) {
+    const request = {
+      scriptName: scriptName,
+      prompt: goalPrompt,
+      context: options.context || '',
+      executionMode: options.executionMode || 'analysis_only',
+      maxAttempts: options.maxAttempts || 3,
+      successCriteria: options.successCriteria || {},
+      sessionContext: options.sessionContext || null,
+      evidenceConfig: options.evidenceConfig || null
+    };
+
+    try {
+      const response = await fetch('/api/debug/patch-loop/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      this.executionId = result.executionId;
+      this.iterationId = result.iterationId;
+
+      this.onGraphExecuted(result);
+      return result;
+
+    } catch (error) {
+      this.onError('Failed to execute patch loop: ' + error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Gets the current graph state.
    */
   async getGraphState(iterationId) {
@@ -490,6 +543,8 @@ class PatchLoopManager {
       'READY': 'status-ready',
       'RUNNING': 'status-running',
       'PAUSED': 'status-paused',
+      'RETESTING': 'status-retesting',
+      'RETESTED': 'status-retested',
       'COMPLETED': 'status-completed',
       'FAILED': 'status-failed',
       'CANCELLED': 'status-cancelled'

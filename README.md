@@ -82,3 +82,40 @@ ChromaScape utilises template matching for accurate and fast OCR. This solution 
 
 ### Note on dependencies:
 This project downloads specific fonts and UI elements from the [OSBC](https://github.com/kelltom/OS-Bot-COLOR/tree/main), [RuneDark](https://github.com/cemenenkoff/runedark-public) and [SRL-dev](https://github.com/Villavu/SRL-Development/tree/master) projects to enable accurate template matching, OCR, and UI consistency. These resources are used solely for educational and research purposes and they are not packaged directly within this repository.
+
+## MCP Integration
+
+ChromaScape integrates with AI providers through the **Model Context Protocol (MCP)** for intelligent bot script debugging and patch generation.
+
+### Features
+
+- **AI-Powered Analysis**: Automatically diagnose script failures and generate fixes
+- **Patch Loop**: Iterate on patches with automated retesting
+- **Zero-Configuration**: Auto-detects Claude/Codex/OpenCode CLIs and starts bridge automatically
+- **BYO Subscription**: Use your existing Claude or Codex CLI subscription
+- **Dual Mode**: Supports MCP mode (no API key) or API mode (direct API access)
+
+### Quick Start
+
+```bash
+# Start ChromaScape (MCP bridge auto-starts)
+gradlew.bat bootRun
+
+# Optional: Register with Claude/Codex CLI for BYO subscription
+cd scripts/mcp-bridge
+register-mcp-clients.bat     # Windows (cmd.exe)
+.\register-mcp-clients.bat   # Windows (PowerShell)
+./register-mcp-clients.sh    # Unix/Linux/macOS
+```
+
+### Documentation
+
+- [MCP Quick Start Guide](docs/MCP_QUICK_START.md) - Get started in minutes
+- [MCP Bridge Implementation](docs/MCP_BRIDGE_AUTO_START_SUMMARY.md) - Technical details
+- [MCP Bridge README](scripts/mcp-bridge/README.md) - Bridge configuration
+
+### Access Points
+
+- **ChromaScape**: http://localhost:8090
+- **Debugger**: http://localhost:8090/debugger
+- **MCP Bridge Health**: http://localhost:8765/health

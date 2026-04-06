@@ -316,6 +316,78 @@ class PatchLoopPersistenceServiceTest {
     assertEquals(0, iteration.getRecommendationCount());
   }
 
+  @Test
+  void saveAnalysisResults_v2_storesPatchIdSeparately_withoutMutatingDiagnosisSummary() {
+    // Given
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    String originalSummary = "Script failed due to network timeout";
+    String patchId = "patch-abc123";
+
+    AnalysisV2Response response = new AnalysisV2Response();
+    response.setAnalysisId("analysis-v2-123");
+
+    AnalysisV2Diagnosis diagnosis = new AnalysisV2Diagnosis();
+    diagnosis.setSummary(originalSummary);
+    diagnosis.setRootCause("Network instability");
+    diagnosis.setConfidence(ConfidenceLevel.HIGH);
+    diagnosis.setRecommendations(Collections.emptyList());
+    response.setDiagnosis(diagnosis);
+
+    AnalysisV2PatchDraft patchDraft = new AnalysisV2PatchDraft();
+    patchDraft.setPatchId(patchId);
+    patchDraft.setDescription("Add retry logic");
+    patchDraft.setAffectedFiles(Arrays.asList("src/NetworkClient.java"));
+    response.setPatchDraft(patchDraft);
+
+    ObjectNode responseNode = objectMapper.createObjectNode();
+    responseNode.put("analysisId", "analysis-v2-123");
+
+    // When
+    persistenceService.saveAnalysisResults(iteration, response, responseNode);
+
+    // Then
+    verify(iterationRepository).save(iteration);
+    assertEquals(patchId, iteration.getPatchId(), "patchId should be stored separately");
+
+    // Verify diagnosisSummary is NOT mutated (no "[Patch: ...]" appended)
+    assertEquals(
+        originalSummary,
+        iteration.getDiagnosisSummary(),
+        "diagnosisSummary should remain unchanged, not polluted with patch info");
+
+    // Verify other fields
+    assertEquals("analysis-v2-123", iteration.getAnalysisId());
+    assertEquals("Network instability", iteration.getRootCause());
+  }
+
+  @Test
+  void saveAnalysisResults_v2_patchIdIsNullWhenPatchDraftMissing() {
+    // Given
+    PatchLoopIteration iteration = new PatchLoopIteration();
+
+    AnalysisV2Response response = new AnalysisV2Response();
+    response.setAnalysisId("analysis-v2-456");
+
+    AnalysisV2Diagnosis diagnosis = new AnalysisV2Diagnosis();
+    diagnosis.setSummary("Script failed");
+    diagnosis.setConfidence(ConfidenceLevel.MEDIUM);
+    diagnosis.setRecommendations(Collections.emptyList());
+    response.setDiagnosis(diagnosis);
+
+    // No patchDraft set
+    response.setPatchDraft(null);
+
+    ObjectNode responseNode = objectMapper.createObjectNode();
+
+    // When
+    persistenceService.saveAnalysisResults(iteration, response, responseNode);
+
+    // Then
+    verify(iterationRepository).save(iteration);
+    assertNull(iteration.getPatchId(), "patchId should be null when patchDraft is missing");
+    assertEquals("Script failed", iteration.getDiagnosisSummary());
+  }
+
   // ==================== Helper Methods ====================
 
   private AnalysisV1EvidenceBundle createEvidenceWithCounts(

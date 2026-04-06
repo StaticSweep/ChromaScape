@@ -167,13 +167,89 @@ public class PatchLoopAsyncWorker {
       long analysisTime = System.currentTimeMillis() - startTime;
       iteration.setAnalysisTimeMs(analysisTime);
 
+      // Guard against terminal state transitions - failed analysis should not proceed to COMPLETED
+      if (iteration.getStatus().isTerminal()) {
+        logEvent(
+            iterationId,
+            PatchLoopEventType.ITERATION_FAILED,
+            "Iteration terminated during analysis");
+        return;
+      }
+
       persistenceService.updateIterationStatus(iteration, PatchLoopStatus.ANALYZED);
       logEvent(
           iterationId,
           PatchLoopEventType.ANALYSIS_COMPLETED,
           "Analysis completed with " + iteration.getRecommendationCount() + " recommendations");
 
-      // State 4: COMPLETED
+      // State 4: RETESTING (only for autofix_loop mode)
+      if ("autofix_loop".equals(iteration.getExecutionMode()) && hasMoreAttempts(iteration)) {
+        persistenceService.updateIterationStatus(iteration, PatchLoopStatus.RETESTING);
+        logEvent(iterationId, PatchLoopEventType.RETEST_STARTED, "Starting retest run");
+
+        boolean retestSuccess = executeRetest(iteration);
+
+        persistenceService.updateIterationStatus(iteration, PatchLoopStatus.RETESTED);
+        logEvent(
+            iterationId,
+            PatchLoopEventType.RETEST_COMPLETED,
+            "Retest " + (retestSuccess ? "passed" : "failed"));
+
+        if (retestSuccess) {
+          // Success - complete the iteration
+          persistenceService.updateIterationStatus(iteration, PatchLoopStatus.COMPLETED);
+          logEvent(
+              iterationId,
+              PatchLoopEventType.ITERATION_COMPLETED,
+              "Iteration completed successfully after retest");
+          return;
+        } else {
+          // Failed - increment attempt and loop back to analysis
+          int nextAttempt = iteration.getCurrentAttempt() + 1;
+          if (nextAttempt >= iteration.getMaxAttempts()) {
+            // Max attempts reached - fail the iteration
+            persistenceService.markIterationFailed(
+                iteration,
+                PatchLoopFailureCode.MAX_ATTEMPTS_EXCEEDED,
+                "Failed after " + iteration.getMaxAttempts() + " attempts",
+                null);
+            logEvent(
+                iterationId, PatchLoopEventType.ITERATION_FAILED, "Max attempts exceeded", "ERROR");
+            return;
+          }
+
+          // Loop back for another attempt
+          persistenceService.updateIterationStatus(iteration, PatchLoopStatus.ANALYZING);
+          logEvent(
+              iterationId,
+              PatchLoopEventType.ANALYSIS_STARTED,
+              "Starting analysis for attempt " + (nextAttempt + 1));
+
+          long retryStartTime = System.currentTimeMillis();
+          analyzeEvidence(iteration, collectEvidence(iteration));
+          long retryAnalysisTime = System.currentTimeMillis() - retryStartTime;
+          iteration.setAnalysisTimeMs(retryAnalysisTime);
+
+          // Guard against terminal state transitions
+          if (iteration.getStatus().isTerminal()) {
+            logEvent(
+                iterationId,
+                PatchLoopEventType.ITERATION_FAILED,
+                "Iteration terminated during retry analysis");
+            return;
+          }
+
+          // Complete after retry analysis
+          persistenceService.updateIterationStatus(iteration, PatchLoopStatus.COMPLETED);
+          logEvent(
+              iterationId,
+              PatchLoopEventType.ITERATION_COMPLETED,
+              "Iteration completed after " + (nextAttempt + 1) + " attempts");
+          return;
+        }
+      }
+
+      // State 5: COMPLETED (for analysis_only mode or when no attempts left)
       persistenceService.updateIterationStatus(iteration, PatchLoopStatus.COMPLETED);
       logEvent(iterationId, PatchLoopEventType.ITERATION_COMPLETED, "Iteration completed");
 
@@ -297,7 +373,7 @@ public class PatchLoopAsyncWorker {
       LocalDateTime startTime = LocalDateTime.now();
       iteration.setRunStartTime(startTime);
 
-      ScriptInstance instance = ScriptInstanceManager.getInstance().getInstanceRef();
+      ScriptInstance instance = getScriptInstance();
       if (instance == null) {
         iteration.setRunSuccess(false);
         iteration.setFailureCode(PatchLoopFailureCode.SCRIPT_START_FAILED);
@@ -400,7 +476,24 @@ public class PatchLoopAsyncWorker {
       // Call analysis provider (long-running, outside any transaction)
       AnalysisV2Response response = analysisProvider.analyzeEvidence(request);
 
+      // Branch on response status - FAILURE stops immediately, PARTIAL_SUCCESS continues
+      if (response.getStatus() == com.chromascape.web.debug.patchloop.dto.AnalysisStatus.FAILURE) {
+        String providerCode = response.getError() != null ? response.getError().getCode() : null;
+        String errorMessage =
+            response.getError() != null ? response.getError().getMessage() : "Analysis failed";
+
+        String failureCode = mapProviderFailureCode(providerCode);
+        persistenceService.markIterationFailed(
+            iteration, failureCode, "Analysis returned FAILURE: " + errorMessage, null);
+        logEvent(
+            iteration.getIterationId(), PatchLoopEventType.ANALYSIS_FAILED, errorMessage, "ERROR");
+        throw new AnalysisException(
+            com.chromascape.web.debug.patchloop.constants.AnalysisV2ErrorCode.API_ERROR,
+            errorMessage);
+      }
+
       // Store response JSON and extract V2 diagnosis fields
+      // (continues for both SUCCESS and PARTIAL_SUCCESS)
       JsonNode responseNode = objectMapper.valueToTree(response);
       persistenceService.saveAnalysisResults(iteration, response, responseNode);
 
@@ -515,5 +608,133 @@ public class PatchLoopAsyncWorker {
     java.io.StringWriter sw = new java.io.StringWriter();
     t.printStackTrace(new java.io.PrintWriter(sw));
     return sw.toString();
+  }
+
+  /**
+   * Maps provider error codes to PatchLoopFailureCode constants.
+   *
+   * <p>Preserves provider-specific failure codes instead of collapsing everything to
+   * ANALYSIS_API_ERROR. This enables better diagnostics and retry strategies.
+   *
+   * @param providerCode the error code from the analysis provider
+   * @return the corresponding PatchLoopFailureCode constant
+   */
+  private String mapProviderFailureCode(String providerCode) {
+    if (providerCode == null) {
+      return PatchLoopFailureCode.ANALYSIS_API_ERROR;
+    }
+
+    return switch (providerCode) {
+      case "API_TIMEOUT" -> PatchLoopFailureCode.ANALYSIS_API_TIMEOUT;
+      case "API_RATE_LIMIT" -> PatchLoopFailureCode.ANALYSIS_API_RATE_LIMIT;
+      case "API_AUTH_FAILED" -> PatchLoopFailureCode.ANALYSIS_API_AUTH_FAILED;
+      case "PARSE_ERROR" -> PatchLoopFailureCode.ANALYSIS_PARSE_ERROR;
+      case "INVALID_REQUEST" -> PatchLoopFailureCode.ANALYSIS_VALIDATION_FAILED;
+      case "INSUFFICIENT_EVIDENCE" -> PatchLoopFailureCode.INSUFFICIENT_EVIDENCE;
+      case "INVALID_TIME_WINDOW" -> PatchLoopFailureCode.INVALID_TIME_WINDOW;
+      case "EVIDENCE_COLLECTION_FAILED" -> PatchLoopFailureCode.EVIDENCE_COLLECTION_FAILED;
+      case "INTERNAL_ERROR" -> PatchLoopFailureCode.INTERNAL_ERROR;
+      default -> PatchLoopFailureCode.ANALYSIS_API_ERROR;
+    };
+  }
+
+  /**
+   * Retrieves the current script instance.
+   *
+   * <p>Testability seam: Extracted to allow test subclasses to override and provide mock instances.
+   *
+   * @return the current ScriptInstance, or null if none is running
+   */
+  protected ScriptInstance getScriptInstance() {
+    return ScriptInstanceManager.getInstance().getInstanceRef();
+  }
+
+  /**
+   * Checks if the iteration has more attempts available.
+   *
+   * @param iteration the iteration to check
+   * @return true if more attempts are available
+   */
+  private boolean hasMoreAttempts(PatchLoopIteration iteration) {
+    int current = iteration.getCurrentAttempt() != null ? iteration.getCurrentAttempt() : 0;
+    int max = iteration.getMaxAttempts() != null ? iteration.getMaxAttempts() : 1;
+    return current < max - 1;
+  }
+
+  /**
+   * Executes a retest run to validate the patch.
+   *
+   * <p>Runs the script again and compares the results against the baseline to determine if the
+   * patch was successful.
+   *
+   * @param iteration the iteration being retested
+   * @return true if retest was successful, false otherwise
+   */
+  private boolean executeRetest(PatchLoopIteration iteration) {
+    logger.info("Executing retest for iteration: {}", iteration.getIterationId());
+
+    try {
+      // Trigger script run similar to main execution
+      RunConfig config = new RunConfig(iteration.getScriptName());
+      ResponseEntity<Object> response = scriptControl.getRunConfig(config);
+
+      if (!response.getStatusCode().is2xxSuccessful()) {
+        iteration.setFailureCode(PatchLoopFailureCode.SCRIPT_START_FAILED);
+        iteration.setFailureReason("Failed to start retest script: " + response.getBody());
+        return false;
+      }
+
+      // Wait for script to start
+      Thread.sleep(1000);
+
+      // Poll for script completion
+      LocalDateTime startTime = LocalDateTime.now();
+      ScriptInstance instance = getScriptInstance();
+
+      if (instance == null) {
+        iteration.setFailureCode(PatchLoopFailureCode.SCRIPT_START_FAILED);
+        iteration.setFailureReason("Script instance is null after retest start");
+        return false;
+      }
+
+      boolean timeout = false;
+      while (instance.isRunning()) {
+        Thread.sleep(SCRIPT_POLL_INTERVAL_MS);
+
+        Duration elapsed = Duration.between(startTime, LocalDateTime.now());
+        if (elapsed.toMinutes() >= SCRIPT_RUN_TIMEOUT_MINUTES) {
+          logger.warn("Retest run timed out after {} minutes", SCRIPT_RUN_TIMEOUT_MINUTES);
+          instance.stop();
+          timeout = true;
+          break;
+        }
+      }
+
+      // Check for success (no failure code in debug session)
+      Optional<DebugSession> session =
+          debugSessionRepository.findFirstByScriptNameOrderByStartTimeDesc(
+              iteration.getScriptName());
+
+      boolean retestSuccess =
+          session.isPresent() && !timeout && session.get().getFailureCode() == null;
+
+      logger.info(
+          "Retest {} for iteration: {}",
+          retestSuccess ? "passed" : "failed",
+          iteration.getIterationId());
+
+      return retestSuccess;
+
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      iteration.setFailureCode(PatchLoopFailureCode.SCRIPT_EXCEPTION);
+      iteration.setFailureReason("Retest run interrupted: " + e.getMessage());
+      return false;
+    } catch (Exception e) {
+      logger.error("Error executing retest", e);
+      iteration.setFailureCode(PatchLoopFailureCode.SCRIPT_EXCEPTION);
+      iteration.setFailureReason("Retest error: " + e.getMessage());
+      return false;
+    }
   }
 }

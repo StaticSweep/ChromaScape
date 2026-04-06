@@ -42,7 +42,8 @@ public class PatchLoopGraphCompiler {
 
   /** Pattern for matching an edge: A --> B, A -.label.-> B, or A -->|label| B */
   private static final Pattern EDGE_PATTERN =
-      Pattern.compile("\\b([A-Za-z0-9_]+)\\s*(\\.-([^\\-]+)\\.->|-->\\|([^\\|]+)\\||-->|->)\\s*([A-Za-z0-9_]+)");
+      Pattern.compile(
+          "\\b([A-Za-z0-9_]+)(?:\\[[^\\]]*\\])?\\s*(-\\.([^.]+)\\.->|-->\\|([^\\|]+)\\||-->|->)\\s*([A-Za-z0-9_]+)(?:\\[[^\\]]*\\])?");
 
   /** Pattern for matching the graph declaration */
   private static final Pattern GRAPH_DECLARATION = Pattern.compile("graph\\s+(TD|LR);?");
@@ -143,17 +144,17 @@ public class PatchLoopGraphCompiler {
         continue;
       }
 
+      // Try to parse as edge FIRST (before node) to handle lines with both patterns
+      Matcher edgeMatcher = EDGE_PATTERN.matcher(line);
+      if (edgeMatcher.find()) {
+        statements.add(new MermaidStatement(StatementType.EDGE, edgeMatcher.group(0), edgeMatcher));
+        continue;
+      }
+
       // Try to parse as node
       Matcher nodeMatcher = NODE_PATTERN.matcher(line);
       if (nodeMatcher.find()) {
         statements.add(new MermaidStatement(StatementType.NODE, nodeMatcher.group(0), nodeMatcher));
-        continue;
-      }
-
-      // Try to parse as edge
-      Matcher edgeMatcher = EDGE_PATTERN.matcher(line);
-      if (edgeMatcher.find()) {
-        statements.add(new MermaidStatement(StatementType.EDGE, edgeMatcher.group(0), edgeMatcher));
         continue;
       }
 
@@ -220,6 +221,7 @@ public class PatchLoopGraphCompiler {
             case "failure", "fail" -> EdgeCondition.FAILURE;
             case "retry" -> EdgeCondition.RETRY;
             case "timeout" -> EdgeCondition.TIMEOUT;
+            case "partial", "partial_success", "partial-success" -> EdgeCondition.PARTIAL_SUCCESS;
             case "success" -> EdgeCondition.SUCCESS;
             default -> {
               warnings.add("Unknown edge label: " + label + ", using SUCCESS");

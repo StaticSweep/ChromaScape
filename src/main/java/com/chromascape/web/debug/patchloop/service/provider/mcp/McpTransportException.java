@@ -84,6 +84,12 @@ public class McpTransportException extends Exception {
     /** Server returned an error status code (4xx or 5xx). */
     HTTP_ERROR,
 
+    /** Authentication/authorization failed (401/403). */
+    AUTH_FAILED,
+
+    /** Rate limit exceeded (HTTP 429). */
+    RATE_LIMIT,
+
     /** Request body could not be serialized or response could not be parsed. */
     SERIALIZATION_ERROR,
 

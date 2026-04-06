@@ -30,7 +30,6 @@ public class PatchLoopGraphOrchestratorService {
   private static final Logger logger =
       LoggerFactory.getLogger(PatchLoopGraphOrchestratorService.class);
 
-  private final PatchLoopOrchestratorService orchestratorService;
   private final PatchLoopGraphCompiler compiler;
   private final PatchLoopGraphExecutor executor;
   private final PatchLoopGraphExecutionRepository executionRepository;
@@ -50,7 +49,6 @@ public class PatchLoopGraphOrchestratorService {
 
   @Autowired
   public PatchLoopGraphOrchestratorService(
-      PatchLoopOrchestratorService orchestratorService,
       PatchLoopGraphCompiler compiler,
       PatchLoopGraphExecutor executor,
       PatchLoopGraphExecutionRepository executionRepository,
@@ -67,7 +65,6 @@ public class PatchLoopGraphOrchestratorService {
       PatchLoopEvidenceArtifactRepository evidenceArtifactRepository,
       ObjectMapper objectMapper,
       PatchLoopAsyncWorker patchLoopAsyncWorker) {
-    this.orchestratorService = orchestratorService;
     this.compiler = compiler;
     this.executor = executor;
     this.executionRepository = executionRepository;
@@ -104,8 +101,25 @@ public class PatchLoopGraphOrchestratorService {
     // Create IDs
     String executionId = "graph_exec_" + UUID.randomUUID().toString().substring(0, 8);
 
-    // Create or get iteration
-    PatchLoopIteration iteration = createIteration(request);
+    // Create or reuse iteration
+    PatchLoopIteration iteration;
+    if (request.getIterationId() != null) {
+      // Reuse existing iteration
+      if (request.getIterationId().isBlank()) {
+        throw new IllegalArgumentException("iterationId must not be blank");
+      }
+      iteration =
+          iterationRepository
+              .findByIterationId(request.getIterationId())
+              .orElseThrow(
+                  () ->
+                      new IllegalArgumentException(
+                          "Iteration not found: " + request.getIterationId()));
+      logger.info("Reusing existing iteration: {}", iteration.getIterationId());
+    } else {
+      // Create new iteration
+      iteration = createIteration(request);
+    }
 
     // Create graph execution record
     PatchLoopGraphExecution execution = new PatchLoopGraphExecution();
@@ -119,7 +133,7 @@ public class PatchLoopGraphOrchestratorService {
 
     // Update iteration with graph execution ID
     iteration.setGraphExecutionId(executionId);
-    iteration.setExecutionMode(request.getExecutionMode());
+    iteration.setExecutionMode(request.getNormalizedExecutionMode());
     iteration.setMaxAttempts(request.getMaxAttempts());
     iteration.setSuccessCriteria(
         request.getSuccessCriteria() != null
@@ -430,7 +444,7 @@ public class PatchLoopGraphOrchestratorService {
         request.getEvidenceConfig() != null
             ? objectMapper.valueToTree(request.getEvidenceConfig())
             : null);
-    iteration.setExecutionMode(request.getExecutionMode());
+    iteration.setExecutionMode(request.getNormalizedExecutionMode());
     iteration.setMaxAttempts(request.getMaxAttempts());
     iterationRepository.save(iteration);
     return iteration;

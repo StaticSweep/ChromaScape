@@ -43,6 +43,8 @@ import org.springframework.stereotype.Service;
 public class SimulatorVerifyService {
 
   private static final Logger logger = LogManager.getLogger(SimulatorVerifyService.class);
+  private static final int REPORT_FILE_WAIT_ATTEMPTS = 15;
+  private static final long REPORT_FILE_WAIT_DELAY_MS = 200L;
 
   private final SimulatorVerifierProperties properties;
   private final SimulatorVerifyJobStore jobStore;
@@ -92,6 +94,15 @@ public class SimulatorVerifyService {
     if (!Files.exists(openruneRoot)) {
       throw new SimulatorVerifierException(
           "OpenRune root directory not found: " + properties.getOpenruneRoot());
+    }
+    if (properties.isJarInvocation()) {
+      Path verifierJar = properties.getResolvedVerifierJarPath();
+      if (!Files.exists(verifierJar)) {
+        throw new SimulatorVerifierException(
+            "Verifier jar not found: "
+                + verifierJar
+                + ". Build it with ./gradlew :simulator-verifier:shadowJar");
+      }
     }
 
     String jobId = UUID.randomUUID().toString();
@@ -195,14 +206,7 @@ public class SimulatorVerifyService {
                 job.getArgs().getBridgeUrl()));
       }
 
-      // Build command using temporary batch file
-      File batchFile;
-      try {
-        batchFile = createBatchFile(job);
-      } catch (IOException e) {
-        throw new RuntimeException("Failed to create batch file", e);
-      }
-      List<String> command = List.of("cmd.exe", "/c", batchFile.getAbsolutePath());
+      List<String> command = buildProcessCommand(job);
       logger.debug("Command: {}", String.join(" ", command));
 
       // Execute process
@@ -244,17 +248,28 @@ public class SimulatorVerifyService {
       // Parse report
       String reportPath = getReportPath(jobId);
       Path reportFile = Paths.get(reportPath);
-      boolean reportExists = Files.exists(reportFile);
+      waitForReportFile(reportFile, jobId, exitCode);
 
       if (exitCode == 0 || exitCode == 1) {
         parseReport(job, output.toString());
-        job.setStatus(JobStatus.SUCCEEDED);
-        logger.info(
-            "Verification job {} completed with exit code {} (passed={})",
-            jobId,
-            exitCode,
-            job.getSummary() != null && job.getSummary().isPassed());
-      } else if (exitCode == 2 && reportExists) {
+        // When exitCode=1, check if report shows failure (may be wrapped exitCode=2 from verifier)
+        if (exitCode == 1 && job.getSummary() != null && !job.getSummary().isPassed()) {
+          job.setStatus(JobStatus.FAILED);
+          String errorMsg = extractErrorMessage(output.toString());
+          if (!errorMsg.isBlank()) {
+            job.setError(errorMsg);
+          }
+          logger.warn(
+              "Verification job {} completed with exit code 1 but report shows failure", jobId);
+        } else {
+          job.setStatus(JobStatus.SUCCEEDED);
+          logger.info(
+              "Verification job {} completed with exit code {} (passed={})",
+              jobId,
+              exitCode,
+              job.getSummary() != null && job.getSummary().isPassed());
+        }
+      } else if (exitCode == 2) {
         // OpenRune writes error reports before exitProcess(2) - consume them
         try {
           parseReport(job, output.toString());
@@ -304,30 +319,45 @@ public class SimulatorVerifyService {
     }
   }
 
-  /** Builds the gradle command to run the verifier. */
-  private List<String> buildCommand(VerifyJob job) {
-    // This method is no longer used, but kept for compatibility
+  /** Builds the process command based on configured invocation mode. */
+  private List<String> buildProcessCommand(VerifyJob job) throws IOException {
+    if (properties.isJarInvocation()) {
+      return buildJarCommand(job);
+    }
+    File batchFile = createGradleBatchFile(job);
+    return List.of("cmd.exe", "/c", batchFile.getAbsolutePath());
+  }
+
+  /** Builds the direct java -jar command for the simulator verifier. */
+  private List<String> buildJarCommand(VerifyJob job) {
     String reportPath = getReportPath(job.getJobId());
-    String argsString =
-        buildArgsString(
+    List<String> command = new ArrayList<>();
+    command.add(resolveJavaCommand());
+    command.add("-jar");
+    command.add(properties.getResolvedVerifierJarPath().toString());
+    command.addAll(
+        buildArgsList(
             job.getArgs().getSession(),
             job.getArgs().getScenario(),
             job.getArgs().getBridgeUrl(),
             job.getArgs().getApiKey(),
-            reportPath);
+            reportPath));
+    return command;
+  }
 
-    // Build the full command using caret to escape special characters in cmd.exe
-    // The caret ^ is cmd.exe's escape character
-    String fullCommand =
-        String.format(
-            "cd /d \"%s\" && %s :simulator-verifier:run --args=^\"%s^\"",
-            properties.getOpenruneRoot(), properties.getGradleCmd(), argsString);
-
-    return List.of("cmd.exe", "/c", fullCommand);
+  /** Resolves the java executable for launching the verifier jar. */
+  private String resolveJavaCommand() {
+    String javaExecutable =
+        System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java";
+    Path javaPath = Paths.get(System.getProperty("java.home"), "bin", javaExecutable);
+    if (Files.exists(javaPath)) {
+      return javaPath.toString();
+    }
+    return "java";
   }
 
   /** Creates a temporary batch file with the gradle command to avoid quoting issues. */
-  private File createBatchFile(VerifyJob job) throws IOException {
+  private File createGradleBatchFile(VerifyJob job) throws IOException {
     String reportPath = getReportPath(job.getJobId());
     String argsString =
         buildArgsString(
@@ -358,8 +388,8 @@ public class SimulatorVerifyService {
     return batchFile;
   }
 
-  /** Builds the arguments string for the verifier. */
-  private String buildArgsString(
+  /** Builds an argument list for the verifier process. */
+  private List<String> buildArgsList(
       String session, String scenario, String bridgeUrl, String apiKey, String outputPath) {
     List<String> args = new ArrayList<>();
 
@@ -382,8 +412,43 @@ public class SimulatorVerifyService {
       args.add("--scenario");
       args.add(scenario);
     }
+    return args;
+  }
 
-    return String.join(" ", args);
+  /** Builds a single --args string for gradle :run invocation. */
+  private String buildArgsString(
+      String session, String scenario, String bridgeUrl, String apiKey, String outputPath) {
+    return String.join(" ", buildArgsList(session, scenario, bridgeUrl, apiKey, outputPath));
+  }
+
+  /**
+   * Waits briefly for a report file to appear after process termination.
+   *
+   * <p>This reduces false negatives when the verifier flushes output just after exit.
+   */
+  private boolean waitForReportFile(Path reportFile, String jobId, int exitCode) {
+    if (Files.exists(reportFile)) {
+      return true;
+    }
+    for (int attempt = 1; attempt <= REPORT_FILE_WAIT_ATTEMPTS; attempt++) {
+      try {
+        Thread.sleep(REPORT_FILE_WAIT_DELAY_MS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        logger.warn("Interrupted while waiting for report file for job {}", jobId);
+        return Files.exists(reportFile);
+      }
+      if (Files.exists(reportFile)) {
+        logger.debug("Report file became available for job {} on retry {}", jobId, attempt);
+        return true;
+      }
+    }
+    logger.warn(
+        "Report file still missing after {} retries for job {} (exitCode={})",
+        REPORT_FILE_WAIT_ATTEMPTS,
+        jobId,
+        exitCode);
+    return false;
   }
 
   /** Gets the report file path for a job. */
@@ -401,16 +466,61 @@ public class SimulatorVerifyService {
       // Try to extract JSON from output
       String json = extractJsonFromOutput(output);
       if (json == null) {
-        // Use extracted error from output instead of generic message
+        // Build a synthetic error report from extracted error so reportAvailable stays true
         String extractedError = extractErrorMessage(output);
-        throw new IOException("Report file not found. " + extractedError);
+        json = buildSyntheticErrorReport(job, extractedError);
+        logger.info(
+            "Built synthetic error report for job {} from verifier output", job.getJobId());
       }
       parseJsonSummary(job, json);
+      try {
+        Path parent = reportFile.getParent();
+        if (parent != null) {
+          Files.createDirectories(parent);
+        }
+        Files.writeString(reportFile, json);
+        job.setReportPath(reportPath);
+        logger.info("Persisted report from verifier output to {}", reportPath);
+      } catch (IOException e) {
+        logger.warn(
+            "Unable to persist parsed output report for job {}: {}",
+            job.getJobId(),
+            e.getMessage());
+      }
     } else {
       String json = Files.readString(reportFile);
       parseJsonSummary(job, json);
       job.setReportPath(reportPath);
     }
+  }
+
+  /** Builds a synthetic JSON error report when the verifier produced no structured output. */
+  private String buildSyntheticErrorReport(VerifyJob job, String errorMessage) {
+    // Escape the error message for safe JSON embedding
+    String escaped = errorMessage.replace("\\", "\\\\").replace("\"", "\\\"");
+    return "{\n"
+        + "  \"sessionId\": \""
+        + job.getArgs().getSession()
+        + "\",\n"
+        + "  \"timestamp\": \""
+        + java.time.Instant.now()
+        + "\",\n"
+        + "  \"scenario\": "
+        + (job.getArgs().getScenario() != null ? "\"" + job.getArgs().getScenario() + "\"" : "null")
+        + ",\n"
+        + "  \"passed\": false,\n"
+        + "  \"summary\": {\n"
+        + "    \"totalActions\": 0,\n"
+        + "    \"tickRange\": {\"start\": 0, \"end\": 0},\n"
+        + "    \"actionTypeCounts\": {},\n"
+        + "    \"playerCount\": 0,\n"
+        + "    \"durationTicks\": 0\n"
+        + "  },\n"
+        + "  \"violations\": [],\n"
+        + "  \"error\": \""
+        + escaped
+        + "\"\n"
+        + "}";
   }
 
   /** Parses JSON summary into the job. */
