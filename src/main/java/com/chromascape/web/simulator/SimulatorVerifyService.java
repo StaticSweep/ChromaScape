@@ -7,6 +7,7 @@ import com.chromascape.web.simulator.SimulatorVerifyJobStore.VerifySummary;
 import com.chromascape.web.simulator.SimulatorVerifyJobStore.VerifySummary.ViolationCounts;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PreDestroy;
 import java.io.BufferedReader;
 import java.io.File;
@@ -517,31 +518,32 @@ public class SimulatorVerifyService {
 
   /** Builds a synthetic JSON error report when the verifier produced no structured output. */
   private String buildSyntheticErrorReport(VerifyJob job, String errorMessage) {
-    // Escape the error message for safe JSON embedding
-    String escaped = errorMessage.replace("\\", "\\\\").replace("\"", "\\\"");
-    return "{\n"
-        + "  \"sessionId\": \""
-        + job.getArgs().getSession()
-        + "\",\n"
-        + "  \"timestamp\": \""
-        + java.time.Instant.now()
-        + "\",\n"
-        + "  \"scenario\": "
-        + (job.getArgs().getScenario() != null ? "\"" + job.getArgs().getScenario() + "\"" : "null")
-        + ",\n"
-        + "  \"passed\": false,\n"
-        + "  \"summary\": {\n"
-        + "    \"totalActions\": 0,\n"
-        + "    \"tickRange\": {\"start\": 0, \"end\": 0},\n"
-        + "    \"actionTypeCounts\": {},\n"
-        + "    \"playerCount\": 0,\n"
-        + "    \"durationTicks\": 0\n"
-        + "  },\n"
-        + "  \"violations\": [],\n"
-        + "  \"error\": \""
-        + escaped
-        + "\"\n"
-        + "}";
+    String safeMessage = errorMessage != null ? errorMessage : "Unknown error";
+    try {
+      ObjectNode root = objectMapper.createObjectNode();
+      root.put("sessionId", job.getArgs().getSession() != null ? job.getArgs().getSession() : "");
+      root.put("timestamp", Instant.now().toString());
+      if (job.getArgs().getScenario() != null) {
+        root.put("scenario", job.getArgs().getScenario());
+      } else {
+        root.putNull("scenario");
+      }
+      root.put("passed", false);
+      ObjectNode summary = root.putObject("summary");
+      summary.put("totalActions", 0);
+      ObjectNode tickRange = summary.putObject("tickRange");
+      tickRange.put("start", 0);
+      tickRange.put("end", 0);
+      summary.putObject("actionTypeCounts");
+      summary.put("playerCount", 0);
+      summary.put("durationTicks", 0);
+      root.putArray("violations");
+      root.put("error", safeMessage);
+      return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
+    } catch (Exception e) {
+      logger.warn("Failed to serialize synthetic report for job {}: {}", job.getJobId(), e.getMessage());
+      return "{\"passed\":false,\"error\":\"" + safeMessage.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}";
+    }
   }
 
   /** Parses JSON summary into the job. */

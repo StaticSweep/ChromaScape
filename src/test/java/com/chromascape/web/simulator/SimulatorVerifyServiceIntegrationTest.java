@@ -440,7 +440,7 @@ class SimulatorVerifyServiceIntegrationTest {
         return;
       }
 
-      // Arrange - start a job
+      // Arrange - start a job with unreachable bridge to trigger failure path
       HttpHeaders headers = new HttpHeaders();
       headers.setContentType(MediaType.APPLICATION_JSON);
       String requestJson =
@@ -456,18 +456,27 @@ class SimulatorVerifyServiceIntegrationTest {
       // Act
       ResponseEntity<Map> startResponse = restTemplate.postForEntity(baseUrl, request, Map.class);
       String jobId = (String) startResponse.getBody().get("jobId");
+
+      // Wait for terminal FAILED state (synthetic report should be generated for failure path)
+      await()
+          .atMost(java.time.Duration.ofSeconds(30))
+          .untilAsserted(
+              () -> {
+                ResponseEntity<Map> statusResponse =
+                    restTemplate.getForEntity(baseUrl + "/" + jobId, Map.class);
+                assertEquals("FAILED", statusResponse.getBody().get("status"));
+              });
+
+      // Assert - status response should include reportAvailable=true for failed jobs
       ResponseEntity<Map> statusResponse =
           restTemplate.getForEntity(baseUrl + "/" + jobId, Map.class);
-
-      // Assert
       assertEquals(HttpStatus.OK, statusResponse.getStatusCode());
       assertTrue(
           statusResponse.getBody().containsKey("reportAvailable"),
           "Status response should include reportAvailable field");
-      // For failed jobs, reportAvailable should be false
-      assertFalse(
+      assertTrue(
           (Boolean) statusResponse.getBody().get("reportAvailable"),
-          "Failed job should have reportAvailable=false");
+          "Failed job should have reportAvailable=true (synthetic report generated)");
     }
   }
 }
