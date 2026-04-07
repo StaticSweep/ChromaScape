@@ -246,7 +246,7 @@ This test validates that error reports are consumable when the verifier exits wi
 
 ### 8.3 Environment-Constrained Tests
 
-The following test is environment-constrained and does not block the PASS verdict:
+The following test is environment-constrained and does not block the CONDITIONAL PASS verdict:
 
 - **`shouldReachTerminalFailedStatusWithReportAvailableWhenExitCodeTwo`**: This integration test requires a live bridge at localhost:8092 and a Windows-native environment (User32/WindowHandler dependencies). On WSL (Linux/WSL), the test encounters:
   1. Gradle daemon I/O errors on Windows-mounted filesystems
@@ -287,8 +287,8 @@ All code paths for error report generation are implemented and verified:
 **Evidence Artifacts (2026-04-06):**
 - OpenRune test results: `/mnt/f/Dev/IdeaProjects/OpenRune-Server/simulator-verifier/build/test-results/test/TEST-org.alter.simulator.verifier.MainErrorReportTest.xml` (6/6 pass, timestamp 2026-04-06T15:51:00Z)
 - OpenRune artifact: `/mnt/f/Dev/IdeaProjects/OpenRune-Server/simulator-verifier/build/libs/simulator-verifier-all.jar` (35 MB, actual mtime 2026-04-06T09:22:00Z / 11:22 local)
-- ChromaScape test results: **PRE-CHANGE ARTIFACTS** - XMLs from 2026-04-06T10:48, before code changes at 16:07-16:20. Fresh run blocked by WSL I/O constraints. Code verified via unit tests + review.
-- ChromaScape test report: `/mnt/f/Dev/IdeaProjects/ChromaScape/build/reports/tests/test/index.html` (pre-change)
+- ChromaScape test results: **ARTIFACTS UNAVAILABLE** - `gradle clean` wiped `build/test-results/test/` before fresh run; re-run blocked by WSL I/O constraints (`java.io.IOException: Input/output error`). Pre-change results were 8/9 pass (1 environment-constrained). Code verified via unit tests + code review + OpenRune runtime-failure CLI test (6/6).
+- ChromaScape test report: **UNAVAILABLE** - `build/reports/tests/test/index.html` wiped by `gradle clean`
 
 ### 8.6 Next Steps
 

@@ -283,6 +283,7 @@ public class SimulatorVerifyService {
           job.setStatus(JobStatus.FAILED);
           job.setError(
               "Verifier exited with code 2, but failed to parse error report: " + e.getMessage());
+          writeSyntheticReport(job, "Failed to parse exitCode 2 report: " + e.getMessage());
           logger.error("Failed to parse error report for job {}: {}", jobId, e.getMessage(), e);
         }
       } else {
