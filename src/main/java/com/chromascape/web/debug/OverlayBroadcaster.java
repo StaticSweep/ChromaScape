@@ -7,11 +7,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /** Periodically broadcasts overlay data (clicks, mouse, highlights) to connected clients. */
 @Component
+@ConditionalOnProperty(name = "overlay-broadcaster.enabled", havingValue = "true", matchIfMissing = true)
 public class OverlayBroadcaster {
 
   private final OverlayWebSocketHandler handler;

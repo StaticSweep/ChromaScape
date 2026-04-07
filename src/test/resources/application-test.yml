@@ -26,6 +26,9 @@ simulator:
     auto-create-reports-dir: true
 
 # Disable noisy subsystems during tests
+overlay-broadcaster:
+  enabled: false
+
 screencapture:
   enabled: false
 

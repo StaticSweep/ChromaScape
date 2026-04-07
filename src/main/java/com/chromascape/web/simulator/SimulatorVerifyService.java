@@ -299,6 +299,7 @@ public class SimulatorVerifyService {
       if (!job.isCancelled()) {
         job.setStatus(JobStatus.FAILED);
         job.setError("Job timed out after " + properties.getJobTimeoutSeconds() + " seconds");
+        writeSyntheticReport(job, "Verification timed out: " + e.getMessage());
       }
       logger.error("Verification job {} timed out", jobId);
 
@@ -306,6 +307,7 @@ public class SimulatorVerifyService {
       if (!job.isCancelled()) {
         job.setStatus(JobStatus.FAILED);
         job.setError("Execution failed: " + e.getMessage());
+        writeSyntheticReport(job, e.getMessage());
       }
       logger.error("Verification job {} failed: {}", jobId, e.getMessage(), e);
 
@@ -491,6 +493,24 @@ public class SimulatorVerifyService {
       String json = Files.readString(reportFile);
       parseJsonSummary(job, json);
       job.setReportPath(reportPath);
+    }
+  }
+
+  /** Writes a synthetic error report to disk and sets reportPath on the job. */
+  private void writeSyntheticReport(VerifyJob job, String errorMessage) {
+    try {
+      String reportPath = getReportPath(job.getJobId());
+      Path reportFile = Paths.get(reportPath);
+      Path parent = reportFile.getParent();
+      if (parent != null) {
+        Files.createDirectories(parent);
+      }
+      String json = buildSyntheticErrorReport(job, errorMessage);
+      Files.writeString(reportFile, json);
+      job.setReportPath(reportPath);
+      logger.info("Wrote synthetic error report to {}", reportPath);
+    } catch (IOException e) {
+      logger.warn("Failed to write synthetic report for job {}: {}", job.getJobId(), e.getMessage());
     }
   }
 

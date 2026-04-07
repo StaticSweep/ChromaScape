@@ -154,7 +154,7 @@ After Codex registration, the script also enforces:
 
 ```toml
 [mcp_servers.chromascape]
-startup_timeout_sec = 90
+startup_timeout_sec = 120
 ```
 
 Override this default by setting `MCP_STARTUP_TIMEOUT_SEC` before running the registration script.
@@ -191,7 +191,7 @@ Checking Claude CLI registration...
 
 Checking Codex CLI registration...
      Codex CLI detected
-[OK]  ChromaScape registered with Codex CLI (verified, timeout=90s)
+[OK]  ChromaScape registered with Codex CLI (verified, timeout=120s)
 ```
 
 Verification exit codes:
@@ -428,9 +428,9 @@ For each server, the probe validates:
 {
   "ok": true,
   "servers": ["chromascape", "shortcut"],
-  "expectedChromascapeTimeout": 90,
+  "expectedChromascapeTimeout": 120,
   "serverResults": {
-    "chromascape": { "status": "ok", "enabled": true, "transport": "stdio", "startupTimeoutSec": 90 },
+    "chromascape": { "status": "ok", "enabled": true, "transport": "stdio", "startupTimeoutSec": 120 },
     "shortcut": { "status": "ok", "enabled": true, "transport": "stdio", "startupTimeoutSec": null }
   }
 }
