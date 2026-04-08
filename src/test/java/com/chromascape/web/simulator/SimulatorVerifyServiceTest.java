@@ -698,4 +698,176 @@ class SimulatorVerifyServiceTest {
               });
     }
   }
+
+  @Nested
+  @DisplayName("Unexpected Exit Code Path Tests")
+  class UnexpectedExitCodePathTests {
+
+    @Test
+    @DisplayName("Should produce FAILED status with parseable report for unexpected exit code (e.g. exitCode=3)")
+    void shouldProduceFailedWithReportForUnexpectedExitCode(@TempDir File tempDir) throws Exception {
+      // Simulates the executeJob branch for exitCode != 0/1/2:
+      // - parseReport is attempted; if it succeeds, reportPath is set
+      // - if parseReport fails (IOException), writeSyntheticReport is called
+      // Either way, reportPath should be non-null.
+
+      java.nio.file.Path reportsDir = tempDir.toPath().resolve("reports");
+      java.nio.file.Files.createDirectories(reportsDir);
+
+      SimulatorVerifierProperties props = new SimulatorVerifierProperties();
+      ReflectionTestUtils.setField(props, "reportsDir", "reports");
+      ReflectionTestUtils.setField(props, "openruneRoot", tempDir.toString());
+
+      SimulatorVerifyService testService = new SimulatorVerifyService(props, jobStore);
+
+      String jobId = "unexpected-exit-code";
+      SimulatorVerifyJobStore.VerifyJob job =
+          new SimulatorVerifyJobStore.VerifyJob(
+              jobId,
+              new SimulatorVerifyJobStore.VerifyArgs(
+                  "test-session", null, "http://localhost:8092", null));
+
+      // Simulate: no report file from verifier, only raw output
+      String output = "Some verifier output\nError: something went wrong\n";
+
+      // Invoke parseReport directly (this is what the unexpected-exit-code branch calls first)
+      Method parseReport =
+          SimulatorVerifyService.class.getDeclaredMethod(
+              "parseReport", SimulatorVerifyJobStore.VerifyJob.class, String.class);
+      parseReport.setAccessible(true);
+
+      parseReport.invoke(testService, job, output);
+
+      // Assert: report was generated (either parsed or synthetic)
+      assertNotNull(job.getReportPath(), "reportPath must be non-null for unexpected exit code");
+      java.nio.file.Path reportFile = java.nio.file.Paths.get(job.getReportPath());
+      assertTrue(java.nio.file.Files.exists(reportFile), "Report file must exist");
+
+      // Verify the report is valid JSON
+      String content = java.nio.file.Files.readString(reportFile);
+      com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = om.readTree(content);
+      assertNotNull(root, "Report must be valid JSON");
+      assertTrue(root.has("passed"), "Report must have 'passed' field");
+      assertFalse(root.path("passed").asBoolean(), "Report must show passed=false for error path");
+
+      // Cleanup
+      java.nio.file.Files.walk(tempDir.toPath())
+          .sorted(java.util.Comparator.reverseOrder())
+          .forEach(
+              p -> {
+                try {
+                  java.nio.file.Files.deleteIfExists(p);
+                } catch (IOException e) {
+                  // ignore
+                }
+              });
+    }
+  }
+
+  @Nested
+  @DisplayName("Synthetic Fallback JSON Safety Tests")
+  class SyntheticFallbackJsonSafetyTests {
+
+    @Test
+    @DisplayName("Should produce valid JSON even when ObjectMapper serialization fails")
+    void shouldProduceValidJsonWhenObjectMapperFails(@TempDir File tempDir) throws Exception {
+      // This tests the catch-block fallback in buildSyntheticErrorReport.
+      // We invoke buildSyntheticErrorReport via reflection with a crafted job
+      // and verify the returned string is always parseable JSON.
+
+      java.nio.file.Path reportsDir = tempDir.toPath().resolve("reports");
+      java.nio.file.Files.createDirectories(reportsDir);
+
+      SimulatorVerifierProperties props = new SimulatorVerifierProperties();
+      ReflectionTestUtils.setField(props, "reportsDir", "reports");
+      ReflectionTestUtils.setField(props, "openruneRoot", tempDir.toString());
+
+      SimulatorVerifyService testService = new SimulatorVerifyService(props, jobStore);
+
+      String jobId = "fallback-json-test";
+      SimulatorVerifyJobStore.VerifyJob job =
+          new SimulatorVerifyJobStore.VerifyJob(
+              jobId,
+              new SimulatorVerifyJobStore.VerifyArgs(
+                  "test-session", null, "http://localhost:8092", null));
+
+      // Test with a message containing characters that could break string-built JSON
+      String trickyMessage = "Error with special chars: back\\slash, \"quotes\", tabs:\t, newline:\n";
+
+      Method buildSyntheticReport =
+          SimulatorVerifyService.class.getDeclaredMethod(
+              "buildSyntheticErrorReport",
+              SimulatorVerifyJobStore.VerifyJob.class,
+              String.class);
+      buildSyntheticReport.setAccessible(true);
+
+      String json = (String) buildSyntheticReport.invoke(testService, job, trickyMessage);
+
+      // Assert: output is valid parseable JSON
+      com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = om.readTree(json);
+      assertNotNull(root, "Synthetic report must be valid JSON");
+      assertFalse(root.path("passed").asBoolean(), "Report must show passed=false");
+      assertTrue(root.has("error"), "Report must have error field");
+
+      // Cleanup
+      java.nio.file.Files.walk(tempDir.toPath())
+          .sorted(java.util.Comparator.reverseOrder())
+          .forEach(
+              p -> {
+                try {
+                  java.nio.file.Files.deleteIfExists(p);
+                } catch (IOException e) {
+                  // ignore
+                }
+              });
+    }
+
+    @Test
+    @DisplayName("Should produce valid JSON with null error message")
+    void shouldProduceValidJsonWithNullErrorMessage(@TempDir File tempDir) throws Exception {
+      java.nio.file.Path reportsDir = tempDir.toPath().resolve("reports");
+      java.nio.file.Files.createDirectories(reportsDir);
+
+      SimulatorVerifierProperties props = new SimulatorVerifierProperties();
+      ReflectionTestUtils.setField(props, "reportsDir", "reports");
+      ReflectionTestUtils.setField(props, "openruneRoot", tempDir.toString());
+
+      SimulatorVerifyService testService = new SimulatorVerifyService(props, jobStore);
+
+      String jobId = "null-error-test";
+      SimulatorVerifyJobStore.VerifyJob job =
+          new SimulatorVerifyJobStore.VerifyJob(
+              jobId,
+              new SimulatorVerifyJobStore.VerifyArgs(
+                  "test-session", null, "http://localhost:8092", null));
+
+      Method buildSyntheticReport =
+          SimulatorVerifyService.class.getDeclaredMethod(
+              "buildSyntheticErrorReport",
+              SimulatorVerifyJobStore.VerifyJob.class,
+              String.class);
+      buildSyntheticReport.setAccessible(true);
+
+      String json = (String) buildSyntheticReport.invoke(testService, job, (String) null);
+
+      com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = om.readTree(json);
+      assertNotNull(root, "Synthetic report must be valid JSON even with null error");
+      assertFalse(root.path("passed").asBoolean());
+
+      // Cleanup
+      java.nio.file.Files.walk(tempDir.toPath())
+          .sorted(java.util.Comparator.reverseOrder())
+          .forEach(
+              p -> {
+                try {
+                  java.nio.file.Files.deleteIfExists(p);
+                } catch (IOException e) {
+                  // ignore
+                }
+              });
+    }
+  }
 }

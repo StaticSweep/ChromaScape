@@ -288,13 +288,34 @@ public class SimulatorVerifyService {
           logger.error("Failed to parse error report for job {}: {}", jobId, e.getMessage(), e);
         }
       } else {
-        job.setStatus(JobStatus.FAILED);
-        job.setError(
-            "Verifier exited with code "
-                + exitCode
-                + ": "
-                + extractErrorMessage(output.toString()));
-        logger.warn("Verification job {} failed with exit code {}", jobId, exitCode);
+        // Unexpected exit code (non-0/1/2): attempt to parse any available report first
+        try {
+          parseReport(job, output.toString());
+          job.setStatus(JobStatus.FAILED);
+          job.setError(
+              "Verifier exited with code "
+                  + exitCode
+                  + ": "
+                  + extractErrorMessage(output.toString()));
+          logger.warn(
+              "Verification job {} failed with exit code {}, report available at {}",
+              jobId, exitCode, reportPath);
+        } catch (IOException e) {
+          // Report parsing failed - write synthetic report as fallback
+          String errorMsg = "Verifier exited with code " + exitCode + ": " + extractErrorMessage(output.toString());
+          job.setStatus(JobStatus.FAILED);
+          job.setError(errorMsg);
+          writeSyntheticReport(job, errorMsg);
+          logger.warn(
+              "Verification job {} failed with exit code {}, wrote synthetic report",
+              jobId, exitCode);
+        }
+      }
+
+      // Final safeguard: any non-cancelled FAILED job must have a report
+      if (job.getStatus() == JobStatus.FAILED && !job.isCancelled() && job.getReportPath() == null) {
+        String fallbackError = job.getError() != null ? job.getError() : "Unknown error";
+        writeSyntheticReport(job, fallbackError);
       }
 
     } catch (TimeoutException e) {
@@ -542,7 +563,9 @@ public class SimulatorVerifyService {
       return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
     } catch (Exception e) {
       logger.warn("Failed to serialize synthetic report for job {}: {}", job.getJobId(), e.getMessage());
-      return "{\"passed\":false,\"error\":\"" + safeMessage.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}";
+      // Fallback: guaranteed valid JSON without interpolating raw message text
+      // (avoids control-character corruption risks in string-built JSON)
+      return "{\"passed\":false,\"summary\":{\"totalActions\":0,\"tickRange\":{\"start\":0,\"end\":0},\"actionTypeCounts\":{},\"playerCount\":0,\"durationTicks\":0},\"violations\":[],\"error\":\"A verifier error occurred but the report could not be generated\"}";
     }
   }
 
