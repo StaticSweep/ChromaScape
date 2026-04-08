@@ -4,7 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.io.IOException;
@@ -954,6 +958,201 @@ class SimulatorVerifyServiceTest {
       assertTrue(root.has("error"), "Fallback must have error field");
       assertTrue(root.has("summary"), "Fallback must have summary field");
       assertTrue(root.has("violations"), "Fallback must have violations field");
+    }
+  }
+
+  @Nested
+  @DisplayName("ExecuteJob Branch Tests (spy)")
+  class ExecuteJobBranchTests {
+
+    @TempDir File tempDir;
+
+    private SimulatorVerifyService spyService;
+    private Process mockProcess;
+
+    @BeforeEach
+    void setUp() throws Exception {
+      java.nio.file.Path reportsDir = tempDir.toPath().resolve("reports");
+      java.nio.file.Files.createDirectories(reportsDir);
+
+      // Create real properties object (not mocked) pointing to tempDir
+      SimulatorVerifierProperties realProps = new SimulatorVerifierProperties();
+      ReflectionTestUtils.setField(realProps, "reportsDir", "reports");
+      ReflectionTestUtils.setField(realProps, "openruneRoot", tempDir.getAbsolutePath());
+      ReflectionTestUtils.setField(realProps, "maxConcurrentJobs", 2);
+      ReflectionTestUtils.setField(realProps, "jobTimeoutSeconds", 300);
+      ReflectionTestUtils.setField(realProps, "autoCreateReportsDir", false);
+      ReflectionTestUtils.setField(realProps, "enabled", true);
+      ReflectionTestUtils.setField(realProps, "invocationMode", "jar");
+      ReflectionTestUtils.setField(realProps, "verifierJarPath", new File(tempDir, "fake.jar").getAbsolutePath());
+      ReflectionTestUtils.setField(realProps, "gradleCmd", "./gradlew");
+
+      // Create a mock jobStore
+      SimulatorVerifyJobStore mockJobStore = mock(SimulatorVerifyJobStore.class);
+
+      // Create real service with spy
+      SimulatorVerifyService realService = new SimulatorVerifyService(realProps, mockJobStore);
+      spyService = spy(realService);
+
+      // Stub bridge reachability to always succeed
+      doReturn(true).when(spyService).isBridgeReachable(org.mockito.ArgumentMatchers.anyString());
+
+      // Create mock Process
+      mockProcess = mock(Process.class);
+    }
+
+    @AfterEach
+    void tearDown() throws Exception {
+      if (spyService != null) {
+        spyService.shutdown();
+      }
+      if (tempDir != null) {
+        java.nio.file.Files.walk(tempDir.toPath())
+            .sorted(java.util.Comparator.reverseOrder())
+            .forEach(
+                p -> {
+                  try {
+                    java.nio.file.Files.deleteIfExists(p);
+                  } catch (IOException e) {
+                    // ignore
+                  }
+                });
+      }
+    }
+
+    private void configureMockProcess(int exitCode, String output) throws Exception {
+      java.io.InputStream stream = new java.io.ByteArrayInputStream(output.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      when(mockProcess.getInputStream()).thenReturn(stream);
+      when(mockProcess.exitValue()).thenReturn(exitCode);
+      when(mockProcess.waitFor(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+      when(mockProcess.isAlive()).thenReturn(false);
+
+      // Stub createVerifierProcess to return our mock
+      doReturn(mockProcess).when(spyService).createVerifierProcess(
+          org.mockito.ArgumentMatchers.anyList(),
+          org.mockito.ArgumentMatchers.any(File.class));
+    }
+
+    private SimulatorVerifyJobStore.VerifyJob createTestJob(String jobId) {
+      SimulatorVerifyJobStore.VerifyArgs args =
+          new SimulatorVerifyJobStore.VerifyArgs("test-session", null, "http://localhost:8092", null);
+      return new SimulatorVerifyJobStore.VerifyJob(jobId, args);
+    }
+
+    private void invokeExecuteJob(SimulatorVerifyJobStore.VerifyJob job) throws Exception {
+      Method executeJob = SimulatorVerifyService.class.getDeclaredMethod(
+          "executeJob", SimulatorVerifyJobStore.VerifyJob.class);
+      executeJob.setAccessible(true);
+      executeJob.invoke(spyService, job);
+    }
+
+    @Test
+    @DisplayName("Unexpected exit code (3) should set FAILED with reportAvailable=true and passed=false")
+    void shouldFailWithReportForUnexpectedExitCode() throws Exception {
+      String jobId = "unexpected-exit-3";
+      SimulatorVerifyJobStore.VerifyJob job = createTestJob(jobId);
+
+      // Verifier produces no report file, only raw output with no JSON
+      configureMockProcess(3, "Some verifier output\nError: something went wrong\n");
+
+      invokeExecuteJob(job);
+
+      assertEquals(SimulatorVerifyJobStore.JobStatus.FAILED, job.getStatus());
+      assertEquals(3, job.getExitCode());
+      assertNotNull(job.getReportPath(), "reportPath must be non-null");
+      assertTrue(java.nio.file.Files.exists(java.nio.file.Paths.get(job.getReportPath())),
+          "Report file must exist on disk");
+
+      String content = java.nio.file.Files.readString(java.nio.file.Paths.get(job.getReportPath()));
+      com.fasterxml.jackson.databind.ObjectMapper om =
+          new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = om.readTree(content);
+      assertFalse(root.path("passed").asBoolean(),
+          "Report file must show passed=false (rewritten from any parsed value)");
+    }
+
+    @Test
+    @DisplayName("Unexpected exit code (137) with report file showing passed=true must be rewritten to passed=false")
+    void shouldRewriteReportFileForUnexpectedExitCode() throws Exception {
+      String jobId = "unexpected-exit-137";
+      SimulatorVerifyJobStore.VerifyJob job = createTestJob(jobId);
+
+      // Pre-create a report file on disk that says passed=true
+      java.nio.file.Path reportFile = tempDir.toPath().resolve("reports").resolve(jobId + ".json");
+      String passingReport =
+          "{\"sessionId\":\"test\",\"timestamp\":\"2026-04-01T00:00:00Z\",\"passed\":true,"
+          + "\"summary\":{\"totalActions\":10,\"tickRange\":{\"start\":0,\"end\":100},"
+          + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":600},"
+          + "\"violations\":[],\"error\":\"\"}";
+      java.nio.file.Files.writeString(reportFile, passingReport);
+
+      configureMockProcess(137, "Verifier ran then crashed with exit 137\n");
+
+      invokeExecuteJob(job);
+
+      assertEquals(SimulatorVerifyJobStore.JobStatus.FAILED, job.getStatus());
+      assertEquals(137, job.getExitCode());
+      assertNotNull(job.getReportPath());
+
+      // Read report from disk and verify passed was rewritten to false
+      String content = java.nio.file.Files.readString(reportFile);
+      com.fasterxml.jackson.databind.ObjectMapper om =
+          new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = om.readTree(content);
+      assertFalse(root.path("passed").asBoolean(),
+          "Report file on disk must show passed=false after rewrite");
+      assertTrue(root.path("summary").path("totalActions").asInt() == 10,
+          "Other report content must be preserved");
+    }
+
+    @Test
+    @DisplayName("ExitCode 0 with report showing passed=false should set FAILED")
+    void shouldFailWhenExitCodeZeroButReportShowsFailure() throws Exception {
+      String jobId = "exit0-passed-false";
+      SimulatorVerifyJobStore.VerifyJob job = createTestJob(jobId);
+
+      // Pre-create a report file that says passed=false
+      java.nio.file.Path reportFile = tempDir.toPath().resolve("reports").resolve(jobId + ".json");
+      String failingReport =
+          "{\"sessionId\":\"test\",\"timestamp\":\"2026-04-01T00:00:00Z\",\"passed\":false,"
+          + "\"summary\":{\"totalActions\":5,\"tickRange\":{\"start\":0,\"end\":50},"
+          + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":300},"
+          + "\"violations\":[{\"severity\":\"HARD\",\"rule\":\"test\"}]}";
+      java.nio.file.Files.writeString(reportFile, failingReport);
+
+      configureMockProcess(0, "Verification completed\n");
+
+      invokeExecuteJob(job);
+
+      assertEquals(SimulatorVerifyJobStore.JobStatus.FAILED, job.getStatus(),
+          "Status must be FAILED even though exitCode=0");
+      assertEquals(0, job.getExitCode());
+      assertNotNull(job.getSummary());
+      assertFalse(job.getSummary().isPassed(), "Summary must show passed=false");
+    }
+
+    @Test
+    @DisplayName("ExitCode 0 with report showing passed=true should set SUCCEEDED")
+    void shouldSucceedWhenExitCodeZeroAndReportShowsPass() throws Exception {
+      String jobId = "exit0-passed-true";
+      SimulatorVerifyJobStore.VerifyJob job = createTestJob(jobId);
+
+      java.nio.file.Path reportFile = tempDir.toPath().resolve("reports").resolve(jobId + ".json");
+      String passingReport =
+          "{\"sessionId\":\"test\",\"timestamp\":\"2026-04-01T00:00:00Z\",\"passed\":true,"
+          + "\"summary\":{\"totalActions\":10,\"tickRange\":{\"start\":0,\"end\":100},"
+          + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":600},"
+          + "\"violations\":[]}";
+      java.nio.file.Files.writeString(reportFile, passingReport);
+
+      configureMockProcess(0, "Verification completed successfully\n");
+
+      invokeExecuteJob(job);
+
+      assertEquals(SimulatorVerifyJobStore.JobStatus.SUCCEEDED, job.getStatus());
+      assertEquals(0, job.getExitCode());
+      assertNotNull(job.getSummary());
+      assertTrue(job.getSummary().isPassed());
     }
   }
 }

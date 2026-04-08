@@ -215,11 +215,7 @@ public class SimulatorVerifyService {
       logger.debug("Command: {}", String.join(" ", command));
 
       // Execute process
-      ProcessBuilder processBuilder = new ProcessBuilder(command);
-      processBuilder.directory(new File(properties.getOpenruneRoot()));
-      processBuilder.redirectErrorStream(true);
-
-      Process process = processBuilder.start();
+      Process process = createVerifierProcess(command, new File(properties.getOpenruneRoot()));
       runningProcesses.put(jobId, process);
 
       // Capture output
@@ -257,15 +253,15 @@ public class SimulatorVerifyService {
 
       if (exitCode == 0 || exitCode == 1) {
         parseReport(job, output.toString());
-        // When exitCode=1, check if report shows failure (may be wrapped exitCode=2 from verifier)
-        if (exitCode == 1 && job.getSummary() != null && !job.getSummary().isPassed()) {
+        if (job.getSummary() != null && !job.getSummary().isPassed()) {
           job.setStatus(JobStatus.FAILED);
           String errorMsg = extractErrorMessage(output.toString());
           if (!errorMsg.isBlank()) {
             job.setError(errorMsg);
           }
           logger.warn(
-              "Verification job {} completed with exit code 1 but report shows failure", jobId);
+              "Verification job {} completed with exit code {} but report shows failure",
+              jobId, exitCode);
         } else {
           job.setStatus(JobStatus.SUCCEEDED);
           logger.info(
@@ -280,6 +276,7 @@ public class SimulatorVerifyService {
           parseReport(job, output.toString());
           if (job.getSummary() != null) {
             job.getSummary().setPassed(false);
+            rewriteReportPassedFlag(reportPath);
           }
           job.setStatus(JobStatus.FAILED); // Keep FAILED for exitCode=2
           job.setError(extractErrorMessage(output.toString()));
@@ -300,6 +297,7 @@ public class SimulatorVerifyService {
           parseReport(job, output.toString());
           if (job.getSummary() != null) {
             job.getSummary().setPassed(false);
+            rewriteReportPassedFlag(reportPath);
           }
           job.setStatus(JobStatus.FAILED);
           job.setError(
@@ -361,6 +359,17 @@ public class SimulatorVerifyService {
     }
     File batchFile = createGradleBatchFile(job);
     return List.of("cmd.exe", "/c", batchFile.getAbsolutePath());
+  }
+
+  /** Creates and starts the verifier process with redirected error stream.
+   *
+   * <p>Extracted for testability: tests can spy on this method to inject a mock Process.
+   */
+  Process createVerifierProcess(List<String> command, File workingDir) throws IOException {
+    ProcessBuilder processBuilder = new ProcessBuilder(command);
+    processBuilder.directory(workingDir);
+    processBuilder.redirectErrorStream(true);
+    return processBuilder.start();
   }
 
   /** Builds the direct java -jar command for the simulator verifier. */
@@ -577,6 +586,28 @@ public class SimulatorVerifyService {
     }
   }
 
+  /** Rewrites the report file on disk to force "passed": false.
+   *
+   * <p>This ensures GET /report returns a file consistent with the in-memory summary
+   * after we override passed=false for failure exit codes.
+   */
+  private void rewriteReportPassedFlag(String reportPath) {
+    try {
+      Path reportFile = Paths.get(reportPath);
+      if (!Files.exists(reportFile)) {
+        return; // nothing to rewrite; synthetic reports already have passed=false
+      }
+      String json = Files.readString(reportFile);
+      JsonNode root = objectMapper.readTree(json);
+      if (root.isObject()) {
+        ((ObjectNode) root).put("passed", false);
+        Files.writeString(reportFile, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root));
+      }
+    } catch (IOException e) {
+      logger.warn("Failed to rewrite passed flag in report {}: {}", reportPath, e.getMessage());
+    }
+  }
+
   /** Parses JSON summary into the job. */
   private void parseJsonSummary(VerifyJob job, String json) throws IOException {
     JsonNode root = objectMapper.readTree(json);
@@ -685,7 +716,8 @@ public class SimulatorVerifyService {
    * @param bridgeUrl The bridge endpoint URL (e.g., "http://localhost:8092")
    * @return true if the bridge is reachable, false otherwise
    */
-  private boolean isBridgeReachable(String bridgeUrl) {
+  // Package-private for testability (Mockito spy)
+  boolean isBridgeReachable(String bridgeUrl) {
     try {
       java.net.URL url = new java.net.URL(bridgeUrl.replace("/replay", "/health"));
       java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
