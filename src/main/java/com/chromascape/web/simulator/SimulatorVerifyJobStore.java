@@ -201,6 +201,10 @@ public class SimulatorVerifyJobStore {
       return passed;
     }
 
+    public void setPassed(boolean passed) {
+      this.passed = passed;
+    }
+
     public int getTotalActions() {
       return totalActions;
     }

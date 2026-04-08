@@ -47,6 +47,10 @@ public class SimulatorVerifyService {
   private static final int REPORT_FILE_WAIT_ATTEMPTS = 15;
   private static final long REPORT_FILE_WAIT_DELAY_MS = 200L;
 
+  /** Minimal valid JSON returned when ObjectMapper serialization fails in buildSyntheticErrorReport. */
+  static final String FALLBACK_ERROR_REPORT_JSON =
+      "{\"passed\":false,\"summary\":{\"totalActions\":0,\"tickRange\":{\"start\":0,\"end\":0},\"actionTypeCounts\":{},\"playerCount\":0,\"durationTicks\":0},\"violations\":[],\"error\":\"A verifier error occurred but the report could not be generated\"}";
+
   private final SimulatorVerifierProperties properties;
   private final SimulatorVerifyJobStore jobStore;
   private final ObjectMapper objectMapper;
@@ -274,6 +278,9 @@ public class SimulatorVerifyService {
         // OpenRune writes error reports before exitProcess(2) - consume them
         try {
           parseReport(job, output.toString());
+          if (job.getSummary() != null) {
+            job.getSummary().setPassed(false);
+          }
           job.setStatus(JobStatus.FAILED); // Keep FAILED for exitCode=2
           job.setError(extractErrorMessage(output.toString()));
           logger.warn(
@@ -291,6 +298,9 @@ public class SimulatorVerifyService {
         // Unexpected exit code (non-0/1/2): attempt to parse any available report first
         try {
           parseReport(job, output.toString());
+          if (job.getSummary() != null) {
+            job.getSummary().setPassed(false);
+          }
           job.setStatus(JobStatus.FAILED);
           job.setError(
               "Verifier exited with code "
@@ -563,9 +573,7 @@ public class SimulatorVerifyService {
       return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
     } catch (Exception e) {
       logger.warn("Failed to serialize synthetic report for job {}: {}", job.getJobId(), e.getMessage());
-      // Fallback: guaranteed valid JSON without interpolating raw message text
-      // (avoids control-character corruption risks in string-built JSON)
-      return "{\"passed\":false,\"summary\":{\"totalActions\":0,\"tickRange\":{\"start\":0,\"end\":0},\"actionTypeCounts\":{},\"playerCount\":0,\"durationTicks\":0},\"violations\":[],\"error\":\"A verifier error occurred but the report could not be generated\"}";
+      return FALLBACK_ERROR_REPORT_JSON;
     }
   }
 
