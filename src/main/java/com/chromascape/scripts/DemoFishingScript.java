@@ -51,7 +51,7 @@ public class DemoFishingScript extends BaseScript {
     if (!checkIfCorrectInventoryLayout()) {
       logger.warn("Fly-fishing rod must be in inventory slot 27 / idx 26");
       logger.warn("Feathers must be in inventory slot 28 / idx 27");
-      logger.info("The top of your bait or feather images should be cropped by 10 px");
+      logger.info("The top of feather image should be cropped by 10 px");
       stop();
     }
 

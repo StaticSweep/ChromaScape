@@ -18,14 +18,6 @@
 # Virtual machine crash logs
 hs_err_pid*
 
-# Generated files
-bin/
-!third_party/KInput/KInput/KInput/bin/
-!third_party/KInput/KInput/KInputCtrl/bin/
-out/
-build/
-!third_party/minhook/build/
-
 # Gradle cache and wrappers
 .gradle/
 !gradle/wrapper/gradle-wrapper.jar
@@ -68,3 +60,6 @@ secrets.properties
 # custom user scripts
 /src/main/java/com/chromascape/scripts/*/
 /scripts/*/
+
+# Ignore build directory, even though it was ignored before??
+/build/

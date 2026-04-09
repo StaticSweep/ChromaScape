@@ -6,7 +6,6 @@ import static org.bytedeco.opencv.global.opencv_imgproc.*;
 import static org.opencv.imgproc.Imgproc.TM_SQDIFF_NORMED;
 
 import com.chromascape.utils.core.screen.viewport.ViewportManager;
-import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.core.state.BotState;
 import com.chromascape.utils.core.state.StateManager;
 import com.chromascape.utils.core.statistics.StatisticsManager;
@@ -136,12 +135,7 @@ public class TemplateMatching {
         return new MatchResult(null, minVal.get(), false, "MinVal greater than threshold");
       }
 
-      // offset for screen cords (Note this means that everything template matched is zone relative)
-      Rectangle offset = ScreenManager.getWindowBounds();
-
-      Rectangle match =
-          new Rectangle(
-              offset.x + minLoc.x(), offset.y + minLoc.y(), template.cols(), template.rows());
+      Rectangle match = new Rectangle(minLoc.x(), minLoc.y(), template.cols(), template.rows());
 
       // Update singleton state manager to update stats in UI
       StatisticsManager.incrementObjectsDetected();

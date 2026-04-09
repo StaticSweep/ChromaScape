@@ -1,0 +1,311 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+      - 'feature/**'
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  Build:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+            #Linux-aarch64
+          - os: ubuntu-24.04-arm
+            name: Linux-aarch64
+            other_linker_flags: '-L/usr/aarch64-linux-gnu/local/lib'
+            arch: aarch64
+            output: libRemoteInput.so
+            release: libRemoteInput-aarch64.so
+
+            #Linux-64
+          - os: ubuntu-latest
+            name: Linux-64
+            other_linker_flags: '-m64'
+            arch: x86_64
+            output: libRemoteInput.so
+            release: libRemoteInput-x86_64.so
+
+            #MacOS-64
+          - os: macos-15-intel
+            name: MacOS-64
+            other_linker_flags: '-m64'
+            arch: x86_64
+            output: libRemoteInput.dylib
+            release: libRemoteInput-x86_64.dylib
+
+            #MacOS-aarch64
+          - os: macos-latest
+            name: MacOS-aarch64
+            other_linker_flags: '-m64'
+            arch: aarch64
+            output: libRemoteInput.dylib
+            release: libRemoteInput-aarch64.dylib
+
+            #Windows-32
+          - os: windows-latest
+            name: Windows-32
+            other_linker_flags: '-m32'
+            arch: i686
+            output: libRemoteInput.dll
+            release: libRemoteInput-i686.dll
+
+            #Windows-64
+          - os: windows-latest
+            name: Windows-64
+            other_linker_flags: '-m64'
+            arch: x86_64
+            output: libRemoteInput.dll
+            release: libRemoteInput-x86_64.dll
+    
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+        
+    - name: Set up Python
+      if: matrix.config.name != 'Linux-aarch64'
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+       
+      #Linux-aarch64
+    - name: Update Sources - Linux-aarch64
+      if: matrix.config.name == 'Linux-aarch64'
+      run: |
+        #source_version=$(cat /etc/apt/sources.list | grep "main restricted" | head -1 | sed -e 's/.*com\/ //' -e 's/ main.*//')
+        #echo "Found: ${ source_version }"
+        sudo apt-get update
+        
+    - name: Dependencies - Linux-aarch64
+      if: matrix.config.name == 'Linux-aarch64'
+      run: |
+        sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        #sudo apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+        sudo apt-get install procps:arm64 mesa-common-dev:arm64 libglu1-mesa:arm64 libglu1-mesa-dev:arm64 libgl1:arm64 libgl1-mesa-dev:arm64 libglfw3-dev:arm64 cmake
+        sudo apt-get install openjdk-11-jdk
+        sudo apt-get install libpython3-dev:arm64
+
+    - name: CMake Generate Build Files - Linux-aarch64
+      if: matrix.config.name == 'Linux-aarch64'
+      env:
+        JAVA_HOME: '/usr/lib/jvm/java-11-openjdk-amd64'
+      run: |
+        cmake -S '${{ github.workspace }}' -B '${{ github.workspace }}/cmake-build-release' -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_COMPILER=/usr/bin/aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=/usr/bin/aarch64-linux-gnu-g++ -DCMAKE_BUILD_TYPE=Release -DOTHER_LINKER_FLAGS:STRING=${{ matrix.config.other_linker_flags }} -G "CodeBlocks - Unix Makefiles"
+        
+    - name: Build - Linux-aarch64
+      if: matrix.config.name == 'Linux-aarch64'
+      env:
+        JAVA_HOME: '/usr/lib/jvm/java-11-openjdk-amd64'
+      run: |
+        cmake --build '${{ github.workspace }}/cmake-build-release' --target all -- -j 4
+        
+      #Linux-64
+    - name: Dependencies - Linux-64
+      if: matrix.config.name == 'Linux-64'
+      run: |
+        sudo apt-get update
+        sudo apt-get install procps mesa-common-dev libglu1-mesa libglu1-mesa-dev libgl1 libgl1-mesa-dev libpython3-dev clang cmake g++
+        
+    - name: CMake Generate Build Files - Linux-64
+      if: matrix.config.name == 'Linux-64'
+      run: |
+        cmake -S '${{ github.workspace }}' -B '${{ github.workspace }}/cmake-build-release' -DCMAKE_BUILD_TYPE=Release -DOTHER_LINKER_FLAGS:STRING=${{ matrix.config.other_linker_flags }} -G "CodeBlocks - Unix Makefiles"
+        
+    - name: Build - Linux-64
+      if: matrix.config.name == 'Linux-64'
+      run: |
+        cmake --build '${{ github.workspace }}/cmake-build-release' --target all -- -j 4
+        
+      #MacOS-64
+    - name: CMake Generate Build Files - MacOS-64
+      if: matrix.config.name == 'MacOS-64'
+      run: |
+        cmake -S '${{ github.workspace }}' -B '${{ github.workspace }}/cmake-build-release' -DCMAKE_BUILD_TYPE=Release -DOTHER_LINKER_FLAGS:STRING=${{ matrix.config.other_linker_flags }} -G "CodeBlocks - Unix Makefiles"
+        
+    - name: Build - MacOS-64
+      if: matrix.config.name == 'MacOS-64'
+      run: |
+        cmake --build '${{ github.workspace }}/cmake-build-release' --target all -- -j 4
+
+      #MacOS-aarch64
+    - name: CMake Generate Build Files - MacOS-aarch64
+      if: matrix.config.name == 'MacOS-aarch64'
+      run: |
+        cmake -S '${{ github.workspace }}' -B '${{ github.workspace }}/cmake-build-release' -DCMAKE_BUILD_TYPE=Release -DOTHER_LINKER_FLAGS:STRING=${{ matrix.config.other_linker_flags }} -G "CodeBlocks - Unix Makefiles"
+
+    - name: Build - MacOS-aarch64
+      if: matrix.config.name == 'MacOS-aarch64'
+      run: |
+        cmake --build '${{ github.workspace }}/cmake-build-release' --target all -- -j 4
+        
+      #Windows-32
+    - name: Dependencies - Windows-32
+      if: matrix.config.name == 'Windows-32'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW32
+        install: mingw-w64-i686-gcc mingw-w64-i686-clang mingw-w64-i686-python mingw-w64-i686-cmake make
+        update: false
+
+    - name: CMake Generate Build Files - Windows-32
+      if: matrix.config.name == 'Windows-32'
+      shell: msys2 {0}
+      run: |
+        set MSYSTEM=MINGW32
+        MINGW_INSTALLS=MINGW32
+        cmake -S '${{ github.workspace }}' -B '${{ github.workspace }}/cmake-build-release' -DCMAKE_BUILD_TYPE=Release -DOTHER_LINKER_FLAGS:STRING=${{ matrix.config.other_linker_flags }} -G "CodeBlocks - Unix Makefiles"
+
+    - name: Build - Windows-32
+      if: matrix.config.name == 'Windows-32'
+      shell: msys2 {0}
+      run: |
+        set MSYSTEM=MINGW32
+        MINGW_INSTALLS=MINGW32
+        cmake --build '${{ github.workspace }}/cmake-build-release' --target all -- -j 4
+        
+      #Windows-64
+    - name: Dependencies - Windows-64
+      if: matrix.config.name == 'Windows-64'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        install: mingw-w64-x86_64-gcc mingw-w64-x86_64-clang mingw-w64-x86_64-python mingw-w64-x86_64-cmake make
+        update: false
+
+    - name: CMake Generate Build Files - Windows-64
+      if: matrix.config.name == 'Windows-64'
+      shell: msys2 {0}
+      run: |
+        set MSYSTEM=MINGW64
+        MINGW_INSTALLS=MINGW64
+        cmake -S '${{ github.workspace }}' -B '${{ github.workspace }}/cmake-build-release' -DCMAKE_BUILD_TYPE=Release -DOTHER_LINKER_FLAGS:STRING=${{ matrix.config.other_linker_flags }} -G "CodeBlocks - Unix Makefiles"
+
+    - name: Build - Windows-64
+      if: matrix.config.name == 'Windows-64'
+      shell: msys2 {0}
+      run: |
+        set MSYSTEM=MINGW64
+        MINGW_INSTALLS=MINGW64
+        cmake --build '${{ github.workspace }}/cmake-build-release' --target all -- -j 4
+
+    #Shared
+    - name: Move Artifacts - ${{ matrix.config.name }}
+      if: github.event_name == 'push'
+      run: |
+        mv '${{ github.workspace }}/cmake-build-release/${{ matrix.config.output }}' '${{ github.workspace }}/cmake-build-release/${{ matrix.config.release }}'
+
+    - name: 'Upload Artifacts - ${{ matrix.config.name }}'
+      if: github.event_name == 'push'
+      uses: actions/upload-artifact@v4
+      with:
+        overwrite: true
+        name: 'artifact-${{ matrix.config.name }}'
+        path: '${{ github.workspace }}/cmake-build-release/${{ matrix.config.release }}'
+
+  Release:
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        config:
+          - os: windows-latest
+            target_release_repo: Reflection
+    
+    steps:
+    - name: Wait For Builds
+      if: github.event_name == 'push'
+      uses: Brandon-T/wait-for-check-action@v1
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        check_names: '["Linux-aarch64", "Linux-64", "MacOS-64", "MacOS-aarch64", "Windows-32", "Windows-64"]'
+        statuses: '["completed", "completed", "completed", "completed", "completed", "completed"]'
+        conclusions: '["success", "success", "success", "success", "success", "success"]'
+        timeout: 600
+        poll_interval: 10
+        
+    - name: Gather Release Notes
+      id: release_notes
+      if: github.event_name == 'push'
+      run: |
+        if [ "${{ github.event_name }}" = "push" ]; then
+            commit="${{ github.event.head_commit.message }}"
+            author="${{ github.event.head_commit.author.name }}"
+            notes="${commit}<br /><br />- ${author}"
+            notes="${notes//\\n/<br />}"
+            notes="${notes//$'\n'/<br />}"
+        elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            commit="${{ github.event.pull_request.title }}"
+            body="${{ github.event.pull_request.body }}"
+            author="${{ github.event.pull_request.author }}"
+            notes="${commit}<br />${body}<br /><br />- ${author}"
+            notes="${notes//\\n/<br />}"
+            notes="${notes//$'\n'/<br />}"
+        fi
+        echo ::set-output name=description::"${notes}"
+      shell: bash
+      
+    - name: Download Artifacts
+      if: github.event_name == 'push'
+      uses: actions/download-artifact@v4
+      with:
+        pattern: 'artifact-*'
+        path: 'artifact'
+        merge-multiple: true
+
+    - name: List Artifacts
+      run: |
+          ls artifact
+
+    - name: Upload Autobuild
+      if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v')
+      uses: Brandon-T/update-release-action@v1
+      with:
+        github_token: ${{ secrets.CI_RELEASE_TOKEN }}
+        release_name: 'Auto-Build'
+        file: 'artifact/*'
+        is_file_glob: true
+        overwrite: true
+        release_notes: ${{ steps.release_notes.outputs.description }}
+        deletes_existing_release: true
+        pre_release: false
+        prefix_branch_name: false
+        suffix_branch_name: false
+        draft_release: false
+        retry_count: 2
+        retry_delay: 5
+        owner: '${{ github.repository_owner }}'
+        repo: '${{ matrix.config.target_release_repo }}'
+        tag: 'autobuild'
+        bump_tag: true
+        ref: 'master'
+
+    - name: Upload Release Build
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+      uses: Brandon-T/update-release-action@v1
+      with:
+        github_token: ${{ secrets.CI_RELEASE_TOKEN }}
+        release_name: ${{ steps.release_notes.outputs.version }}
+        file: 'artifact/*'
+        is_file_glob: true
+        overwrite: true
+        release_notes: ${{ steps.release_notes.outputs.description }}
+        deletes_existing_release: false
+        pre_release: false
+        prefix_branch_name: false
+        suffix_branch_name: false
+        draft_release: false
+        retry_count: 2
+        retry_delay: 5
+        owner: '${{ github.repository_owner }}'
+        repo: '${{ matrix.config.target_release_repo }}'
+        tag: ${{ steps.release_notes.outputs.version }}
+        bump_tag: true
+        ref: 'master'

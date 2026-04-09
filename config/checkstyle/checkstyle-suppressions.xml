@@ -6,11 +6,10 @@
 <suppressions>
     <suppress files=".*Kinput\.java" checks="AbbreviationAsWordInName"/>
     <suppress files=".*Kinput\.java" checks="MethodName"/>
-    <suppress files=".*WindowHandler\.java" checks="MethodName"/>
-    <suppress files=".*ScreenManager\.java" checks="MethodName"/>
+    <suppress files=".*WindowsProcessManager\.java" checks="MethodName"/>
     <suppress files=".*Similarity\.java" checks=".*"/>
     <suppress files=".*WindMouse\.java" checks=".*"/>
+    <suppress files=".*RemoteInputInterface\.java" checks=".*"/>
     <suppress files=".*TemplateMatching\.java" checks="AvoidStarImport"/>
-    <suppress files=".*ScreenManager\.java" checks="LocalVariableName"/>
     <suppress files=".*ColourContours\.java" checks="AvoidStarImport"/>
 </suppressions>

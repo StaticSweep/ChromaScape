@@ -57,10 +57,13 @@ https://github.com/user-attachments/assets/1267df86-db5c-4189-8c8d-e2f5fe047cab
 
 ChromaScape uses advanced remote input techniques to function as a virtual second mouse dedicated to the client window. Unlike traditional input methods, this approach never hijacks your physical mouse, so you can continue using your PC without interruption while the bot runs in the background.
 
-This is achieved through KInput.
+RemoteInput also allows the user to completely minimise RuneLite while the bot is running
 
-ChromaScape uses a slightly modified version of the [64-bit](https://github.com/ThatOneGuyScripts/KInput) supported version of KInput. The [original](https://github.com/Kasi-R/KInput) KInput source is also available for reference.
-There are instructions on how to build KInput from source within the third_party directory in `DEV_README.md`
+This is achieved through Brandon-T's RemoteInput.
+
+The [original](https://github.com/Brandon-T/RemoteInput) RemoteInput source is also available for reference.
+There are instructions on how to build RemoteInput from source within the third-party directory in `DEV_README.md`.
+For those who prefer, pre-built binaries are available, so the project will work out of the box.
 
 ### - Humanised mouse movement
 To further reduce bot detection risks, ChromaScape uses an adapted version of [WindMouse](https://ben.land/post/2021/04/25/windmouse-human-mouse-movement/), a physics based calculation of gravity and wind to ensure pixel imperfections unlike bezier curves. WindMouse has been a successful staple within the community for over a decade, and provides exceedingly human mouse movements.
@@ -72,9 +75,6 @@ https://github.com/user-attachments/assets/b1c601e9-b58a-4a54-865b-739a25ddf898
 
 
 The UI is built with Spring Boot, a mature industry framework, and served locally. This gives you a powerful way to view logs, manage scripts, see the bot's sensor information, and extend functionality. It's fully customizable with basic HTML/CSS/JS, so power users can tweak or overhaul it without modifying core framework utilities or needing to worry about tight coupling.
-
-**Newly: you can now have runelite covered by other applications while the bot runs**
-> You can't minimise it or put it entirely offscreen yet, but you can place other applications on top and have it run in the background.
 
 ## Colour and Image Detection
 

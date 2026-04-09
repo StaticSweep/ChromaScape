@@ -1,0 +1,1178 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 50;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5E07A6C02378B1B100EB4CDF /* Graphics.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E07A6BE2378B1B100EB4CDF /* Graphics.cxx */; };
+		5E07A6C12378B1B100EB4CDF /* Graphics.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E07A6BF2378B1B100EB4CDF /* Graphics.hxx */; };
+		5E0F52AC23AE8EAD002518AF /* Plugin.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E0F52AA23AE8EAD002518AF /* Plugin.cxx */; };
+		5E0F52AD23AE8EAD002518AF /* Plugin.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E0F52AA23AE8EAD002518AF /* Plugin.cxx */; };
+		5E0F52AE23AE8EAD002518AF /* Plugin.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E0F52AB23AE8EAD002518AF /* Plugin.hxx */; };
+		5E0F52AF23AE8EAD002518AF /* Plugin.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E0F52AB23AE8EAD002518AF /* Plugin.hxx */; };
+		5E1236A423946AA900D8AE33 /* ReflectionHook.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E1236A223946AA900D8AE33 /* ReflectionHook.cxx */; };
+		5E1236A523946AA900D8AE33 /* ReflectionHook.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E1236A323946AA900D8AE33 /* ReflectionHook.hxx */; };
+		5E27B24423B829C60091232F /* InputOutput.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E27B24223B829C60091232F /* InputOutput.cxx */; };
+		5E27B24523B829C60091232F /* InputOutput.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E27B24223B829C60091232F /* InputOutput.cxx */; };
+		5E27B24623B829C60091232F /* InputOutput.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E27B24323B829C60091232F /* InputOutput.hxx */; };
+		5E27B24723B829C60091232F /* InputOutput.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E27B24323B829C60091232F /* InputOutput.hxx */; };
+		5E27B24A23B9A0430091232F /* Random.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E27B24823B9A0430091232F /* Random.cxx */; };
+		5E27B24B23B9A0430091232F /* Random.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E27B24823B9A0430091232F /* Random.cxx */; };
+		5E27B24C23B9A0430091232F /* Random.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E27B24923B9A0430091232F /* Random.hxx */; };
+		5E27B24D23B9A0430091232F /* Random.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E27B24923B9A0430091232F /* Random.hxx */; };
+		5E31A8B323C83E3F00E751F6 /* MouseWheelEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E31A8B123C83E3F00E751F6 /* MouseWheelEvent.cxx */; };
+		5E31A8B423C83E3F00E751F6 /* MouseWheelEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E31A8B223C83E3F00E751F6 /* MouseWheelEvent.hxx */; };
+		5E31A8B523C840F500E751F6 /* MouseWheelEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E31A8B123C83E3F00E751F6 /* MouseWheelEvent.cxx */; };
+		5E31A8B623C840F500E751F6 /* MouseWheelEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E31A8B223C83E3F00E751F6 /* MouseWheelEvent.hxx */; };
+		5E4CDC1D2381F40700A05869 /* NativeHooks_Darwin.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E4CDC1A2381F40700A05869 /* NativeHooks_Darwin.cxx */; };
+		5E4CDC1E2381F40700A05869 /* NativeHooks_Linux.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E4CDC1B2381F40700A05869 /* NativeHooks_Linux.cxx */; };
+		5E4CDC1F2381F40700A05869 /* NativeHooks_Windows.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E4CDC1C2381F40700A05869 /* NativeHooks_Windows.cxx */; };
+		5E4D644B241F424D0010EDBE /* PointerInfo.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E4D6449241F424D0010EDBE /* PointerInfo.cxx */; };
+		5E4D644C241F424D0010EDBE /* PointerInfo.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E4D644A241F424D0010EDBE /* PointerInfo.hxx */; };
+		5E4D644D241F47930010EDBE /* PointerInfo.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E4D6449241F424D0010EDBE /* PointerInfo.cxx */; };
+		5E4D644E241F47990010EDBE /* PointerInfo.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E4D644A241F424D0010EDBE /* PointerInfo.hxx */; };
+		5E5B3F8A239D36A400F07DD1 /* ModelRendering.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5E5B3F88239D36A400F07DD1 /* ModelRendering.cpp */; };
+		5E5B3F8B239D36A400F07DD1 /* ModelRendering.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 5E5B3F89239D36A400F07DD1 /* ModelRendering.hpp */; };
+		5E5B3F8D239D39F700F07DD1 /* ModelRendering.hpp in Headers */ = {isa = PBXBuildFile; fileRef = 5E5B3F89239D36A400F07DD1 /* ModelRendering.hpp */; };
+		5E5B3F8E239D39FA00F07DD1 /* ModelRendering.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5E5B3F88239D36A400F07DD1 /* ModelRendering.cpp */; };
+		5E5FC02B237264840048997B /* ControlCenter.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E5FC029237264840048997B /* ControlCenter.cxx */; };
+		5E5FC02C237264840048997B /* ControlCenter.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E5FC02A237264840048997B /* ControlCenter.hxx */; };
+		5E6281F12421B79E006BA298 /* RemoteInputBootstrap_Darwin.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E6281EF2421B79E006BA298 /* RemoteInputBootstrap_Darwin.cxx */; };
+		5E667F9A23C8D1BB00931DEC /* libawt_lwawt.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 5E667F9923C8D1BB00931DEC /* libawt_lwawt.dylib */; };
+		5E667F9E23C8D1C000931DEC /* libawt.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 5E667F9D23C8D1C000931DEC /* libawt.dylib */; };
+		5E6B9A002394C57600E6720C /* Time.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66B1235CF15400D183B1 /* Time.cxx */; };
+		5E6B9A012394C57600E6720C /* SharedEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66B2235CF15400D183B1 /* SharedEvent.cxx */; };
+		5E6B9A022394C57600E6720C /* MemoryMap.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66B3235CF15400D183B1 /* MemoryMap.hxx */; };
+		5E6B9A032394C57600E6720C /* Module.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66B4235CF15400D183B1 /* Module.hxx */; };
+		5E6B9A042394C57600E6720C /* Module.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66B5235CF15400D183B1 /* Module.cxx */; };
+		5E6B9A052394C57600E6720C /* Time.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66B6235CF15400D183B1 /* Time.hxx */; };
+		5E6B9A062394C57600E6720C /* SharedEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66B7235CF15400D183B1 /* SharedEvent.hxx */; };
+		5E6B9A072394C57600E6720C /* EIOS.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66AD235CF15400D183B1 /* EIOS.cxx */; };
+		5E6B9A082394C57600E6720C /* EIOS.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66A5235CF15400D183B1 /* EIOS.hxx */; };
+		5E6B9A092394C57600E6720C /* JVM.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66AF235CF15400D183B1 /* JVM.cxx */; };
+		5E6B9A0A2394C57600E6720C /* JVM.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66AB235CF15400D183B1 /* JVM.hxx */; };
+		5E6B9A0B2394C57A00E6720C /* NativeHooks_Darwin.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E4CDC1A2381F40700A05869 /* NativeHooks_Darwin.cxx */; };
+		5E6B9A0C2394C57A00E6720C /* NativeHooks_Linux.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E4CDC1B2381F40700A05869 /* NativeHooks_Linux.cxx */; };
+		5E6B9A0D2394C57A00E6720C /* NativeHooks_Windows.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E4CDC1C2381F40700A05869 /* NativeHooks_Windows.cxx */; };
+		5E6B9A0E2394C57A00E6720C /* DebugConsole.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD6697235CF15400D183B1 /* DebugConsole.hxx */; };
+		5E6B9A0F2394C57A00E6720C /* Platform_Linux.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD6698235CF15400D183B1 /* Platform_Linux.cxx */; };
+		5E6B9A102394C57A00E6720C /* Platform.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD669A235CF15400D183B1 /* Platform.hxx */; };
+		5E6B9A112394C57A00E6720C /* NativeHooks.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD669B235CF15400D183B1 /* NativeHooks.hxx */; };
+		5E6B9A132394C57A00E6720C /* DebugConsole.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD669F235CF15400D183B1 /* DebugConsole.cxx */; };
+		5E6B9A142394C57A00E6720C /* JavaInternal.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66A0235CF15400D183B1 /* JavaInternal.hxx */; };
+		5E6B9A152394C57A00E6720C /* Platform_Windows.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66A1235CF15400D183B1 /* Platform_Windows.cxx */; };
+		5E6B9A162394C58500E6720C /* SimbaPlugin.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66A8235CF15400D183B1 /* SimbaPlugin.cxx */; };
+		5E6B9A172394C58500E6720C /* SimbaPlugin.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66AA235CF15400D183B1 /* SimbaPlugin.hxx */; };
+		5E6B9A182394C58500E6720C /* TMemoryManager.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66A9235CF15400D183B1 /* TMemoryManager.hxx */; };
+		5E6B9A192394C58500E6720C /* ControlCenter.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E5FC029237264840048997B /* ControlCenter.cxx */; };
+		5E6B9A1A2394C58500E6720C /* ControlCenter.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E5FC02A237264840048997B /* ControlCenter.hxx */; };
+		5E6B9A1B2394C58500E6720C /* Graphics.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E07A6BE2378B1B100EB4CDF /* Graphics.cxx */; };
+		5E6B9A1C2394C58500E6720C /* Graphics.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E07A6BF2378B1B100EB4CDF /* Graphics.hxx */; };
+		5E6B9A1D2394C59400E6720C /* Reflection.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66A4235CF15400D183B1 /* Reflection.cxx */; };
+		5E6B9A1E2394C59400E6720C /* Reflection.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66A2235CF15400D183B1 /* Reflection.hxx */; };
+		5E6B9A1F2394C59700E6720C /* ThreadPool.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66AE235CF15400D183B1 /* ThreadPool.cxx */; };
+		5E6B9A202394C59700E6720C /* ThreadPool.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66B8235CF15400D183B1 /* ThreadPool.hxx */; };
+		5E6B9A212394C59700E6720C /* RemoteInput.h in Headers */ = {isa = PBXBuildFile; fileRef = 5EC5950A232D956B00922111 /* RemoteInput.h */; };
+		5E6B9A242394C59C00E6720C /* ReflectionHook.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E1236A223946AA900D8AE33 /* ReflectionHook.cxx */; };
+		5E6B9A252394C59C00E6720C /* ReflectionHook.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E1236A323946AA900D8AE33 /* ReflectionHook.hxx */; };
+		5E6B9A262394C60A00E6720C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5EBD66DC235D041D00D183B1 /* Foundation.framework */; };
+		5E6B9A272394C61200E6720C /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5EBD66DA235D041600D183B1 /* Cocoa.framework */; };
+		5E6EA10123C91350003CB0B5 /* DetachedThreadPool.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E6EA0FF23C91350003CB0B5 /* DetachedThreadPool.cxx */; };
+		5E6EA10223C91350003CB0B5 /* DetachedThreadPool.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5E6EA0FF23C91350003CB0B5 /* DetachedThreadPool.cxx */; };
+		5E6EA10323C91350003CB0B5 /* DetachedThreadPool.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E6EA10023C91350003CB0B5 /* DetachedThreadPool.hxx */; };
+		5E6EA10423C91350003CB0B5 /* DetachedThreadPool.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5E6EA10023C91350003CB0B5 /* DetachedThreadPool.hxx */; };
+		5E6EA10A23C91371003CB0B5 /* rd_route.h in Headers */ = {isa = PBXBuildFile; fileRef = 5E6EA10723C91371003CB0B5 /* rd_route.h */; };
+		5E6EA10B23C91371003CB0B5 /* rd_route.h in Headers */ = {isa = PBXBuildFile; fileRef = 5E6EA10723C91371003CB0B5 /* rd_route.h */; };
+		5E6EA10C23C91371003CB0B5 /* rd_route.c in Sources */ = {isa = PBXBuildFile; fileRef = 5E6EA10923C91371003CB0B5 /* rd_route.c */; };
+		5E6EA10D23C91371003CB0B5 /* rd_route.c in Sources */ = {isa = PBXBuildFile; fileRef = 5E6EA10923C91371003CB0B5 /* rd_route.c */; };
+		5EB76181239B922500218452 /* OpenGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5EB76180239B922500218452 /* OpenGL.framework */; };
+		5EBD66B9235CF15400D183B1 /* DebugConsole.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD6697235CF15400D183B1 /* DebugConsole.hxx */; };
+		5EBD66BA235CF15400D183B1 /* Platform_Linux.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD6698235CF15400D183B1 /* Platform_Linux.cxx */; };
+		5EBD66BC235CF15400D183B1 /* Platform.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD669A235CF15400D183B1 /* Platform.hxx */; };
+		5EBD66BD235CF15400D183B1 /* NativeHooks.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD669B235CF15400D183B1 /* NativeHooks.hxx */; };
+		5EBD66C1235CF15400D183B1 /* DebugConsole.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD669F235CF15400D183B1 /* DebugConsole.cxx */; };
+		5EBD66C2235CF15400D183B1 /* JavaInternal.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66A0235CF15400D183B1 /* JavaInternal.hxx */; };
+		5EBD66C3235CF15400D183B1 /* Platform_Windows.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66A1235CF15400D183B1 /* Platform_Windows.cxx */; };
+		5EBD66C4235CF15400D183B1 /* Reflection.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66A2235CF15400D183B1 /* Reflection.hxx */; };
+		5EBD66C6235CF15400D183B1 /* Reflection.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66A4235CF15400D183B1 /* Reflection.cxx */; };
+		5EBD66C7235CF15400D183B1 /* EIOS.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66A5235CF15400D183B1 /* EIOS.hxx */; };
+		5EBD66C8235CF15400D183B1 /* RemoteInput.def in Resources */ = {isa = PBXBuildFile; fileRef = 5EBD66A6235CF15400D183B1 /* RemoteInput.def */; };
+		5EBD66C9235CF15400D183B1 /* SimbaPlugin.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66A8235CF15400D183B1 /* SimbaPlugin.cxx */; };
+		5EBD66CA235CF15400D183B1 /* TMemoryManager.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66A9235CF15400D183B1 /* TMemoryManager.hxx */; };
+		5EBD66CB235CF15400D183B1 /* SimbaPlugin.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66AA235CF15400D183B1 /* SimbaPlugin.hxx */; };
+		5EBD66CC235CF15400D183B1 /* JVM.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66AB235CF15400D183B1 /* JVM.hxx */; };
+		5EBD66CE235CF15400D183B1 /* EIOS.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66AD235CF15400D183B1 /* EIOS.cxx */; };
+		5EBD66CF235CF15400D183B1 /* ThreadPool.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66AE235CF15400D183B1 /* ThreadPool.cxx */; };
+		5EBD66D0235CF15400D183B1 /* JVM.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66AF235CF15400D183B1 /* JVM.cxx */; };
+		5EBD66D1235CF15400D183B1 /* Time.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66B1235CF15400D183B1 /* Time.cxx */; };
+		5EBD66D2235CF15400D183B1 /* SharedEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66B2235CF15400D183B1 /* SharedEvent.cxx */; };
+		5EBD66D3235CF15400D183B1 /* MemoryMap.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66B3235CF15400D183B1 /* MemoryMap.hxx */; };
+		5EBD66D4235CF15400D183B1 /* Module.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66B4235CF15400D183B1 /* Module.hxx */; };
+		5EBD66D5235CF15400D183B1 /* Module.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBD66B5235CF15400D183B1 /* Module.cxx */; };
+		5EBD66D6235CF15400D183B1 /* Time.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66B6235CF15400D183B1 /* Time.hxx */; };
+		5EBD66D7235CF15400D183B1 /* SharedEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66B7235CF15400D183B1 /* SharedEvent.hxx */; };
+		5EBD66D8235CF15400D183B1 /* ThreadPool.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBD66B8235CF15400D183B1 /* ThreadPool.hxx */; };
+		5EBD66DB235D041600D183B1 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5EBD66DA235D041600D183B1 /* Cocoa.framework */; };
+		5EBD66DD235D041D00D183B1 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5EBD66DC235D041D00D183B1 /* Foundation.framework */; };
+		5EBE1A9923C7C84800B99E32 /* KeyEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8123C7C84700B99E32 /* KeyEvent.hxx */; };
+		5EBE1A9A23C7C84800B99E32 /* KeyEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8123C7C84700B99E32 /* KeyEvent.hxx */; };
+		5EBE1A9B23C7C84800B99E32 /* Applet.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8223C7C84700B99E32 /* Applet.cxx */; };
+		5EBE1A9C23C7C84800B99E32 /* Applet.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8223C7C84700B99E32 /* Applet.cxx */; };
+		5EBE1A9D23C7C84800B99E32 /* AWTEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8323C7C84700B99E32 /* AWTEvent.cxx */; };
+		5EBE1A9E23C7C84800B99E32 /* AWTEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8323C7C84700B99E32 /* AWTEvent.cxx */; };
+		5EBE1A9F23C7C84800B99E32 /* AWTEventAccessor.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8423C7C84700B99E32 /* AWTEventAccessor.cxx */; };
+		5EBE1AA023C7C84800B99E32 /* AWTEventAccessor.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8423C7C84700B99E32 /* AWTEventAccessor.cxx */; };
+		5EBE1AA123C7C84800B99E32 /* Component.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8523C7C84700B99E32 /* Component.cxx */; };
+		5EBE1AA223C7C84800B99E32 /* Component.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8523C7C84700B99E32 /* Component.cxx */; };
+		5EBE1AA323C7C84800B99E32 /* AWTAccessor.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8623C7C84700B99E32 /* AWTAccessor.cxx */; };
+		5EBE1AA423C7C84800B99E32 /* AWTAccessor.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8623C7C84700B99E32 /* AWTAccessor.cxx */; };
+		5EBE1AA523C7C84800B99E32 /* InputEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8723C7C84700B99E32 /* InputEvent.cxx */; };
+		5EBE1AA623C7C84800B99E32 /* InputEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8723C7C84700B99E32 /* InputEvent.cxx */; };
+		5EBE1AA723C7C84800B99E32 /* MouseEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8823C7C84700B99E32 /* MouseEvent.cxx */; };
+		5EBE1AA823C7C84800B99E32 /* MouseEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8823C7C84700B99E32 /* MouseEvent.cxx */; };
+		5EBE1AA923C7C84800B99E32 /* EventQueue.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8923C7C84700B99E32 /* EventQueue.cxx */; };
+		5EBE1AAA23C7C84800B99E32 /* EventQueue.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8923C7C84700B99E32 /* EventQueue.cxx */; };
+		5EBE1AAB23C7C84800B99E32 /* Toolkit.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8A23C7C84700B99E32 /* Toolkit.hxx */; };
+		5EBE1AAC23C7C84800B99E32 /* Toolkit.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8A23C7C84700B99E32 /* Toolkit.hxx */; };
+		5EBE1AAD23C7C84800B99E32 /* AWTAccessor.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8B23C7C84700B99E32 /* AWTAccessor.hxx */; };
+		5EBE1AAE23C7C84800B99E32 /* AWTAccessor.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8B23C7C84700B99E32 /* AWTAccessor.hxx */; };
+		5EBE1AAF23C7C84800B99E32 /* Toolkit.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8C23C7C84700B99E32 /* Toolkit.cxx */; };
+		5EBE1AB023C7C84800B99E32 /* Toolkit.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A8C23C7C84700B99E32 /* Toolkit.cxx */; };
+		5EBE1AB123C7C84800B99E32 /* FocusEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8D23C7C84700B99E32 /* FocusEvent.hxx */; };
+		5EBE1AB223C7C84800B99E32 /* FocusEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8D23C7C84700B99E32 /* FocusEvent.hxx */; };
+		5EBE1AB323C7C84800B99E32 /* Applet.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8E23C7C84700B99E32 /* Applet.hxx */; };
+		5EBE1AB423C7C84800B99E32 /* Applet.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8E23C7C84700B99E32 /* Applet.hxx */; };
+		5EBE1AB523C7C84800B99E32 /* AWTEventAccessor.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8F23C7C84700B99E32 /* AWTEventAccessor.hxx */; };
+		5EBE1AB623C7C84800B99E32 /* AWTEventAccessor.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A8F23C7C84700B99E32 /* AWTEventAccessor.hxx */; };
+		5EBE1AB723C7C84800B99E32 /* AWTEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9023C7C84700B99E32 /* AWTEvent.hxx */; };
+		5EBE1AB823C7C84800B99E32 /* AWTEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9023C7C84700B99E32 /* AWTEvent.hxx */; };
+		5EBE1AB923C7C84800B99E32 /* Component.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9123C7C84700B99E32 /* Component.hxx */; };
+		5EBE1ABA23C7C84800B99E32 /* Component.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9123C7C84700B99E32 /* Component.hxx */; };
+		5EBE1ABB23C7C84800B99E32 /* Frame.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9223C7C84800B99E32 /* Frame.hxx */; };
+		5EBE1ABC23C7C84800B99E32 /* Frame.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9223C7C84800B99E32 /* Frame.hxx */; };
+		5EBE1ABD23C7C84800B99E32 /* InputEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9323C7C84800B99E32 /* InputEvent.hxx */; };
+		5EBE1ABE23C7C84800B99E32 /* InputEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9323C7C84800B99E32 /* InputEvent.hxx */; };
+		5EBE1ABF23C7C84800B99E32 /* FocusEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A9423C7C84800B99E32 /* FocusEvent.cxx */; };
+		5EBE1AC023C7C84800B99E32 /* FocusEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A9423C7C84800B99E32 /* FocusEvent.cxx */; };
+		5EBE1AC123C7C84800B99E32 /* KeyEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A9523C7C84800B99E32 /* KeyEvent.cxx */; };
+		5EBE1AC223C7C84800B99E32 /* KeyEvent.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A9523C7C84800B99E32 /* KeyEvent.cxx */; };
+		5EBE1AC323C7C84800B99E32 /* MouseEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9623C7C84800B99E32 /* MouseEvent.hxx */; };
+		5EBE1AC423C7C84800B99E32 /* MouseEvent.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9623C7C84800B99E32 /* MouseEvent.hxx */; };
+		5EBE1AC523C7C84800B99E32 /* EventQueue.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9723C7C84800B99E32 /* EventQueue.hxx */; };
+		5EBE1AC623C7C84800B99E32 /* EventQueue.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EBE1A9723C7C84800B99E32 /* EventQueue.hxx */; };
+		5EBE1AC723C7C84800B99E32 /* Frame.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A9823C7C84800B99E32 /* Frame.cxx */; };
+		5EBE1AC823C7C84800B99E32 /* Frame.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EBE1A9823C7C84800B99E32 /* Frame.cxx */; };
+		5EC5950C232D956B00922111 /* RemoteInput.h in Headers */ = {isa = PBXBuildFile; fileRef = 5EC5950A232D956B00922111 /* RemoteInput.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		5EC942EB23D4A81B00E42B21 /* Platform_Darwin.mm in Sources */ = {isa = PBXBuildFile; fileRef = 5EC942EA23D4A81B00E42B21 /* Platform_Darwin.mm */; };
+		5EC942EC23D4A8AA00E42B21 /* Platform_Darwin.mm in Sources */ = {isa = PBXBuildFile; fileRef = 5EC942EA23D4A81B00E42B21 /* Platform_Darwin.mm */; };
+		5EE7DD94243BD9E5008FDC5D /* mach_inject.h in Headers */ = {isa = PBXBuildFile; fileRef = 5EE7DD91243BD9E5008FDC5D /* mach_inject.h */; };
+		5EE7DD95243BD9E5008FDC5D /* mach_inject.h in Headers */ = {isa = PBXBuildFile; fileRef = 5EE7DD91243BD9E5008FDC5D /* mach_inject.h */; };
+		5EE7DD96243BD9E5008FDC5D /* mach_inject.c in Sources */ = {isa = PBXBuildFile; fileRef = 5EE7DD93243BD9E5008FDC5D /* mach_inject.c */; };
+		5EE7DD97243BD9E5008FDC5D /* mach_inject.c in Sources */ = {isa = PBXBuildFile; fileRef = 5EE7DD93243BD9E5008FDC5D /* mach_inject.c */; };
+		5EE7DD9A243BD9F7008FDC5D /* main.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EE7DD98243BD9F7008FDC5D /* main.hxx */; };
+		5EE7DD9B243BD9F7008FDC5D /* main.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EE7DD98243BD9F7008FDC5D /* main.hxx */; };
+		5EE7DD9C243BD9F7008FDC5D /* main.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EE7DD99243BD9F7008FDC5D /* main.cxx */; };
+		5EE7DD9D243BD9F7008FDC5D /* main.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EE7DD99243BD9F7008FDC5D /* main.cxx */; };
+		5EFF49BA23A7037C00DC83D1 /* SpinLock.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EFF49B223A6EF4100DC83D1 /* SpinLock.hxx */; };
+		5EFF49BC23A7039C00DC83D1 /* SpinLock.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EFF49B223A6EF4100DC83D1 /* SpinLock.hxx */; };
+		5EFF49BE23A703C700DC83D1 /* SpinLock.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EFF49BD23A703C700DC83D1 /* SpinLock.cxx */; };
+		5EFF49BF23A703C700DC83D1 /* SpinLock.cxx in Sources */ = {isa = PBXBuildFile; fileRef = 5EFF49BD23A703C700DC83D1 /* SpinLock.cxx */; };
+		5EFF49C423A704DF00DC83D1 /* Signal.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EFF49C123A704DF00DC83D1 /* Signal.hxx */; };
+		5EFF49C523A704DF00DC83D1 /* Signal.hxx in Headers */ = {isa = PBXBuildFile; fileRef = 5EFF49C123A704DF00DC83D1 /* Signal.hxx */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		5E07A6BE2378B1B100EB4CDF /* Graphics.cxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Graphics.cxx; sourceTree = "<group>"; };
+		5E07A6BF2378B1B100EB4CDF /* Graphics.hxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Graphics.hxx; sourceTree = "<group>"; };
+		5E0F52AA23AE8EAD002518AF /* Plugin.cxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Plugin.cxx; sourceTree = "<group>"; };
+		5E0F52AB23AE8EAD002518AF /* Plugin.hxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Plugin.hxx; sourceTree = "<group>"; };
+		5E1236A223946AA900D8AE33 /* ReflectionHook.cxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ReflectionHook.cxx; sourceTree = "<group>"; };
+		5E1236A323946AA900D8AE33 /* ReflectionHook.hxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ReflectionHook.hxx; sourceTree = "<group>"; };
+		5E27B24223B829C60091232F /* InputOutput.cxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = InputOutput.cxx; sourceTree = "<group>"; };
+		5E27B24323B829C60091232F /* InputOutput.hxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = InputOutput.hxx; sourceTree = "<group>"; };
+		5E27B24823B9A0430091232F /* Random.cxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Random.cxx; sourceTree = "<group>"; };
+		5E27B24923B9A0430091232F /* Random.hxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Random.hxx; sourceTree = "<group>"; };
+		5E31A8B123C83E3F00E751F6 /* MouseWheelEvent.cxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = MouseWheelEvent.cxx; sourceTree = "<group>"; };
+		5E31A8B223C83E3F00E751F6 /* MouseWheelEvent.hxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = MouseWheelEvent.hxx; sourceTree = "<group>"; };
+		5E4CDC1A2381F40700A05869 /* NativeHooks_Darwin.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = NativeHooks_Darwin.cxx; sourceTree = "<group>"; };
+		5E4CDC1B2381F40700A05869 /* NativeHooks_Linux.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = NativeHooks_Linux.cxx; sourceTree = "<group>"; };
+		5E4CDC1C2381F40700A05869 /* NativeHooks_Windows.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = NativeHooks_Windows.cxx; sourceTree = "<group>"; };
+		5E4D6449241F424D0010EDBE /* PointerInfo.cxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PointerInfo.cxx; sourceTree = "<group>"; };
+		5E4D644A241F424D0010EDBE /* PointerInfo.hxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = PointerInfo.hxx; sourceTree = "<group>"; };
+		5E5B3F88239D36A400F07DD1 /* ModelRendering.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ModelRendering.cpp; sourceTree = "<group>"; };
+		5E5B3F89239D36A400F07DD1 /* ModelRendering.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ModelRendering.hpp; sourceTree = "<group>"; };
+		5E5FC029237264840048997B /* ControlCenter.cxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ControlCenter.cxx; sourceTree = "<group>"; };
+		5E5FC02A237264840048997B /* ControlCenter.hxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ControlCenter.hxx; sourceTree = "<group>"; };
+		5E6281EB2421B776006BA298 /* libRemoteInputBootstrap.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libRemoteInputBootstrap.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E6281EF2421B79E006BA298 /* RemoteInputBootstrap_Darwin.cxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = RemoteInputBootstrap_Darwin.cxx; sourceTree = "<group>"; };
+		5E667F9923C8D1BB00931DEC /* libawt_lwawt.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libawt_lwawt.dylib; path = "../../../../Library/Internet Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib/libawt_lwawt.dylib"; sourceTree = "<group>"; };
+		5E667F9D23C8D1C000931DEC /* libawt.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libawt.dylib; path = "../../../../Library/Internet Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib/libawt.dylib"; sourceTree = "<group>"; };
+		5E667FA023C8D1D000931DEC /* libjawt.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libjawt.dylib; path = "../../../../Library/Internet Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib/libjawt.dylib"; sourceTree = "<group>"; };
+		5E667FA323C8D1F500931DEC /* libjvm.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libjvm.dylib; path = "../../../../Library/Internet Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib/server/libjvm.dylib"; sourceTree = "<group>"; };
+		5E6B99FC2394C4F200E6720C /* liblibRemoteInput.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = liblibRemoteInput.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E6EA0FF23C91350003CB0B5 /* DetachedThreadPool.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DetachedThreadPool.cxx; sourceTree = "<group>"; };
+		5E6EA10023C91350003CB0B5 /* DetachedThreadPool.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = DetachedThreadPool.hxx; sourceTree = "<group>"; };
+		5E6EA10723C91371003CB0B5 /* rd_route.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = rd_route.h; sourceTree = "<group>"; };
+		5E6EA10923C91371003CB0B5 /* rd_route.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = rd_route.c; sourceTree = "<group>"; };
+		5EB76180239B922500218452 /* OpenGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGL.framework; path = System/Library/Frameworks/OpenGL.framework; sourceTree = SDKROOT; };
+		5EBD6697235CF15400D183B1 /* DebugConsole.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = DebugConsole.hxx; sourceTree = "<group>"; };
+		5EBD6698235CF15400D183B1 /* Platform_Linux.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Platform_Linux.cxx; sourceTree = "<group>"; };
+		5EBD669A235CF15400D183B1 /* Platform.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Platform.hxx; sourceTree = "<group>"; };
+		5EBD669B235CF15400D183B1 /* NativeHooks.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = NativeHooks.hxx; sourceTree = "<group>"; };
+		5EBD669F235CF15400D183B1 /* DebugConsole.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DebugConsole.cxx; sourceTree = "<group>"; };
+		5EBD66A0235CF15400D183B1 /* JavaInternal.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = JavaInternal.hxx; sourceTree = "<group>"; };
+		5EBD66A1235CF15400D183B1 /* Platform_Windows.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Platform_Windows.cxx; sourceTree = "<group>"; };
+		5EBD66A2235CF15400D183B1 /* Reflection.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Reflection.hxx; sourceTree = "<group>"; };
+		5EBD66A4235CF15400D183B1 /* Reflection.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Reflection.cxx; sourceTree = "<group>"; };
+		5EBD66A5235CF15400D183B1 /* EIOS.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = EIOS.hxx; sourceTree = "<group>"; };
+		5EBD66A6235CF15400D183B1 /* RemoteInput.def */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = RemoteInput.def; sourceTree = "<group>"; };
+		5EBD66A8235CF15400D183B1 /* SimbaPlugin.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SimbaPlugin.cxx; sourceTree = "<group>"; };
+		5EBD66A9235CF15400D183B1 /* TMemoryManager.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = TMemoryManager.hxx; sourceTree = "<group>"; };
+		5EBD66AA235CF15400D183B1 /* SimbaPlugin.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = SimbaPlugin.hxx; sourceTree = "<group>"; };
+		5EBD66AB235CF15400D183B1 /* JVM.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = JVM.hxx; sourceTree = "<group>"; };
+		5EBD66AD235CF15400D183B1 /* EIOS.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = EIOS.cxx; sourceTree = "<group>"; };
+		5EBD66AE235CF15400D183B1 /* ThreadPool.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ThreadPool.cxx; sourceTree = "<group>"; };
+		5EBD66AF235CF15400D183B1 /* JVM.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = JVM.cxx; sourceTree = "<group>"; };
+		5EBD66B1235CF15400D183B1 /* Time.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Time.cxx; sourceTree = "<group>"; };
+		5EBD66B2235CF15400D183B1 /* SharedEvent.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SharedEvent.cxx; sourceTree = "<group>"; };
+		5EBD66B3235CF15400D183B1 /* MemoryMap.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = MemoryMap.hxx; sourceTree = "<group>"; };
+		5EBD66B4235CF15400D183B1 /* Module.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Module.hxx; sourceTree = "<group>"; };
+		5EBD66B5235CF15400D183B1 /* Module.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Module.cxx; sourceTree = "<group>"; };
+		5EBD66B6235CF15400D183B1 /* Time.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Time.hxx; sourceTree = "<group>"; };
+		5EBD66B7235CF15400D183B1 /* SharedEvent.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = SharedEvent.hxx; sourceTree = "<group>"; };
+		5EBD66B8235CF15400D183B1 /* ThreadPool.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = ThreadPool.hxx; sourceTree = "<group>"; };
+		5EBD66DA235D041600D183B1 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
+		5EBD66DC235D041D00D183B1 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		5EBE1A8123C7C84700B99E32 /* KeyEvent.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = KeyEvent.hxx; sourceTree = "<group>"; };
+		5EBE1A8223C7C84700B99E32 /* Applet.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Applet.cxx; sourceTree = "<group>"; };
+		5EBE1A8323C7C84700B99E32 /* AWTEvent.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AWTEvent.cxx; sourceTree = "<group>"; };
+		5EBE1A8423C7C84700B99E32 /* AWTEventAccessor.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AWTEventAccessor.cxx; sourceTree = "<group>"; };
+		5EBE1A8523C7C84700B99E32 /* Component.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Component.cxx; sourceTree = "<group>"; };
+		5EBE1A8623C7C84700B99E32 /* AWTAccessor.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AWTAccessor.cxx; sourceTree = "<group>"; };
+		5EBE1A8723C7C84700B99E32 /* InputEvent.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = InputEvent.cxx; sourceTree = "<group>"; };
+		5EBE1A8823C7C84700B99E32 /* MouseEvent.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MouseEvent.cxx; sourceTree = "<group>"; };
+		5EBE1A8923C7C84700B99E32 /* EventQueue.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = EventQueue.cxx; sourceTree = "<group>"; };
+		5EBE1A8A23C7C84700B99E32 /* Toolkit.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Toolkit.hxx; sourceTree = "<group>"; };
+		5EBE1A8B23C7C84700B99E32 /* AWTAccessor.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = AWTAccessor.hxx; sourceTree = "<group>"; };
+		5EBE1A8C23C7C84700B99E32 /* Toolkit.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Toolkit.cxx; sourceTree = "<group>"; };
+		5EBE1A8D23C7C84700B99E32 /* FocusEvent.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = FocusEvent.hxx; sourceTree = "<group>"; };
+		5EBE1A8E23C7C84700B99E32 /* Applet.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Applet.hxx; sourceTree = "<group>"; };
+		5EBE1A8F23C7C84700B99E32 /* AWTEventAccessor.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = AWTEventAccessor.hxx; sourceTree = "<group>"; };
+		5EBE1A9023C7C84700B99E32 /* AWTEvent.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = AWTEvent.hxx; sourceTree = "<group>"; };
+		5EBE1A9123C7C84700B99E32 /* Component.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Component.hxx; sourceTree = "<group>"; };
+		5EBE1A9223C7C84800B99E32 /* Frame.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Frame.hxx; sourceTree = "<group>"; };
+		5EBE1A9323C7C84800B99E32 /* InputEvent.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = InputEvent.hxx; sourceTree = "<group>"; };
+		5EBE1A9423C7C84800B99E32 /* FocusEvent.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = FocusEvent.cxx; sourceTree = "<group>"; };
+		5EBE1A9523C7C84800B99E32 /* KeyEvent.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = KeyEvent.cxx; sourceTree = "<group>"; };
+		5EBE1A9623C7C84800B99E32 /* MouseEvent.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = MouseEvent.hxx; sourceTree = "<group>"; };
+		5EBE1A9723C7C84800B99E32 /* EventQueue.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = EventQueue.hxx; sourceTree = "<group>"; };
+		5EBE1A9823C7C84800B99E32 /* Frame.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Frame.cxx; sourceTree = "<group>"; };
+		5EC59507232D956B00922111 /* RemoteInput.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RemoteInput.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		5EC5950A232D956B00922111 /* RemoteInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RemoteInput.h; sourceTree = "<group>"; };
+		5EC5950B232D956B00922111 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		5EC942EA23D4A81B00E42B21 /* Platform_Darwin.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Platform_Darwin.mm; sourceTree = "<group>"; };
+		5EE7DD91243BD9E5008FDC5D /* mach_inject.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = mach_inject.h; sourceTree = "<group>"; };
+		5EE7DD93243BD9E5008FDC5D /* mach_inject.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mach_inject.c; sourceTree = "<group>"; };
+		5EE7DD98243BD9F7008FDC5D /* main.hxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = main.hxx; sourceTree = "<group>"; };
+		5EE7DD99243BD9F7008FDC5D /* main.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = main.cxx; sourceTree = "<group>"; };
+		5EFF49B223A6EF4100DC83D1 /* SpinLock.hxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SpinLock.hxx; sourceTree = "<group>"; };
+		5EFF49BD23A703C700DC83D1 /* SpinLock.cxx */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SpinLock.cxx; sourceTree = "<group>"; };
+		5EFF49C123A704DF00DC83D1 /* Signal.hxx */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Signal.hxx; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5E6281E92421B776006BA298 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E6B99FA2394C4F200E6720C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E6B9A272394C61200E6720C /* Cocoa.framework in Frameworks */,
+				5E667F9A23C8D1BB00931DEC /* libawt_lwawt.dylib in Frameworks */,
+				5E667F9E23C8D1C000931DEC /* libawt.dylib in Frameworks */,
+				5E6B9A262394C60A00E6720C /* Foundation.framework in Frameworks */,
+				5EB76181239B922500218452 /* OpenGL.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5EC59504232D956B00922111 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5EBD66DB235D041600D183B1 /* Cocoa.framework in Frameworks */,
+				5EBD66DD235D041D00D183B1 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5E5B3F83239D367000F07DD1 /* Hooks */ = {
+			isa = PBXGroup;
+			children = (
+				5E5B3F88239D36A400F07DD1 /* ModelRendering.cpp */,
+				5E5B3F89239D36A400F07DD1 /* ModelRendering.hpp */,
+			);
+			path = Hooks;
+			sourceTree = "<group>";
+		};
+		5E667F9223C8C60000931DEC /* Thirdparty */ = {
+			isa = PBXGroup;
+			children = (
+				5EE7DD99243BD9F7008FDC5D /* main.cxx */,
+				5EE7DD98243BD9F7008FDC5D /* main.hxx */,
+				5EE7DD8F243BD9E5008FDC5D /* mach_inject */,
+				5E6EA10523C91371003CB0B5 /* rd_route */,
+			);
+			path = Thirdparty;
+			sourceTree = "<group>";
+		};
+		5E6EA10523C91371003CB0B5 /* rd_route */ = {
+			isa = PBXGroup;
+			children = (
+				5E6EA10623C91371003CB0B5 /* include */,
+				5E6EA10823C91371003CB0B5 /* src */,
+			);
+			path = rd_route;
+			sourceTree = "<group>";
+		};
+		5E6EA10623C91371003CB0B5 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				5E6EA10723C91371003CB0B5 /* rd_route.h */,
+			);
+			path = include;
+			sourceTree = "<group>";
+		};
+		5E6EA10823C91371003CB0B5 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				5E6EA10923C91371003CB0B5 /* rd_route.c */,
+			);
+			path = src;
+			sourceTree = "<group>";
+		};
+		5EBD6696235CF15400D183B1 /* Platform */ = {
+			isa = PBXGroup;
+			children = (
+				5E4CDC1A2381F40700A05869 /* NativeHooks_Darwin.cxx */,
+				5E4CDC1B2381F40700A05869 /* NativeHooks_Linux.cxx */,
+				5E4CDC1C2381F40700A05869 /* NativeHooks_Windows.cxx */,
+				5EBD6697235CF15400D183B1 /* DebugConsole.hxx */,
+				5EBD6698235CF15400D183B1 /* Platform_Linux.cxx */,
+				5EC942EA23D4A81B00E42B21 /* Platform_Darwin.mm */,
+				5EBD66A1235CF15400D183B1 /* Platform_Windows.cxx */,
+				5EBD669A235CF15400D183B1 /* Platform.hxx */,
+				5EBD669B235CF15400D183B1 /* NativeHooks.hxx */,
+				5EBD669F235CF15400D183B1 /* DebugConsole.cxx */,
+				5EBD66A0235CF15400D183B1 /* JavaInternal.hxx */,
+				5E6281EF2421B79E006BA298 /* RemoteInputBootstrap_Darwin.cxx */,
+			);
+			path = Platform;
+			sourceTree = "<group>";
+		};
+		5EBD66A7235CF15400D183B1 /* Plugin */ = {
+			isa = PBXGroup;
+			children = (
+				5E0F52AA23AE8EAD002518AF /* Plugin.cxx */,
+				5E0F52AB23AE8EAD002518AF /* Plugin.hxx */,
+				5EBD66A8235CF15400D183B1 /* SimbaPlugin.cxx */,
+				5EBD66AA235CF15400D183B1 /* SimbaPlugin.hxx */,
+				5EBD66A9235CF15400D183B1 /* TMemoryManager.hxx */,
+				5E5FC029237264840048997B /* ControlCenter.cxx */,
+				5E5FC02A237264840048997B /* ControlCenter.hxx */,
+				5E07A6BE2378B1B100EB4CDF /* Graphics.cxx */,
+				5E07A6BF2378B1B100EB4CDF /* Graphics.hxx */,
+				5EFF49C123A704DF00DC83D1 /* Signal.hxx */,
+				5E27B24223B829C60091232F /* InputOutput.cxx */,
+				5E27B24323B829C60091232F /* InputOutput.hxx */,
+			);
+			path = Plugin;
+			sourceTree = "<group>";
+		};
+		5EBD66B0235CF15400D183B1 /* Echo */ = {
+			isa = PBXGroup;
+			children = (
+				5EBD66B1235CF15400D183B1 /* Time.cxx */,
+				5EBD66B2235CF15400D183B1 /* SharedEvent.cxx */,
+				5EBD66B7235CF15400D183B1 /* SharedEvent.hxx */,
+				5EBD66B3235CF15400D183B1 /* MemoryMap.hxx */,
+				5EBD66B4235CF15400D183B1 /* Module.hxx */,
+				5EBD66B5235CF15400D183B1 /* Module.cxx */,
+				5EBD66B6235CF15400D183B1 /* Time.hxx */,
+				5EFF49BD23A703C700DC83D1 /* SpinLock.cxx */,
+				5EFF49B223A6EF4100DC83D1 /* SpinLock.hxx */,
+			);
+			path = Echo;
+			sourceTree = "<group>";
+		};
+		5EBD66D9235D041600D183B1 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				5E667FA323C8D1F500931DEC /* libjvm.dylib */,
+				5E667FA023C8D1D000931DEC /* libjawt.dylib */,
+				5E667F9D23C8D1C000931DEC /* libawt.dylib */,
+				5E667F9923C8D1BB00931DEC /* libawt_lwawt.dylib */,
+				5EB76180239B922500218452 /* OpenGL.framework */,
+				5EBD66DC235D041D00D183B1 /* Foundation.framework */,
+				5EBD66DA235D041600D183B1 /* Cocoa.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		5EBE1A5323C7AE2000B99E32 /* Java */ = {
+			isa = PBXGroup;
+			children = (
+				5EBE1A8223C7C84700B99E32 /* Applet.cxx */,
+				5EBE1A8E23C7C84700B99E32 /* Applet.hxx */,
+				5EBE1A8623C7C84700B99E32 /* AWTAccessor.cxx */,
+				5EBE1A8B23C7C84700B99E32 /* AWTAccessor.hxx */,
+				5EBE1A8323C7C84700B99E32 /* AWTEvent.cxx */,
+				5EBE1A9023C7C84700B99E32 /* AWTEvent.hxx */,
+				5EBE1A8423C7C84700B99E32 /* AWTEventAccessor.cxx */,
+				5EBE1A8F23C7C84700B99E32 /* AWTEventAccessor.hxx */,
+				5EBE1A8523C7C84700B99E32 /* Component.cxx */,
+				5EBE1A9123C7C84700B99E32 /* Component.hxx */,
+				5EBE1A8923C7C84700B99E32 /* EventQueue.cxx */,
+				5EBE1A9723C7C84800B99E32 /* EventQueue.hxx */,
+				5EBE1A9423C7C84800B99E32 /* FocusEvent.cxx */,
+				5EBE1A8D23C7C84700B99E32 /* FocusEvent.hxx */,
+				5EBE1A9823C7C84800B99E32 /* Frame.cxx */,
+				5EBE1A9223C7C84800B99E32 /* Frame.hxx */,
+				5EBE1A8723C7C84700B99E32 /* InputEvent.cxx */,
+				5EBE1A9323C7C84800B99E32 /* InputEvent.hxx */,
+				5EBE1A9523C7C84800B99E32 /* KeyEvent.cxx */,
+				5EBE1A8123C7C84700B99E32 /* KeyEvent.hxx */,
+				5EBE1A8823C7C84700B99E32 /* MouseEvent.cxx */,
+				5EBE1A9623C7C84800B99E32 /* MouseEvent.hxx */,
+				5E31A8B123C83E3F00E751F6 /* MouseWheelEvent.cxx */,
+				5E31A8B223C83E3F00E751F6 /* MouseWheelEvent.hxx */,
+				5EBE1A8C23C7C84700B99E32 /* Toolkit.cxx */,
+				5EBE1A8A23C7C84700B99E32 /* Toolkit.hxx */,
+				5E4D6449241F424D0010EDBE /* PointerInfo.cxx */,
+				5E4D644A241F424D0010EDBE /* PointerInfo.hxx */,
+			);
+			path = Java;
+			sourceTree = "<group>";
+		};
+		5EC594FD232D956B00922111 = {
+			isa = PBXGroup;
+			children = (
+				5EC59509232D956B00922111 /* RemoteInput */,
+				5EC59508232D956B00922111 /* Products */,
+				5EBD66D9235D041600D183B1 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		5EC59508232D956B00922111 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5EC59507232D956B00922111 /* RemoteInput.framework */,
+				5E6B99FC2394C4F200E6720C /* liblibRemoteInput.dylib */,
+				5E6281EB2421B776006BA298 /* libRemoteInputBootstrap.dylib */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5EC59509232D956B00922111 /* RemoteInput */ = {
+			isa = PBXGroup;
+			children = (
+				5E667F9223C8C60000931DEC /* Thirdparty */,
+				5EBE1A5323C7AE2000B99E32 /* Java */,
+				5E5B3F83239D367000F07DD1 /* Hooks */,
+				5EBD66B0235CF15400D183B1 /* Echo */,
+				5EBD66AD235CF15400D183B1 /* EIOS.cxx */,
+				5EBD66A5235CF15400D183B1 /* EIOS.hxx */,
+				5EBD66AF235CF15400D183B1 /* JVM.cxx */,
+				5EBD66AB235CF15400D183B1 /* JVM.hxx */,
+				5EBD6696235CF15400D183B1 /* Platform */,
+				5EBD66A7235CF15400D183B1 /* Plugin */,
+				5EBD66A4235CF15400D183B1 /* Reflection.cxx */,
+				5EBD66A2235CF15400D183B1 /* Reflection.hxx */,
+				5EBD66A6235CF15400D183B1 /* RemoteInput.def */,
+				5EBD66AE235CF15400D183B1 /* ThreadPool.cxx */,
+				5EBD66B8235CF15400D183B1 /* ThreadPool.hxx */,
+				5E6EA0FF23C91350003CB0B5 /* DetachedThreadPool.cxx */,
+				5E6EA10023C91350003CB0B5 /* DetachedThreadPool.hxx */,
+				5EC5950A232D956B00922111 /* RemoteInput.h */,
+				5EC5950B232D956B00922111 /* Info.plist */,
+				5E1236A223946AA900D8AE33 /* ReflectionHook.cxx */,
+				5E1236A323946AA900D8AE33 /* ReflectionHook.hxx */,
+				5E27B24823B9A0430091232F /* Random.cxx */,
+				5E27B24923B9A0430091232F /* Random.hxx */,
+			);
+			path = RemoteInput;
+			sourceTree = "<group>";
+		};
+		5EE7DD8F243BD9E5008FDC5D /* mach_inject */ = {
+			isa = PBXGroup;
+			children = (
+				5EE7DD90243BD9E5008FDC5D /* include */,
+				5EE7DD92243BD9E5008FDC5D /* src */,
+			);
+			path = mach_inject;
+			sourceTree = "<group>";
+		};
+		5EE7DD90243BD9E5008FDC5D /* include */ = {
+			isa = PBXGroup;
+			children = (
+				5EE7DD91243BD9E5008FDC5D /* mach_inject.h */,
+			);
+			path = include;
+			sourceTree = "<group>";
+		};
+		5EE7DD92243BD9E5008FDC5D /* src */ = {
+			isa = PBXGroup;
+			children = (
+				5EE7DD93243BD9E5008FDC5D /* mach_inject.c */,
+			);
+			path = src;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		5E6281E72421B776006BA298 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E6B99F82394C4F200E6720C /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E6EA10423C91350003CB0B5 /* DetachedThreadPool.hxx in Headers */,
+				5EBE1AB823C7C84800B99E32 /* AWTEvent.hxx in Headers */,
+				5EBE1AB223C7C84800B99E32 /* FocusEvent.hxx in Headers */,
+				5EBE1AAE23C7C84800B99E32 /* AWTAccessor.hxx in Headers */,
+				5EBE1AB423C7C84800B99E32 /* Applet.hxx in Headers */,
+				5E4D644E241F47990010EDBE /* PointerInfo.hxx in Headers */,
+				5EE7DD95243BD9E5008FDC5D /* mach_inject.h in Headers */,
+				5EBE1ABA23C7C84800B99E32 /* Component.hxx in Headers */,
+				5E6B9A0A2394C57600E6720C /* JVM.hxx in Headers */,
+				5E6B9A1C2394C58500E6720C /* Graphics.hxx in Headers */,
+				5E5B3F8D239D39F700F07DD1 /* ModelRendering.hpp in Headers */,
+				5EBE1AC623C7C84800B99E32 /* EventQueue.hxx in Headers */,
+				5EBE1AAC23C7C84800B99E32 /* Toolkit.hxx in Headers */,
+				5E27B24723B829C60091232F /* InputOutput.hxx in Headers */,
+				5EFF49BC23A7039C00DC83D1 /* SpinLock.hxx in Headers */,
+				5E6B9A032394C57600E6720C /* Module.hxx in Headers */,
+				5EBE1ABE23C7C84800B99E32 /* InputEvent.hxx in Headers */,
+				5E6B9A052394C57600E6720C /* Time.hxx in Headers */,
+				5E6B9A142394C57A00E6720C /* JavaInternal.hxx in Headers */,
+				5EE7DD9B243BD9F7008FDC5D /* main.hxx in Headers */,
+				5E0F52AF23AE8EAD002518AF /* Plugin.hxx in Headers */,
+				5EBE1AB623C7C84800B99E32 /* AWTEventAccessor.hxx in Headers */,
+				5EBE1A9A23C7C84800B99E32 /* KeyEvent.hxx in Headers */,
+				5E6B9A182394C58500E6720C /* TMemoryManager.hxx in Headers */,
+				5E6B9A202394C59700E6720C /* ThreadPool.hxx in Headers */,
+				5E6B9A082394C57600E6720C /* EIOS.hxx in Headers */,
+				5E27B24D23B9A0430091232F /* Random.hxx in Headers */,
+				5EFF49C523A704DF00DC83D1 /* Signal.hxx in Headers */,
+				5EBE1AC423C7C84800B99E32 /* MouseEvent.hxx in Headers */,
+				5E6B9A062394C57600E6720C /* SharedEvent.hxx in Headers */,
+				5E6B9A1A2394C58500E6720C /* ControlCenter.hxx in Headers */,
+				5E6B9A172394C58500E6720C /* SimbaPlugin.hxx in Headers */,
+				5E6B9A252394C59C00E6720C /* ReflectionHook.hxx in Headers */,
+				5EBE1ABC23C7C84800B99E32 /* Frame.hxx in Headers */,
+				5E6B9A022394C57600E6720C /* MemoryMap.hxx in Headers */,
+				5E6B9A0E2394C57A00E6720C /* DebugConsole.hxx in Headers */,
+				5E6B9A112394C57A00E6720C /* NativeHooks.hxx in Headers */,
+				5E6B9A102394C57A00E6720C /* Platform.hxx in Headers */,
+				5E6B9A212394C59700E6720C /* RemoteInput.h in Headers */,
+				5E6EA10B23C91371003CB0B5 /* rd_route.h in Headers */,
+				5E31A8B623C840F500E751F6 /* MouseWheelEvent.hxx in Headers */,
+				5E6B9A1E2394C59400E6720C /* Reflection.hxx in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5EC59502232D956B00922111 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E6EA10323C91350003CB0B5 /* DetachedThreadPool.hxx in Headers */,
+				5EBE1AB723C7C84800B99E32 /* AWTEvent.hxx in Headers */,
+				5EBE1AB123C7C84800B99E32 /* FocusEvent.hxx in Headers */,
+				5EBE1AAD23C7C84800B99E32 /* AWTAccessor.hxx in Headers */,
+				5EBE1AB323C7C84800B99E32 /* Applet.hxx in Headers */,
+				5EBE1AB923C7C84800B99E32 /* Component.hxx in Headers */,
+				5EE7DD94243BD9E5008FDC5D /* mach_inject.h in Headers */,
+				5EBD66C4235CF15400D183B1 /* Reflection.hxx in Headers */,
+				5EBD66C7235CF15400D183B1 /* EIOS.hxx in Headers */,
+				5E5B3F8B239D36A400F07DD1 /* ModelRendering.hpp in Headers */,
+				5EBE1AC523C7C84800B99E32 /* EventQueue.hxx in Headers */,
+				5EBE1AAB23C7C84800B99E32 /* Toolkit.hxx in Headers */,
+				5E27B24623B829C60091232F /* InputOutput.hxx in Headers */,
+				5EFF49BA23A7037C00DC83D1 /* SpinLock.hxx in Headers */,
+				5EBD66D8235CF15400D183B1 /* ThreadPool.hxx in Headers */,
+				5EBE1ABD23C7C84800B99E32 /* InputEvent.hxx in Headers */,
+				5E07A6C12378B1B100EB4CDF /* Graphics.hxx in Headers */,
+				5EBD66BD235CF15400D183B1 /* NativeHooks.hxx in Headers */,
+				5E0F52AE23AE8EAD002518AF /* Plugin.hxx in Headers */,
+				5EE7DD9A243BD9F7008FDC5D /* main.hxx in Headers */,
+				5EBE1AB523C7C84800B99E32 /* AWTEventAccessor.hxx in Headers */,
+				5EBE1A9923C7C84800B99E32 /* KeyEvent.hxx in Headers */,
+				5EBD66C2235CF15400D183B1 /* JavaInternal.hxx in Headers */,
+				5E1236A523946AA900D8AE33 /* ReflectionHook.hxx in Headers */,
+				5EBD66D3235CF15400D183B1 /* MemoryMap.hxx in Headers */,
+				5E27B24C23B9A0430091232F /* Random.hxx in Headers */,
+				5EFF49C423A704DF00DC83D1 /* Signal.hxx in Headers */,
+				5EBE1AC323C7C84800B99E32 /* MouseEvent.hxx in Headers */,
+				5EBD66CA235CF15400D183B1 /* TMemoryManager.hxx in Headers */,
+				5EBD66CC235CF15400D183B1 /* JVM.hxx in Headers */,
+				5EBD66CB235CF15400D183B1 /* SimbaPlugin.hxx in Headers */,
+				5E4D644C241F424D0010EDBE /* PointerInfo.hxx in Headers */,
+				5EBD66B9235CF15400D183B1 /* DebugConsole.hxx in Headers */,
+				5EBE1ABB23C7C84800B99E32 /* Frame.hxx in Headers */,
+				5EBD66D4235CF15400D183B1 /* Module.hxx in Headers */,
+				5EC5950C232D956B00922111 /* RemoteInput.h in Headers */,
+				5EBD66D6235CF15400D183B1 /* Time.hxx in Headers */,
+				5E5FC02C237264840048997B /* ControlCenter.hxx in Headers */,
+				5EBD66BC235CF15400D183B1 /* Platform.hxx in Headers */,
+				5E6EA10A23C91371003CB0B5 /* rd_route.h in Headers */,
+				5EBD66D7235CF15400D183B1 /* SharedEvent.hxx in Headers */,
+				5E31A8B423C83E3F00E751F6 /* MouseWheelEvent.hxx in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		5E6281EA2421B776006BA298 /* RemoteInputBootstrap */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E6281EE2421B776006BA298 /* Build configuration list for PBXNativeTarget "RemoteInputBootstrap" */;
+			buildPhases = (
+				5E6281E72421B776006BA298 /* Headers */,
+				5E6281E82421B776006BA298 /* Sources */,
+				5E6281E92421B776006BA298 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RemoteInputBootstrap;
+			productName = RemoteInputBootstrap;
+			productReference = 5E6281EB2421B776006BA298 /* libRemoteInputBootstrap.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+		5E6B99FB2394C4F200E6720C /* libRemoteInput */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E6B99FD2394C4F200E6720C /* Build configuration list for PBXNativeTarget "libRemoteInput" */;
+			buildPhases = (
+				5E6B99F82394C4F200E6720C /* Headers */,
+				5E6B99F92394C4F200E6720C /* Sources */,
+				5E6B99FA2394C4F200E6720C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = libRemoteInput;
+			productName = libRemoteInput;
+			productReference = 5E6B99FC2394C4F200E6720C /* liblibRemoteInput.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+		5EC59506232D956B00922111 /* RemoteInput */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5EC5950F232D956B00922111 /* Build configuration list for PBXNativeTarget "RemoteInput" */;
+			buildPhases = (
+				5EC59502232D956B00922111 /* Headers */,
+				5EC59503232D956B00922111 /* Sources */,
+				5EC59504232D956B00922111 /* Frameworks */,
+				5EC59505232D956B00922111 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RemoteInput;
+			productName = RemoteInput;
+			productReference = 5EC59507232D956B00922111 /* RemoteInput.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5EC594FE232D956B00922111 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1100;
+				ORGANIZATIONNAME = XIO;
+				TargetAttributes = {
+					5E6281EA2421B776006BA298 = {
+						CreatedOnToolsVersion = 11.3.1;
+					};
+					5E6B99FB2394C4F200E6720C = {
+						CreatedOnToolsVersion = 11.2.1;
+					};
+					5EC59506232D956B00922111 = {
+						CreatedOnToolsVersion = 11.0;
+					};
+				};
+			};
+			buildConfigurationList = 5EC59501232D956B00922111 /* Build configuration list for PBXProject "RemoteInput" */;
+			compatibilityVersion = "Xcode 9.3";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 5EC594FD232D956B00922111;
+			productRefGroup = 5EC59508232D956B00922111 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5EC59506232D956B00922111 /* RemoteInput */,
+				5E6B99FB2394C4F200E6720C /* libRemoteInput */,
+				5E6281EA2421B776006BA298 /* RemoteInputBootstrap */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5EC59505232D956B00922111 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5EBD66C8235CF15400D183B1 /* RemoteInput.def in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5E6281E82421B776006BA298 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E6281F12421B79E006BA298 /* RemoteInputBootstrap_Darwin.cxx in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E6B99F92394C4F200E6720C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E6B9A192394C58500E6720C /* ControlCenter.cxx in Sources */,
+				5EBE1AA023C7C84800B99E32 /* AWTEventAccessor.cxx in Sources */,
+				5EBE1A9E23C7C84800B99E32 /* AWTEvent.cxx in Sources */,
+				5E6B9A1B2394C58500E6720C /* Graphics.cxx in Sources */,
+				5E5B3F8E239D39FA00F07DD1 /* ModelRendering.cpp in Sources */,
+				5E0F52AD23AE8EAD002518AF /* Plugin.cxx in Sources */,
+				5E6B9A0B2394C57A00E6720C /* NativeHooks_Darwin.cxx in Sources */,
+				5E6B9A162394C58500E6720C /* SimbaPlugin.cxx in Sources */,
+				5E6B9A1F2394C59700E6720C /* ThreadPool.cxx in Sources */,
+				5EBE1AC223C7C84800B99E32 /* KeyEvent.cxx in Sources */,
+				5E27B24523B829C60091232F /* InputOutput.cxx in Sources */,
+				5E31A8B523C840F500E751F6 /* MouseWheelEvent.cxx in Sources */,
+				5E27B24B23B9A0430091232F /* Random.cxx in Sources */,
+				5E6B9A002394C57600E6720C /* Time.cxx in Sources */,
+				5EBE1AA223C7C84800B99E32 /* Component.cxx in Sources */,
+				5EC942EC23D4A8AA00E42B21 /* Platform_Darwin.mm in Sources */,
+				5EBE1AA823C7C84800B99E32 /* MouseEvent.cxx in Sources */,
+				5E6B9A092394C57600E6720C /* JVM.cxx in Sources */,
+				5EE7DD97243BD9E5008FDC5D /* mach_inject.c in Sources */,
+				5EE7DD9D243BD9F7008FDC5D /* main.cxx in Sources */,
+				5EFF49BF23A703C700DC83D1 /* SpinLock.cxx in Sources */,
+				5E6B9A152394C57A00E6720C /* Platform_Windows.cxx in Sources */,
+				5E6B9A132394C57A00E6720C /* DebugConsole.cxx in Sources */,
+				5EBE1AC823C7C84800B99E32 /* Frame.cxx in Sources */,
+				5E6B9A0C2394C57A00E6720C /* NativeHooks_Linux.cxx in Sources */,
+				5EBE1AC023C7C84800B99E32 /* FocusEvent.cxx in Sources */,
+				5EBE1A9C23C7C84800B99E32 /* Applet.cxx in Sources */,
+				5EBE1AAA23C7C84800B99E32 /* EventQueue.cxx in Sources */,
+				5E6EA10223C91350003CB0B5 /* DetachedThreadPool.cxx in Sources */,
+				5E6B9A1D2394C59400E6720C /* Reflection.cxx in Sources */,
+				5E4D644D241F47930010EDBE /* PointerInfo.cxx in Sources */,
+				5EBE1AB023C7C84800B99E32 /* Toolkit.cxx in Sources */,
+				5E6B9A072394C57600E6720C /* EIOS.cxx in Sources */,
+				5EBE1AA423C7C84800B99E32 /* AWTAccessor.cxx in Sources */,
+				5E6B9A0F2394C57A00E6720C /* Platform_Linux.cxx in Sources */,
+				5E6B9A0D2394C57A00E6720C /* NativeHooks_Windows.cxx in Sources */,
+				5E6B9A042394C57600E6720C /* Module.cxx in Sources */,
+				5EBE1AA623C7C84800B99E32 /* InputEvent.cxx in Sources */,
+				5E6EA10D23C91371003CB0B5 /* rd_route.c in Sources */,
+				5E6B9A012394C57600E6720C /* SharedEvent.cxx in Sources */,
+				5E6B9A242394C59C00E6720C /* ReflectionHook.cxx in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5EC59503232D956B00922111 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E4CDC1E2381F40700A05869 /* NativeHooks_Linux.cxx in Sources */,
+				5EBE1A9F23C7C84800B99E32 /* AWTEventAccessor.cxx in Sources */,
+				5EBE1A9D23C7C84800B99E32 /* AWTEvent.cxx in Sources */,
+				5EBD66D5235CF15400D183B1 /* Module.cxx in Sources */,
+				5E31A8B323C83E3F00E751F6 /* MouseWheelEvent.cxx in Sources */,
+				5EBD66D1235CF15400D183B1 /* Time.cxx in Sources */,
+				5E0F52AC23AE8EAD002518AF /* Plugin.cxx in Sources */,
+				5EBD66D0235CF15400D183B1 /* JVM.cxx in Sources */,
+				5E5B3F8A239D36A400F07DD1 /* ModelRendering.cpp in Sources */,
+				5EBD66CE235CF15400D183B1 /* EIOS.cxx in Sources */,
+				5EBE1AC123C7C84800B99E32 /* KeyEvent.cxx in Sources */,
+				5E27B24423B829C60091232F /* InputOutput.cxx in Sources */,
+				5E27B24A23B9A0430091232F /* Random.cxx in Sources */,
+				5E4D644B241F424D0010EDBE /* PointerInfo.cxx in Sources */,
+				5EBD66BA235CF15400D183B1 /* Platform_Linux.cxx in Sources */,
+				5EBE1AA123C7C84800B99E32 /* Component.cxx in Sources */,
+				5EBE1AA723C7C84800B99E32 /* MouseEvent.cxx in Sources */,
+				5EC942EB23D4A81B00E42B21 /* Platform_Darwin.mm in Sources */,
+				5EBD66C1235CF15400D183B1 /* DebugConsole.cxx in Sources */,
+				5EE7DD96243BD9E5008FDC5D /* mach_inject.c in Sources */,
+				5EE7DD9C243BD9F7008FDC5D /* main.cxx in Sources */,
+				5EFF49BE23A703C700DC83D1 /* SpinLock.cxx in Sources */,
+				5E4CDC1F2381F40700A05869 /* NativeHooks_Windows.cxx in Sources */,
+				5EBD66C9235CF15400D183B1 /* SimbaPlugin.cxx in Sources */,
+				5EBD66C6235CF15400D183B1 /* Reflection.cxx in Sources */,
+				5EBE1AC723C7C84800B99E32 /* Frame.cxx in Sources */,
+				5E4CDC1D2381F40700A05869 /* NativeHooks_Darwin.cxx in Sources */,
+				5EBE1ABF23C7C84800B99E32 /* FocusEvent.cxx in Sources */,
+				5EBE1A9B23C7C84800B99E32 /* Applet.cxx in Sources */,
+				5EBE1AA923C7C84800B99E32 /* EventQueue.cxx in Sources */,
+				5E6EA10123C91350003CB0B5 /* DetachedThreadPool.cxx in Sources */,
+				5E1236A423946AA900D8AE33 /* ReflectionHook.cxx in Sources */,
+				5EBE1AAF23C7C84800B99E32 /* Toolkit.cxx in Sources */,
+				5EBE1AA323C7C84800B99E32 /* AWTAccessor.cxx in Sources */,
+				5EBD66D2235CF15400D183B1 /* SharedEvent.cxx in Sources */,
+				5EBD66CF235CF15400D183B1 /* ThreadPool.cxx in Sources */,
+				5E5FC02B237264840048997B /* ControlCenter.cxx in Sources */,
+				5EBE1AA523C7C84800B99E32 /* InputEvent.cxx in Sources */,
+				5E6EA10C23C91371003CB0B5 /* rd_route.c in Sources */,
+				5E07A6C02378B1B100EB4CDF /* Graphics.cxx in Sources */,
+				5EBD66C3235CF15400D183B1 /* Platform_Windows.cxx in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		5E6281EC2421B776006BA298 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_WARN_ATOMIC_IMPLICIT_SEQ_CST = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				EXECUTABLE_PREFIX = lib;
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		5E6281ED2421B776006BA298 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_WARN_ATOMIC_IMPLICIT_SEQ_CST = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				EXECUTABLE_PREFIX = lib;
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		5E6B99FE2394C4F200E6720C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+				CLANG_WARN_ATOMIC_IMPLICIT_SEQ_CST = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = YTT3U95S25;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				EXECUTABLE_PREFIX = lib;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				HEADER_SEARCH_PATHS = (
+					"/Library/Java/JavaVirtualMachines/jdk-12.0.2.jdk/Contents/Home/include",
+					"/Library/Java/JavaVirtualMachines/jdk-12.0.2.jdk/Contents/Home/include/darwin",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(LOCAL_LIBRARY_DIR)/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib",
+					"$(LOCAL_LIBRARY_DIR)/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib",
+					"$(LOCAL_LIBRARY_DIR)/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib",
+					"$(LOCAL_LIBRARY_DIR)/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib/server",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
+				OTHER_CFLAGS = "-fvisibility=hidden";
+				OTHER_LDFLAGS = (
+					"-rpath",
+					"/Library/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib",
+					"-rpath",
+					"/Library/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib/server/",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		5E6B99FF2394C4F200E6720C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+				CLANG_WARN_ATOMIC_IMPLICIT_SEQ_CST = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = YTT3U95S25;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				EXECUTABLE_PREFIX = lib;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				HEADER_SEARCH_PATHS = (
+					"/Library/Java/JavaVirtualMachines/jdk-12.0.2.jdk/Contents/Home/include",
+					"/Library/Java/JavaVirtualMachines/jdk-12.0.2.jdk/Contents/Home/include/darwin",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(LOCAL_LIBRARY_DIR)/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib",
+					"$(LOCAL_LIBRARY_DIR)/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib",
+					"$(LOCAL_LIBRARY_DIR)/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib",
+					"$(LOCAL_LIBRARY_DIR)/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib/server",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
+				OTHER_CFLAGS = "-fvisibility=hidden";
+				OTHER_LDFLAGS = (
+					"-rpath",
+					"/Library/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib",
+					"-rpath",
+					"/Library/Internet\\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/lib/server/",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		5EC5950D232D956B00922111 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
+		};
+		5EC5950E232D956B00922111 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
+		5EC59510232D956B00922111 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+					"USE_DETOURS=1",
+				);
+				HEADER_SEARCH_PATHS = (
+					"/Library/Java/JavaVirtualMachines/jdk-12.0.2.jdk/Contents/Home/include",
+					"/Library/Java/JavaVirtualMachines/jdk-12.0.2.jdk/Contents/Home/include/darwin",
+				);
+				INFOPLIST_FILE = RemoteInput/Info.plist;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_CFLAGS = "-fvisibility=hidden";
+				PRODUCT_BUNDLE_IDENTIFIER = XIO.RemoteInput;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		5EC59511232D956B00922111 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GCC_PREPROCESSOR_DEFINITIONS = "USE_DETOURS=1";
+				HEADER_SEARCH_PATHS = (
+					"/Library/Java/JavaVirtualMachines/jdk-12.0.2.jdk/Contents/Home/include",
+					"/Library/Java/JavaVirtualMachines/jdk-12.0.2.jdk/Contents/Home/include/darwin",
+				);
+				INFOPLIST_FILE = RemoteInput/Info.plist;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_CFLAGS = "-fvisibility=hidden";
+				PRODUCT_BUNDLE_IDENTIFIER = XIO.RemoteInput;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5E6281EE2421B776006BA298 /* Build configuration list for PBXNativeTarget "RemoteInputBootstrap" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E6281EC2421B776006BA298 /* Debug */,
+				5E6281ED2421B776006BA298 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5E6B99FD2394C4F200E6720C /* Build configuration list for PBXNativeTarget "libRemoteInput" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E6B99FE2394C4F200E6720C /* Debug */,
+				5E6B99FF2394C4F200E6720C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5EC59501232D956B00922111 /* Build configuration list for PBXProject "RemoteInput" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5EC5950D232D956B00922111 /* Debug */,
+				5EC5950E232D956B00922111 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5EC5950F232D956B00922111 /* Build configuration list for PBXNativeTarget "RemoteInput" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5EC59510232D956B00922111 /* Debug */,
+				5EC59511232D956B00922111 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 5EC594FE232D956B00922111 /* Project object */;
+}

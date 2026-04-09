@@ -78,21 +78,16 @@ public class ZoneManager {
     ctrlPanel = SubZoneMapper.mapCtrlPanel(ctrlPanelBounds);
     inventorySlots = SubZoneMapper.mapInventory(ctrlPanelBounds);
 
-    Rectangle windowBounds = ScreenManager.getWindowBounds();
-    mouseOver = new Rectangle(windowBounds.x, windowBounds.y, 407, 26);
+    mouseOver = new Rectangle(0, 0, 407, 26);
 
     if (isFixed) {
       minimapBounds = locateUiElement(zoneTemplates[3]);
       minimap = SubZoneMapper.mapFixedMinimap(minimapBounds);
-      gridInfo =
-          SubZoneMapper.mapGridInfo(
-              new Rectangle(windowBounds.x + 9, windowBounds.y + 24, 129, 56));
+      gridInfo = SubZoneMapper.mapGridInfo(new Rectangle(9, 24, 129, 56));
     } else {
       minimapBounds = locateUiElement(zoneTemplates[0]);
       minimap = SubZoneMapper.mapMinimap(minimapBounds);
-      gridInfo =
-          SubZoneMapper.mapGridInfo(
-              new Rectangle(windowBounds.x + 5, windowBounds.y + 20, 129, 56));
+      gridInfo = SubZoneMapper.mapGridInfo(new Rectangle(5, 20, 129, 56));
     }
   }
 
@@ -127,19 +122,13 @@ public class ZoneManager {
   public BufferedImage getGameView() {
     BufferedImage gameViewMask = ScreenManager.captureWindow();
     if (ctrlPanelBounds != null) {
-      gameViewMask =
-          MaskZones.maskZones(
-              gameViewMask, ScreenManager.toClientBounds(new Rectangle(ctrlPanelBounds)));
+      gameViewMask = MaskZones.maskZones(gameViewMask, ctrlPanelBounds);
     }
     if (chatBounds != null) {
-      gameViewMask =
-          MaskZones.maskZones(
-              gameViewMask, ScreenManager.toClientBounds(new Rectangle(chatBounds)));
+      gameViewMask = MaskZones.maskZones(gameViewMask, chatBounds);
     }
     if (minimapBounds != null) {
-      gameViewMask =
-          MaskZones.maskZones(
-              gameViewMask, ScreenManager.toClientBounds(new Rectangle(minimapBounds)));
+      gameViewMask = MaskZones.maskZones(gameViewMask, minimapBounds);
     }
     return gameViewMask;
   }

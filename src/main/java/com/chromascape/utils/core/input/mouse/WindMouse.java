@@ -1,3 +1,19 @@
+/**
+ * Copyright 2006-2013 by Benjamin J. Land (a.k.a. BenLand100)
+ *
+ * <p>This file is part of the SMART Minimizing Autoing Resource Thing (SMART)
+ *
+ * <p>SMART is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * <p>SMART is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * <p>You should have received a copy of the GNU General Public License along with SMART. If not,
+ * see <http://www.gnu.org/licenses/>.
+ */
 package com.chromascape.utils.core.input.mouse;
 
 import static java.util.concurrent.locks.LockSupport.parkNanos;
@@ -7,25 +23,30 @@ import java.util.Random;
 import java.util.function.Consumer;
 
 /**
- * A robust implementation of the WindMouse algorithm for human-like mouse movement.
  *
- * <p>This class simulates mouse movement using a physics-based model that accounts for:
+ *
+ * <blockquote>
+ *
+ * "The WindMouse algorithm is inspired by highschool physics that me-of-fifteen-years-ago was just
+ * getting interested in. The cursor is modeled as an object with some inertia (mass) that is acted
+ * on by two forces:
  *
  * <ul>
- *   <li><b>Gravity:</b> A directional force pulling the cursor towards the target.
- *   <li><b>Wind:</b> A chaotic force adding randomness to the path to mimic human imperfection.
- *   <li><b>Momentum:</b> Velocity preservation with friction/braking near the target.
+ *   <li>Gravity, which is constant in magnitude (a configurable parameter) and always points
+ *       towards the final destination.
+ *   <li>Wind, which exerts a random force in a random direction, and smoothly changes in both
+ *       magnitude and direction over time." - BenLand100
  * </ul>
  *
- * <p>The implementation has been tuned for standard simulation (approx. 60Hz internal logic) to
- * ensure compatibility with standard client ticking rates while maintaining the statistical
- * properties of the original algorithm.
+ * </blockquote>
+ *
+ * <p>This modified impl has been tuned to 60hz as opposed to 30
  *
  * <p>Original Algorithm by <a href=
  * "https://ben.land/post/2021/04/25/windmouse-human-mouse-movement/">BenLand100</a>. Tweaked
  * "WindMouse2" implementation by <a href=
  * "https://dreambot.org/forums/index.php?/topic/21147-windmouse-custom-mouse-movement-algorithm/">holic</a>.
- * Adapted for ChromaScape by StaticSweep.
+ * Adapted for ChromaScape.
  */
 public class WindMouse {
 
@@ -40,18 +61,14 @@ public class WindMouse {
    * @param target The destination coordinates.
    * @param speedProfile A string constant determining movement characteristics ("slow", "medium",
    *     "fast"). Defaults to "medium" if the profile is unrecognized.
-   * @param onMove A {@link Consumer} that accepts a {@link Point} for every step of the path. This
-   *     is typically used to trigger the actual hardware or robot input.
+   * @param moveMouseImpl A {@link Consumer} that accepts a {@link Point} for every step of the
+   *     path. This is typically used to trigger the actual hardware or robot input.
    */
-  public void move(Point start, Point target, String speedProfile, Consumer<Point> onMove) {
-    // defaults (Tuned for ~60Hz update rate)
-    // Speed: Controls loop frequency (higher = lower sleep times).
-    // Gravity/Wind: Forces applied per loop iteration.
+  public void move(Point start, Point target, String speedProfile, Consumer<Point> moveMouseImpl) {
     double mouseSpeed = 30;
     double mouseGravity = 4.5;
     double mouseWind = 1.5;
 
-    // Adjust parameters based on profile
     switch (speedProfile.toLowerCase()) {
       case "slow" -> {
         mouseSpeed = 20;
@@ -68,22 +85,21 @@ public class WindMouse {
       }
     }
 
-    windMouse2(start, target, mouseGravity, mouseWind, mouseSpeed, onMove);
+    windMouse2(start, target, mouseGravity, mouseWind, mouseSpeed, moveMouseImpl);
   }
 
   /**
-   * Orchestrates the movement logic, optionally generating an intermediate waypoint for
-   * long-distance moves.
+   * Moves the mouse from the current position to the specified position. Approximates human
+   * movement in a way where smoothness and accuracy are relative to speed, as it should be.
    *
-   * <p>If the distance is greater than 250 pixels, there is a 50% chance an intermediate point will
-   * be generated to simulate a human "correction arc" or two-stage movement.
+   * <p>Algorithm by BenLand100, modified by holic and later ChromaScape.
    *
    * @param start The starting point.
    * @param target The final destination.
    * @param gravity The gravitational pull towards the target.
    * @param wind The magnitude of random perturbations.
    * @param speed The timing speed factor.
-   * @param onMove The callback for cursor updates.
+   * @param moveMouseImpl The callback for cursor updates.
    */
   private void windMouse2(
       Point start,
@@ -91,10 +107,8 @@ public class WindMouse {
       double gravity,
       double wind,
       double speed,
-      Consumer<Point> onMove) {
+      Consumer<Point> moveMouseImpl) {
 
-    // Random intermediate point for long distances (simulates human "arc" or
-    // "correction")
     Point intermediate =
         (distance(target, start) > 250 && random.nextInt(2) == 1)
             ? randomPoint(target, start)
@@ -110,33 +124,39 @@ public class WindMouse {
           wind,
           speed,
           random.nextInt(10, 25),
-          onMove);
-      // Small pause between "stages" of movement to look natural
+          moveMouseImpl);
+
+      // Small pause between each movement
       sleepPrecise(random.nextInt(1, 150));
       start = intermediate; // Continue from intermediate
     }
 
     // Move to final target
     windMouseImpl(
-        start.x, start.y, target.x, target.y, gravity, wind, speed, random.nextInt(10, 25), onMove);
+        start.x,
+        start.y,
+        target.x,
+        target.y,
+        gravity,
+        wind,
+        speed,
+        random.nextInt(10, 25),
+        moveMouseImpl);
   }
 
   /**
-   * The core WindMouse physics simulation loop.
+   * Internal mouse movement algorithm. Do not use this without credit to either Benjamin J. Land or
+   * BenLand100. This is synchronized to prevent multiple motions and bannage.
    *
-   * <p>This method runs a loop that continuously calculates velocity vectors based on gravity
-   * (distance to target) and wind (random noise). It applies these vectors to the current position
-   * and triggers the {@code onMove} callback.
-   *
-   * @param xs Current X position.
-   * @param ys Current Y position.
-   * @param xe Target X position.
-   * @param ye Target Y position.
-   * @param gravity The strength of the pull towards the target.
-   * @param wind The strength of the random wind forces.
-   * @param speed Controls the sleep duration between steps.
-   * @param targetArea The radius (in pixels) around the target where "braking" logic begins.
-   * @param onMove The callback to execute when the integer coordinates change.
+   * @param xs The x start
+   * @param ys The y start
+   * @param xe The x destination
+   * @param ye The y destination
+   * @param gravity Strength pulling the position towards the destination
+   * @param wind Strength pulling the position in random directions
+   * @param speed Influences the rate of sleeps, speeding up or slowing down the routine
+   * @param targetArea Radius of area around the destination that should trigger slowing, prevents
+   *     spiraling
    */
   private void windMouseImpl(
       double xs,
@@ -151,7 +171,6 @@ public class WindMouse {
 
     double dist, veloX = 0, veloY = 0, windX = 0, windY = 0;
 
-    // Pre-calculated square roots for vector normalization
     double sqrt2 = Math.sqrt(2);
     double sqrt3 = Math.sqrt(3);
     double sqrt5 = Math.sqrt(5);
@@ -159,29 +178,19 @@ public class WindMouse {
     int tDist = (int) distance(new Point((int) xs, (int) ys), new Point((int) xe, (int) ye));
     long t = System.currentTimeMillis() + 10000; // 10-second timeout safety
 
-    // Loop until we are within 3 pixels.
-    // Stopping at 3px prevents the "micro-orbiting" physics glitch where gravity
-    // causes the cursor to overshoot and circle the target pixel indefinitely.
     while ((dist = Math.hypot((xs - xe), (ys - ye))) >= 3) {
       if (System.currentTimeMillis() > t) break;
 
-      // Cap wind force so it doesn't exceed the remaining distance
       wind = Math.min(wind, dist);
 
-      // Adaptive step size based on total distance
       long d = (Math.round((Math.round(((double) (tDist))) * 0.3)) / 7);
       if (d > 20) d = 20;
       if (d < 5) d = 5;
 
-      // Occasional random slowdown
       if (random.nextInt(6) == 0) {
         d = 2;
       }
 
-      // Max step calculation.
-      // Multiplier set to 1.5 (Standard WindMouse).
-      // Since we run at 60Hz (half the 120Hz rate), we need to cover twice the
-      // distance per frame to preserve the visual speed.
       double maxStep = (Math.min(d, Math.round(dist))) * 1.5;
 
       if (dist >= targetArea) {
@@ -190,23 +199,17 @@ public class WindMouse {
         windX = (windX / sqrt3) + ((random.nextInt(windRange) - wind) / sqrt5);
         windY = (windY / sqrt3) + ((random.nextInt(windRange) - wind) / sqrt5);
       } else {
-        // Short range (Entering Target Area):
-        // Dampen wind (divide by sqrt2)
+
         windX = (windX / sqrt2);
         windY = (windY / sqrt2);
 
-        // (Friction)
-        // Multiplier 0.64 allows velocity to decay naturally over the standard frame count.
-        // (Previously 0.80 at 120Hz; 0.80^2 approx 0.64 for 60Hz).
         veloX *= 0.64;
         veloY *= 0.64;
       }
 
-      // Apply forces to velocity
       veloX += windX + gravity * (xe - xs) / dist;
       veloY += windY + gravity * (ye - ys) / dist;
 
-      // Cap velocity at maxStep
       if (Math.hypot(veloX, veloY) > maxStep) {
         maxStep = ((maxStep / 2) < 1) ? 2 : maxStep;
         double randomDist = (maxStep / 2) + random.nextInt((int) (Math.round(maxStep) / 2));
@@ -215,21 +218,16 @@ public class WindMouse {
         veloY = (veloY / veloMag) * randomDist;
       }
 
-      // Update position
       int lastX = ((int) (Math.round(xs)));
       int lastY = ((int) (Math.round(ys)));
       xs += veloX;
       ys += veloY;
 
-      // Only fire callback if the integer pixel coordinate actually changed
       if ((lastX != Math.round(xs)) || (lastY != Math.round(ys))) {
         Point newP = new Point((int) Math.round(xs), (int) Math.round(ys));
         if (onMove != null) onMove.accept(newP);
       }
 
-      // Sleep calculation
-      // Logic yields ~10-20ms sleeps, targeting standard 60Hz.
-      // (Multiplier increased from 6 to 12 to double sleep times).
       int w = random.nextInt((int) (Math.round(100.0 / speed))) * 12;
       if (w < 10) {
         w = 10;
@@ -239,7 +237,6 @@ public class WindMouse {
       sleepPrecise(w);
     }
 
-    // Instantly bridge the last <3 pixels to ensure pixel-perfect accuracy.
     if ((Math.round(xe) != Math.round(xs)) || (Math.round(ye) != Math.round(ys))) {
       Point finalP = new Point((int) Math.round(xe), (int) Math.round(ye));
       if (onMove != null) onMove.accept(finalP);
@@ -247,31 +244,20 @@ public class WindMouse {
   }
 
   /**
-   * Executes a high-precision sleep using a hybrid approach.
-   *
-   * <p>Standard {@link Thread#sleep(long)} is too coarse (~15ms resolution on Windows) for smooth
-   * mouse movement. Pure busy-waiting burns 100% CPU.
-   *
-   * <p>This method parks the thread (yields CPU) for the majority of the duration, then switches to
-   * a busy-wait spin loop for the final millisecond to ensure sub-millisecond precision.
+   * Precisely sleeps for a given length of time, as other approaches aren't as accurate.
    *
    * @param millis The duration to sleep in milliseconds.
    */
   private void sleepPrecise(long millis) {
     long end = System.nanoTime() + millis * 1_000_000L;
     long timeLeft = end - System.nanoTime();
-
-    // If we have more than 2ms, we can afford to park the thread to save CPU.
-    // We wake up 1ms early to spin for the final precision.
     while (timeLeft > 2_000_000L) {
       parkNanos(timeLeft - 1_000_000L);
       timeLeft = end - System.nanoTime();
     }
 
-    // Busy-wait for the final <1ms
     while (System.nanoTime() < end) {
       try {
-        // Java 9+ hint to CPU to optimize power consumption during spin-waits
         java.lang.Thread.onSpinWait();
       } catch (NoSuchMethodError e) {
         // Fallback for older JDKs (implicitly just busy-waits)
@@ -284,7 +270,7 @@ public class WindMouse {
    *
    * @param p1 The first point.
    * @param p2 The second point.
-   * @return pixel perfect distance.
+   * @return The distance.
    */
   private double distance(Point p1, Point p2) {
     return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
@@ -304,10 +290,7 @@ public class WindMouse {
   }
 
   /**
-   * Generates a pseudo-random floating-point value between two bounds.
-   *
-   * <p>This utility is used to calculate randomized intermediate coordinates (waypoints) when
-   * generating the mouse path. It handles both positive and negative directions automatically.
+   * Generates a random floating-point value between two bounds.
    *
    * @param corner1 The first boundary (e.g., the starting coordinate).
    * @param corner2 The second boundary (e.g., the target coordinate).
