@@ -1154,5 +1154,39 @@ class SimulatorVerifyServiceTest {
       assertNotNull(job.getSummary());
       assertTrue(job.getSummary().isPassed());
     }
+
+    @Test
+    @DisplayName("ExitCode 2 with report showing passed=true must be rewritten to passed=false")
+    void shouldRewriteReportFileForExitCodeTwo() throws Exception {
+      String jobId = "exit2-rewrite";
+      SimulatorVerifyJobStore.VerifyJob job = createTestJob(jobId);
+
+      // Pre-create a report file on disk that says passed=true
+      java.nio.file.Path reportFile = tempDir.toPath().resolve("reports").resolve(jobId + ".json");
+      String passingReport =
+          "{\"sessionId\":\"test\",\"timestamp\":\"2026-04-01T00:00:00Z\",\"passed\":true,"
+          + "\"summary\":{\"totalActions\":5,\"tickRange\":{\"start\":0,\"end\":50},"
+          + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":300},"
+          + "\"violations\":[],\"error\":\"\"}";
+      java.nio.file.Files.writeString(reportFile, passingReport);
+
+      configureMockProcess(2, "Verification failed: session error\n");
+
+      invokeExecuteJob(job);
+
+      assertEquals(SimulatorVerifyJobStore.JobStatus.FAILED, job.getStatus());
+      assertEquals(2, job.getExitCode());
+      assertNotNull(job.getReportPath());
+
+      // Read report from disk and verify passed was rewritten to false
+      String content = java.nio.file.Files.readString(reportFile);
+      com.fasterxml.jackson.databind.ObjectMapper om =
+          new com.fasterxml.jackson.databind.ObjectMapper();
+      com.fasterxml.jackson.databind.JsonNode root = om.readTree(content);
+      assertFalse(root.path("passed").asBoolean(),
+          "Report file on disk must show passed=false after exitCode 2 rewrite");
+      assertTrue(root.path("summary").path("totalActions").asInt() == 5,
+          "Other report content must be preserved after rewrite");
+    }
   }
 }

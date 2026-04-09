@@ -276,7 +276,9 @@ public class SimulatorVerifyService {
           parseReport(job, output.toString());
           if (job.getSummary() != null) {
             job.getSummary().setPassed(false);
-            rewriteReportPassedFlag(reportPath);
+            if (!rewriteReportPassedFlag(reportPath)) {
+              writeSyntheticReport(job, extractErrorMessage(output.toString()));
+            }
           }
           job.setStatus(JobStatus.FAILED); // Keep FAILED for exitCode=2
           job.setError(extractErrorMessage(output.toString()));
@@ -297,7 +299,9 @@ public class SimulatorVerifyService {
           parseReport(job, output.toString());
           if (job.getSummary() != null) {
             job.getSummary().setPassed(false);
-            rewriteReportPassedFlag(reportPath);
+            if (!rewriteReportPassedFlag(reportPath)) {
+              writeSyntheticReport(job, extractErrorMessage(output.toString()));
+            }
           }
           job.setStatus(JobStatus.FAILED);
           job.setError(
@@ -590,12 +594,14 @@ public class SimulatorVerifyService {
    *
    * <p>This ensures GET /report returns a file consistent with the in-memory summary
    * after we override passed=false for failure exit codes.
+   *
+   * @return true if the file was successfully rewritten or didn't need rewriting
    */
-  private void rewriteReportPassedFlag(String reportPath) {
+  private boolean rewriteReportPassedFlag(String reportPath) {
     try {
       Path reportFile = Paths.get(reportPath);
       if (!Files.exists(reportFile)) {
-        return; // nothing to rewrite; synthetic reports already have passed=false
+        return true; // nothing to rewrite; synthetic reports already have passed=false
       }
       String json = Files.readString(reportFile);
       JsonNode root = objectMapper.readTree(json);
@@ -603,8 +609,10 @@ public class SimulatorVerifyService {
         ((ObjectNode) root).put("passed", false);
         Files.writeString(reportFile, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root));
       }
+      return true;
     } catch (IOException e) {
       logger.warn("Failed to rewrite passed flag in report {}: {}", reportPath, e.getMessage());
+      return false;
     }
   }
 
