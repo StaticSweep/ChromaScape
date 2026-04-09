@@ -179,9 +179,7 @@ public class ColourContours {
     for (int i = 0; i < contours.size(); i++) {
       Mat contour = contours.get(i);
       Rect rect = boundingRect(contour);
-      Rectangle offset = ScreenManager.getWindowBounds();
-      Rectangle contourBounds =
-          new Rectangle(rect.x() + offset.x, rect.y() + offset.y, rect.width(), rect.height());
+      Rectangle contourBounds = new Rectangle(rect.x(), rect.y(), rect.width(), rect.height());
       chromaObjects.add(new ChromaObj(i, contour, contourBounds));
       StatisticsManager.incrementObjectsDetected();
     }
@@ -196,8 +194,7 @@ public class ColourContours {
    * @return true if the point lies inside the contour; false otherwise
    */
   public static boolean isPointInContour(Point point, Mat contour) {
-    Point clientPoint = ScreenManager.toClientCoords(point);
-    try (Point2f point2f = new Point2f(clientPoint.x, clientPoint.y)) {
+    try (Point2f point2f = new Point2f(point.x, point.y)) {
       return pointPolygonTest(contour, point2f, false) > 0;
     }
   }

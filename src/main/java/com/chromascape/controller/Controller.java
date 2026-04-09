@@ -2,9 +2,9 @@ package com.chromascape.controller;
 
 import com.chromascape.utils.core.input.keyboard.VirtualKeyboardUtils;
 import com.chromascape.utils.core.input.mouse.VirtualMouseUtils;
-import com.chromascape.utils.core.input.remoteinput.Kinput;
+import com.chromascape.utils.core.input.remoteinput.RemoteInput;
+import com.chromascape.utils.core.screen.window.ProcessManagerFactory;
 import com.chromascape.utils.core.screen.window.ScreenManager;
-import com.chromascape.utils.core.screen.window.WindowHandler;
 import com.chromascape.utils.domain.ocr.Ocr;
 import com.chromascape.utils.domain.walker.Walker;
 import com.chromascape.utils.domain.zones.ZoneManager;
@@ -30,7 +30,7 @@ public class Controller {
 
   private ControllerState state;
 
-  private Kinput kinput;
+  private RemoteInput remoteInput;
   private VirtualMouseUtils virtualMouseUtils;
   private VirtualKeyboardUtils virtualKeyboardUtils;
   private ZoneManager zoneManager;
@@ -51,23 +51,20 @@ public class Controller {
    */
   public void init() {
     logger.info("Setting up Font masks...");
-    // Warmup: Pre-load common fonts
-    try {
-      Ocr.loadFont("Plain 11");
-      Ocr.loadFont("Plain 12");
-      Ocr.loadFont("Bold 12");
-    } catch (Exception e) {
-      logger.error("Failed to pre-load fonts during init: {}", e.getMessage());
-    }
+    Ocr.loadFont("Plain 11");
+    Ocr.loadFont("Plain 12");
+    Ocr.loadFont("Bold 12");
 
     logger.info("Setting up Remote Input Library...");
     // Obtain process ID of the target window to initialize input injection
-    kinput = new Kinput(WindowHandler.getPid(WindowHandler.getTargetWindow()));
+    remoteInput = new RemoteInput(ProcessManagerFactory.getProcessManager().getPid());
+    // Give screen manager access to Remote Input to grab screen buffer
+    ScreenManager.setRemoteInput(remoteInput);
 
     // Initialize virtual input utilities with current window bounds and fullscreen status
     logger.info("Initialising mouse and keyboard utils...");
-    virtualMouseUtils = new VirtualMouseUtils(kinput, ScreenManager.getWindowBounds());
-    virtualKeyboardUtils = new VirtualKeyboardUtils(kinput);
+    virtualMouseUtils = new VirtualMouseUtils(remoteInput);
+    virtualKeyboardUtils = new VirtualKeyboardUtils(remoteInput);
 
     logger.info("Pre-loading and instantiating zones...");
     // Initialize zone management with fixed mode option
@@ -89,8 +86,7 @@ public class Controller {
    * utilities until re-initialized.
    */
   public void shutdown() {
-    mouse().getMouseOverlay().eraseOverlay();
-    kinput.destroy();
+    remoteInput.close();
     state = ControllerState.STOPPED;
     logger.info("Shutting down");
   }

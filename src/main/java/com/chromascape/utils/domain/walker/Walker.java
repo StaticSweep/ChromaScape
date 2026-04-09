@@ -188,7 +188,7 @@ public class Walker {
       // Async precomputing the next click point while waiting for the bot to stop
       pointFuture = CompletableFuture.supplyAsync(() -> getClickLocation(newTarget, oldTarget));
       // This blocks the main thread, but the next point is being computed already.
-      logger.info("Precomputing next click at " + newTarget.x() + ", " + newTarget.y());
+      logger.info("Precomputing next click at {}, {}", newTarget.x(), newTarget.y());
       waitToStop();
       // Recalculate path and cancel async if not at expected location
       Tile position = getPlayerPosition();

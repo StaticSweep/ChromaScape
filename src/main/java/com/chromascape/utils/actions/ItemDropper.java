@@ -4,6 +4,7 @@ import com.chromascape.base.BaseScript;
 import com.chromascape.utils.core.input.distribution.ClickDistribution;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -19,11 +20,6 @@ import org.apache.logging.log4j.Logger;
 public class ItemDropper {
 
   private static final Logger logger = LogManager.getLogger(ItemDropper.class);
-
-  // AWT Event IDs for Key Press/Release
-  private static final int KEY_PRESS = 401;
-  private static final int KEY_RELEASE = 402;
-
   private static final int INVENTORY_SIZE = 28;
 
   /** Defines the order in which items should be dropped. */
@@ -68,8 +64,8 @@ public class ItemDropper {
     List<Integer> slotsToDrop = generateSlotIndices(pattern);
 
     // Start Shift-Drop
-    baseScript.controller().keyboard().sendModifierKey(KEY_PRESS, "shift");
-    BaseScript.waitRandomMillis(100, 250);
+    baseScript.controller().keyboard().sendKeyDown(KeyEvent.VK_SHIFT);
+    BaseScript.waitRandomMillis(400, 850);
 
     try {
       for (int slotIndex : slotsToDrop) {
@@ -90,7 +86,7 @@ public class ItemDropper {
       }
     } finally {
       BaseScript.waitRandomMillis(100, 200);
-      baseScript.controller().keyboard().sendModifierKey(KEY_RELEASE, "shift");
+      baseScript.controller().keyboard().sendKeyRelease(KeyEvent.VK_SHIFT);
     }
   }
 

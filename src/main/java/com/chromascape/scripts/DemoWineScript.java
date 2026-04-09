@@ -8,6 +8,7 @@ import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -86,9 +87,9 @@ public class DemoWineScript extends BaseScript {
    * keyboard controller.
    */
   private void pressEscape() {
-    controller().keyboard().sendModifierKey(401, "esc");
+    controller().keyboard().sendKeyDown(KeyEvent.VK_ESCAPE);
     waitRandomMillis(80, 100);
-    controller().keyboard().sendModifierKey(402, "esc");
+    controller().keyboard().sendKeyRelease(KeyEvent.VK_ESCAPE);
   }
 
   /**
@@ -96,9 +97,9 @@ public class DemoWineScript extends BaseScript {
    * keyboard controller.
    */
   private void pressSpace() {
-    controller().keyboard().sendModifierKey(401, "space");
+    controller().keyboard().sendKeyDown(KeyEvent.VK_SPACE);
     waitRandomMillis(300, 500);
-    controller().keyboard().sendModifierKey(402, "space");
+    controller().keyboard().sendKeyDown(KeyEvent.VK_SPACE);
   }
 
   /**
