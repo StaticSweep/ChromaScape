@@ -1,0 +1,65 @@
+# Java class files
+*.class
+
+# Log files
+*.log
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.ear
+
+# Virtual machine crash logs
+hs_err_pid*
+
+# Gradle cache and wrappers
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+
+# VS Code
+.vscode/
+
+# Eclipse
+*.classpath
+*.project
+*.settings/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Templates
+/src/main/resources/fonts/
+/src/main/resources/images/ui/
+/src/main/resources/images/user/*
+!/src/main/resources/images/user/.gitkeep
+
+# output
+output/*
+!output/.gitkeep
+
+# chromascape secrets for individual developers
+secrets.properties
+
+# custom user scripts
+/src/main/java/com/chromascape/scripts/*/
+/scripts/*/
+
+# Ignore build directory, even though it was ignored before??
+/build/
