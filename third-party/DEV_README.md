@@ -35,3 +35,29 @@ Alternatively, they are pre-packaged with ChromaScape (currently only Windows) i
 6. ChromaScape checks for a compiled binary before resorting to a provided pre-compiled one, 
    however you may safely delete the pre-compiled folder and any binaries within:
    >    `third-party/RemoteInput/precompiled`
+
+# Linux Instructions
+
+1. Install [make](https://www.gnu.org/software/make/make.html), [cmake](https://cmake.org/), [python3-dev](https://packages.debian.org/de/sid/python3-dev), and [libgl-dev](https://packages.debian.org/de/sid/libgl-dev)
+2. In the terminal, install the following dependencies:
+   - Fedora x64:
+     > `sudo dnf install make cmake libGL-devel python3-devel`
+   - Ubuntu x64:
+     > `sudo apt install make cmake libgl-dev python3-dev`
+   - Arch x64:
+     > `sudo pacman -S make cmake mesa python`
+3. In the terminal, navigate to the RemoteInput directory:
+   > e.g., `cd /c/Users/YourName/repos/ChromaScape/third-party/RemoteInput`
+4. To build the binary, execute the following in the `RemoteInput` project's root folder, same level as CMakeLists.txt, 
+   in an the terminal:
+    ```
+    # Set flags: "-m64" for 64-bit or "-m32" for 32-bit
+    cmake -S . -B cmake-build-release -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DOTHER_LINKER_FLAGS="-m64"
+    
+    # Build
+    cmake --build cmake-build-release --target all -j 4
+    ```
+5. The binary will be located as: `third-party/RemoteInput/cmake-build-release/libRemoteInput.so`
+6. ChromaScape checks for a compiled binary before resorting to a provided pre-compiled one, 
+   however you may safely delete the pre-compiled folder and any binaries within:
+   >    `third-party/RemoteInput/precompiled`
