@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Objects;
@@ -35,8 +34,8 @@ public class ProfileManager {
   /** Path to the current user's home directory. */
   private final String userHome = System.getProperty("user.home");
 
-  /** RuneLite profile directory (typically ~/.runelite/profiles2). */
-  private final Path profileDir = Paths.get(userHome, ".runelite/profiles2");
+  /** RuneLite profile directory. On Linux with native Bolt, uses the Bolt data path. */
+  private final Path profileDir = resolveProfileDir();
 
   /** List of all loaded RuneLite profiles from profiles.json. */
   private List<Profile> profiles = null;
@@ -50,6 +49,44 @@ public class ProfileManager {
   /** Creates a new {@code ProfileManager} with a default Jackson ObjectMapper. */
   public ProfileManager() {
     mapper = new ObjectMapper();
+  }
+
+  /**
+   * Resolves the RuneLite profile directory for the current operating system.
+   *
+   * <p>On Windows, returns the standard {@code %APPDATA%\Local\RuneLite\profiles2} path.
+   *
+   * <p>On Linux, checks for a native Bolt installation first ({@code
+   * ~/.var/app/com.adamcake.Bolt/data/bolt-launcher/.runelite/profiles2}), falling back to the
+   * standard {@code ~/.runelite/profiles2} path if Bolt is not detected.
+   *
+   * <p>On macOS, returns {@code ~/Library/Application Support/RuneLite/profiles2}.
+   *
+   * @return The resolved profile directory path
+   */
+  private Path resolveProfileDir() {
+    String home = System.getProperty("user.home");
+    String os = System.getProperty("os.name").toLowerCase();
+
+    if (os.contains("win")) {
+      return Path.of(home, "AppData", "Local", "RuneLite", "profiles2");
+    }
+
+    if (os.contains("linux")) {
+      Path boltPath =
+          Path.of(home, ".var/app/com.adamcake.Bolt/data/bolt-launcher/.runelite/profiles2");
+      if (Files.exists(boltPath.getParent())) {
+        logger.info("ProfileManager: using Bolt RuneLite path: {}", boltPath);
+        return boltPath;
+      }
+    }
+
+    if (os.contains("mac")) {
+      return Path.of(home, "Library/Application Support/RuneLite/profiles2");
+    }
+
+    // Fallback (Linux standard or unknown OS)
+    return Path.of(home, ".runelite/profiles2");
   }
 
   /**
