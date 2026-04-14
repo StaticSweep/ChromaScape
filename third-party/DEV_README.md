@@ -70,12 +70,12 @@ The following guide explains how to build the binary from source, enabling you t
      sudo pacman -S make cmake mesa python
      ```
 
-3. Navigate to the `RemoteInput` directory:
+2. Navigate to the `RemoteInput` directory:
    ```sh
    cd /path/to/ChromaScape/third-party/RemoteInput
    ```
 
-4. From the `RemoteInput` project root (same level as `CMakeLists.txt`), run the following to configure and build the binary:
+3. From the `RemoteInput` project root (same level as `CMakeLists.txt`), run the following to configure and build the binary:
    ```sh
    # Set flags: "-m64" for 64-bit or "-m32" for 32-bit
    cmake -S . -B cmake-build-release -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DOTHER_LINKER_FLAGS="-m64"
@@ -84,12 +84,12 @@ The following guide explains how to build the binary from source, enabling you t
    cmake --build cmake-build-release --target all -j 4
    ```
 
-5. The compiled binary will be output to:
+4. The compiled binary will be output to:
    ```
    third-party/RemoteInput/cmake-build-release/libRemoteInput.so
    ```
 
-6. ChromaScape will prefer a locally compiled binary over the bundled pre-compiled one. If desired, the pre-compiled directory and its contents can be safely removed:
+5. ChromaScape will prefer a locally compiled binary over the bundled pre-compiled one. If desired, the pre-compiled directory and its contents can be safely removed:
    ```
    third-party/RemoteInput/precompiled/
    ```
