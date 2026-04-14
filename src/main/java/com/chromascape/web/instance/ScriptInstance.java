@@ -62,6 +62,10 @@ public class ScriptInstance {
                 instance.run();
               } finally {
                 StatisticsManager.stop();
+                // Clear the interrupted flag so the blocking WebSocket send in broadcast()
+                // can acquire its semaphore. The thread was interrupted by stop() to end
+                // the script; the flag is no longer meaningful at this point.
+                Thread.interrupted();
                 stateHandler.broadcast(false);
               }
             });

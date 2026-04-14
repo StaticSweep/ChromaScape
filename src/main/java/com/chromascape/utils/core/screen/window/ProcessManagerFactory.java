@@ -19,6 +19,9 @@ public class ProcessManagerFactory {
     if (os.contains("mac")) {
       return new MacProcessManager();
     }
-    return new LinuxProcessManager();
+    if (os.contains("linux")) {
+      return new LinuxProcessManager();
+    }
+    throw new UnsupportedOperationException("Unsupported OS: " + System.getProperty("os.name"));
   }
 }
