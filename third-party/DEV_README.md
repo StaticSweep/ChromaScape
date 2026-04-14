@@ -51,9 +51,11 @@ The following guide explains how to build the binary from source, enabling you t
 
 # Linux Instructions
 
-1. Install [make](https://www.gnu.org/software/make/make.html), [cmake](https://cmake.org/), [python3-dev](https://packages.debian.org/de/sid/python3-dev), and [libgl-dev](https://packages.debian.org/de/sid/libgl-dev).
-
-2. In a terminal, install the required dependencies for your distribution:
+1. Install the following dependencies for your distribution. Required packages:
+   [make](https://www.gnu.org/software/make/make.html),
+   [cmake](https://cmake.org/),
+   [python3-dev](https://packages.debian.org/de/sid/python3-dev),
+   [libgl-dev](https://packages.debian.org/de/sid/libgl-dev).
 
    - **Fedora x64:**
      ```sh
