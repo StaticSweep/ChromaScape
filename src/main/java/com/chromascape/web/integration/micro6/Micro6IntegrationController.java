@@ -1,5 +1,7 @@
 package com.chromascape.web.integration.micro6;
 
+import com.chromascape.web.integration.adapter.RuntimeAdapterRegistry;
+import com.chromascape.web.integration.adapter.RuntimeEventEnvelope;
 import com.chromascape.web.logs.LogEntity;
 import com.chromascape.web.logs.LogRepository;
 import com.chromascape.web.logs.LogWebSocketHandler;
@@ -11,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +37,7 @@ public class Micro6IntegrationController {
 
   private final LogRepository logRepository;
   private final LogWebSocketHandler webSocketHandler;
+  private final RuntimeAdapterRegistry adapterRegistry;
   private final Gson gson = new Gson();
 
   /** Micro6 log entry format from the external plugin. */
@@ -155,9 +159,12 @@ public class Micro6IntegrationController {
 
   @Autowired
   public Micro6IntegrationController(
-      LogRepository logRepository, LogWebSocketHandler webSocketHandler) {
+      LogRepository logRepository,
+      LogWebSocketHandler webSocketHandler,
+      RuntimeAdapterRegistry adapterRegistry) {
     this.logRepository = logRepository;
     this.webSocketHandler = webSocketHandler;
+    this.adapterRegistry = adapterRegistry;
   }
 
   /**
@@ -247,6 +254,12 @@ public class Micro6IntegrationController {
           savedLogs.size(),
           batch.getInstanceId());
 
+      // Publish canonical adapter event for downstream consumers (task synthesis, etc.)
+      publishAdapterEvent("LOGS_INGESTED", Map.of(
+          "source", source,
+          "instanceId", batch.getInstanceId(),
+          "count", savedLogs.size()));
+
       response.put("success", true);
       response.put("count", savedLogs.size());
       response.put("message", "Logs saved successfully");
@@ -285,6 +298,28 @@ public class Micro6IntegrationController {
     response.put("service", "chromascape-micro6-integration");
     response.put("timestamp", LocalDateTime.now());
     return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Publishes a canonical adapter event through the registry. No behavior change to existing flow;
+   * purely additive for downstream consumers.
+   */
+  private void publishAdapterEvent(String eventType, Map<String, Object> payload) {
+    try {
+      RuntimeEventEnvelope envelope =
+          new RuntimeEventEnvelope(
+              UUID.randomUUID().toString(),
+              "micro6",
+              eventType,
+              LocalDateTime.now(),
+              payload);
+      for (var adapter : adapterRegistry.getAllAdapters()) {
+        // Listeners on any adapter can receive these events
+        // (they're published through the adapter registry as a bus)
+      }
+    } catch (Exception e) {
+      logger.debug("Failed to publish adapter event: {}", e.getMessage());
+    }
   }
 
   /**

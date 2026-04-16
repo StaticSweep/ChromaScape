@@ -64,6 +64,9 @@
             <i class="bi bi-arrow-clockwise me-1"></i>Refresh
           </button>
         </div>
+        <button type="button" id="taskPlannerToggleBtn" class="btn btn-outline-secondary ms-2">
+          <i class="bi bi-kanban me-1"></i>Task Planner
+        </button>
         <div id="sessionHealthPreview" class="session-health-preview" style="display:none;">
           <span id="healthLifecycleState" class="health-chip"></span>
           <span id="healthHasEvents" class="health-chip"></span>
@@ -184,7 +187,18 @@
               <i class="bi bi-question-circle me-1"></i>Checking...
             </span>
           </div>
-          <small id="providerNameText" class="text-muted">Loading provider info...</small>
+          <div class="provider-detail-row">
+            <small id="providerNameText" class="text-muted">Loading provider info...</small>
+          </div>
+          <div class="provider-detail-row" id="providerDetailRow" style="display:none;">
+            <small class="text-muted">
+              <span id="providerRuntimeProvider"></span>
+              <span class="mx-1">|</span>
+              <span id="providerRuntimeModel"></span>
+              <span class="mx-1">|</span>
+              <span id="providerBridgeMode"></span>
+            </small>
+          </div>
         </div>
 
         <!-- Execution Mode -->
@@ -236,6 +250,11 @@
                 <i class="bi bi-box-seam me-1"></i>Evidence
               </button>
             </li>
+            <li class="nav-item">
+              <button class="nav-link" id="scriptRunTab" data-bs-toggle="tab" data-bs-target="#scriptRunContent" type="button">
+                <i class="bi bi-terminal me-1"></i>Script Runs
+              </button>
+            </li>
           </ul>
           <div class="tab-content mt-2" id="artifactsTabContent">
             <div class="tab-pane fade show active" id="analysisContent">
@@ -252,6 +271,9 @@
             </div>
             <div class="tab-pane fade" id="evidenceContent">
               <div class="text-muted small">No evidence collected yet</div>
+            </div>
+            <div class="tab-pane fade" id="scriptRunContent">
+              <div class="text-muted small">No script run details yet</div>
             </div>
           </div>
         </div>
@@ -285,6 +307,73 @@
           </div>
           <div class="progress mt-2" style="height: 4px;">
             <div id="loopProgressBar" class="progress-bar" role="progressbar" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Account Task Planner Panel -->
+    <div class="task-planner-panel glass-panel" id="taskPlannerPanel" style="display:none;">
+      <div class="task-planner-header">
+        <h6><i class="bi bi-kanban me-2"></i>Account Task Planner</h6>
+        <div class="task-planner-controls">
+          <button class="btn btn-sm btn-outline-secondary" id="refreshPlansBtn" title="Refresh plans">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" id="toggleTaskPlannerBtn">
+            <i class="bi bi-chevron-up"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="task-planner-content" id="taskPlannerContent">
+        <!-- Generate New Plan -->
+        <div class="task-planner-section">
+          <label class="form-label">Generate Task Plan</label>
+          <input type="text" id="taskPlanIntentInput" class="form-control form-control-sm mb-2"
+                 placeholder="What do you want to achieve? (e.g., Complete Monkey Madness)">
+          <div class="d-flex gap-2 mb-2">
+            <select id="taskPlanSourceSession" class="form-select form-select-sm">
+              <option value="">Current session</option>
+            </select>
+          </div>
+          <button class="btn btn-sm btn-primary w-100" id="generatePlanBtn">
+            <i class="bi bi-magic me-1"></i>Generate Plan
+          </button>
+        </div>
+
+        <!-- Plans List -->
+        <div class="task-planner-section">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label mb-0">Task Plans</label>
+            <span class="badge bg-secondary" id="planCountBadge">0 plans</span>
+          </div>
+          <div id="plansList" class="task-plans-list">
+            <div class="text-muted small fst-italic">No task plans yet. Generate one above.</div>
+          </div>
+        </div>
+
+        <!-- Plan Detail View (shown when a plan is selected) -->
+        <div class="task-planner-section" id="planDetailSection" style="display:none;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0" id="planDetailTitle">Plan Detail</h6>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm btn-success" id="approvePlanBtn" title="Approve all items">
+                <i class="bi bi-check-all me-1"></i>Approve All
+              </button>
+              <button class="btn btn-sm btn-danger" id="rejectPlanBtn" title="Reject plan">
+                <i class="bi bi-x-circle me-1"></i>Reject
+              </button>
+            </div>
+          </div>
+          <div class="mb-2">
+            <span class="badge" id="planDetailStatus">GENERATED</span>
+            <small class="text-muted ms-2" id="planDetailIntent"></small>
+          </div>
+
+          <!-- Plan Items -->
+          <div id="planItemsList" class="plan-items-list">
+            <!-- Dynamically populated -->
           </div>
         </div>
       </div>
@@ -533,6 +622,7 @@
 
   <script src="/js/debugger.js?v=8"></script>
   <script src="/js/patchloop.js?v=1"></script>
+  <script src="/js/account-task-planner.js?v=1"></script>
 </body>
 
 </html>

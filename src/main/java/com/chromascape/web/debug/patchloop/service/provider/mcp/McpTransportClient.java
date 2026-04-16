@@ -86,25 +86,38 @@ public class McpTransportClient {
 
         HttpResponse<String> response =
             httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        int statusCode = response.statusCode();
+        String responseBody = response.body();
 
-        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+        if (statusCode >= 200 && statusCode < 300) {
           logger.debug(
               "MCP health check successful (attempt {}): status {}",
               attempt,
-              response.statusCode());
-          return parseHealthResponse(response.body());
+              statusCode);
+          return parseHealthResponse(responseBody);
+        }
+
+        // Some MCP bridges intentionally return non-2xx on readiness failures while still
+        // returning structured health payloads. Parse and surface that payload when possible.
+        McpHealthResponse structuredHealth = tryParseStructuredHealthResponse(responseBody);
+        if (structuredHealth != null) {
+          logger.warn(
+              "MCP health check returned HTTP {} with structured payload (healthy={})",
+              statusCode,
+              structuredHealth.isHealthy());
+          return structuredHealth;
         } else {
           logger.warn(
-              "MCP health check failed (attempt {}): HTTP {}", attempt, response.statusCode());
+              "MCP health check failed (attempt {}): HTTP {}", attempt, statusCode);
 
           McpTransportException.McpErrorType errorType =
-              determineHttpErrorType(response.statusCode());
-          boolean isRetryable = isRetryableHttpError(response.statusCode());
+              determineHttpErrorType(statusCode);
+          boolean isRetryable = isRetryableHttpError(statusCode);
 
           if (!isRetryable || attempt >= maxAttempts) {
             throw new McpTransportException(
                 errorType,
-                "MCP server returned HTTP " + response.statusCode() + ": " + response.body(),
+                "MCP server returned HTTP " + statusCode + ": " + responseBody,
                 isRetryable);
           }
         }
@@ -348,6 +361,35 @@ public class McpTransportClient {
           "Failed to parse MCP health response: " + e.getMessage(),
           e,
           false); // NOT retryable - server is broken
+    }
+  }
+
+  /**
+   * Attempts to parse a structured health payload from non-2xx responses.
+   *
+   * <p>This only succeeds when the response includes an explicit {@code healthy} field. Generic
+   * error payloads are ignored and will continue through normal HTTP error handling.
+   */
+  private McpHealthResponse tryParseStructuredHealthResponse(String body) {
+    if (body == null || body.isBlank()) {
+      return null;
+    }
+
+    try {
+      Map<String, Object> response = objectMapper.readValue(body, HashMap.class);
+      if (!response.containsKey("healthy")) {
+        return null;
+      }
+
+      boolean isHealthy = parseBooleanField(response, "healthy", false);
+      String serverVersion = parseStringField(response, "serverVersion");
+      @SuppressWarnings("unchecked")
+      Map<String, Object> metadata =
+          (Map<String, Object>) response.getOrDefault("metadata", Map.of());
+
+      return new McpHealthResponse(isHealthy, serverVersion, metadata);
+    } catch (Exception e) {
+      return null;
     }
   }
 

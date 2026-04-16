@@ -6,6 +6,8 @@ import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportExce
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.io.File;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
@@ -39,6 +41,8 @@ public class McpBridgeLifecycleManager {
   private final McpConfigProperties config;
   private final McpTransportClient transportClient;
   private final BridgeOutputStreamHandler outputHandler;
+  private volatile String bridgeMode = "managed";
+  private volatile String availabilityReason = "initializing";
 
   @Value("${analysis.mcp.bridge-directory:scripts/mcp-bridge}")
   private String bridgeDirectory;
@@ -83,6 +87,8 @@ public class McpBridgeLifecycleManager {
       if (isBridgeRunning()) {
         logger.info("MCP bridge is already running externally on port {}", getBridgePort());
         logger.info("Skipping auto-start (using existing instance)");
+        bridgeMode = "external";
+        availabilityReason = "attached_existing_bridge";
         return;
       }
 
@@ -103,12 +109,20 @@ public class McpBridgeLifecycleManager {
       // Register shutdown hook
       Runtime.getRuntime().addShutdownHook(new Thread(this::stopBridge, "MCP-Bridge-Shutdown"));
 
+      bridgeMode = "managed";
+      availabilityReason = "provider_ready";
       logger.info("MCP bridge started successfully on port {}", getBridgePort());
       logger.info("===========================================");
 
     } catch (BridgeStartupException e) {
       logger.error("Failed to start MCP bridge: {}", e.getMessage());
-      handleStartupFailure(e);
+      boolean continueStartup = handleStartupFailure(e);
+      if (!continueStartup) {
+        throw e;
+      }
+      logger.warn(
+          "Continuing ChromaScape startup with MCP provider unavailable (reason: {})",
+          availabilityReason);
     } catch (Exception e) {
       logger.error("Unexpected error during MCP bridge startup", e);
       throw new BridgeStartupException("Unexpected error during bridge startup", e);
@@ -264,16 +278,74 @@ public class McpBridgeLifecycleManager {
    * @param e the startup exception
    * @throws BridgeStartupException if no fallback is available
    */
-  private void handleStartupFailure(BridgeStartupException e) throws BridgeStartupException {
-    String apiKey = System.getenv("ANTHROPIC_API_KEY");
-    if (apiKey != null && !apiKey.isBlank()) {
-      logger.warn("MCP bridge startup failed, but ANTHROPIC_API_KEY is available");
-      logger.warn(
-          "You can set ANALYSIS_PROVIDER=claude-api to use direct API mode without the bridge");
-    } else {
-      logger.error("No fallback available - set ANTHROPIC_API_KEY to use API mode");
+  private boolean handleStartupFailure(BridgeStartupException e) {
+    if (isFatalStartupError(e)) {
+      String apiKey = System.getenv("ANTHROPIC_API_KEY");
+      if (apiKey != null && !apiKey.isBlank()) {
+        logger.warn("MCP bridge startup failed, but ANTHROPIC_API_KEY is available");
+        logger.warn(
+            "You can set ANALYSIS_PROVIDER=claude-api to use direct API mode without the bridge");
+      } else {
+        logger.error("No fallback available - set ANTHROPIC_API_KEY to use API mode");
+      }
+      availabilityReason = "fatal_bridge_startup_failure";
+      return false;
     }
-    throw e;
+
+    if (isBridgeRunning()) {
+      bridgeMode = "external";
+      availabilityReason = "attached_existing_bridge_after_failure";
+      logger.warn(
+          "Bridge startup failed, but an existing healthy bridge is available on port {}."
+              + " Reusing external bridge.",
+          getBridgePort());
+      return true;
+    }
+
+    if (isPortInUse(getBridgePort())) {
+      bridgeMode = "external";
+      availabilityReason = "bridge_port_in_use_existing_instance_unhealthy";
+      logger.warn(
+          "Bridge startup failed and port {} is already in use by another process. "
+              + "Proceeding without a healthy MCP provider.",
+          getBridgePort());
+      return true;
+    }
+
+    bridgeMode = "managed";
+    availabilityReason = "bridge_startup_failed";
+    logger.warn("Proceeding without MCP provider after startup failure: {}", e.getMessage());
+    return true;
+  }
+
+  private boolean isFatalStartupError(BridgeStartupException e) {
+    String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+    if (message.contains("node.js is not installed")
+        || message.contains("failed to start bridge process")
+        || message.contains("bridge directory not found")
+        || message.contains("invalid")) {
+      return true;
+    }
+    return hasCause(e, BridgeConfigException.class);
+  }
+
+  private boolean hasCause(Throwable error, Class<? extends Throwable> type) {
+    Throwable current = error;
+    while (current != null) {
+      if (type.isInstance(current)) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
+  }
+
+  private boolean isPortInUse(int port) {
+    try (ServerSocket ignored = new ServerSocket(port, 1, InetAddress.getByName("127.0.0.1"))) {
+      return false;
+    } catch (Exception e) {
+      return true;
+    }
   }
 
   /**
@@ -352,5 +424,13 @@ public class McpBridgeLifecycleManager {
    */
   public boolean isBridgeProcessRunning() {
     return bridgeProcess != null && bridgeProcess.isAlive();
+  }
+
+  public String getBridgeMode() {
+    return bridgeMode;
+  }
+
+  public String getAvailabilityReason() {
+    return availabilityReason;
   }
 }

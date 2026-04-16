@@ -22,7 +22,7 @@ echo Press Ctrl+C to stop ChromaScape and the MCP bridge
 echo ============================================================
 echo.
 
-cd /d F:\Dev\IdeaProjects\ChromaScape
+cd /d "%~dp0"
 gradlew.bat bootRun
 
 pause

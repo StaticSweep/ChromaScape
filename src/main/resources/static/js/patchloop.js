@@ -299,7 +299,8 @@ class PatchLoopManager {
       validations: artifacts.validations || [],
       retests: artifacts.retests || [],
       analyses: artifacts.analyses || [],
-      evidence: artifacts.evidence || []
+      evidence: artifacts.evidence || [],
+      scriptRuns: artifacts.scriptRuns || []
     };
     this.artifactManager.renderAll();
   }
@@ -644,7 +645,8 @@ class PatchLoopArtifactManager {
       validations: [],
       retests: [],
       analyses: [],
-      evidence: []
+      evidence: [],
+      scriptRuns: []
     };
   }
 
@@ -664,6 +666,7 @@ class PatchLoopArtifactManager {
       this.artifacts.retests = data.retests || [];
       this.artifacts.analyses = data.analyses || [];
       this.artifacts.evidence = data.evidence || [];
+      this.artifacts.scriptRuns = data.scriptRuns || [];
 
       this.renderAll();
     } catch (error) {
@@ -687,6 +690,7 @@ class PatchLoopArtifactManager {
     this.renderRetests();
     this.renderAnalyses();
     this.renderEvidence();
+    this.renderScriptRuns();
   }
 
   /**
@@ -883,6 +887,42 @@ class PatchLoopArtifactManager {
             ${item.summary ? `<span class="ms-2">${this.escapeHtml(item.summary)}</span>` : ''}
           </div>
         `).join('')}
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Renders script run terminal details.
+   */
+  renderScriptRuns() {
+    const container = document.getElementById('scriptRunContent');
+    if (!container) return;
+
+    if (!this.artifacts.scriptRuns || this.artifacts.scriptRuns.length === 0) {
+      container.innerHTML = '<p class="text-muted small">No script run details yet</p>';
+      return;
+    }
+
+    container.innerHTML = this.artifacts.scriptRuns.map(run => `
+      <div class="artifact-card mb-2 p-2 border rounded">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <h6 class="mb-0">
+            <i class="bi bi-terminal me-1"></i>${this.escapeHtml(run.scriptName || 'Script Run')}
+          </h6>
+          <span class="badge bg-${run.terminalStatus === 'COMPLETED' ? 'success' : run.terminalStatus === 'TIMEOUT' ? 'warning text-dark' : 'danger'}">
+            ${this.escapeHtml(run.terminalStatus || 'UNKNOWN')}
+          </span>
+        </div>
+        <div class="small text-muted">
+          <span>Attempt: ${run.attemptNumber ?? 'N/A'}</span>
+          <span class="ms-2">Backend: ${this.escapeHtml(run.backend || 'unknown')}</span>
+          ${run.durationMs ? `<span class="ms-2">Duration: ${this.formatDuration(run.durationMs)}</span>` : ''}
+        </div>
+        ${run.errorMessage ? `
+          <div class="mt-1">
+            <small class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${this.escapeHtml(run.errorMessage)}</small>
+          </div>
+        ` : ''}
       </div>
     `).join('');
   }

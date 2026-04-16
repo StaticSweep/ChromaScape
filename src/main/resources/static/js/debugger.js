@@ -6451,10 +6451,68 @@ async function updateProviderStatus() {
       badge.innerHTML = '<i class="bi bi-x-circle me-1"></i>Unavailable';
     }
 
-    nameText.textContent = `Provider: ${status.providerName}`;
+    nameText.textContent = buildProviderDisplayText(status);
+
+    // Update provider detail row
+    const detailRow = document.getElementById('providerDetailRow');
+    if (detailRow) {
+      const runtimeProvider = document.getElementById('providerRuntimeProvider');
+      const runtimeModel = document.getElementById('providerRuntimeModel');
+      const bridgeMode = document.getElementById('providerBridgeMode');
+      if (runtimeProvider) runtimeProvider.textContent = status.runtimeProvider || status.frameworkProvider || 'unknown';
+      if (runtimeModel) runtimeModel.textContent = status.runtimeModel || 'unknown';
+      if (bridgeMode) bridgeMode.textContent = 'mode: ' + (status.bridgeMode || 'unknown');
+      detailRow.style.display = 'block';
+    }
   } catch (error) {
     console.error('Error fetching provider status:', error);
   }
+}
+
+function buildProviderDisplayText(status) {
+  const frameworkProvider = status.frameworkProvider || status.providerName || 'unknown';
+  const runtimeProvider = status.runtimeProvider;
+  const runtimeModel = status.runtimeModel;
+  const hasRuntimeWrapper =
+    runtimeProvider && runtimeProvider !== 'unknown' && runtimeProvider !== frameworkProvider;
+
+  if (hasRuntimeWrapper) {
+    if (runtimeModel) {
+      return `Provider: ${frameworkProvider} (wrapper: ${runtimeProvider}, model: ${runtimeModel})`;
+    }
+    return `Provider: ${frameworkProvider} (wrapper: ${runtimeProvider})`;
+  }
+
+  if (runtimeModel) {
+    return `Provider: ${frameworkProvider} (model: ${runtimeModel})`;
+  }
+
+  return `Provider: ${frameworkProvider}`;
+}
+
+function buildProviderUnavailableMessage(status) {
+  const frameworkProvider = status.frameworkProvider || status.providerName || 'unknown';
+  const runtimeProvider = status.runtimeProvider;
+  const runtimeModel = status.runtimeModel;
+  const availabilityReason = status.availabilityReason;
+  const hasRuntimeWrapper =
+    runtimeProvider && runtimeProvider !== 'unknown' && runtimeProvider !== frameworkProvider;
+  const reasonSuffix = availabilityReason && availabilityReason !== 'unknown'
+    ? ` (${String(availabilityReason).replace(/_/g, ' ')})`
+    : '';
+
+  if (hasRuntimeWrapper) {
+    if (runtimeModel) {
+      return `Provider (${frameworkProvider} / ${runtimeProvider}, model: ${runtimeModel}) is unavailable${reasonSuffix}`;
+    }
+    return `Provider (${frameworkProvider} / ${runtimeProvider}) is unavailable${reasonSuffix}`;
+  }
+
+  if (runtimeModel) {
+    return `Provider (${frameworkProvider}, model: ${runtimeModel}) is unavailable${reasonSuffix}`;
+  }
+
+  return `Provider (${frameworkProvider}) is unavailable${reasonSuffix}`;
 }
 
 /**
@@ -6484,7 +6542,7 @@ async function validatePatchLoopPreflight() {
     if (response.ok) {
       const status = await response.json();
       if (!status.available) {
-        return { valid: false, message: `Provider (${status.providerName}) is unavailable` };
+        return { valid: false, message: buildProviderUnavailableMessage(status) };
       }
     }
   } catch (error) {

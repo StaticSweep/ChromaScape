@@ -94,6 +94,33 @@ class McpTransportClientTest {
   }
 
   @Test
+  @DisplayName("healthCheck() returns structured unhealthy payload from non-2xx health response")
+  void testHealthCheckReturnsStructuredUnhealthyOnNon2xx() throws Exception {
+    // Arrange: server returns 503 but still includes standard health payload
+    AtomicInteger attemptCount = new AtomicInteger(0);
+    testServer.createContext(
+        "/health",
+        exchange -> {
+          attemptCount.incrementAndGet();
+          String response =
+              "{\"healthy\":false,\"serverVersion\":\"2.0.0\","
+                  + "\"metadata\":{\"provider\":\"codex-cli\",\"backend\":\"mcp\"}}";
+          sendJsonResponse(exchange, 503, response);
+        });
+
+    testServer.start();
+
+    // Act
+    McpHealthResponse result = client.healthCheck();
+
+    // Assert
+    assertFalse(result.isHealthy(), "Health check should return unhealthy");
+    assertEquals("2.0.0", result.getServerVersion(), "Should preserve server version");
+    assertEquals("codex-cli", result.getMetadata().get("provider"));
+    assertEquals(1, attemptCount.get(), "Structured health payload should not trigger retries");
+  }
+
+  @Test
   @DisplayName("healthCheck() returns unhealthy when healthy field is missing")
   void testHealthCheckReturnsUnhealthyWhenFieldMissing() throws Exception {
     // Arrange: server returns response without "healthy" field

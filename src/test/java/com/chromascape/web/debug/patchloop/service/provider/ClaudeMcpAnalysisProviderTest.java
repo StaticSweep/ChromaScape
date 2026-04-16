@@ -64,9 +64,20 @@ class ClaudeMcpAnalysisProviderTest {
   }
 
   @Test
-  @DisplayName("getProviderName() returns 'claude-mcp'")
+  @DisplayName("getProviderName() returns 'codex-mcp' by default")
   void testGetProviderName() {
-    assertEquals("claude-mcp", provider.getProviderName(), "Provider name should be 'claude-mcp'");
+    assertEquals("codex-mcp", provider.getProviderName(), "Provider name should be 'codex-mcp'");
+  }
+
+  @Test
+  @DisplayName("getProviderName() preserves legacy alias 'claude-mcp' when configured")
+  void testGetProviderNameWithLegacyAlias() {
+    ClaudeMcpAnalysisProvider legacyProvider =
+        new ClaudeMcpAnalysisProvider(transport, config, "claude-mcp");
+    assertEquals(
+        "claude-mcp",
+        legacyProvider.getProviderName(),
+        "Provider name should preserve configured legacy alias");
   }
 
   @Test

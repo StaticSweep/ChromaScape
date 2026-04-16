@@ -418,6 +418,15 @@ public class PatchLoopGraphOrchestratorService {
     response.setEvidence(
         evidence.stream().map(this::mapEvidenceArtifact).collect(Collectors.toList()));
 
+    // Load script run terminal details from node execution state
+    List<PatchLoopGraphNode> graphNodes =
+        nodeRepository.findByExecutionIdOrderByStartedAtAsc(executionId);
+    response.setScriptRuns(
+        graphNodes.stream()
+            .filter(node -> node.getNodeType() == NodeType.RUN_SCRIPT)
+            .map(this::mapScriptRunArtifact)
+            .collect(Collectors.toList()));
+
     return response;
   }
 
@@ -724,5 +733,63 @@ public class PatchLoopGraphOrchestratorService {
     artifact.setSummary(entity.getSummary());
     artifact.setTimestamp(formatDateTime(entity.getTimestamp()));
     return artifact;
+  }
+
+  private ArtifactsResponse.ScriptRunArtifact mapScriptRunArtifact(PatchLoopGraphNode entity) {
+    ArtifactsResponse.ScriptRunArtifact artifact = new ArtifactsResponse.ScriptRunArtifact();
+    artifact.setNodeId(entity.getNodeId());
+    artifact.setAttemptNumber(entity.getAttemptNumber());
+    artifact.setDurationMs(entity.getDurationMs());
+    artifact.setStartedAt(formatDateTime(entity.getStartedAt()));
+    artifact.setCompletedAt(formatDateTime(entity.getCompletedAt()));
+
+    JsonNode outputData = entity.getOutputData();
+    artifact.setScriptName(readText(outputData, "scriptName", null));
+    artifact.setBackend(readText(outputData, "backend", "local_instance"));
+
+    boolean timedOutFromData = readBoolean(outputData, "timedOut", false);
+    boolean timedOutFromStatus = entity.getStatus() == NodeExecutionStatus.TIMEOUT;
+    boolean timedOut = timedOutFromData || timedOutFromStatus;
+    artifact.setTimedOut(timedOut);
+
+    String statusFromData = readText(outputData, "terminalStatus", null);
+    if (statusFromData != null && !statusFromData.isBlank()) {
+      artifact.setTerminalStatus(statusFromData);
+    } else if (timedOut) {
+      artifact.setTerminalStatus("TIMEOUT");
+    } else if (entity.getStatus() == NodeExecutionStatus.COMPLETED) {
+      artifact.setTerminalStatus("COMPLETED");
+    } else {
+      artifact.setTerminalStatus("FAILED");
+    }
+
+    boolean success = readBoolean(outputData, "success", entity.getStatus() == NodeExecutionStatus.COMPLETED);
+    artifact.setSuccess(success);
+
+    String errorFromOutput = readText(outputData, "errorMessage", null);
+    if (errorFromOutput != null && !errorFromOutput.isBlank()) {
+      artifact.setErrorMessage(errorFromOutput);
+    } else if (entity.getErrorMessage() != null && !entity.getErrorMessage().isBlank()) {
+      artifact.setErrorMessage(entity.getErrorMessage());
+    } else if (!success) {
+      artifact.setErrorMessage(entity.getOutputSummary());
+    }
+
+    return artifact;
+  }
+
+  private String readText(JsonNode node, String key, String defaultValue) {
+    if (node == null || !node.has(key) || node.get(key).isNull()) {
+      return defaultValue;
+    }
+    String value = node.get(key).asText(defaultValue);
+    return value == null || value.isBlank() ? defaultValue : value;
+  }
+
+  private boolean readBoolean(JsonNode node, String key, boolean defaultValue) {
+    if (node == null || !node.has(key) || node.get(key).isNull()) {
+      return defaultValue;
+    }
+    return node.get(key).asBoolean(defaultValue);
   }
 }

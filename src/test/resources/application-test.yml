@@ -52,6 +52,6 @@ micro6:
     enabled: false
 
 analysis:
-  provider: claude-mcp
+  provider: codex-mcp
   mcp:
     auto-start: false

@@ -69,6 +69,17 @@ leeuwbot:
 server:
   port: ${SERVER_PORT:8090}  # Changed from 8080 to avoid conflict with leeuwbot-api
 
+# ChromaScape runtime configuration
+chromascape:
+  patchloop:
+    # Execution backend: local_instance | micro6_local_executor
+    execution-backend: ${CHROMASCAPE_PATCHLOOP_EXECUTION_BACKEND:micro6_local_executor}
+    micro6-executor:
+      # Micro6 local executor base URL for patch-loop script execution
+      base-url: ${CHROMASCAPE_PATCHLOOP_MICRO6_EXECUTOR_BASE_URL:http://127.0.0.1:8098}
+    # Poll interval for syncing task-plan item status from linked patch-loop iterations
+    task-sync-interval-ms: ${CHROMASCAPE_PATCHLOOP_TASK_SYNC_INTERVAL_MS:5000}
+
 # Unified Frame Capture - Single capture thread for all consumers
 unified-capture:
   # Enable unified capture (reduces CPU usage by eliminating duplicate screen captures)
@@ -138,15 +149,24 @@ micro6:
     max-batch-size: ${MICRO6_MAX_BATCH:100}
     # Maximum deduplication history
     max-history-lines: ${MICRO6_HISTORY_LINES:500}
+  executor-catalog:
+    # Enable/disable catalog fetch from local executor
+    enabled: ${MICRO6_EXECUTOR_CATALOG_ENABLED:true}
+    # Micro6 local executor base URL
+    base-url: ${MICRO6_EXECUTOR_BASE_URL:http://127.0.0.1:8098}
+    # HTTP timeout for catalog fetch
+    timeout-ms: ${MICRO6_EXECUTOR_TIMEOUT_MS:5000}
+    # Cache TTL in seconds
+    refresh-seconds: ${MICRO6_EXECUTOR_CATALOG_REFRESH_SECONDS:30}
 
 # Analysis Provider Configuration - For BMAD (Bot Metric Analysis & Diagnostics)
 analysis:
-  # Provider selection: claude-api or claude-mcp
+  # Provider selection: claude-api, codex-mcp, claude-mcp (legacy alias), or openai-codex
   # Set via ANALYSIS_PROVIDER environment variable
-  # Default changed to claude-mcp for auto-start convenience
-  provider: ${ANALYSIS_PROVIDER:claude-mcp}
+  # Default is codex-mcp for auto-start convenience
+  provider: ${ANALYSIS_PROVIDER:codex-mcp}
 
-  # MCP-specific configuration (only used if provider=claude-mcp)
+  # MCP-specific configuration (used when provider is codex-mcp or claude-mcp)
   mcp:
     # Auto-start configuration
     auto-start: ${MCP_AUTO_START:true}
@@ -160,8 +180,21 @@ analysis:
     # Maximum retry attempts
     max-retries: ${MCP_MAX_RETRIES:3}
 
+  # OpenAI/Codex API configuration (used when provider is openai-codex)
+  openai:
+    # OpenAI API key (set via ANALYSIS_OPENAI_API_KEY environment variable)
+    api-key: ${ANALYSIS_OPENAI_API_KEY:}
+    # OpenAI Chat Completions endpoint URL
+    url: ${ANALYSIS_OPENAI_URL:https://api.openai.com/v1/chat/completions}
+    # Model to use for analysis (gpt-5-mini, gpt-4.1, etc.)
+    model: ${ANALYSIS_OPENAI_MODEL:gpt-5-mini}
+    # Request timeout in seconds
+    timeout-seconds: ${ANALYSIS_OPENAI_TIMEOUT:120}
+    # Maximum tokens in API response
+    max-tokens: ${ANALYSIS_OPENAI_MAX_TOKENS:8192}
+
 # Claude API Configuration - For BMAD (Bot Metric Analysis & Diagnostics)
-# Only used when analysis.provider=claude-api (default)
+# Only used when analysis.provider=claude-api
 claude:
   api:
     # Claude API key (set via CLAUDE_API_KEY environment variable)
@@ -174,6 +207,34 @@ claude:
     timeout-seconds: ${CLAUDE_API_TIMEOUT:120}
     # Maximum tokens in API response
     max-tokens: ${CLAUDE_API_MAX_TOKENS:4096}
+
+# Microbot Agent Server Configuration
+microbot:
+  agent-server:
+    # Enable/disable Microbot Agent Server adapter
+    enabled: ${MICROBOT_AGENT_SERVER_ENABLED:false}
+    # Base URL of the Microbot Agent Server
+    base-url: ${MICROBOT_AGENT_SERVER_URL:http://localhost:8085}
+    # HTTP request timeout in milliseconds
+    timeout-ms: ${MICROBOT_AGENT_SERVER_TIMEOUT:5000}
+    # Polling interval for state snapshots in milliseconds
+    poll-interval-ms: ${MICROBOT_AGENT_SERVER_POLL_MS:2000}
+
+# Feature Flags
+features:
+  task-synthesis:
+    enabled: ${FEATURES_TASK_SYNTHESIS_ENABLED:true}
+  patch-loop:
+    autofix-enabled: ${FEATURES_PATCH_LOOP_AUTOFIX:true}
+  ai-player:
+    enabled: ${FEATURES_AI_PLAYER_ENABLED:false}
+    shadow-mode: ${FEATURES_AI_PLAYER_SHADOW:false}
+    control-enabled: ${FEATURES_AI_PLAYER_CONTROL:false}
+
+# AI Player Configuration
+ai-player:
+  dataset:
+    output-dir: ${AI_PLAYER_DATASET_DIR:.chromascape/datasets}
 
 # Simulator Verifier Integration Configuration
 simulator:

@@ -103,8 +103,7 @@ public class PatchLoopOrchestratorService {
     // Persist E6.5+ fields
     iteration.setPromptType(
         request.getPromptType() != null ? request.getPromptType().name() : "ISSUE");
-    iteration.setExecutionMode(
-        request.getExecutionMode() != null ? request.getExecutionMode() : "analysis_only");
+    iteration.setExecutionMode(request.getNormalizedExecutionMode());
     iteration.setMaxAttempts(request.getMaxAttempts() != null ? request.getMaxAttempts() : 3);
 
     if (request.getSuccessCriteria() != null) {
@@ -133,6 +132,14 @@ public class PatchLoopOrchestratorService {
       }
     }
 
+    // Store task plan context if provided
+    if (request.getTaskPlanId() != null) {
+      iteration.setTaskPlanId(request.getTaskPlanId());
+    }
+    if (request.getTaskItemId() != null) {
+      iteration.setTaskItemId(request.getTaskItemId());
+    }
+
     iteration = iterationRepository.save(iteration);
 
     logEvent(
@@ -146,7 +153,7 @@ public class PatchLoopOrchestratorService {
     graphRequest.setScriptName(request.getScriptName());
     graphRequest.setGoalPrompt(request.getPrompt());
     graphRequest.setContext(request.getContext());
-    graphRequest.setExecutionMode(request.getExecutionMode());
+    graphRequest.setExecutionMode(request.getNormalizedExecutionMode());
     graphRequest.setMaxAttempts(request.getMaxAttempts());
     graphRequest.setSuccessCriteria(request.getSuccessCriteria());
     graphRequest.setEvidenceConfig(request.getEvidenceConfig());

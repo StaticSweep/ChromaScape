@@ -35,6 +35,10 @@ public class ArtifactsResponse {
   @JsonProperty("evidence")
   private List<EvidenceArtifact> evidence;
 
+  /** Script run terminal details */
+  @JsonProperty("scriptRuns")
+  private List<ScriptRunArtifact> scriptRuns;
+
   public ArtifactsResponse() {}
 
   public String getExecutionId() {
@@ -83,6 +87,14 @@ public class ArtifactsResponse {
 
   public void setEvidence(List<EvidenceArtifact> evidence) {
     this.evidence = evidence;
+  }
+
+  public List<ScriptRunArtifact> getScriptRuns() {
+    return scriptRuns;
+  }
+
+  public void setScriptRuns(List<ScriptRunArtifact> scriptRuns) {
+    this.scriptRuns = scriptRuns;
   }
 
   @Override
@@ -632,6 +644,131 @@ public class ArtifactsResponse {
 
     public void setTimestamp(String timestamp) {
       this.timestamp = timestamp;
+    }
+  }
+
+  /** Script run artifact. */
+  public static class ScriptRunArtifact {
+
+    @JsonProperty("nodeId")
+    private String nodeId;
+
+    @JsonProperty("attemptNumber")
+    private Integer attemptNumber;
+
+    @JsonProperty("scriptName")
+    private String scriptName;
+
+    @JsonProperty("backend")
+    private String backend;
+
+    @JsonProperty("terminalStatus")
+    private String terminalStatus;
+
+    @JsonProperty("timedOut")
+    private Boolean timedOut;
+
+    @JsonProperty("success")
+    private Boolean success;
+
+    @JsonProperty("errorMessage")
+    private String errorMessage;
+
+    @JsonProperty("durationMs")
+    private Long durationMs;
+
+    @JsonProperty("startedAt")
+    private String startedAt;
+
+    @JsonProperty("completedAt")
+    private String completedAt;
+
+    public String getNodeId() {
+      return nodeId;
+    }
+
+    public void setNodeId(String nodeId) {
+      this.nodeId = nodeId;
+    }
+
+    public Integer getAttemptNumber() {
+      return attemptNumber;
+    }
+
+    public void setAttemptNumber(Integer attemptNumber) {
+      this.attemptNumber = attemptNumber;
+    }
+
+    public String getScriptName() {
+      return scriptName;
+    }
+
+    public void setScriptName(String scriptName) {
+      this.scriptName = scriptName;
+    }
+
+    public String getBackend() {
+      return backend;
+    }
+
+    public void setBackend(String backend) {
+      this.backend = backend;
+    }
+
+    public String getTerminalStatus() {
+      return terminalStatus;
+    }
+
+    public void setTerminalStatus(String terminalStatus) {
+      this.terminalStatus = terminalStatus;
+    }
+
+    public Boolean getTimedOut() {
+      return timedOut;
+    }
+
+    public void setTimedOut(Boolean timedOut) {
+      this.timedOut = timedOut;
+    }
+
+    public Boolean getSuccess() {
+      return success;
+    }
+
+    public void setSuccess(Boolean success) {
+      this.success = success;
+    }
+
+    public String getErrorMessage() {
+      return errorMessage;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+      this.errorMessage = errorMessage;
+    }
+
+    public Long getDurationMs() {
+      return durationMs;
+    }
+
+    public void setDurationMs(Long durationMs) {
+      this.durationMs = durationMs;
+    }
+
+    public String getStartedAt() {
+      return startedAt;
+    }
+
+    public void setStartedAt(String startedAt) {
+      this.startedAt = startedAt;
+    }
+
+    public String getCompletedAt() {
+      return completedAt;
+    }
+
+    public void setCompletedAt(String completedAt) {
+      this.completedAt = completedAt;
     }
   }
 }

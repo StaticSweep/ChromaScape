@@ -18,8 +18,10 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>"claude-api" - Uses Claude API provider (production-ready)
- *   <li>"claude-mcp" - Uses Claude MCP provider (scaffold only, not functional)
- *   <li>undefined - Defaults to "claude-api" via Spring's default value mechanism
+ *   <li>"codex-mcp" - Uses MCP provider with Codex naming (default)
+ *   <li>"claude-mcp" - Legacy alias for MCP provider (backward compatibility)
+ *   <li>"openai-codex" - Uses OpenAI/Codex API provider
+ *   <li>undefined - Defaults to "codex-mcp" via Spring's default value mechanism
  * </ul>
  *
  * @see AnalysisProviderConfig
@@ -28,9 +30,10 @@ import org.springframework.stereotype.Component;
 public class AnalysisProviderValidator {
 
   private static final Logger logger = LoggerFactory.getLogger(AnalysisProviderValidator.class);
-  private static final Set<String> VALID_PROVIDERS = Set.of("claude-api", "claude-mcp");
+  private static final Set<String> VALID_PROVIDERS =
+      Set.of("claude-api", "codex-mcp", "claude-mcp", "openai-codex");
 
-  @Value("${analysis.provider:claude-api}")
+  @Value("${analysis.provider:codex-mcp}")
   private String providerValue;
 
   /**
@@ -44,7 +47,7 @@ public class AnalysisProviderValidator {
       String errorMsg =
           String.format(
               "Invalid analysis.provider='%s'. Valid values: %s. "
-                  + "Note: If property is undefined, it defaults to 'claude-api'.",
+                  + "Note: If property is undefined, it defaults to 'codex-mcp'.",
               providerValue, VALID_PROVIDERS);
       logger.error(errorMsg);
       throw new IllegalStateException(errorMsg);

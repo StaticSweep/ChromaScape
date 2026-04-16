@@ -59,7 +59,8 @@ public class ScriptControl {
       logger.info("Config valid: attempting to run script");
 
       // Instantiate and start the script instance
-      ScriptInstance instance = new ScriptInstance(config, stateHandler, taskDetectionService);
+      ScriptInstance instance =
+          new ScriptInstance(config, stateHandler, taskDetectionService, config.taskPlanId(), config.taskItemId());
       ScriptInstanceManager.getInstance().setInstance(instance);
       instance.start();
 

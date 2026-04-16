@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.patchloop.controller;
 
+import com.chromascape.web.config.McpBridgeLifecycleManager;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopEventResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteRequest;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteResponse;
@@ -8,11 +9,15 @@ import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
 import com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
+import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
+import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,15 +37,27 @@ public class PatchLoopController {
   private final PatchLoopOrchestratorService orchestratorService;
   private final PatchLoopGraphOrchestratorService graphOrchestratorService;
   private final PatchLoopAnalysisClient analysisClient;
+  private final McpTransportClient mcpTransportClient;
+
+  @Value("${claude.api.model:claude-opus-4-6}")
+  private String claudeApiModel;
+
+  @Value("${analysis.openai.model:gpt-5-mini}")
+  private String openAiCodexModel;
+
+  @Autowired(required = false)
+  private McpBridgeLifecycleManager bridgeLifecycleManager;
 
   @Autowired
   public PatchLoopController(
       PatchLoopOrchestratorService orchestratorService,
       PatchLoopGraphOrchestratorService graphOrchestratorService,
-      PatchLoopAnalysisClient analysisClient) {
+      PatchLoopAnalysisClient analysisClient,
+      McpTransportClient mcpTransportClient) {
     this.orchestratorService = orchestratorService;
     this.graphOrchestratorService = graphOrchestratorService;
     this.analysisClient = analysisClient;
+    this.mcpTransportClient = mcpTransportClient;
   }
 
   /**
@@ -357,9 +374,66 @@ public class PatchLoopController {
 
     try {
       java.util.Map<String, Object> status = new java.util.HashMap<>();
-      status.put("providerName", analysisClient.getProviderName());
-      status.put("available", analysisClient.isProviderAvailable());
+      String frameworkProvider = analysisClient.getProviderName();
+      if (frameworkProvider == null || frameworkProvider.isBlank()) {
+        frameworkProvider = "unknown";
+      }
+      String backend =
+          frameworkProvider != null && frameworkProvider.endsWith("-mcp") ? "mcp" : "api";
+      boolean available;
+      String availabilityReason = "unknown";
+
+      // Keep providerName for backward compatibility with older clients.
+      status.put("providerName", frameworkProvider);
+      status.put("frameworkProvider", frameworkProvider);
+      status.put("backend", backend);
+      status.put("runtimeProvider", inferRuntimeProvider(frameworkProvider, backend));
+      status.put("bridgeMode", resolveBridgeMode(backend));
       status.put("defaultMode", "analysis_only"); // Current default
+
+      if ("mcp".equals(backend)) {
+        available = false;
+        try {
+          McpHealthResponse health = mcpTransportClient.healthCheck();
+          if (health != null) {
+            status.put("bridgeHealthy", health.isHealthy());
+            available = health.isHealthy();
+            Map<String, Object> metadata = health.getMetadata();
+            status.put(
+                "runtimeProvider",
+                normalizeRuntimeProvider(
+                    readStringMetadata(
+                        metadata,
+                        "provider",
+                        String.valueOf(status.get("runtimeProvider")))));
+            status.put("runtimeModel", readStringMetadata(metadata, "model", "unknown"));
+            status.put("backend", readStringMetadata(metadata, "backend", backend));
+            availabilityReason =
+                readStringMetadata(
+                    metadata,
+                    "readiness",
+                    health.isHealthy() ? "provider_ready" : "provider_unavailable");
+          }
+        } catch (Exception e) {
+          logger.debug("MCP runtime metadata unavailable while building provider status", e);
+          availabilityReason = "mcp_health_check_failed";
+        }
+      } else if ("claude-api".equals(frameworkProvider)) {
+        available = analysisClient.isProviderAvailable();
+        status.put("runtimeProvider", "claude-api");
+        status.put("runtimeModel", claudeApiModel);
+        availabilityReason = available ? "provider_ready" : "claude_api_unavailable";
+      } else if ("openai-codex".equals(frameworkProvider)) {
+        available = analysisClient.isProviderAvailable();
+        status.put("runtimeProvider", "openai-codex");
+        status.put("runtimeModel", openAiCodexModel);
+        availabilityReason = available ? "provider_ready" : "openai_codex_unavailable";
+      } else {
+        available = analysisClient.isProviderAvailable();
+        availabilityReason = available ? "provider_ready" : "provider_unavailable";
+      }
+      status.put("available", available);
+      status.put("availabilityReason", availabilityReason);
 
       return ResponseEntity.ok(status);
 
@@ -368,5 +442,74 @@ public class PatchLoopController {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body("Failed to get provider status: " + e.getMessage());
     }
+  }
+
+  private String readStringMetadata(Map<String, Object> metadata, String key, String fallback) {
+    if (metadata == null) {
+      return fallback;
+    }
+    Object value = metadata.get(key);
+    if (value == null) {
+      return fallback;
+    }
+    String stringValue = value.toString().trim();
+    return stringValue.isEmpty() ? fallback : stringValue;
+  }
+
+  private String inferRuntimeProvider(String frameworkProvider, String backend) {
+    if ("api".equals(backend)) {
+      return frameworkProvider;
+    }
+    if ("claude-mcp".equals(frameworkProvider)) {
+      return "claude-cli";
+    }
+    if ("codex-mcp".equals(frameworkProvider)) {
+      return "codex-cli";
+    }
+    return "mcp-wrapper";
+  }
+
+  private String normalizeRuntimeProvider(String runtimeProvider) {
+    if (runtimeProvider == null || runtimeProvider.isBlank()) {
+      return runtimeProvider;
+    }
+
+    return switch (runtimeProvider) {
+      case "codex" -> "codex-cli";
+      case "claude" -> "claude-cli";
+      case "opencode" -> "opencode-cli";
+      default -> runtimeProvider;
+    };
+  }
+
+  private String resolveBridgeMode(String backend) {
+    if (!"mcp".equals(backend)) {
+      return "managed";
+    }
+    if (bridgeLifecycleManager == null) {
+      return "external";
+    }
+    if (bridgeLifecycleManager.isBridgeProcessRunning()) {
+      return "managed";
+    }
+    String mode = bridgeLifecycleManager.getBridgeMode();
+    return (mode == null || mode.isBlank()) ? "external" : mode;
+  }
+
+  /**
+   * Executes a patch loop for a task plan item.
+   *
+   * <p>This endpoint is also exposed through /api/account-tasks/items/{itemId}/execute-patch-loop,
+   * which delegates here.
+   *
+   * @param request execution request with optional taskPlanId/taskItemId
+   * @return execution response
+   */
+  @PostMapping("/execute-for-task")
+  public ResponseEntity<Object> executeForTask(@RequestBody PatchLoopExecuteRequest request) {
+    logger.info(
+        "POST /api/debug/patch-loop/execute-for-task - taskItem: {}",
+        request.getTaskItemId());
+    return executeIteration(request);
   }
 }

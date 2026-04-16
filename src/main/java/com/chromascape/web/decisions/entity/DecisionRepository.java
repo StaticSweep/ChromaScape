@@ -14,6 +14,9 @@ public interface DecisionRepository extends JpaRepository<DecisionEntity, Long> 
   /** Find decisions by recording session ID ordered by timestamp. */
   List<DecisionEntity> findByRecordingSessionIdOrderByTimestampAsc(Long recordingSessionId);
 
+  /** Find decisions by recording session ID ordered by timestamp descending. */
+  List<DecisionEntity> findByRecordingSessionIdOrderByTimestampDesc(Long recordingSessionId);
+
   /** Find decisions by script name ordered by timestamp descending. */
   List<DecisionEntity> findByScriptNameOrderByTimestampDesc(String scriptName);
 

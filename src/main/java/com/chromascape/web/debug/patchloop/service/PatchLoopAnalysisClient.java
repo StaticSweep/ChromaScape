@@ -16,7 +16,8 @@ import org.springframework.stereotype.Service;
  * implementations (e.g., {@code ClaudeApiAnalysisProvider}).
  *
  * <p>This design allows the provider to be selected via configuration ({@code
- * analysis.provider=claude-api|claude-mcp}) without changing core orchestration logic.
+ * analysis.provider=claude-api|codex-mcp|claude-mcp|openai-codex}) without changing core
+ * orchestration logic.
  *
  * @since 2.0.0
  */
@@ -51,7 +52,7 @@ public class PatchLoopAnalysisClient {
   /**
    * Returns the configured provider name.
    *
-   * @return provider name (e.g., "claude-api", "claude-mcp")
+   * @return provider name (e.g., "claude-api", "codex-mcp", "claude-mcp", "openai-codex")
    */
   public String getProviderName() {
     return analysisProvider.getProviderName();

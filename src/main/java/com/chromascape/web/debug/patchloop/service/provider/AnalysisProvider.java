@@ -32,7 +32,7 @@ public interface AnalysisProvider {
   /**
    * Returns the provider name for logging/debugging.
    *
-   * @return provider name (e.g., "claude-api", "claude-mcp")
+   * @return provider name (e.g., "claude-api", "codex-mcp", "claude-mcp", "openai-codex")
    */
   String getProviderName();
 

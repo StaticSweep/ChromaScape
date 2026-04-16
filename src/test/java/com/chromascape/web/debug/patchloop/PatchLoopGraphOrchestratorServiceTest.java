@@ -16,6 +16,7 @@ import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.UUID;
@@ -305,5 +306,59 @@ class PatchLoopGraphOrchestratorServiceTest {
     PatchLoopIteration savedIteration = captor.getValue();
     assertThat(savedIteration.getIterationId()).isEqualTo(existingIterationId);
     assertThat(savedIteration.getGraphExecutionId()).isEqualTo(response.getExecutionId());
+  }
+
+  @Test
+  @DisplayName("getArtifacts includes scriptRuns derived from RUN_SCRIPT node states")
+  void testGetArtifactsIncludesScriptRuns() throws Exception {
+    when(patchRepository.findByExecutionIdOrderByCreatedAtAsc(executionId))
+        .thenReturn(Collections.emptyList());
+    when(validationRepository.findByExecutionIdOrderByTimestampAsc(executionId))
+        .thenReturn(Collections.emptyList());
+    when(retestRepository.findByExecutionIdOrderByTimestampAsc(executionId))
+        .thenReturn(Collections.emptyList());
+    when(analysisArtifactRepository.findByExecutionIdOrderByTimestampAsc(executionId))
+        .thenReturn(Collections.emptyList());
+    when(evidenceArtifactRepository.findByExecutionIdOrderByTimestampAsc(executionId))
+        .thenReturn(Collections.emptyList());
+
+    PatchLoopGraphNode runNode = new PatchLoopGraphNode();
+    runNode.setExecutionId(executionId);
+    runNode.setNodeId("RUN_SCRIPT");
+    runNode.setNodeType(NodeType.RUN_SCRIPT);
+    runNode.setAttemptNumber(2);
+    runNode.setStatus(NodeExecutionStatus.TIMEOUT);
+    runNode.setDurationMs(2500L);
+    runNode.setStartedAt(LocalDateTime.now().minusSeconds(3));
+    runNode.setCompletedAt(LocalDateTime.now());
+    runNode.setOutputData(
+        new ObjectMapper()
+            .readTree(
+                """
+                {
+                  "scriptName": "MyScript",
+                  "backend": "micro6_local_executor",
+                  "terminalStatus": "TIMEOUT",
+                  "timedOut": true,
+                  "success": false,
+                  "errorMessage": "Script execution timed out",
+                  "durationMs": 2500
+                }
+                """));
+    when(nodeRepository.findByExecutionIdOrderByStartedAtAsc(executionId))
+        .thenReturn(Collections.singletonList(runNode));
+
+    var response = orchestrator.getArtifacts(iterationId);
+
+    assertThat(response).isNotNull();
+    assertThat(response.getScriptRuns()).hasSize(1);
+    var scriptRun = response.getScriptRuns().get(0);
+    assertThat(scriptRun.getNodeId()).isEqualTo("RUN_SCRIPT");
+    assertThat(scriptRun.getScriptName()).isEqualTo("MyScript");
+    assertThat(scriptRun.getBackend()).isEqualTo("micro6_local_executor");
+    assertThat(scriptRun.getTerminalStatus()).isEqualTo("TIMEOUT");
+    assertThat(scriptRun.getTimedOut()).isTrue();
+    assertThat(scriptRun.getSuccess()).isFalse();
+    assertThat(scriptRun.getErrorMessage()).contains("timed out");
   }
 }

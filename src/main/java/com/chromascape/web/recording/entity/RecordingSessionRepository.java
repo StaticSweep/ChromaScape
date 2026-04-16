@@ -53,4 +53,8 @@ public interface RecordingSessionRepository extends JpaRepository<RecordingSessi
       @Param("triggerType") RecordingSession.SessionTrigger triggerType,
       @Param("start") LocalDateTime start,
       @Param("end") LocalDateTime end);
+
+  /** Find recent sessions with time bounds for evidence collection. */
+  List<RecordingSession> findByStartTimeBetweenOrderByStartTimeDesc(
+      LocalDateTime start, LocalDateTime end);
 }

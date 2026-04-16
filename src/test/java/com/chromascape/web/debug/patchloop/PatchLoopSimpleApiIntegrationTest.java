@@ -36,7 +36,8 @@ class PatchLoopSimpleApiIntegrationTest {
 
   @BeforeEach
   void setUp() {
-    controller = new PatchLoopController(orchestratorService, graphOrchestratorService, null);
+    controller =
+        new PatchLoopController(orchestratorService, graphOrchestratorService, null, null);
   }
 
   @Test

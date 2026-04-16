@@ -33,7 +33,10 @@ public class PatchLoopExecuteRequest {
   @JsonProperty("promptType")
   private PromptType promptType = PromptType.ISSUE;
 
-  /** Execution mode: "analysis_only" or "autofix_loop" (default: analysis_only) */
+  /**
+   * Execution mode: "analysis_only", "propose_then_apply", or "autofix_loop" (default:
+   * analysis_only)
+   */
   @JsonProperty("executionMode")
   private String executionMode = "analysis_only";
 
@@ -48,6 +51,14 @@ public class PatchLoopExecuteRequest {
   /** Debugger session context for linking to existing sessions (optional) */
   @JsonProperty("sessionContext")
   private SessionContextDto sessionContext;
+
+  /** Task plan ID for plan-linked execution (optional) */
+  @JsonProperty("taskPlanId")
+  private String taskPlanId;
+
+  /** Task plan item ID for plan-linked execution (optional) */
+  @JsonProperty("taskItemId")
+  private String taskItemId;
 
   public PatchLoopExecuteRequest() {}
 
@@ -100,6 +111,17 @@ public class PatchLoopExecuteRequest {
     return executionMode;
   }
 
+  /** Returns the normalized execution mode for compatibility with older clients. */
+  public String getNormalizedExecutionMode() {
+    if (executionMode == null) {
+      return "analysis_only";
+    }
+    if ("full_loop".equals(executionMode)) {
+      return "autofix_loop";
+    }
+    return executionMode;
+  }
+
   public void setExecutionMode(String executionMode) {
     this.executionMode = executionMode;
   }
@@ -126,6 +148,22 @@ public class PatchLoopExecuteRequest {
 
   public void setSessionContext(SessionContextDto sessionContext) {
     this.sessionContext = sessionContext;
+  }
+
+  public String getTaskPlanId() {
+    return taskPlanId;
+  }
+
+  public void setTaskPlanId(String taskPlanId) {
+    this.taskPlanId = taskPlanId;
+  }
+
+  public String getTaskItemId() {
+    return taskItemId;
+  }
+
+  public void setTaskItemId(String taskItemId) {
+    this.taskItemId = taskItemId;
   }
 
   @Override

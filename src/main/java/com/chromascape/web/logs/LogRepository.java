@@ -68,4 +68,12 @@ public interface LogRepository extends JpaRepository<LogEntity, Long> {
 
   /** Find logs by tick and log type */
   List<LogEntity> findByTickAndLogType(Integer tick, String logType);
+
+  /** Find logs by source and timestamp window for evidence collection. */
+  List<LogEntity> findBySourceAndTimestampBetweenOrderByTimestampAsc(
+      String source, LocalDateTime start, LocalDateTime end);
+
+  /** Find all logs in a timestamp window ordered chronologically. */
+  List<LogEntity> findByTimestampBetweenOrderByTimestampAsc(
+      LocalDateTime start, LocalDateTime end);
 }

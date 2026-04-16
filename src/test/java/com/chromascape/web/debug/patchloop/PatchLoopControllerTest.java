@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.chromascape.web.debug.patchloop.controller.PatchLoopController;
+import com.chromascape.web.debug.patchloop.dto.ArtifactsResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopEventResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteRequest;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteResponse;
@@ -13,9 +14,13 @@ import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
 import com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
+import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
+import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
+import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportException;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,13 +40,15 @@ class PatchLoopControllerTest {
   @Mock private PatchLoopOrchestratorService orchestratorService;
   @Mock private PatchLoopGraphOrchestratorService graphOrchestratorService;
   @Mock private PatchLoopAnalysisClient analysisClient;
+  @Mock private McpTransportClient mcpTransportClient;
 
   private PatchLoopController controller;
 
   @BeforeEach
   void setUp() {
     controller =
-        new PatchLoopController(orchestratorService, graphOrchestratorService, analysisClient);
+        new PatchLoopController(
+            orchestratorService, graphOrchestratorService, analysisClient, mcpTransportClient);
   }
 
   @Test
@@ -436,6 +443,34 @@ class PatchLoopControllerTest {
   }
 
   @Test
+  @DisplayName("GET /{iterationId}/artifacts returns scriptRuns when present")
+  void testGetArtifactsReturnsScriptRuns() {
+    String iterationId = "iter-script-runs";
+    ArtifactsResponse artifacts = new ArtifactsResponse();
+    ArtifactsResponse.ScriptRunArtifact runArtifact = new ArtifactsResponse.ScriptRunArtifact();
+    runArtifact.setNodeId("RUN_SCRIPT");
+    runArtifact.setScriptName("MyScript");
+    runArtifact.setBackend("micro6_local_executor");
+    runArtifact.setTerminalStatus("FAILED");
+    runArtifact.setTimedOut(false);
+    runArtifact.setSuccess(false);
+    runArtifact.setErrorMessage("boom");
+    artifacts.setScriptRuns(List.of(runArtifact));
+
+    when(graphOrchestratorService.getArtifacts(iterationId)).thenReturn(artifacts);
+
+    ResponseEntity<Object> response = controller.getArtifacts(iterationId);
+
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody() instanceof ArtifactsResponse);
+    ArtifactsResponse body = (ArtifactsResponse) response.getBody();
+    assertNotNull(body.getScriptRuns());
+    assertEquals(1, body.getScriptRuns().size());
+    assertEquals("RUN_SCRIPT", body.getScriptRuns().get(0).getNodeId());
+  }
+
+  @Test
   @DisplayName("POST /execute-graph creates graph execution (E6.5 non-regression)")
   void testExecuteGraphCreatesExecution()
       throws com.chromascape.web.debug.patchloop.graph.GraphCompilationException,
@@ -515,9 +550,46 @@ class PatchLoopControllerTest {
 
   @Test
   @DisplayName("GET /provider/status returns provider status")
-  void testGetProviderStatusReturns200() {
+  void testGetProviderStatusReturns200() throws Exception {
     // Arrange
-    when(analysisClient.getProviderName()).thenReturn("claude-mcp");
+    when(analysisClient.getProviderName()).thenReturn("codex-mcp");
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("provider", "codex-cli");
+    metadata.put("model", "claude-opus-4-6");
+    metadata.put("backend", "mcp");
+    when(mcpTransportClient.healthCheck())
+        .thenReturn(new McpHealthResponse(true, "2.0.0", metadata));
+
+    // Act
+    ResponseEntity<Object> response = controller.getProviderStatus();
+
+    // Assert
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody() instanceof Map);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals("codex-mcp", body.get("providerName"));
+    assertEquals("codex-mcp", body.get("frameworkProvider"));
+    assertEquals("codex-cli", body.get("runtimeProvider"));
+    assertEquals("claude-opus-4-6", body.get("runtimeModel"));
+    assertEquals("mcp", body.get("backend"));
+    assertEquals(true, body.get("available"));
+    assertEquals("analysis_only", body.get("defaultMode"));
+    assertEquals("external", body.get("bridgeMode"));
+    assertEquals("provider_ready", body.get("availabilityReason"));
+
+    verify(analysisClient, times(1)).getProviderName();
+    verify(analysisClient, never()).isProviderAvailable();
+    verify(mcpTransportClient, times(1)).healthCheck();
+  }
+
+  @Test
+  @DisplayName("GET /provider/status returns claude-api runtime details")
+  void testGetProviderStatusReturnsClaudeApiRuntimeDetails() throws Exception {
+    // Arrange
+    when(analysisClient.getProviderName()).thenReturn("claude-api");
     when(analysisClient.isProviderAvailable()).thenReturn(true);
 
     // Act
@@ -530,12 +602,77 @@ class PatchLoopControllerTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> body = (Map<String, Object>) response.getBody();
-    assertEquals("claude-mcp", body.get("providerName"));
+    assertEquals("claude-api", body.get("providerName"));
+    assertEquals("claude-api", body.get("frameworkProvider"));
+    assertEquals("claude-api", body.get("runtimeProvider"));
+    assertEquals("api", body.get("backend"));
     assertEquals(true, body.get("available"));
-    assertEquals("analysis_only", body.get("defaultMode"));
+    assertEquals("managed", body.get("bridgeMode"));
+    assertEquals("provider_ready", body.get("availabilityReason"));
 
     verify(analysisClient, times(1)).getProviderName();
     verify(analysisClient, times(1)).isProviderAvailable();
+    verify(mcpTransportClient, never()).healthCheck();
+  }
+
+  @Test
+  @DisplayName("GET /provider/status returns openai-codex runtime details")
+  void testGetProviderStatusReturnsOpenAiCodexRuntimeDetails() throws Exception {
+    // Arrange
+    when(analysisClient.getProviderName()).thenReturn("openai-codex");
+    when(analysisClient.isProviderAvailable()).thenReturn(true);
+
+    // Act
+    ResponseEntity<Object> response = controller.getProviderStatus();
+
+    // Assert
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody() instanceof Map);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals("openai-codex", body.get("providerName"));
+    assertEquals("openai-codex", body.get("frameworkProvider"));
+    assertEquals("openai-codex", body.get("runtimeProvider"));
+    assertEquals("api", body.get("backend"));
+    assertEquals(true, body.get("available"));
+    assertEquals("managed", body.get("bridgeMode"));
+    assertEquals("provider_ready", body.get("availabilityReason"));
+
+    verify(analysisClient, times(1)).getProviderName();
+    verify(analysisClient, times(1)).isProviderAvailable();
+    verify(mcpTransportClient, never()).healthCheck();
+  }
+
+  @Test
+  @DisplayName("GET /provider/status keeps codex runtime wrapper when MCP health check throws")
+  void testGetProviderStatusFallsBackToFrameworkRuntimeOnMcpException() throws Exception {
+    // Arrange
+    when(analysisClient.getProviderName()).thenReturn("codex-mcp");
+    when(mcpTransportClient.healthCheck())
+        .thenThrow(
+            new McpTransportException(
+                McpTransportException.McpErrorType.CONNECTION_REFUSED,
+                "Connection refused",
+                false));
+
+    // Act
+    ResponseEntity<Object> response = controller.getProviderStatus();
+
+    // Assert
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody() instanceof Map);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals("codex-mcp", body.get("frameworkProvider"));
+    assertEquals("codex-cli", body.get("runtimeProvider"));
+    assertEquals("mcp", body.get("backend"));
+    assertEquals(false, body.get("available"));
+    assertEquals("external", body.get("bridgeMode"));
+    assertEquals("mcp_health_check_failed", body.get("availabilityReason"));
   }
 
   @Test

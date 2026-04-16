@@ -223,15 +223,35 @@ public class PatchLoopGraphExecutor {
       NodeExecutionResult result = executor.execute(graphNode, execContext);
       long duration = System.currentTimeMillis() - startTime;
 
-      // Update node state with result
-      nodeState.markCompleted(
-          result.outputSummary() != null ? result.outputSummary() : "Completed",
-          result.outputData());
-      nodeRepository.save(nodeState);
-
-      // Broadcast node completed event
-      webSocketHandler.broadcastNodeCompleted(
-          execution.getExecutionId(), graphNode.id(), duration, result.outputSummary());
+      if (result.success()) {
+        nodeState.markCompleted(
+            result.outputSummary() != null ? result.outputSummary() : "Completed",
+            result.outputData());
+        nodeRepository.save(nodeState);
+        webSocketHandler.broadcastNodeCompleted(
+            execution.getExecutionId(), graphNode.id(), duration, result.outputSummary());
+      } else if (result.timedOut()) {
+        String timeoutMessage =
+            result.outputSummary() != null ? result.outputSummary() : "Execution timed out";
+        nodeState.markTimeout(timeoutMessage, result.outputData());
+        nodeRepository.save(nodeState);
+        webSocketHandler.broadcastNodeFailed(
+            execution.getExecutionId(),
+            graphNode.id(),
+            timeoutMessage,
+            nodeState.getRetryCount() != null ? nodeState.getRetryCount() : 0);
+      } else {
+        String failureMessage =
+            result.outputSummary() != null ? result.outputSummary() : "Execution failed";
+        nodeState.markFailed(failureMessage);
+        nodeState.setOutputData(result.outputData());
+        nodeRepository.save(nodeState);
+        webSocketHandler.broadcastNodeFailed(
+            execution.getExecutionId(),
+            graphNode.id(),
+            failureMessage,
+            nodeState.getRetryCount() != null ? nodeState.getRetryCount() : 0);
+      }
 
       // Save runtime snapshot after node completes (for resume/retry)
       snapshotService.saveSnapshot(execution.getExecutionId(), context.getRuntimeData(), context);

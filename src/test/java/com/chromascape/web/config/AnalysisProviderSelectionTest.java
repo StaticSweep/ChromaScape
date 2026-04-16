@@ -3,7 +3,9 @@ package com.chromascape.web.config;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.chromascape.web.debug.patchloop.service.provider.ClaudeApiAnalysisProvider;
+import com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAliasAnalysisProvider;
 import com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider;
+import com.chromascape.web.debug.patchloop.service.provider.OpenAiCodexAnalysisProvider;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpConfigProperties;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,7 +24,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
  *
  * <pre>
  * ===========================================
- * Analysis Provider: claude-api (or claude-mcp)
+ * Analysis Provider: claude-api (or codex-mcp / claude-mcp alias / openai-codex)
  * Provider Available: true/false
  * ===========================================
  * </pre>
@@ -30,19 +32,23 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
  * <p>To manually test provider selection:
  *
  * <pre>
- * # Test 1: Default (claude-api)
+ * # Test 1: Default (codex-mcp)
  * ./gradlew bootRun
  *
  * # Test 2: Explicit claude-api
  * export ANALYSIS_PROVIDER=claude-api && ./gradlew bootRun
  *
- * # Test 3: Claude MCP
+ * # Test 3: Codex MCP (default MCP name)
+ * export ANALYSIS_PROVIDER=codex-mcp && ./gradlew bootRun
+ *
+ * # Test 4: Legacy Claude MCP alias (backward compatibility)
  * export ANALYSIS_PROVIDER=claude-mcp && ./gradlew bootRun
  *
- * # Test 4: Invalid provider (fails at startup with validation error)
+ * # Test 5: Invalid provider (fails at startup with validation error)
  * export ANALYSIS_PROVIDER=invalid && ./gradlew bootRun
  * # Expected: Application fails with IllegalStateException from AnalysisProviderValidator
- * # ERROR: Invalid analysis.provider='invalid'. Valid values: [claude-api, claude-mcp]
+ * # ERROR: Invalid analysis.provider='invalid'. Valid values: [claude-api, codex-mcp,
+ * # claude-mcp, openai-codex]
  * </pre>
  *
  * <p><strong>Note on Invalid Values:</strong> Spring's
@@ -74,7 +80,7 @@ class AnalysisProviderSelectionTest {
   @Test
   @DisplayName("ClaudeMcpAnalysisProvider has @ConditionalOnProperty annotation")
   void testClaudeMcpProviderAnnotation() {
-    // Verify the class has the correct conditional annotation
+    // Verify the class has the correct conditional annotation for codex-mcp.
     ConditionalOnProperty annotation =
         ClaudeMcpAnalysisProvider.class.getAnnotation(ConditionalOnProperty.class);
 
@@ -84,9 +90,46 @@ class AnalysisProviderSelectionTest {
         new String[] {"analysis.provider"},
         annotation.name(),
         "Should check 'analysis.provider' property");
+    assertEquals("codex-mcp", annotation.havingValue(), "Should activate when value is 'codex-mcp'");
+    assertTrue(annotation.matchIfMissing(), "Should default to codex-mcp when property is missing");
+  }
+
+  @Test
+  @DisplayName("ClaudeMcpAliasAnalysisProvider has @ConditionalOnProperty annotation")
+  void testClaudeMcpAliasProviderAnnotation() {
+    ConditionalOnProperty annotation =
+        ClaudeMcpAliasAnalysisProvider.class.getAnnotation(ConditionalOnProperty.class);
+
+    assertNotNull(
+        annotation,
+        "ClaudeMcpAliasAnalysisProvider should have @ConditionalOnProperty annotation");
+    assertArrayEquals(
+        new String[] {"analysis.provider"},
+        annotation.name(),
+        "Should check 'analysis.provider' property");
+    assertEquals("claude-mcp", annotation.havingValue(), "Should activate when value is 'claude-mcp'");
+    assertFalse(annotation.matchIfMissing(), "Alias should not be default when property is missing");
+  }
+
+  @Test
+  @DisplayName("OpenAiCodexAnalysisProvider has @ConditionalOnProperty annotation")
+  void testOpenAiCodexProviderAnnotation() {
+    ConditionalOnProperty annotation =
+        OpenAiCodexAnalysisProvider.class.getAnnotation(ConditionalOnProperty.class);
+
+    assertNotNull(
+        annotation, "OpenAiCodexAnalysisProvider should have @ConditionalOnProperty annotation");
+    assertArrayEquals(
+        new String[] {"analysis.provider"},
+        annotation.name(),
+        "Should check 'analysis.provider' property");
     assertEquals(
-        "claude-mcp", annotation.havingValue(), "Should activate when value is 'claude-mcp'");
-    // Note: matchIfMissing defaults to false, so this is NOT the default provider
+        "openai-codex",
+        annotation.havingValue(),
+        "Should activate when value is 'openai-codex'");
+    assertFalse(
+        annotation.matchIfMissing(),
+        "openai-codex provider should not be selected when property is missing");
   }
 
   @Test
@@ -128,7 +171,7 @@ class AnalysisProviderSelectionTest {
     ClaudeMcpAnalysisProvider provider = new ClaudeMcpAnalysisProvider(transport, config);
 
     assertNotNull(provider, "Provider should be instantiated");
-    assertEquals("claude-mcp", provider.getProviderName(), "Provider name should be 'claude-mcp'");
+    assertEquals("codex-mcp", provider.getProviderName(), "Default provider name should be 'codex-mcp'");
     // Note: isAvailable() now performs actual health check, which will fail without a real MCP
     // server
     // For this test, we just verify the provider can be instantiated
@@ -145,5 +188,9 @@ class AnalysisProviderSelectionTest {
         com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider.class
             .isAssignableFrom(ClaudeMcpAnalysisProvider.class),
         "ClaudeMcpAnalysisProvider should implement AnalysisProvider");
+    assertTrue(
+        com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider.class
+            .isAssignableFrom(OpenAiCodexAnalysisProvider.class),
+        "OpenAiCodexAnalysisProvider should implement AnalysisProvider");
   }
 }

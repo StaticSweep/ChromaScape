@@ -18,6 +18,8 @@ public class TaskDetectionService {
   private final TaskRecordingPreferenceService taskPreferenceService;
   private final RecordingSessionRepository recordingSessionRepository;
   private TaskType currentTask = null;
+  private String currentTaskPlanId = null;
+  private String currentTaskItemId = null;
 
   public TaskDetectionService(
       RecordingService recordingService,
@@ -94,5 +96,49 @@ public class TaskDetectionService {
 
   public TaskType getCurrentTask() {
     return currentTask;
+  }
+
+  /** Returns the current task plan ID, if running from a plan. */
+  public String getCurrentTaskPlanId() {
+    return currentTaskPlanId;
+  }
+
+  /** Returns the current task item ID, if running from a plan. */
+  public String getCurrentTaskItemId() {
+    return currentTaskItemId;
+  }
+
+  /**
+   * Called when a script is started with task plan context. Uses the plan-linked context before
+   * falling back to heuristic detection.
+   */
+  public void onPlanTaskDetected(String taskPlanId, String taskItemId, String context) {
+    log.info("Plan-linked task detected: plan={}, item={}, context={}", taskPlanId, taskItemId, context);
+    this.currentTaskPlanId = taskPlanId;
+    this.currentTaskItemId = taskItemId;
+
+    // Auto-start recording for plan-linked tasks
+    if (taskPreferenceService.isTaskEnabled(TaskType.OTHER)) {
+      log.info("Auto-starting recording for plan task: {}/{}", taskPlanId, taskItemId);
+      String recordingId =
+          recordingService.startRecordingAuto(
+              "plan-task", RecordingTriggerSource.TASK_AUTO);
+      currentTask = TaskType.OTHER;
+
+      if (recordingId != null) {
+        LocalDateTime startTime = recordingService.getRecordingStartTimeAsLocalDateTime();
+        if (startTime != null && recordingSessionRepository.findByRecordingId(recordingId).isEmpty()) {
+          RecordingSession session =
+              new RecordingSession(
+                  recordingId,
+                  "plan-task",
+                  taskPlanId,
+                  startTime,
+                  RecordingSession.SessionTrigger.AUTO_START,
+                  null);
+          recordingSessionRepository.save(session);
+        }
+      }
+    }
   }
 }

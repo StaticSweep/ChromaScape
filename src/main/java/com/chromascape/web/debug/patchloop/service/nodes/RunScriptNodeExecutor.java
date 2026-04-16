@@ -50,25 +50,34 @@ public class RunScriptNodeExecutor implements GraphNodeExecutor {
       ScriptExecutionService.ScriptExecutionResult result =
           scriptExecutionService.runScriptAndWait(scriptName, timeoutMs);
 
-      if (result.success()) {
-        ObjectNode outputData = JsonNodeFactory.instance.objectNode();
-        outputData.put("executionId", executionId);
-        outputData.put("iterationId", iterationId);
-        outputData.put("attemptNumber", attemptNumber);
-        outputData.put("success", true);
-        outputData.put("scriptName", scriptName);
-        outputData.put("durationMs", result.durationMs());
+      ObjectNode outputData = JsonNodeFactory.instance.objectNode();
+      outputData.put("executionId", executionId);
+      outputData.put("iterationId", iterationId);
+      outputData.put("attemptNumber", attemptNumber);
+      outputData.put("scriptName", scriptName);
+      outputData.put("backend", result.backend());
+      outputData.put("terminalStatus", result.terminalStatus());
+      outputData.put("timedOut", result.timedOut());
+      outputData.put("success", result.success());
+      outputData.put("durationMs", result.durationMs());
+      if (result.errorMessage() != null) {
+        outputData.put("errorMessage", result.errorMessage());
+      }
 
+      if (result.success()) {
         return NodeExecutionResult.success(
             node.id(),
             String.format("Script completed successfully in %dms", result.durationMs()),
             outputData);
       } else {
-        // Check if it was a timeout
-        if (result.errorMessage() != null && result.errorMessage().contains("timed out")) {
-          return NodeExecutionResult.timeout(node.id());
+        if (result.timedOut()) {
+          return NodeExecutionResult.timeout(node.id())
+              .withOutput("Script timed out")
+              .withOutputData(outputData);
         }
-        return NodeExecutionResult.failure(node.id(), "Script failed: " + result.errorMessage());
+        return NodeExecutionResult.failure(
+                node.id(), "Script failed: " + sanitizeError(result.errorMessage()))
+            .withOutputData(outputData);
       }
 
     } catch (Exception e) {
@@ -90,5 +99,12 @@ public class RunScriptNodeExecutor implements GraphNodeExecutor {
       }
     }
     return defaultTimeout;
+  }
+
+  private String sanitizeError(String errorMessage) {
+    if (errorMessage == null || errorMessage.isBlank()) {
+      return "Unknown error";
+    }
+    return errorMessage;
   }
 }

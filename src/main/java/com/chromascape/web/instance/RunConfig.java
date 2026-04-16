@@ -1,17 +1,28 @@
 package com.chromascape.web.instance;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 /**
  * Represents the configuration settings for running a script instance.
  *
- * <p>Contains the duration the script should run, the script identifier, and a flag indicating
- * whether the client UI is fixed or resizable.
+ * <p>Contains the script identifier and optional task plan context for linking script execution to
+ * synthesized task plans.
  */
-public record RunConfig(String script) {
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public record RunConfig(
+    String script, String taskPlanId, String taskItemId) {
+
+  /** Constructs a RunConfig with script only (backward compatible). */
+  public RunConfig(String script) {
+    this(script, null, null);
+  }
 
   /**
-   * Constructs a new RunConfig with the specified duration, script, and fixed flag.
+   * Constructs a new RunConfig with optional task plan context.
    *
    * @param script the identifier or name of the script to run
+   * @param taskPlanId optional task plan ID for plan-linked execution
+   * @param taskItemId optional task plan item ID for plan-linked execution
    */
   public RunConfig {}
 
@@ -23,5 +34,15 @@ public record RunConfig(String script) {
   @Override
   public String script() {
     return script;
+  }
+
+  /** Returns the optional task plan ID. */
+  public String taskPlanId() {
+    return taskPlanId;
+  }
+
+  /** Returns the optional task plan item ID. */
+  public String taskItemId() {
+    return taskItemId;
   }
 }

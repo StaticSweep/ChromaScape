@@ -22,6 +22,8 @@ public class ScriptInstance {
   private final WebSocketStateHandler stateHandler;
   private final TaskDetectionService taskDetectionService;
   private volatile long tickStartTime = 0;
+  private final String taskPlanId;
+  private final String taskItemId;
 
   /**
    * Constructs a ScriptInstance by dynamically loading the script class specified in the config.
@@ -42,8 +44,31 @@ public class ScriptInstance {
           InvocationTargetException,
           InstantiationException,
           IllegalAccessException {
+    this(config, stateHandler, taskDetectionService, null, null);
+  }
+
+  /**
+   * Constructs a ScriptInstance with task plan context.
+   *
+   * @param config the RunConfig containing script name
+   * @param taskPlanId optional task plan ID for plan-linked execution
+   * @param taskItemId optional task item ID for plan-linked execution
+   */
+  public ScriptInstance(
+      RunConfig config,
+      WebSocketStateHandler stateHandler,
+      TaskDetectionService taskDetectionService,
+      String taskPlanId,
+      String taskItemId)
+      throws NoSuchMethodException,
+          ClassNotFoundException,
+          InvocationTargetException,
+          InstantiationException,
+          IllegalAccessException {
     this.stateHandler = stateHandler;
     this.taskDetectionService = taskDetectionService;
+    this.taskPlanId = taskPlanId;
+    this.taskItemId = taskItemId;
 
     String fileName = config.script();
     String className = fileName.replace(".java", "").replace("/", ".");
@@ -157,5 +182,15 @@ public class ScriptInstance {
   /** Returns whether the script thread is currently running. */
   public boolean isRunning() {
     return thread != null && thread.isAlive();
+  }
+
+  /** Returns the task plan ID, if this instance was started from a plan. */
+  public String getTaskPlanId() {
+    return taskPlanId;
+  }
+
+  /** Returns the task plan item ID, if this instance was started from a plan. */
+  public String getTaskItemId() {
+    return taskItemId;
   }
 }

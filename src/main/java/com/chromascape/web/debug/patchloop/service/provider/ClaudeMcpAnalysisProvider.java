@@ -14,6 +14,7 @@ import com.chromascape.web.debug.patchloop.validation.AnalysisV2Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -25,7 +26,8 @@ import org.springframework.stereotype.Service;
  *
  * <p><b>V2 Changes:</b> Updated to use V2 request/response contracts.
  *
- * <p>Activated when {@code analysis.provider=claude-mcp}.
+ * <p>Activated when {@code analysis.provider=codex-mcp} or {@code analysis.provider=claude-mcp}
+ * (legacy alias).
  *
  * <p>The provider delegates HTTP communication to {@link McpTransportClient} which handles retry
  * logic with exponential backoff, timeout management, and deterministic error type mapping.
@@ -33,13 +35,14 @@ import org.springframework.stereotype.Service;
  * @since 2.0.0
  */
 @Service
-@ConditionalOnProperty(name = "analysis.provider", havingValue = "claude-mcp")
+@ConditionalOnProperty(name = "analysis.provider", havingValue = "codex-mcp", matchIfMissing = true)
 public class ClaudeMcpAnalysisProvider implements AnalysisProvider {
 
   private static final Logger logger = LoggerFactory.getLogger(ClaudeMcpAnalysisProvider.class);
 
   private final McpTransportClient transport;
   private final McpConfigProperties config;
+  private final String providerName;
 
   /**
    * Creates a new Claude MCP analysis provider.
@@ -48,15 +51,32 @@ public class ClaudeMcpAnalysisProvider implements AnalysisProvider {
    * @param config the MCP configuration properties
    */
   @Autowired
-  public ClaudeMcpAnalysisProvider(McpTransportClient transport, McpConfigProperties config) {
+  public ClaudeMcpAnalysisProvider(
+      McpTransportClient transport,
+      McpConfigProperties config,
+      @Value("${analysis.provider:codex-mcp}") String configuredProviderName) {
     this.transport = transport;
     this.config = config;
+    this.providerName = normalizeProviderName(configuredProviderName);
 
     logger.info(
-        "ClaudeMcpAnalysisProvider initialized (V2) - serverUrl: {}, timeout: {}s, maxRetries: {}",
+        "ClaudeMcpAnalysisProvider initialized (V2) - provider: {}, serverUrl: {}, timeout: {}s,"
+            + " maxRetries: {}",
+        this.providerName,
         config.getServerUrl(),
         config.getTimeoutSeconds(),
         config.getMaxRetries());
+  }
+
+  public ClaudeMcpAnalysisProvider(McpTransportClient transport, McpConfigProperties config) {
+    this(transport, config, "codex-mcp");
+  }
+
+  private String normalizeProviderName(String configuredProviderName) {
+    if ("claude-mcp".equals(configuredProviderName)) {
+      return "claude-mcp";
+    }
+    return "codex-mcp";
   }
 
   @Override
@@ -155,7 +175,7 @@ public class ClaudeMcpAnalysisProvider implements AnalysisProvider {
 
   @Override
   public String getProviderName() {
-    return "claude-mcp";
+    return providerName;
   }
 
   @Override

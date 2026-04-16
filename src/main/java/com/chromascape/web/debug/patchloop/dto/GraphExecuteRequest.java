@@ -42,7 +42,7 @@ public class GraphExecuteRequest {
   @JsonProperty("policy")
   private PatchPolicyConfig policy;
 
-  /** Execution mode: "analysis_only" or "autofix_loop" */
+  /** Execution mode: "analysis_only", "propose_then_apply", or "autofix_loop" */
   @JsonProperty("executionMode")
   private String executionMode;
 

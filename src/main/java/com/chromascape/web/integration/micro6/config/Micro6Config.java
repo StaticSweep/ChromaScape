@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 public class Micro6Config {
 
   private LogShipperConfig logShipper = new LogShipperConfig();
+  private ExecutorCatalogConfig executorCatalog = new ExecutorCatalogConfig();
 
   public LogShipperConfig getLogShipper() {
     return logShipper;
@@ -20,6 +21,14 @@ public class Micro6Config {
 
   public void setLogShipper(LogShipperConfig logShipper) {
     this.logShipper = logShipper;
+  }
+
+  public ExecutorCatalogConfig getExecutorCatalog() {
+    return executorCatalog;
+  }
+
+  public void setExecutorCatalog(ExecutorCatalogConfig executorCatalog) {
+    this.executorCatalog = executorCatalog;
   }
 
   /** Configuration for the log file shipper service. */
@@ -88,6 +97,53 @@ public class Micro6Config {
 
     public void setMaxHistoryLines(int maxHistoryLines) {
       this.maxHistoryLines = maxHistoryLines;
+    }
+  }
+
+  /** Configuration for fetching task catalog from Micro6 local executor. */
+  public static class ExecutorCatalogConfig {
+    /** Enable remote catalog fetching. */
+    private boolean enabled = true;
+
+    /** Base URL to local executor service. */
+    private String baseUrl = "http://127.0.0.1:8098";
+
+    /** Request timeout in milliseconds. */
+    private int timeoutMs = 5000;
+
+    /** Refresh interval in seconds (cache TTL). */
+    private int refreshSeconds = 30;
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+      this.enabled = enabled;
+    }
+
+    public String getBaseUrl() {
+      return baseUrl;
+    }
+
+    public void setBaseUrl(String baseUrl) {
+      this.baseUrl = baseUrl;
+    }
+
+    public int getTimeoutMs() {
+      return timeoutMs;
+    }
+
+    public void setTimeoutMs(int timeoutMs) {
+      this.timeoutMs = timeoutMs;
+    }
+
+    public int getRefreshSeconds() {
+      return refreshSeconds;
+    }
+
+    public void setRefreshSeconds(int refreshSeconds) {
+      this.refreshSeconds = refreshSeconds;
     }
   }
 }

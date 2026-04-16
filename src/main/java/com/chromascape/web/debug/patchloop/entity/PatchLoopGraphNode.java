@@ -104,6 +104,18 @@ public class PatchLoopGraphNode {
     }
   }
 
+  /** Marks this node as timed out. */
+  public void markTimeout(String errorMessage, JsonNode outputData) {
+    this.status = NodeExecutionStatus.TIMEOUT;
+    this.completedAt = LocalDateTime.now();
+    this.errorMessage = errorMessage;
+    this.outputSummary = errorMessage;
+    this.outputData = outputData;
+    if (this.startedAt != null) {
+      this.durationMs = java.time.Duration.between(startedAt, completedAt).toMillis();
+    }
+  }
+
   /** Increments the retry counter. */
   public void incrementRetry() {
     this.retryCount = (this.retryCount == null) ? 1 : this.retryCount + 1;

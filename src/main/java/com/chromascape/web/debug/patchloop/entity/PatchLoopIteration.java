@@ -203,6 +203,14 @@ public class PatchLoopIteration {
   @Column(name = "result_type", length = 50)
   private String resultType;
 
+  /** Task plan ID for plan-linked execution */
+  @Column(name = "task_plan_id", length = 100)
+  private String taskPlanId;
+
+  /** Task plan item ID for plan-linked execution */
+  @Column(name = "task_item_id", length = 100)
+  private String taskItemId;
+
   public PatchLoopIteration() {
     this.createdAt = LocalDateTime.now();
     this.lastStateAt = LocalDateTime.now();
@@ -620,6 +628,22 @@ public class PatchLoopIteration {
 
   public void setResultType(String resultType) {
     this.resultType = resultType;
+  }
+
+  public String getTaskPlanId() {
+    return taskPlanId;
+  }
+
+  public void setTaskPlanId(String taskPlanId) {
+    this.taskPlanId = taskPlanId;
+  }
+
+  public String getTaskItemId() {
+    return taskItemId;
+  }
+
+  public void setTaskItemId(String taskItemId) {
+    this.taskItemId = taskItemId;
   }
 
   /** Increments the current attempt counter. */
