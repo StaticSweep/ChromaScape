@@ -6,6 +6,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,11 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
 
   /** Ensures only one send loop is queued at a time. */
   private final AtomicBoolean sendScheduled = new AtomicBoolean(false);
+  private final AtomicLong broadcastRequests = new AtomicLong(0);
+  private final AtomicLong flushCycles = new AtomicLong(0);
+  private final AtomicLong payloadsFlushed = new AtomicLong(0);
+  private final AtomicLong sessionSendSuccesses = new AtomicLong(0);
+  private final AtomicLong sessionSendErrors = new AtomicLong(0);
 
   /**
    * Invoked after the WebSocket connection has been closed by either side, or after a transport
@@ -108,6 +114,7 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
    * @param message The message string to broadcast (e.g., a Data URI).
    */
   public void broadcast(String message) {
+    broadcastRequests.incrementAndGet();
     logger.debug(
         "Broadcasting viewport frame, size: {} bytes, sessions: {}",
         message.length(),
@@ -124,12 +131,14 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
   }
 
   private void flushPending() {
+    flushCycles.incrementAndGet();
     try {
       while (true) {
         String message = pendingMessage.getAndSet(null);
         if (message == null) {
           return;
         }
+        payloadsFlushed.incrementAndGet();
         for (WebSocketSession session : sessions) {
           if (!session.isOpen()) {
             sessions.remove(session);
@@ -137,7 +146,9 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
           }
           try {
             session.sendMessage(new TextMessage(message));
+            sessionSendSuccesses.incrementAndGet();
           } catch (IOException e) {
+            sessionSendErrors.incrementAndGet();
             logger.warn("Failed to send viewport data to session: {}", e.getMessage());
             sessions.remove(session);
           }
@@ -149,5 +160,29 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
         scheduleSend();
       }
     }
+  }
+
+  public int getActiveSessionCount() {
+    return sessions.size();
+  }
+
+  public long getBroadcastRequests() {
+    return broadcastRequests.get();
+  }
+
+  public long getFlushCycles() {
+    return flushCycles.get();
+  }
+
+  public long getPayloadsFlushed() {
+    return payloadsFlushed.get();
+  }
+
+  public long getSessionSendSuccesses() {
+    return sessionSendSuccesses.get();
+  }
+
+  public long getSessionSendErrors() {
+    return sessionSendErrors.get();
   }
 }

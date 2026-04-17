@@ -9,6 +9,7 @@ import java.awt.image.BufferedImage;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -36,6 +37,11 @@ public class UnifiedFrameCaptureService {
   private final Set<FrameListener> subscribers = ConcurrentHashMap.newKeySet();
   private final AtomicInteger refCount = new AtomicInteger(0);
   private final AtomicReference<FrameEvent> latestFrame = new AtomicReference<>();
+  private final AtomicLong captureAttempts = new AtomicLong(0);
+  private final AtomicLong captureSuccesses = new AtomicLong(0);
+  private final AtomicLong captureErrors = new AtomicLong(0);
+  private final AtomicLong subscriberDispatchAttempts = new AtomicLong(0);
+  private final AtomicLong subscriberDispatchErrors = new AtomicLong(0);
 
   private ScheduledExecutorService captureScheduler;
   private ExecutorService dispatchExecutor;
@@ -197,6 +203,7 @@ public class UnifiedFrameCaptureService {
     if (refCount.get() == 0) {
       return; // No subscribers, skip capture
     }
+    captureAttempts.incrementAndGet();
 
     long captureStart = System.currentTimeMillis();
 
@@ -231,6 +238,7 @@ public class UnifiedFrameCaptureService {
       }
 
       if (frame != null) {
+        captureSuccesses.incrementAndGet();
         // Create frame event with timestamp and dimensions
         FrameEvent event =
             new FrameEvent(frame, System.nanoTime(), frame.getWidth(), frame.getHeight());
@@ -241,11 +249,13 @@ public class UnifiedFrameCaptureService {
         // Dispatch to all active subscribers asynchronously
         for (FrameListener subscriber : subscribers) {
           if (subscriber.isActive()) {
+            subscriberDispatchAttempts.incrementAndGet();
             dispatchExecutor.execute(() -> deliverFrame(subscriber, event));
           }
         }
       }
     } catch (Exception e) {
+      captureErrors.incrementAndGet();
       // Rate limit error logging to avoid spam
       long nowMs = System.currentTimeMillis();
       if (nowMs - lastErrorLogTimeMs >= ERROR_LOG_INTERVAL_MS) {
@@ -260,6 +270,7 @@ public class UnifiedFrameCaptureService {
     try {
       subscriber.onFrameCaptured(event);
     } catch (Exception e) {
+      subscriberDispatchErrors.incrementAndGet();
       logger.error(
           "Error delivering frame to subscriber {}: {}",
           subscriber.getClass().getSimpleName(),
@@ -284,6 +295,26 @@ public class UnifiedFrameCaptureService {
   /** Returns the number of registered subscribers. */
   public int getSubscriberCount() {
     return refCount.get();
+  }
+
+  public long getCaptureAttempts() {
+    return captureAttempts.get();
+  }
+
+  public long getCaptureSuccesses() {
+    return captureSuccesses.get();
+  }
+
+  public long getCaptureErrors() {
+    return captureErrors.get();
+  }
+
+  public long getSubscriberDispatchAttempts() {
+    return subscriberDispatchAttempts.get();
+  }
+
+  public long getSubscriberDispatchErrors() {
+    return subscriberDispatchErrors.get();
   }
 
   /**

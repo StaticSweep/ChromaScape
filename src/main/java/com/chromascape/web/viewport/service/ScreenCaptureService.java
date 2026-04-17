@@ -38,6 +38,10 @@ public class ScreenCaptureService implements FrameListener {
   private final AtomicBoolean paused = new AtomicBoolean(false);
   private final AtomicBoolean registered = new AtomicBoolean(false);
   private final AtomicLong latestCaptureTimeNanos = new AtomicLong(0);
+  private final AtomicLong framesReceived = new AtomicLong(0);
+  private final AtomicLong framesForwarded = new AtomicLong(0);
+  private final AtomicLong framesDroppedStale = new AtomicLong(0);
+  private final AtomicLong frameProcessingErrors = new AtomicLong(0);
 
   @Autowired
   public ScreenCaptureService(
@@ -102,9 +106,12 @@ public class ScreenCaptureService implements FrameListener {
    */
   @Override
   public void onFrameCaptured(FrameEvent event) {
+    framesReceived.incrementAndGet();
+
     long captureTime = event.getCaptureTimeNanos();
     long latestTime = latestCaptureTimeNanos.updateAndGet(prev -> Math.max(prev, captureTime));
     if (captureTime < latestTime) {
+      framesDroppedStale.incrementAndGet();
       return;
     }
 
@@ -113,12 +120,15 @@ public class ScreenCaptureService implements FrameListener {
       if (frame != null) {
         try (Mat mat = Java2DFrameUtils.toMat(frame)) {
           if (captureTime < latestCaptureTimeNanos.get()) {
+            framesDroppedStale.incrementAndGet();
             return;
           }
           ViewportManager.getInstance().updateState(mat);
+          framesForwarded.incrementAndGet();
         }
       }
     } catch (Exception e) {
+      frameProcessingErrors.incrementAndGet();
       logger.debug("Failed to process frame for viewport: {}", e.getMessage());
     }
   }
@@ -169,5 +179,21 @@ public class ScreenCaptureService implements FrameListener {
    */
   public boolean isRunning() {
     return registered.get();
+  }
+
+  public long getFramesReceived() {
+    return framesReceived.get();
+  }
+
+  public long getFramesForwarded() {
+    return framesForwarded.get();
+  }
+
+  public long getFramesDroppedStale() {
+    return framesDroppedStale.get();
+  }
+
+  public long getFrameProcessingErrors() {
+    return frameProcessingErrors.get();
   }
 }
