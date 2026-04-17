@@ -5,7 +5,9 @@ import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClie
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportException;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.time.Duration;
@@ -97,6 +99,9 @@ public class McpBridgeLifecycleManager {
       // Ensure .env configured
       ensureBridgeConfigured();
 
+      // Ensure bridge dependencies are installed
+      ensureBridgeDependencies();
+
       // Start bridge process
       startBridgeProcess();
 
@@ -161,6 +166,75 @@ public class McpBridgeLifecycleManager {
   }
 
   /**
+   * Ensures the MCP bridge Node.js dependencies are installed.
+   *
+   * <p>If {@code node_modules} is missing, this method runs {@code npm install} in the bridge
+   * directory before attempting to start the bridge process.
+   *
+   * @throws BridgeStartupException if dependency installation fails
+   */
+  private void ensureBridgeDependencies() throws BridgeStartupException {
+    File bridgeDir = getBridgeDirectory();
+    File packageJson = new File(bridgeDir, "package.json");
+    File nodeModules = new File(bridgeDir, "node_modules");
+
+    if (!packageJson.exists()) {
+      logger.warn("MCP bridge package.json not found; skipping dependency check");
+      return;
+    }
+
+    if (nodeModules.exists()) {
+      logger.info("MCP bridge dependencies already installed");
+      return;
+    }
+
+    logger.info("MCP bridge dependencies not found; running npm install...");
+
+    if (!isNpmAvailable()) {
+      throw new BridgeStartupException(
+          "npm is not installed or not on PATH. Install Node.js/npm to use MCP bridge.");
+    }
+
+    ProcessBuilder pb =
+        isWindows()
+            ? new ProcessBuilder("cmd", "/c", "npm install --no-audit --no-fund")
+            : new ProcessBuilder("npm", "install", "--no-audit", "--no-fund");
+    pb.directory(bridgeDir).redirectErrorStream(true);
+
+    try {
+      Process process = pb.start();
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+        String line;
+        while ((line = reader.readLine()) != null) {
+          logger.info("[Bridge setup] {}", line);
+        }
+      }
+
+      boolean finished = process.waitFor(5, TimeUnit.MINUTES);
+      if (!finished) {
+        process.destroyForcibly();
+        throw new BridgeStartupException(
+            "npm install timed out after 5 minutes in " + bridgeDir.getAbsolutePath());
+      }
+
+      if (process.exitValue() != 0) {
+        throw new BridgeStartupException(
+            "npm install failed with exit code "
+                + process.exitValue()
+                + " in "
+                + bridgeDir.getAbsolutePath());
+      }
+
+      logger.info("MCP bridge dependencies installed successfully");
+    } catch (BridgeStartupException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new BridgeStartupException("Failed to install MCP bridge dependencies", e);
+    }
+  }
+
+  /**
    * Starts the MCP bridge Node.js process.
    *
    * @throws BridgeStartupException if the process fails to start
@@ -208,6 +282,25 @@ public class McpBridgeLifecycleManager {
     } catch (Exception e) {
       return false;
     }
+  }
+
+  private boolean isNpmAvailable() {
+    try {
+      Process process = new ProcessBuilder("npm", "--version").redirectErrorStream(true).start();
+      boolean finished = process.waitFor(5, TimeUnit.SECONDS);
+      if (!finished) {
+        process.destroyForcibly();
+        return false;
+      }
+      return process.exitValue() == 0;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  private boolean isWindows() {
+    String os = System.getProperty("os.name", "").toLowerCase();
+    return os.contains("win");
   }
 
   /**
