@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.web.simulator.dto.ReplayFramePageResponse;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,13 +28,14 @@ import org.springframework.http.ResponseEntity;
 class SimulatorReplayControlControllerTest {
 
   @Mock private SimulatorReplayControlService service;
+  @Mock private SimulatorReplaySourceService sourceService;
   @Mock private SimulatorReplayControlProperties properties;
 
   private SimulatorReplayControlController controller;
 
   @BeforeEach
   void setUp() {
-    controller = new SimulatorReplayControlController(service, properties);
+    controller = new SimulatorReplayControlController(service, sourceService, properties);
   }
 
   @Nested
@@ -88,12 +90,48 @@ class SimulatorReplayControlControllerTest {
     }
 
     @Test
-    @DisplayName("start returns 400 when player is missing")
+    @DisplayName("start allows missing player and forwards auto-target request")
     void startMissingPlayer() {
+      ReplayFramePageResponse.FrameData frame = new ReplayFramePageResponse.FrameData();
+      frame.setTick(1L);
+      when(sourceService.frames("rec-1", 0, 1))
+          .thenReturn(new ReplayFramePageResponse("rec-1", "sess-1", java.util.List.of(frame), null, false));
+      when(service.start(null, "latest", null, null, "rec-1", "tick"))
+          .thenReturn(Map.of("success", true, "message", "Started"));
       ResponseEntity<Map<String, Object>> response =
-          controller.start(Map.of("sessionId", "latest"));
-      assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-      assertErrorBody(response.getBody(), "Missing required field: player");
+          controller.start(Map.of("recordingId", "rec-1", "sourceMode", "tick"));
+      assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("start returns 409 when recording has no tick frames")
+    void startRecordingNotReplayableNoFrames() {
+      when(sourceService.frames("rec-empty", 0, 1))
+          .thenReturn(new ReplayFramePageResponse("rec-empty", "sess-1", java.util.List.of(), null, false));
+      ResponseEntity<Map<String, Object>> response =
+          controller.start(Map.of("recordingId", "rec-empty", "sourceMode", "tick"));
+      assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+      assertTrue(response.getBody().get("error").toString().contains("not replayable"));
+    }
+
+    @Test
+    @DisplayName("start returns 409 when no debug session exists for recording")
+    void startRecordingNotReplayableNoDebugSession() {
+      when(sourceService.frames("rec-missing", 0, 1))
+          .thenThrow(new SimulatorReplayControlException("No debug session found for recordingId: rec-missing"));
+      ResponseEntity<Map<String, Object>> response =
+          controller.start(Map.of("recordingId", "rec-missing", "sourceMode", "tick"));
+      assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+      assertTrue(response.getBody().get("error").toString().contains("no tick snapshot session"));
+    }
+
+    @Test
+    @DisplayName("start allows missing player and forwards auto-target request")
+    void startMissingPlayerActionMode() {
+      when(service.start(null, "latest", null, null, null, null))
+          .thenReturn(Map.of("success", true, "message", "Started"));
+      ResponseEntity<Map<String, Object>> response = controller.start(Map.of("sessionId", "latest"));
+      assertEquals(HttpStatus.OK, response.getStatusCode());
     }
 
     @Test
@@ -113,10 +151,11 @@ class SimulatorReplayControlControllerTest {
     }
 
     @Test
-    @DisplayName("pause returns 400 when player is missing")
+    @DisplayName("pause allows missing player and forwards auto-target request")
     void pauseMissingPlayer() {
+      when(service.pause(null)).thenReturn(Map.of("success", true, "message", "Paused"));
       ResponseEntity<Map<String, Object>> response = controller.pause(Map.of());
-      assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+      assertEquals(HttpStatus.OK, response.getStatusCode());
     }
 
     @Test
@@ -142,7 +181,8 @@ class SimulatorReplayControlControllerTest {
     void startDomainFailure() {
       Map<String, Object> upstreamResult =
           Map.of("success", false, "message", "Player not found: unknown");
-      when(service.start("player1", "latest", null, null)).thenReturn(upstreamResult);
+      when(service.start("player1", "latest", null, null, null, null))
+          .thenReturn(upstreamResult);
 
       ResponseEntity<Map<String, Object>> response = controller.start(Map.of("player", "player1"));
 
@@ -187,7 +227,7 @@ class SimulatorReplayControlControllerTest {
     @Test
     @DisplayName("start returns 502 on upstream non-2xx without parsed status")
     void startUpstreamError() {
-      when(service.start("player1", "latest", null, null))
+      when(service.start("player1", "latest", null, null, null, null))
           .thenThrow(
               new SimulatorReplayControlException("OpenRune API returned 500: Internal error"));
 
@@ -234,7 +274,7 @@ class SimulatorReplayControlControllerTest {
     @Test
     @DisplayName("propagates upstream 404 status")
     void propagatesUpstream404() {
-      when(service.start("player1", "latest", null, null))
+      when(service.start("player1", "latest", null, null, null, null))
           .thenThrow(
               new SimulatorReplayControlException(
                   "OpenRune API returned 404: Player not found", 404));
@@ -266,6 +306,22 @@ class SimulatorReplayControlControllerTest {
     }
 
     @Test
+    @DisplayName("players returns 200 with selected and player list")
+    void playersSuccess() {
+      Map<String, Object> result =
+          Map.of(
+              "success", true,
+              "players", java.util.List.of("dev-one"),
+              "selected", "dev-one");
+      when(service.getPlayers()).thenReturn(result);
+
+      ResponseEntity<Map<String, Object>> response = controller.getPlayers();
+      assertEquals(HttpStatus.OK, response.getStatusCode());
+      assertEquals(true, response.getBody().get("success"));
+      assertEquals("dev-one", response.getBody().get("selected"));
+    }
+
+    @Test
     @DisplayName("getStatus returns 200 with status data")
     void getStatusSuccess() {
       Map<String, Object> status =
@@ -284,10 +340,32 @@ class SimulatorReplayControlControllerTest {
     @DisplayName("start returns 200 with success result")
     void startSuccess() {
       Map<String, Object> result = Map.of("success", true, "message", "Playback started");
-      when(service.start("player1", "latest", 2.0, null)).thenReturn(result);
+      when(service.start("player1", "latest", 2.0, null, null, null)).thenReturn(result);
 
       ResponseEntity<Map<String, Object>> response =
           controller.start(Map.of("player", "player1", "speed", 2.0));
+
+      assertEquals(HttpStatus.OK, response.getStatusCode());
+      assertEquals(true, response.getBody().get("success"));
+    }
+
+    @Test
+    @DisplayName("start passes recordingId and sourceMode to service")
+    void startPassesRecordingIdAndSourceMode() {
+      ReplayFramePageResponse.FrameData frame = new ReplayFramePageResponse.FrameData();
+      frame.setTick(1L);
+      when(sourceService.frames("rec-42", 0, 1))
+          .thenReturn(new ReplayFramePageResponse("rec-42", "sess-42", java.util.List.of(frame), null, false));
+      Map<String, Object> result = Map.of("success", true, "message", "Started tick replay");
+      when(service.start("player1", "latest", null, null, "rec-42", "tick"))
+          .thenReturn(result);
+
+      ResponseEntity<Map<String, Object>> response =
+          controller.start(
+              Map.of(
+                  "player", "player1",
+                  "recordingId", "rec-42",
+                  "sourceMode", "tick"));
 
       assertEquals(HttpStatus.OK, response.getStatusCode());
       assertEquals(true, response.getBody().get("success"));

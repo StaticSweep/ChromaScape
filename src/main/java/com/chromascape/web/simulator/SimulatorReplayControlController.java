@@ -1,5 +1,6 @@
 package com.chromascape.web.simulator;
 
+import com.chromascape.web.simulator.dto.ReplayFramePageResponse;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
@@ -37,6 +38,7 @@ public class SimulatorReplayControlController {
   private static final Logger logger = LogManager.getLogger(SimulatorReplayControlController.class);
 
   private final SimulatorReplayControlService replayControlService;
+  private final SimulatorReplaySourceService replaySourceService;
   private final SimulatorReplayControlProperties properties;
 
   /**
@@ -48,8 +50,10 @@ public class SimulatorReplayControlController {
   @Autowired
   public SimulatorReplayControlController(
       SimulatorReplayControlService replayControlService,
+      SimulatorReplaySourceService replaySourceService,
       SimulatorReplayControlProperties properties) {
     this.replayControlService = replayControlService;
+    this.replaySourceService = replaySourceService;
     this.properties = properties;
   }
 
@@ -60,7 +64,8 @@ public class SimulatorReplayControlController {
    * @return the playback status
    */
   @GetMapping("/status")
-  public ResponseEntity<Map<String, Object>> getStatus(@RequestParam String player) {
+  public ResponseEntity<Map<String, Object>> getStatus(
+      @RequestParam(required = false) String player) {
     if (!properties.isEnabled()) {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(disabledResponse());
     }
@@ -72,10 +77,25 @@ public class SimulatorReplayControlController {
     }
   }
 
+  /** Lists online DEV players available for replay control. */
+  @GetMapping("/players")
+  public ResponseEntity<Map<String, Object>> getPlayers() {
+    if (!properties.isEnabled()) {
+      return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(disabledResponse());
+    }
+    try {
+      Map<String, Object> result = replayControlService.getPlayers();
+      return mapSuccessResponse(result);
+    } catch (SimulatorReplayControlException e) {
+      return handleException(e);
+    }
+  }
+
   /**
    * Starts a replay playback session.
    *
-   * @param body the request body containing player, sessionId, speed, and actorId
+   * @param body the request body containing player, sessionId, speed, actorId, recordingId, and
+   *     sourceMode
    * @return the start result
    */
   @PostMapping("/start")
@@ -84,13 +104,34 @@ public class SimulatorReplayControlController {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(disabledResponse());
     }
     try {
-      String player = requiredString(body, "player");
+      String player = optionalString(body, "player");
       String sessionId = (String) body.getOrDefault("sessionId", "latest");
       Double speed = optionalDouble(body, "speed");
       String actorId = (String) body.get("actorId");
-      Map<String, Object> result = replayControlService.start(player, sessionId, speed, actorId);
+      String recordingId = (String) body.get("recordingId");
+      String sourceMode = (String) body.get("sourceMode");
+
+      if (recordingId != null && !recordingId.isBlank()) {
+        ReplayFramePageResponse preflight = replaySourceService.frames(recordingId, 0, 1);
+        if (preflight.getFrames() == null || preflight.getFrames().isEmpty()) {
+          return ResponseEntity.status(HttpStatus.CONFLICT)
+              .body(
+                  errorResponse(
+                      "Recording is not replayable: no tick frames found for recordingId="
+                          + recordingId));
+        }
+      }
+
+      Map<String, Object> result =
+          replayControlService.start(player, sessionId, speed, actorId, recordingId, sourceMode);
       return mapSuccessResponse(result);
     } catch (SimulatorReplayControlException e) {
+      if (e.getMessage() != null && e.getMessage().contains("No debug session found for recordingId")) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(
+                errorResponse(
+                    "Recording exists but has no tick snapshot session. It cannot be replayed into OpenRune."));
+      }
       return handleException(e);
     }
   }
@@ -107,7 +148,7 @@ public class SimulatorReplayControlController {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(disabledResponse());
     }
     try {
-      Map<String, Object> result = replayControlService.pause(requiredString(body, "player"));
+      Map<String, Object> result = replayControlService.pause(optionalString(body, "player"));
       return mapSuccessResponse(result);
     } catch (SimulatorReplayControlException e) {
       return handleException(e);
@@ -126,7 +167,7 @@ public class SimulatorReplayControlController {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(disabledResponse());
     }
     try {
-      Map<String, Object> result = replayControlService.resume(requiredString(body, "player"));
+      Map<String, Object> result = replayControlService.resume(optionalString(body, "player"));
       return mapSuccessResponse(result);
     } catch (SimulatorReplayControlException e) {
       return handleException(e);
@@ -145,7 +186,7 @@ public class SimulatorReplayControlController {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(disabledResponse());
     }
     try {
-      Map<String, Object> result = replayControlService.stop(requiredString(body, "player"));
+      Map<String, Object> result = replayControlService.stop(optionalString(body, "player"));
       return mapSuccessResponse(result);
     } catch (SimulatorReplayControlException e) {
       return handleException(e);
@@ -164,7 +205,7 @@ public class SimulatorReplayControlController {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(disabledResponse());
     }
     try {
-      String player = requiredString(body, "player");
+      String player = optionalString(body, "player");
       double seconds = requiredDouble(body, "seconds");
       Map<String, Object> result = replayControlService.seek(player, seconds);
       return mapSuccessResponse(result);
@@ -185,7 +226,7 @@ public class SimulatorReplayControlController {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(disabledResponse());
     }
     try {
-      String player = requiredString(body, "player");
+      String player = optionalString(body, "player");
       double spd = requiredDouble(body, "speed");
       Map<String, Object> result = replayControlService.setSpeed(player, spd);
       return mapSuccessResponse(result);
@@ -240,6 +281,15 @@ public class SimulatorReplayControlController {
       throw new SimulatorReplayControlException("Missing required field: " + key);
     }
     return value.toString();
+  }
+
+  private static String optionalString(Map<String, Object> body, String key) {
+    Object value = body.get(key);
+    if (value == null) {
+      return null;
+    }
+    String text = value.toString().trim();
+    return text.isEmpty() ? null : text;
   }
 
   private static double requiredDouble(Map<String, Object> body, String key) {
