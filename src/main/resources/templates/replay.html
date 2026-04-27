@@ -704,10 +704,6 @@
             currentReplayEntry = entry;
             const recordingInput = document.getElementById('orRecordingId');
             recordingInput.value = recordingId || '';
-            if (entry && entry.accountName) {
-                document.getElementById('orPlayerName').value = entry.accountName;
-                orPersistPlayerName();
-            }
 
             // Background: fetch sync info and tick data without blocking playback
             await loadSyncInfo(recordingId);
