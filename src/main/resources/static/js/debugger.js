@@ -6,6 +6,7 @@
 let currentMode = 'live';
 let currentRecording = null;
 let sessionHealthMap = {};
+let sessionMetadataMap = {};
 let currentRecordingSessionId = null;
 let currentRecordingFps = 30; // Default FPS, updated when loading recording
 let currentLogLevel = 'all';
@@ -473,6 +474,16 @@ function cacheElements() {
   elements.overlayCanvas = document.getElementById('overlay-canvas');
   elements.sessionSelect = document.getElementById('sessionSelect');
   elements.refreshSessionsBtn = document.getElementById('refreshSessionsBtn');
+  elements.editReplayMetadataBtn = document.getElementById('editReplayMetadataBtn');
+  elements.replayMetadataEditor = document.getElementById('replayMetadataEditor');
+  elements.replayNameInput = document.getElementById('replayNameInput');
+  elements.replayTagsInput = document.getElementById('replayTagsInput');
+  elements.replayTagsPreview = document.getElementById('replayTagsPreview');
+  elements.saveMetadataBtn = document.getElementById('saveMetadataBtn');
+  elements.cancelMetadataBtn = document.getElementById('cancelMetadataBtn');
+  elements.replayMetadataPreview = document.getElementById('replayMetadataPreview');
+  elements.replayDisplayName = document.getElementById('replayDisplayName');
+  elements.replayTagsDisplay = document.getElementById('replayTagsDisplay');
   elements.scrubberRange = document.getElementById('scrubberRange');
   elements.scrubberTimecode = document.getElementById('scrubberTimecode');
   elements.scrubberMode = document.getElementById('scrubberMode');
@@ -571,6 +582,13 @@ function switchMode(mode) {
     replaySnapshotFetchInFlight.clear();
     clearOverlayCanvas();
     setScrubberEnabled(false);
+    // Hide replay metadata UI when leaving replay mode
+    if (elements.replayMetadataEditor) elements.replayMetadataEditor.style.display = 'none';
+    if (elements.replayMetadataPreview) elements.replayMetadataPreview.style.display = 'none';
+    if (elements.editReplayMetadataBtn) elements.editReplayMetadataBtn.style.display = 'none';
+    if (elements.replayTagsPreview) elements.replayTagsPreview.innerHTML = '';
+    if (elements.replayNameInput) elements.replayNameInput.value = '';
+    if (elements.replayTagsInput) elements.replayTagsInput.value = '';
     // Re-discover sources from live history to restore filter chips
     discoveredSources.clear();
     sourceLogTypes.clear();
@@ -1421,6 +1439,23 @@ function buildActionsSection(tick, entries) {
 /**
  * Build quest section showing quest step, helper state, and current varbits.
  */
+function resolveQuestVarbits(quest) {
+  if (!quest || typeof quest !== 'object') return null;
+
+  const providedVarbits = quest.questVarbits;
+  if (providedVarbits && typeof providedVarbits === 'object' && !Array.isArray(providedVarbits)) {
+    return providedVarbits;
+  }
+
+  const hasQuestVar = quest.questVar !== undefined && quest.questVar !== null;
+  const hasQuestVarId = quest.questVarId !== undefined && quest.questVarId !== null;
+  if (hasQuestVar && hasQuestVarId) {
+    return { [String(quest.questVarId)]: quest.questVar };
+  }
+
+  return null;
+}
+
 function buildQuestSection(tick, snapshot) {
   const section = document.createElement('div');
   section.className = 'tick-section section-quest';
@@ -1441,7 +1476,12 @@ function buildQuestSection(tick, snapshot) {
     const changed = quest.changed === true;
     const active = quest.active === true;
     const questHelperState = quest.questHelperState || null;
-    const questVarbits = quest.questVarbits || null;
+    const questKey = quest.questKey || null;
+    const questId = quest.questId;
+    const questVar = quest.questVar;
+    const questVarId = quest.questVarId;
+    const questVarType = quest.questVarType || null;
+    const questVarbits = resolveQuestVarbits(quest);
     const varbitCount = questVarbits ? Object.keys(questVarbits).length : 0;
 
     const nameRow = document.createElement('div');
@@ -1466,6 +1506,31 @@ function buildQuestSection(tick, snapshot) {
     }
 
     content.appendChild(nameRow);
+
+    if (questKey || questId !== undefined || questVar !== undefined) {
+      const metaDiv = document.createElement('div');
+      metaDiv.style.cssText = 'display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:4px; font-size:0.72rem; color:#abb2bf;';
+
+      if (questKey) {
+        const keySpan = document.createElement('span');
+        keySpan.textContent = `Key: ${questKey}`;
+        metaDiv.appendChild(keySpan);
+      }
+      if (questId !== undefined && questId !== null) {
+        const idSpan = document.createElement('span');
+        idSpan.textContent = `ID: ${questId}`;
+        metaDiv.appendChild(idSpan);
+      }
+      if (questVar !== undefined && questVar !== null) {
+        const varSpan = document.createElement('span');
+        const varLabel = questVarType === 'VARP' ? 'Varp' : 'Var';
+        const varIdText = questVarId !== undefined && questVarId !== null ? ` #${questVarId}` : '';
+        varSpan.textContent = `${varLabel}${varIdText}: ${questVar}`;
+        metaDiv.appendChild(varSpan);
+      }
+
+      content.appendChild(metaDiv);
+    }
 
     const stepDiv = document.createElement('div');
     stepDiv.className = changed ? 'quest-step-changed' : '';
@@ -1958,7 +2023,7 @@ function buildVarbitsSection(tick, entries, snapshot) {
   );
 
   // Subsection 1: Current Quest Varbits (from snapshot)
-  const questVarbits = snapshot?.quest?.questVarbits;
+  const questVarbits = resolveQuestVarbits(snapshot?.quest);
   if (questVarbits && Object.keys(questVarbits).length > 0) {
     const snapshotHeader = document.createElement('div');
     snapshotHeader.className = 'varbits-subsection-header quest-varbits-header';
@@ -3965,6 +4030,8 @@ function initReplayModeListeners() {
           const preview = document.getElementById('sessionHealthPreview');
           if (preview) preview.style.display = 'none';
         }
+        renderReplayMetadataPreview(recordingId);
+        if (elements.editReplayMetadataBtn) elements.editReplayMetadataBtn.style.display = '';
       } else {
         // User selected blank option - clear everything
         currentRecording = null;
@@ -3982,8 +4049,24 @@ function initReplayModeListeners() {
         }
         const preview = document.getElementById('sessionHealthPreview');
         if (preview) preview.style.display = 'none';
+        hideReplayMetadataEditor();
+        if (elements.editReplayMetadataBtn) elements.editReplayMetadataBtn.style.display = 'none';
       }
     });
+  }
+
+  // Metadata editor listeners
+  if (elements.editReplayMetadataBtn) {
+    elements.editReplayMetadataBtn.addEventListener('click', showReplayMetadataEditor);
+  }
+  if (elements.saveMetadataBtn) {
+    elements.saveMetadataBtn.addEventListener('click', saveReplayMetadata);
+  }
+  if (elements.cancelMetadataBtn) {
+    elements.cancelMetadataBtn.addEventListener('click', hideReplayMetadataEditor);
+  }
+  if (elements.replayTagsInput) {
+    elements.replayTagsInput.addEventListener('input', updateTagsPreview);
   }
 
   if (elements.replayVideo) {
@@ -4140,15 +4223,22 @@ async function loadRecordingSessions() {
     const sessions = await recordingRes.json();
     elements.sessionSelect.innerHTML = '<option value="">-- Select a recording session --</option>';
 
+    // Build metadata map keyed by recordingId
+    sessionMetadataMap = {};
+
     sessions.forEach(session => {
       const option = document.createElement('option');
       option.value = session.recordingId;
-      const startTime = new Date(session.startTime).toLocaleString();
-      const duration = session.endTime
-        ? Math.round((new Date(session.endTime) - new Date(session.startTime)) / 1000 / 60) + ' min'
-        : 'In progress';
-      const base = `${session.accountName || 'Unknown'} - ${startTime} (${duration})`;
+
+      // Store metadata for editor
+      sessionMetadataMap[session.recordingId] = {
+        displayName: session.displayName,
+        replayName: session.replayName,
+        replayTags: session.replayTags || []
+      };
+
       const h = sessionHealthMap[session.recordingId];
+      const displayName = session.displayName || `${session.accountName || 'Unknown'}`;
 
       // Add lifecycle state badge
       let lifecycleBadge = '';
@@ -4168,7 +4258,7 @@ async function loadRecordingSessions() {
 
       const eventPart = h ? ` · Events ${h.eventCount ?? 0}` : '';
       const failPart = h && (h.failureMarkerCount ?? 0) > 0 ? ` · Fail ${h.failureMarkerCount}` : '';
-      option.textContent = `${base}${lifecycleBadge}${eventPart}${failPart}`;
+      option.textContent = `${displayName}${lifecycleBadge}${eventPart}${failPart}`;
       elements.sessionSelect.appendChild(option);
     });
 
@@ -4181,10 +4271,121 @@ async function loadRecordingSessions() {
 
     if (preservedValue) {
       elements.sessionSelect.value = preservedValue;
+      renderReplayMetadataPreview(preservedValue);
+      if (elements.editReplayMetadataBtn && currentMode === 'replay') {
+        elements.editReplayMetadataBtn.style.display = '';
+      }
     }
   } catch (error) {
     console.error('Failed to load recording sessions:', error);
     elements.sessionSelect.innerHTML = '<option value="">Error loading sessions</option>';
+  }
+}
+
+function renderReplayMetadataPreview(recordingId) {
+  const meta = sessionMetadataMap[recordingId];
+  if (!meta || !elements.replayMetadataPreview) return;
+
+  elements.replayDisplayName.textContent = meta.displayName || '';
+  elements.replayTagsDisplay.innerHTML = '';
+  (meta.replayTags || []).forEach(tag => {
+    const chip = document.createElement('span');
+    chip.className = 'replay-tag-chip';
+    chip.textContent = tag;
+    elements.replayTagsDisplay.appendChild(chip);
+  });
+
+  const hasTags = (meta.replayTags || []).length > 0;
+  const hasCustomName = meta.replayName;
+  elements.replayMetadataPreview.style.display = (hasCustomName || hasTags) ? 'flex' : 'none';
+}
+
+function showReplayMetadataEditor() {
+  const recordingId = elements.sessionSelect?.value;
+  if (!recordingId) return;
+
+  const meta = sessionMetadataMap[recordingId] || { replayName: '', replayTags: [] };
+
+  if (elements.replayNameInput) {
+    elements.replayNameInput.value = meta.replayName || '';
+  }
+  if (elements.replayTagsInput) {
+    elements.replayTagsInput.value = (meta.replayTags || []).join(', ');
+  }
+  updateTagsPreview();
+
+  if (elements.replayMetadataEditor) elements.replayMetadataEditor.style.display = 'flex';
+  if (elements.replayMetadataPreview) elements.replayMetadataPreview.style.display = 'none';
+}
+
+function hideReplayMetadataEditor() {
+  if (elements.replayMetadataEditor) elements.replayMetadataEditor.style.display = 'none';
+  const recordingId = elements.sessionSelect?.value;
+  if (recordingId) renderReplayMetadataPreview(recordingId);
+}
+
+function updateTagsPreview() {
+  if (!elements.replayTagsInput || !elements.replayTagsPreview) return;
+  const tags = elements.replayTagsInput.value
+    .split(',')
+    .map(t => t.trim())
+    .filter(t => t.length > 0);
+  elements.replayTagsPreview.innerHTML = '';
+  tags.forEach(tag => {
+    const chip = document.createElement('span');
+    chip.className = 'replay-tag-chip';
+    chip.textContent = tag;
+    elements.replayTagsPreview.appendChild(chip);
+  });
+}
+
+async function saveReplayMetadata() {
+  const recordingId = elements.sessionSelect?.value;
+  if (!recordingId) return;
+
+  const body = {};
+  if (elements.replayNameInput) {
+    body.replayName = elements.replayNameInput.value.trim() || null;
+  }
+  if (elements.replayTagsInput) {
+    body.replayTags = elements.replayTagsInput.value
+      .split(',')
+      .map(t => t.trim())
+      .filter(t => t.length > 0);
+  }
+
+  try {
+    const res = await fetch(`/api/recordings/sessions/${encodeURIComponent(recordingId)}/metadata`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showNotification(err.error || `Failed to save metadata (${res.status})`, 'error');
+      return;
+    }
+
+    // Update local cache
+    const result = await res.json();
+    sessionMetadataMap[recordingId] = {
+      displayName: result.displayName,
+      replayName: result.replayName,
+      replayTags: result.replayTags || []
+    };
+
+    hideReplayMetadataEditor();
+
+    // Refresh sessions list to update display names
+    await loadRecordingSessions();
+    if (elements.sessionSelect) elements.sessionSelect.value = recordingId;
+    renderReplayMetadataPreview(recordingId);
+
+    showNotification('Replay metadata saved', 'success');
+  } catch (error) {
+    console.error('Failed to save metadata:', error);
+    showNotification('Failed to save metadata', 'error');
   }
 }
 
@@ -6174,6 +6375,10 @@ function showNotification(message, type = 'info') {
   console.log(`[${type.toUpperCase()}] ${message}`);
 }
 
+if (typeof window !== 'undefined') {
+  window.showNotification = showNotification;
+}
+
 // ==================== DEBUG SESSION CONTROLS ====================
 
 /**
@@ -6399,31 +6604,93 @@ async function updatePauseButtonState() {
 // ==================== PATCH LOOP CONTROLS ====================
 
 /**
- * Loads available scripts from /api/scripts and populates the patch loop dropdown.
+ * Loads available scripts for patch loop from the unified worker supervisor catalog.
+ * Replaces the previous split-fetch approach (local /api/scripts + /api/micro6/executor/catalog).
  */
 async function loadPatchLoopScripts() {
   try {
-    const response = await fetch('/api/scripts');
-    if (!response.ok) {
-      console.warn('Failed to load scripts:', response.statusText);
-      return;
-    }
-    const scripts = await response.json();
     const select = document.getElementById('patchScriptSelect');
     if (!select) return;
 
-    // Clear existing options (keep first "Select script..." option)
     select.innerHTML = '<option value="">Select script...</option>';
 
-    // Add script options
-    scripts.forEach(script => {
-      const option = document.createElement('option');
-      option.value = script;
-      option.textContent = script;
-      select.appendChild(option);
-    });
+    const supervisorBase = window.CHROMASCAPE_SUPERVISOR_BASE_URL || 'http://127.0.0.1:8096';
+    const catalogUrl = supervisorBase + '/api/dev/workers/catalog';
 
-    console.log(`Loaded ${scripts.length} scripts for patch loop`);
+    let catalog = null;
+    try {
+      const resp = await fetch(catalogUrl);
+      if (resp.ok) {
+        catalog = await resp.json();
+      }
+    } catch (e) {
+      console.warn('Failed to fetch unified catalog from supervisor:', e);
+    }
+
+    const addOption = (parent, value, label, disabled = false) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      option.disabled = disabled;
+      parent.appendChild(option);
+    };
+
+    let queueCount = 0;
+    let patchLoopCount = 0;
+
+    if (catalog && Array.isArray(catalog.tasks)) {
+      // Group by execution mode and queueability.
+      // queueTasks: visible in planner queue flow.
+      // patchLoopTasks: patch-loop-only entries (avoid duplicating queue-capable entries).
+      const queueTasks = catalog.tasks.filter(t => t && (t.queueable === true || t.execution_mode === 'queue'));
+      const patchLoopTasks = catalog.tasks.filter(
+        t => t && t.execution_mode === 'patch_loop' && t.queueable !== true
+      );
+
+      if (queueTasks.length > 0) {
+        const queueGroup = document.createElement('optgroup');
+        queueGroup.label = 'Queue Tasks';
+        queueTasks.forEach(task => {
+          const taskKey = task?.task_key;
+          if (!taskKey) return;
+          const clientType = task?.client_type || 'unknown';
+          const selectable = clientType === 'micro6';
+          const displayName = task?.display_name || taskKey;
+          let label = `${displayName} (${taskKey}) [${clientType}]`;
+          if (task.script_author) {
+            label += ` [${task.script_author}]`;
+          }
+          if (!selectable) {
+            label += ' [not executable in patch loop]';
+          }
+          addOption(queueGroup, `${clientType}:${taskKey}`, label, !selectable);
+          queueCount++;
+        });
+        select.appendChild(queueGroup);
+      }
+
+      if (patchLoopTasks.length > 0) {
+        const patchGroup = document.createElement('optgroup');
+        patchGroup.label = 'Patch-Loop Scripts (local)';
+        patchLoopTasks.forEach(task => {
+          const taskKey = task?.task_key;
+          if (!taskKey) return;
+          const displayName = task?.display_name || taskKey;
+          addOption(patchGroup, `local:${displayName}`, displayName);
+          patchLoopCount++;
+        });
+        select.appendChild(patchGroup);
+      }
+    }
+
+    // Fallback if unified catalog is unavailable/empty
+    if (queueCount === 0 && patchLoopCount === 0) {
+      const message = catalog
+        ? 'No scripts/tasks available'
+        : 'No scripts/tasks available (unified catalog unavailable)';
+      addOption(select, '', message, true);
+    }
+    console.log(`Loaded patch loop options: queue=${queueCount}, patch_loop=${patchLoopCount}`);
   } catch (error) {
     console.error('Error loading patch loop scripts:', error);
   }
@@ -6516,37 +6783,58 @@ function buildProviderUnavailableMessage(status) {
 }
 
 /**
- * Validates preflight conditions before executing patch loop.
- * Returns { valid: boolean, message: string }
+ * Derives execution requirements from a compiled graph's node types.
+ *
+ * TRADEOFF: The permissive fallback (no provider/prompt required when response shape is
+ * unexpected) prioritizes not blocking run-only workflows over catching contract drift early.
+ * If the compile response shape changes (e.g., nodes array removed or renamed), execution
+ * will proceed to the server and fail there with a real error message rather than being
+ * silently blocked client-side with a misleading "provider unavailable" message.
+ * See PatchLoopGraphCompilerTest for contract-locked tests that guard against this drift.
+ *
+ * @param {object} compiledGraph - The compiledGraph from the compile response
+ * @returns {{ requiresProvider: boolean, requiresGoalPrompt: boolean }}
  */
-async function validatePatchLoopPreflight() {
+function deriveGraphRequirements(compiledGraph) {
+  if (!compiledGraph || !compiledGraph.nodes) {
+    // Permissive fallback: don't block run-only flows on response-contract drift.
+    // If the response shape is unexpected, let execution attempt and fail server-side.
+    return { requiresProvider: false, requiresGoalPrompt: false };
+  }
+  // Only ANALYZE invokes the analysis provider; downstream AI nodes operate on its output.
+  const hasAnalysis = compiledGraph.nodes.some(n => n.type === 'ANALYZE');
+  return { requiresProvider: hasAnalysis, requiresGoalPrompt: hasAnalysis };
+}
+
+/**
+ * Validates preflight conditions before executing patch loop.
+ * @param {{ requiresProvider: boolean, requiresGoalPrompt: boolean }} requirements
+ * @returns { valid: boolean, message: string }
+ */
+async function validatePatchLoopPreflight(requirements) {
   const script = document.getElementById('patchScriptSelect')?.value;
   const prompt = document.getElementById('goalPromptInput')?.value;
-  const compiled = window.patchLoopCompiledGraph;
 
   if (!script) {
     return { valid: false, message: 'Please select a script' };
   }
 
-  if (!prompt || prompt.trim().length === 0) {
-    return { valid: false, message: 'Please enter a goal prompt' };
+  if (requirements.requiresGoalPrompt && (!prompt || prompt.trim().length === 0)) {
+    return { valid: false, message: 'Please enter a goal prompt (required for analysis graphs)' };
   }
 
-  if (!compiled) {
-    return { valid: false, message: 'Please compile the graph first' };
-  }
-
-  // Check provider availability
-  try {
-    const response = await fetch('/api/debug/patch-loop/provider/status');
-    if (response.ok) {
-      const status = await response.json();
-      if (!status.available) {
-        return { valid: false, message: buildProviderUnavailableMessage(status) };
+  if (requirements.requiresProvider) {
+    try {
+      const response = await fetch('/api/debug/patch-loop/provider/status');
+      if (response.ok) {
+        const status = await response.json();
+        if (!status.available) {
+          return { valid: false, message: buildProviderUnavailableMessage(status) };
+        }
       }
+    } catch (error) {
+      console.warn('Could not verify provider status:', error);
     }
-  } catch (error) {
-    console.warn('Could not verify provider status:', error);
   }
 
   return { valid: true };
@@ -6596,7 +6884,8 @@ F --> G[validate]
 G --> H[retest]
 H --> I[evaluate_success]
 I -.success.-> J[end]
-I -.failure.-> D`;
+I -.retry.-> D
+I -.failure.-> J`;
       const mermaidInput = document.getElementById('mermaidInput');
       if (mermaidInput) {
         mermaidInput.value = template;
@@ -6668,8 +6957,25 @@ I -.failure.-> D`;
             compileGraphBtn.disabled = false;
           }, 2000);
         } else {
-          const error = await response.json();
-          console.error('Compilation failed:', error);
+          let errorPayload;
+          try {
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              const asJson = await response.json();
+              errorPayload = typeof asJson === 'string' ? asJson : JSON.stringify(asJson);
+            } else {
+              errorPayload = await response.text();
+            }
+          } catch (parseError) {
+            errorPayload = `Graph compilation failed (HTTP ${response.status})`;
+          }
+          console.error('Compilation failed:', errorPayload);
+          showNotification(
+            typeof errorPayload === 'string' && errorPayload
+              ? errorPayload
+              : `Graph compilation failed (HTTP ${response.status})`,
+            'error'
+          );
           compileGraphBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Failed';
           setTimeout(() => {
             compileGraphBtn.innerHTML = '<i class="bi bi-code-slash me-2"></i>Compile Graph';
@@ -6708,23 +7014,61 @@ I -.failure.-> D`;
         return;
       }
 
-      // Preflight validation
-      const preflight = await validatePatchLoopPreflight();
-      if (!preflight.valid) {
-        alert(preflight.message);
-        return;
-      }
-
       try {
         // Disable button during execution
         executeLoopBtn.disabled = true;
-        executeLoopBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Executing...';
+        executeLoopBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Compiling...';
 
-        // Refresh provider status right before execute
+        // Step 1: Compile Mermaid to inspect node types
+        const compileResponse = await fetch('/api/debug/patch-loop/compile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mermaid })
+        });
+        if (!compileResponse.ok) {
+          let compileError;
+          try {
+            const contentType = compileResponse.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              const asJson = await compileResponse.json();
+              compileError = typeof asJson === 'string' ? asJson : JSON.stringify(asJson);
+            } else {
+              compileError = await compileResponse.text();
+            }
+          } catch (e) {
+            compileError = `Graph compilation failed (HTTP ${compileResponse.status})`;
+          }
+          alert(compileError || `Graph compilation failed (HTTP ${compileResponse.status})`);
+          executeLoopBtn.innerHTML = '<i class="bi bi-play-fill me-2"></i>Execute';
+          executeLoopBtn.disabled = false;
+          return;
+        }
+        window.patchLoopCompiledGraph = true;
+        const compileResult = await compileResponse.json();
+
+        // Step 2: Derive requirements from compiled graph node types
+        const requirements = deriveGraphRequirements(compileResult);
+
+        // Step 3: Conditional preflight validation
+        const preflight = await validatePatchLoopPreflight(requirements);
+        if (!preflight.valid) {
+          alert(preflight.message);
+          executeLoopBtn.innerHTML = '<i class="bi bi-play-fill me-2"></i>Execute';
+          executeLoopBtn.disabled = false;
+          return;
+        }
+
+        // Step 4: Refresh provider status and execute
+        executeLoopBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Executing...';
         await updateProviderStatus();
 
-        // Execute using the simple API (which internally delegates to graph orchestrator)
-        const result = await window.patchLoopManager.execute(scriptName, goalPrompt, { executionMode });
+        // Execute the exact Mermaid graph currently in the editor.
+        const result = await window.patchLoopManager.executeGraph(
+          mermaid,
+          scriptName,
+          goalPrompt,
+          { executionMode }
+        );
 
         console.log('Graph execution started:', result);
 
@@ -6935,6 +7279,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (elements.sessionSelect) elements.sessionSelect.value = targetRecordingId;
       const health = sessionHealthMap[targetRecordingId];
       if (health) renderSessionHealthPreview(health);
+      renderReplayMetadataPreview(targetRecordingId);
+      if (elements.editReplayMetadataBtn) elements.editReplayMetadataBtn.style.display = '';
       await loadRecording(targetRecordingId);
     } else if (modeParam === 'replay') {
       // mode=replay only: stay in replay mode with selector usable, no auto-load
