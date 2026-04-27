@@ -10,11 +10,14 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
     integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPgv6ud+Mvd" crossorigin="anonymous" />
   <link rel="stylesheet" href="/css/style.css" />
-  <link rel="stylesheet" href="/css/debugger.css?v=7" />
+  <link rel="stylesheet" href="/css/debugger.css?v=8" />
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
     crossorigin="anonymous"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <script th:inline="javascript">
+    window.CHROMASCAPE_SUPERVISOR_BASE_URL = /*[[${supervisorBaseUrl}]]*/ 'http://127.0.0.1:8096';
+  </script>
 </head>
 
 <body>
@@ -63,6 +66,26 @@
           <button id="refreshSessionsBtn" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-clockwise me-1"></i>Refresh
           </button>
+          <button id="editReplayMetadataBtn" class="btn btn-outline-secondary" title="Edit replay name and tags" style="display:none;">
+            <i class="bi bi-pencil me-1"></i>Edit
+          </button>
+        </div>
+        <!-- Replay Metadata Editor -->
+        <div id="replayMetadataEditor" class="replay-metadata-editor" style="display:none;">
+          <div class="replay-metadata-editor-row">
+            <input type="text" id="replayNameInput" class="form-control form-control-sm" placeholder="Replay name (optional)" maxlength="160" />
+            <div class="replay-tags-input-wrap">
+              <input type="text" id="replayTagsInput" class="form-control form-control-sm" placeholder="Tags (comma-separated)" />
+              <div id="replayTagsPreview" class="replay-tags-preview"></div>
+            </div>
+            <button id="saveMetadataBtn" class="btn btn-primary btn-sm"><i class="bi bi-check me-1"></i>Save</button>
+            <button id="cancelMetadataBtn" class="btn btn-outline-secondary btn-sm">Cancel</button>
+          </div>
+        </div>
+        <!-- Replay Metadata Preview -->
+        <div id="replayMetadataPreview" class="replay-metadata-preview" style="display:none;">
+          <span id="replayDisplayName" class="replay-display-name"></span>
+          <div id="replayTagsDisplay" class="replay-tags-display"></div>
         </div>
         <button type="button" id="taskPlannerToggleBtn" class="btn btn-outline-secondary ms-2">
           <i class="bi bi-kanban me-1"></i>Task Planner
@@ -169,12 +192,18 @@
 
         <!-- Script Configuration -->
         <div class="patch-section">
-          <label class="form-label">Script</label>
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label mb-0">Script</label>
+            <button class="btn btn-sm btn-outline-secondary" id="refreshPatchScriptCatalogBtn" type="button">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+          </div>
           <select id="patchScriptSelect" class="form-select form-select-sm">
             <option value="">Select script...</option>
           </select>
+          <div id="patchScriptCatalogStatus" class="form-text text-muted mt-1"></div>
           <div class="mt-2">
-            <label class="form-label small">Goal Prompt</label>
+            <label class="form-label small">Goal Prompt <span class="text-muted">(required for analysis graphs)</span></label>
             <input type="text" id="goalPromptInput" class="form-control form-control-sm" placeholder="What should the loop achieve?">
           </div>
         </div>
@@ -620,8 +649,8 @@
     </div>
   </div>
 
-  <script src="/js/debugger.js?v=8"></script>
-  <script src="/js/patchloop.js?v=1"></script>
+  <script src="/js/debugger.js?v=11"></script>
+  <script src="/js/patchloop.js?v=2"></script>
   <script src="/js/account-task-planner.js?v=1"></script>
 </body>
 

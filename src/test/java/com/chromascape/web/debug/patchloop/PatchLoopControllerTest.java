@@ -17,6 +17,7 @@ import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportException;
+import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
@@ -688,7 +689,57 @@ class PatchLoopControllerTest {
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
   }
 
+  @Test
+  @DisplayName("GET /catalog returns degraded payload when supervisor is unreachable")
+  void testGetCatalogReturnsDegradedPayloadWhenSupervisorUnavailable() throws Exception {
+    setPrivateField(controller, "supervisorBaseUrl", "http://127.0.0.1:1");
+
+    ResponseEntity<Object> response = controller.getCatalog(false);
+
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody() instanceof Map);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertTrue(body.containsKey("tasks"));
+    assertTrue(body.containsKey("sources"));
+    assertTrue(body.containsKey("availableClientTypes"));
+    assertTrue(body.containsKey("errors"));
+    assertTrue(body.containsKey("catalogUrl"));
+    assertEquals("http://127.0.0.1:1/api/dev/workers/catalog", body.get("catalogUrl"));
+
+    @SuppressWarnings("unchecked")
+    List<Object> tasks = (List<Object>) body.get("tasks");
+    @SuppressWarnings("unchecked")
+    List<Object> errors = (List<Object>) body.get("errors");
+    assertTrue(tasks.isEmpty());
+    assertFalse(errors.isEmpty());
+  }
+
+  @Test
+  @DisplayName("GET /catalog refresh=true appends refresh query param")
+  void testGetCatalogRefreshParamIncludedInCatalogUrl() throws Exception {
+    setPrivateField(controller, "supervisorBaseUrl", "http://127.0.0.1:1");
+
+    ResponseEntity<Object> response = controller.getCatalog(true);
+
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody() instanceof Map);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals("http://127.0.0.1:1/api/dev/workers/catalog?refresh=true", body.get("catalogUrl"));
+  }
+
   // ========== Helper Methods ==========
+
+  private void setPrivateField(Object target, String name, Object value) throws Exception {
+    Field field = target.getClass().getDeclaredField(name);
+    field.setAccessible(true);
+    field.set(target, value);
+  }
 
   private PatchLoopIterationResponse createIterationResponse(String iterationId, String status) {
     PatchLoopIterationResponse response = new PatchLoopIterationResponse();

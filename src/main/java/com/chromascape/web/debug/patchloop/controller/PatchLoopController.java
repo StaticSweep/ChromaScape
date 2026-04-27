@@ -11,6 +11,15 @@ import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorSer
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,12 +47,18 @@ public class PatchLoopController {
   private final PatchLoopGraphOrchestratorService graphOrchestratorService;
   private final PatchLoopAnalysisClient analysisClient;
   private final McpTransportClient mcpTransportClient;
+  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final HttpClient catalogHttpClient =
+      HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
   @Value("${claude.api.model:claude-opus-4-6}")
   private String claudeApiModel;
 
   @Value("${analysis.openai.model:gpt-5-mini}")
   private String openAiCodexModel;
+
+  @Value("${chromascape.patchloop.supervisor-base-url:http://127.0.0.1:8096}")
+  private String supervisorBaseUrl;
 
   @Autowired(required = false)
   private McpBridgeLifecycleManager bridgeLifecycleManager;
@@ -403,9 +418,7 @@ public class PatchLoopController {
                 "runtimeProvider",
                 normalizeRuntimeProvider(
                     readStringMetadata(
-                        metadata,
-                        "provider",
-                        String.valueOf(status.get("runtimeProvider")))));
+                        metadata, "provider", String.valueOf(status.get("runtimeProvider")))));
             status.put("runtimeModel", readStringMetadata(metadata, "model", "unknown"));
             status.put("backend", readStringMetadata(metadata, "backend", backend));
             availabilityReason =
@@ -442,6 +455,86 @@ public class PatchLoopController {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body("Failed to get provider status: " + e.getMessage());
     }
+  }
+
+  /**
+   * Gets a normalized patch-loop script catalog via supervisor.
+   *
+   * <p>Always returns 200 with a payload that may include errors, so UI can render degraded state.
+   *
+   * @param refresh whether to request a fresh catalog from upstream
+   * @return normalized catalog payload
+   */
+  @GetMapping("/catalog")
+  public ResponseEntity<Object> getCatalog(
+      @RequestParam(name = "refresh", defaultValue = "false") boolean refresh) {
+    logger.debug("GET /api/debug/patch-loop/catalog?refresh={}", refresh);
+
+    Map<String, Object> payload = new HashMap<>();
+    List<String> errors = new ArrayList<>();
+    payload.put("tasks", List.of());
+    payload.put("sources", Map.of());
+    payload.put("availableClientTypes", List.of());
+    payload.put("errors", errors);
+
+    String base =
+        supervisorBaseUrl == null || supervisorBaseUrl.isBlank()
+            ? "http://127.0.0.1:8096"
+            : supervisorBaseUrl;
+    String catalogUrl = base + "/api/dev/workers/catalog" + (refresh ? "?refresh=true" : "");
+    payload.put("catalogUrl", catalogUrl);
+
+    try {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create(catalogUrl))
+              .timeout(Duration.ofSeconds(10))
+              .GET()
+              .build();
+      HttpResponse<String> response =
+          catalogHttpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+      if (response.statusCode() >= 400) {
+        errors.add("Supervisor catalog request failed: HTTP " + response.statusCode());
+      }
+
+      JsonNode root = objectMapper.readTree(response.body());
+      if (root.path("tasks").isArray()) {
+        payload.put("tasks", objectMapper.convertValue(root.path("tasks"), List.class));
+      }
+      if (root.path("sources").isObject()) {
+        Map<String, Object> sources = objectMapper.convertValue(root.path("sources"), Map.class);
+        payload.put("sources", sources);
+        for (Map.Entry<String, Object> entry : sources.entrySet()) {
+          if (entry.getValue() instanceof Map<?, ?> sourceMeta) {
+            Object ok = sourceMeta.get("ok");
+            if (Boolean.FALSE.equals(ok)) {
+              String reason =
+                  sourceMeta.get("error") == null
+                      ? "source unavailable"
+                      : String.valueOf(sourceMeta.get("error"));
+              errors.add(entry.getKey() + ": " + reason);
+            }
+          }
+        }
+      }
+      if (root.path("enabled_client_types").isArray()) {
+        List<String> clientTypes = new ArrayList<>();
+        for (JsonNode value : root.path("enabled_client_types")) {
+          if (value.isTextual()) {
+            clientTypes.add(value.asText());
+          }
+        }
+        payload.put("availableClientTypes", clientTypes);
+      }
+      if (root.path("error").isTextual() && !root.path("error").asText().isBlank()) {
+        errors.add(root.path("error").asText());
+      }
+    } catch (Exception e) {
+      errors.add("Supervisor catalog unavailable: " + e.getMessage());
+    }
+
+    return ResponseEntity.ok(payload);
   }
 
   private String readStringMetadata(Map<String, Object> metadata, String key, String fallback) {
@@ -508,8 +601,7 @@ public class PatchLoopController {
   @PostMapping("/execute-for-task")
   public ResponseEntity<Object> executeForTask(@RequestBody PatchLoopExecuteRequest request) {
     logger.info(
-        "POST /api/debug/patch-loop/execute-for-task - taskItem: {}",
-        request.getTaskItemId());
+        "POST /api/debug/patch-loop/execute-for-task - taskItem: {}", request.getTaskItemId());
     return executeIteration(request);
   }
 }

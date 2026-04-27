@@ -6603,28 +6603,49 @@ async function updatePauseButtonState() {
 
 // ==================== PATCH LOOP CONTROLS ====================
 
+const PATCH_LOOP_CATALOG_POLL_INTERVAL_MS = 30000;
+let patchLoopCatalogPollTimer = null;
+
+function setPatchScriptCatalogStatus(message, tone = 'muted') {
+  const status = document.getElementById('patchScriptCatalogStatus');
+  if (!status) return;
+
+  const toneClass = {
+    muted: 'text-muted',
+    success: 'text-success',
+    warning: 'text-warning',
+    error: 'text-danger'
+  }[tone] || 'text-muted';
+
+  status.className = `form-text mt-1 ${toneClass}`;
+  status.textContent = message;
+}
+
 /**
- * Loads available scripts for patch loop from the unified worker supervisor catalog.
- * Replaces the previous split-fetch approach (local /api/scripts + /api/micro6/executor/catalog).
+ * Loads available scripts/tasks for patch loop via backend catalog proxy.
+ *
+ * @param {boolean} forceRefresh when true, asks backend to refresh upstream catalog
  */
-async function loadPatchLoopScripts() {
+async function loadPatchLoopScripts(forceRefresh = false) {
   try {
     const select = document.getElementById('patchScriptSelect');
     if (!select) return;
 
+    const selectedValue = select.value;
     select.innerHTML = '<option value="">Select script...</option>';
+    setPatchScriptCatalogStatus('Loading script catalog...');
 
-    const supervisorBase = window.CHROMASCAPE_SUPERVISOR_BASE_URL || 'http://127.0.0.1:8096';
-    const catalogUrl = supervisorBase + '/api/dev/workers/catalog';
+    const catalogUrl = `/api/debug/patch-loop/catalog${forceRefresh ? '?refresh=true' : ''}`;
 
-    let catalog = null;
+    let catalogPayload = null;
     try {
       const resp = await fetch(catalogUrl);
-      if (resp.ok) {
-        catalog = await resp.json();
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
       }
+      catalogPayload = await resp.json();
     } catch (e) {
-      console.warn('Failed to fetch unified catalog from supervisor:', e);
+      console.warn('Failed to fetch patch-loop catalog:', e);
     }
 
     const addOption = (parent, value, label, disabled = false) => {
@@ -6638,12 +6659,18 @@ async function loadPatchLoopScripts() {
     let queueCount = 0;
     let patchLoopCount = 0;
 
-    if (catalog && Array.isArray(catalog.tasks)) {
+    const tasks = Array.isArray(catalogPayload?.tasks) ? catalogPayload.tasks : [];
+    const sourceMap = catalogPayload?.sources && typeof catalogPayload.sources === 'object'
+      ? catalogPayload.sources
+      : {};
+    const payloadErrors = Array.isArray(catalogPayload?.errors) ? catalogPayload.errors : [];
+
+    if (tasks.length > 0) {
       // Group by execution mode and queueability.
       // queueTasks: visible in planner queue flow.
       // patchLoopTasks: patch-loop-only entries (avoid duplicating queue-capable entries).
-      const queueTasks = catalog.tasks.filter(t => t && (t.queueable === true || t.execution_mode === 'queue'));
-      const patchLoopTasks = catalog.tasks.filter(
+      const queueTasks = tasks.filter(t => t && (t.queueable === true || t.execution_mode === 'queue'));
+      const patchLoopTasks = tasks.filter(
         t => t && t.execution_mode === 'patch_loop' && t.queueable !== true
       );
 
@@ -6661,7 +6688,7 @@ async function loadPatchLoopScripts() {
             label += ` [${task.script_author}]`;
           }
           if (!selectable) {
-            label += ' [not executable in patch loop]';
+            label += ' [visible only - not executable in patch loop]';
           }
           addOption(queueGroup, `${clientType}:${taskKey}`, label, !selectable);
           queueCount++;
@@ -6683,16 +6710,45 @@ async function loadPatchLoopScripts() {
       }
     }
 
-    // Fallback if unified catalog is unavailable/empty
+    // Fallback if catalog is unavailable/empty
     if (queueCount === 0 && patchLoopCount === 0) {
-      const message = catalog
+      const message = catalogPayload
         ? 'No scripts/tasks available'
-        : 'No scripts/tasks available (unified catalog unavailable)';
+        : 'No scripts/tasks available (catalog unavailable)';
       addOption(select, '', message, true);
     }
+
+    // Preserve previous selection when still present and enabled.
+    if (selectedValue) {
+      const matching = Array.from(select.options).find(
+        option => option.value === selectedValue && option.disabled !== true
+      );
+      if (matching) {
+        select.value = selectedValue;
+      }
+    }
+
+    const sourceFailures = Object.entries(sourceMap)
+      .filter(([, meta]) => meta && meta.ok === false)
+      .map(([name, meta]) => `${name}: ${meta.error || 'unavailable'}`);
+    const failureMessages = Array.from(new Set([...sourceFailures, ...payloadErrors]));
+
+    if (failureMessages.length > 0) {
+      const summary = failureMessages.slice(0, 2).join(' | ');
+      setPatchScriptCatalogStatus(`Catalog degraded: ${summary}`, 'warning');
+    } else if (queueCount > 0 || patchLoopCount > 0) {
+      setPatchScriptCatalogStatus(
+        `Loaded ${queueCount + patchLoopCount} tasks (${queueCount} queue, ${patchLoopCount} patch-loop).`,
+        'success'
+      );
+    } else {
+      setPatchScriptCatalogStatus('No scripts/tasks available.', 'muted');
+    }
+
     console.log(`Loaded patch loop options: queue=${queueCount}, patch_loop=${patchLoopCount}`);
   } catch (error) {
     console.error('Error loading patch loop scripts:', error);
+    setPatchScriptCatalogStatus(`Failed to load catalog: ${error.message}`, 'error');
   }
 }
 
@@ -6845,11 +6901,31 @@ async function validatePatchLoopPreflight(requirements) {
  */
 function initPatchLoopControls() {
   // Load scripts and provider status on initialization
-  loadPatchLoopScripts();
+  loadPatchLoopScripts(true);
   updateProviderStatus();
 
   // Poll provider status every 15 seconds
   setInterval(updateProviderStatus, 15000);
+
+  // Poll script catalog periodically and allow manual refresh.
+  if (patchLoopCatalogPollTimer) {
+    clearInterval(patchLoopCatalogPollTimer);
+  }
+  patchLoopCatalogPollTimer = setInterval(() => {
+    loadPatchLoopScripts(true);
+  }, PATCH_LOOP_CATALOG_POLL_INTERVAL_MS);
+
+  const refreshCatalogBtn = document.getElementById('refreshPatchScriptCatalogBtn');
+  if (refreshCatalogBtn) {
+    refreshCatalogBtn.addEventListener('click', async () => {
+      refreshCatalogBtn.disabled = true;
+      try {
+        await loadPatchLoopScripts(true);
+      } finally {
+        refreshCatalogBtn.disabled = false;
+      }
+    });
+  }
 
   // Toggle patch loop panel collapse/expand
   const togglePatchLoopBtn = document.getElementById('togglePatchLoopBtn');
