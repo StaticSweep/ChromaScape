@@ -6605,6 +6605,7 @@ async function updatePauseButtonState() {
 
 const PATCH_LOOP_CATALOG_POLL_INTERVAL_MS = 30000;
 let patchLoopCatalogPollTimer = null;
+let patchLoopCatalogEntries = [];
 
 function setPatchScriptCatalogStatus(message, tone = 'muted') {
   const status = document.getElementById('patchScriptCatalogStatus');
@@ -6621,6 +6622,68 @@ function setPatchScriptCatalogStatus(message, tone = 'muted') {
   status.textContent = message;
 }
 
+function buildPatchLoopSearchIndex(task) {
+  const tokens = [
+    task?.display_name,
+    task?.task_key,
+    task?.category,
+    Array.isArray(task?.tags) ? task.tags.join(' ') : ''
+  ].filter(Boolean);
+  return tokens.join(' ').toLowerCase();
+}
+
+function createPatchLoopOption(select, value, label, disabled = false) {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = label;
+  option.disabled = disabled;
+  select.appendChild(option);
+}
+
+function renderPatchLoopScriptOptions(selectedValue = '') {
+  const select = document.getElementById('patchScriptSelect');
+  const searchInput = document.getElementById('patchScriptSearchInput');
+  if (!select) return;
+
+  const query = (searchInput?.value || '').trim().toLowerCase();
+  select.innerHTML = '<option value="">Select script...</option>';
+
+  const filtered = query
+    ? patchLoopCatalogEntries.filter(entry => entry.searchText.includes(query))
+    : [...patchLoopCatalogEntries];
+
+  const grouped = new Map();
+  filtered.forEach(entry => {
+    if (!grouped.has(entry.group)) {
+      grouped.set(entry.group, []);
+    }
+    grouped.get(entry.group).push(entry);
+  });
+
+  for (const [groupLabel, entries] of grouped.entries()) {
+    const group = document.createElement('optgroup');
+    group.label = groupLabel;
+    entries.forEach(entry => {
+      createPatchLoopOption(group, entry.value, entry.label, entry.disabled);
+    });
+    select.appendChild(group);
+  }
+
+  if (filtered.length === 0) {
+    const emptyLabel = query ? 'No scripts match your search' : 'No scripts/tasks available';
+    createPatchLoopOption(select, '', emptyLabel, true);
+  }
+
+  if (selectedValue) {
+    const matching = Array.from(select.options).find(
+      option => option.value === selectedValue && option.disabled !== true
+    );
+    if (matching) {
+      select.value = selectedValue;
+    }
+  }
+}
+
 /**
  * Loads available scripts/tasks for patch loop via backend catalog proxy.
  *
@@ -6632,6 +6695,7 @@ async function loadPatchLoopScripts(forceRefresh = false) {
     if (!select) return;
 
     const selectedValue = select.value;
+    patchLoopCatalogEntries = [];
     select.innerHTML = '<option value="">Select script...</option>';
     setPatchScriptCatalogStatus('Loading script catalog...');
 
@@ -6648,16 +6712,10 @@ async function loadPatchLoopScripts(forceRefresh = false) {
       console.warn('Failed to fetch patch-loop catalog:', e);
     }
 
-    const addOption = (parent, value, label, disabled = false) => {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = label;
-      option.disabled = disabled;
-      parent.appendChild(option);
-    };
-
     let queueCount = 0;
     let patchLoopCount = 0;
+    let micro6QueueCount = 0;
+    let otherQueueCount = 0;
 
     const tasks = Array.isArray(catalogPayload?.tasks) ? catalogPayload.tasks : [];
     const sourceMap = catalogPayload?.sources && typeof catalogPayload.sources === 'object'
@@ -6666,67 +6724,80 @@ async function loadPatchLoopScripts(forceRefresh = false) {
     const payloadErrors = Array.isArray(catalogPayload?.errors) ? catalogPayload.errors : [];
 
     if (tasks.length > 0) {
-      // Group by execution mode and queueability.
-      // queueTasks: visible in planner queue flow.
-      // patchLoopTasks: patch-loop-only entries (avoid duplicating queue-capable entries).
-      const queueTasks = tasks.filter(t => t && (t.queueable === true || t.execution_mode === 'queue'));
+      const queueTasks = tasks.filter(
+        t => t && (t.queueable === true || t.execution_mode === 'queue')
+      );
       const patchLoopTasks = tasks.filter(
         t => t && t.execution_mode === 'patch_loop' && t.queueable !== true
       );
-
-      if (queueTasks.length > 0) {
-        const queueGroup = document.createElement('optgroup');
-        queueGroup.label = 'Queue Tasks';
-        queueTasks.forEach(task => {
-          const taskKey = task?.task_key;
-          if (!taskKey) return;
-          const clientType = task?.client_type || 'unknown';
-          const selectable = clientType === 'micro6';
-          const displayName = task?.display_name || taskKey;
-          let label = `${displayName} (${taskKey}) [${clientType}]`;
-          if (task.script_author) {
-            label += ` [${task.script_author}]`;
-          }
-          if (!selectable) {
-            label += ' [visible only - not executable in patch loop]';
-          }
-          addOption(queueGroup, `${clientType}:${taskKey}`, label, !selectable);
-          queueCount++;
+      const micro6QueueTasks = queueTasks
+        .filter(t => (t?.client_type || '').toLowerCase() === 'micro6')
+        .sort((a, b) => {
+          const catA = (a?.category || '').toString().toLowerCase();
+          const catB = (b?.category || '').toString().toLowerCase();
+          if (catA !== catB) return catA.localeCompare(catB);
+          const nameA = (a?.display_name || a?.task_key || '').toString().toLowerCase();
+          const nameB = (b?.display_name || b?.task_key || '').toString().toLowerCase();
+          return nameA.localeCompare(nameB);
         });
-        select.appendChild(queueGroup);
-      }
+      const otherQueueTasks = queueTasks
+        .filter(t => (t?.client_type || '').toLowerCase() !== 'micro6')
+        .sort((a, b) =>
+          (a?.display_name || a?.task_key || '')
+            .toString()
+            .localeCompare((b?.display_name || b?.task_key || '').toString())
+        );
+
+      micro6QueueTasks.forEach(task => {
+        const taskKey = task?.task_key;
+        if (!taskKey) return;
+        const displayName = task?.display_name || taskKey;
+        const category = task?.category ? ` [${task.category}]` : '';
+        patchLoopCatalogEntries.push({
+          group: 'Micro6 AccountBuilder',
+          value: `micro6:${taskKey}`,
+          label: `${displayName} (${taskKey})${category}`,
+          disabled: false,
+          searchText: buildPatchLoopSearchIndex(task)
+        });
+        queueCount++;
+        micro6QueueCount++;
+      });
+
+      otherQueueTasks.forEach(task => {
+        const taskKey = task?.task_key;
+        if (!taskKey) return;
+        const clientType = task?.client_type || 'unknown';
+        const displayName = task?.display_name || taskKey;
+        patchLoopCatalogEntries.push({
+          group: 'Other Queue Tasks',
+          value: `${clientType}:${taskKey}`,
+          label: `${displayName} (${taskKey}) [${clientType}] [visible only - not executable in patch loop]`,
+          disabled: true,
+          searchText: buildPatchLoopSearchIndex(task)
+        });
+        queueCount++;
+        otherQueueCount++;
+      });
 
       if (patchLoopTasks.length > 0) {
-        const patchGroup = document.createElement('optgroup');
-        patchGroup.label = 'Patch-Loop Scripts (local)';
         patchLoopTasks.forEach(task => {
           const taskKey = task?.task_key;
           if (!taskKey) return;
           const displayName = task?.display_name || taskKey;
-          addOption(patchGroup, `local:${displayName}`, displayName);
+          patchLoopCatalogEntries.push({
+            group: 'Patch-Loop Scripts (local)',
+            value: `local:${displayName}`,
+            label: displayName,
+            disabled: false,
+            searchText: buildPatchLoopSearchIndex(task)
+          });
           patchLoopCount++;
         });
-        select.appendChild(patchGroup);
       }
     }
 
-    // Fallback if catalog is unavailable/empty
-    if (queueCount === 0 && patchLoopCount === 0) {
-      const message = catalogPayload
-        ? 'No scripts/tasks available'
-        : 'No scripts/tasks available (catalog unavailable)';
-      addOption(select, '', message, true);
-    }
-
-    // Preserve previous selection when still present and enabled.
-    if (selectedValue) {
-      const matching = Array.from(select.options).find(
-        option => option.value === selectedValue && option.disabled !== true
-      );
-      if (matching) {
-        select.value = selectedValue;
-      }
-    }
+    renderPatchLoopScriptOptions(selectedValue);
 
     const sourceFailures = Object.entries(sourceMap)
       .filter(([, meta]) => meta && meta.ok === false)
@@ -6738,7 +6809,7 @@ async function loadPatchLoopScripts(forceRefresh = false) {
       setPatchScriptCatalogStatus(`Catalog degraded: ${summary}`, 'warning');
     } else if (queueCount > 0 || patchLoopCount > 0) {
       setPatchScriptCatalogStatus(
-        `Loaded ${queueCount + patchLoopCount} tasks (${queueCount} queue, ${patchLoopCount} patch-loop).`,
+        `Loaded ${queueCount + patchLoopCount} tasks (${micro6QueueCount} micro6, ${otherQueueCount} other queue, ${patchLoopCount} patch-loop).`,
         'success'
       );
     } else {
@@ -6924,6 +6995,14 @@ function initPatchLoopControls() {
       } finally {
         refreshCatalogBtn.disabled = false;
       }
+    });
+  }
+
+  const patchScriptSearchInput = document.getElementById('patchScriptSearchInput');
+  if (patchScriptSearchInput) {
+    patchScriptSearchInput.addEventListener('input', () => {
+      const selectedValue = document.getElementById('patchScriptSelect')?.value || '';
+      renderPatchLoopScriptOptions(selectedValue);
     });
   }
 

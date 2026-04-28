@@ -17,6 +17,8 @@ import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportException;
+import com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -42,6 +44,7 @@ class PatchLoopControllerTest {
   @Mock private PatchLoopGraphOrchestratorService graphOrchestratorService;
   @Mock private PatchLoopAnalysisClient analysisClient;
   @Mock private McpTransportClient mcpTransportClient;
+  @Mock private Micro6ExecutorCatalogService micro6ExecutorCatalogService;
 
   private PatchLoopController controller;
 
@@ -49,7 +52,11 @@ class PatchLoopControllerTest {
   void setUp() {
     controller =
         new PatchLoopController(
-            orchestratorService, graphOrchestratorService, analysisClient, mcpTransportClient);
+            orchestratorService,
+            graphOrchestratorService,
+            analysisClient,
+            mcpTransportClient,
+            micro6ExecutorCatalogService);
   }
 
   @Test
@@ -693,6 +700,8 @@ class PatchLoopControllerTest {
   @DisplayName("GET /catalog returns degraded payload when supervisor is unreachable")
   void testGetCatalogReturnsDegradedPayloadWhenSupervisorUnavailable() throws Exception {
     setPrivateField(controller, "supervisorBaseUrl", "http://127.0.0.1:1");
+    when(micro6ExecutorCatalogService.getCatalog(false))
+        .thenReturn(new ObjectMapper().readTree("{\"tasks\":[]}"));
 
     ResponseEntity<Object> response = controller.getCatalog(false);
 
@@ -721,6 +730,8 @@ class PatchLoopControllerTest {
   @DisplayName("GET /catalog refresh=true appends refresh query param")
   void testGetCatalogRefreshParamIncludedInCatalogUrl() throws Exception {
     setPrivateField(controller, "supervisorBaseUrl", "http://127.0.0.1:1");
+    when(micro6ExecutorCatalogService.getCatalog(true))
+        .thenReturn(new ObjectMapper().readTree("{\"tasks\":[]}"));
 
     ResponseEntity<Object> response = controller.getCatalog(true);
 
@@ -731,6 +742,68 @@ class PatchLoopControllerTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertEquals("http://127.0.0.1:1/api/dev/workers/catalog?refresh=true", body.get("catalogUrl"));
+  }
+
+  @Test
+  @DisplayName("GET /catalog includes normalized micro6 executor tasks and source status")
+  void testGetCatalogMergesMicro6ExecutorTasks() throws Exception {
+    setPrivateField(controller, "supervisorBaseUrl", "http://127.0.0.1:1");
+    when(micro6ExecutorCatalogService.getCatalog(false))
+        .thenReturn(
+            new ObjectMapper()
+                .readTree(
+                    """
+                    {"tasks":[
+                      {"task_key":"CONFIGURABLE_COOKING","display_name":"Configurable Cooking","enabled":true,"category":"skilling","tags":["cooking"]},
+                      {"task_key":"DISABLED_TASK","display_name":"Disabled Task","enabled":false}
+                    ]}
+                    """));
+
+    ResponseEntity<Object> response = controller.getCatalog(false);
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody() instanceof Map);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> tasks = (List<Map<String, Object>>) body.get("tasks");
+    assertEquals(1, tasks.size());
+    assertEquals("micro6", tasks.get(0).get("client_type"));
+    assertEquals("CONFIGURABLE_COOKING", tasks.get(0).get("task_key"));
+    assertEquals("queue", tasks.get(0).get("execution_mode"));
+    assertEquals(true, tasks.get(0).get("queueable"));
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> sources = (Map<String, Object>) body.get("sources");
+    assertTrue(sources.containsKey("micro6_executor"));
+    @SuppressWarnings("unchecked")
+    Map<String, Object> micro6Source = (Map<String, Object>) sources.get("micro6_executor");
+    assertEquals(true, micro6Source.get("ok"));
+  }
+
+  @Test
+  @DisplayName("GET /catalog falls back gracefully when micro6 executor catalog fails")
+  void testGetCatalogHandlesMicro6ExecutorFailure() throws Exception {
+    setPrivateField(controller, "supervisorBaseUrl", "http://127.0.0.1:1");
+    when(micro6ExecutorCatalogService.getCatalog(false))
+        .thenThrow(new RuntimeException("micro6 executor offline"));
+
+    ResponseEntity<Object> response = controller.getCatalog(false);
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertNotNull(response.getBody());
+    assertTrue(response.getBody() instanceof Map);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    @SuppressWarnings("unchecked")
+    List<String> errors = (List<String>) body.get("errors");
+    assertTrue(errors.stream().anyMatch(msg -> msg.contains("micro6_executor")));
+    @SuppressWarnings("unchecked")
+    Map<String, Object> sources = (Map<String, Object>) body.get("sources");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> micro6Source = (Map<String, Object>) sources.get("micro6_executor");
+    assertEquals(false, micro6Source.get("ok"));
   }
 
   // ========== Helper Methods ==========

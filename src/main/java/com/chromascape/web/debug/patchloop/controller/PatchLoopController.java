@@ -11,6 +11,7 @@ import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorSer
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
+import com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
@@ -20,7 +21,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -47,6 +50,7 @@ public class PatchLoopController {
   private final PatchLoopGraphOrchestratorService graphOrchestratorService;
   private final PatchLoopAnalysisClient analysisClient;
   private final McpTransportClient mcpTransportClient;
+  private final Micro6ExecutorCatalogService micro6ExecutorCatalogService;
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final HttpClient catalogHttpClient =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -68,11 +72,13 @@ public class PatchLoopController {
       PatchLoopOrchestratorService orchestratorService,
       PatchLoopGraphOrchestratorService graphOrchestratorService,
       PatchLoopAnalysisClient analysisClient,
-      McpTransportClient mcpTransportClient) {
+      McpTransportClient mcpTransportClient,
+      Micro6ExecutorCatalogService micro6ExecutorCatalogService) {
     this.orchestratorService = orchestratorService;
     this.graphOrchestratorService = graphOrchestratorService;
     this.analysisClient = analysisClient;
     this.mcpTransportClient = mcpTransportClient;
+    this.micro6ExecutorCatalogService = micro6ExecutorCatalogService;
   }
 
   /**
@@ -484,6 +490,9 @@ public class PatchLoopController {
     String catalogUrl = base + "/api/dev/workers/catalog" + (refresh ? "?refresh=true" : "");
     payload.put("catalogUrl", catalogUrl);
 
+    List<Map<String, Object>> supervisorTasks = new ArrayList<>();
+    Map<String, Object> sourceMap = new HashMap<>();
+
     try {
       HttpRequest request =
           HttpRequest.newBuilder()
@@ -500,12 +509,15 @@ public class PatchLoopController {
 
       JsonNode root = objectMapper.readTree(response.body());
       if (root.path("tasks").isArray()) {
-        payload.put("tasks", objectMapper.convertValue(root.path("tasks"), List.class));
+        for (JsonNode task : root.path("tasks")) {
+          if (task.isObject()) {
+            supervisorTasks.add(objectMapper.convertValue(task, Map.class));
+          }
+        }
       }
       if (root.path("sources").isObject()) {
-        Map<String, Object> sources = objectMapper.convertValue(root.path("sources"), Map.class);
-        payload.put("sources", sources);
-        for (Map.Entry<String, Object> entry : sources.entrySet()) {
+        sourceMap.putAll(objectMapper.convertValue(root.path("sources"), Map.class));
+        for (Map.Entry<String, Object> entry : sourceMap.entrySet()) {
           if (entry.getValue() instanceof Map<?, ?> sourceMeta) {
             Object ok = sourceMeta.get("ok");
             if (Boolean.FALSE.equals(ok)) {
@@ -534,7 +546,148 @@ public class PatchLoopController {
       errors.add("Supervisor catalog unavailable: " + e.getMessage());
     }
 
+    List<Map<String, Object>> mergedTasks = new ArrayList<>();
+    Map<String, Map<String, Object>> byTaskIdentity = new LinkedHashMap<>();
+    for (Map<String, Object> task : supervisorTasks) {
+      if (task == null) {
+        continue;
+      }
+      String clientType = stringField(task, "client_type");
+      if ("micro6".equalsIgnoreCase(clientType)) {
+        continue;
+      }
+      String key = normalizedTaskIdentity(task);
+      if (key != null) {
+        byTaskIdentity.putIfAbsent(key, task);
+      }
+    }
+
+    List<Map<String, Object>> normalizedMicro6Tasks = new ArrayList<>();
+    try {
+      JsonNode micro6Catalog = micro6ExecutorCatalogService.getCatalog(refresh);
+      String executorError =
+          micro6Catalog.path("error").isTextual() ? micro6Catalog.path("error").asText() : null;
+      if (micro6Catalog.path("tasks").isArray()) {
+        for (JsonNode task : micro6Catalog.path("tasks")) {
+          Map<String, Object> normalized = normalizeMicro6Task(task);
+          if (normalized != null) {
+            normalizedMicro6Tasks.add(normalized);
+          }
+        }
+      }
+      if (executorError != null && !executorError.isBlank()) {
+        sourceMap.put(
+            "micro6_executor",
+            Map.of(
+                "ok", false,
+                "error", executorError,
+                "fetched_at", java.time.Instant.now().toString(),
+                "source", "micro6_executor_catalog"));
+        errors.add("micro6_executor: " + executorError);
+      } else {
+        sourceMap.put(
+            "micro6_executor",
+            Map.of(
+                "ok", true,
+                "fetched_at", java.time.Instant.now().toString(),
+                "source", "micro6_executor_catalog"));
+      }
+    } catch (Exception e) {
+      sourceMap.put(
+          "micro6_executor",
+          Map.of(
+              "ok", false,
+              "error", e.getMessage() == null ? "executor catalog unavailable" : e.getMessage(),
+              "source", "micro6_executor_catalog"));
+      errors.add(
+          "micro6_executor: "
+              + (e.getMessage() == null ? "executor catalog unavailable" : e.getMessage()));
+    }
+
+    if (normalizedMicro6Tasks.isEmpty()) {
+      for (Map<String, Object> task : supervisorTasks) {
+        if (task == null) {
+          continue;
+        }
+        if (!"micro6".equalsIgnoreCase(stringField(task, "client_type"))) {
+          continue;
+        }
+        String key = normalizedTaskIdentity(task);
+        if (key != null) {
+          byTaskIdentity.putIfAbsent(key, task);
+        }
+      }
+    } else {
+      for (Map<String, Object> task : normalizedMicro6Tasks) {
+        String key = normalizedTaskIdentity(task);
+        if (key != null) {
+          byTaskIdentity.put(key, task);
+        }
+      }
+    }
+
+    mergedTasks.addAll(byTaskIdentity.values());
+    payload.put("tasks", mergedTasks);
+    payload.put("sources", sourceMap);
+
     return ResponseEntity.ok(payload);
+  }
+
+  private String stringField(Map<String, Object> row, String key) {
+    if (row == null) {
+      return null;
+    }
+    Object value = row.get(key);
+    if (value == null) {
+      return null;
+    }
+    String text = value.toString().trim();
+    return text.isEmpty() ? null : text;
+  }
+
+  private String normalizedTaskIdentity(Map<String, Object> row) {
+    String clientType = stringField(row, "client_type");
+    String taskKey = stringField(row, "task_key");
+    if (taskKey == null) {
+      return null;
+    }
+    String normalizedClient =
+        clientType == null ? "unknown" : clientType.toLowerCase(Locale.ROOT).trim();
+    return normalizedClient + ":" + taskKey.toLowerCase(Locale.ROOT).trim();
+  }
+
+  private Map<String, Object> normalizeMicro6Task(JsonNode row) {
+    if (row == null || !row.isObject()) {
+      return null;
+    }
+    if (row.path("enabled").isBoolean() && !row.path("enabled").asBoolean()) {
+      return null;
+    }
+    String taskKey = row.path("task_key").asText(null);
+    if (taskKey == null || taskKey.isBlank()) {
+      return null;
+    }
+    Map<String, Object> normalized = new LinkedHashMap<>();
+    normalized.put("client_type", "micro6");
+    normalized.put("execution_mode", "queue");
+    normalized.put("queueable", true);
+    normalized.put("source", "micro6");
+    normalized.put("task_key", taskKey);
+    normalized.put("display_name", row.path("display_name").asText(taskKey));
+
+    if (row.path("description").isTextual()) {
+      normalized.put("description", row.path("description").asText());
+    }
+    if (row.path("category").isTextual()) {
+      normalized.put("category", row.path("category").asText());
+    }
+    if (row.path("tags").isArray()) {
+      normalized.put("tags", objectMapper.convertValue(row.path("tags"), List.class));
+    }
+    if (row.path("args_schema").isObject()) {
+      normalized.put("args_schema", objectMapper.convertValue(row.path("args_schema"), Map.class));
+    }
+    return normalized;
   }
 
   private String readStringMetadata(Map<String, Object> metadata, String key, String fallback) {

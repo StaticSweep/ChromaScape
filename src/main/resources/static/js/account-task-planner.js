@@ -135,7 +135,7 @@ class AccountTaskPlanner {
     if (!this.sourceSessionSelect) return;
 
     try {
-      const response = await fetch('/api/recording/sessions');
+      const response = await fetch('/api/recordings/sessions');
       if (!response.ok) return;
 
       const sessions = await response.json();
@@ -145,9 +145,16 @@ class AccountTaskPlanner {
       sessions.forEach(session => {
         const option = document.createElement('option');
         option.value = session.recordingId || session.id || '';
-        const label = session.scriptName || session.recordingId || session.id || 'Unknown';
-        const time = session.startTime ? new Date(session.startTime).toLocaleString() : '';
-        option.textContent = time ? `${label} - ${time}` : label;
+        let label = session.displayName || session.scriptName || session.recordingId || session.id || 'Unknown';
+        // Disambiguate duplicate custom replay names with a time suffix
+        if (session.replayName && session.startTime) {
+          try {
+            const d = new Date(session.startTime);
+            const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            label = `${label} \u00B7 ${timeStr}`;
+          } catch (_) { /* ignore parse errors */ }
+        }
+        option.textContent = label;
         this.sourceSessionSelect.appendChild(option);
       });
     } catch (error) {
@@ -299,6 +306,7 @@ class AccountTaskPlanner {
       const canAct = ['PENDING', 'APPROVED'].includes(item.status);
       const canExecute = item.status === 'APPROVED' && (item.scriptName || this.scriptCatalog.length > 0);
       const selectorId = `catalogSelect_${item.itemId || index}`;
+      const searchId = `catalogSearch_${item.itemId || index}`;
 
       return `
         <div class="plan-item-card" data-item-id="${this.escapeAttr(item.itemId)}">
@@ -335,11 +343,15 @@ class AccountTaskPlanner {
           ${item.status === 'APPROVED' && !item.scriptName && this.scriptCatalog.length > 0 ? `
             <div class="mt-2">
               <label class="small text-muted mb-1 d-block">Catalog script/task</label>
+              <input
+                type="text"
+                class="form-control form-control-sm mb-1 task-catalog-search"
+                id="${this.escapeAttr(searchId)}"
+                data-selector-id="${this.escapeAttr(selectorId)}"
+                placeholder="Search task catalog..."
+              >
               <select class="form-select form-select-sm task-catalog-select" id="${this.escapeAttr(selectorId)}">
-                ${this.scriptCatalog.slice(0, 120).map(task => `
-                  <option value="${this.escapeAttr(task.task_key || '')}">
-                    ${this.escapeHtml(task.display_name || task.task_key || 'unknown')}
-                  </option>`).join('')}
+                ${this.buildCatalogOptionsHtml()}
               </select>
             </div>
           ` : ''}
@@ -377,6 +389,92 @@ class AccountTaskPlanner {
         this.executeItemPatchLoop(btn.dataset.itemId, selectedScript);
       });
     });
+
+    this.planItemsList.querySelectorAll('.task-catalog-search').forEach(input => {
+      input.addEventListener('input', () => {
+        const selectorId = input.dataset.selectorId;
+        if (!selectorId) return;
+        const selector = document.getElementById(selectorId);
+        if (!selector) return;
+        this.filterCatalogSelector(selector, input.value || '');
+      });
+    });
+  }
+
+  buildCatalogOptionsHtml() {
+    const groups = new Map();
+    this.scriptCatalog.forEach(task => {
+      const category = (task?.category || 'other').toString();
+      if (!groups.has(category)) {
+        groups.set(category, []);
+      }
+      groups.get(category).push(task);
+    });
+
+    const orderedCategories = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+    return orderedCategories.map(category => {
+      const options = groups.get(category)
+        .slice()
+        .sort((a, b) =>
+          (a?.display_name || a?.task_key || '')
+            .toString()
+            .localeCompare((b?.display_name || b?.task_key || '').toString())
+        )
+        .map(task => {
+          const taskKey = task?.task_key || '';
+          return `<option value="${this.escapeAttr(taskKey)}">${this.escapeHtml(this.buildCatalogTaskLabel(task))}</option>`;
+        })
+        .join('');
+      return `<optgroup label="${this.escapeAttr(category)}">${options}</optgroup>`;
+    }).join('');
+  }
+
+  buildCatalogTaskLabel(task) {
+    let label = task?.display_name || task?.task_key || 'unknown';
+    if (task?.queue_status) {
+      const prefix = task.queue_status === 'RUNNING' ? '[RUNNING' : '[QUEUED';
+      const countSuffix = task.queue_count > 1 ? ` x${task.queue_count}` : '';
+      label = `${prefix} #${task.queue_rank}]${countSuffix} ${label}`;
+    }
+    if (task?.task_key) {
+      label += ` (${task.task_key})`;
+    }
+    return label;
+  }
+
+  filterCatalogSelector(selector, query) {
+    const normalizedQuery = (query || '').toLowerCase().trim();
+    const selectedValue = selector.value;
+    let visibleCount = 0;
+
+    selector.querySelectorAll('optgroup').forEach(group => {
+      let groupVisible = 0;
+      group.querySelectorAll('option').forEach(option => {
+        const text = option.textContent ? option.textContent.toLowerCase() : '';
+        const visible = normalizedQuery.length === 0 || text.includes(normalizedQuery);
+        option.hidden = !visible;
+        if (visible) {
+          groupVisible++;
+        }
+      });
+      group.hidden = groupVisible === 0;
+      visibleCount += groupVisible;
+    });
+
+    if (visibleCount === 0) {
+      selector.value = '';
+      return;
+    }
+
+    const selectedOption = Array.from(selector.options).find(option => option.value === selectedValue);
+    if (selectedOption && !selectedOption.hidden) {
+      selector.value = selectedValue;
+    } else {
+      const firstVisible = Array.from(selector.options).find(option => !option.hidden && option.value);
+      if (firstVisible) {
+        selector.value = firstVisible.value;
+      }
+    }
   }
 
   /**
