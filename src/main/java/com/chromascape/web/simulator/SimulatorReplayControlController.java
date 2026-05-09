@@ -120,6 +120,19 @@ public class SimulatorReplayControlController {
                       "Recording is not replayable: no tick frames found for recordingId="
                           + recordingId));
         }
+        ReplayFramePageResponse.FrameData firstFrame = preflight.getFrames().get(0);
+        boolean hasPosition =
+            firstFrame.getPlayerState() != null
+                && ((firstFrame.getPlayerState().has("x") && firstFrame.getPlayerState().has("z"))
+                    || (firstFrame.getPlayerState().has("worldX")
+                        && firstFrame.getPlayerState().has("worldY")));
+        if (!hasPosition) {
+          return ResponseEntity.status(HttpStatus.CONFLICT)
+              .body(
+                  errorResponse(
+                      "Recording is not replayable: missing position telemetry in tick snapshots for recordingId="
+                          + recordingId));
+        }
       }
 
       Map<String, Object> result =

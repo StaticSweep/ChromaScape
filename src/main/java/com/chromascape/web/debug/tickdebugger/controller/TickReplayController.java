@@ -486,7 +486,11 @@ public class TickReplayController {
 
       SessionStartResponse response =
           debugSessionService.startSession(
-              accountName, scriptName, recordingEnabled, RecordingTriggerSource.MANUAL);
+              accountName,
+              scriptName,
+              recordingEnabled,
+              RecordingTriggerSource.MANUAL,
+              request.getSessionId());
 
       log.info(
           "Started recording via replay page: sessionId={}, recordingId={}",
@@ -522,10 +526,41 @@ public class TickReplayController {
       }
 
       debugSessionService.stopSession(sessionId, endTick);
+      DebugSession stoppedSession = sessionRepository.findBySessionId(sessionId).orElse(null);
+      String recordingId = stoppedSession != null ? stoppedSession.getRecordingId() : null;
+
+      boolean linkRepaired = false;
+      if (recordingId != null && !recordingId.isBlank()) {
+        linkRepaired = debugSessionService.repairRecordingLink(recordingId);
+      }
+
+      DebugSession linkedSession =
+          (recordingId != null && !recordingId.isBlank())
+              ? sessionRepository.findByRecordingId(recordingId).orElse(stoppedSession)
+              : stoppedSession;
+      long tickCount =
+          linkedSession != null ? snapshotRepository.countBySessionId(linkedSession.getSessionId()) : 0L;
+      long positionFrameCount =
+          linkedSession != null
+              ? snapshotRepository.countWithPositionTelemetry(linkedSession.getSessionId())
+              : 0L;
+      boolean replayable = tickCount > 0 && positionFrameCount > 0;
+      String replayabilityReason =
+          replayable
+              ? "Replayable"
+              : (tickCount == 0
+                  ? "No tick snapshots stored for this recording"
+                  : "No position telemetry in tick snapshots");
 
       Map<String, Object> response = new HashMap<>();
       response.put("status", "stopped");
       response.put("sessionId", sessionId);
+      response.put("recordingId", recordingId);
+      response.put("tickCount", tickCount);
+      response.put("positionFrameCount", positionFrameCount);
+      response.put("replayable", replayable);
+      response.put("replayabilityReason", replayabilityReason);
+      response.put("linkRepaired", linkRepaired);
 
       log.info("Stopped recording via replay page: sessionId={}", sessionId);
 
@@ -663,6 +698,134 @@ public class TickReplayController {
     } catch (Exception e) {
       log.error("Failed to get recording health: {}", e.getMessage(), e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  @GetMapping("/log-parity")
+  public ResponseEntity<Map<String, Object>> getLogParity(@RequestParam String recordingId) {
+    try {
+      boolean linkRepaired = debugSessionService.repairRecordingLink(recordingId);
+      DebugSession session = sessionRepository.findByRecordingId(recordingId).orElse(null);
+
+      Map<String, Object> response = new HashMap<>();
+      response.put("recordingId", recordingId);
+      response.put("linkRepaired", linkRepaired);
+
+      if (session == null) {
+        response.put("hasSession", false);
+        response.put("hasTickLogs", false);
+        response.put("tickSnapshotCount", 0L);
+        response.put("tickLogCount", 0L);
+        return ResponseEntity.ok(response);
+      }
+
+      Long tickSnapshotCount = snapshotRepository.countBySessionId(session.getSessionId());
+      Long tickLogCount = logRepository.countBySessionId(session.getSessionId());
+
+      response.put("hasSession", true);
+      response.put("sessionId", session.getSessionId());
+      response.put("recordingStartTime", session.getStartTime());
+      response.put("tickSnapshotCount", tickSnapshotCount);
+      response.put("tickLogCount", tickLogCount);
+      response.put("hasTickLogs", tickLogCount != null && tickLogCount > 0);
+      snapshotRepository.findMinTickBySessionId(session.getSessionId()).ifPresent(t -> response.put("minTick", t));
+      snapshotRepository.findMaxTickBySessionId(session.getSessionId()).ifPresent(t -> response.put("maxTick", t));
+
+      return ResponseEntity.ok(response);
+    } catch (Exception e) {
+      log.error("Failed to compute replay log parity for recording {}: {}", recordingId, e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+    }
+  }
+
+  @GetMapping("/tick-logs")
+  public ResponseEntity<Map<String, Object>> getTickLogs(
+      @RequestParam String recordingId,
+      @RequestParam Long tick,
+      @RequestParam(defaultValue = "3") Integer windowTicks) {
+    try {
+      debugSessionService.repairRecordingLink(recordingId);
+      DebugSession session = sessionRepository.findByRecordingId(recordingId).orElse(null);
+      if (session == null) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(Map.of("error", "No debug session found for recordingId: " + recordingId));
+      }
+
+      long startTick = Math.max(0L, tick - Math.max(0, windowTicks));
+      long endTick = tick + Math.max(0, windowTicks);
+      List<TickLog> tickLogs =
+          logRepository.findBySessionIdAndTickBetweenOrderByTickAsc(session.getSessionId(), startTick, endTick);
+
+      List<UnifiedLogEntry> logs = new ArrayList<>();
+      for (TickLog tl : tickLogs) {
+        UnifiedLogEntry entry = new UnifiedLogEntry();
+        entry.setId(tl.getId());
+        entry.setTimestamp(tl.getTimestamp());
+        entry.setLevel(tl.getSeverity());
+        entry.setMessage(tl.getMessage());
+        entry.setSource(tl.getSubsystem());
+        entry.setTick(tl.getTick());
+        entry.setLogType(tl.getEventType());
+        entry.setStructuredData(tl.getDetails() != null ? tl.getDetails().toString() : null);
+        entry.setOrigin("tick");
+        logs.add(entry);
+      }
+
+      if (logs.isEmpty()) {
+        long ms = tick * 600L;
+        RecordingSession recordingSession = recordingSessionRepository.findByRecordingId(recordingId).orElse(null);
+        if (recordingSession != null && recordingSession.getStartTime() != null) {
+          LocalDateTime target = recordingSession.getStartTime().plus(ms, ChronoUnit.MILLIS);
+          LocalDateTime windowStart = target.minusSeconds(2);
+          LocalDateTime windowEnd = target.plusSeconds(2);
+          for (LogEntity log : standardLogRepository.findByTimestampBetween(windowStart, windowEnd)) {
+            UnifiedLogEntry entry = new UnifiedLogEntry();
+            entry.setId(log.getId());
+            entry.setTimestamp(log.getTimestamp());
+            entry.setLevel(log.getLevel());
+            entry.setMessage(log.getMessage());
+            entry.setSource(log.getSource());
+            entry.setTick(log.getTick() != null ? log.getTick().longValue() : null);
+            entry.setLogType(log.getLogType());
+            entry.setStructuredData(log.getStructuredData());
+            entry.setOrigin("standard");
+            logs.add(entry);
+          }
+        }
+      }
+
+      Map<String, Object> response = new HashMap<>();
+      response.put("recordingId", recordingId);
+      response.put("sessionId", session.getSessionId());
+      response.put("tick", tick);
+      response.put("windowTicks", windowTicks);
+      response.put("logs", logs);
+      return ResponseEntity.ok(response);
+    } catch (Exception e) {
+      log.error("Failed to load replay tick logs for recording {}: {}", recordingId, e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+    }
+  }
+
+  /**
+   * Repairs a recording->session link when recording was attached to a no-tick session.
+   *
+   * @param recordingId recording ID to repair
+   * @return result map with repaired flag
+   */
+  @PostMapping("/repair-recording-link")
+  public ResponseEntity<Map<String, Object>> repairRecordingLink(@RequestParam String recordingId) {
+    try {
+      if (recordingId == null || recordingId.isBlank()) {
+        return ResponseEntity.badRequest()
+            .body(Map.of("success", false, "error", "recordingId is required"));
+      }
+      boolean repaired = debugSessionService.repairRecordingLink(recordingId);
+      return ResponseEntity.ok(Map.of("success", true, "repaired", repaired));
+    } catch (Exception e) {
+      log.error("Failed to repair recording link {}: {}", recordingId, e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("success", false, "error", e.getMessage()));
     }
   }
 
@@ -1121,6 +1284,7 @@ public class TickReplayController {
     private String accountName;
     private String scriptName;
     private Boolean recordingEnabled;
+    private String sessionId;
 
     public String getAccountName() {
       return accountName;
@@ -1144,6 +1308,14 @@ public class TickReplayController {
 
     public void setRecordingEnabled(Boolean recordingEnabled) {
       this.recordingEnabled = recordingEnabled;
+    }
+
+    public String getSessionId() {
+      return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+      this.sessionId = sessionId;
     }
   }
 

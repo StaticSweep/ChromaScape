@@ -19,6 +19,10 @@ public class ReplayCatalogEntry {
   private Long startTick;
   private Long endTick;
   private long tickCount;
+  private long positionFrameCount;
+  private double positionCoveragePct;
+  private boolean replayable;
+  private String replayabilityReason;
 
   public ReplayCatalogEntry() {}
 
@@ -31,7 +35,11 @@ public class ReplayCatalogEntry {
       LocalDateTime endTime,
       Long startTick,
       Long endTick,
-      long tickCount) {
+      long tickCount,
+      long positionFrameCount,
+      double positionCoveragePct,
+      boolean replayable,
+      String replayabilityReason) {
     this.recordingId = recordingId;
     this.sessionId = sessionId;
     this.accountName = accountName;
@@ -41,6 +49,10 @@ public class ReplayCatalogEntry {
     this.startTick = startTick;
     this.endTick = endTick;
     this.tickCount = tickCount;
+    this.positionFrameCount = positionFrameCount;
+    this.positionCoveragePct = positionCoveragePct;
+    this.replayable = replayable;
+    this.replayabilityReason = replayabilityReason;
   }
 
   public String getRecordingId() {
@@ -113,5 +125,37 @@ public class ReplayCatalogEntry {
 
   public void setTickCount(long tickCount) {
     this.tickCount = tickCount;
+  }
+
+  public long getPositionFrameCount() {
+    return positionFrameCount;
+  }
+
+  public void setPositionFrameCount(long positionFrameCount) {
+    this.positionFrameCount = positionFrameCount;
+  }
+
+  public double getPositionCoveragePct() {
+    return positionCoveragePct;
+  }
+
+  public void setPositionCoveragePct(double positionCoveragePct) {
+    this.positionCoveragePct = positionCoveragePct;
+  }
+
+  public boolean isReplayable() {
+    return replayable;
+  }
+
+  public void setReplayable(boolean replayable) {
+    this.replayable = replayable;
+  }
+
+  public String getReplayabilityReason() {
+    return replayabilityReason;
+  }
+
+  public void setReplayabilityReason(String replayabilityReason) {
+    this.replayabilityReason = replayabilityReason;
   }
 }

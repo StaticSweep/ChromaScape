@@ -78,6 +78,15 @@ public class SimulatorReplaySourceService {
     List<ReplayCatalogEntry> entries = new ArrayList<>();
     for (DebugSession session : page) {
       long tickCount = tickSnapshotRepository.countBySessionId(session.getSessionId());
+      long positionFrameCount = tickSnapshotRepository.countWithPositionTelemetry(session.getSessionId());
+      double positionCoveragePct = tickCount > 0 ? ((double) positionFrameCount * 100.0) / (double) tickCount : 0.0;
+      boolean replayable = tickCount > 0 && positionFrameCount > 0;
+      String replayabilityReason =
+          replayable
+              ? "Replayable"
+              : (tickCount == 0
+                  ? "No tick snapshots stored for this recording"
+                  : "No position telemetry in tick snapshots");
       entries.add(
           new ReplayCatalogEntry(
               session.getRecordingId(),
@@ -88,7 +97,11 @@ public class SimulatorReplaySourceService {
               session.getEndTime(),
               session.getStartTick(),
               session.getEndTick(),
-              tickCount));
+              tickCount,
+              positionFrameCount,
+              positionCoveragePct,
+              replayable,
+              replayabilityReason));
     }
 
     return new ReplayCatalogResponse(entries, total);

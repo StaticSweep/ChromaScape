@@ -512,8 +512,8 @@
         <div class="row">
             <div class="col-12">
                 <div class="glass-panel">
-                    <h6><i class="bi bi-collection-play me-2"></i>Replayable Recordings</h6>
-                    <p class="text-muted small mb-2">Only recordings with tick snapshots are listed here and can be replayed into OpenRune.</p>
+                    <h6><i class="bi bi-collection-play me-2"></i>Available Recordings</h6>
+                    <p class="text-muted small mb-2">Recordings without tick snapshots are shown as not replayable so you can diagnose capture/session issues.</p>
                     <div class="table-responsive">
                         <table class="table table-dark table-hover">
                             <thead>
@@ -521,7 +521,7 @@
                                     <th>Recording ID</th>
                                     <th>Account</th>
                                     <th>Start</th>
-                                    <th>Ticks</th>
+                                    <th>Replay Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -599,7 +599,8 @@
                     body: JSON.stringify({
                         accountName: 'Replay User',
                         scriptName: 'Manual Recording',
-                        recordingEnabled: true
+                        recordingEnabled: true,
+                        sessionId: currentSessionId || null
                     })
                 });
                 const data = await response.json();
@@ -655,29 +656,37 @@
             }
         }
 
-        // Load replayable recordings (tick snapshots available)
+        // Load recordings and mark replayability by tick snapshot availability
         async function loadRecordings() {
             try {
                 const response = await fetch(`${REPLAY_SOURCE_API}/catalog?limit=200&offset=0`);
                 const data = await response.json();
                 const recordings = Array.isArray(data.entries) ? data.entries : [];
-                const replayable = recordings.filter(r => (r.tickCount || 0) > 0);
 
-                if (replayable.length === 0) {
+                if (recordings.length === 0) {
                     recordingsList.innerHTML = '<tr><td colspan="5" class="text-center">No recordings found</td></tr>';
                     return;
                 }
 
-                recordingsList.innerHTML = replayable.map(r => `
+                recordingsList.innerHTML = recordings.map(r => `
                     <tr class="recording-item" data-id="${r.recordingId}">
                         <td><code>${r.recordingId}</code></td>
                         <td>${r.accountName || '-'}</td>
                         <td>${r.startTime ? new Date(r.startTime).toLocaleString() : '--'}</td>
-                        <td>${r.tickCount || 0}</td>
                         <td>
-                            <button class="btn btn-sm btn-primary play-recording" data-id="${r.recordingId}">
-                                <i class="bi bi-check2-circle"></i> Select
-                            </button>
+                            ${(r.replayable === false)
+                                ? `<span class="badge bg-warning text-dark" title="${r.replayabilityReason || 'Not replayable'}">Not replayable</span>`
+                                : `<span class="badge bg-success" title="${r.replayabilityReason || ''}">Replayable (${r.tickCount || 0} ticks)</span>`}
+                            <div class="small text-muted mt-1">${r.replayabilityReason || ''}</div>
+                        </td>
+                        <td>
+                            ${(r.replayable === false)
+                                ? `<button class="btn btn-sm btn-outline-secondary" disabled title="${r.replayabilityReason || 'Not replayable'}">
+                                     Unavailable
+                                   </button>`
+                                : `<button class="btn btn-sm btn-primary play-recording" data-id="${r.recordingId}">
+                                     <i class="bi bi-check2-circle"></i> Select
+                                   </button>`}
                         </td>
                     </tr>
                 `).join('');
@@ -686,12 +695,12 @@
                 document.querySelectorAll('.play-recording').forEach(btn => {
                     btn.addEventListener('click', async () => {
                         const recordingId = btn.dataset.id;
-                        const entry = replayable.find(r => r.recordingId === recordingId) || null;
+                        const entry = recordings.find(r => r.recordingId === recordingId) || null;
                         await selectReplayRecording(recordingId, entry);
                     });
                 });
 
-                return replayable;
+                return recordings;
             } catch (error) {
                 console.error('Failed to load recordings:', error);
             }
@@ -1340,6 +1349,10 @@
                 orShowError('Select a replayable recording first.');
                 return;
             }
+            if (currentReplayEntry && currentReplayEntry.replayable === false) {
+                orShowError(currentReplayEntry.replayabilityReason || 'Selected recording is not replayable.');
+                return;
+            }
             const speed = parseFloat(document.getElementById('orSpeed').value);
             const body = {
                 speed: speed,
@@ -1360,16 +1373,6 @@
                     return;
                 }
 
-                const statusUrl = player
-                    ? OR_API + '/status?player=' + encodeURIComponent(player)
-                    : OR_API + '/status';
-                const controlStatus = await fetch(statusUrl);
-                const controlStatusData = await controlStatus.json();
-                const statusErr = orCheckFailure(controlStatus, controlStatusData);
-                if (statusErr && controlStatus.status >= 500) {
-                    orShowError('OpenRune replay control is not reachable: ' + statusErr);
-                    return;
-                }
             } catch (e) {
                 orShowError('Preflight failed: ' + e.message);
                 return;

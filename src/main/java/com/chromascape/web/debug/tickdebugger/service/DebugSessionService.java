@@ -75,7 +75,7 @@ public class DebugSessionService {
   public SessionStartResponse startSession(
       String accountName, String scriptName, Boolean recordingEnabled) {
     return startSession(
-        accountName, scriptName, recordingEnabled, RecordingTriggerSource.MICRO6_AUTO);
+        accountName, scriptName, recordingEnabled, RecordingTriggerSource.MICRO6_AUTO, null);
   }
 
   /**
@@ -93,22 +93,28 @@ public class DebugSessionService {
       String scriptName,
       Boolean recordingEnabled,
       RecordingTriggerSource triggerSource) {
+    return startSession(accountName, scriptName, recordingEnabled, triggerSource, null);
+  }
 
-    String sessionId = "debug_" + System.currentTimeMillis();
-    Long startTick = 0L; // Will be updated by first tick batch
+  /**
+   * Start a session/recording with optional preferred session binding.
+   *
+   * <p>When preferredSessionId is provided and active, it is reused to ensure recording and tick
+   * ingestion stay on the same session.
+   */
+  @Transactional
+  public SessionStartResponse startSession(
+      String accountName,
+      String scriptName,
+      Boolean recordingEnabled,
+      RecordingTriggerSource triggerSource,
+      String preferredSessionId) {
+
+    DebugSession session = resolveOrCreateSession(accountName, scriptName, preferredSessionId);
+    String sessionId = session.getSessionId();
+    Long startTick = session.getStartTick() != null ? session.getStartTick() : 0L;
     String recordingId = null;
     LocalDateTime sessionStartTime;
-
-    // Create and persist the session in STARTING state first
-    DebugSession session =
-        new DebugSession(sessionId, accountName, scriptName, LocalDateTime.now(), startTick);
-    session = sessionRepository.save(session);
-
-    log.info(
-        "Created debug session in STARTING state: sessionId={}, account={}, script={}",
-        sessionId,
-        accountName,
-        scriptName);
 
     // Optionally start video recording
     if (Boolean.TRUE.equals(recordingEnabled)
@@ -123,7 +129,7 @@ public class DebugSessionService {
           log.warn("Recording started but time unavailable, using current time");
         }
 
-        // Update session with recording ID and aligned start time
+        // Update (or bind existing) session with recording ID and aligned start time
         session.setRecordingId(recordingId);
         session.setStartTime(sessionStartTime);
 
@@ -296,6 +302,10 @@ public class DebugSessionService {
 
     // Final session finalization with try-catch
     try {
+      if (session.getRecordingId() != null) {
+        maybeRelinkRecordingToTickBearingSession(session);
+      }
+
       if (!hasFailure) {
         session.transitionTo(DebugSessionLifecycleState.FINALIZED);
         log.info("Session {} transition: RECORDING -> FINALIZED", sessionId);
@@ -325,6 +335,16 @@ public class DebugSessionService {
         session.getLifecycleState(),
         duration,
         tickCount);
+
+    if (session.getRecordingId() != null && !session.getRecordingId().isBlank()) {
+      long snapshotCount = snapshotRepository.countBySessionId(sessionId);
+      if (snapshotCount == 0) {
+        log.warn(
+            "Recording {} finalized with zero tick snapshots (sessionId={})",
+            session.getRecordingId(),
+            sessionId);
+      }
+    }
   }
 
   /** Get a debug session by ID. */
@@ -345,6 +365,93 @@ public class DebugSessionService {
   /** Get all sessions. */
   public List<DebugSession> getAllSessions() {
     return sessionRepository.findAllByOrderByStartTimeDesc();
+  }
+
+  /**
+   * Attempts to repair broken recording links by moving recordingId from a no-tick session to a
+   * tick-bearing sibling session in the same time window.
+   *
+   * @return true when relink was applied
+   */
+  @Transactional
+  public boolean repairRecordingLink(String recordingId) {
+    Optional<DebugSession> currentOpt = sessionRepository.findByRecordingId(recordingId);
+    if (currentOpt.isEmpty()) {
+      return false;
+    }
+    DebugSession current = currentOpt.get();
+    return maybeRelinkRecordingToTickBearingSession(current);
+  }
+
+  private DebugSession resolveOrCreateSession(
+      String accountName, String scriptName, String preferredSessionId) {
+    if (preferredSessionId != null && !preferredSessionId.isBlank()) {
+      Optional<DebugSession> preferred = sessionRepository.findBySessionId(preferredSessionId);
+      if (preferred.isPresent() && preferred.get().isActive()) {
+        DebugSession active = preferred.get();
+        log.info("Binding recording to preferred active session {}", active.getSessionId());
+        return active;
+      }
+      log.warn("Preferred session {} not active/found, falling back", preferredSessionId);
+    }
+
+    String sessionId = "debug_" + System.currentTimeMillis();
+    DebugSession created =
+        new DebugSession(sessionId, accountName, scriptName, LocalDateTime.now(), 0L);
+    created = sessionRepository.save(created);
+    log.info(
+        "Created debug session in STARTING state: sessionId={}, account={}, script={}",
+        sessionId,
+        accountName,
+        scriptName);
+    return created;
+  }
+
+  private boolean maybeRelinkRecordingToTickBearingSession(DebugSession current) {
+    String recordingId = current.getRecordingId();
+    if (recordingId == null || recordingId.isBlank()) {
+      return false;
+    }
+
+    long currentTickCount = snapshotRepository.countBySessionId(current.getSessionId());
+    if (currentTickCount > 0) {
+      return false;
+    }
+
+    LocalDateTime start = current.getStartTime() != null ? current.getStartTime().minusMinutes(5) : LocalDateTime.now().minusMinutes(5);
+    LocalDateTime end = current.getEndTime() != null ? current.getEndTime().plusMinutes(5) : LocalDateTime.now().plusMinutes(1);
+
+    DebugSession best = null;
+    long bestTickCount = 0;
+    for (DebugSession candidate : sessionRepository.findByStartTimeBetweenOrderByStartTimeDesc(start, end)) {
+      if (candidate.getId().equals(current.getId())) {
+        continue;
+      }
+      if (candidate.getRecordingId() != null && !candidate.getRecordingId().isBlank()) {
+        continue;
+      }
+      long ticks = snapshotRepository.countBySessionId(candidate.getSessionId());
+      if (ticks > bestTickCount) {
+        bestTickCount = ticks;
+        best = candidate;
+      }
+    }
+
+    if (best == null || bestTickCount == 0) {
+      return false;
+    }
+
+    current.setRecordingId(null);
+    best.setRecordingId(recordingId);
+    sessionRepository.save(current);
+    sessionRepository.save(best);
+    log.warn(
+        "Relinked recording {} from session {} (0 ticks) to session {} ({} ticks)",
+        recordingId,
+        current.getSessionId(),
+        best.getSessionId(),
+        bestTickCount);
+    return true;
   }
 
   /**
