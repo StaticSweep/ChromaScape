@@ -6,7 +6,6 @@ import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.WindowConstants;
-import org.bytedeco.javacv.Java2DFrameUtils;
 
 /**
  * Utility class for temporarily displaying {@link BufferedImage} instances in a Swing window for
@@ -26,7 +25,7 @@ public class DisplayImage {
    * <p>This method is primarily intended for testing and debugging purposes during development.
    *
    * @param image The image to display. If the source is an OpenCV {@code Mat}, convert it first
-   *     using {@link Java2DFrameUtils#toBufferedImage(org.bytedeco.opencv.opencv_core.Mat)}.
+   *     using {@code TemplateMatching.matToBufferedImage(Mat)}.
    */
   public static void display(BufferedImage image) {
     if (frame == null) {

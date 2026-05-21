@@ -7,13 +7,13 @@ import static org.bytedeco.opencv.global.opencv_imgproc.cvtColor;
 
 import com.chromascape.controller.Controller;
 import com.chromascape.utils.core.screen.colour.ColourObj;
+import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 import org.bytedeco.javacpp.PointerScope;
-import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Point2f;
 import org.bytedeco.opencv.opencv_core.Scalar;
@@ -208,7 +208,7 @@ public class Compass {
     Rectangle zone = controller.zones().getMinimap().get("compassSimilarity");
     BufferedImage img = ScreenManager.captureZone(zone);
 
-    Mat src = Java2DFrameUtils.toMat(img);
+    Mat src = TemplateMatching.bufferedImageToMat(img);
     Mat hsv = new Mat();
     Mat mask = new Mat();
 

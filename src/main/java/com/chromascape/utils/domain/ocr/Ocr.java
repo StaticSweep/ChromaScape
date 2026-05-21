@@ -12,6 +12,7 @@ import static org.bytedeco.opencv.global.opencv_imgproc.rectangle;
 
 import com.chromascape.utils.core.screen.colour.ColourObj;
 import com.chromascape.utils.core.screen.topology.ColourContours;
+import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.utils.domain.zones.MaskZones;
 import java.awt.Rectangle;
@@ -30,7 +31,6 @@ import java.util.Map;
 import java.util.Objects;
 import javax.imageio.ImageIO;
 import org.bytedeco.javacpp.DoublePointer;
-import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Point;
 import org.bytedeco.opencv.opencv_core.Rect;
@@ -130,7 +130,7 @@ public class Ocr {
       }
 
       // Add the character and Mat to the map
-      Mat img = Java2DFrameUtils.toMat(ImageIO.read(is));
+      Mat img = TemplateMatching.bufferedImageToMat(ImageIO.read(is));
       cvtColor(img, img, COLOR_BGR2GRAY);
       map.put(character, img);
     }
@@ -298,7 +298,7 @@ public class Ocr {
     zoneMask.release();
     roiMat.release();
 
-    return Java2DFrameUtils.toBufferedImage(fullScreenMask);
+    return TemplateMatching.matToBufferedImage(fullScreenMask);
   }
 
   /**

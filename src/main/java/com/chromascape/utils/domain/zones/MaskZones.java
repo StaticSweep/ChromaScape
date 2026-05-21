@@ -1,9 +1,9 @@
 package com.chromascape.utils.domain.zones;
 
+import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import org.bytedeco.javacpp.indexer.UByteRawIndexer;
-import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.bytedeco.opencv.opencv_core.Rect;
 
@@ -21,14 +21,14 @@ public class MaskZones {
    * specified area set to black.
    *
    * @param originalImg The original input image.
-   * @param maskArea The rectangular area to mask, in AWT {@link Rectangle} coordinates.
+   * @param maskArea The rectangular area to mask.
    * @return a new {@link BufferedImage} With the specified region zeroed out.
    * @throws IllegalArgumentException If the rectangle is out of image bounds or invalid.
    */
   public static BufferedImage maskZones(BufferedImage originalImg, Rectangle maskArea) {
-    Mat original = Java2DFrameUtils.toMat(originalImg);
+    Mat original = TemplateMatching.bufferedImageToMat(originalImg);
     Mat output = maskZonesMat(original, maskArea);
-    BufferedImage outImg = Java2DFrameUtils.toBufferedImage(output);
+    BufferedImage outImg = TemplateMatching.matToBufferedImage(output);
     original.release();
     output.release();
     return outImg;

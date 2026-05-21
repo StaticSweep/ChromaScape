@@ -1,5 +1,6 @@
 package com.chromascape.web.viewport;
 
+import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.viewport.Viewport;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -9,7 +10,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
-import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,7 +74,7 @@ public class WebsocketViewport implements Viewport {
     }
 
     // Convert here. This cost is only incurred if we are NOT backlogged.
-    BufferedImage image = Java2DFrameUtils.toBufferedImage(mat);
+    BufferedImage image = TemplateMatching.matToBufferedImage(mat);
 
     // Atomically set the latest update
     pendingUpdate.set(image);

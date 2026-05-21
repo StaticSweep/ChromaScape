@@ -7,10 +7,7 @@ plugins {
 }
 
 group = "com.chromascape"
-version = "0.4.0-SNAPSHOT"
-
-// Customize build directories - put DLLs in build/dist
-layout.buildDirectory.set(file("build"))
+version = "0.4.0"
 
 java {
 	toolchain {
@@ -82,77 +79,4 @@ spotless {
 
 tasks.named("check") {
 	dependsOn("spotlessApply", "spotlessCheck", "checkstyleMain")
-}
-
-// Windows-only native build configuration
-val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
-
-// Copy prebuilt DLLs to build/dist folder
-val copyNativeLibraries by tasks.registering(Copy::class) {
-	group = "native"
-	description = "Copy prebuilt native libraries to build/dist"
-	
-	// Only run on Windows
-	onlyIf {
-		isWindows
-	}
-	
-	// Check if we have prebuilt libraries
-	onlyIf {
-		val kInputExists = file("third_party/KInput/KInput/KInput/bin/Release/KInput.dll").exists()
-		val kInputCtrlExists = file("third_party/KInput/KInput/KInputCtrl/bin/Release/KInputCtrl.dll").exists()
-		
-		kInputExists && kInputCtrlExists
-	}
-	
-	doFirst {
-		// Ensure build/dist directory exists
-		file("build/dist").mkdirs()
-	}
-	
-	// Copy from prebuilt libraries
-	from("third_party/KInput/KInput/KInput/bin/Release")
-	from("third_party/KInput/KInput/KInputCtrl/bin/Release")
-	into("build/dist")
-	
-	include("*.dll")
-}
-
-// Note: Removed copyNativeToResources task as the application loads DLLs directly from build/dist
-// and doesn't use classpath fallback mechanism
-
-// Make build depend on native library copying and quality checks
-tasks.named("processResources") {
-	dependsOn(copyNativeLibraries)
-}
-
-tasks.named("build") {
-	dependsOn(copyNativeLibraries, "check")
-}
-
-tasks.named("jar") {
-	dependsOn(copyNativeLibraries)
-}
-
-// Custom task to clean .chromascape directory
-tasks.register("cleanChromascape") {
-	group = "cleanup"
-	description = "Remove the .chromascape directory"
-	
-	doLast {
-		val chromascapeDir = file(".chromascape")
-		if (chromascapeDir.exists()) {
-			delete(chromascapeDir)
-			println("Removed .chromascape directory")
-		} else {
-			println(".chromascape directory does not exist")
-		}
-	}
-}
-
-// Task to clean everything including .chromascape
-tasks.register("cleanAll") {
-	group = "cleanup"
-	description = "Clean build artifacts and .chromascape directory"
-	dependsOn("clean", "cleanChromascape")
 }

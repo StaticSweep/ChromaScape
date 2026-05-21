@@ -14,7 +14,6 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
-import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.*;
 
 /**
@@ -96,7 +95,7 @@ public class ColourContours {
    */
   public static Mat extractColours(BufferedImage image, ColourObj colourObj) {
     // Convert BufferedImage to Mat explicitly
-    try (Mat hsvImage = Java2DFrameUtils.toMat(image)) {
+    try (Mat hsvImage = TemplateMatching.bufferedImageToMat(image)) {
       return extractColours(hsvImage, colourObj);
     }
   }
