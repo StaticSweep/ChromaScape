@@ -21,8 +21,6 @@ public class ScreenManager {
 
   private static RemoteInput remoteInput;
 
-  private static Pointer screenBuffer = null;
-
   /**
    * Captures a {@link Rectangle} region on the client screen, intended to be used when
    * screenshotting zones for template matching and or colour extraction.
@@ -54,12 +52,13 @@ public class ScreenManager {
       return null;
     }
 
-    if (screenBuffer == null) {
-      screenBuffer = remoteInput.getImageBuffer();
+    Pointer currentScreenBuffer = remoteInput.getImageBuffer();
+    if (currentScreenBuffer == null) {
+      return null;
     }
 
     int bufferSize = width * height * 4;
-    byte[] data = screenBuffer.getByteArray(0, bufferSize);
+    byte[] data = currentScreenBuffer.getByteArray(0, bufferSize);
 
     return createBufferedImage(data, width, height);
   }
@@ -68,7 +67,7 @@ public class ScreenManager {
    * Internal helper to create a buffered image from a C++ style byte array of pixels in BGRA
    * format.
    *
-   * @param pixels The byte array of pixel data in BGRA format
+   * @param pixels The byte array of pixel data in [B, G, R, A] format
    * @param width The width of the client in pixels
    * @param height The height of the client in pixels
    * @return A {@link BufferedImage} representing the image
@@ -77,15 +76,15 @@ public class ScreenManager {
     DataBufferByte buffer = new DataBufferByte(pixels, pixels.length);
     WritableRaster raster =
         Raster.createInterleavedRaster(
-            buffer, width, height, width * 4, 4, new int[] {2, 1, 0, 3}, null);
+            buffer, width, height, width * 4, 4, new int[] {2, 1, 0}, null);
 
     ColorModel cm =
         new ComponentColorModel(
             ColorSpace.getInstance(ColorSpace.CS_sRGB),
-            new int[] {8, 8, 8, 8},
-            true,
+            new int[] {8, 8, 8},
             false,
-            Transparency.TRANSLUCENT,
+            false,
+            Transparency.OPAQUE,
             DataBuffer.TYPE_BYTE);
 
     return new BufferedImage(cm, raster, false, null);

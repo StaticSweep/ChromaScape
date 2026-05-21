@@ -46,7 +46,7 @@ public class ZoneManager {
   private Rectangle chatBounds;
 
   /** Default template matching threshold to verify that an image is matched successfully. */
-  private static final double THRESHOLD = 0.15;
+  private static final double THRESHOLD = 0.05;
 
   /** File paths to template images used for UI element detection. */
   private final String[] zoneTemplates = {
