@@ -13,9 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Manages the lifecycle of task plans: approval, rejection, execution tracking.
- */
+/** Manages the lifecycle of task plans: approval, rejection, execution tracking. */
 @Service
 public class TaskPlanExecutionService {
 
@@ -34,7 +32,9 @@ public class TaskPlanExecutionService {
   @Transactional
   public TaskPlan approvePlan(String planId) {
     TaskPlan plan =
-        planRepository.findByPlanId(planId).orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
+        planRepository
+            .findByPlanId(planId)
+            .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
     plan.setStatus(TaskPlanStatus.APPROVED);
     plan.setApprovedAt(LocalDateTime.now());
@@ -58,7 +58,9 @@ public class TaskPlanExecutionService {
   @Transactional
   public TaskPlan rejectPlan(String planId) {
     TaskPlan plan =
-        planRepository.findByPlanId(planId).orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
+        planRepository
+            .findByPlanId(planId)
+            .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
 
     plan.setStatus(TaskPlanStatus.REJECTED);
     plan = planRepository.save(plan);
@@ -80,7 +82,9 @@ public class TaskPlanExecutionService {
   @Transactional
   public TaskPlanItem approveItem(String itemId) {
     TaskPlanItem item =
-        itemRepository.findByItemId(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
+        itemRepository
+            .findByItemId(itemId)
+            .orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
 
     item.setStatus(ItemStatus.APPROVED);
     item.setApprovedAt(LocalDateTime.now());
@@ -96,7 +100,9 @@ public class TaskPlanExecutionService {
   @Transactional
   public TaskPlanItem rejectItem(String itemId) {
     TaskPlanItem item =
-        itemRepository.findByItemId(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
+        itemRepository
+            .findByItemId(itemId)
+            .orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
 
     item.setStatus(ItemStatus.REJECTED);
     item = itemRepository.save(item);
@@ -109,7 +115,9 @@ public class TaskPlanExecutionService {
   @Transactional
   public TaskPlanItem editItem(String itemId, String title, String description, String scriptName) {
     TaskPlanItem item =
-        itemRepository.findByItemId(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
+        itemRepository
+            .findByItemId(itemId)
+            .orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
 
     if (title != null) {
       item.setTitle(title);
@@ -127,7 +135,9 @@ public class TaskPlanExecutionService {
   @Transactional
   public TaskPlanItem markItemExecuting(String itemId, String patchLoopIterationId) {
     TaskPlanItem item =
-        itemRepository.findByItemId(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
+        itemRepository
+            .findByItemId(itemId)
+            .orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
 
     item.setStatus(ItemStatus.EXECUTING);
     item.setPatchLoopIterationId(patchLoopIterationId);
@@ -136,7 +146,8 @@ public class TaskPlanExecutionService {
 
     // Update plan to executing
     TaskPlan plan = planRepository.findByPlanId(item.getPlanId()).orElseThrow();
-    if (plan.getStatus() == TaskPlanStatus.APPROVED || plan.getStatus() == TaskPlanStatus.PARTIALLY_APPROVED) {
+    if (plan.getStatus() == TaskPlanStatus.APPROVED
+        || plan.getStatus() == TaskPlanStatus.PARTIALLY_APPROVED) {
       plan.setStatus(TaskPlanStatus.EXECUTING);
       planRepository.save(plan);
     }
@@ -148,7 +159,9 @@ public class TaskPlanExecutionService {
   @Transactional
   public TaskPlanItem markItemCompleted(String itemId, String result) {
     TaskPlanItem item =
-        itemRepository.findByItemId(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
+        itemRepository
+            .findByItemId(itemId)
+            .orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
 
     item.setStatus(ItemStatus.COMPLETED);
     item.setExecutionResult(result);
@@ -163,7 +176,9 @@ public class TaskPlanExecutionService {
   @Transactional
   public TaskPlanItem markItemFailed(String itemId, String reason) {
     TaskPlanItem item =
-        itemRepository.findByItemId(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
+        itemRepository
+            .findByItemId(itemId)
+            .orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
 
     item.setStatus(ItemStatus.FAILED);
     item.setExecutionResult(reason);

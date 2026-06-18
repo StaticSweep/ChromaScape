@@ -72,7 +72,9 @@ public class OpenAiCodexAnalysisProvider implements AnalysisProvider {
   @Override
   public AnalysisV2Response analyzeEvidence(AnalysisV2Request request) throws AnalysisException {
     logger.info(
-        "[{}] Starting V2 evidence analysis for prompt: {}", getProviderName(), request.getPrompt());
+        "[{}] Starting V2 evidence analysis for prompt: {}",
+        getProviderName(),
+        request.getPrompt());
 
     long startTime = System.currentTimeMillis();
     AnalysisV2Validator.validateRequest(request);
@@ -266,7 +268,11 @@ public class OpenAiCodexAnalysisProvider implements AnalysisProvider {
       Map<String, Object> requestBody = new HashMap<>();
       requestBody.put("model", model);
       requestBody.put("max_tokens", maxTokens);
-      requestBody.put("messages", List.of(Map.of("role", "system", "content", systemPrompt), Map.of("role", "user", "content", userMessage)));
+      requestBody.put(
+          "messages",
+          List.of(
+              Map.of("role", "system", "content", systemPrompt),
+              Map.of("role", "user", "content", userMessage)));
       requestBody.put("temperature", 0.1);
 
       String requestJson = objectMapper.writeValueAsString(requestBody);
@@ -281,7 +287,8 @@ public class OpenAiCodexAnalysisProvider implements AnalysisProvider {
               .build();
 
       logger.debug("[{}] Calling OpenAI API: {} (retry: {})", getProviderName(), apiUrl, isRetry);
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       int statusCode = response.statusCode();
       String responseBody = response.body();
 
@@ -386,7 +393,8 @@ public class OpenAiCodexAnalysisProvider implements AnalysisProvider {
               && evidenceRefsNode.isArray()
               && evidenceRefsNode.size() > 0;
 
-      response.setStatus(hasAllSuccessFields ? AnalysisStatus.SUCCESS : AnalysisStatus.PARTIAL_SUCCESS);
+      response.setStatus(
+          hasAllSuccessFields ? AnalysisStatus.SUCCESS : AnalysisStatus.PARTIAL_SUCCESS);
 
       AnalysisV2Diagnosis diagnosis = new AnalysisV2Diagnosis();
       diagnosis.setSummary(diagnosisNode.path("summary").asText());
@@ -456,7 +464,8 @@ public class OpenAiCodexAnalysisProvider implements AnalysisProvider {
             if (changeNode.has("changeType")) {
               try {
                 change.setChangeType(
-                    AnalysisV2PatchDraft.ChangeType.valueOf(changeNode.path("changeType").asText()));
+                    AnalysisV2PatchDraft.ChangeType.valueOf(
+                        changeNode.path("changeType").asText()));
               } catch (IllegalArgumentException e) {
                 change.setChangeType(AnalysisV2PatchDraft.ChangeType.MODIFY);
               }
@@ -518,7 +527,8 @@ public class OpenAiCodexAnalysisProvider implements AnalysisProvider {
       return response;
 
     } catch (JsonProcessingException e) {
-      logger.error("[{}] Failed to parse analysis response: {}", getProviderName(), responseText, e);
+      logger.error(
+          "[{}] Failed to parse analysis response: {}", getProviderName(), responseText, e);
       throw new AnalysisException(
           AnalysisV2ErrorCode.PARSE_ERROR,
           "Failed to parse OpenAI response as JSON: " + e.getMessage(),

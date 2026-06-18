@@ -49,7 +49,7 @@ class PatchLoopControllerTest {
   private PatchLoopController controller;
 
   @BeforeEach
-  void setUp() {
+  void setUp() throws Exception {
     controller =
         new PatchLoopController(
             orchestratorService,
@@ -57,6 +57,7 @@ class PatchLoopControllerTest {
             analysisClient,
             mcpTransportClient,
             micro6ExecutorCatalogService);
+    setAutofixEnabled(true);
   }
 
   @Test
@@ -112,6 +113,47 @@ class PatchLoopControllerTest {
     assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     assertNotNull(response.getBody());
     assertTrue(response.getBody().toString().contains("Script name"));
+  }
+
+  @Test
+  @DisplayName("POST /execute rejects autofix_loop when autofix is disabled")
+  void testExecuteIterationRejectsAutofixLoopWhenDisabled() throws Exception {
+    setAutofixEnabled(false);
+
+    PatchLoopExecuteRequest request = new PatchLoopExecuteRequest();
+    request.setScriptName("TestScript");
+    request.setPrompt("Fix this");
+    request.setExecutionMode("autofix_loop");
+
+    ResponseEntity<Object> response = controller.executeIteration(request);
+
+    assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    assertTrue(response.getBody() instanceof Map);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals("AUTOFIX_DISABLED", body.get("errorCode"));
+    verifyNoInteractions(orchestratorService);
+  }
+
+  @Test
+  @DisplayName("POST /execute-graph rejects full_loop when autofix is disabled")
+  void testExecuteGraphRejectsFullLoopWhenDisabled() throws Exception {
+    setAutofixEnabled(false);
+
+    com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest request =
+        new com.chromascape.web.debug.patchloop.dto.GraphExecuteRequest();
+    request.setScriptName("TestScript");
+    request.setMermaid("graph TD\nA[Start]");
+    request.setExecutionMode("full_loop");
+
+    ResponseEntity<Object> response = controller.executeGraph(request);
+
+    assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    assertTrue(response.getBody() instanceof Map);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals("AUTOFIX_DISABLED", body.get("errorCode"));
+    verifyNoInteractions(graphOrchestratorService);
   }
 
   @Test
@@ -753,8 +795,8 @@ class PatchLoopControllerTest {
             new ObjectMapper()
                 .readTree(
                     """
-                    {"tasks":[
-                      {"task_key":"CONFIGURABLE_COOKING","display_name":"Configurable Cooking","enabled":true,"category":"skilling","tags":["cooking"]},
+                    {"catalog_source":"primary","source_client_type":"micro6","tasks":[
+                      {"key":"CONFIGURABLE_COOKING","name":"Configurable Cooking","enabled":true,"category":"skilling","tags":["cooking"]},
                       {"task_key":"DISABLED_TASK","display_name":"Disabled Task","enabled":false}
                     ]}
                     """));
@@ -780,6 +822,9 @@ class PatchLoopControllerTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> micro6Source = (Map<String, Object>) sources.get("micro6_executor");
     assertEquals(true, micro6Source.get("ok"));
+    assertEquals(1, micro6Source.get("task_count"));
+    assertEquals("primary", micro6Source.get("catalog_source"));
+    assertEquals("micro6", micro6Source.get("source_client_type"));
   }
 
   @Test
@@ -812,6 +857,12 @@ class PatchLoopControllerTest {
     Field field = target.getClass().getDeclaredField(name);
     field.setAccessible(true);
     field.set(target, value);
+  }
+
+  private void setAutofixEnabled(boolean value) throws Exception {
+    Field field = PatchLoopController.class.getDeclaredField("patchLoopAutofixEnabled");
+    field.setAccessible(true);
+    field.set(controller, value);
   }
 
   private PatchLoopIterationResponse createIterationResponse(String iterationId, String status) {

@@ -21,6 +21,7 @@ import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopValidationArtifactRepository;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
+import com.chromascape.web.debug.patchloop.service.PatchLoopSessionResolverService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -48,6 +49,7 @@ class PatchLoopOrchestratorServiceTest {
   @Mock private PatchLoopValidationArtifactRepository validationArtifactRepository;
   @Mock private PatchLoopRetestArtifactRepository retestArtifactRepository;
   @Mock private PatchLoopEvidenceArtifactRepository evidenceArtifactRepository;
+  @Mock private PatchLoopSessionResolverService sessionResolverService;
 
   private PatchLoopOrchestratorService orchestratorService;
   private ObjectMapper objectMapper;
@@ -66,7 +68,8 @@ class PatchLoopOrchestratorServiceTest {
             patchArtifactRepository,
             validationArtifactRepository,
             retestArtifactRepository,
-            evidenceArtifactRepository);
+            evidenceArtifactRepository,
+            sessionResolverService);
   }
 
   @Test

@@ -4530,6 +4530,9 @@ async function loadRecording(recordingId) {
                 // Render the full history
                 if (currentMode === 'replay') {
                   renderLogHistory('Loading complete');
+                  if (replayLogHistory.length === 0) {
+                    diagnoseReplayEmptyLogs(recordingId);
+                  }
                 }
               } else {
                 console.warn('Failed to load tick cards, status:', tickCardsResponse.status);
@@ -4666,6 +4669,33 @@ function buildReplayHistoryFromTickCards(tickCards) {
   console.log(`Built replay history: ${replayLogHistory.length} log entries, ${replayTickSnapshots.size} snapshots across ${replaySnapshotTimeline.length} ticks (${replaySnapshotTimeline[0]}-${replaySnapshotTimeline[replaySnapshotTimeline.length - 1]})`);
 }
 
+async function diagnoseReplayEmptyLogs(recordingId) {
+  try {
+    const resp = await fetch(`/api/debug/replay/log-parity?recordingId=${encodeURIComponent(recordingId)}`);
+    if (!resp.ok) return;
+    const parity = await resp.json();
+    if (parity && parity.tickLogCount === 0) {
+      ensureLogPlaceholder('No replay tick logs were stored for this recording.');
+    } else if (parity && parity.tickLogCount > 0) {
+      ensureLogPlaceholder('Replay tick logs exist; scrubbing will fetch them per tick.');
+    }
+  } catch (e) {
+    console.warn('Replay parity diagnosis failed:', e);
+  }
+}
+
+async function fetchReplayTickLogsWindow(recordingId, tick, windowTicks = 4) {
+  try {
+    const resp = await fetch(`/api/debug/replay/tick-logs?recordingId=${encodeURIComponent(recordingId)}&tick=${tick}&windowTicks=${windowTicks}`);
+    if (!resp.ok) return;
+    const payload = await resp.json();
+    if (!Array.isArray(payload.logs) || payload.logs.length === 0) return;
+    renderReplayLogs(payload.logs, tick);
+  } catch (e) {
+    console.warn('Failed to fetch replay tick logs window:', e);
+  }
+}
+
 /**
  * Calculate current tick from video time using snapshot timeline.
  * Uses snapshot timeline as authoritative source if available.
@@ -4797,6 +4827,9 @@ async function syncLogsToVideo(videoMs) {
       updateTickDisplay(currentTick);
       highlightCurrentTickGroup(currentTick);
       maybeAutoFollowTick(currentTick);
+      if (currentMode === 'replay' && currentRecording && replayLogHistory.length === 0) {
+        fetchReplayTickLogsWindow(currentRecording, currentTick, 4);
+      }
     }
 
   } catch (error) {
@@ -5233,17 +5266,19 @@ function connectTickStreamWebSocket() {
 
       // Handle SESSION_CREATED broadcast from Micro6
       if (data.type === 'SESSION_CREATED') {
-        // Update UI to use Micro6's sessionId
-        if (debugFeedEnabled && (!currentDebugSessionId || !isRecording)) {
-          currentDebugSessionId = data.sessionId;
+        // Always keep the canonical debug session pointer in sync with Micro6,
+        // independent of feed visibility state.
+        currentDebugSessionId = data.sessionId;
+        if (!isRecording || !currentSessionId) {
+          currentSessionId = data.sessionId;
+        }
+        if (debugFeedEnabled) {
           isDebugSessionActive = true;
           if (elements.debugSessionStatus) {
             elements.debugSessionStatus.classList.remove('d-none');
           }
-          console.log('✅ Micro6 session detected:', data.sessionId);
-        } else {
-          console.log('ℹ️ SESSION_CREATED received but debug feed is disabled');
         }
+        console.log('✅ Micro6 session detected:', data.sessionId);
         return;
       }
 
@@ -6011,7 +6046,8 @@ async function startRecording() {
       body: JSON.stringify({
         accountName: currentWindowId || 'Unknown',
         scriptName: 'Debug Session',
-        recordingEnabled: true
+        recordingEnabled: true,
+        sessionId: currentDebugSessionId || currentSessionId || null
       })
     });
 
@@ -6055,7 +6091,12 @@ async function startRecording() {
     }
 
     const data = await response.json();
+    if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) {
+      console.warn(`Recording session rebound from ${currentSessionId} to ${data.sessionId}`);
+      showNotification('Recording bound to active tick session', 'info');
+    }
     currentSessionId = data.sessionId;
+    currentDebugSessionId = data.sessionId;
 
     // Validate recording actually started before updating UI
     if (data.recordingId) {
@@ -6097,6 +6138,7 @@ async function startRecording() {
     isRecording = false;
     currentRecordingId = null;
     currentSessionId = null;
+    currentDebugSessionId = null;
   }
 }
 
@@ -6111,11 +6153,13 @@ async function stopRecording() {
   try {
     let endpoint, body, headers = {};
 
+    const stopSessionId = currentDebugSessionId || currentSessionId;
+
     // If we have a debug session, use the debug stop endpoint
-    if (currentSessionId) {
+    if (stopSessionId) {
       endpoint = '/api/debug/replay/stop-recording';
       body = JSON.stringify({
-        sessionId: currentSessionId,
+        sessionId: stopSessionId,
         endTick: null
       });
       headers['Content-Type'] = 'application/json';
@@ -6140,6 +6184,7 @@ async function stopRecording() {
         isRecording = false;
         currentRecordingId = null;
         currentSessionId = null;
+        currentDebugSessionId = null;
         recordingStartTime = null;
 
         // Reset UI
@@ -6184,6 +6229,7 @@ async function stopRecording() {
     const savedRecordingId = currentRecordingId;
     currentRecordingId = null;
     currentSessionId = null;
+    currentDebugSessionId = null;
     recordingStartTime = null;
 
     console.log('Recording stopped');
@@ -6231,6 +6277,7 @@ async function forceResetRecording() {
     isRecording = false;
     currentRecordingId = null;
     currentSessionId = null;
+    currentDebugSessionId = null;
     recordingStartTime = null;
 
     // Update UI
@@ -6317,6 +6364,7 @@ async function checkRecordingStatus() {
       isRecording = false;
       currentRecordingId = null;
       currentSessionId = null;
+      currentDebugSessionId = null;
       recordingStartTime = null;
 
       // Reset UI
@@ -6623,11 +6671,14 @@ function setPatchScriptCatalogStatus(message, tone = 'muted') {
 }
 
 function buildPatchLoopSearchIndex(task) {
+  const aliasText = Array.isArray(task?.search_aliases) ? task.search_aliases.join(' ') : '';
   const tokens = [
+    task?.panel_display_name,
     task?.display_name,
     task?.task_key,
     task?.category,
-    Array.isArray(task?.tags) ? task.tags.join(' ') : ''
+    Array.isArray(task?.tags) ? task.tags.join(' ') : '',
+    aliasText
   ].filter(Boolean);
   return tokens.join(' ').toLowerCase();
 }
@@ -6682,6 +6733,35 @@ function renderPatchLoopScriptOptions(selectedValue = '') {
       select.value = selectedValue;
     }
   }
+}
+
+function toBase64UrlUtf8(input) {
+  try {
+    const utf8 = new TextEncoder().encode(String(input || ''));
+    let binary = '';
+    for (let i = 0; i < utf8.length; i++) {
+      binary += String.fromCharCode(utf8[i]);
+    }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  } catch (e) {
+    console.warn('Failed to encode display task key:', e);
+    return '';
+  }
+}
+
+function buildMicro6ExecutionValue(task) {
+  const rawTaskKey = (task?.task_key || '').toString();
+  if (rawTaskKey.startsWith('DISPLAY::')) {
+    return `micro6:${rawTaskKey}`;
+  }
+  const panelDisplayName = (task?.panel_display_name || task?.display_name || '').toString().trim();
+  if (panelDisplayName.length > 0) {
+    const encoded = toBase64UrlUtf8(panelDisplayName);
+    if (encoded.length > 0) {
+      return `micro6:DISPLAY::${encoded}`;
+    }
+  }
+  return `micro6:${rawTaskKey}`;
 }
 
 /**
@@ -6748,16 +6828,26 @@ async function loadPatchLoopScripts(forceRefresh = false) {
             .localeCompare((b?.display_name || b?.task_key || '').toString())
         );
 
+      const seenMicro6Labels = new Set();
       micro6QueueTasks.forEach(task => {
         const taskKey = task?.task_key;
         if (!taskKey) return;
-        const displayName = task?.display_name || taskKey;
+        const displayName = task?.panel_display_name || task?.display_name || taskKey;
+        const dedupeKey = displayName.toString().trim().toLowerCase();
+        if (dedupeKey && seenMicro6Labels.has(dedupeKey)) {
+          return;
+        }
+        if (dedupeKey) {
+          seenMicro6Labels.add(dedupeKey);
+        }
         const category = task?.category ? ` [${task.category}]` : '';
+        const isRunnable = task?.runnable !== false;
+        const disabledReason = task?.disabled_reason ? ` [not runnable: ${task.disabled_reason}]` : '';
         patchLoopCatalogEntries.push({
           group: 'Micro6 AccountBuilder',
-          value: `micro6:${taskKey}`,
-          label: `${displayName} (${taskKey})${category}`,
-          disabled: false,
+          value: buildMicro6ExecutionValue(task),
+          label: `${displayName} (${taskKey})${category}${isRunnable ? '' : disabledReason}`,
+          disabled: !isRunnable,
           searchText: buildPatchLoopSearchIndex(task)
         });
         queueCount++;

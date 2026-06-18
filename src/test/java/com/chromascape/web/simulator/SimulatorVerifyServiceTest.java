@@ -650,13 +650,13 @@ class SimulatorVerifyServiceTest {
     }
 
     @Test
-    @DisplayName("Should build synthetic error report when report file missing and no JSON in output")
+    @DisplayName(
+        "Should build synthetic error report when report file missing and no JSON in output")
     void shouldBuildSyntheticReportWhenNoFileAndNoJson() throws Exception {
       // This validates the SIM-04 fix: parseReport no longer throws for missing files.
       // Instead it builds a synthetic JSON report so reportAvailable stays true.
 
-      java.nio.file.Path tempDir =
-          java.nio.file.Files.createTempDirectory("synthetic-report-test");
+      java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("synthetic-report-test");
       java.nio.file.Path reportsDir = tempDir.resolve("reports");
       java.nio.file.Files.createDirectories(reportsDir);
 
@@ -808,9 +808,7 @@ class SimulatorVerifyServiceTest {
       // Invoke writeSyntheticReport directly (same method the safeguard calls)
       Method writeSyntheticReport =
           SimulatorVerifyService.class.getDeclaredMethod(
-              "writeSyntheticReport",
-              SimulatorVerifyJobStore.VerifyJob.class,
-              String.class);
+              "writeSyntheticReport", SimulatorVerifyJobStore.VerifyJob.class, String.class);
       writeSyntheticReport.setAccessible(true);
       writeSyntheticReport.invoke(testService, job, job.getError());
 
@@ -863,13 +861,12 @@ class SimulatorVerifyServiceTest {
               new SimulatorVerifyJobStore.VerifyArgs(
                   "test-session", null, "http://localhost:8092", null));
 
-      String trickyMessage = "Error with special chars: back\\slash, \"quotes\", tabs:\t, newline:\n";
+      String trickyMessage =
+          "Error with special chars: back\\slash, \"quotes\", tabs:\t, newline:\n";
 
       Method buildSyntheticReport =
           SimulatorVerifyService.class.getDeclaredMethod(
-              "buildSyntheticErrorReport",
-              SimulatorVerifyJobStore.VerifyJob.class,
-              String.class);
+              "buildSyntheticErrorReport", SimulatorVerifyJobStore.VerifyJob.class, String.class);
       buildSyntheticReport.setAccessible(true);
 
       String json = (String) buildSyntheticReport.invoke(testService, job, trickyMessage);
@@ -915,9 +912,7 @@ class SimulatorVerifyServiceTest {
 
       Method buildSyntheticReport =
           SimulatorVerifyService.class.getDeclaredMethod(
-              "buildSyntheticErrorReport",
-              SimulatorVerifyJobStore.VerifyJob.class,
-              String.class);
+              "buildSyntheticErrorReport", SimulatorVerifyJobStore.VerifyJob.class, String.class);
       buildSyntheticReport.setAccessible(true);
 
       String json = (String) buildSyntheticReport.invoke(testService, job, (String) null);
@@ -946,7 +941,8 @@ class SimulatorVerifyServiceTest {
     void shouldHaveValidFallbackConstantJson() throws Exception {
       // Tests the catch-block fallback in buildSyntheticErrorReport (line ~571).
       // This constant is returned when ObjectMapper serialization fails.
-      Field fallbackField = SimulatorVerifyService.class.getDeclaredField("FALLBACK_ERROR_REPORT_JSON");
+      Field fallbackField =
+          SimulatorVerifyService.class.getDeclaredField("FALLBACK_ERROR_REPORT_JSON");
       fallbackField.setAccessible(true);
       String fallbackJson = (String) fallbackField.get(null);
 
@@ -984,7 +980,8 @@ class SimulatorVerifyServiceTest {
       ReflectionTestUtils.setField(realProps, "autoCreateReportsDir", false);
       ReflectionTestUtils.setField(realProps, "enabled", true);
       ReflectionTestUtils.setField(realProps, "invocationMode", "jar");
-      ReflectionTestUtils.setField(realProps, "verifierJarPath", new File(tempDir, "fake.jar").getAbsolutePath());
+      ReflectionTestUtils.setField(
+          realProps, "verifierJarPath", new File(tempDir, "fake.jar").getAbsolutePath());
       ReflectionTestUtils.setField(realProps, "gradleCmd", "./gradlew");
 
       // Create a mock jobStore
@@ -1021,33 +1018,41 @@ class SimulatorVerifyServiceTest {
     }
 
     private void configureMockProcess(int exitCode, String output) throws Exception {
-      java.io.InputStream stream = new java.io.ByteArrayInputStream(output.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      java.io.InputStream stream =
+          new java.io.ByteArrayInputStream(
+              output.getBytes(java.nio.charset.StandardCharsets.UTF_8));
       when(mockProcess.getInputStream()).thenReturn(stream);
       when(mockProcess.exitValue()).thenReturn(exitCode);
-      when(mockProcess.waitFor(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+      when(mockProcess.waitFor(
+              org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any()))
+          .thenReturn(true);
       when(mockProcess.isAlive()).thenReturn(false);
 
       // Stub createVerifierProcess to return our mock
-      doReturn(mockProcess).when(spyService).createVerifierProcess(
-          org.mockito.ArgumentMatchers.anyList(),
-          org.mockito.ArgumentMatchers.any(File.class));
+      doReturn(mockProcess)
+          .when(spyService)
+          .createVerifierProcess(
+              org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.any(File.class));
     }
 
     private SimulatorVerifyJobStore.VerifyJob createTestJob(String jobId) {
       SimulatorVerifyJobStore.VerifyArgs args =
-          new SimulatorVerifyJobStore.VerifyArgs("test-session", null, "http://localhost:8092", null);
+          new SimulatorVerifyJobStore.VerifyArgs(
+              "test-session", null, "http://localhost:8092", null);
       return new SimulatorVerifyJobStore.VerifyJob(jobId, args);
     }
 
     private void invokeExecuteJob(SimulatorVerifyJobStore.VerifyJob job) throws Exception {
-      Method executeJob = SimulatorVerifyService.class.getDeclaredMethod(
-          "executeJob", SimulatorVerifyJobStore.VerifyJob.class);
+      Method executeJob =
+          SimulatorVerifyService.class.getDeclaredMethod(
+              "executeJob", SimulatorVerifyJobStore.VerifyJob.class);
       executeJob.setAccessible(true);
       executeJob.invoke(spyService, job);
     }
 
     @Test
-    @DisplayName("Unexpected exit code (3) should set FAILED with reportAvailable=true and passed=false")
+    @DisplayName(
+        "Unexpected exit code (3) should set FAILED with reportAvailable=true and passed=false")
     void shouldFailWithReportForUnexpectedExitCode() throws Exception {
       String jobId = "unexpected-exit-3";
       SimulatorVerifyJobStore.VerifyJob job = createTestJob(jobId);
@@ -1060,19 +1065,22 @@ class SimulatorVerifyServiceTest {
       assertEquals(SimulatorVerifyJobStore.JobStatus.FAILED, job.getStatus());
       assertEquals(3, job.getExitCode());
       assertNotNull(job.getReportPath(), "reportPath must be non-null");
-      assertTrue(java.nio.file.Files.exists(java.nio.file.Paths.get(job.getReportPath())),
+      assertTrue(
+          java.nio.file.Files.exists(java.nio.file.Paths.get(job.getReportPath())),
           "Report file must exist on disk");
 
       String content = java.nio.file.Files.readString(java.nio.file.Paths.get(job.getReportPath()));
       com.fasterxml.jackson.databind.ObjectMapper om =
           new com.fasterxml.jackson.databind.ObjectMapper();
       com.fasterxml.jackson.databind.JsonNode root = om.readTree(content);
-      assertFalse(root.path("passed").asBoolean(),
+      assertFalse(
+          root.path("passed").asBoolean(),
           "Report file must show passed=false (rewritten from any parsed value)");
     }
 
     @Test
-    @DisplayName("Unexpected exit code (137) with report file showing passed=true must be rewritten to passed=false")
+    @DisplayName(
+        "Unexpected exit code (137) with report file showing passed=true must be rewritten to passed=false")
     void shouldRewriteReportFileForUnexpectedExitCode() throws Exception {
       String jobId = "unexpected-exit-137";
       SimulatorVerifyJobStore.VerifyJob job = createTestJob(jobId);
@@ -1081,9 +1089,9 @@ class SimulatorVerifyServiceTest {
       java.nio.file.Path reportFile = tempDir.toPath().resolve("reports").resolve(jobId + ".json");
       String passingReport =
           "{\"sessionId\":\"test\",\"timestamp\":\"2026-04-01T00:00:00Z\",\"passed\":true,"
-          + "\"summary\":{\"totalActions\":10,\"tickRange\":{\"start\":0,\"end\":100},"
-          + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":600},"
-          + "\"violations\":[],\"error\":\"\"}";
+              + "\"summary\":{\"totalActions\":10,\"tickRange\":{\"start\":0,\"end\":100},"
+              + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":600},"
+              + "\"violations\":[],\"error\":\"\"}";
       java.nio.file.Files.writeString(reportFile, passingReport);
 
       configureMockProcess(137, "Verifier ran then crashed with exit 137\n");
@@ -1099,9 +1107,11 @@ class SimulatorVerifyServiceTest {
       com.fasterxml.jackson.databind.ObjectMapper om =
           new com.fasterxml.jackson.databind.ObjectMapper();
       com.fasterxml.jackson.databind.JsonNode root = om.readTree(content);
-      assertFalse(root.path("passed").asBoolean(),
+      assertFalse(
+          root.path("passed").asBoolean(),
           "Report file on disk must show passed=false after rewrite");
-      assertTrue(root.path("summary").path("totalActions").asInt() == 10,
+      assertTrue(
+          root.path("summary").path("totalActions").asInt() == 10,
           "Other report content must be preserved");
     }
 
@@ -1115,16 +1125,18 @@ class SimulatorVerifyServiceTest {
       java.nio.file.Path reportFile = tempDir.toPath().resolve("reports").resolve(jobId + ".json");
       String failingReport =
           "{\"sessionId\":\"test\",\"timestamp\":\"2026-04-01T00:00:00Z\",\"passed\":false,"
-          + "\"summary\":{\"totalActions\":5,\"tickRange\":{\"start\":0,\"end\":50},"
-          + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":300},"
-          + "\"violations\":[{\"severity\":\"HARD\",\"rule\":\"test\"}]}";
+              + "\"summary\":{\"totalActions\":5,\"tickRange\":{\"start\":0,\"end\":50},"
+              + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":300},"
+              + "\"violations\":[{\"severity\":\"HARD\",\"rule\":\"test\"}]}";
       java.nio.file.Files.writeString(reportFile, failingReport);
 
       configureMockProcess(0, "Verification completed\n");
 
       invokeExecuteJob(job);
 
-      assertEquals(SimulatorVerifyJobStore.JobStatus.FAILED, job.getStatus(),
+      assertEquals(
+          SimulatorVerifyJobStore.JobStatus.FAILED,
+          job.getStatus(),
           "Status must be FAILED even though exitCode=0");
       assertEquals(0, job.getExitCode());
       assertNotNull(job.getSummary());
@@ -1140,9 +1152,9 @@ class SimulatorVerifyServiceTest {
       java.nio.file.Path reportFile = tempDir.toPath().resolve("reports").resolve(jobId + ".json");
       String passingReport =
           "{\"sessionId\":\"test\",\"timestamp\":\"2026-04-01T00:00:00Z\",\"passed\":true,"
-          + "\"summary\":{\"totalActions\":10,\"tickRange\":{\"start\":0,\"end\":100},"
-          + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":600},"
-          + "\"violations\":[]}";
+              + "\"summary\":{\"totalActions\":10,\"tickRange\":{\"start\":0,\"end\":100},"
+              + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":600},"
+              + "\"violations\":[]}";
       java.nio.file.Files.writeString(reportFile, passingReport);
 
       configureMockProcess(0, "Verification completed successfully\n");
@@ -1165,9 +1177,9 @@ class SimulatorVerifyServiceTest {
       java.nio.file.Path reportFile = tempDir.toPath().resolve("reports").resolve(jobId + ".json");
       String passingReport =
           "{\"sessionId\":\"test\",\"timestamp\":\"2026-04-01T00:00:00Z\",\"passed\":true,"
-          + "\"summary\":{\"totalActions\":5,\"tickRange\":{\"start\":0,\"end\":50},"
-          + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":300},"
-          + "\"violations\":[],\"error\":\"\"}";
+              + "\"summary\":{\"totalActions\":5,\"tickRange\":{\"start\":0,\"end\":50},"
+              + "\"actionTypeCounts\":{},\"playerCount\":1,\"durationTicks\":300},"
+              + "\"violations\":[],\"error\":\"\"}";
       java.nio.file.Files.writeString(reportFile, passingReport);
 
       configureMockProcess(2, "Verification failed: session error\n");
@@ -1183,9 +1195,11 @@ class SimulatorVerifyServiceTest {
       com.fasterxml.jackson.databind.ObjectMapper om =
           new com.fasterxml.jackson.databind.ObjectMapper();
       com.fasterxml.jackson.databind.JsonNode root = om.readTree(content);
-      assertFalse(root.path("passed").asBoolean(),
+      assertFalse(
+          root.path("passed").asBoolean(),
           "Report file on disk must show passed=false after exitCode 2 rewrite");
-      assertTrue(root.path("summary").path("totalActions").asInt() == 5,
+      assertTrue(
+          root.path("summary").path("totalActions").asInt() == 5,
           "Other report content must be preserved after rewrite");
     }
   }

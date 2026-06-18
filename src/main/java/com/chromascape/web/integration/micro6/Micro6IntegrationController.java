@@ -255,10 +255,12 @@ public class Micro6IntegrationController {
           batch.getInstanceId());
 
       // Publish canonical adapter event for downstream consumers (task synthesis, etc.)
-      publishAdapterEvent("LOGS_INGESTED", Map.of(
-          "source", source,
-          "instanceId", batch.getInstanceId(),
-          "count", savedLogs.size()));
+      publishAdapterEvent(
+          "LOGS_INGESTED",
+          Map.of(
+              "source", source,
+              "instanceId", batch.getInstanceId(),
+              "count", savedLogs.size()));
 
       response.put("success", true);
       response.put("count", savedLogs.size());
@@ -308,11 +310,7 @@ public class Micro6IntegrationController {
     try {
       RuntimeEventEnvelope envelope =
           new RuntimeEventEnvelope(
-              UUID.randomUUID().toString(),
-              "micro6",
-              eventType,
-              LocalDateTime.now(),
-              payload);
+              UUID.randomUUID().toString(), "micro6", eventType, LocalDateTime.now(), payload);
       for (var adapter : adapterRegistry.getAllAdapters()) {
         // Listeners on any adapter can receive these events
         // (they're published through the adapter registry as a bus)

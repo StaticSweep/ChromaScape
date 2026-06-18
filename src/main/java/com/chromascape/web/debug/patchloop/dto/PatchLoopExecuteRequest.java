@@ -60,6 +60,10 @@ public class PatchLoopExecuteRequest {
   @JsonProperty("taskItemId")
   private String taskItemId;
 
+  /** Task metadata for executor-side configuration (optional) */
+  @JsonProperty("taskMetadata")
+  private Map<String, Object> taskMetadata;
+
   public PatchLoopExecuteRequest() {}
 
   public PatchLoopExecuteRequest(String scriptName, String prompt) {
@@ -164,6 +168,14 @@ public class PatchLoopExecuteRequest {
 
   public void setTaskItemId(String taskItemId) {
     this.taskItemId = taskItemId;
+  }
+
+  public Map<String, Object> getTaskMetadata() {
+    return taskMetadata;
+  }
+
+  public void setTaskMetadata(Map<String, Object> taskMetadata) {
+    this.taskMetadata = taskMetadata;
   }
 
   @Override

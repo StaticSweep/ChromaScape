@@ -4,6 +4,8 @@ import com.chromascape.utils.core.screen.window.WindowInfo;
 import com.chromascape.utils.core.screen.window.WindowSelectionService;
 import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
+import com.chromascape.web.recording.dto.RecordingSessionMetadataResponse;
+import com.chromascape.web.recording.dto.RecordingSessionMetadataUpdateRequest;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.chromascape.web.recording.exception.FrameCaptureException;
@@ -12,6 +14,7 @@ import com.chromascape.web.recording.exception.RecordingDisabledException;
 import com.chromascape.web.recording.exception.RecordingException;
 import com.chromascape.web.recording.service.RecordingService;
 import com.chromascape.web.recording.service.RecordingService.RecordingMetadata;
+import com.chromascape.web.recording.service.RecordingSessionMetadataService;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,6 +35,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -54,17 +58,20 @@ public class RecordingController {
   private final RecordingSessionRepository recordingSessionRepository;
   private final WindowSelectionService windowSelectionService;
   private final RecordingConfig recordingConfig;
+  private final RecordingSessionMetadataService metadataService;
 
   @Autowired
   public RecordingController(
       RecordingService recordingService,
       RecordingSessionRepository recordingSessionRepository,
       WindowSelectionService windowSelectionService,
-      RecordingConfig recordingConfig) {
+      RecordingConfig recordingConfig,
+      RecordingSessionMetadataService metadataService) {
     this.recordingService = recordingService;
     this.recordingSessionRepository = recordingSessionRepository;
     this.windowSelectionService = windowSelectionService;
     this.recordingConfig = recordingConfig;
+    this.metadataService = metadataService;
   }
 
   /**
@@ -379,6 +386,15 @@ public class RecordingController {
                     map.put("endTime", session.getEndTime());
                     map.put("triggerType", session.getTriggerType());
                     map.put("videoCodec", session.getVideoCodec());
+                    map.put("replayName", session.getReplayName());
+                    map.put("replayTags", metadataService.parseTags(session.getReplayTagsJson()));
+                    map.put(
+                        "displayName",
+                        metadataService.computeDisplayName(
+                            session.getReplayName(),
+                            session.getAccountName(),
+                            session.getScriptName(),
+                            metadataService.formatStartTime(session.getStartTime())));
                     return map;
                   })
               .toList();
@@ -412,6 +428,15 @@ public class RecordingController {
                 response.put("startTime", session.getStartTime());
                 response.put("endTime", session.getEndTime());
                 response.put("triggerType", session.getTriggerType());
+                response.put("replayName", session.getReplayName());
+                response.put("replayTags", metadataService.parseTags(session.getReplayTagsJson()));
+                response.put(
+                    "displayName",
+                    metadataService.computeDisplayName(
+                        session.getReplayName(),
+                        session.getAccountName(),
+                        session.getScriptName(),
+                        metadataService.formatStartTime(session.getStartTime())));
 
                 // Validate and add video URL
                 if (session.getVideoPath() != null) {
@@ -443,6 +468,72 @@ public class RecordingController {
     } catch (Exception e) {
       logger.error("Failed to get recording {}: {}", recordingId, e.getMessage(), e);
       return ResponseEntity.internalServerError().build();
+    }
+  }
+
+  /**
+   * Updates replay metadata (name and/or tags) for a recording session.
+   *
+   * @param recordingId the recording ID
+   * @param request the metadata update request
+   * @return updated metadata response
+   */
+  @PatchMapping("/sessions/{recordingId}/metadata")
+  public ResponseEntity<?> updateMetadata(
+      @PathVariable String recordingId,
+      @RequestBody RecordingSessionMetadataUpdateRequest request) {
+    try {
+      RecordingSession session =
+          recordingSessionRepository.findByRecordingId(recordingId).orElse(null);
+
+      if (session == null) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(Map.of("error", "Recording not found: " + recordingId));
+      }
+
+      // Apply replayName if provided
+      if (request.isReplayNameSet()) {
+        String name = request.getReplayName();
+        if (name != null && name.isBlank()) {
+          name = null;
+        }
+        if (name != null) {
+          metadataService.validateReplayName(name);
+        }
+        session.setReplayName(name);
+      }
+
+      // Apply replayTags if provided
+      if (request.isReplayTagsSet()) {
+        List<String> normalized = metadataService.normalizeTags(request.getReplayTags());
+        metadataService.validateTags(normalized);
+        session.setReplayTagsJson(metadataService.serializeTags(normalized));
+      }
+
+      recordingSessionRepository.save(session);
+
+      List<String> tags = metadataService.parseTags(session.getReplayTagsJson());
+      String displayName =
+          metadataService.computeDisplayName(
+              session.getReplayName(),
+              session.getAccountName(),
+              session.getScriptName(),
+              metadataService.formatStartTime(session.getStartTime()));
+
+      return ResponseEntity.ok(
+          new RecordingSessionMetadataResponse(
+              session.getRecordingId(),
+              session.getReplayName(),
+              tags,
+              displayName,
+              LocalDateTime.now()));
+
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      logger.error("Failed to update metadata for {}: {}", recordingId, e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", "Unexpected error"));
     }
   }
 

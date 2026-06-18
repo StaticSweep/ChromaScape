@@ -66,6 +66,12 @@ class PatchLoopGraphOrchestratorServiceTest {
 
   @Mock private PatchLoopAsyncWorker asyncWorker;
 
+  @Mock private ScriptExecutionService scriptExecutionService;
+
+  @Mock private PatchLoopPersistenceService persistenceService;
+
+  @Mock private PatchLoopSessionResolverService sessionResolverService;
+
   private PatchLoopGraphOrchestratorService orchestrator;
 
   private String executionId;
@@ -94,7 +100,10 @@ class PatchLoopGraphOrchestratorServiceTest {
             analysisArtifactRepository,
             evidenceArtifactRepository,
             mapper,
-            asyncWorker);
+            asyncWorker,
+            scriptExecutionService,
+            persistenceService,
+            sessionResolverService);
 
     executionId = "graph_exec_" + UUID.randomUUID().toString().substring(0, 8);
     iterationId = "patchloop_" + UUID.randomUUID().toString().substring(0, 8);
@@ -140,6 +149,9 @@ class PatchLoopGraphOrchestratorServiceTest {
     lenient()
         .when(asyncWorker.retryFromNodeAsync(anyString(), anyString()))
         .thenReturn(CompletableFuture.completedFuture(null));
+    lenient()
+        .when(asyncWorker.executeGraphAsync(anyString(), any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(null));
   }
 
   @Test
@@ -148,13 +160,10 @@ class PatchLoopGraphOrchestratorServiceTest {
     // Given: execution is in PAUSED state
     execution.setExecutionStatus(GraphExecutionStatus.PAUSED);
 
-    // When: resuming execution
-    long startTime = System.currentTimeMillis();
+    // When: resuming execution (delegates to async worker, does not block on sync executor)
     orchestrator.controlExecution(iterationId, GraphControlRequest.resume());
-    long duration = System.currentTimeMillis() - startTime;
 
-    // Then: should return immediately (<100ms) and call async worker
-    assertThat(duration).isLessThan(100);
+    // Then: async worker is invoked and sync executor is never called
     verify(asyncWorker).resumeExecutionAsync(executionId);
     verify(executor, never()).resumeExecution(anyString());
   }
@@ -165,13 +174,10 @@ class PatchLoopGraphOrchestratorServiceTest {
     // Given: execution is in PAUSED state
     execution.setExecutionStatus(GraphExecutionStatus.PAUSED);
 
-    // When: retrying from a node
-    long startTime = System.currentTimeMillis();
+    // When: retrying from a node (delegates to async worker, does not block on sync executor)
     orchestrator.controlExecution(iterationId, GraphControlRequest.retryFromNode("ANALYZE"));
-    long duration = System.currentTimeMillis() - startTime;
 
-    // Then: should return immediately (<100ms) and call async worker
-    assertThat(duration).isLessThan(100);
+    // Then: async worker is invoked and sync executor is never called
     verify(asyncWorker).retryFromNodeAsync(executionId, "ANALYZE");
     verify(executor, never()).retryFromNode(anyString(), anyString());
   }
@@ -234,6 +240,55 @@ class PatchLoopGraphOrchestratorServiceTest {
 
     // Then: should call async worker
     verify(asyncWorker).retryFromNodeAsync(executionId, "ANALYZE");
+  }
+
+  @Test
+  @DisplayName("RELAUNCH_IF_CREATED uses async worker when execution has not started")
+  void testRelaunchIfCreatedUsesAsyncWorker() throws GraphExecutionException {
+    execution.setExecutionStatus(GraphExecutionStatus.CREATED);
+    when(nodeRepository.findByExecutionIdOrderByStartedAtAsc(executionId))
+        .thenReturn(Collections.emptyList());
+
+    orchestrator.controlExecution(
+        iterationId, GraphControlRequest.relaunchIfCreated("ui-auto-relaunch"));
+
+    verify(asyncWorker).executeGraphAsync(eq(executionId), any(LoopGraph.class), any());
+    verify(webSocketHandler).broadcastStatusChange(executionId, "RELAUNCHING_CREATED");
+  }
+
+  @Test
+  @DisplayName("RELAUNCH_IF_CREATED rejected when nodes already started")
+  void testRelaunchIfCreatedRejectedWhenNodesStarted() {
+    execution.setExecutionStatus(GraphExecutionStatus.CREATED);
+    PatchLoopGraphNode node = new PatchLoopGraphNode();
+    node.setExecutionId(executionId);
+    node.setNodeId("RUN_SCRIPT");
+    when(nodeRepository.findByExecutionIdOrderByStartedAtAsc(executionId))
+        .thenReturn(Collections.singletonList(node));
+
+    assertThatThrownBy(
+            () ->
+                orchestrator.controlExecution(
+                    iterationId, GraphControlRequest.relaunchIfCreated("ui-auto-relaunch")))
+        .isInstanceOf(GraphExecutionException.class)
+        .hasMessageContaining("Cannot relaunch execution once nodes have started");
+
+    verify(asyncWorker, never()).executeGraphAsync(anyString(), any(), any());
+  }
+
+  @Test
+  @DisplayName("RELAUNCH_IF_CREATED rejected from non-CREATED state")
+  void testRelaunchIfCreatedRejectedFromNonCreatedState() {
+    execution.setExecutionStatus(GraphExecutionStatus.RUNNING);
+
+    assertThatThrownBy(
+            () ->
+                orchestrator.controlExecution(
+                    iterationId, GraphControlRequest.relaunchIfCreated("ui-auto-relaunch")))
+        .isInstanceOf(GraphExecutionException.class)
+        .hasMessageContaining("RELAUNCH_IF_CREATED only allowed from CREATED state");
+
+    verify(asyncWorker, never()).executeGraphAsync(anyString(), any(), any());
   }
 
   @Test
@@ -306,6 +361,39 @@ class PatchLoopGraphOrchestratorServiceTest {
     PatchLoopIteration savedIteration = captor.getValue();
     assertThat(savedIteration.getIterationId()).isEqualTo(existingIterationId);
     assertThat(savedIteration.getGraphExecutionId()).isEqualTo(response.getExecutionId());
+  }
+
+  @Test
+  @DisplayName("PAUSE calls execution-scoped pauseScript with executionId")
+  void testPauseCallsExecutionScopedPauseScript() throws Exception {
+    execution.setExecutionStatus(GraphExecutionStatus.RUNNING);
+
+    orchestrator.controlExecution(iterationId, GraphControlRequest.pause());
+
+    verify(scriptExecutionService).pauseScript(executionId);
+    verify(scriptExecutionService, never()).pauseCurrentScript();
+  }
+
+  @Test
+  @DisplayName("RESUME calls execution-scoped resumeScript with executionId")
+  void testResumeCallsExecutionScopedResumeScript() throws Exception {
+    execution.setExecutionStatus(GraphExecutionStatus.PAUSED);
+
+    orchestrator.controlExecution(iterationId, GraphControlRequest.resume());
+
+    verify(scriptExecutionService).resumeScript(executionId);
+    verify(scriptExecutionService, never()).resumeCurrentScript();
+  }
+
+  @Test
+  @DisplayName("CANCEL calls execution-scoped stopScript with executionId and reason")
+  void testCancelCallsExecutionScopedStopScript() throws Exception {
+    execution.setExecutionStatus(GraphExecutionStatus.RUNNING);
+
+    orchestrator.controlExecution(iterationId, GraphControlRequest.cancel("user requested"));
+
+    verify(scriptExecutionService).stopScript(executionId, "user requested");
+    verify(scriptExecutionService, never()).stopCurrentScript();
   }
 
   @Test

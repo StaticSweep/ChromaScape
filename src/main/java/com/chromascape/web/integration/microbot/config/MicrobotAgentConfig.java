@@ -16,8 +16,8 @@ public class MicrobotAgentConfig {
   /** Enable or disable the Microbot Agent Server adapter. */
   private boolean enabled = false;
 
-  /** Base URL of the Microbot Agent Server (e.g., "http://localhost:8085"). */
-  private String baseUrl = "http://localhost:8085";
+  /** Base URL of the Microbot Agent Server (e.g., "http://127.0.0.1:8081"). */
+  private String baseUrl = "http://127.0.0.1:8081";
 
   /** HTTP request timeout in milliseconds. */
   private int timeoutMs = 5000;

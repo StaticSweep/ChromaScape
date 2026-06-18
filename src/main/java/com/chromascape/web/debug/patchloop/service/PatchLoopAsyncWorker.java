@@ -49,6 +49,7 @@ public class PatchLoopAsyncWorker {
   private final PatchLoopPersistenceService persistenceService;
   private final PatchLoopGraphExecutor graphExecutor;
   private final PatchLoopWebSocketHandler webSocketHandler;
+  private final PatchLoopSessionResolverService sessionResolverService;
 
   public PatchLoopAsyncWorker(
       PatchLoopIterationRepository iterationRepository,
@@ -60,7 +61,8 @@ public class PatchLoopAsyncWorker {
       ObjectMapper objectMapper,
       PatchLoopPersistenceService persistenceService,
       PatchLoopGraphExecutor graphExecutor,
-      PatchLoopWebSocketHandler webSocketHandler) {
+      PatchLoopWebSocketHandler webSocketHandler,
+      PatchLoopSessionResolverService sessionResolverService) {
     this.iterationRepository = iterationRepository;
     this.eventRepository = eventRepository;
     this.evidenceService = evidenceService;
@@ -71,6 +73,7 @@ public class PatchLoopAsyncWorker {
     this.persistenceService = persistenceService;
     this.graphExecutor = graphExecutor;
     this.webSocketHandler = webSocketHandler;
+    this.sessionResolverService = sessionResolverService;
 
     logger.info(
         "PatchLoopAsyncWorker initialized with analysis provider: {}",
@@ -299,7 +302,13 @@ public class PatchLoopAsyncWorker {
       return CompletableFuture.completedFuture(null);
     } catch (GraphExecutionException e) {
       logger.error("Async graph execution failed: {}", executionId, e);
-      webSocketHandler.broadcastIterationFailed(executionId, e.getMessage());
+      persistGraphFailure(executionId, e);
+      safeBroadcastFailure(executionId, e.getMessage());
+      return CompletableFuture.failedFuture(e);
+    } catch (Exception e) {
+      logger.error("Unexpected error in async graph execution: {}", executionId, e);
+      persistGraphFailure(executionId, e);
+      safeBroadcastFailure(executionId, e.getMessage());
       return CompletableFuture.failedFuture(e);
     }
   }
@@ -321,7 +330,13 @@ public class PatchLoopAsyncWorker {
       return CompletableFuture.completedFuture(null);
     } catch (GraphExecutionException e) {
       logger.error("Async resume execution failed: {}", executionId, e);
-      webSocketHandler.broadcastIterationFailed(executionId, e.getMessage());
+      persistGraphFailure(executionId, e);
+      safeBroadcastFailure(executionId, e.getMessage());
+      return CompletableFuture.failedFuture(e);
+    } catch (Exception e) {
+      logger.error("Unexpected error in async resume execution: {}", executionId, e);
+      persistGraphFailure(executionId, e);
+      safeBroadcastFailure(executionId, e.getMessage());
       return CompletableFuture.failedFuture(e);
     }
   }
@@ -345,7 +360,14 @@ public class PatchLoopAsyncWorker {
       return CompletableFuture.completedFuture(null);
     } catch (GraphExecutionException e) {
       logger.error("Async retry from node failed: {}, node: {}", executionId, nodeId, e);
-      webSocketHandler.broadcastIterationFailed(executionId, e.getMessage());
+      persistGraphFailure(executionId, e);
+      safeBroadcastFailure(executionId, e.getMessage());
+      return CompletableFuture.failedFuture(e);
+    } catch (Exception e) {
+      logger.error(
+          "Unexpected error in async retry from node: {}, node: {}", executionId, nodeId, e);
+      persistGraphFailure(executionId, e);
+      safeBroadcastFailure(executionId, e.getMessage());
       return CompletableFuture.failedFuture(e);
     }
   }
@@ -398,15 +420,17 @@ public class PatchLoopAsyncWorker {
       iteration.setRunEndTime(endTime);
 
       // Find debug session
-      Optional<DebugSession> session =
+      Optional<DebugSession> latestScriptSession =
           debugSessionRepository.findFirstByScriptNameOrderByStartTimeDesc(
               iteration.getScriptName());
-      if (session.isPresent()) {
-        iteration.setRunSessionId(session.get().getSessionId());
-        if (session.get().getRecordingId() != null) {
-          iteration.setRunRecordingId(session.get().getRecordingId());
+      if (latestScriptSession.isPresent()) {
+        if (iteration.getRunSessionId() == null || iteration.getRunSessionId().isBlank()) {
+          iteration.setRunSessionId(latestScriptSession.get().getSessionId());
+          if (latestScriptSession.get().getRecordingId() != null) {
+            iteration.setRunRecordingId(latestScriptSession.get().getRecordingId());
+          }
         }
-        iteration.setRunSuccess(!timeout && session.get().getFailureCode() == null);
+        iteration.setRunSuccess(!timeout && latestScriptSession.get().getFailureCode() == null);
       } else {
         logger.warn("No debug session found for script: {}", iteration.getScriptName());
         iteration.setRunSuccess(!timeout);
@@ -639,6 +663,37 @@ public class PatchLoopAsyncWorker {
   }
 
   /**
+   * Persists graph execution and iteration as FAILED for non-Graph runtime failures.
+   *
+   * <p>Delegates to {@link PatchLoopPersistenceService#markGraphExecutionFailed} which creates its
+   * own transaction. Errors here are logged but never propagated — the async worker must not crash.
+   */
+  private void persistGraphFailure(String executionId, Exception e) {
+    try {
+      persistenceService.markGraphExecutionFailed(
+          executionId,
+          PatchLoopFailureCode.INTERNAL_ERROR,
+          "Unexpected runtime error: " + e.getMessage());
+    } catch (Exception persistEx) {
+      logger.error(
+          "Failed to persist graph failure for {}: {}", executionId, persistEx.getMessage());
+    }
+  }
+
+  /**
+   * Broadcasts a failure event via WebSocket, catching any exceptions to prevent WS errors from
+   * propagating to callers.
+   */
+  private void safeBroadcastFailure(String executionId, String message) {
+    try {
+      webSocketHandler.broadcastIterationFailed(executionId, message);
+    } catch (Exception wsEx) {
+      logger.warn(
+          "Failed to broadcast failure via WebSocket for {}: {}", executionId, wsEx.getMessage());
+    }
+  }
+
+  /**
    * Retrieves the current script instance.
    *
    * <p>Testability seam: Extracted to allow test subclasses to override and provide mock instances.
@@ -712,8 +767,7 @@ public class PatchLoopAsyncWorker {
 
       // Check for success (no failure code in debug session)
       Optional<DebugSession> session =
-          debugSessionRepository.findFirstByScriptNameOrderByStartTimeDesc(
-              iteration.getScriptName());
+          sessionResolverService.resolveForRetest(iteration).map(r -> r.getSession());
 
       boolean retestSuccess =
           session.isPresent() && !timeout && session.get().getFailureCode() == null;

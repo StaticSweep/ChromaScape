@@ -46,7 +46,10 @@ public class TaskCitationValidationService {
         countsByType.merge(citation.getEvidenceType(), 1, Integer::sum);
       } else {
         invalid++;
-        logger.warn("Invalid citation {} for item {}: missing evidenceId or type", citation.getId(), itemId);
+        logger.warn(
+            "Invalid citation {} for item {}: missing evidenceId or type",
+            citation.getId(),
+            itemId);
       }
     }
 
@@ -61,10 +64,7 @@ public class TaskCitationValidationService {
     private final Map<EvidenceType, Integer> countsByType;
 
     public CitationValidationResult(
-        String itemId,
-        int validCount,
-        int invalidCount,
-        Map<EvidenceType, Integer> countsByType) {
+        String itemId, int validCount, int invalidCount, Map<EvidenceType, Integer> countsByType) {
       this.itemId = itemId;
       this.validCount = validCount;
       this.invalidCount = invalidCount;

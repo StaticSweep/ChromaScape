@@ -27,11 +27,18 @@ public class AiPlayerController {
 
   private final ImitationDatasetBuilderService datasetBuilder;
   private final ShadowPolicyService shadowPolicy;
+  private final PatchOutcomeEvaluationService evaluationService;
+  private final AiPlayerDatasetScheduler datasetScheduler;
 
   public AiPlayerController(
-      ImitationDatasetBuilderService datasetBuilder, ShadowPolicyService shadowPolicy) {
+      ImitationDatasetBuilderService datasetBuilder,
+      ShadowPolicyService shadowPolicy,
+      PatchOutcomeEvaluationService evaluationService,
+      AiPlayerDatasetScheduler datasetScheduler) {
     this.datasetBuilder = datasetBuilder;
     this.shadowPolicy = shadowPolicy;
+    this.evaluationService = evaluationService;
+    this.datasetScheduler = datasetScheduler;
   }
 
   /** Gets the AI player feature status. */
@@ -41,6 +48,10 @@ public class AiPlayerController {
         Map.of(
             "enabled", datasetBuilder.isAiPlayerEnabled(),
             "shadowMode", shadowPolicy.isShadowMode(),
+            "controlEnabled", shadowPolicy.isControlEnabled(),
+            "controlAllowed", shadowPolicy.isControlAllowed(),
+            "scheduledPatchOutcomeExports", datasetScheduler.isScheduledExportEnabled(),
+            "datasetOutputDir", datasetBuilder.getOutputDir(),
             "summary", datasetBuilder.getDatasetSummary(null));
     return ResponseEntity.ok(status);
   }
@@ -57,15 +68,23 @@ public class AiPlayerController {
     String endTimeStr = request.get("endTime");
 
     LocalDateTime startTime =
-        startTimeStr != null ? LocalDateTime.parse(startTimeStr, DateTimeFormatter.ISO_DATE_TIME)
+        startTimeStr != null
+            ? LocalDateTime.parse(startTimeStr, DateTimeFormatter.ISO_DATE_TIME)
             : LocalDateTime.now().minusHours(1);
     LocalDateTime endTime =
-        endTimeStr != null ? LocalDateTime.parse(endTimeStr, DateTimeFormatter.ISO_DATE_TIME)
+        endTimeStr != null
+            ? LocalDateTime.parse(endTimeStr, DateTimeFormatter.ISO_DATE_TIME)
             : LocalDateTime.now();
 
     try {
-      String outputPath = datasetBuilder.buildDataset(accountName, startTime, endTime);
-      return ResponseEntity.ok(Map.of("outputPath", outputPath, "status", "COMPLETED"));
+      DatasetBuildResult result = datasetBuilder.buildDatasetResult(accountName, startTime, endTime);
+      return ResponseEntity.ok(
+          Map.of(
+              "datasetId", result.getDatasetId(),
+              "outputPath", result.getOutputPath(),
+              "manifestPath", result.getManifestPath(),
+              "recordCount", result.getRecordCount(),
+              "status", "COMPLETED"));
     } catch (Exception e) {
       log.error("Failed to build dataset", e);
       return ResponseEntity.internalServerError().body("Failed: " + e.getMessage());
@@ -92,12 +111,36 @@ public class AiPlayerController {
             : LocalDateTime.now();
 
     try {
-      String outputPath = datasetBuilder.buildPatchOutcomeDataset(startTime, endTime);
-      return ResponseEntity.ok(Map.of("outputPath", outputPath, "status", "COMPLETED"));
+      DatasetBuildResult result = datasetBuilder.buildPatchOutcomeDatasetResult(startTime, endTime);
+      return ResponseEntity.ok(
+          Map.of(
+              "datasetId", result.getDatasetId(),
+              "outputPath", result.getOutputPath(),
+              "manifestPath", result.getManifestPath(),
+              "recordCount", result.getRecordCount(),
+              "excludedRecordCount", result.getExcludedRecordCount(),
+              "status", "COMPLETED"));
     } catch (Exception e) {
       log.error("Failed to build patch-outcome dataset", e);
       return ResponseEntity.internalServerError().body("Failed: " + e.getMessage());
     }
+  }
+
+  /** Returns offline evaluation metrics for patch-outcome exports. */
+  @GetMapping("/evaluation/patch-outcomes")
+  public ResponseEntity<Object> evaluatePatchOutcomes(
+      @RequestParam(required = false) String startTime,
+      @RequestParam(required = false) String endTime,
+      @RequestParam(required = false) String scriptName) {
+    LocalDateTime resolvedStart =
+        startTime != null
+            ? LocalDateTime.parse(startTime, DateTimeFormatter.ISO_DATE_TIME)
+            : LocalDateTime.now().minusDays(7);
+    LocalDateTime resolvedEnd =
+        endTime != null
+            ? LocalDateTime.parse(endTime, DateTimeFormatter.ISO_DATE_TIME)
+            : LocalDateTime.now();
+    return ResponseEntity.ok(evaluationService.evaluate(resolvedStart, resolvedEnd, scriptName));
   }
 
   /** Gets a shadow policy recommendation. */

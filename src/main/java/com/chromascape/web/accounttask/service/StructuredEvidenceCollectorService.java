@@ -3,10 +3,10 @@ package com.chromascape.web.accounttask.service;
 import com.chromascape.web.accounttask.entity.TaskEvidenceCitation;
 import com.chromascape.web.accounttask.entity.TaskEvidenceCitation.EvidenceType;
 import com.chromascape.web.accounttask.repository.TaskEvidenceCitationRepository;
-import com.chromascape.web.decisions.entity.DecisionEntity;
-import com.chromascape.web.decisions.entity.DecisionRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickLog;
 import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
+import com.chromascape.web.decisions.entity.DecisionEntity;
+import com.chromascape.web.decisions.entity.DecisionRepository;
 import com.chromascape.web.logs.LogEntity;
 import com.chromascape.web.logs.LogRepository;
 import com.chromascape.web.recording.entity.RecordingSession;
@@ -27,7 +27,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class StructuredEvidenceCollectorService {
 
-  private static final Logger logger = LoggerFactory.getLogger(StructuredEvidenceCollectorService.class);
+  private static final Logger logger =
+      LoggerFactory.getLogger(StructuredEvidenceCollectorService.class);
 
   private final LogRepository logRepository;
   private final DecisionRepository decisionRepository;
@@ -56,7 +57,8 @@ public class StructuredEvidenceCollectorService {
    * @param sourceSessionId optional session filter
    * @return collected evidence summary
    */
-  public EvidenceSummary collectEvidence(LocalDateTime start, LocalDateTime end, String sourceSessionId) {
+  public EvidenceSummary collectEvidence(
+      LocalDateTime start, LocalDateTime end, String sourceSessionId) {
     logger.info("Collecting evidence from {} to {} (session: {})", start, end, sourceSessionId);
 
     EvidenceSummary summary = new EvidenceSummary();

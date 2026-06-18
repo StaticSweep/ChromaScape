@@ -90,7 +90,8 @@ class AnalysisProviderSelectionTest {
         new String[] {"analysis.provider"},
         annotation.name(),
         "Should check 'analysis.provider' property");
-    assertEquals("codex-mcp", annotation.havingValue(), "Should activate when value is 'codex-mcp'");
+    assertEquals(
+        "codex-mcp", annotation.havingValue(), "Should activate when value is 'codex-mcp'");
     assertTrue(annotation.matchIfMissing(), "Should default to codex-mcp when property is missing");
   }
 
@@ -101,14 +102,15 @@ class AnalysisProviderSelectionTest {
         ClaudeMcpAliasAnalysisProvider.class.getAnnotation(ConditionalOnProperty.class);
 
     assertNotNull(
-        annotation,
-        "ClaudeMcpAliasAnalysisProvider should have @ConditionalOnProperty annotation");
+        annotation, "ClaudeMcpAliasAnalysisProvider should have @ConditionalOnProperty annotation");
     assertArrayEquals(
         new String[] {"analysis.provider"},
         annotation.name(),
         "Should check 'analysis.provider' property");
-    assertEquals("claude-mcp", annotation.havingValue(), "Should activate when value is 'claude-mcp'");
-    assertFalse(annotation.matchIfMissing(), "Alias should not be default when property is missing");
+    assertEquals(
+        "claude-mcp", annotation.havingValue(), "Should activate when value is 'claude-mcp'");
+    assertFalse(
+        annotation.matchIfMissing(), "Alias should not be default when property is missing");
   }
 
   @Test
@@ -124,9 +126,7 @@ class AnalysisProviderSelectionTest {
         annotation.name(),
         "Should check 'analysis.provider' property");
     assertEquals(
-        "openai-codex",
-        annotation.havingValue(),
-        "Should activate when value is 'openai-codex'");
+        "openai-codex", annotation.havingValue(), "Should activate when value is 'openai-codex'");
     assertFalse(
         annotation.matchIfMissing(),
         "openai-codex provider should not be selected when property is missing");
@@ -171,7 +171,8 @@ class AnalysisProviderSelectionTest {
     ClaudeMcpAnalysisProvider provider = new ClaudeMcpAnalysisProvider(transport, config);
 
     assertNotNull(provider, "Provider should be instantiated");
-    assertEquals("codex-mcp", provider.getProviderName(), "Default provider name should be 'codex-mcp'");
+    assertEquals(
+        "codex-mcp", provider.getProviderName(), "Default provider name should be 'codex-mcp'");
     // Note: isAvailable() now performs actual health check, which will fail without a real MCP
     // server
     // For this test, we just verify the provider can be instantiated

@@ -3,11 +3,18 @@ package com.chromascape.web.debug.patchloop.service;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV1EvidenceBundle;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV1Response;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV2Response;
+import com.chromascape.web.debug.patchloop.entity.GraphExecutionStatus;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopFailureCode;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopGraphExecution;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopGraphExecutionRepository;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIteration;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIterationRepository;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
 import com.fasterxml.jackson.databind.JsonNode;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,10 +31,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PatchLoopPersistenceService {
 
-  private final PatchLoopIterationRepository iterationRepository;
+  private static final Logger logger = LoggerFactory.getLogger(PatchLoopPersistenceService.class);
 
-  public PatchLoopPersistenceService(PatchLoopIterationRepository iterationRepository) {
+  private final PatchLoopIterationRepository iterationRepository;
+  private final PatchLoopGraphExecutionRepository graphExecutionRepository;
+
+  public PatchLoopPersistenceService(
+      PatchLoopIterationRepository iterationRepository,
+      PatchLoopGraphExecutionRepository graphExecutionRepository) {
     this.iterationRepository = iterationRepository;
+    this.graphExecutionRepository = graphExecutionRepository;
   }
 
   /**
@@ -234,6 +247,48 @@ public class PatchLoopPersistenceService {
     result.put("schemaVersion", responseNode.path("schemaVersion").asText("1.0.0"));
 
     return result;
+  }
+
+  /**
+   * Marks a graph execution and its associated iteration as failed in a short transaction.
+   *
+   * <p>Used when async submission fails or a non-Graph runtime error occurs. Ensures both the graph
+   * execution and iteration are transitioned to a terminal FAILED state so they don't get stuck.
+   *
+   * @param executionId the graph execution ID
+   * @param failureCode the failure code for the iteration
+   * @param reason human-readable failure reason
+   */
+  @Transactional
+  public void markGraphExecutionFailed(String executionId, String failureCode, String reason) {
+    Optional<PatchLoopGraphExecution> optExec =
+        graphExecutionRepository.findByExecutionId(executionId);
+    if (optExec.isPresent()) {
+      PatchLoopGraphExecution execution = optExec.get();
+      if (!execution.getExecutionStatus().isTerminal()) {
+        execution.setExecutionStatus(GraphExecutionStatus.FAILED);
+        execution.setStopReason(reason);
+        execution.setFinalStatus("FAILED");
+        execution.setCompletedAt(LocalDateTime.now());
+        graphExecutionRepository.save(execution);
+        logger.info("Marked graph execution {} as FAILED: {}", executionId, reason);
+      }
+
+      // Also mark the iteration as failed
+      String iterationId = execution.getIterationId();
+      if (iterationId != null) {
+        iterationRepository
+            .findByIterationId(iterationId)
+            .ifPresent(
+                iteration -> {
+                  if (!iteration.getStatus().isTerminal()) {
+                    markIterationFailed(iteration, failureCode, reason, "Graph execution failed");
+                  }
+                });
+      }
+    } else {
+      logger.warn("Cannot mark graph execution {} as FAILED: not found", executionId);
+    }
   }
 
   /** Extracts fields from V2 response JSON. */

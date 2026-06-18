@@ -126,11 +126,19 @@ public class SimulatorReplayControlController {
                 && ((firstFrame.getPlayerState().has("x") && firstFrame.getPlayerState().has("z"))
                     || (firstFrame.getPlayerState().has("worldX")
                         && firstFrame.getPlayerState().has("worldY")));
+        boolean strictSchema = firstFrame.getSchemaVersion() != null && firstFrame.getSchemaVersion() >= 2;
         if (!hasPosition) {
           return ResponseEntity.status(HttpStatus.CONFLICT)
               .body(
                   errorResponse(
                       "Recording is not replayable: missing position telemetry in tick snapshots for recordingId="
+                          + recordingId));
+        }
+        if (!strictSchema) {
+          return ResponseEntity.status(HttpStatus.CONFLICT)
+              .body(
+                  errorResponse(
+                      "Recording is not replayable: strict schemaVersion>=2 is required for recordingId="
                           + recordingId));
         }
       }

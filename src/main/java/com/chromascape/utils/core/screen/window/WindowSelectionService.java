@@ -38,19 +38,11 @@ public class WindowSelectionService {
   public void setSelectedWindow(WindowInfo window) {
     if (window == null) {
       logger.info("Window selection cleared");
-      System.err.println("[WINDOW SELECTION] Selection cleared");
     } else {
       logger.info("Window selected: {}", window.getTitle());
-      System.err.println(
-          "[WINDOW SELECTION] Window set: "
-              + window.getTitle()
-              + " (ID: "
-              + window.getId()
-              + ", HWND: "
-              + window.getHwnd()
-              + ")");
     }
     selectedWindow.set(window);
+    ScreenManager.clearWindowCache();
   }
 
   /**
@@ -70,14 +62,7 @@ public class WindowSelectionService {
    */
   public HWND getSelectedHwnd() {
     WindowInfo window = selectedWindow.get();
-    HWND result = window != null ? window.getHwnd() : null;
-    System.err.println(
-        "[WINDOW SELECTION] getSelectedHwnd() called - returning: "
-            + result
-            + " (window: "
-            + (window != null ? window.getTitle() : "null")
-            + ")");
-    return result;
+    return window != null ? window.getHwnd() : null;
   }
 
   /**
@@ -92,5 +77,6 @@ public class WindowSelectionService {
   /** Clears the current selection. */
   public void clearSelection() {
     selectedWindow.set(null);
+    ScreenManager.clearWindowCache();
   }
 }

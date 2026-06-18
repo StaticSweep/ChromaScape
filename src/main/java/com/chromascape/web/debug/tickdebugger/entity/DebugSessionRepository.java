@@ -19,6 +19,9 @@ public interface DebugSessionRepository extends JpaRepository<DebugSession, Long
   /** Find all active sessions (no end time set). */
   List<DebugSession> findByEndTimeIsNullOrderByStartTimeDesc();
 
+  /** Find active sessions that are not yet linked to a recording. */
+  List<DebugSession> findByEndTimeIsNullAndRecordingIdIsNullOrderByStartTimeDesc();
+
   /** Find all sessions for a specific account, ordered by start time (newest first). */
   List<DebugSession> findByAccountNameOrderByStartTimeDesc(String accountName);
 

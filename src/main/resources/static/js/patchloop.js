@@ -17,6 +17,9 @@ class PatchLoopManager {
     this.analyses = [];
     this.evidence = [];
     this.artifactManager = null;
+    this.currentStatus = 'READY';
+    this._launchRetryCount = 0;
+    this._launchRetryInProgress = false;
   }
 
   /**
@@ -81,6 +84,10 @@ class PatchLoopManager {
    * Disconnects the WebSocket.
    */
   disconnect() {
+    if (this._stuckCheckTimer) {
+      clearTimeout(this._stuckCheckTimer);
+      this._stuckCheckTimer = null;
+    }
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -111,14 +118,23 @@ class PatchLoopManager {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const body = await this.safeResponseBody(response);
+        throw new Error(`HTTP ${response.status}: ${body}`);
       }
 
-      const result = await response.json();
+      let result;
+      try {
+        result = await response.json();
+      } catch (jsonErr) {
+        throw new Error('Server returned non-JSON response');
+      }
       this.executionId = result.executionId;
       this.iterationId = result.iterationId;
+      this._launchRetryCount = 0;
+      this._launchRetryInProgress = false;
 
       this.onGraphExecuted(result);
+      this.scheduleStuckCreatedCheck();
       return result;
 
     } catch (error) {
@@ -164,14 +180,23 @@ class PatchLoopManager {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const body = await this.safeResponseBody(response);
+        throw new Error(`HTTP ${response.status}: ${body}`);
       }
 
-      const result = await response.json();
+      let result;
+      try {
+        result = await response.json();
+      } catch (jsonErr) {
+        throw new Error('Server returned non-JSON response');
+      }
       this.executionId = result.executionId;
       this.iterationId = result.iterationId;
+      this._launchRetryCount = 0;
+      this._launchRetryInProgress = false;
 
       this.onGraphExecuted(result);
+      this.scheduleStuckCreatedCheck();
       return result;
 
     } catch (error) {
@@ -263,7 +288,7 @@ class PatchLoopManager {
     this.executionId = response.executionId;
     this.iterationId = response.iterationId;
     this.currentStatus = 'RUNNING';
-    this.updateControlButtons();
+    this.updateControlButtons('RUNNING');
 
     // Reset node states for fresh run
     this.nodeStates.clear();
@@ -278,6 +303,13 @@ class PatchLoopManager {
 
     // Trigger initial artifact refresh
     this.refreshArtifacts();
+
+    // Fallback bootstrap in case the first WS status/node events are missed.
+    if (this.iterationId) {
+      this.getGraphState(this.iterationId).catch(() => {
+        // getGraphState already logs
+      });
+    }
   }
 
   onGraphStateUpdate(state) {
@@ -307,6 +339,9 @@ class PatchLoopManager {
 
   onError(error) {
     console.error('Patch loop error:', error);
+    if (typeof window !== 'undefined' && typeof window.showNotification === 'function') {
+      window.showNotification(error, 'error');
+    }
   }
 
   // WebSocket message handling
@@ -484,8 +519,45 @@ class PatchLoopManager {
   // Render methods (to be overridden or customized)
 
   renderNodeTimeline() {
-    // Override this to render the node timeline in your UI
-    console.log('Node timeline:', Array.from(this.nodeStates.entries()));
+    const timeline = document.getElementById('nodeTimeline');
+    const nodeCountBadge = document.getElementById('nodeCountBadge');
+    if (!timeline) {
+      console.log('Node timeline:', Array.from(this.nodeStates.entries()));
+      return;
+    }
+
+    const entries = Array.from(this.nodeStates.entries());
+    if (nodeCountBadge) {
+      nodeCountBadge.textContent = `${entries.length} nodes`;
+    }
+
+    if (entries.length === 0) {
+      timeline.innerHTML = '<div class="text-muted small fst-italic">No nodes executed yet</div>';
+      return;
+    }
+
+    const rows = entries.map(([nodeId, state]) => {
+      const status = (state.status || 'unknown').toUpperCase();
+      const badgeClass =
+        status === 'COMPLETED'
+          ? 'bg-success'
+          : status === 'RUNNING'
+            ? 'bg-primary'
+            : 'bg-danger';
+      const detail =
+        state.outputSummary || state.error || (state.duration ? `${state.duration}ms` : '');
+      return `
+        <div class="d-flex justify-content-between align-items-start border rounded p-2 mb-1">
+          <div>
+            <div class="fw-semibold small">${this.escapeHtml(nodeId)}</div>
+            ${detail ? `<div class="text-muted small">${this.escapeHtml(String(detail))}</div>` : ''}
+          </div>
+          <span class="badge ${badgeClass}">${this.escapeHtml(status)}</span>
+        </div>
+      `;
+    });
+
+    timeline.innerHTML = rows.join('');
   }
 
   renderPatchPreview(data) {
@@ -532,6 +604,13 @@ class PatchLoopManager {
 
   onStatusChanged(status) {
     console.log('Status changed:', status);
+    this.currentStatus = status;
+
+    if (status !== 'CREATED' && status !== 'RELAUNCHING_CREATED' && this._stuckCheckTimer) {
+      clearTimeout(this._stuckCheckTimer);
+      this._stuckCheckTimer = null;
+    }
+
     // Update UI elements for status change
     const statusIndicator = document.getElementById('loopStatusIndicator');
     const statusText = document.getElementById('loopStatusText');
@@ -543,6 +622,8 @@ class PatchLoopManager {
     const statusClasses = {
       'READY': 'status-ready',
       'RUNNING': 'status-running',
+      'CREATED': 'status-ready',
+      'RELAUNCHING_CREATED': 'status-running',
       'PAUSED': 'status-paused',
       'RETESTING': 'status-retesting',
       'RETESTED': 'status-retested',
@@ -554,6 +635,8 @@ class PatchLoopManager {
     const statusLabels = {
       'READY': 'Ready',
       'RUNNING': 'Running',
+      'CREATED': 'Starting',
+      'RELAUNCHING_CREATED': 'Retrying Start',
       'PAUSED': 'Paused',
       'COMPLETED': 'Completed',
       'FAILED': 'Failed',
@@ -627,6 +710,95 @@ class PatchLoopManager {
     if (ms < 1000) return `${ms}ms`;
     if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
     return `${(ms / 60000).toFixed(1)}m`;
+  }
+
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
+   * Schedules a check for stuck CREATED status after a short delay.
+   *
+   * <p>If the graph execution is still in CREATED status after the threshold,
+   * it means the async submission likely failed silently. Shows an error to the user.
+   */
+  scheduleStuckCreatedCheck() {
+    if (this._stuckCheckTimer) {
+      clearTimeout(this._stuckCheckTimer);
+    }
+    const STUCK_THRESHOLD_MS = 10000;
+    this._stuckCheckTimer = setTimeout(async () => {
+      if (!this.iterationId) return;
+      try {
+        const state = await this.getGraphState(this.iterationId);
+        const executionStatus = state ? (state.status || state.executionStatus) : null;
+        if (executionStatus === 'CREATED' && this.currentStatus !== 'RUNNING') {
+          await this.retryIfStuckCreated();
+        }
+      } catch (e) {
+        // getGraphState already logs the error
+      }
+    }, STUCK_THRESHOLD_MS);
+  }
+
+  async retryIfStuckCreated() {
+    if (this._launchRetryInProgress) return;
+
+    if (this._launchRetryCount >= 1) {
+      this.onStatusChanged('FAILED');
+      this.onError(
+        'Execution failed to start after automatic retry. Please click Execute Loop again.'
+      );
+      return;
+    }
+
+    this._launchRetryInProgress = true;
+    this._launchRetryCount += 1;
+    const attempt = this._launchRetryCount;
+
+    if (typeof window !== 'undefined' && typeof window.showNotification === 'function') {
+      window.showNotification(
+        `Patch Loop start is stuck. Retrying automatically (${attempt}/1)...`,
+        'warning'
+      );
+    }
+
+    try {
+      await this.controlExecution(
+        this.iterationId,
+        'RELAUNCH_IF_CREATED',
+        'ui-auto-relaunch-after-created-timeout'
+      );
+      this.onStatusChanged('RELAUNCHING_CREATED');
+      this.scheduleStuckCreatedCheck();
+    } catch (error) {
+      this.onStatusChanged('FAILED');
+      this.onError(
+        'Automatic retry failed: ' +
+          error.message +
+          '. Please click Execute Loop again.'
+      );
+    } finally {
+      this._launchRetryInProgress = false;
+    }
+  }
+
+  /**
+   * Safely extracts response body text for error messages.
+   *
+   * <p>Falls back to statusText if reading the body fails (e.g., already consumed).
+   */
+  async safeResponseBody(response) {
+    try {
+      const text = await response.text();
+      // Truncate long HTML error pages
+      return text.length > 200 ? text.substring(0, 200) + '...' : text;
+    } catch (e) {
+      return response.statusText;
+    }
   }
 }
 

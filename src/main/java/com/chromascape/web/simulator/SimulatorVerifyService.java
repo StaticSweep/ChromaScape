@@ -47,7 +47,9 @@ public class SimulatorVerifyService {
   private static final int REPORT_FILE_WAIT_ATTEMPTS = 15;
   private static final long REPORT_FILE_WAIT_DELAY_MS = 200L;
 
-  /** Minimal valid JSON returned when ObjectMapper serialization fails in buildSyntheticErrorReport. */
+  /**
+   * Minimal valid JSON returned when ObjectMapper serialization fails in buildSyntheticErrorReport.
+   */
   static final String FALLBACK_ERROR_REPORT_JSON =
       "{\"passed\":false,\"summary\":{\"totalActions\":0,\"tickRange\":{\"start\":0,\"end\":0},\"actionTypeCounts\":{},\"playerCount\":0,\"durationTicks\":0},\"violations\":[],\"error\":\"A verifier error occurred but the report could not be generated\"}";
 
@@ -261,7 +263,8 @@ public class SimulatorVerifyService {
           }
           logger.warn(
               "Verification job {} completed with exit code {} but report shows failure",
-              jobId, exitCode);
+              jobId,
+              exitCode);
         } else {
           job.setStatus(JobStatus.SUCCEEDED);
           logger.info(
@@ -311,21 +314,30 @@ public class SimulatorVerifyService {
                   + extractErrorMessage(output.toString()));
           logger.warn(
               "Verification job {} failed with exit code {}, report available at {}",
-              jobId, exitCode, reportPath);
+              jobId,
+              exitCode,
+              reportPath);
         } catch (IOException e) {
           // Report parsing failed - write synthetic report as fallback
-          String errorMsg = "Verifier exited with code " + exitCode + ": " + extractErrorMessage(output.toString());
+          String errorMsg =
+              "Verifier exited with code "
+                  + exitCode
+                  + ": "
+                  + extractErrorMessage(output.toString());
           job.setStatus(JobStatus.FAILED);
           job.setError(errorMsg);
           writeSyntheticReport(job, errorMsg);
           logger.warn(
               "Verification job {} failed with exit code {}, wrote synthetic report",
-              jobId, exitCode);
+              jobId,
+              exitCode);
         }
       }
 
       // Final safeguard: any non-cancelled FAILED job must have a report
-      if (job.getStatus() == JobStatus.FAILED && !job.isCancelled() && job.getReportPath() == null) {
+      if (job.getStatus() == JobStatus.FAILED
+          && !job.isCancelled()
+          && job.getReportPath() == null) {
         String fallbackError = job.getError() != null ? job.getError() : "Unknown error";
         writeSyntheticReport(job, fallbackError);
       }
@@ -365,7 +377,8 @@ public class SimulatorVerifyService {
     return List.of("cmd.exe", "/c", batchFile.getAbsolutePath());
   }
 
-  /** Creates and starts the verifier process with redirected error stream.
+  /**
+   * Creates and starts the verifier process with redirected error stream.
    *
    * <p>Extracted for testability: tests can spy on this method to inject a mock Process.
    */
@@ -517,8 +530,7 @@ public class SimulatorVerifyService {
         // Build a synthetic error report from extracted error so reportAvailable stays true
         String extractedError = extractErrorMessage(output);
         json = buildSyntheticErrorReport(job, extractedError);
-        logger.info(
-            "Built synthetic error report for job {} from verifier output", job.getJobId());
+        logger.info("Built synthetic error report for job {} from verifier output", job.getJobId());
       }
       parseJsonSummary(job, json);
       try {
@@ -556,7 +568,8 @@ public class SimulatorVerifyService {
       job.setReportPath(reportPath);
       logger.info("Wrote synthetic error report to {}", reportPath);
     } catch (IOException e) {
-      logger.warn("Failed to write synthetic report for job {}: {}", job.getJobId(), e.getMessage());
+      logger.warn(
+          "Failed to write synthetic report for job {}: {}", job.getJobId(), e.getMessage());
     }
   }
 
@@ -585,15 +598,17 @@ public class SimulatorVerifyService {
       root.put("error", safeMessage);
       return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
     } catch (Exception e) {
-      logger.warn("Failed to serialize synthetic report for job {}: {}", job.getJobId(), e.getMessage());
+      logger.warn(
+          "Failed to serialize synthetic report for job {}: {}", job.getJobId(), e.getMessage());
       return FALLBACK_ERROR_REPORT_JSON;
     }
   }
 
-  /** Rewrites the report file on disk to force "passed": false.
+  /**
+   * Rewrites the report file on disk to force "passed": false.
    *
-   * <p>This ensures GET /report returns a file consistent with the in-memory summary
-   * after we override passed=false for failure exit codes.
+   * <p>This ensures GET /report returns a file consistent with the in-memory summary after we
+   * override passed=false for failure exit codes.
    *
    * @return true if the file was successfully rewritten or didn't need rewriting
    */
@@ -607,7 +622,8 @@ public class SimulatorVerifyService {
       JsonNode root = objectMapper.readTree(json);
       if (root.isObject()) {
         ((ObjectNode) root).put("passed", false);
-        Files.writeString(reportFile, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root));
+        Files.writeString(
+            reportFile, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root));
       }
       return true;
     } catch (IOException e) {

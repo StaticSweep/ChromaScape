@@ -24,7 +24,8 @@ public class RuntimeAdapterRegistry {
   /** Registers an adapter. Called automatically by Spring for all BotRuntimeAdapter beans. */
   public void register(BotRuntimeAdapter adapter) {
     adapters.put(adapter.getAdapterId(), adapter);
-    logger.info("Registered runtime adapter: {} ({})", adapter.getAdapterId(), adapter.getDisplayName());
+    logger.info(
+        "Registered runtime adapter: {} ({})", adapter.getAdapterId(), adapter.getDisplayName());
   }
 
   /** Unregisters an adapter. */

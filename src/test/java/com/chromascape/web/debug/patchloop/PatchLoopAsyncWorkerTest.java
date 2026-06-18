@@ -24,6 +24,7 @@ import com.chromascape.web.debug.patchloop.graph.PatchLoopGraphExecutor;
 import com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker;
 import com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopPersistenceService;
+import com.chromascape.web.debug.patchloop.service.PatchLoopSessionResolverService;
 import com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider;
 import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
@@ -59,6 +60,7 @@ class PatchLoopAsyncWorkerTest {
   @Mock private PatchLoopPersistenceService persistenceService;
   @Mock private PatchLoopGraphExecutor graphExecutor;
   @Mock private PatchLoopWebSocketHandler webSocketHandler;
+  @Mock private PatchLoopSessionResolverService sessionResolverService;
 
   private PatchLoopAsyncWorker asyncWorker;
   private ObjectMapper objectMapper;
@@ -81,7 +83,8 @@ class PatchLoopAsyncWorkerTest {
         ObjectMapper objectMapper,
         PatchLoopPersistenceService persistenceService,
         PatchLoopGraphExecutor graphExecutor,
-        PatchLoopWebSocketHandler webSocketHandler) {
+        PatchLoopWebSocketHandler webSocketHandler,
+        PatchLoopSessionResolverService sessionResolverService) {
       super(
           iterationRepository,
           eventRepository,
@@ -92,7 +95,8 @@ class PatchLoopAsyncWorkerTest {
           objectMapper,
           persistenceService,
           graphExecutor,
-          webSocketHandler);
+          webSocketHandler,
+          sessionResolverService);
     }
 
     @Override
@@ -110,6 +114,7 @@ class PatchLoopAsyncWorkerTest {
 
     // Setup evidence validation to pass by default (lenient for tests that don't reach this point)
     lenient().when(evidenceService.validateEvidenceSufficiency(any())).thenReturn(true);
+    lenient().when(sessionResolverService.resolveForRetest(any())).thenReturn(Optional.empty());
 
     // Setup script control mocks for successful run (lenient for tests that don't reach this point)
     lenient()
@@ -131,7 +136,8 @@ class PatchLoopAsyncWorkerTest {
             objectMapper,
             persistenceService,
             graphExecutor,
-            webSocketHandler);
+            webSocketHandler,
+            sessionResolverService);
   }
 
   /**

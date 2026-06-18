@@ -23,6 +23,9 @@ public class ScriptFailureTriage {
   @Column(nullable = false, length = 200)
   private String scriptKey;
 
+  @Column(length = 50)
+  private String family;
+
   @Column(nullable = false, length = 255)
   private String failureSignature;
 
@@ -37,6 +40,24 @@ public class ScriptFailureTriage {
 
   @Column(columnDefinition = "TEXT")
   private String lastErrorMessage;
+
+  @Column(length = 20)
+  private String lastOutcome;
+
+  @Column(length = 50)
+  private String lastStatus;
+
+  @Column
+  private Long lastDurationMs;
+
+  @Column
+  private LocalDateTime lastExecutedAt;
+
+  @Column(nullable = false)
+  private Boolean backlogReady = false;
+
+  @Column(nullable = false)
+  private Integer backlogPriority = 0;
 
   @Column(nullable = false)
   private LocalDateTime firstSeenAt;
@@ -67,6 +88,14 @@ public class ScriptFailureTriage {
 
   public void setScriptKey(String scriptKey) {
     this.scriptKey = scriptKey;
+  }
+
+  public String getFamily() {
+    return family;
+  }
+
+  public void setFamily(String family) {
+    this.family = family;
   }
 
   public String getFailureSignature() {
@@ -107,6 +136,54 @@ public class ScriptFailureTriage {
 
   public void setLastErrorMessage(String lastErrorMessage) {
     this.lastErrorMessage = lastErrorMessage;
+  }
+
+  public String getLastOutcome() {
+    return lastOutcome;
+  }
+
+  public void setLastOutcome(String lastOutcome) {
+    this.lastOutcome = lastOutcome;
+  }
+
+  public String getLastStatus() {
+    return lastStatus;
+  }
+
+  public void setLastStatus(String lastStatus) {
+    this.lastStatus = lastStatus;
+  }
+
+  public Long getLastDurationMs() {
+    return lastDurationMs;
+  }
+
+  public void setLastDurationMs(Long lastDurationMs) {
+    this.lastDurationMs = lastDurationMs;
+  }
+
+  public LocalDateTime getLastExecutedAt() {
+    return lastExecutedAt;
+  }
+
+  public void setLastExecutedAt(LocalDateTime lastExecutedAt) {
+    this.lastExecutedAt = lastExecutedAt;
+  }
+
+  public Boolean getBacklogReady() {
+    return backlogReady;
+  }
+
+  public void setBacklogReady(Boolean backlogReady) {
+    this.backlogReady = backlogReady;
+  }
+
+  public Integer getBacklogPriority() {
+    return backlogPriority;
+  }
+
+  public void setBacklogPriority(Integer backlogPriority) {
+    this.backlogPriority = backlogPriority;
   }
 
   public LocalDateTime getFirstSeenAt() {

@@ -6,6 +6,7 @@ import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteRequest;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopIterationResponse;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
+import com.chromascape.web.debug.patchloop.exception.PatchLoopRequestException;
 import com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
@@ -64,6 +65,9 @@ public class PatchLoopController {
   @Value("${chromascape.patchloop.supervisor-base-url:http://127.0.0.1:8096}")
   private String supervisorBaseUrl;
 
+  @Value("${features.patch-loop.autofix-enabled:false}")
+  private boolean patchLoopAutofixEnabled;
+
   @Autowired(required = false)
   private McpBridgeLifecycleManager bridgeLifecycleManager;
 
@@ -94,12 +98,18 @@ public class PatchLoopController {
     logger.info("POST /api/debug/patch-loop/execute - script: {}", request.getScriptName());
 
     try {
+      validateExecutionModePolicy(request.getNormalizedExecutionMode());
       PatchLoopExecuteResponse response = orchestratorService.executeIteration(request);
       return ResponseEntity.ok(response);
 
+    } catch (PatchLoopRequestException e) {
+      logger.warn("Patch-loop request rejected [{}]: {}", e.getErrorCode(), e.getMessage());
+      return ResponseEntity.badRequest().body(buildErrorBody(e.getErrorCode(), e.getMessage()));
+
     } catch (IllegalArgumentException e) {
       logger.warn("Invalid request: {}", e.getMessage());
-      return ResponseEntity.badRequest().body(e.getMessage());
+      return ResponseEntity.badRequest()
+          .body(buildErrorBody("INVALID_REQUEST", e.getMessage()));
 
     } catch (Exception e) {
       logger.error("Failed to execute iteration", e);
@@ -258,14 +268,20 @@ public class PatchLoopController {
     logger.info("POST /api/debug/patch-loop/execute-graph - script: {}", request.getScriptName());
 
     try {
+      validateExecutionModePolicy(request.getNormalizedExecutionMode());
       com.chromascape.web.debug.patchloop.dto.GraphExecuteResponse response =
           graphOrchestratorService.executeGraph(request);
 
       return ResponseEntity.ok(response);
 
+    } catch (PatchLoopRequestException e) {
+      logger.warn("Patch-loop graph request rejected [{}]: {}", e.getErrorCode(), e.getMessage());
+      return ResponseEntity.badRequest().body(buildErrorBody(e.getErrorCode(), e.getMessage()));
+
     } catch (IllegalArgumentException e) {
       logger.warn("Invalid graph request: {}", e.getMessage());
-      return ResponseEntity.badRequest().body(e.getMessage());
+      return ResponseEntity.badRequest()
+          .body(buildErrorBody("INVALID_REQUEST", e.getMessage()));
 
     } catch (com.chromascape.web.debug.patchloop.graph.GraphCompilationException e) {
       logger.warn("Graph compilation failed: {}", e.getMessage());
@@ -276,6 +292,22 @@ public class PatchLoopController {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body("Failed to execute graph: " + e.getMessage());
     }
+  }
+
+  private void validateExecutionModePolicy(String normalizedExecutionMode) {
+    if (!patchLoopAutofixEnabled && "autofix_loop".equals(normalizedExecutionMode)) {
+      throw new PatchLoopRequestException(
+          "AUTOFIX_DISABLED",
+          "autofix_loop execution is disabled by features.patch-loop.autofix-enabled");
+    }
+  }
+
+  private Map<String, Object> buildErrorBody(String errorCode, String message) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("success", false);
+    body.put("errorCode", errorCode);
+    body.put("message", message);
+    return body;
   }
 
   /**
@@ -567,6 +599,14 @@ public class PatchLoopController {
       JsonNode micro6Catalog = micro6ExecutorCatalogService.getCatalog(refresh);
       String executorError =
           micro6Catalog.path("error").isTextual() ? micro6Catalog.path("error").asText() : null;
+      String catalogSource =
+          micro6Catalog.path("catalog_source").isTextual()
+              ? micro6Catalog.path("catalog_source").asText()
+              : "unknown";
+      String sourceClientType =
+          micro6Catalog.path("source_client_type").isTextual()
+              ? micro6Catalog.path("source_client_type").asText()
+              : "unknown";
       if (micro6Catalog.path("tasks").isArray()) {
         for (JsonNode task : micro6Catalog.path("tasks")) {
           Map<String, Object> normalized = normalizeMicro6Task(task);
@@ -575,22 +615,40 @@ public class PatchLoopController {
           }
         }
       }
+      int taskCount = normalizedMicro6Tasks.size();
       if (executorError != null && !executorError.isBlank()) {
         sourceMap.put(
             "micro6_executor",
             Map.of(
                 "ok", false,
                 "error", executorError,
+                "task_count", taskCount,
+                "catalog_source", catalogSource,
+                "source_client_type", sourceClientType,
                 "fetched_at", java.time.Instant.now().toString(),
                 "source", "micro6_executor_catalog"));
         errors.add("micro6_executor: " + executorError);
       } else {
+        Map<String, Object> sourceMeta = new LinkedHashMap<>();
+        sourceMeta.put("ok", true);
+        sourceMeta.put("task_count", taskCount);
+        sourceMeta.put("catalog_source", catalogSource);
+        sourceMeta.put("source_client_type", sourceClientType);
+        sourceMeta.put("fetched_at", java.time.Instant.now().toString());
+        sourceMeta.put("source", "micro6_executor_catalog");
+        if (taskCount < 50) {
+          sourceMeta.put(
+              "warning",
+              "micro6_executor returned unexpectedly small catalog ("
+                  + taskCount
+                  + " tasks) - possible wrong executor instance");
+          errors.add(
+              "micro6_executor: unexpectedly small catalog ("
+                  + taskCount
+                  + " tasks) - verify executor bind/config");
+        }
         sourceMap.put(
-            "micro6_executor",
-            Map.of(
-                "ok", true,
-                "fetched_at", java.time.Instant.now().toString(),
-                "source", "micro6_executor_catalog"));
+            "micro6_executor", sourceMeta);
       }
     } catch (Exception e) {
       sourceMap.put(
@@ -663,17 +721,36 @@ public class PatchLoopController {
     if (row.path("enabled").isBoolean() && !row.path("enabled").asBoolean()) {
       return null;
     }
-    String taskKey = row.path("task_key").asText(null);
+    String taskKey =
+        firstNonBlankText(
+            row.path("task_key").asText(null),
+            row.path("key").asText(null),
+            row.path("target_enum").asText(null));
     if (taskKey == null || taskKey.isBlank()) {
       return null;
     }
+    String displayName =
+        firstNonBlankText(row.path("display_name").asText(null), row.path("name").asText(null), taskKey);
+
     Map<String, Object> normalized = new LinkedHashMap<>();
     normalized.put("client_type", "micro6");
     normalized.put("execution_mode", "queue");
     normalized.put("queueable", true);
     normalized.put("source", "micro6");
     normalized.put("task_key", taskKey);
-    normalized.put("display_name", row.path("display_name").asText(taskKey));
+    normalized.put("display_name", displayName);
+    if (row.path("panel_display_name").isTextual()) {
+      normalized.put("panel_display_name", row.path("panel_display_name").asText());
+    }
+    if (row.path("search_aliases").isArray()) {
+      normalized.put("search_aliases", objectMapper.convertValue(row.path("search_aliases"), List.class));
+    }
+    if (row.path("runnable").isBoolean()) {
+      normalized.put("runnable", row.path("runnable").asBoolean());
+    }
+    if (row.path("disabled_reason").isTextual()) {
+      normalized.put("disabled_reason", row.path("disabled_reason").asText());
+    }
 
     if (row.path("description").isTextual()) {
       normalized.put("description", row.path("description").asText());
@@ -688,6 +765,18 @@ public class PatchLoopController {
       normalized.put("args_schema", objectMapper.convertValue(row.path("args_schema"), Map.class));
     }
     return normalized;
+  }
+
+  private String firstNonBlankText(String... candidates) {
+    if (candidates == null) {
+      return null;
+    }
+    for (String candidate : candidates) {
+      if (candidate != null && !candidate.isBlank()) {
+        return candidate.trim();
+      }
+    }
+    return null;
   }
 
   private String readStringMetadata(Map<String, Object> metadata, String key, String fallback) {

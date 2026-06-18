@@ -47,6 +47,7 @@ public class PatchLoopOrchestratorService {
   private final PatchLoopValidationArtifactRepository validationArtifactRepository;
   private final PatchLoopRetestArtifactRepository retestArtifactRepository;
   private final PatchLoopEvidenceArtifactRepository evidenceArtifactRepository;
+  private final PatchLoopSessionResolverService sessionResolverService;
 
   public PatchLoopOrchestratorService(
       PatchLoopIterationRepository iterationRepository,
@@ -58,7 +59,8 @@ public class PatchLoopOrchestratorService {
       PatchLoopPatchArtifactRepository patchArtifactRepository,
       PatchLoopValidationArtifactRepository validationArtifactRepository,
       PatchLoopRetestArtifactRepository retestArtifactRepository,
-      PatchLoopEvidenceArtifactRepository evidenceArtifactRepository) {
+      PatchLoopEvidenceArtifactRepository evidenceArtifactRepository,
+      PatchLoopSessionResolverService sessionResolverService) {
     this.iterationRepository = iterationRepository;
     this.eventRepository = eventRepository;
     this.eventPublisher = eventPublisher;
@@ -69,6 +71,7 @@ public class PatchLoopOrchestratorService {
     this.validationArtifactRepository = validationArtifactRepository;
     this.retestArtifactRepository = retestArtifactRepository;
     this.evidenceArtifactRepository = evidenceArtifactRepository;
+    this.sessionResolverService = sessionResolverService;
   }
 
   /**
@@ -122,6 +125,11 @@ public class PatchLoopOrchestratorService {
       }
     }
 
+    var resolvedSession = sessionResolverService.resolveForIteration(iteration);
+    if (resolvedSession.isPresent()) {
+      sessionResolverService.applyResolvedSession(iteration, resolvedSession.get());
+    }
+
     // Store evidence config if provided
     if (request.getEvidenceConfig() != null) {
       try {
@@ -156,7 +164,9 @@ public class PatchLoopOrchestratorService {
     graphRequest.setExecutionMode(request.getNormalizedExecutionMode());
     graphRequest.setMaxAttempts(request.getMaxAttempts());
     graphRequest.setSuccessCriteria(request.getSuccessCriteria());
+    graphRequest.setSessionContext(request.getSessionContext());
     graphRequest.setEvidenceConfig(request.getEvidenceConfig());
+    graphRequest.setTaskMetadata(request.getTaskMetadata());
     graphRequest.setIterationId(iteration.getIterationId()); // Pass iterationId to reuse iteration
 
     // Delegate to graph orchestrator

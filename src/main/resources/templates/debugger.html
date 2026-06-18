@@ -372,11 +372,87 @@
           </button>
         </div>
 
+        <!-- Stabilization KPI Snapshot -->
+        <div class="task-planner-section">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label mb-0">Stabilization KPI</label>
+            <button class="btn btn-sm btn-outline-secondary" id="stabilizationRefreshBtn" title="Refresh KPI data">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <select id="stabilizationFamilyFilter" class="form-select form-select-sm">
+                <option value="">All families</option>
+                <option value="quest">Quest</option>
+                <option value="boss">Boss</option>
+                <option value="skilling">Skilling</option>
+                <option value="utility">Utility</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <select id="stabilizationHistoryLimit" class="form-select form-select-sm">
+                <option value="5">Last 5 snapshots</option>
+                <option value="10" selected>Last 10 snapshots</option>
+                <option value="20">Last 20 snapshots</option>
+              </select>
+            </div>
+          </div>
+          <div id="stabilizationSummary" class="d-flex flex-wrap gap-2 mb-2">
+            <div class="stabilization-stat"><div class="small text-muted">24h runs</div><div class="fw-bold fs-6">0</div></div>
+            <div class="stabilization-stat"><div class="small text-muted">7d runs</div><div class="fw-bold fs-6">0</div></div>
+            <div class="stabilization-stat"><div class="small text-muted">Open triage</div><div class="fw-bold fs-6">0</div></div>
+            <div class="stabilization-stat"><div class="small text-muted">Regressions</div><div class="fw-bold fs-6">0</div></div>
+          </div>
+          <div class="table-responsive mb-2">
+            <table class="table table-sm table-dark table-striped mb-0">
+              <thead>
+                <tr>
+                  <th>Script</th>
+                  <th>Family</th>
+                  <th>24h</th>
+                  <th>Pass%</th>
+                  <th>Reg.</th>
+                  <th>Top failure</th>
+                </tr>
+              </thead>
+              <tbody id="stabilizationScripts">
+                <tr><td colspan="6" class="text-muted small">No KPI data yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-responsive mb-2">
+            <table class="table table-sm table-dark table-striped mb-0">
+              <thead>
+                <tr>
+                  <th>Report</th>
+                  <th>Script</th>
+                  <th>Family</th>
+                  <th>Pass</th>
+                  <th>Timeout</th>
+                  <th>Regression</th>
+                </tr>
+              </thead>
+              <tbody id="stabilizationHistory">
+                <tr><td colspan="6" class="text-muted small">No history yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ul class="list-group list-group-flush" id="stabilizationRegressions">
+            <li class="list-group-item text-muted small">No regressions detected.</li>
+          </ul>
+        </div>
+
         <!-- Plans List -->
         <div class="task-planner-section">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Task Plans</label>
             <span class="badge bg-secondary" id="planCountBadge">0 plans</span>
+          </div>
+          <div class="mb-2">
+            <select id="taskPlanAccountSelect" class="form-select form-select-sm">
+              <option value="">All accounts</option>
+            </select>
           </div>
           <div id="plansList" class="task-plans-list">
             <div class="text-muted small fst-italic">No task plans yet. Generate one above.</div>

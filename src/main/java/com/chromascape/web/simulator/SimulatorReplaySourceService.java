@@ -112,6 +112,7 @@ public class SimulatorReplaySourceService {
       Map.of(
           "worldX", "x",
           "worldY", "z",
+          "y", "z",
           "currentHp", "hp",
           "currentPrayer", "prayer");
 
@@ -164,6 +165,9 @@ public class SimulatorReplaySourceService {
       frame.setGameObjects(snapshot.getGameObjects());
       frame.setGroundObjects(snapshot.getGroundObjects());
       frame.setGroundItems(snapshot.getGroundItems());
+      frame.setPlayers(snapshot.getPlayers());
+      frame.setWidgets(snapshot.getWidgets());
+      frame.setSchemaVersion(snapshot.getSchemaVersion());
       frames.add(frame);
     }
 

@@ -5,6 +5,7 @@ import com.chromascape.web.accounttask.entity.TaskPlanStatus;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 /** Spring Data JPA repository for {@link TaskPlan} entities. */
@@ -24,4 +25,10 @@ public interface TaskPlanRepository extends JpaRepository<TaskPlan, Long> {
   List<TaskPlan> findBySourceSessionId(String sessionId);
 
   List<TaskPlan> findBySourceRecordingId(String recordingId);
+
+  @Query("SELECT p FROM TaskPlan p WHERE p.accountName IS NULL OR TRIM(p.accountName) = '' ORDER BY p.createdAt DESC")
+  List<TaskPlan> findUnassignedOrderByCreatedAtDesc();
+
+  @Query("SELECT p FROM TaskPlan p WHERE p.accountName IS NULL OR TRIM(p.accountName) = ''")
+  List<TaskPlan> findUnassigned();
 }

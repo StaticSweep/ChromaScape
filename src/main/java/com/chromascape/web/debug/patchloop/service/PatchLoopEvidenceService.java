@@ -10,7 +10,6 @@ import com.chromascape.web.debug.patchloop.dto.TickWindow;
 import com.chromascape.web.debug.patchloop.dto.TimeWindow;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIteration;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
-import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickLog;
 import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
 import com.chromascape.web.decisions.entity.DecisionEntity;
@@ -46,17 +45,17 @@ public class PatchLoopEvidenceService {
   private final LogRepository logRepository;
   private final TickLogRepository tickLogRepository;
   private final DecisionRepository decisionRepository;
-  private final DebugSessionRepository debugSessionRepository;
+  private final PatchLoopSessionResolverService sessionResolverService;
 
   public PatchLoopEvidenceService(
       LogRepository logRepository,
       TickLogRepository tickLogRepository,
       DecisionRepository decisionRepository,
-      DebugSessionRepository debugSessionRepository) {
+      PatchLoopSessionResolverService sessionResolverService) {
     this.logRepository = logRepository;
     this.tickLogRepository = tickLogRepository;
     this.decisionRepository = decisionRepository;
-    this.debugSessionRepository = debugSessionRepository;
+    this.sessionResolverService = sessionResolverService;
   }
 
   /**
@@ -182,32 +181,14 @@ public class PatchLoopEvidenceService {
    * @return tick window if available
    */
   private Optional<TickWindow> determineTickWindow(PatchLoopIteration iteration) {
-    if (iteration.getRunSessionId() == null) {
-      // Try to find most recent session for this script
-      Optional<DebugSession> session =
-          debugSessionRepository.findFirstByScriptNameOrderByStartTimeDesc(
-              iteration.getScriptName());
-
-      if (session.isPresent()) {
-        iteration.setRunSessionId(session.get().getSessionId());
-        if (session.get().getRecordingId() != null) {
-          iteration.setRunRecordingId(session.get().getRecordingId());
-        }
-        return Optional.of(
-            new TickWindow(session.get().getStartTick(), session.get().getEndTick()));
-      }
+    Optional<PatchLoopSessionResolverService.ResolvedSessionContext> resolved =
+        sessionResolverService.resolveForIteration(iteration);
+    if (resolved.isEmpty()) {
       return Optional.empty();
     }
 
-    // Load session by ID
-    Optional<DebugSession> session =
-        debugSessionRepository.findBySessionId(iteration.getRunSessionId());
-    if (session.isEmpty()) {
-      logger.warn("Debug session {} not found", iteration.getRunSessionId());
-      return Optional.empty();
-    }
-
-    DebugSession s = session.get();
+    sessionResolverService.applyResolvedSession(iteration, resolved.get());
+    DebugSession s = resolved.get().getSession();
     return Optional.of(new TickWindow(s.getStartTick(), s.getEndTick()));
   }
 

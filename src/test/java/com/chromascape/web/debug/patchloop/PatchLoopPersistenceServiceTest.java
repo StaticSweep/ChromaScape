@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +30,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class PatchLoopPersistenceServiceTest {
 
   @Mock private PatchLoopIterationRepository iterationRepository;
+
+  @Mock private PatchLoopGraphExecutionRepository graphExecutionRepository;
 
   @InjectMocks private PatchLoopPersistenceService persistenceService;
 
@@ -386,6 +389,102 @@ class PatchLoopPersistenceServiceTest {
     verify(iterationRepository).save(iteration);
     assertNull(iteration.getPatchId(), "patchId should be null when patchDraft is missing");
     assertEquals("Script failed", iteration.getDiagnosisSummary());
+  }
+
+  // ==================== markGraphExecutionFailed Tests ====================
+
+  @Test
+  void markGraphExecutionFailed_marksBothExecutionAndIterationAsFailed() {
+    // Given
+    String iterId = "iter-123";
+    PatchLoopGraphExecution graphExecution = new PatchLoopGraphExecution();
+    graphExecution.setExecutionId("exec-123");
+    graphExecution.setIterationId(iterId);
+    graphExecution.setExecutionStatus(GraphExecutionStatus.RUNNING);
+
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId(iterId);
+    iteration.setStatus(PatchLoopStatus.RUNNING_SCRIPT);
+
+    when(graphExecutionRepository.findByExecutionId("exec-123"))
+        .thenReturn(Optional.of(graphExecution));
+    when(iterationRepository.findByIterationId(iterId)).thenReturn(Optional.of(iteration));
+    when(graphExecutionRepository.save(any(PatchLoopGraphExecution.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    // When
+    persistenceService.markGraphExecutionFailed(
+        "exec-123", PatchLoopFailureCode.INTERNAL_ERROR, "Async submission failed");
+
+    // Then
+    verify(graphExecutionRepository).save(graphExecution);
+    assertEquals(GraphExecutionStatus.FAILED, graphExecution.getExecutionStatus());
+    assertEquals("FAILED", graphExecution.getFinalStatus());
+    assertEquals("Async submission failed", graphExecution.getStopReason());
+    assertNotNull(graphExecution.getCompletedAt());
+
+    verify(iterationRepository).save(iteration);
+    assertEquals(PatchLoopStatus.FAILED, iteration.getStatus());
+    assertEquals(PatchLoopFailureCode.INTERNAL_ERROR, iteration.getFailureCode());
+  }
+
+  @Test
+  void markGraphExecutionFailed_skipsIfExecutionAlreadyTerminal() {
+    // Given
+    String iterId = "iter-456";
+    PatchLoopGraphExecution graphExecution = new PatchLoopGraphExecution();
+    graphExecution.setExecutionId("exec-456");
+    graphExecution.setIterationId(iterId);
+    graphExecution.setExecutionStatus(GraphExecutionStatus.COMPLETED);
+    graphExecution.setFinalStatus("COMPLETED");
+
+    when(graphExecutionRepository.findByExecutionId("exec-456"))
+        .thenReturn(Optional.of(graphExecution));
+    when(iterationRepository.findByIterationId(iterId)).thenReturn(Optional.empty());
+
+    // When
+    persistenceService.markGraphExecutionFailed(
+        "exec-456", PatchLoopFailureCode.INTERNAL_ERROR, "Should not apply");
+
+    // Then: graph execution should NOT be overwritten
+    assertEquals(GraphExecutionStatus.COMPLETED, graphExecution.getExecutionStatus());
+    assertEquals("COMPLETED", graphExecution.getFinalStatus());
+  }
+
+  @Test
+  void markGraphExecutionFailed_handlesExecutionNotFound() {
+    // Given
+    when(graphExecutionRepository.findByExecutionId("nonexistent")).thenReturn(Optional.empty());
+
+    // When - should not throw
+    persistenceService.markGraphExecutionFailed(
+        "nonexistent", PatchLoopFailureCode.INTERNAL_ERROR, "Not found");
+
+    // Then: no saves attempted
+    verify(graphExecutionRepository, never()).save(any());
+    verify(iterationRepository, never()).save(any());
+  }
+
+  @Test
+  void markGraphExecutionFailed_handlesNullIterationId() {
+    // Given
+    PatchLoopGraphExecution graphExecution = new PatchLoopGraphExecution();
+    graphExecution.setExecutionId("exec-789");
+    graphExecution.setIterationId(null); // no iteration linked
+    graphExecution.setExecutionStatus(GraphExecutionStatus.CREATED);
+
+    when(graphExecutionRepository.findByExecutionId("exec-789"))
+        .thenReturn(Optional.of(graphExecution));
+    when(graphExecutionRepository.save(any(PatchLoopGraphExecution.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    // When - should not throw
+    persistenceService.markGraphExecutionFailed(
+        "exec-789", PatchLoopFailureCode.INTERNAL_ERROR, "No iteration");
+
+    // Then: graph marked failed, no iteration save attempted
+    assertEquals(GraphExecutionStatus.FAILED, graphExecution.getExecutionStatus());
+    verify(iterationRepository, never()).save(any());
   }
 
   // ==================== Helper Methods ====================

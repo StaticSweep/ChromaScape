@@ -29,6 +29,9 @@ public class ShadowPolicyService {
   @Value("${features.ai-player.shadow-mode:false}")
   private boolean shadowMode;
 
+  @Value("${features.ai-player.control-enabled:false}")
+  private boolean controlEnabled;
+
   public ShadowPolicyService(DecisionRepository decisionRepository) {
     this.decisionRepository = decisionRepository;
   }
@@ -47,7 +50,8 @@ public class ShadowPolicyService {
     }
 
     String sessionId = "shadow_" + UUID.randomUUID().toString().substring(0, 8);
-    log.info("Shadow session started: {} for account={}, script={}", sessionId, accountName, scriptName);
+    log.info(
+        "Shadow session started: {} for account={}, script={}", sessionId, accountName, scriptName);
     return sessionId;
   }
 
@@ -107,5 +111,13 @@ public class ShadowPolicyService {
 
   public boolean isShadowMode() {
     return shadowMode;
+  }
+
+  public boolean isControlEnabled() {
+    return controlEnabled;
+  }
+
+  public boolean isControlAllowed() {
+    return enabled && controlEnabled;
   }
 }

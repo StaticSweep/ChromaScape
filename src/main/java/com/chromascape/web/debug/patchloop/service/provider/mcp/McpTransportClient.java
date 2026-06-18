@@ -90,10 +90,7 @@ public class McpTransportClient {
         String responseBody = response.body();
 
         if (statusCode >= 200 && statusCode < 300) {
-          logger.debug(
-              "MCP health check successful (attempt {}): status {}",
-              attempt,
-              statusCode);
+          logger.debug("MCP health check successful (attempt {}): status {}", attempt, statusCode);
           return parseHealthResponse(responseBody);
         }
 
@@ -107,11 +104,9 @@ public class McpTransportClient {
               structuredHealth.isHealthy());
           return structuredHealth;
         } else {
-          logger.warn(
-              "MCP health check failed (attempt {}): HTTP {}", attempt, statusCode);
+          logger.warn("MCP health check failed (attempt {}): HTTP {}", attempt, statusCode);
 
-          McpTransportException.McpErrorType errorType =
-              determineHttpErrorType(statusCode);
+          McpTransportException.McpErrorType errorType = determineHttpErrorType(statusCode);
           boolean isRetryable = isRetryableHttpError(statusCode);
 
           if (!isRetryable || attempt >= maxAttempts) {

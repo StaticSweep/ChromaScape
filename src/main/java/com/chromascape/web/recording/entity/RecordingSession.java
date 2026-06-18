@@ -69,6 +69,14 @@ public class RecordingSession {
   @Column(length = 50)
   private String videoCodec;
 
+  /** User-defined replay name (nullable). If set, used as displayName; otherwise auto-generated. */
+  @Column(length = 160)
+  private String replayName;
+
+  /** Tags stored as JSON array string (nullable). Normalized in service layer. */
+  @Column(columnDefinition = "TEXT")
+  private String replayTagsJson;
+
   /** Default constructor required by JPA. */
   public RecordingSession() {}
 
@@ -184,5 +192,21 @@ public class RecordingSession {
 
   public void setVideoCodec(String videoCodec) {
     this.videoCodec = videoCodec;
+  }
+
+  public String getReplayName() {
+    return replayName;
+  }
+
+  public void setReplayName(String replayName) {
+    this.replayName = replayName;
+  }
+
+  public String getReplayTagsJson() {
+    return replayTagsJson;
+  }
+
+  public void setReplayTagsJson(String replayTagsJson) {
+    this.replayTagsJson = replayTagsJson;
   }
 }

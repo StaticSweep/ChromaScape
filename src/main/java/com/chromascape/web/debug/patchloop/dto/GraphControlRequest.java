@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * Request to control a running graph execution.
  *
- * <p>Supports pause, resume, cancel, and retry-from-node operations.
+ * <p>Supports pause, resume, cancel, retry-from-node, and relaunch-if-created operations.
  */
 public class GraphControlRequest {
 
@@ -102,6 +102,14 @@ public class GraphControlRequest {
     return request;
   }
 
+  /** Creates a RELAUNCH_IF_CREATED control request. */
+  public static GraphControlRequest relaunchIfCreated(String reason) {
+    GraphControlRequest request = new GraphControlRequest();
+    request.setAction(ControlAction.RELAUNCH_IF_CREATED);
+    request.setReason(reason);
+    return request;
+  }
+
   /** Creates a SKIP control request. */
   public static GraphControlRequest skip() {
     GraphControlRequest request = new GraphControlRequest();
@@ -129,6 +137,9 @@ public class GraphControlRequest {
 
     /** Retry from a specific node */
     RETRY_FROM_NODE,
+
+    /** Relaunch async execution if still in CREATED and no node has started */
+    RELAUNCH_IF_CREATED,
 
     /** Skip current node and move to next */
     SKIP,

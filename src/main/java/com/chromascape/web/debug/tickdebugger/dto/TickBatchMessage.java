@@ -15,6 +15,8 @@ public class TickBatchMessage {
 
   /** Message type identifier. */
   private final String type;
+  /** Replay schema version for strict compatibility checks. */
+  private final Integer schemaVersion;
 
   /** The debug session ID. */
   private final String sessionId;
@@ -63,10 +65,15 @@ public class TickBatchMessage {
 
   /** Ground items. */
   private final List<Map<String, Object>> groundItems;
+  /** Nearby players. */
+  private final List<Map<String, Object>> players;
+  /** Widget state subset. */
+  private final List<Map<String, Object>> widgets;
 
   @JsonCreator
   public TickBatchMessage(
       @JsonProperty("type") String type,
+      @JsonProperty("schemaVersion") Integer schemaVersion,
       @JsonProperty("sessionId") String sessionId,
       @JsonProperty("tick") long tick,
       @JsonProperty("timestamp") String timestamp,
@@ -82,8 +89,11 @@ public class TickBatchMessage {
       @JsonProperty("npcs") List<Map<String, Object>> npcs,
       @JsonProperty("gameObjects") List<Map<String, Object>> gameObjects,
       @JsonProperty("groundObjects") List<Map<String, Object>> groundObjects,
-      @JsonProperty("groundItems") List<Map<String, Object>> groundItems) {
+      @JsonProperty("groundItems") List<Map<String, Object>> groundItems,
+      @JsonProperty("players") List<Map<String, Object>> players,
+      @JsonProperty("widgets") List<Map<String, Object>> widgets) {
     this.type = type;
+    this.schemaVersion = schemaVersion;
     this.sessionId = sessionId;
     this.tick = tick;
     this.timestamp = timestamp;
@@ -100,10 +110,15 @@ public class TickBatchMessage {
     this.gameObjects = gameObjects;
     this.groundObjects = groundObjects;
     this.groundItems = groundItems;
+    this.players = players;
+    this.widgets = widgets;
   }
 
   public String getType() {
     return type;
+  }
+  public Integer getSchemaVersion() {
+    return schemaVersion;
   }
 
   public String getSessionId() {
@@ -168,6 +183,12 @@ public class TickBatchMessage {
 
   public List<Map<String, Object>> getGroundItems() {
     return groundItems;
+  }
+  public List<Map<String, Object>> getPlayers() {
+    return players;
+  }
+  public List<Map<String, Object>> getWidgets() {
+    return widgets;
   }
 
   /** Individual log entry within a tick batch. */

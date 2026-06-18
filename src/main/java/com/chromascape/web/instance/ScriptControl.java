@@ -60,7 +60,8 @@ public class ScriptControl {
 
       // Instantiate and start the script instance
       ScriptInstance instance =
-          new ScriptInstance(config, stateHandler, taskDetectionService, config.taskPlanId(), config.taskItemId());
+          new ScriptInstance(
+              config, stateHandler, taskDetectionService, config.taskPlanId(), config.taskItemId());
       ScriptInstanceManager.getInstance().setInstance(instance);
       instance.start();
 

@@ -16,6 +16,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Orchestrator for Mermaid-defined patch loop graph execution.
@@ -46,6 +48,9 @@ public class PatchLoopGraphOrchestratorService {
   private final PatchLoopEvidenceArtifactRepository evidenceArtifactRepository;
   private final ObjectMapper objectMapper;
   private final PatchLoopAsyncWorker patchLoopAsyncWorker;
+  private final ScriptExecutionService scriptExecutionService;
+  private final PatchLoopPersistenceService persistenceService;
+  private final PatchLoopSessionResolverService sessionResolverService;
 
   @Autowired
   public PatchLoopGraphOrchestratorService(
@@ -64,7 +69,10 @@ public class PatchLoopGraphOrchestratorService {
       PatchLoopAnalysisArtifactRepository analysisArtifactRepository,
       PatchLoopEvidenceArtifactRepository evidenceArtifactRepository,
       ObjectMapper objectMapper,
-      PatchLoopAsyncWorker patchLoopAsyncWorker) {
+      PatchLoopAsyncWorker patchLoopAsyncWorker,
+      ScriptExecutionService scriptExecutionService,
+      PatchLoopPersistenceService persistenceService,
+      PatchLoopSessionResolverService sessionResolverService) {
     this.compiler = compiler;
     this.executor = executor;
     this.executionRepository = executionRepository;
@@ -81,6 +89,9 @@ public class PatchLoopGraphOrchestratorService {
     this.evidenceArtifactRepository = evidenceArtifactRepository;
     this.objectMapper = objectMapper;
     this.patchLoopAsyncWorker = patchLoopAsyncWorker;
+    this.scriptExecutionService = scriptExecutionService;
+    this.persistenceService = persistenceService;
+    this.sessionResolverService = sessionResolverService;
   }
 
   /**
@@ -139,6 +150,13 @@ public class PatchLoopGraphOrchestratorService {
         request.getSuccessCriteria() != null
             ? objectMapper.valueToTree(request.getSuccessCriteria())
             : null);
+    if (request.getSessionContext() != null) {
+      iteration.setSessionContext(objectMapper.valueToTree(request.getSessionContext()));
+    }
+    var resolvedSession = sessionResolverService.resolveForIteration(iteration);
+    if (resolvedSession.isPresent()) {
+      sessionResolverService.applyResolvedSession(iteration, resolvedSession.get());
+    }
     iterationRepository.save(iteration);
 
     // Build execution context
@@ -155,16 +173,16 @@ public class PatchLoopGraphOrchestratorService {
                     ? objectMapper.valueToTree(request.getSuccessCriteria())
                     : null)
             .policy(request.getPolicy())
-            .executionMode(request.getExecutionMode())
+            .executionMode(request.getNormalizedExecutionMode())
             .evidenceConfig(request.getEvidenceConfig())
             .runtimeData(new HashMap<>())
+            .taskMetadata(request.getTaskMetadata())
             .build();
 
     // Broadcast execution started
     webSocketHandler.broadcastStatusChange(executionId, "CREATED");
 
-    // Execute the graph asynchronously via PatchLoopAsyncWorker (cross-bean call for proper @Async)
-    patchLoopAsyncWorker.executeGraphAsync(executionId, graph, context);
+    scheduleAsyncGraphExecution(executionId, graph, context);
 
     // Build response
     GraphExecuteResponse response = new GraphExecuteResponse();
@@ -259,6 +277,9 @@ public class PatchLoopGraphOrchestratorService {
     } else if (execution.getExecutionStatus() == GraphExecutionStatus.PAUSED) {
       actions.add("RESUME");
       actions.add("CANCEL");
+    } else if (execution.getExecutionStatus() == GraphExecutionStatus.CREATED) {
+      actions.add("RELAUNCH_IF_CREATED");
+      actions.add("CANCEL");
     }
     response.setAvailableActions(actions);
 
@@ -296,6 +317,7 @@ public class PatchLoopGraphOrchestratorService {
         }
 
         executor.pauseExecution(executionId);
+        scriptExecutionService.pauseScript(executionId);
         webSocketHandler.broadcastStatusChange(executionId, "PAUSED");
       }
       case RESUME -> {
@@ -313,6 +335,7 @@ public class PatchLoopGraphOrchestratorService {
         }
 
         // Use async worker to avoid blocking the HTTP response
+        scriptExecutionService.resumeScript(executionId);
         patchLoopAsyncWorker.resumeExecutionAsync(executionId);
         webSocketHandler.broadcastStatusChange(executionId, "RUNNING");
       }
@@ -329,6 +352,7 @@ public class PatchLoopGraphOrchestratorService {
         }
 
         executor.cancelExecution(executionId, request.getReason());
+        scriptExecutionService.stopScript(executionId, request.getReason());
         webSocketHandler.broadcastStatusChange(executionId, "CANCELLED");
       }
       case RETRY_FROM_NODE -> {
@@ -363,6 +387,37 @@ public class PatchLoopGraphOrchestratorService {
         // Use async worker to avoid blocking the HTTP response
         patchLoopAsyncWorker.retryFromNodeAsync(executionId, nodeId);
         webSocketHandler.broadcastStatusChange(executionId, "RETRYING");
+      }
+      case RELAUNCH_IF_CREATED -> {
+        PatchLoopGraphExecution execution =
+            executionRepository
+                .findByExecutionId(executionId)
+                .orElseThrow(
+                    () -> new GraphExecutionException("Execution not found: " + executionId));
+
+        if (execution.getExecutionStatus() != GraphExecutionStatus.CREATED) {
+          throw new GraphExecutionException(
+              "Cannot relaunch execution in state: "
+                  + execution.getExecutionStatus()
+                  + ". RELAUNCH_IF_CREATED only allowed from CREATED state.");
+        }
+
+        // Relaunch is only safe before any node execution has begun.
+        List<PatchLoopGraphNode> nodes =
+            nodeRepository.findByExecutionIdOrderByStartedAtAsc(executionId);
+        if (!nodes.isEmpty()) {
+          throw new GraphExecutionException(
+              "Cannot relaunch execution once nodes have started. Use RESUME/CANCEL instead.");
+        }
+
+        LoopGraph graph = loadGraph(execution.getGraphJson());
+        if (graph == null) {
+          throw new GraphExecutionException("Graph is null for execution: " + executionId);
+        }
+
+        GraphExecutionContext context = buildExecutionContext(iteration, execution);
+        scheduleAsyncGraphExecution(executionId, graph, context);
+        webSocketHandler.broadcastStatusChange(executionId, "RELAUNCHING_CREATED");
       }
       default -> throw new IllegalArgumentException("Unsupported action: " + request.getAction());
     }
@@ -441,6 +496,77 @@ public class PatchLoopGraphOrchestratorService {
 
   // Helper methods
 
+  private void scheduleAsyncGraphExecution(
+      String executionId, LoopGraph graph, GraphExecutionContext context) {
+    // Schedule async execution AFTER the transaction commits to avoid the race condition
+    // where the async thread starts before the DB records are visible.
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              launchAsyncGraphExecution(executionId, graph, context);
+            }
+          });
+      return;
+    }
+
+    // No active transaction (e.g. test or non-transactional caller) — launch immediately
+    launchAsyncGraphExecution(executionId, graph, context);
+  }
+
+  /**
+   * Launches async graph execution, persisting terminal failure if submission fails.
+   *
+   * <p>This method runs outside any transaction (afterCommit callback or immediate). If the async
+   * submission itself throws, the graph execution and iteration are marked as FAILED so they don't
+   * remain stuck in CREATED.
+   */
+  private void launchAsyncGraphExecution(
+      String executionId, LoopGraph graph, GraphExecutionContext context) {
+    try {
+      patchLoopAsyncWorker.executeGraphAsync(executionId, graph, context);
+    } catch (Exception e) {
+      logger.error("Failed to submit async graph execution {}: {}", executionId, e.getMessage(), e);
+      try {
+        persistenceService.markGraphExecutionFailed(
+            executionId,
+            PatchLoopFailureCode.INTERNAL_ERROR,
+            "Async submission failed: " + e.getMessage());
+      } catch (Exception persistEx) {
+        logger.error(
+            "Failed to persist terminal failure for execution {}: {}",
+            executionId,
+            persistEx.getMessage());
+      }
+    }
+  }
+
+  private GraphExecutionContext buildExecutionContext(
+      PatchLoopIteration iteration, PatchLoopGraphExecution execution) {
+    return GraphExecutionContext.builder()
+        .executionId(execution.getExecutionId())
+        .iterationId(iteration.getIterationId())
+        .scriptName(iteration.getScriptName())
+        .goalPrompt(iteration.getPrompt())
+        .context(iteration.getContext())
+        .maxAttempts(iteration.getMaxAttempts())
+        .successCriteria(iteration.getSuccessCriteria())
+        .policy(
+            execution.getPolicyJson() != null
+                ? objectMapper.convertValue(
+                    execution.getPolicyJson(), GraphExecuteRequest.PatchPolicyConfig.class)
+                : null)
+        .executionMode(iteration.getExecutionMode())
+        .evidenceConfig(
+            iteration.getEvidenceConfig() != null
+                ? objectMapper.convertValue(iteration.getEvidenceConfig(), EvidenceConfigDto.class)
+                : null)
+        .runtimeData(new HashMap<>())
+        .taskMetadata(new HashMap<>())
+        .build();
+  }
+
   private PatchLoopIteration createIteration(GraphExecuteRequest request) {
     // For now, create a new iteration
     // In real implementation, might reuse existing iteration
@@ -455,6 +581,13 @@ public class PatchLoopGraphOrchestratorService {
             : null);
     iteration.setExecutionMode(request.getNormalizedExecutionMode());
     iteration.setMaxAttempts(request.getMaxAttempts());
+    if (request.getSessionContext() != null) {
+      iteration.setSessionContext(objectMapper.valueToTree(request.getSessionContext()));
+    }
+    var resolvedSession = sessionResolverService.resolveForIteration(iteration);
+    if (resolvedSession.isPresent()) {
+      sessionResolverService.applyResolvedSession(iteration, resolvedSession.get());
+    }
     iterationRepository.save(iteration);
     return iteration;
   }
@@ -763,7 +896,8 @@ public class PatchLoopGraphOrchestratorService {
       artifact.setTerminalStatus("FAILED");
     }
 
-    boolean success = readBoolean(outputData, "success", entity.getStatus() == NodeExecutionStatus.COMPLETED);
+    boolean success =
+        readBoolean(outputData, "success", entity.getStatus() == NodeExecutionStatus.COMPLETED);
     artifact.setSuccess(success);
 
     String errorFromOutput = readText(outputData, "errorMessage", null);

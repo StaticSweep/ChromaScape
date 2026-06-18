@@ -113,7 +113,8 @@ public class TaskDetectionService {
    * falling back to heuristic detection.
    */
   public void onPlanTaskDetected(String taskPlanId, String taskItemId, String context) {
-    log.info("Plan-linked task detected: plan={}, item={}, context={}", taskPlanId, taskItemId, context);
+    log.info(
+        "Plan-linked task detected: plan={}, item={}, context={}", taskPlanId, taskItemId, context);
     this.currentTaskPlanId = taskPlanId;
     this.currentTaskItemId = taskItemId;
 
@@ -121,13 +122,13 @@ public class TaskDetectionService {
     if (taskPreferenceService.isTaskEnabled(TaskType.OTHER)) {
       log.info("Auto-starting recording for plan task: {}/{}", taskPlanId, taskItemId);
       String recordingId =
-          recordingService.startRecordingAuto(
-              "plan-task", RecordingTriggerSource.TASK_AUTO);
+          recordingService.startRecordingAuto("plan-task", RecordingTriggerSource.TASK_AUTO);
       currentTask = TaskType.OTHER;
 
       if (recordingId != null) {
         LocalDateTime startTime = recordingService.getRecordingStartTimeAsLocalDateTime();
-        if (startTime != null && recordingSessionRepository.findByRecordingId(recordingId).isEmpty()) {
+        if (startTime != null
+            && recordingSessionRepository.findByRecordingId(recordingId).isEmpty()) {
           RecordingSession session =
               new RecordingSession(
                   recordingId,

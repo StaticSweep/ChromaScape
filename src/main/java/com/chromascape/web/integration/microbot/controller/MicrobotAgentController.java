@@ -1,10 +1,11 @@
 package com.chromascape.web.integration.microbot.controller;
 
+import com.chromascape.web.integration.adapter.BotRuntimeAdapter;
 import com.chromascape.web.integration.adapter.RuntimeAction;
 import com.chromascape.web.integration.adapter.RuntimeAdapterRegistry;
 import com.chromascape.web.integration.adapter.RuntimeStateSnapshot;
-import com.chromascape.web.integration.adapter.BotRuntimeAdapter;
 import com.chromascape.web.integration.microbot.adapter.MicrobotAgentServerAdapter;
+import com.chromascape.web.integration.microbot.config.MicrobotAgentConfig;
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -32,16 +33,20 @@ public class MicrobotAgentController {
   private static final Logger logger = LoggerFactory.getLogger(MicrobotAgentController.class);
 
   private final RuntimeAdapterRegistry adapterRegistry;
+  private final MicrobotAgentConfig config;
 
   @Autowired
-  public MicrobotAgentController(RuntimeAdapterRegistry adapterRegistry) {
+  public MicrobotAgentController(
+      RuntimeAdapterRegistry adapterRegistry, MicrobotAgentConfig config) {
     this.adapterRegistry = adapterRegistry;
+    this.config = config;
   }
 
   /** Health check for the Microbot Agent Server adapter. */
   @GetMapping("/health")
   public ResponseEntity<Map<String, Object>> health() {
     Map<String, Object> response = new HashMap<>();
+    response.put("configuredBaseUrl", config.getBaseUrl());
     var adapter = adapterRegistry.getAdapter("microbot-agent");
     if (adapter.isPresent()) {
       BotRuntimeAdapter a = adapter.get();
@@ -83,7 +88,8 @@ public class MicrobotAgentController {
 
   /** Script lifecycle passthrough - receives script start/stop events. */
   @PostMapping("/script-lifecycle")
-  public ResponseEntity<Map<String, Object>> scriptLifecycle(@RequestBody Map<String, Object> event) {
+  public ResponseEntity<Map<String, Object>> scriptLifecycle(
+      @RequestBody Map<String, Object> event) {
     logger.info("Script lifecycle event from Microbot Agent: {}", event);
     var adapter = adapterRegistry.getAdapter("microbot-agent");
     if (adapter.isPresent() && adapter.get() instanceof MicrobotAgentServerAdapter agentAdapter) {

@@ -4,7 +4,7 @@ import com.chromascape.web.debug.patchloop.entity.NodeType;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -64,7 +64,7 @@ public class PatchLoopGraphCompiler {
 
     LoopGraph graph = new LoopGraph();
     graph.setMermaidSource(mermaidSource);
-    Set<String> nodeIds = new HashSet<>();
+    Set<String> nodeIds = new LinkedHashSet<>();
     List<String> warnings = new ArrayList<>();
 
     // Parse the Mermaid source
@@ -130,35 +130,46 @@ public class PatchLoopGraphCompiler {
     // Normalize the source
     String normalized = source.replaceAll("\\r\\n", "\n").trim();
 
-    // Split into lines and parse each line
-    for (String line : normalized.split("\n")) {
-      line = line.trim();
-
-      // Skip empty lines and comments
+    // Split into lines and parse each line (a line may contain both node declarations and an edge)
+    for (String rawLine : normalized.split("\n")) {
+      String line = rawLine.trim();
       if (line.isEmpty() || line.startsWith("%%")) {
         continue;
       }
 
-      // Skip the graph declaration line
-      if (GRAPH_DECLARATION.matcher(line).matches()) {
+      // Handle single-line mermaid with graph declaration and statements.
+      line = line.replaceFirst("^graph\\s+(TD|LR)\\s*;?\\s*", "");
+      if (line.isEmpty()) {
         continue;
       }
 
-      // Try to parse as edge FIRST (before node) to handle lines with both patterns
-      Matcher edgeMatcher = EDGE_PATTERN.matcher(line);
-      if (edgeMatcher.find()) {
-        statements.add(new MermaidStatement(StatementType.EDGE, edgeMatcher.group(0), edgeMatcher));
-        continue;
-      }
+      for (String part : line.split(";")) {
+        String stmtSource = part.trim();
+        if (stmtSource.isEmpty() || stmtSource.startsWith("%%")) {
+          continue;
+        }
+        if (GRAPH_DECLARATION.matcher(stmtSource).matches()) {
+          continue;
+        }
 
-      // Try to parse as node
-      Matcher nodeMatcher = NODE_PATTERN.matcher(line);
-      if (nodeMatcher.find()) {
-        statements.add(new MermaidStatement(StatementType.NODE, nodeMatcher.group(0), nodeMatcher));
-        continue;
-      }
+        boolean recognized = false;
 
-      logger.warn("Unrecognized statement: {}", line);
+        Matcher nodeMatcher = NODE_PATTERN.matcher(stmtSource);
+        while (nodeMatcher.find()) {
+          statements.add(new MermaidStatement(StatementType.NODE, nodeMatcher.group(0)));
+          recognized = true;
+        }
+
+        Matcher edgeMatcher = EDGE_PATTERN.matcher(stmtSource);
+        while (edgeMatcher.find()) {
+          statements.add(new MermaidStatement(StatementType.EDGE, edgeMatcher.group(0)));
+          recognized = true;
+        }
+
+        if (!recognized) {
+          logger.warn("Unrecognized statement: {}", stmtSource);
+        }
+      }
     }
 
     return statements;
@@ -167,7 +178,11 @@ public class PatchLoopGraphCompiler {
   /** Parses a node statement and adds it to the graph. */
   private void parseAndAddNode(
       MermaidStatement stmt, LoopGraph graph, Set<String> nodeIds, List<String> warnings) {
-    Matcher matcher = stmt.matcher();
+    Matcher matcher = NODE_PATTERN.matcher(stmt.source());
+    if (!matcher.find()) {
+      warnings.add("Invalid node statement: " + stmt.source());
+      return;
+    }
     String nodeId = matcher.group(1);
     String nodeTypeLabel = matcher.group(2);
     String config = matcher.group(3);
@@ -192,7 +207,11 @@ public class PatchLoopGraphCompiler {
   /** Parses an edge statement and adds it to the graph. */
   private void parseAndAddEdge(
       MermaidStatement stmt, LoopGraph graph, Set<String> nodeIds, List<String> warnings) {
-    Matcher matcher = stmt.matcher();
+    Matcher matcher = EDGE_PATTERN.matcher(stmt.source());
+    if (!matcher.find()) {
+      warnings.add("Invalid edge statement: " + stmt.source());
+      return;
+    }
     String from = matcher.group(1);
     String edgeSyntax = matcher.group(2);
     String edgeLabel = matcher.group(3); // For -.label.-> syntax
@@ -303,5 +322,5 @@ public class PatchLoopGraphCompiler {
   }
 
   /** A parsed Mermaid statement. */
-  private record MermaidStatement(StatementType type, String source, Matcher matcher) {}
+  private record MermaidStatement(StatementType type, String source) {}
 }

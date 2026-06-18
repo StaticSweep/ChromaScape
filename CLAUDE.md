@@ -52,6 +52,7 @@ ChromaScape is a colour-based game automation framework with a Spring Boot web i
    - `web/debug/` - Tick-based debugger, AI inspector, timeline
    - `web/state/` - Bot state broadcasting
    - `web/integration/` - LeeuwBot API, Micro6 client integrations
+   - `web/simulator/` - Tick replay source service, replay control proxy, catalog/frames API
 
 3. **Frontend** - Static HTML/CSS/JS in `resources/templates/` and `resources/static/`
 
@@ -60,6 +61,7 @@ ChromaScape is a colour-based game automation framework with a Spring Boot web i
 - WebSocket streaming for real-time updates (`/ws/logs`, `/ws/viewport`, `/ws/overlay`, `/ws/bot-state`)
 - Producer-consumer with `BlockingQueue` for recording service
 - Listener interfaces (`BotStateListener`, `ViewportListener`) for reactive updates
+- Schema canonicalization at response time (`SimulatorReplaySourceService`) maps micro6 field names to OpenRune conventions
 
 ## Code Conventions
 
@@ -91,3 +93,18 @@ Recordings created before the timing fix (commit bf45d59) have `startTime` captu
 
 **Tick-Based Logs:**
 Tick logs from Micro6 are correlated to game ticks, which provide frame-accurate alignment for tick-based analysis regardless of timestamp precision.
+
+## Tick Replay System
+
+ChromaScape serves as the storage and API layer for deterministic tick replay between micro6 (recorder) and OpenRune (player).
+
+**Architecture:** See `docs/simulator/tick-replay-architecture.md` for the full end-to-end design.
+
+**Key endpoints:**
+- `GET /api/simulator/replay/source/catalog` — List recordings with tick snapshot data
+- `GET /api/simulator/replay/source/frames` — Paginated tick frame retrieval with schema canonicalization
+- `POST /api/replay/control/*` — Proxy to OpenRune replay control API (start, pause, resume, stop, seek, speed)
+
+**Schema canonicalization:** `SimulatorReplaySourceService` maps micro6 field names to OpenRune conventions at response time (worldX→x, worldY→z, currentHp→hp, currentPrayer→prayer). Items are passed through with their original slot fields — slot must come from source (micro6).
+
+**Pagination:** Uses bounded `limit+1` strategy to detect `hasMore` without loading entire result sets.

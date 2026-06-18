@@ -37,7 +37,6 @@ public class ScreenCaptureService implements FrameListener {
   private final UnifiedFrameCaptureService unifiedCaptureService;
   private final AtomicBoolean paused = new AtomicBoolean(false);
   private final AtomicBoolean registered = new AtomicBoolean(false);
-  private final AtomicLong latestCaptureTimeNanos = new AtomicLong(0);
   private final AtomicLong framesReceived = new AtomicLong(0);
   private final AtomicLong framesForwarded = new AtomicLong(0);
   private final AtomicLong framesDroppedStale = new AtomicLong(0);
@@ -108,21 +107,10 @@ public class ScreenCaptureService implements FrameListener {
   public void onFrameCaptured(FrameEvent event) {
     framesReceived.incrementAndGet();
 
-    long captureTime = event.getCaptureTimeNanos();
-    long latestTime = latestCaptureTimeNanos.updateAndGet(prev -> Math.max(prev, captureTime));
-    if (captureTime < latestTime) {
-      framesDroppedStale.incrementAndGet();
-      return;
-    }
-
     try {
       BufferedImage frame = event.getFrame();
       if (frame != null) {
         try (Mat mat = Java2DFrameUtils.toMat(frame)) {
-          if (captureTime < latestCaptureTimeNanos.get()) {
-            framesDroppedStale.incrementAndGet();
-            return;
-          }
           ViewportManager.getInstance().updateState(mat);
           framesForwarded.incrementAndGet();
         }

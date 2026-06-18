@@ -2,6 +2,7 @@ package com.chromascape.utils.core.screen.window;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
+import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.GDI32;
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef;
@@ -34,6 +35,11 @@ import java.awt.image.DataBufferInt;
  */
 public class ScreenManager {
 
+  private static HWND cachedTargetWindow;
+  private static HWND cachedCanvasHwnd;
+  private static HWND cachedSelectedHwnd;
+  private static boolean cachedUsingSelection;
+
   /**
    * Reference to the WindowSelectionService for accessing the user's selected window. Set via
    * {@link #setWindowSelectionService(WindowSelectionService)} by Spring on startup.
@@ -46,6 +52,14 @@ public class ScreenManager {
    */
   public static void setWindowSelectionService(WindowSelectionService service) {
     windowSelectionService = service;
+    clearWindowCache();
+  }
+
+  public static synchronized void clearWindowCache() {
+    cachedTargetWindow = null;
+    cachedCanvasHwnd = null;
+    cachedSelectedHwnd = null;
+    cachedUsingSelection = false;
   }
 
   /**
@@ -61,59 +75,66 @@ public class ScreenManager {
    *
    * @return the window handle, or null if RuneLite is not running
    */
-  private static HWND getCanvasHwnd() {
-    HWND targetWindow = null;
-    boolean usingSelection = false;
+  private static synchronized HWND getCanvasHwnd() {
+    HWND selectedHwnd = windowSelectionService != null ? windowSelectionService.getSelectedHwnd() : null;
+    boolean usingSelection = selectedHwnd != null;
 
-    // Check if a window has been selected via the UI
-    if (windowSelectionService != null) {
-      HWND selectedHwnd = windowSelectionService.getSelectedHwnd();
-      System.err.println(
-          "[VIEWPORT DEBUG] windowSelectionService is NOT null, checking selection...");
-      if (selectedHwnd != null) {
-        targetWindow = selectedHwnd;
-        usingSelection = true;
-        System.err.println("[VIEWPORT DEBUG] Found selected HWND: " + selectedHwnd);
-      } else {
-        System.err.println("[VIEWPORT DEBUG] selectedHwnd is NULL - no window selected");
-      }
-    } else {
-      System.err.println("[VIEWPORT DEBUG] windowSelectionService is NULL!");
+    if (hasValidCachedWindow(usingSelection, selectedHwnd)) {
+      return cachedCanvasHwnd;
     }
 
-    // Fall back to default window lookup if no selection
-    if (targetWindow == null) {
-      targetWindow = WindowHandler.getTargetWindow();
-      System.err.println("[VIEWPORT DEBUG] Using fallback window: " + targetWindow);
-    }
-
-    if (targetWindow == null) {
+    HWND targetWindow = usingSelection ? selectedHwnd : WindowHandler.getTargetWindow();
+    if (!isValidWindow(targetWindow)) {
+      clearWindowCache();
       return null;
     }
 
-    HWND canvasHwnd = WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 2);
+    HWND canvasHwnd = resolveCanvasHwnd(targetWindow);
+    if (!isValidWindow(canvasHwnd)) {
+      clearWindowCache();
+      return null;
+    }
 
-    // Fallback: try 1st canvas if 2nd doesn't exist
+    cachedTargetWindow = targetWindow;
+    cachedCanvasHwnd = canvasHwnd;
+    cachedSelectedHwnd = usingSelection ? selectedHwnd : null;
+    cachedUsingSelection = usingSelection;
+    return canvasHwnd;
+  }
+
+  private static boolean hasValidCachedWindow(boolean usingSelection, HWND selectedHwnd) {
+    if (!isValidWindow(cachedTargetWindow) || !isValidWindow(cachedCanvasHwnd)) {
+      return false;
+    }
+    if (cachedUsingSelection != usingSelection) {
+      return false;
+    }
+    if (!usingSelection) {
+      return true;
+    }
+    return sameWindow(cachedSelectedHwnd, selectedHwnd);
+  }
+
+  private static HWND resolveCanvasHwnd(HWND targetWindow) {
+    HWND canvasHwnd = WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 2);
     if (canvasHwnd == null) {
-      System.err.println("[VIEWPORT DEBUG] 2nd canvas not found, trying 1st canvas");
       canvasHwnd = WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 1);
     }
+    return canvasHwnd != null ? canvasHwnd : targetWindow;
+  }
 
-    // Last resort: use parent window directly
-    if (canvasHwnd == null) {
-      System.err.println("[VIEWPORT DEBUG] No canvas found, using parent window directly");
-      canvasHwnd = targetWindow;
+  private static boolean isValidWindow(HWND hwnd) {
+    return hwnd != null && User32.INSTANCE.IsWindow(hwnd);
+  }
+
+  private static boolean sameWindow(HWND left, HWND right) {
+    if (left == right) {
+      return true;
     }
-
-    // Debug logging
-    if (usingSelection) {
-      System.err.println("[VIEWPORT DEBUG] Using SELECTED window, canvas HWND: " + canvasHwnd);
-    } else {
-      System.err.println(
-          "[VIEWPORT DEBUG] Using FALLBACK (default) window, canvas HWND: " + canvasHwnd);
+    if (left == null || right == null) {
+      return false;
     }
-
-    return canvasHwnd;
+    return Pointer.nativeValue(left.getPointer()) == Pointer.nativeValue(right.getPointer());
   }
 
   /**

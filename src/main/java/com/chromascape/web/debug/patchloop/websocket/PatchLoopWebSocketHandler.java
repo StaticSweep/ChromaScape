@@ -2,7 +2,6 @@ package com.chromascape.web.debug.patchloop.websocket;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -69,7 +68,7 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
       }
     }
 
-    // Send welcome message
+    // Send welcome message (sendMessage now catches exceptions internally)
     sendMessage(session, createMessage("CONNECTED", "Connected to patch loop updates", null));
   }
 
@@ -298,8 +297,9 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
         if (session.isOpen()) {
           try {
             session.sendMessage(textMessage);
-          } catch (IOException e) {
+          } catch (Exception e) {
             logger.error("Failed to send message to session {}", session.getId(), e);
+            dropSession(session);
           }
         }
       }
@@ -318,18 +318,44 @@ public class PatchLoopWebSocketHandler extends TextWebSocketHandler {
       if (session.isOpen()) {
         try {
           session.sendMessage(textMessage);
-        } catch (IOException e) {
+        } catch (Exception e) {
           logger.error("Failed to send message to session {}", session.getId(), e);
+          dropSession(session);
         }
       }
     }
   }
 
   /** Sends a message to a specific session. */
-  private void sendMessage(WebSocketSession session, String message) throws IOException {
+  private void sendMessage(WebSocketSession session, String message) {
     if (session.isOpen()) {
-      session.sendMessage(new TextMessage(message));
+      try {
+        session.sendMessage(new TextMessage(message));
+      } catch (Exception e) {
+        logger.error("Failed to send message to session {}", session.getId(), e);
+        dropSession(session);
+      }
     }
+  }
+
+  /**
+   * Drops a broken session from all tracking maps.
+   *
+   * <p>Called when a send fails, to prevent repeated errors against a dead connection.
+   */
+  private void dropSession(WebSocketSession session) {
+    allSessions.remove(session.getId());
+    sessionsByExecution.forEach((execId, sessions) -> sessions.remove(session));
+    sessionsByExecution
+        .entrySet()
+        .removeIf(
+            entry -> {
+              boolean empty = entry.getValue().isEmpty();
+              if (empty) {
+                replayBuffer.remove(entry.getKey());
+              }
+              return empty;
+            });
   }
 
   /** Creates a JSON message for WebSocket transmission. */

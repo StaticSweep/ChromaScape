@@ -46,9 +46,10 @@ public class RunScriptNodeExecutor implements GraphNodeExecutor {
 
       logger.info("Starting script: {} with timeout: {}ms", scriptName, timeoutMs);
 
-      // Run the script and wait for completion
+      // Run the script and wait for completion (execution-scoped for safe concurrent control)
       ScriptExecutionService.ScriptExecutionResult result =
-          scriptExecutionService.runScriptAndWait(scriptName, timeoutMs);
+          scriptExecutionService.runScriptAndWait(
+              executionId, scriptName, timeoutMs, context.context().getTaskMetadata());
 
       ObjectNode outputData = JsonNodeFactory.instance.objectNode();
       outputData.put("executionId", executionId);

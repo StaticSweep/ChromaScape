@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,6 +91,7 @@ public class TickStreamIngestionService {
   @Transactional
   public void processTickBatch(TickBatchMessage batch) {
     try {
+      validateStrictV2(batch);
       String sessionId = batch.getSessionId();
 
       // Verify session exists
@@ -177,6 +179,10 @@ public class TickStreamIngestionService {
               : null;
       JsonNode groundItems =
           batch.getGroundItems() != null ? objectMapper.valueToTree(batch.getGroundItems()) : null;
+      JsonNode players =
+          batch.getPlayers() != null ? objectMapper.valueToTree(batch.getPlayers()) : null;
+      JsonNode widgets =
+          batch.getWidgets() != null ? objectMapper.valueToTree(batch.getWidgets()) : null;
 
       // Log expanded data for diagnostics
       log.info(
@@ -216,11 +222,43 @@ public class TickStreamIngestionService {
       snapshot.setGameObjects(gameObjects);
       snapshot.setGroundObjects(groundObjects);
       snapshot.setGroundItems(groundItems);
+      snapshot.setPlayers(players);
+      snapshot.setWidgets(widgets);
+      snapshot.setSchemaVersion(batch.getSchemaVersion());
 
       snapshotRepository.save(snapshot);
 
     } catch (Exception e) {
       log.error("Error saving tick snapshot: {}", e.getMessage(), e);
+    }
+  }
+
+  private void validateStrictV2(TickBatchMessage batch) {
+    if (batch.getSchemaVersion() == null || batch.getSchemaVersion() < 2) {
+      throw new IllegalArgumentException("Strict replay requires schemaVersion >= 2");
+    }
+    if (batch.getSessionId() == null || batch.getSessionId().isBlank()) {
+      throw new IllegalArgumentException("Missing sessionId");
+    }
+    if (batch.getPlayerState() == null) {
+      throw new IllegalArgumentException("Missing playerState");
+    }
+    Map<String, Object> ps = batch.getPlayerState();
+    if (!ps.containsKey("x") || !ps.containsKey("z")) {
+      throw new IllegalArgumentException("Missing required player position (x/z)");
+    }
+    if (batch.getInventory() == null || batch.getEquipment() == null) {
+      throw new IllegalArgumentException("Missing inventory/equipment");
+    }
+    if (batch.getNpcs() == null
+        || batch.getGameObjects() == null
+        || batch.getGroundObjects() == null
+        || batch.getGroundItems() == null
+        || batch.getPlayers() == null
+        || batch.getWidgets() == null
+        || batch.getQuest() == null
+        || batch.getCooldowns() == null) {
+      throw new IllegalArgumentException("Missing required strict replay sections");
     }
   }
 

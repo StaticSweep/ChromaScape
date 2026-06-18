@@ -74,6 +74,5 @@ public interface LogRepository extends JpaRepository<LogEntity, Long> {
       String source, LocalDateTime start, LocalDateTime end);
 
   /** Find all logs in a timestamp window ordered chronologically. */
-  List<LogEntity> findByTimestampBetweenOrderByTimestampAsc(
-      LocalDateTime start, LocalDateTime end);
+  List<LogEntity> findByTimestampBetweenOrderByTimestampAsc(LocalDateTime start, LocalDateTime end);
 }

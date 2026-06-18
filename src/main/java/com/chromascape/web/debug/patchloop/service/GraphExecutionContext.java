@@ -45,6 +45,9 @@ public class GraphExecutionContext {
   /** Runtime data that can be updated during execution */
   private final Map<String, Object> runtimeData;
 
+  /** Task metadata forwarded to script execution backend */
+  private final Map<String, Object> taskMetadata;
+
   private GraphExecutionContext(Builder builder) {
     this.executionId = builder.executionId;
     this.iterationId = builder.iterationId;
@@ -57,6 +60,7 @@ public class GraphExecutionContext {
     this.executionMode = builder.executionMode;
     this.evidenceConfig = builder.evidenceConfig;
     this.runtimeData = builder.runtimeData;
+    this.taskMetadata = builder.taskMetadata;
   }
 
   public String getExecutionId() {
@@ -103,6 +107,10 @@ public class GraphExecutionContext {
     return runtimeData;
   }
 
+  public Map<String, Object> getTaskMetadata() {
+    return taskMetadata;
+  }
+
   /** Gets a runtime value by key. */
   public Object getRuntimeValue(String key) {
     return runtimeData.get(key);
@@ -141,6 +149,7 @@ public class GraphExecutionContext {
     private String executionMode;
     private EvidenceConfigDto evidenceConfig;
     private Map<String, Object> runtimeData;
+    private Map<String, Object> taskMetadata;
 
     public Builder executionId(String executionId) {
       this.executionId = executionId;
@@ -194,6 +203,11 @@ public class GraphExecutionContext {
 
     public Builder runtimeData(Map<String, Object> runtimeData) {
       this.runtimeData = runtimeData;
+      return this;
+    }
+
+    public Builder taskMetadata(Map<String, Object> taskMetadata) {
+      this.taskMetadata = taskMetadata;
       return this;
     }
 

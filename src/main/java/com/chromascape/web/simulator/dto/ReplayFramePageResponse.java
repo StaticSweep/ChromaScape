@@ -131,6 +131,9 @@ public class ReplayFramePageResponse {
     private JsonNode gameObjects;
     private JsonNode groundObjects;
     private JsonNode groundItems;
+    private JsonNode players;
+    private JsonNode widgets;
+    private Integer schemaVersion;
 
     public FrameData() {}
 
@@ -236,6 +239,30 @@ public class ReplayFramePageResponse {
 
     public void setGroundItems(JsonNode groundItems) {
       this.groundItems = groundItems;
+    }
+
+    public JsonNode getPlayers() {
+      return players;
+    }
+
+    public void setPlayers(JsonNode players) {
+      this.players = players;
+    }
+
+    public JsonNode getWidgets() {
+      return widgets;
+    }
+
+    public void setWidgets(JsonNode widgets) {
+      this.widgets = widgets;
+    }
+
+    public Integer getSchemaVersion() {
+      return schemaVersion;
+    }
+
+    public void setSchemaVersion(Integer schemaVersion) {
+      this.schemaVersion = schemaVersion;
     }
   }
 }

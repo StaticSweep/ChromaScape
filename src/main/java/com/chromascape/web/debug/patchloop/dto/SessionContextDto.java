@@ -36,6 +36,10 @@ public class SessionContextDto {
   @JsonProperty("timeWindowEnd")
   private String timeWindowEnd;
 
+  /** How the backend resolved the effective session linkage. */
+  @JsonProperty("resolutionSource")
+  private String resolutionSource;
+
   public SessionContextDto() {}
 
   public String getDebugSessionId() {
@@ -84,6 +88,14 @@ public class SessionContextDto {
 
   public void setTimeWindowEnd(String timeWindowEnd) {
     this.timeWindowEnd = timeWindowEnd;
+  }
+
+  public String getResolutionSource() {
+    return resolutionSource;
+  }
+
+  public void setResolutionSource(String resolutionSource) {
+    this.resolutionSource = resolutionSource;
   }
 
   @Override

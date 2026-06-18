@@ -7,9 +7,10 @@ import com.chromascape.web.accounttask.repository.TaskEvidenceCitationRepository
 import com.chromascape.web.accounttask.repository.TaskPlanItemRepository;
 import com.chromascape.web.accounttask.repository.TaskPlanRepository;
 import com.chromascape.web.accounttask.service.HybridTaskSynthesisService;
+import com.chromascape.web.accounttask.service.TaskPlanAccountService;
 import com.chromascape.web.accounttask.service.TaskCitationValidationService;
-import com.chromascape.web.accounttask.service.TaskPlanExecutionService;
 import com.chromascape.web.accounttask.service.TaskCitationValidationService.CitationValidationResult;
+import com.chromascape.web.accounttask.service.TaskPlanExecutionService;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteRequest;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import java.time.LocalDateTime;
@@ -46,6 +47,7 @@ public class AccountTaskController {
   private final TaskPlanExecutionService executionService;
   private final TaskCitationValidationService validationService;
   private final PatchLoopOrchestratorService patchLoopOrchestratorService;
+  private final TaskPlanAccountService taskPlanAccountService;
 
   public AccountTaskController(
       TaskPlanRepository planRepository,
@@ -54,7 +56,8 @@ public class AccountTaskController {
       HybridTaskSynthesisService synthesisService,
       TaskPlanExecutionService executionService,
       TaskCitationValidationService validationService,
-      PatchLoopOrchestratorService patchLoopOrchestratorService) {
+      PatchLoopOrchestratorService patchLoopOrchestratorService,
+      TaskPlanAccountService taskPlanAccountService) {
     this.planRepository = planRepository;
     this.itemRepository = itemRepository;
     this.citationRepository = citationRepository;
@@ -62,6 +65,7 @@ public class AccountTaskController {
     this.executionService = executionService;
     this.validationService = validationService;
     this.patchLoopOrchestratorService = patchLoopOrchestratorService;
+    this.taskPlanAccountService = taskPlanAccountService;
   }
 
   /** Generates a new task plan from intent and evidence. */
@@ -105,12 +109,15 @@ public class AccountTaskController {
       @RequestParam(required = false) String accountName) {
     try {
       List<TaskPlan> plans;
-      if (accountName != null) {
+      if (TaskPlanAccountService.UNASSIGNED_FILTER.equals(accountName)) {
+        plans = planRepository.findUnassignedOrderByCreatedAtDesc();
+      } else if (accountName != null) {
         plans = planRepository.findByAccountNameOrderByCreatedAtDesc(accountName);
       } else if (status != null) {
         plans =
             planRepository.findByStatusOrderByCreatedAtDesc(
-                com.chromascape.web.accounttask.entity.TaskPlanStatus.valueOf(status.toUpperCase()));
+                com.chromascape.web.accounttask.entity.TaskPlanStatus.valueOf(
+                    status.toUpperCase()));
       } else {
         plans = planRepository.findAllByOrderByCreatedAtDesc();
       }
@@ -199,10 +206,7 @@ public class AccountTaskController {
     try {
       TaskPlanItem item =
           executionService.editItem(
-              itemId,
-              updates.get("title"),
-              updates.get("description"),
-              updates.get("scriptName"));
+              itemId, updates.get("title"), updates.get("description"), updates.get("scriptName"));
       return ResponseEntity.ok(item);
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(e.getMessage());
@@ -261,13 +265,21 @@ public class AccountTaskController {
       plRequest.setExecutionMode("propose_then_apply");
       plRequest.setTaskPlanId(item.getPlanId());
       plRequest.setTaskItemId(item.getItemId());
+      if (overrides != null && overrides.get("taskMetadata") instanceof Map) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> taskMetadata =
+            new java.util.HashMap<>((Map<String, Object>) overrides.get("taskMetadata"));
+        normalizeTaskMetadata(taskMetadata);
+        plRequest.setTaskMetadata(taskMetadata);
+      }
 
       var plResponse = patchLoopOrchestratorService.executeIteration(plRequest);
 
-      // Link item to patch loop iteration
-      executionService.markItemExecuting(itemId, plResponse.getIterationId());
+      // Link item to patch loop iteration and return the updated entity
+      TaskPlanItem updatedItem =
+          executionService.markItemExecuting(itemId, plResponse.getIterationId());
 
-      return ResponseEntity.ok(Map.of("patchLoop", plResponse, "item", item));
+      return ResponseEntity.ok(Map.of("patchLoop", plResponse, "item", updatedItem));
 
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(e.getMessage());
@@ -275,6 +287,84 @@ public class AccountTaskController {
       logger.error("Failed to execute patch loop for item {}", itemId, e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body("Failed to execute patch loop: " + e.getMessage());
+    }
+  }
+
+  /** Backfill missing account names for existing plans. */
+  @PostMapping("/backfill-account-names")
+  public ResponseEntity<Object> backfillAccountNames() {
+    try {
+      return ResponseEntity.ok(taskPlanAccountService.backfillMissingAccountNames());
+    } catch (Exception e) {
+      logger.error("Failed to backfill account names", e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body("Failed to backfill account names: " + e.getMessage());
+    }
+  }
+
+  /** Executes a quick test run for an item without approval/evidence gating. */
+  @PostMapping("/items/{itemId}/quick-test")
+  public ResponseEntity<Object> quickTestItem(
+      @PathVariable String itemId, @RequestBody(required = false) Map<String, Object> overrides) {
+    try {
+      TaskPlanItem item =
+          itemRepository
+              .findByItemId(itemId)
+              .orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
+
+      String scriptName =
+          overrides != null && overrides.containsKey("scriptName")
+              ? (String) overrides.get("scriptName")
+              : item.getScriptName();
+      if (scriptName == null || scriptName.isBlank()) {
+        scriptName = "auto-detected";
+      }
+
+      String prompt =
+          overrides != null && overrides.containsKey("prompt")
+              ? (String) overrides.get("prompt")
+              : item.getTitle() + ": " + item.getDescription();
+
+      PatchLoopExecuteRequest plRequest = new PatchLoopExecuteRequest(scriptName, prompt);
+      plRequest.setExecutionMode("propose_then_apply");
+      plRequest.setTaskPlanId(item.getPlanId());
+      plRequest.setTaskItemId(item.getItemId());
+
+      Map<String, Object> taskMetadata = new java.util.HashMap<>();
+      taskMetadata.put("source", "planner_quick_test");
+      if (overrides != null && overrides.get("taskMetadata") instanceof Map) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> overrideMetadata = (Map<String, Object>) overrides.get("taskMetadata");
+        taskMetadata.putAll(overrideMetadata);
+      }
+      normalizeTaskMetadata(taskMetadata);
+      plRequest.setTaskMetadata(taskMetadata);
+
+      var plResponse = patchLoopOrchestratorService.executeIteration(plRequest);
+      TaskPlanItem updatedItem =
+          executionService.markItemExecuting(itemId, plResponse.getIterationId());
+
+      return ResponseEntity.ok(Map.of("patchLoop", plResponse, "item", updatedItem));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    } catch (Exception e) {
+      logger.error("Failed to run quick test for item {}", itemId, e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body("Failed to run quick test: " + e.getMessage());
+    }
+  }
+
+  private void normalizeTaskMetadata(Map<String, Object> taskMetadata) {
+    if (taskMetadata == null) {
+      return;
+    }
+    Object rawTaskKey = taskMetadata.get("task_key");
+    if (rawTaskKey != null && !rawTaskKey.toString().isBlank()) {
+      return;
+    }
+    Object rawTaskName = taskMetadata.get("task_name");
+    if (rawTaskName != null && !rawTaskName.toString().isBlank()) {
+      taskMetadata.put("task_key", rawTaskName.toString());
     }
   }
 }

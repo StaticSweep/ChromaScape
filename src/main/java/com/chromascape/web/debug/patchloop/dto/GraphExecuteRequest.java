@@ -50,6 +50,14 @@ public class GraphExecuteRequest {
   @JsonProperty("evidenceConfig")
   private EvidenceConfigDto evidenceConfig;
 
+  /** Debugger session context for linking to existing sessions (optional). */
+  @JsonProperty("sessionContext")
+  private SessionContextDto sessionContext;
+
+  /** Task metadata for executor-side configuration (optional) */
+  @JsonProperty("taskMetadata")
+  private Map<String, Object> taskMetadata;
+
   /**
    * Optional iteration ID to reuse an existing iteration.
    *
@@ -155,12 +163,28 @@ public class GraphExecuteRequest {
     this.evidenceConfig = evidenceConfig;
   }
 
+  public SessionContextDto getSessionContext() {
+    return sessionContext;
+  }
+
+  public void setSessionContext(SessionContextDto sessionContext) {
+    this.sessionContext = sessionContext;
+  }
+
   public String getIterationId() {
     return iterationId;
   }
 
   public void setIterationId(String iterationId) {
     this.iterationId = iterationId;
+  }
+
+  public Map<String, Object> getTaskMetadata() {
+    return taskMetadata;
+  }
+
+  public void setTaskMetadata(Map<String, Object> taskMetadata) {
+    this.taskMetadata = taskMetadata;
   }
 
   @Override

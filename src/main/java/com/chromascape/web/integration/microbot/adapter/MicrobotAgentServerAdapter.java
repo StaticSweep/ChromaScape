@@ -45,9 +45,7 @@ public class MicrobotAgentServerAdapter implements BotRuntimeAdapter {
     this.config = config;
     this.objectMapper = objectMapper;
     this.httpClient =
-        HttpClient.newBuilder()
-            .connectTimeout(Duration.ofMillis(config.getTimeoutMs()))
-            .build();
+        HttpClient.newBuilder().connectTimeout(Duration.ofMillis(config.getTimeoutMs())).build();
     logger.info("Microbot Agent Server adapter initialized: {}", config.getBaseUrl());
   }
 
@@ -70,7 +68,8 @@ public class MicrobotAgentServerAdapter implements BotRuntimeAdapter {
               .timeout(Duration.ofMillis(config.getTimeoutMs()))
               .GET()
               .build();
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       return response.statusCode() == 200;
     } catch (Exception e) {
       logger.debug("Microbot Agent Server health check failed: {}", e.getMessage());
@@ -87,7 +86,8 @@ public class MicrobotAgentServerAdapter implements BotRuntimeAdapter {
               .timeout(Duration.ofMillis(config.getTimeoutMs()))
               .GET()
               .build();
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
       if (response.statusCode() != 200) {
         logger.warn("State snapshot request failed with status: {}", response.statusCode());
@@ -163,11 +163,7 @@ public class MicrobotAgentServerAdapter implements BotRuntimeAdapter {
   public void publishEvent(String eventType, Map<String, Object> payload) {
     RuntimeEventEnvelope envelope =
         new RuntimeEventEnvelope(
-            UUID.randomUUID().toString(),
-            getAdapterId(),
-            eventType,
-            LocalDateTime.now(),
-            payload);
+            UUID.randomUUID().toString(), getAdapterId(), eventType, LocalDateTime.now(), payload);
     for (RuntimeEventListener listener : listeners) {
       try {
         listener.onEvent(envelope);

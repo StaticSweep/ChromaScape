@@ -13,7 +13,10 @@ import org.springframework.stereotype.Component;
 
 /** Periodically broadcasts overlay data (clicks, mouse, highlights) to connected clients. */
 @Component
-@ConditionalOnProperty(name = "overlay-broadcaster.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(
+    name = "overlay-broadcaster.enabled",
+    havingValue = "true",
+    matchIfMissing = true)
 public class OverlayBroadcaster {
 
   private final OverlayWebSocketHandler handler;

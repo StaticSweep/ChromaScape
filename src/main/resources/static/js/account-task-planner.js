@@ -5,12 +5,17 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
+  static UNASSIGNED_FILTER = '__UNASSIGNED__';
+
   constructor() {
     this.plans = [];
+    this.allPlans = [];
     this.selectedPlanId = null;
     this.selectedPlan = null;
     this.panelVisible = false;
     this.scriptCatalog = [];
+    this.itemSelectionState = new Map();
+    this.selectedAccountName = localStorage.getItem('taskPlanner.selectedAccount') || '';
   }
 
   /**
@@ -22,6 +27,7 @@ class AccountTaskPlanner {
     this.loadPlans();
     this.loadSourceSessions();
     this.loadScriptCatalog();
+    this.loadStabilizationKpis();
   }
 
   /**
@@ -42,6 +48,7 @@ class AccountTaskPlanner {
     // Plans list
     this.plansList = document.getElementById('plansList');
     this.planCountBadge = document.getElementById('planCountBadge');
+    this.accountSelect = document.getElementById('taskPlanAccountSelect');
 
     // Plan detail
     this.planDetailSection = document.getElementById('planDetailSection');
@@ -51,6 +58,15 @@ class AccountTaskPlanner {
     this.planItemsList = document.getElementById('planItemsList');
     this.approvePlanBtn = document.getElementById('approvePlanBtn');
     this.rejectPlanBtn = document.getElementById('rejectPlanBtn');
+
+    // Stabilization KPI panel
+    this.stabilizationFamilyFilter = document.getElementById('stabilizationFamilyFilter');
+    this.stabilizationHistoryLimit = document.getElementById('stabilizationHistoryLimit');
+    this.stabilizationRefreshBtn = document.getElementById('stabilizationRefreshBtn');
+    this.stabilizationSummary = document.getElementById('stabilizationSummary');
+    this.stabilizationScripts = document.getElementById('stabilizationScripts');
+    this.stabilizationHistory = document.getElementById('stabilizationHistory');
+    this.stabilizationRegressions = document.getElementById('stabilizationRegressions');
   }
 
   /**
@@ -64,7 +80,22 @@ class AccountTaskPlanner {
       this.togglePlannerBtn.addEventListener('click', () => this.toggleContent());
     }
     if (this.refreshBtn) {
-      this.refreshBtn.addEventListener('click', () => this.loadPlans());
+      this.refreshBtn.addEventListener('click', () => {
+        this.loadPlans();
+        this.loadStabilizationKpis();
+      });
+    }
+    if (this.accountSelect) {
+      this.accountSelect.addEventListener('change', () => {
+        this.selectedAccountName = this.accountSelect.value || '';
+        localStorage.setItem('taskPlanner.selectedAccount', this.selectedAccountName);
+        this.selectedPlanId = null;
+        this.selectedPlan = null;
+        if (this.planDetailSection) {
+          this.planDetailSection.style.display = 'none';
+        }
+        this.loadPlans();
+      });
     }
     if (this.generateBtn) {
       this.generateBtn.addEventListener('click', () => this.generatePlan());
@@ -74,6 +105,15 @@ class AccountTaskPlanner {
     }
     if (this.rejectPlanBtn) {
       this.rejectPlanBtn.addEventListener('click', () => this.rejectPlan());
+    }
+    if (this.stabilizationRefreshBtn) {
+      this.stabilizationRefreshBtn.addEventListener('click', () => this.loadStabilizationKpis());
+    }
+    if (this.stabilizationFamilyFilter) {
+      this.stabilizationFamilyFilter.addEventListener('change', () => this.loadStabilizationKpis());
+    }
+    if (this.stabilizationHistoryLimit) {
+      this.stabilizationHistoryLimit.addEventListener('change', () => this.loadStabilizationKpis());
     }
   }
 
@@ -108,16 +148,36 @@ class AccountTaskPlanner {
    */
   async loadPlans() {
     try {
-      const response = await fetch('/api/account-tasks');
+      const allResponse = await fetch('/api/account-tasks');
+      if (!allResponse.ok) {
+        throw new Error(`HTTP ${allResponse.status}`);
+      }
+      this.allPlans = await allResponse.json();
+      this.populateAccountOptions();
+
+      const query = new URLSearchParams();
+      if (this.selectedAccountName) {
+        query.set('accountName', this.selectedAccountName);
+      }
+      const plansUrl = query.toString() ? `/api/account-tasks?${query.toString()}` : '/api/account-tasks';
+      const response = await fetch(plansUrl);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
       this.plans = await response.json();
       this.renderPlansList();
 
-      // If a plan was selected, refresh its detail
+      const selectedStillVisible = this.selectedPlanId &&
+        this.plans.some(plan => plan.planId === this.selectedPlanId);
+
+      if (!selectedStillVisible) {
+        this.selectedPlanId = this.plans.length ? this.plans[0].planId : null;
+      }
+
       if (this.selectedPlanId) {
         await this.loadPlanDetail(this.selectedPlanId);
+      } else if (this.planDetailSection) {
+        this.planDetailSection.style.display = 'none';
       }
     } catch (error) {
       console.error('Failed to load plans:', error);
@@ -125,6 +185,44 @@ class AccountTaskPlanner {
         this.plansList.innerHTML =
           '<div class="text-muted small">Failed to load plans. Check that the service is running.</div>';
       }
+    }
+  }
+
+  populateAccountOptions() {
+    if (!this.accountSelect) return;
+    const previous = this.selectedAccountName || this.accountSelect.value || '';
+    const names = Array.from(new Set(
+      (this.allPlans || [])
+        .map(plan => (plan?.accountName || '').toString().trim())
+        .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b));
+    const hasUnassigned = (this.allPlans || []).some(plan => {
+      const account = (plan?.accountName || '').toString().trim();
+      return account.length === 0;
+    });
+
+    this.accountSelect.innerHTML = '<option value="">All accounts</option>';
+    if (hasUnassigned) {
+      const unknown = document.createElement('option');
+      unknown.value = AccountTaskPlanner.UNASSIGNED_FILTER;
+      unknown.textContent = 'Unknown/Unassigned';
+      this.accountSelect.appendChild(unknown);
+    }
+    names.forEach(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      this.accountSelect.appendChild(option);
+    });
+
+    const validValues = new Set(['', AccountTaskPlanner.UNASSIGNED_FILTER, ...names]);
+    if (previous && validValues.has(previous)) {
+      this.accountSelect.value = previous;
+      this.selectedAccountName = previous;
+    } else {
+      this.accountSelect.value = '';
+      this.selectedAccountName = '';
+      localStorage.removeItem('taskPlanner.selectedAccount');
     }
   }
 
@@ -139,20 +237,20 @@ class AccountTaskPlanner {
       if (!response.ok) return;
 
       const sessions = await response.json();
-      // Keep the "Current session" default option
       this.sourceSessionSelect.innerHTML = '<option value="">Current session</option>';
 
       sessions.forEach(session => {
         const option = document.createElement('option');
         option.value = session.recordingId || session.id || '';
         let label = session.displayName || session.scriptName || session.recordingId || session.id || 'Unknown';
-        // Disambiguate duplicate custom replay names with a time suffix
         if (session.replayName && session.startTime) {
           try {
             const d = new Date(session.startTime);
             const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
             label = `${label} \u00B7 ${timeStr}`;
-          } catch (_) { /* ignore parse errors */ }
+          } catch (_) {
+            // ignore
+          }
         }
         option.textContent = label;
         this.sourceSessionSelect.appendChild(option);
@@ -175,6 +273,120 @@ class AccountTaskPlanner {
       console.debug('Could not load script catalog:', error);
       this.scriptCatalog = [];
     }
+  }
+
+  async loadStabilizationKpis() {
+    try {
+      const query = new URLSearchParams();
+      const family = this.stabilizationFamilyFilter?.value || '';
+      const historyLimit = this.stabilizationHistoryLimit?.value || '10';
+      if (family) {
+        query.set('family', family);
+      }
+      query.set('historyLimit', historyLimit);
+      const response = await fetch(`/api/account-tasks/stabilization/kpi?${query.toString()}`);
+      if (!response.ok) return;
+      const payload = await response.json();
+      this.renderStabilizationKpis(payload);
+    } catch (error) {
+      console.debug('Could not load stabilization KPI data:', error);
+    }
+  }
+
+  renderStabilizationKpis(payload) {
+    if (!payload) return;
+
+    const regressions = Array.isArray(payload.regressions) ? payload.regressions : [];
+    const summary = [
+      { label: '24h runs', value: payload.window_24h_count ?? 0 },
+      { label: '7d runs', value: payload.window_7d_count ?? 0 },
+      { label: 'Open triage', value: payload.open_triage_count ?? 0 },
+      { label: 'Regressions', value: regressions.length }
+    ];
+
+    if (this.stabilizationSummary) {
+      this.stabilizationSummary.innerHTML = summary.map(item => `
+        <div class="stabilization-stat">
+          <div class="small text-muted">${this.escapeHtml(item.label)}</div>
+          <div class="fw-bold fs-6">${this.escapeHtml(String(item.value))}</div>
+        </div>
+      `).join('');
+    }
+
+    if (this.stabilizationScripts) {
+      const scripts = Array.isArray(payload.scripts) ? payload.scripts : [];
+      this.stabilizationScripts.innerHTML = scripts.length ? scripts.map(script => `
+        <tr>
+          <td>${this.escapeHtml(script.script_key || '')}</td>
+          <td>${this.escapeHtml(script.family || '')}</td>
+          <td>${this.escapeHtml(String(script.window_24h_count ?? 0))}</td>
+          <td>${this.escapeHtml((Number(script.pass_rate_24h ?? 0) * 100).toFixed(0))}%</td>
+          <td>${script.regression ? '<span class="badge bg-danger">Yes</span>' : '<span class="badge bg-success">No</span>'}</td>
+          <td>${this.escapeHtml(script.top_failure_signature || '')}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="6" class="text-muted small">No KPI data yet.</td></tr>';
+    }
+
+    if (this.stabilizationHistory) {
+      const history = Array.isArray(payload.history) ? payload.history : [];
+      this.stabilizationHistory.innerHTML = history.length ? history.map(row => `
+        <tr>
+          <td>${this.escapeHtml(row.reportId || '')}</td>
+          <td>${this.escapeHtml(row.scriptKey || '')}</td>
+          <td>${this.escapeHtml(row.family || '')}</td>
+          <td>${this.escapeHtml(String(row.passRate24h ?? 0))}</td>
+          <td>${this.escapeHtml(String(row.timeoutRate24h ?? 0))}</td>
+          <td>${row.regression ? 'Yes' : 'No'}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="6" class="text-muted small">No history yet.</td></tr>';
+    }
+
+    if (this.stabilizationRegressions) {
+      this.stabilizationRegressions.innerHTML = regressions.length ? regressions.map(row => `
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>${this.escapeHtml(row.script_key || '')} <span class="text-muted">(${this.escapeHtml(row.family || '')})</span></span>
+          <span class="badge bg-danger">${this.escapeHtml(String(row.window_24h_count ?? 0))}</span>
+        </li>
+      `).join('') : '<li class="list-group-item text-muted small">No regressions detected.</li>';
+    }
+  }
+
+  getCatalogTaskByKey(taskKey) {
+    if (!taskKey) return null;
+    return this.scriptCatalog.find(task => task && task.task_key === taskKey) || null;
+  }
+
+  normalizeTaskKey(taskKey) {
+    return (taskKey || '')
+      .toString()
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  findCatalogTaskByKeyFlexible(taskKey) {
+    if (!taskKey) return null;
+    const direct = this.getCatalogTaskByKey(taskKey);
+    if (direct) return direct;
+
+    const normalizedTarget = this.normalizeTaskKey(taskKey);
+    if (!normalizedTarget) return null;
+    return this.scriptCatalog.find(task => {
+      if (!task?.task_key) return false;
+      return this.normalizeTaskKey(task.task_key) === normalizedTarget;
+    }) || null;
+  }
+
+  buildCatalogStateForItem(item, index) {
+    const itemId = item?.itemId || String(index);
+    const selectorId = `catalogSelect_${itemId}`;
+    const searchId = `catalogSearch_${itemId}`;
+    const settingsId = `catalogSettings_${itemId}`;
+    const settingPrefix = `setting_${itemId}_`;
+    const state = this.itemSelectionState.get(itemId) || {};
+    const selectedTaskKey = state.selectedTaskKey || item?.scriptName || '';
+    return { itemId, selectorId, searchId, settingsId, settingPrefix, selectedTaskKey };
   }
 
   /**
@@ -217,7 +429,6 @@ class AccountTaskPlanner {
       `;
     }).join('');
 
-    // Bind click handlers to plan cards
     this.plansList.querySelectorAll('.plan-card').forEach(card => {
       card.addEventListener('click', () => {
         const planId = card.dataset.planId;
@@ -226,18 +437,12 @@ class AccountTaskPlanner {
     });
   }
 
-  /**
-   * Selects a plan and loads its detail.
-   */
   async selectPlan(planId) {
     this.selectedPlanId = planId;
-    this.renderPlansList(); // Update active state
+    this.renderPlansList();
     await this.loadPlanDetail(planId);
   }
 
-  /**
-   * Loads and renders plan detail with items and citations.
-   */
   async loadPlanDetail(planId) {
     try {
       const response = await fetch(`/api/account-tasks/${planId}`);
@@ -251,18 +456,12 @@ class AccountTaskPlanner {
     }
   }
 
-  /**
-   * Renders the plan detail section.
-   */
   renderPlanDetail() {
     if (!this.selectedPlan || !this.planDetailSection) return;
 
     const plan = this.selectedPlan;
-
-    // Show the detail section
     this.planDetailSection.style.display = 'block';
 
-    // Update header
     if (this.planDetailTitle) {
       this.planDetailTitle.textContent = plan.intent || 'Untitled Plan';
     }
@@ -275,7 +474,6 @@ class AccountTaskPlanner {
       this.planDetailStatus.textContent = plan.status || 'GENERATED';
     }
 
-    // Update action buttons visibility
     const canApprove = ['GENERATED', 'UNDER_REVIEW'].includes(plan.status);
     const canReject = ['GENERATED', 'UNDER_REVIEW', 'PARTIALLY_APPROVED'].includes(plan.status);
     if (this.approvePlanBtn) {
@@ -285,13 +483,9 @@ class AccountTaskPlanner {
       this.rejectPlanBtn.style.display = canReject ? 'inline-block' : 'none';
     }
 
-    // Render items
     this.renderPlanItems(plan.items || []);
   }
 
-  /**
-   * Renders plan items with citations and actions.
-   */
   renderPlanItems(items) {
     if (!this.planItemsList) return;
 
@@ -305,8 +499,9 @@ class AccountTaskPlanner {
       const status = (item.status || 'pending').toLowerCase();
       const canAct = ['PENDING', 'APPROVED'].includes(item.status);
       const canExecute = item.status === 'APPROVED' && (item.scriptName || this.scriptCatalog.length > 0);
-      const selectorId = `catalogSelect_${item.itemId || index}`;
-      const searchId = `catalogSearch_${item.itemId || index}`;
+      const canQuickTest = Boolean(item.scriptName || this.scriptCatalog.length > 0);
+      const catalogState = this.buildCatalogStateForItem(item, index);
+      const selectedTask = this.getCatalogTaskByKey(catalogState.selectedTaskKey);
 
       return `
         <div class="plan-item-card" data-item-id="${this.escapeAttr(item.itemId)}">
@@ -325,8 +520,13 @@ class AccountTaskPlanner {
                 </button>
               ` : ''}
               ${canExecute ? `
-                <button class="btn btn-outline-primary btn-item-execute" data-item-id="${this.escapeAttr(item.itemId)}" data-script="${this.escapeAttr(item.scriptName || '')}" data-selector-id="${this.escapeAttr(selectorId)}" title="Execute Patch Loop">
+                <button class="btn btn-outline-primary btn-item-execute" data-item-id="${this.escapeAttr(item.itemId)}" data-script="${this.escapeAttr(item.scriptName || '')}" data-selector-id="${this.escapeAttr(catalogState.selectorId)}" data-settings-id="${this.escapeAttr(catalogState.settingsId)}" title="Execute Patch Loop">
                   <i class="bi bi-play-fill"></i>
+                </button>
+              ` : ''}
+              ${canQuickTest ? `
+                <button class="btn btn-outline-info btn-item-quick-test" data-item-id="${this.escapeAttr(item.itemId)}" data-script="${this.escapeAttr(item.scriptName || '')}" data-selector-id="${this.escapeAttr(catalogState.selectorId)}" data-settings-id="${this.escapeAttr(catalogState.settingsId)}" title="Run quick test">
+                  <i class="bi bi-lightning-charge"></i>
                 </button>
               ` : ''}
               ${item.status === 'COMPLETED' ? '<i class="bi bi-check-circle-fill text-success"></i>' : ''}
@@ -340,19 +540,22 @@ class AccountTaskPlanner {
             ${item.estimatedMinutes ? `<span><i class="bi bi-clock me-1"></i>~${item.estimatedMinutes}min</span>` : ''}
             ${item.difficulty ? `<span><i class="bi bi-bar-chart me-1"></i>${this.escapeHtml(item.difficulty)}</span>` : ''}
           </div>
-          ${item.status === 'APPROVED' && !item.scriptName && this.scriptCatalog.length > 0 ? `
+          ${this.scriptCatalog.length > 0 ? `
             <div class="mt-2">
               <label class="small text-muted mb-1 d-block">Catalog script/task</label>
               <input
                 type="text"
                 class="form-control form-control-sm mb-1 task-catalog-search"
-                id="${this.escapeAttr(searchId)}"
-                data-selector-id="${this.escapeAttr(selectorId)}"
+                id="${this.escapeAttr(catalogState.searchId)}"
+                data-selector-id="${this.escapeAttr(catalogState.selectorId)}"
                 placeholder="Search task catalog..."
               >
-              <select class="form-select form-select-sm task-catalog-select" id="${this.escapeAttr(selectorId)}">
-                ${this.buildCatalogOptionsHtml()}
+              <select class="form-select form-select-sm task-catalog-select" id="${this.escapeAttr(catalogState.selectorId)}" data-item-id="${this.escapeAttr(catalogState.itemId)}" data-settings-id="${this.escapeAttr(catalogState.settingsId)}">
+                ${this.buildCatalogOptionsHtml(catalogState.selectedTaskKey)}
               </select>
+              <div class="mt-2 task-settings-container" id="${this.escapeAttr(catalogState.settingsId)}">
+                ${this.renderTaskSettings(selectedTask, catalogState)}
+              </div>
             </div>
           ` : ''}
           ${item.citations && item.citations.length > 0 ? this.renderCitations(item.citations) : ''}
@@ -360,7 +563,6 @@ class AccountTaskPlanner {
       `;
     }).join('');
 
-    // Bind item action handlers
     this.planItemsList.querySelectorAll('.btn-item-approve').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -379,6 +581,7 @@ class AccountTaskPlanner {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const selectorId = btn.dataset.selectorId;
+        const settingsId = btn.dataset.settingsId;
         let selectedScript = btn.dataset.script;
         if ((!selectedScript || selectedScript.trim() === '') && selectorId) {
           const selector = document.getElementById(selectorId);
@@ -386,7 +589,23 @@ class AccountTaskPlanner {
             selectedScript = selector.value;
           }
         }
-        this.executeItemPatchLoop(btn.dataset.itemId, selectedScript);
+        this.executeItemPatchLoop(btn.dataset.itemId, selectedScript, settingsId);
+      });
+    });
+
+    this.planItemsList.querySelectorAll('.btn-item-quick-test').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const selectorId = btn.dataset.selectorId;
+        const settingsId = btn.dataset.settingsId;
+        let selectedScript = btn.dataset.script;
+        if ((!selectedScript || selectedScript.trim() === '') && selectorId) {
+          const selector = document.getElementById(selectorId);
+          if (selector && selector.value) {
+            selectedScript = selector.value;
+          }
+        }
+        this.executeItemQuickTest(btn.dataset.itemId, selectedScript, settingsId);
       });
     });
 
@@ -399,9 +618,22 @@ class AccountTaskPlanner {
         this.filterCatalogSelector(selector, input.value || '');
       });
     });
+
+    this.planItemsList.querySelectorAll('.task-catalog-select').forEach(selector => {
+      selector.addEventListener('change', async () => {
+        const itemId = selector.dataset.itemId;
+        const settingsId = selector.dataset.settingsId;
+        const selectedTask = this.getCatalogTaskByKey(selector.value);
+        await this.refreshTaskSettingsUI(itemId, selectedTask, settingsId);
+      });
+      if (selector.value) {
+        const selectedTask = this.getCatalogTaskByKey(selector.value);
+        this.refreshTaskSettingsUI(selector.dataset.itemId, selectedTask, selector.dataset.settingsId);
+      }
+    });
   }
 
-  buildCatalogOptionsHtml() {
+  buildCatalogOptionsHtml(selectedTaskKey) {
     const groups = new Map();
     this.scriptCatalog.forEach(task => {
       const category = (task?.category || 'other').toString();
@@ -422,7 +654,8 @@ class AccountTaskPlanner {
         )
         .map(task => {
           const taskKey = task?.task_key || '';
-          return `<option value="${this.escapeAttr(taskKey)}">${this.escapeHtml(this.buildCatalogTaskLabel(task))}</option>`;
+          const selectedAttr = selectedTaskKey && selectedTaskKey === taskKey ? ' selected' : '';
+          return `<option value="${this.escapeAttr(taskKey)}"${selectedAttr}>${this.escapeHtml(this.buildCatalogTaskLabel(task))}</option>`;
         })
         .join('');
       return `<optgroup label="${this.escapeAttr(category)}">${options}</optgroup>`;
@@ -439,7 +672,415 @@ class AccountTaskPlanner {
     if (task?.task_key) {
       label += ` (${task.task_key})`;
     }
+    if (task?.runnable === false && task?.disabled_reason) {
+      label += ` [not runnable: ${task.disabled_reason}]`;
+    }
     return label;
+  }
+
+  renderTaskSettings(task, catalogState) {
+    if (!task) {
+      return '<div class="small text-muted fst-italic">Select a task to configure settings.</div>';
+    }
+    const fields = Array.isArray(task?.args_schema?.fields) ? task.args_schema.fields : [];
+    if (!fields.length) {
+      return '<div class="small text-muted fst-italic">No configurable settings exposed for this task.</div>';
+    }
+    const rendered = fields.map(field => this.renderTaskSettingField(field, catalogState.settingPrefix)).join('');
+    const copyBtnId = `taskConfigCopy_${catalogState.itemId}`;
+    const pasteBtnId = `taskConfigPaste_${catalogState.itemId}`;
+    const applyBtnId = `taskConfigApply_${catalogState.itemId}`;
+    const pasteBoxId = `taskConfigPasteBox_${catalogState.itemId}`;
+    const pasteInputId = `taskConfigPasteInput_${catalogState.itemId}`;
+    const messageId = `taskConfigMsg_${catalogState.itemId}`;
+    return `
+      <div class="d-flex gap-1 mb-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm task-config-copy-btn"
+          id="${this.escapeAttr(copyBtnId)}"
+          data-item-id="${this.escapeAttr(catalogState.itemId)}">Copy Config</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm task-config-paste-btn"
+          id="${this.escapeAttr(pasteBtnId)}"
+          data-item-id="${this.escapeAttr(catalogState.itemId)}"
+          data-paste-box-id="${this.escapeAttr(pasteBoxId)}">Paste Config</button>
+      </div>
+      <div class="mb-2" id="${this.escapeAttr(pasteBoxId)}" style="display:none;">
+        <label class="small text-muted d-block mb-1">Paste task config JSON</label>
+        <textarea class="form-control form-control-sm task-config-paste-input"
+          id="${this.escapeAttr(pasteInputId)}"
+          rows="5"
+          placeholder='{"settings":{"field":"value"},"requirements":{"items":[]}}'></textarea>
+        <div class="d-flex gap-1 mt-1">
+          <button type="button" class="btn btn-primary btn-sm task-config-apply-btn"
+            id="${this.escapeAttr(applyBtnId)}"
+            data-item-id="${this.escapeAttr(catalogState.itemId)}"
+            data-paste-input-id="${this.escapeAttr(pasteInputId)}">Apply Pasted Config</button>
+        </div>
+      </div>
+      <div class="small text-muted mb-2" id="${this.escapeAttr(messageId)}"></div>
+      <div class="task-settings-fields">${rendered}</div>
+    `;
+  }
+
+  renderTaskSettingField(field, settingPrefix) {
+    const key = field?.key || '';
+    if (!key) return '';
+    const fieldId = `${settingPrefix}${key}`;
+    const label = this.escapeHtml(field?.label || key);
+    const type = (field?.type || 'string').toLowerCase();
+    const dependsOn = field?.depends_on ? ` data-depends-on="${this.escapeAttr(field.depends_on)}"` : '';
+    const optionsByDep = field?.options_by_dependency
+      ? ` data-options-by-dependency="${this.escapeAttr(JSON.stringify(field.options_by_dependency))}"`
+      : '';
+    const baseAttrs = `class="form-control form-control-sm task-setting-input" data-setting-key="${this.escapeAttr(key)}" data-setting-type="${this.escapeAttr(type)}"${dependsOn}${optionsByDep}`;
+    const description = field?.description ? `<div class="form-text">${this.escapeHtml(field.description)}</div>` : '';
+
+    if (type === 'boolean') {
+      return `
+        <div class="form-check mb-2">
+          <input type="checkbox" id="${this.escapeAttr(fieldId)}" ${baseAttrs.replace('form-control form-control-sm', 'form-check-input')}>
+          <label class="form-check-label small" for="${this.escapeAttr(fieldId)}">${label}</label>
+          ${description}
+        </div>
+      `;
+    }
+
+    if (type === 'select' || type === 'multi_select') {
+      const options = Array.isArray(field?.options) ? field.options : [];
+      const multipleAttr = type === 'multi_select' ? ' multiple' : '';
+      const optionHtml = options.map(opt => `<option value="${this.escapeAttr(String(opt))}">${this.escapeHtml(String(opt))}</option>`).join('');
+      return `
+        <div class="mb-2">
+          <label class="small text-muted d-block mb-1" for="${this.escapeAttr(fieldId)}">${label}</label>
+          <select id="${this.escapeAttr(fieldId)}" ${baseAttrs}${multipleAttr}>
+            ${optionHtml}
+          </select>
+          ${description}
+        </div>
+      `;
+    }
+
+    const inputType = type === 'integer' || type === 'number' ? 'number' : 'text';
+    const minAttr = field?.min !== undefined ? ` min="${this.escapeAttr(String(field.min))}"` : '';
+    const maxAttr = field?.max !== undefined ? ` max="${this.escapeAttr(String(field.max))}"` : '';
+    const stepAttr = type === 'integer' ? ' step="1"' : (type === 'number' ? ' step="any"' : '');
+    return `
+      <div class="mb-2">
+        <label class="small text-muted d-block mb-1" for="${this.escapeAttr(fieldId)}">${label}</label>
+        <input type="${inputType}" id="${this.escapeAttr(fieldId)}" ${baseAttrs}${minAttr}${maxAttr}${stepAttr}>
+        ${description}
+      </div>
+    `;
+  }
+
+  async refreshTaskSettingsUI(itemId, selectedTask, settingsContainerId) {
+    if (!itemId || !settingsContainerId) return;
+    const state = this.itemSelectionState.get(itemId) || {};
+    state.selectedTaskKey = selectedTask?.task_key || '';
+    state.taskSettings = state.taskSettings || {};
+    this.itemSelectionState.set(itemId, state);
+
+    const container = document.getElementById(settingsContainerId);
+    const catalogState = this.buildCatalogStateForItem({ itemId, scriptName: state.selectedTaskKey }, 0);
+    if (container) {
+      container.innerHTML = this.renderTaskSettings(selectedTask, catalogState);
+    }
+
+    if (!selectedTask) return;
+
+    await this.prefillTaskSettings(itemId, selectedTask, settingsContainerId);
+    this.bindTaskSettingsInputs(itemId, selectedTask, settingsContainerId);
+  }
+
+  bindTaskSettingsInputs(itemId, selectedTask, settingsContainerId) {
+    const container = document.getElementById(settingsContainerId);
+    if (!container) return;
+    container.querySelectorAll('.task-setting-input').forEach(input => {
+      const eventName = input.type === 'checkbox' ? 'change' : 'input';
+      input.addEventListener(eventName, () => {
+        this.captureTaskSettingsFromForm(itemId, selectedTask, settingsContainerId);
+        this.applyDependencyRules(settingsContainerId);
+      });
+    });
+    container.querySelectorAll('.task-config-copy-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await this.copyTaskConfig(itemId, selectedTask, settingsContainerId);
+      });
+    });
+    container.querySelectorAll('.task-config-paste-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pasteBox = document.getElementById(btn.dataset.pasteBoxId);
+        if (!pasteBox) return;
+        const isHidden = pasteBox.style.display === 'none';
+        pasteBox.style.display = isHidden ? 'block' : 'none';
+      });
+    });
+    container.querySelectorAll('.task-config-apply-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.applyPastedTaskConfig(itemId, selectedTask, settingsContainerId, btn.dataset.pasteInputId);
+      });
+    });
+    this.applyDependencyRules(settingsContainerId);
+  }
+
+  buildTaskConfigEnvelope(itemId, selectedTask, settingsContainerId) {
+    const settings = this.captureTaskSettingsFromForm(itemId, selectedTask, settingsContainerId);
+    const state = this.itemSelectionState.get(itemId) || {};
+    const requirements = state.taskRequirements || {};
+    return {
+      version: 1,
+      task_key: selectedTask?.task_key || '',
+      display_name: selectedTask?.display_name || '',
+      panel_display_name: selectedTask?.panel_display_name || '',
+      settings,
+      requirements
+    };
+  }
+
+  async copyTaskConfig(itemId, selectedTask, settingsContainerId) {
+    if (!selectedTask) return;
+    try {
+      const envelope = this.buildTaskConfigEnvelope(itemId, selectedTask, settingsContainerId);
+      await navigator.clipboard.writeText(JSON.stringify(envelope, null, 2));
+      this.showTaskConfigMessage(itemId, 'Config copied to clipboard.', 'success');
+    } catch (error) {
+      console.error('Failed to copy config:', error);
+      this.showTaskConfigMessage(itemId, 'Failed to copy config.', 'error');
+    }
+  }
+
+  normalizePastedConfig(rawParsed) {
+    if (!rawParsed || typeof rawParsed !== 'object' || Array.isArray(rawParsed)) {
+      return { error: 'Pasted JSON must be an object.' };
+    }
+    const asObject = value => (value && typeof value === 'object' && !Array.isArray(value) ? value : null);
+
+    const builderExecution = asObject(rawParsed.builder_execution);
+    const queuePreview = asObject(rawParsed.queue_payload_preview);
+    const envelopeSettings = asObject(rawParsed.settings);
+    const builderSettings = asObject(builderExecution?.task_metadata);
+    const queueSettings = asObject(queuePreview?.task_metadata);
+
+    const settings =
+      builderSettings ||
+      queueSettings ||
+      envelopeSettings ||
+      rawParsed;
+
+    if (!asObject(settings)) {
+      return { error: 'Could not find a valid settings object in pasted JSON.' };
+    }
+
+    const requirements = asObject(rawParsed.requirements) || {};
+    const taskKey =
+      builderExecution?.task_key ||
+      queuePreview?.task_key ||
+      rawParsed.task_key ||
+      null;
+
+    return { settings, requirements, taskKey };
+  }
+
+  applyPastedTaskConfig(itemId, selectedTask, settingsContainerId, pasteInputId) {
+    const input = document.getElementById(pasteInputId);
+    if (!input) return;
+    const raw = (input.value || '').trim();
+    if (!raw) {
+      this.showTaskConfigMessage(itemId, 'Paste JSON first.', 'warning');
+      return;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      this.showTaskConfigMessage(itemId, `Invalid JSON: ${error.message}`, 'error');
+      return;
+    }
+
+    const normalized = this.normalizePastedConfig(parsed);
+    if (normalized.error) {
+      this.showTaskConfigMessage(itemId, normalized.error, 'error');
+      return;
+    }
+
+    const state = this.itemSelectionState.get(itemId) || {};
+    const resolvedTask = this.findCatalogTaskByKeyFlexible(normalized.taskKey) || selectedTask || null;
+    const resolvedTaskKey = resolvedTask?.task_key || selectedTask?.task_key || state.selectedTaskKey || '';
+    state.selectedTaskKey = resolvedTaskKey;
+    state.taskSettings = normalized.settings || {};
+    state.taskRequirements = normalized.requirements || {};
+    this.itemSelectionState.set(itemId, state);
+
+    const selector = document.getElementById(`catalogSelect_${itemId}`);
+    if (selector && resolvedTask?.task_key) {
+      selector.value = resolvedTask.task_key;
+    }
+
+    this.refreshTaskSettingsUI(itemId, resolvedTask, settingsContainerId).then(() => {
+      this.applySettingsToForm(settingsContainerId, state.taskSettings);
+    });
+
+    const allKeys = Object.keys(state.taskSettings);
+    const appliedKeys = [];
+    const ignoredKeys = [];
+    const container = document.getElementById(settingsContainerId);
+    if (container) {
+      const knownKeys = new Set(
+        Array.from(container.querySelectorAll('.task-setting-input'))
+          .map(el => el.dataset.settingKey)
+          .filter(Boolean)
+      );
+      allKeys.forEach(k => {
+        if (knownKeys.has(k)) appliedKeys.push(k);
+        else ignoredKeys.push(k);
+      });
+    }
+    const reqCount = Object.keys(state.taskRequirements).length;
+    const taskMsg = resolvedTask?.task_key ? ` for ${resolvedTask.task_key}` : '';
+    const msg = `Applied ${appliedKeys.length} setting(s)${taskMsg}` +
+      (ignoredKeys.length ? `, ignored ${ignoredKeys.length} unknown key(s)` : '') +
+      (reqCount ? `, stored requirements metadata (${reqCount} key(s))` : '') +
+      '.';
+    this.showTaskConfigMessage(itemId, msg, ignoredKeys.length ? 'warning' : 'success');
+  }
+
+  showTaskConfigMessage(itemId, message, tone) {
+    const el = document.getElementById(`taskConfigMsg_${itemId}`);
+    if (!el) return;
+    const cls = tone === 'error'
+      ? 'text-danger'
+      : tone === 'warning'
+        ? 'text-warning'
+        : 'text-success';
+    el.className = `small mb-2 ${cls}`;
+    el.textContent = message;
+  }
+
+  applyDependencyRules(settingsContainerId) {
+    const container = document.getElementById(settingsContainerId);
+    if (!container) return;
+
+    container.querySelectorAll('[data-depends-on]').forEach(input => {
+      const dependsOnKey = input.dataset.dependsOn;
+      const dependency = container.querySelector(`[data-setting-key="${dependsOnKey}"]`);
+      if (!dependency) return;
+
+      const depValue = this.readSettingInputValue(dependency);
+      const mapRaw = input.dataset.optionsByDependency;
+      if (mapRaw && input.tagName === 'SELECT') {
+        try {
+          const map = JSON.parse(mapRaw);
+          const branch = Array.isArray(map?.[depValue]) ? map[depValue] : [];
+          if (branch.length) {
+            const prevValue = input.value;
+            input.innerHTML = branch
+              .map(v => `<option value="${this.escapeAttr(String(v))}">${this.escapeHtml(String(v))}</option>`)
+              .join('');
+            if (Array.from(input.options).some(o => o.value === prevValue)) {
+              input.value = prevValue;
+            }
+          }
+        } catch (error) {
+          console.debug('Failed applying dependency options', error);
+        }
+      }
+    });
+  }
+
+  async prefillTaskSettings(itemId, selectedTask, settingsContainerId) {
+    const state = this.itemSelectionState.get(itemId) || {};
+    let settings = state.taskSettings || {};
+    if (!Object.keys(settings).length) {
+      settings = await this.loadSavedTaskSettings(selectedTask);
+      if (!Object.keys(settings).length) {
+        settings = this.buildDefaultSettings(selectedTask);
+      }
+    }
+    state.taskSettings = settings;
+    this.itemSelectionState.set(itemId, state);
+    this.applySettingsToForm(settingsContainerId, settings);
+  }
+
+  async loadSavedTaskSettings(selectedTask) {
+    try {
+      const query = new URLSearchParams();
+      if (selectedTask?.task_key) query.set('taskKey', selectedTask.task_key);
+      if (selectedTask?.panel_display_name) {
+        query.set('displayName', selectedTask.panel_display_name);
+      } else if (selectedTask?.display_name) {
+        query.set('displayName', selectedTask.display_name);
+      }
+      const response = await fetch(`/api/account-tasks/stabilization/config?${query.toString()}`);
+      if (!response.ok) return {};
+      const payload = await response.json();
+      if (payload && payload.success === true && payload.settings && typeof payload.settings === 'object') {
+        return payload.settings;
+      }
+      return {};
+    } catch (error) {
+      console.debug('Could not load saved task settings:', error);
+      return {};
+    }
+  }
+
+  buildDefaultSettings(task) {
+    const defaults = {};
+    const fields = Array.isArray(task?.args_schema?.fields) ? task.args_schema.fields : [];
+    fields.forEach(field => {
+      if (field?.key && field.default !== undefined) {
+        defaults[field.key] = field.default;
+      }
+    });
+    return defaults;
+  }
+
+  applySettingsToForm(settingsContainerId, settings) {
+    const container = document.getElementById(settingsContainerId);
+    if (!container) return;
+    container.querySelectorAll('.task-setting-input').forEach(input => {
+      const key = input.dataset.settingKey;
+      if (!key || settings[key] === undefined) return;
+      const value = settings[key];
+      if (input.type === 'checkbox') {
+        input.checked = Boolean(value);
+      } else if (input.multiple && Array.isArray(value)) {
+        Array.from(input.options).forEach(option => {
+          option.selected = value.includes(option.value);
+        });
+      } else if (value !== null && value !== undefined) {
+        input.value = value;
+      }
+    });
+    this.applyDependencyRules(settingsContainerId);
+  }
+
+  readSettingInputValue(input) {
+    if (input.type === 'checkbox') return input.checked;
+    if (input.multiple) return Array.from(input.selectedOptions).map(option => option.value);
+
+    const raw = input.value;
+    const type = input.dataset.settingType;
+    if (type === 'integer') return raw === '' ? null : parseInt(raw, 10);
+    if (type === 'number') return raw === '' ? null : parseFloat(raw);
+    return raw;
+  }
+
+  captureTaskSettingsFromForm(itemId, selectedTask, settingsContainerId) {
+    const container = document.getElementById(settingsContainerId);
+    if (!container) return {};
+
+    const settings = {};
+    container.querySelectorAll('.task-setting-input').forEach(input => {
+      const key = input.dataset.settingKey;
+      if (!key) return;
+      settings[key] = this.readSettingInputValue(input);
+    });
+
+    const state = this.itemSelectionState.get(itemId) || {};
+    state.selectedTaskKey = selectedTask?.task_key || state.selectedTaskKey || '';
+    state.taskSettings = settings;
+    this.itemSelectionState.set(itemId, state);
+
+    return settings;
   }
 
   filterCatalogSelector(selector, query) {
@@ -477,9 +1118,6 @@ class AccountTaskPlanner {
     }
   }
 
-  /**
-   * Renders citation list for a plan item.
-   */
   renderCitations(citations) {
     if (!citations || citations.length === 0) return '';
 
@@ -501,9 +1139,6 @@ class AccountTaskPlanner {
     `;
   }
 
-  /**
-   * Generates a new task plan.
-   */
   async generatePlan() {
     if (!this.intentInput) return;
 
@@ -542,7 +1177,6 @@ class AccountTaskPlanner {
       const plan = await response.json();
       this.intentInput.value = '';
 
-      // Reload plans and select the new one
       await this.loadPlans();
       if (plan.planId) {
         this.selectPlan(plan.planId);
@@ -558,9 +1192,6 @@ class AccountTaskPlanner {
     }
   }
 
-  /**
-   * Approves all items in the current plan.
-   */
   async approvePlan() {
     if (!this.selectedPlanId) return;
 
@@ -580,9 +1211,6 @@ class AccountTaskPlanner {
     }
   }
 
-  /**
-   * Rejects the current plan.
-   */
   async rejectPlan() {
     if (!this.selectedPlanId) return;
 
@@ -606,9 +1234,6 @@ class AccountTaskPlanner {
     }
   }
 
-  /**
-   * Approves a single plan item.
-   */
   async approveItem(itemId) {
     try {
       const response = await fetch(`/api/account-tasks/items/${itemId}/approve`, {
@@ -627,9 +1252,6 @@ class AccountTaskPlanner {
     }
   }
 
-  /**
-   * Rejects a single plan item.
-   */
   async rejectItem(itemId) {
     try {
       const response = await fetch(`/api/account-tasks/items/${itemId}/reject`, {
@@ -648,15 +1270,28 @@ class AccountTaskPlanner {
     }
   }
 
-  /**
-   * Executes a patch loop for a plan item.
-   */
-  async executeItemPatchLoop(itemId, scriptName) {
+  async executeItemPatchLoop(itemId, scriptName, settingsId) {
     try {
+      const payload = scriptName ? { scriptName } : {};
+      if (settingsId && scriptName) {
+        const selectedTask = this.getCatalogTaskByKey(scriptName);
+        const settings = this.captureTaskSettingsFromForm(itemId, selectedTask, settingsId);
+        if (selectedTask) {
+          payload.taskMetadata = {
+            task_key: selectedTask.task_key || '',
+            task_name: selectedTask.task_key || scriptName,
+            display_name: selectedTask.display_name || selectedTask.task_key || scriptName,
+            panel_display_name: selectedTask.panel_display_name || selectedTask.display_name || selectedTask.task_key || scriptName,
+            settings,
+            persist_settings: true
+          };
+        }
+      }
+
       const response = await fetch(`/api/account-tasks/items/${itemId}/execute-patch-loop`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(scriptName ? { scriptName } : {})
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -665,13 +1300,15 @@ class AccountTaskPlanner {
       }
 
       const result = await response.json();
-
-      // If patch loop manager exists, connect to it
-      if (window.patchLoopManager && result.executionId) {
-        window.patchLoopManager.connect(result.executionId);
+      const executionId =
+        result?.executionId ||
+        result?.patchLoop?.executionId ||
+        result?.patchLoop?.iterationId ||
+        null;
+      if (window.patchLoopManager && executionId) {
+        window.patchLoopManager.connect(executionId);
       }
 
-      // Show the patch loop panel if hidden
       const patchPanel = document.getElementById('patchLoopPanel');
       if (patchPanel && patchPanel.style.display === 'none') {
         patchPanel.style.display = 'block';
@@ -686,7 +1323,59 @@ class AccountTaskPlanner {
     }
   }
 
-  // Utility methods
+  async executeItemQuickTest(itemId, scriptName, settingsId) {
+    try {
+      const payload = scriptName ? { scriptName } : {};
+      if (settingsId && scriptName) {
+        const selectedTask = this.getCatalogTaskByKey(scriptName);
+        const settings = this.captureTaskSettingsFromForm(itemId, selectedTask, settingsId);
+        if (selectedTask) {
+          payload.taskMetadata = {
+            task_key: selectedTask.task_key || '',
+            task_name: selectedTask.task_key || scriptName,
+            display_name: selectedTask.display_name || selectedTask.task_key || scriptName,
+            panel_display_name: selectedTask.panel_display_name || selectedTask.display_name || selectedTask.task_key || scriptName,
+            settings,
+            persist_settings: true,
+            source: 'planner_quick_test'
+          };
+        }
+      }
+
+      const response = await fetch(`/api/account-tasks/items/${itemId}/quick-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      const executionId =
+        result?.executionId ||
+        result?.patchLoop?.executionId ||
+        result?.patchLoop?.iterationId ||
+        null;
+      if (window.patchLoopManager && executionId) {
+        window.patchLoopManager.connect(executionId);
+      }
+
+      const patchPanel = document.getElementById('patchLoopPanel');
+      if (patchPanel && patchPanel.style.display === 'none') {
+        patchPanel.style.display = 'block';
+      }
+
+      if (this.selectedPlanId) {
+        await this.loadPlanDetail(this.selectedPlanId);
+      }
+    } catch (error) {
+      console.error('Failed to run quick test for item:', error);
+      alert('Failed to run quick test: ' + error.message);
+    }
+  }
 
   escapeHtml(text) {
     if (!text) return '';
@@ -697,7 +1386,12 @@ class AccountTaskPlanner {
 
   escapeAttr(text) {
     if (!text) return '';
-    return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   formatTimeAgo(dateStr) {
@@ -719,7 +1413,6 @@ class AccountTaskPlanner {
   }
 }
 
-// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   window.accountTaskPlanner = new AccountTaskPlanner();
   window.accountTaskPlanner.init();

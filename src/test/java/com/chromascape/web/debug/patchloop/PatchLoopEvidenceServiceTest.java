@@ -8,8 +8,8 @@ import com.chromascape.web.debug.patchloop.dto.*;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIteration;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
 import com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService;
+import com.chromascape.web.debug.patchloop.service.PatchLoopSessionResolverService;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
-import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickLog;
 import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
 import com.chromascape.web.decisions.entity.DecisionEntity;
@@ -35,7 +35,7 @@ class PatchLoopEvidenceServiceTest {
   @Mock private LogRepository logRepository;
   @Mock private TickLogRepository tickLogRepository;
   @Mock private DecisionRepository decisionRepository;
-  @Mock private DebugSessionRepository debugSessionRepository;
+  @Mock private PatchLoopSessionResolverService sessionResolverService;
 
   private PatchLoopEvidenceService evidenceService;
 
@@ -43,7 +43,8 @@ class PatchLoopEvidenceServiceTest {
   void setUp() {
     evidenceService =
         new PatchLoopEvidenceService(
-            logRepository, tickLogRepository, decisionRepository, debugSessionRepository);
+            logRepository, tickLogRepository, decisionRepository, sessionResolverService);
+    lenient().when(sessionResolverService.resolveForIteration(any())).thenReturn(Optional.empty());
   }
 
   @Test
@@ -324,12 +325,7 @@ class PatchLoopEvidenceServiceTest {
     when(decisionRepository.findByScriptNameAndTimestampBetween(anyString(), any(), any()))
         .thenReturn(decisions);
 
-    // Mock debug session
-    DebugSession session = new DebugSession();
-    session.setSessionId("session-123");
-    session.setStartTick(100L);
-    session.setEndTick(200L);
-    when(debugSessionRepository.findBySessionId("session-123")).thenReturn(Optional.of(session));
+    stubResolvedSession("session-123", 100L, 200L);
   }
 
   private void setupMockDataWithManyLogs(int count) {
@@ -354,12 +350,7 @@ class PatchLoopEvidenceServiceTest {
     when(decisionRepository.findByScriptNameAndTimestampBetween(anyString(), any(), any()))
         .thenReturn(new ArrayList<>());
 
-    // Mock debug session
-    DebugSession session = new DebugSession();
-    session.setSessionId("session-123");
-    session.setStartTick(100L);
-    session.setEndTick(200L);
-    when(debugSessionRepository.findBySessionId("session-123")).thenReturn(Optional.of(session));
+    stubResolvedSession("session-123", 100L, 200L);
   }
 
   private void setupMockDataWithManyTickLogs(int count) {
@@ -386,12 +377,7 @@ class PatchLoopEvidenceServiceTest {
     when(decisionRepository.findByScriptNameAndTimestampBetween(anyString(), any(), any()))
         .thenReturn(new ArrayList<>());
 
-    // Mock debug session
-    DebugSession session = new DebugSession();
-    session.setSessionId("session-123");
-    session.setStartTick(100L);
-    session.setEndTick(200L);
-    when(debugSessionRepository.findBySessionId("session-123")).thenReturn(Optional.of(session));
+    stubResolvedSession("session-123", 100L, 200L);
   }
 
   private void setupMockDataOnlyLogs() {
@@ -434,12 +420,7 @@ class PatchLoopEvidenceServiceTest {
             anyString(), anyLong(), anyLong()))
         .thenReturn(tickLogs);
 
-    // Mock debug session
-    DebugSession session = new DebugSession();
-    session.setSessionId("session-123");
-    session.setStartTick(100L);
-    session.setEndTick(200L);
-    when(debugSessionRepository.findBySessionId("session-123")).thenReturn(Optional.of(session));
+    stubResolvedSession("session-123", 100L, 200L);
   }
 
   private void setupMockDataOnlyDecisions() {
@@ -456,5 +437,17 @@ class PatchLoopEvidenceServiceTest {
 
     when(decisionRepository.findByScriptNameAndTimestampBetween(anyString(), any(), any()))
         .thenReturn(decisions);
+  }
+
+  private void stubResolvedSession(String sessionId, long startTick, long endTick) {
+    DebugSession session = new DebugSession();
+    session.setSessionId(sessionId);
+    session.setStartTick(startTick);
+    session.setEndTick(endTick);
+    when(sessionResolverService.resolveForIteration(any()))
+        .thenReturn(
+            Optional.of(
+                new PatchLoopSessionResolverService.ResolvedSessionContext(
+                    session, PatchLoopSessionResolverService.SOURCE_RUN_SESSION)));
   }
 }

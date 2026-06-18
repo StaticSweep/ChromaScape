@@ -9,8 +9,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * synthesized task plans.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record RunConfig(
-    String script, String taskPlanId, String taskItemId) {
+public record RunConfig(String script, String taskPlanId, String taskItemId) {
 
   /** Constructs a RunConfig with script only (backward compatible). */
   public RunConfig(String script) {

@@ -23,14 +23,16 @@ public class ScriptStabilizationRun {
   @Column(nullable = false, length = 200)
   private String scriptKey;
 
+  @Column(length = 50)
+  private String family;
+
   @Column(length = 20, nullable = false)
   private String outcome; // PASS | FAIL | TIMEOUT
 
   @Column(length = 50)
   private String status;
 
-  @Column
-  private Long durationMs;
+  @Column private Long durationMs;
 
   @Column(length = 255)
   private String failureSignature;
@@ -63,6 +65,14 @@ public class ScriptStabilizationRun {
 
   public void setScriptKey(String scriptKey) {
     this.scriptKey = scriptKey;
+  }
+
+  public String getFamily() {
+    return family;
+  }
+
+  public void setFamily(String family) {
+    this.family = family;
   }
 
   public String getOutcome() {

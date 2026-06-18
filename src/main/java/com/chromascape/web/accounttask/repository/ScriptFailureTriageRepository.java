@@ -11,4 +11,12 @@ public interface ScriptFailureTriageRepository extends JpaRepository<ScriptFailu
   Optional<ScriptFailureTriage> findByTriageKey(String triageKey);
 
   List<ScriptFailureTriage> findByStatusOrderByLastSeenAtDesc(String status);
+
+  List<ScriptFailureTriage> findByStatusAndFamilyOrderByLastSeenAtDesc(String status, String family);
+
+  List<ScriptFailureTriage> findByStatusInOrderByBacklogPriorityDescLastSeenAtDesc(
+      List<String> statuses);
+
+  List<ScriptFailureTriage> findByStatusInAndFamilyOrderByBacklogPriorityDescLastSeenAtDesc(
+      List<String> statuses, String family);
 }

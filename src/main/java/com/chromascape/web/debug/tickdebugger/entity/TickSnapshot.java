@@ -79,6 +79,15 @@ public class TickSnapshot {
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "ground_items")
   private JsonNode groundItems;
+  /** Nearby players as JSON array. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode players;
+  /** Widgets as JSON array. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode widgets;
+  /** Replay schema version for strict pipeline compatibility. */
+  @Column(name = "schema_version")
+  private Integer schemaVersion;
 
   /** Default constructor required by JPA. */
   public TickSnapshot() {}
@@ -211,5 +220,29 @@ public class TickSnapshot {
 
   public void setGroundItems(JsonNode groundItems) {
     this.groundItems = groundItems;
+  }
+
+  public JsonNode getPlayers() {
+    return players;
+  }
+
+  public void setPlayers(JsonNode players) {
+    this.players = players;
+  }
+
+  public JsonNode getWidgets() {
+    return widgets;
+  }
+
+  public void setWidgets(JsonNode widgets) {
+    this.widgets = widgets;
+  }
+
+  public Integer getSchemaVersion() {
+    return schemaVersion;
+  }
+
+  public void setSchemaVersion(Integer schemaVersion) {
+    this.schemaVersion = schemaVersion;
   }
 }

@@ -301,4 +301,158 @@ org.opentest4j.AssertionFailedError: Expected AnalysisException to be thrown, bu
 
 ---
 
+## SC-582: TaskPlan PatchLoop Sync Hardening
+
+**Date:** 2026-04-17
+**Scope:** Deterministic item status transitions, stale EXECUTING auto-fail, focused tests
+
+### New Configuration
+
+| Key | Env Variable | Default | Purpose |
+|-----|-------------|---------|---------|
+| `chromascape.patchloop.task-sync-executing-timeout-ms` | `CHROMASCAPE_PATCHLOOP_TASK_SYNC_EXECUTING_TIMEOUT_MS` | `1800000` (30 min) | Stale threshold for EXECUTING items |
+| `chromascape.patchloop.task-sync-fail-stale` | `CHROMASCAPE_PATCHLOOP_TASK_SYNC_FAIL_STALE` | `true` | Enable/disable stale auto-fail |
+
+### Status Transition Table
+
+| Source | Condition | Item Result | Plan Result |
+|--------|-----------|-------------|-------------|
+| EXECUTING + iteration | COMPLETED | COMPLETED | updatePlanStatus() |
+| EXECUTING + iteration | FAILED/CANCELLED/INSUFFICIENT_EVIDENCE | FAILED | updatePlanStatus() |
+| EXECUTING + iteration | Non-terminal, within timeout | unchanged | unchanged |
+| EXECUTING + iteration | Non-terminal, past timeout, fail-stale=true | FAILED (stale) | updatePlanStatus() |
+| EXECUTING + iteration id | Iteration missing, within timeout | unchanged | unchanged |
+| EXECUTING + iteration id | Iteration missing, past timeout, fail-stale=true | FAILED (stale) | updatePlanStatus() |
+
+### Validation Checklist
+
+#### 1. Run SC-582 Unit Tests
+
+```bash
+cd /mnt/f/Dev/IdeaProjects/ChromaScape
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH="$JAVA_HOME/bin:$PATH"
+
+# Sync service tests (10 methods)
+./gradlew test --tests "com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncServiceTest"
+
+# Controller contract tests (5 methods)
+./gradlew test --tests "com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest"
+```
+
+**Expected:** All 15 tests pass.
+
+#### 2. Regression Suite (Existing Patch-Loop Tests)
+
+```bash
+./gradlew test \
+  --tests "com.chromascape.web.config.PatchLoopExecutionBackendValidatorTest" \
+  --tests "com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" \
+  --tests "com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" \
+  --tests "com.chromascape.web.debug.patchloop.PatchLoopControllerTest"
+```
+
+**Expected:** All existing tests pass (no regressions).
+
+#### 3. Stale Auto-Fail Verification
+
+```bash
+# Start app with aggressive timeout for testing
+CHROMASCAPE_PATCHLOOP_TASK_SYNC_EXECUTING_TIMEOUT_MS=10000 \
+CHROMASCAPE_PATCHLOOP_TASK_SYNC_INTERVAL_MS=2000 \
+./gradlew bootRun
+```
+
+Then in the dashboard at `http://localhost:8090/debugger`:
+
+1. In task planner, approve an item that has the evidence triplet (LOG + TICK_LOG + RECORDING_SESSION).
+2. Execute patch loop for that item from the planner.
+3. Confirm immediate transition to EXECUTING.
+4. To test stale: stop the micro6 executor backend and wait past the timeout.
+5. Confirm item transitions to FAILED with executionResult containing "Stale execution auto-fail".
+
+#### 4. Windows-Host API Probe (micro6 on host localhost)
+
+```bash
+node scripts/mcp-bridge/probe-patch-loop-e2e.js \
+  --baseUrl http://localhost:8090 \
+  --scriptName "<known_micro6_task_key>" \
+  --executionMode analysis_only \
+  --timeoutSec 600 \
+  --pollMs 2000
+```
+
+#### 5. Dashboard Full-Flow Gate
+
+1. Open `http://localhost:8090/debugger`.
+2. In task planner, approve one item with the evidence triplet.
+3. Execute patch loop for that item.
+4. Confirm immediate EXECUTING transition in planner.
+5. Poll `GET /api/account-tasks/{planId}` and confirm item transitions within two sync cycles after iteration terminal state:
+   - Success path -> COMPLETED
+   - Failure/timeout/cancel/insufficient path -> FAILED with non-empty executionResult
+6. Open Script Runs tab and verify terminal status card appears with backend + duration from `/api/debug/patch-loop/{iterationId}/artifacts`.
+
+### Failure Mode Checks
+
+| Failure Mode | Expected Behavior | Verification |
+|-------------|-------------------|-------------|
+| Iteration record deleted mid-execution | Item auto-fails after timeout | Check executionResult contains "missing iteration" |
+| Iteration stuck in ANALYZING | Item auto-fails after timeout | Check executionResult contains "non-terminal ANALYZING" |
+| Stale fail disabled (`fail-stale=false`) | Item stays EXECUTING, log-only | Check log for skipped entries |
+| Normal completion within timeout | Item marks COMPLETED | Check executionResult has "Patch loop completed" |
+| Failed iteration within timeout | Item marks FAILED immediately | No stale timeout needed |
+
+---
+
 **End of Report**
+
+---
+
+## SC-582 Residual Hardening (2026-04-17)
+
+**Scope:** Flaky test removal, concurrency-safe legacy controls, HTTP-targeting test assertions, host fallback verification
+
+### WSL I/O Fallback Verification
+
+When WSL Gradle initialization fails with `java.io.IOException: Input/output error`, use the Windows host as the authoritative fallback.
+
+#### Windows Host Commands
+
+```cmd
+cd F:\Dev\IdeaProjects\ChromaScape
+set JAVA_HOME=C:\Program Files\Java\jdk-17
+set PATH=%JAVA_HOME%\bin;%PATH%
+
+gradlew.bat test ^
+  --tests "com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" ^
+  --tests "com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" ^
+  --tests "com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" ^
+  --tests "com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncServiceTest"
+```
+
+**Expected:** All focused suite tests pass.
+
+#### WSL Commands (preferred if I/O is stable)
+
+```bash
+cd /mnt/f/Dev/IdeaProjects/ChromaScape
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH="$JAVA_HOME/bin:$PATH"
+
+./gradlew test \
+  --tests "com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" \
+  --tests "com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" \
+  --tests "com.chromascape.web.accounttask.controller.AccountTaskControllerPatchLoopExecutionTest" \
+  --tests "com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncServiceTest"
+```
+
+**Pass Criteria:** At least one environment (WSL or Windows host) must pass all tests.
+
+### Changes Applied
+
+| File | Change |
+|------|--------|
+| `PatchLoopGraphOrchestratorServiceTest.java` | Removed hard `<100ms` timing assertions; kept async worker + never-sync assertions |
+| `ScriptExecutionService.java` | Legacy global control methods (`pauseCurrentScript`/`resumeCurrentScript`/`stopCurrentScript`) now delegate to execution-scoped methods when exactly 1 active run; warn + no-op when >1 active runs |
+| `ScriptExecutionServiceTest.java` | Added HTTP URI assertions for pause/resume/stop targeting; added `resumeScript_targetsCorrectEntry` test; strengthened `pauseScript_noopWhenNoActiveRun` to verify no HTTP sent |

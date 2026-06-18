@@ -34,6 +34,7 @@ public class HybridTaskSynthesisService {
   private final TaskPlanRepository planRepository;
   private final TaskPlanItemRepository itemRepository;
   private final StructuredEvidenceCollectorService evidenceCollector;
+  private final TaskPlanAccountService accountService;
   private final ObjectMapper objectMapper;
 
   @Value("${features.task-synthesis.enabled:true}")
@@ -43,10 +44,12 @@ public class HybridTaskSynthesisService {
       TaskPlanRepository planRepository,
       TaskPlanItemRepository itemRepository,
       StructuredEvidenceCollectorService evidenceCollector,
+      TaskPlanAccountService accountService,
       ObjectMapper objectMapper) {
     this.planRepository = planRepository;
     this.itemRepository = itemRepository;
     this.evidenceCollector = evidenceCollector;
+    this.accountService = accountService;
     this.objectMapper = objectMapper;
   }
 
@@ -85,6 +88,9 @@ public class HybridTaskSynthesisService {
     plan.setStatus(TaskPlanStatus.GENERATED);
     plan.setSourceSessionId(sourceSessionId);
     plan.setSourceRecordingId(sourceRecordingId);
+    accountService
+        .resolveAccountName(sourceSessionId, sourceRecordingId)
+        .ifPresent(plan::setAccountName);
 
     // Store synthesis metadata
     Map<String, Object> metadata = new HashMap<>();
@@ -138,7 +144,9 @@ public class HybridTaskSynthesisService {
       item.setSortOrder(sortOrder++);
       item.setTitle("Investigate " + failedDecisions + " failed decisions");
       item.setDescription(
-          "Review and resolve " + failedDecisions + " failed bot decisions found in evidence window.");
+          "Review and resolve "
+              + failedDecisions
+              + " failed bot decisions found in evidence window.");
       item.setDifficulty("MEDIUM");
       item.setStatus(ItemStatus.PENDING);
       items.add(item);
@@ -166,8 +174,7 @@ public class HybridTaskSynthesisService {
       item.setPlanId(planId);
       item.setSortOrder(sortOrder++);
       item.setTitle("Review " + evidence.getRecordingSessions().size() + " recording sessions");
-      item.setDescription(
-          "Analyze recorded sessions for patterns relevant to: " + intent);
+      item.setDescription("Analyze recorded sessions for patterns relevant to: " + intent);
       item.setDifficulty("EASY");
       item.setStatus(ItemStatus.PENDING);
       items.add(item);

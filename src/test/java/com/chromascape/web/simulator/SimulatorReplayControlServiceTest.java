@@ -83,7 +83,7 @@ class SimulatorReplayControlServiceTest {
       when(httpClient.send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString())))
           .thenReturn(httpResponse);
 
-      var result = service.start("player1", "latest", 2.0, "actor1");
+      var result = service.start("player1", "latest", 2.0, "actor1", null, null);
 
       assertEquals(true, result.get("success"));
       assertEquals("Started", result.get("message"));
