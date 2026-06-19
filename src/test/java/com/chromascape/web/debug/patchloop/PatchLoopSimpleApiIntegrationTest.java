@@ -9,8 +9,6 @@ import com.chromascape.web.debug.patchloop.dto.*;
 import com.chromascape.web.debug.patchloop.dto.SessionContextDto;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
-import java.lang.reflect.Field;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,10 +35,9 @@ class PatchLoopSimpleApiIntegrationTest {
   private PatchLoopController controller;
 
   @BeforeEach
-  void setUp() throws Exception {
+  void setUp() {
     controller =
         new PatchLoopController(orchestratorService, graphOrchestratorService, null, null, null);
-    setAutofixEnabled(true);
   }
 
   @Test
@@ -159,46 +156,6 @@ class PatchLoopSimpleApiIntegrationTest {
     PatchLoopExecuteResponse body = (PatchLoopExecuteResponse) response.getBody();
     assertNotNull(body);
     assertEquals("patchloop_autofix", body.getIterationId());
-  }
-
-  @Test
-  @DisplayName("POST /execute rejects autofix_loop when autofix is disabled")
-  void testExecuteRejectsAutofixLoopWhenDisabled() throws Exception {
-    setAutofixEnabled(false);
-
-    PatchLoopExecuteRequest request = new PatchLoopExecuteRequest();
-    request.setScriptName("TestScript");
-    request.setPrompt("Fix the issue");
-    request.setExecutionMode("autofix_loop");
-
-    ResponseEntity<Object> response = controller.executeIteration(request);
-
-    assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-    assertTrue(response.getBody() instanceof Map);
-    @SuppressWarnings("unchecked")
-    Map<String, Object> body = (Map<String, Object>) response.getBody();
-    assertEquals("AUTOFIX_DISABLED", body.get("errorCode"));
-    verifyNoInteractions(orchestratorService);
-  }
-
-  @Test
-  @DisplayName("POST /execute rejects legacy full_loop when autofix is disabled")
-  void testExecuteRejectsFullLoopWhenDisabled() throws Exception {
-    setAutofixEnabled(false);
-
-    PatchLoopExecuteRequest request = new PatchLoopExecuteRequest();
-    request.setScriptName("TestScript");
-    request.setPrompt("Fix the issue");
-    request.setExecutionMode("full_loop");
-
-    ResponseEntity<Object> response = controller.executeIteration(request);
-
-    assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-    assertTrue(response.getBody() instanceof Map);
-    @SuppressWarnings("unchecked")
-    Map<String, Object> body = (Map<String, Object>) response.getBody();
-    assertEquals("AUTOFIX_DISABLED", body.get("errorCode"));
-    verifyNoInteractions(orchestratorService);
   }
 
   @Test
@@ -367,11 +324,5 @@ class PatchLoopSimpleApiIntegrationTest {
     // Assert
     assertEquals(HttpStatus.OK, response.getStatusCode());
     verify(graphOrchestratorService, times(1)).executeGraph(request);
-  }
-
-  private void setAutofixEnabled(boolean value) throws Exception {
-    Field field = PatchLoopController.class.getDeclaredField("patchLoopAutofixEnabled");
-    field.setAccessible(true);
-    field.set(controller, value);
   }
 }

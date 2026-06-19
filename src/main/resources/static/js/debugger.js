@@ -22,6 +22,8 @@ let lastDrawnSeq = 0;
 let latestSeq = 0;
 let pendingBitmap = null;
 let pendingSeq = 0;
+let pendingSourceWidth = 0;
+let pendingSourceHeight = 0;
 let rafScheduled = false;
 let decodeInFlight = false;
 let viewportCanvas = null;
@@ -3472,6 +3474,7 @@ function connectViewportWebSocket() {
 
   const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
   viewportWebSocket = new WebSocket(`${wsProtocol}://${location.host}/ws/viewport`);
+  viewportWebSocket.binaryType = 'arraybuffer';
 
   viewportWebSocket.onopen = () => {
     console.log('Connected to viewport WebSocket');
@@ -3482,35 +3485,28 @@ function connectViewportWebSocket() {
     elements.viewportLoader.style.display = 'none';
     elements.viewportCanvas.style.display = 'block';
 
-    let seq, dataUrl;
-
-    // Parse frame payload
     try {
-      const payload = JSON.parse(event.data);
-      seq = payload.seq;
-      dataUrl = payload.data;
-    } catch {
-      // Fallback: raw data URI (old server without metadata)
-      seq = ++latestSeq;
-      dataUrl = event.data;
-    }
+      const frame = await parseViewportFramePayload(event.data);
 
-    // Track highest seq seen
-    if (seq > latestSeq) latestSeq = seq;
+      // Track highest seq seen
+      if (frame.seq > latestSeq) latestSeq = frame.seq;
 
-    // Drop immediately if already drawn
-    if (seq <= lastDrawnSeq) {
-      if (window.DEBUG_FRAME_SEQ) {
-        console.log(`[FRAME] Dropped frame ${seq} - already drawn ${lastDrawnSeq}`);
+      // Drop immediately if already drawn
+      if (frame.seq <= lastDrawnSeq) {
+        if (window.DEBUG_FRAME_SEQ) {
+          console.log(`[FRAME] Dropped frame ${frame.seq} - already drawn ${lastDrawnSeq}`);
+        }
+        return;
       }
-      return;
+
+      // Buffer the frame
+      bufferFrame(frame);
+
+      // Trigger drain (idempotent, safe to call always)
+      drainFrameBuffer();
+    } catch (error) {
+      console.warn('Failed to parse viewport frame', error);
     }
-
-    // Buffer the frame
-    bufferFrame(seq, dataUrl);
-
-    // Trigger drain (idempotent, safe to call always)
-    drainFrameBuffer();
   };
 
   viewportWebSocket.onerror = (error) => {
@@ -3576,6 +3572,39 @@ async function loadCurrentFps() {
   }
 }
 
+async function parseViewportFramePayload(rawData) {
+  if (rawData instanceof Blob) {
+    return parseViewportFramePayload(await rawData.arrayBuffer());
+  }
+
+  if (rawData instanceof ArrayBuffer) {
+    if (rawData.byteLength < 16) {
+      throw new Error(`Viewport frame too small: ${rawData.byteLength}`);
+    }
+
+    const view = new DataView(rawData);
+    const seq = Number(view.getBigUint64(0, false));
+    const sourceWidth = view.getInt32(8, false);
+    const sourceHeight = view.getInt32(12, false);
+    const jpegBytes = rawData.slice(16);
+
+    return {
+      seq,
+      blob: new Blob([jpegBytes], { type: 'image/jpeg' }),
+      sourceWidth,
+      sourceHeight
+    };
+  }
+
+  const payload = JSON.parse(rawData);
+  return {
+    seq: payload.seq ?? ++latestSeq,
+    dataUrl: payload.data,
+    sourceWidth: payload.sourceWidth ?? 0,
+    sourceHeight: payload.sourceHeight ?? 0
+  };
+}
+
 /**
  * Converts a data URL to a Blob without using fetch().
  * Handles both base64 and non-base64 (URL-encoded) data URLs.
@@ -3609,7 +3638,27 @@ function dataUrlToBlob(dataUrl) {
  * Decode a data URL into an ImageBitmap or Image element.
  * Uses direct conversion (faster), with fallbacks for edge cases.
  */
-async function decodeFrame(dataUrl) {
+async function decodeFrame(frame) {
+  if (frame.blob) {
+    if (window.createImageBitmap) {
+      return await createImageBitmap(frame.blob);
+    }
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(frame.blob);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(img);
+      };
+      img.onerror = (error) => {
+        URL.revokeObjectURL(objectUrl);
+        reject(error);
+      };
+      img.src = objectUrl;
+    });
+  }
+
+  const dataUrl = frame.dataUrl;
   if (window.createImageBitmap) {
     try {
       const blob = dataUrlToBlob(dataUrl);
@@ -3659,8 +3708,12 @@ function renderViewportFrame() {
 
   const bitmap = pendingBitmap;
   const seq = pendingSeq;
+  const sourceWidth = pendingSourceWidth;
+  const sourceHeight = pendingSourceHeight;
   pendingBitmap = null;
   pendingSeq = 0;
+  pendingSourceWidth = 0;
+  pendingSourceHeight = 0;
 
   // Only drop if we've already drawn a newer frame
   if (seq <= lastDrawnSeq) {
@@ -3676,10 +3729,15 @@ function renderViewportFrame() {
   }
 
   // Resize canvas to match bitmap
-  if (elements.viewportCanvas.width !== bitmap.width) {
+  if (
+    elements.viewportCanvas.width !== bitmap.width ||
+    elements.viewportCanvas.height !== bitmap.height
+  ) {
     elements.viewportCanvas.width = bitmap.width;
     elements.viewportCanvas.height = bitmap.height;
   }
+  elements.viewportCanvas.dataset.sourceWidth = String(sourceWidth || bitmap.width);
+  elements.viewportCanvas.dataset.sourceHeight = String(sourceHeight || bitmap.height);
 
   // Clear and draw
   viewportCtx.clearRect(0, 0, bitmap.width, bitmap.height);
@@ -3703,7 +3761,8 @@ function renderViewportFrame() {
  * - De-duplicates by seq (removes existing same seq)
  * - Keeps only newest FRAME_BUFFER_SIZE frames
  */
-function bufferFrame(seq, dataUrl) {
+function bufferFrame(frame) {
+  const { seq } = frame;
   // Drop frames already rendered
   if (seq <= lastDrawnSeq) {
     if (window.DEBUG_FRAME_SEQ) {
@@ -3716,7 +3775,7 @@ function bufferFrame(seq, dataUrl) {
   frameBuffer = frameBuffer.filter(f => f.seq !== seq);
 
   // Add new frame
-  frameBuffer.push({ seq, dataUrl });
+  frameBuffer.push(frame);
 
   // Sort by seq ascending (oldest first)
   frameBuffer.sort((a, b) => a.seq - b.seq);
@@ -3763,6 +3822,12 @@ function clearFrameState() {
   if (pendingBitmap?.close) pendingBitmap.close();
   pendingBitmap = null;
   pendingSeq = 0;
+  pendingSourceWidth = 0;
+  pendingSourceHeight = 0;
+  if (elements.viewportCanvas?.dataset) {
+    delete elements.viewportCanvas.dataset.sourceWidth;
+    delete elements.viewportCanvas.dataset.sourceHeight;
+  }
 
   // Reset decode state
   decodeInFlight = false;
@@ -3796,7 +3861,7 @@ async function drainFrameBuffer() {
       console.log(`[FRAME] Decoding frame ${frame.seq}`);
     }
 
-    const bitmap = await decodeFrame(frame.dataUrl);
+    const bitmap = await decodeFrame(frame);
 
     // Check if still valid after decode (could have been superseded)
     // Also check latestSeq - a newer frame may have arrived while decoding
@@ -3810,6 +3875,8 @@ async function drainFrameBuffer() {
       if (pendingBitmap?.close) pendingBitmap.close();
       pendingBitmap = bitmap;
       pendingSeq = frame.seq;
+      pendingSourceWidth = frame.sourceWidth || bitmap.width;
+      pendingSourceHeight = frame.sourceHeight || bitmap.height;
 
       // Schedule RAF render
       if (!rafScheduled) {
@@ -3910,8 +3977,16 @@ function getViewportMetrics() {
   if (!displayWidth || !displayHeight) return null;
 
   // Get source dimensions (actual canvas/video resolution)
-  const sourceWidth = activeElement.width || activeElement.videoWidth || displayWidth;
-  const sourceHeight = activeElement.height || activeElement.videoHeight || displayHeight;
+  const sourceWidth =
+    Number(activeElement.dataset?.sourceWidth || 0) ||
+    activeElement.width ||
+    activeElement.videoWidth ||
+    displayWidth;
+  const sourceHeight =
+    Number(activeElement.dataset?.sourceHeight || 0) ||
+    activeElement.height ||
+    activeElement.videoHeight ||
+    displayHeight;
 
   // Canvas uses object-fit: contain, so compute actual displayed size accounting for letterboxing
   const sourceAspect = sourceWidth / sourceHeight;
@@ -4530,9 +4605,6 @@ async function loadRecording(recordingId) {
                 // Render the full history
                 if (currentMode === 'replay') {
                   renderLogHistory('Loading complete');
-                  if (replayLogHistory.length === 0) {
-                    diagnoseReplayEmptyLogs(recordingId);
-                  }
                 }
               } else {
                 console.warn('Failed to load tick cards, status:', tickCardsResponse.status);
@@ -4669,33 +4741,6 @@ function buildReplayHistoryFromTickCards(tickCards) {
   console.log(`Built replay history: ${replayLogHistory.length} log entries, ${replayTickSnapshots.size} snapshots across ${replaySnapshotTimeline.length} ticks (${replaySnapshotTimeline[0]}-${replaySnapshotTimeline[replaySnapshotTimeline.length - 1]})`);
 }
 
-async function diagnoseReplayEmptyLogs(recordingId) {
-  try {
-    const resp = await fetch(`/api/debug/replay/log-parity?recordingId=${encodeURIComponent(recordingId)}`);
-    if (!resp.ok) return;
-    const parity = await resp.json();
-    if (parity && parity.tickLogCount === 0) {
-      ensureLogPlaceholder('No replay tick logs were stored for this recording.');
-    } else if (parity && parity.tickLogCount > 0) {
-      ensureLogPlaceholder('Replay tick logs exist; scrubbing will fetch them per tick.');
-    }
-  } catch (e) {
-    console.warn('Replay parity diagnosis failed:', e);
-  }
-}
-
-async function fetchReplayTickLogsWindow(recordingId, tick, windowTicks = 4) {
-  try {
-    const resp = await fetch(`/api/debug/replay/tick-logs?recordingId=${encodeURIComponent(recordingId)}&tick=${tick}&windowTicks=${windowTicks}`);
-    if (!resp.ok) return;
-    const payload = await resp.json();
-    if (!Array.isArray(payload.logs) || payload.logs.length === 0) return;
-    renderReplayLogs(payload.logs, tick);
-  } catch (e) {
-    console.warn('Failed to fetch replay tick logs window:', e);
-  }
-}
-
 /**
  * Calculate current tick from video time using snapshot timeline.
  * Uses snapshot timeline as authoritative source if available.
@@ -4827,9 +4872,6 @@ async function syncLogsToVideo(videoMs) {
       updateTickDisplay(currentTick);
       highlightCurrentTickGroup(currentTick);
       maybeAutoFollowTick(currentTick);
-      if (currentMode === 'replay' && currentRecording && replayLogHistory.length === 0) {
-        fetchReplayTickLogsWindow(currentRecording, currentTick, 4);
-      }
     }
 
   } catch (error) {
@@ -5266,19 +5308,17 @@ function connectTickStreamWebSocket() {
 
       // Handle SESSION_CREATED broadcast from Micro6
       if (data.type === 'SESSION_CREATED') {
-        // Always keep the canonical debug session pointer in sync with Micro6,
-        // independent of feed visibility state.
-        currentDebugSessionId = data.sessionId;
-        if (!isRecording || !currentSessionId) {
-          currentSessionId = data.sessionId;
-        }
-        if (debugFeedEnabled) {
+        // Update UI to use Micro6's sessionId
+        if (debugFeedEnabled && (!currentDebugSessionId || !isRecording)) {
+          currentDebugSessionId = data.sessionId;
           isDebugSessionActive = true;
           if (elements.debugSessionStatus) {
             elements.debugSessionStatus.classList.remove('d-none');
           }
+          console.log('✅ Micro6 session detected:', data.sessionId);
+        } else {
+          console.log('ℹ️ SESSION_CREATED received but debug feed is disabled');
         }
-        console.log('✅ Micro6 session detected:', data.sessionId);
         return;
       }
 
@@ -6046,8 +6086,7 @@ async function startRecording() {
       body: JSON.stringify({
         accountName: currentWindowId || 'Unknown',
         scriptName: 'Debug Session',
-        recordingEnabled: true,
-        sessionId: currentDebugSessionId || currentSessionId || null
+        recordingEnabled: true
       })
     });
 
@@ -6091,12 +6130,7 @@ async function startRecording() {
     }
 
     const data = await response.json();
-    if (data.sessionId && currentSessionId && data.sessionId !== currentSessionId) {
-      console.warn(`Recording session rebound from ${currentSessionId} to ${data.sessionId}`);
-      showNotification('Recording bound to active tick session', 'info');
-    }
     currentSessionId = data.sessionId;
-    currentDebugSessionId = data.sessionId;
 
     // Validate recording actually started before updating UI
     if (data.recordingId) {
@@ -6138,7 +6172,6 @@ async function startRecording() {
     isRecording = false;
     currentRecordingId = null;
     currentSessionId = null;
-    currentDebugSessionId = null;
   }
 }
 
@@ -6153,13 +6186,11 @@ async function stopRecording() {
   try {
     let endpoint, body, headers = {};
 
-    const stopSessionId = currentDebugSessionId || currentSessionId;
-
     // If we have a debug session, use the debug stop endpoint
-    if (stopSessionId) {
+    if (currentSessionId) {
       endpoint = '/api/debug/replay/stop-recording';
       body = JSON.stringify({
-        sessionId: stopSessionId,
+        sessionId: currentSessionId,
         endTick: null
       });
       headers['Content-Type'] = 'application/json';
@@ -6184,7 +6215,6 @@ async function stopRecording() {
         isRecording = false;
         currentRecordingId = null;
         currentSessionId = null;
-        currentDebugSessionId = null;
         recordingStartTime = null;
 
         // Reset UI
@@ -6229,7 +6259,6 @@ async function stopRecording() {
     const savedRecordingId = currentRecordingId;
     currentRecordingId = null;
     currentSessionId = null;
-    currentDebugSessionId = null;
     recordingStartTime = null;
 
     console.log('Recording stopped');
@@ -6277,7 +6306,6 @@ async function forceResetRecording() {
     isRecording = false;
     currentRecordingId = null;
     currentSessionId = null;
-    currentDebugSessionId = null;
     recordingStartTime = null;
 
     // Update UI
@@ -6364,7 +6392,6 @@ async function checkRecordingStatus() {
       isRecording = false;
       currentRecordingId = null;
       currentSessionId = null;
-      currentDebugSessionId = null;
       recordingStartTime = null;
 
       // Reset UI
@@ -6671,14 +6698,11 @@ function setPatchScriptCatalogStatus(message, tone = 'muted') {
 }
 
 function buildPatchLoopSearchIndex(task) {
-  const aliasText = Array.isArray(task?.search_aliases) ? task.search_aliases.join(' ') : '';
   const tokens = [
-    task?.panel_display_name,
     task?.display_name,
     task?.task_key,
     task?.category,
-    Array.isArray(task?.tags) ? task.tags.join(' ') : '',
-    aliasText
+    Array.isArray(task?.tags) ? task.tags.join(' ') : ''
   ].filter(Boolean);
   return tokens.join(' ').toLowerCase();
 }
@@ -6733,35 +6757,6 @@ function renderPatchLoopScriptOptions(selectedValue = '') {
       select.value = selectedValue;
     }
   }
-}
-
-function toBase64UrlUtf8(input) {
-  try {
-    const utf8 = new TextEncoder().encode(String(input || ''));
-    let binary = '';
-    for (let i = 0; i < utf8.length; i++) {
-      binary += String.fromCharCode(utf8[i]);
-    }
-    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-  } catch (e) {
-    console.warn('Failed to encode display task key:', e);
-    return '';
-  }
-}
-
-function buildMicro6ExecutionValue(task) {
-  const rawTaskKey = (task?.task_key || '').toString();
-  if (rawTaskKey.startsWith('DISPLAY::')) {
-    return `micro6:${rawTaskKey}`;
-  }
-  const panelDisplayName = (task?.panel_display_name || task?.display_name || '').toString().trim();
-  if (panelDisplayName.length > 0) {
-    const encoded = toBase64UrlUtf8(panelDisplayName);
-    if (encoded.length > 0) {
-      return `micro6:DISPLAY::${encoded}`;
-    }
-  }
-  return `micro6:${rawTaskKey}`;
 }
 
 /**
@@ -6828,26 +6823,16 @@ async function loadPatchLoopScripts(forceRefresh = false) {
             .localeCompare((b?.display_name || b?.task_key || '').toString())
         );
 
-      const seenMicro6Labels = new Set();
       micro6QueueTasks.forEach(task => {
         const taskKey = task?.task_key;
         if (!taskKey) return;
-        const displayName = task?.panel_display_name || task?.display_name || taskKey;
-        const dedupeKey = displayName.toString().trim().toLowerCase();
-        if (dedupeKey && seenMicro6Labels.has(dedupeKey)) {
-          return;
-        }
-        if (dedupeKey) {
-          seenMicro6Labels.add(dedupeKey);
-        }
+        const displayName = task?.display_name || taskKey;
         const category = task?.category ? ` [${task.category}]` : '';
-        const isRunnable = task?.runnable !== false;
-        const disabledReason = task?.disabled_reason ? ` [not runnable: ${task.disabled_reason}]` : '';
         patchLoopCatalogEntries.push({
           group: 'Micro6 AccountBuilder',
-          value: buildMicro6ExecutionValue(task),
-          label: `${displayName} (${taskKey})${category}${isRunnable ? '' : disabledReason}`,
-          disabled: !isRunnable,
+          value: `micro6:${taskKey}`,
+          label: `${displayName} (${taskKey})${category}`,
+          disabled: false,
           searchText: buildPatchLoopSearchIndex(task)
         });
         queueCount++;

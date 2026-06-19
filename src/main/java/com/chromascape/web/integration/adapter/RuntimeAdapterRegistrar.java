@@ -11,8 +11,7 @@ public class RuntimeAdapterRegistrar {
   private final RuntimeAdapterRegistry registry;
   private final List<BotRuntimeAdapter> adapters;
 
-  public RuntimeAdapterRegistrar(
-      RuntimeAdapterRegistry registry, List<BotRuntimeAdapter> adapters) {
+  public RuntimeAdapterRegistrar(RuntimeAdapterRegistry registry, List<BotRuntimeAdapter> adapters) {
     this.registry = registry;
     this.adapters = adapters;
   }

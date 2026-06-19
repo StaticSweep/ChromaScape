@@ -3,11 +3,13 @@ package com.chromascape.web.viewport.service;
 import com.chromascape.utils.core.screen.FrameEvent;
 import com.chromascape.utils.core.screen.FrameListener;
 import com.chromascape.utils.core.screen.viewport.ViewportManager;
+import com.chromascape.web.viewport.WebsocketViewport;
 import com.chromascape.web.viewport.config.ScreenCaptureConfig;
 import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
+import com.chromascape.web.viewport.config.ViewportStreamConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import java.awt.image.BufferedImage;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.logging.log4j.LogManager;
@@ -34,21 +36,30 @@ public class ScreenCaptureService implements FrameListener {
 
   private final ScreenCaptureConfig config;
   private final UnifiedCaptureConfig unifiedConfig;
+  private final ViewportStreamConfig viewportStreamConfig;
   private final UnifiedFrameCaptureService unifiedCaptureService;
   private final AtomicBoolean paused = new AtomicBoolean(false);
   private final AtomicBoolean registered = new AtomicBoolean(false);
+  private final AtomicInteger activeViewportSessions = new AtomicInteger(0);
+  private final AtomicLong latestCaptureTimeNanos = new AtomicLong(0);
+  private final AtomicLong lastForwardedCaptureTimeNanos = new AtomicLong(0);
   private final AtomicLong framesReceived = new AtomicLong(0);
   private final AtomicLong framesForwarded = new AtomicLong(0);
   private final AtomicLong framesDroppedStale = new AtomicLong(0);
+  private final AtomicLong framesSkippedThrottle = new AtomicLong(0);
   private final AtomicLong frameProcessingErrors = new AtomicLong(0);
+  private final AtomicLong streamActivations = new AtomicLong(0);
+  private final AtomicLong streamDeactivations = new AtomicLong(0);
 
   @Autowired
   public ScreenCaptureService(
       ScreenCaptureConfig config,
       UnifiedCaptureConfig unifiedConfig,
+      ViewportStreamConfig viewportStreamConfig,
       UnifiedFrameCaptureService unifiedCaptureService) {
     this.config = config;
     this.unifiedConfig = unifiedConfig;
+    this.viewportStreamConfig = viewportStreamConfig;
     this.unifiedCaptureService = unifiedCaptureService;
   }
 
@@ -57,7 +68,7 @@ public class ScreenCaptureService implements FrameListener {
    *
    * <p>This method is automatically called after Spring bean construction via @PostConstruct.
    *
-   * <p>Registers with the unified capture service to receive frames.
+   * <p>Viewport capture is demand-driven and only subscribes while viewport sessions are present.
    */
   @PostConstruct
   public void start() {
@@ -65,22 +76,9 @@ public class ScreenCaptureService implements FrameListener {
       logger.info("Screen capture is disabled");
       return;
     }
-
-    if (registered.getAndSet(true)) {
-      logger.warn("ScreenCaptureService is already registered");
-      return;
-    }
-
-    if (unifiedConfig.isEnabled()) {
-      logger.info(
-          "Registering ScreenCaptureService with unified capture at {} FPS",
-          unifiedConfig.getFps());
-      unifiedCaptureService.registerSubscriber(this);
-    } else {
-      logger.warn(
-          "Unified capture is disabled, falling back to legacy capture mode (not implemented)");
-      // Fallback to legacy mode could be implemented here if needed
-    }
+    logger.info(
+        "ScreenCaptureService ready; waiting for viewport clients before subscribing (target viewport FPS: {})",
+        viewportStreamConfig.getTargetFps());
   }
 
   /**
@@ -90,12 +88,8 @@ public class ScreenCaptureService implements FrameListener {
    */
   @PreDestroy
   public void stop() {
-    if (!registered.getAndSet(false)) {
-      return;
-    }
-
-    logger.info("Unregistering ScreenCaptureService from unified capture");
-    unifiedCaptureService.unregisterSubscriber(this);
+    activeViewportSessions.set(0);
+    ensureUnsubscribed();
   }
 
   /**
@@ -107,14 +101,32 @@ public class ScreenCaptureService implements FrameListener {
   public void onFrameCaptured(FrameEvent event) {
     framesReceived.incrementAndGet();
 
+    long captureTime = event.getCaptureTimeNanos();
+    long latestTime = latestCaptureTimeNanos.updateAndGet(prev -> Math.max(prev, captureTime));
+    if (captureTime < latestTime) {
+      framesDroppedStale.incrementAndGet();
+      return;
+    }
+
     try {
-      BufferedImage frame = event.getFrame();
-      if (frame != null) {
-        try (Mat mat = Java2DFrameUtils.toMat(frame)) {
+      if (captureTime < latestCaptureTimeNanos.get()) {
+        framesDroppedStale.incrementAndGet();
+        return;
+      }
+      if (!shouldForwardAtTargetRate(captureTime)) {
+        framesSkippedThrottle.incrementAndGet();
+        return;
+      }
+
+      if (ViewportManager.getInstance() instanceof WebsocketViewport websocketViewport) {
+        websocketViewport.publishFrame(
+            event.getFrame(), event.getSourceWidth(), event.getSourceHeight());
+      } else {
+        try (Mat mat = Java2DFrameUtils.toMat(event.getFrame())) {
           ViewportManager.getInstance().updateState(mat);
-          framesForwarded.incrementAndGet();
         }
       }
+      framesForwarded.incrementAndGet();
     } catch (Exception e) {
       frameProcessingErrors.incrementAndGet();
       logger.debug("Failed to process frame for viewport: {}", e.getMessage());
@@ -128,7 +140,7 @@ public class ScreenCaptureService implements FrameListener {
    */
   @Override
   public boolean isActive() {
-    return !paused.get();
+    return registered.get() && !paused.get();
   }
 
   /**
@@ -169,6 +181,66 @@ public class ScreenCaptureService implements FrameListener {
     return registered.get();
   }
 
+  public void onViewportSessionOpened() {
+    if (!config.isEnabled()) {
+      return;
+    }
+
+    int sessions = activeViewportSessions.incrementAndGet();
+    if (sessions == 1) {
+      ensureSubscribed();
+    }
+  }
+
+  public void onViewportSessionClosed() {
+    int sessions =
+        activeViewportSessions.updateAndGet(current -> current > 0 ? current - 1 : 0);
+    if (sessions == 0) {
+      ensureUnsubscribed();
+    }
+  }
+
+  private synchronized void ensureSubscribed() {
+    if (!unifiedConfig.isEnabled()) {
+      logger.warn("Unified capture is disabled, viewport streaming cannot subscribe");
+      return;
+    }
+    if (registered.getAndSet(true)) {
+      return;
+    }
+
+    lastForwardedCaptureTimeNanos.set(0);
+    logger.info(
+        "Registering ScreenCaptureService with unified capture at {} FPS (viewport target: {} FPS)",
+        unifiedConfig.getFps(),
+        viewportStreamConfig.getTargetFps());
+    unifiedCaptureService.registerSubscriber(this);
+    streamActivations.incrementAndGet();
+  }
+
+  private synchronized void ensureUnsubscribed() {
+    if (!registered.getAndSet(false)) {
+      return;
+    }
+
+    logger.info("Unregistering ScreenCaptureService from unified capture");
+    unifiedCaptureService.unregisterSubscriber(this);
+    streamDeactivations.incrementAndGet();
+  }
+
+  private boolean shouldForwardAtTargetRate(long captureTimeNanos) {
+    long minIntervalNanos = viewportStreamConfig.getTargetIntervalNanos();
+    while (true) {
+      long lastForwarded = lastForwardedCaptureTimeNanos.get();
+      if (lastForwarded > 0 && captureTimeNanos - lastForwarded < minIntervalNanos) {
+        return false;
+      }
+      if (lastForwardedCaptureTimeNanos.compareAndSet(lastForwarded, captureTimeNanos)) {
+        return true;
+      }
+    }
+  }
+
   public long getFramesReceived() {
     return framesReceived.get();
   }
@@ -181,7 +253,23 @@ public class ScreenCaptureService implements FrameListener {
     return framesDroppedStale.get();
   }
 
+  public long getFramesSkippedThrottle() {
+    return framesSkippedThrottle.get();
+  }
+
   public long getFrameProcessingErrors() {
     return frameProcessingErrors.get();
+  }
+
+  public int getActiveViewportSessions() {
+    return activeViewportSessions.get();
+  }
+
+  public long getStreamActivations() {
+    return streamActivations.get();
+  }
+
+  public long getStreamDeactivations() {
+    return streamDeactivations.get();
   }
 }

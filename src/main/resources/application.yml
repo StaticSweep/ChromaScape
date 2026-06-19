@@ -6,9 +6,9 @@ spring:
 
   # Database configuration
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/chromascape?sslmode=disable}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/chromascape}
     username: ${SPRING_DATASOURCE_USERNAME:chromascape}
-    password: ${SPRING_DATASOURCE_PASSWORD:chromascape123}
+    password: ${SPRING_DATASCAPE_PASSWORD:chromascape123}
   jpa:
     hibernate:
       ddl-auto: update
@@ -77,14 +77,8 @@ chromascape:
     micro6-executor:
       # Micro6 local executor base URL for patch-loop script execution
       base-url: ${CHROMASCAPE_PATCHLOOP_MICRO6_EXECUTOR_BASE_URL:http://127.0.0.1:8098}
-    # Worker supervisor catalog endpoint for unified script/task dropdown
-    supervisor-base-url: ${CHROMASCAPE_SUPERVISOR_BASE_URL:http://127.0.0.1:8096}
     # Poll interval for syncing task-plan item status from linked patch-loop iterations
     task-sync-interval-ms: ${CHROMASCAPE_PATCHLOOP_TASK_SYNC_INTERVAL_MS:5000}
-    # Timeout before an EXECUTING item with a stale/missing iteration is auto-failed
-    task-sync-executing-timeout-ms: ${CHROMASCAPE_PATCHLOOP_TASK_SYNC_EXECUTING_TIMEOUT_MS:1800000}
-    # Whether to auto-fail stale EXECUTING items past the timeout (false = log only)
-    task-sync-fail-stale: ${CHROMASCAPE_PATCHLOOP_TASK_SYNC_FAIL_STALE:true}
 
 # Unified Frame Capture - Single capture thread for all consumers
 unified-capture:
@@ -92,6 +86,14 @@ unified-capture:
   enabled: ${UNIFIED_CAPTURE_ENABLED:true}
   # Frames per second for all consumers (viewport, recording, streaming)
   fps: ${UNIFIED_CAPTURE_FPS:30}
+
+viewport-stream:
+  # Target FPS for the browser viewport only (recording and other consumers still use unified-capture.fps)
+  target-fps: ${VIEWPORT_STREAM_FPS:15}
+  # JPEG quality for browser viewport frames
+  jpeg-quality: ${VIEWPORT_STREAM_JPEG_QUALITY:70}
+  # Downscale long edge before encode to reduce browser latency and payload size
+  max-long-edge: ${VIEWPORT_STREAM_MAX_LONG_EDGE:960}
 
 # Screen Capture Configuration - Continuous viewport display
 screencapture:
@@ -219,8 +221,8 @@ microbot:
   agent-server:
     # Enable/disable Microbot Agent Server adapter
     enabled: ${MICROBOT_AGENT_SERVER_ENABLED:false}
-    # Base URL of the Microbot Agent Server. micro6 Agent Server defaults to 127.0.0.1:8081.
-    base-url: ${MICROBOT_AGENT_SERVER_URL:http://127.0.0.1:8081}
+    # Base URL of the Microbot Agent Server
+    base-url: ${MICROBOT_AGENT_SERVER_URL:http://localhost:8085}
     # HTTP request timeout in milliseconds
     timeout-ms: ${MICROBOT_AGENT_SERVER_TIMEOUT:5000}
     # Polling interval for state snapshots in milliseconds
@@ -231,7 +233,7 @@ features:
   task-synthesis:
     enabled: ${FEATURES_TASK_SYNTHESIS_ENABLED:true}
   patch-loop:
-    autofix-enabled: ${FEATURES_PATCH_LOOP_AUTOFIX:false}
+    autofix-enabled: ${FEATURES_PATCH_LOOP_AUTOFIX:true}
   ai-player:
     enabled: ${FEATURES_AI_PLAYER_ENABLED:false}
     shadow-mode: ${FEATURES_AI_PLAYER_SHADOW:false}
@@ -241,12 +243,6 @@ features:
 ai-player:
   dataset:
     output-dir: ${AI_PLAYER_DATASET_DIR:.chromascape/datasets}
-    patch-outcomes:
-      scheduled-export-enabled: ${AI_PLAYER_PATCH_OUTCOME_SCHEDULED_EXPORT:false}
-      schedule-fixed-delay-ms: ${AI_PLAYER_PATCH_OUTCOME_SCHEDULE_FIXED_DELAY_MS:3600000}
-      initial-delay-ms: ${AI_PLAYER_PATCH_OUTCOME_INITIAL_DELAY_MS:60000}
-      lookback-hours: ${AI_PLAYER_PATCH_OUTCOME_LOOKBACK_HOURS:24}
-      export-empty: ${AI_PLAYER_PATCH_OUTCOME_EXPORT_EMPTY:false}
 
 # Simulator Verifier Integration Configuration
 simulator:

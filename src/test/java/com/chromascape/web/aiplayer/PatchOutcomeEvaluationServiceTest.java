@@ -55,8 +55,12 @@ class PatchOutcomeEvaluationServiceTest {
     assertThat(result).containsEntry("successCount", 1L);
     assertThat(result).containsEntry("failureCount", 1L);
     assertThat(result).containsEntry("successRate", 0.5d);
-    assertThat((Map<?, ?>) result.get("countsByScript")).containsEntry("QUESTSCRIPT", 2L);
-    assertThat((Map<?, ?>) result.get("countsByResult")).containsEntry("FAILED", 1L);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> countsByScript = (Map<String, Object>) result.get("countsByScript");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> countsByResult = (Map<String, Object>) result.get("countsByResult");
+    assertThat(countsByScript).containsEntry("QUESTSCRIPT", 2L);
+    assertThat(countsByResult).containsEntry("FAILED", 1L);
   }
 
   private TaskPlanItem item(String itemId, String scriptName, ItemStatus status, String result) {

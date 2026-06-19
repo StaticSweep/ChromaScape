@@ -42,7 +42,6 @@ public class WindowSelectionService {
       logger.info("Window selected: {}", window.getTitle());
     }
     selectedWindow.set(window);
-    ScreenManager.clearWindowCache();
   }
 
   /**
@@ -76,7 +75,6 @@ public class WindowSelectionService {
 
   /** Clears the current selection. */
   public void clearSelection() {
-    selectedWindow.set(null);
-    ScreenManager.clearWindowCache();
+    setSelectedWindow(null);
   }
 }

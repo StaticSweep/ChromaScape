@@ -11,8 +11,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -39,9 +37,7 @@ public class Micro6ExecutorCatalogService {
       return objectMapper.valueToTree(Map.of("enabled", false, "tasks", java.util.List.of()));
     }
     long ttl = Math.max(1, config.getExecutorCatalog().getRefreshSeconds());
-    if (!forceRefresh
-        && cache.get() != null
-        && Instant.now().isBefore(lastRefresh.plusSeconds(ttl))) {
+    if (!forceRefresh && cache.get() != null && Instant.now().isBefore(lastRefresh.plusSeconds(ttl))) {
       return cache.get();
     }
 
@@ -52,8 +48,7 @@ public class Micro6ExecutorCatalogService {
               .timeout(Duration.ofMillis(config.getExecutorCatalog().getTimeoutMs()))
               .GET()
               .build();
-      HttpResponse<String> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() >= 400) {
         throw new IllegalStateException("Catalog fetch failed: HTTP " + response.statusCode());
       }
@@ -66,53 +61,8 @@ public class Micro6ExecutorCatalogService {
       if (cache.get() != null) {
         return cache.get();
       }
-      String errorMessage =
-          e.getMessage() != null && !e.getMessage().isBlank()
-              ? e.getMessage()
-              : "Micro6 catalog unavailable";
       return objectMapper.valueToTree(
-          Map.of("enabled", true, "error", errorMessage, "tasks", java.util.List.of()));
-    }
-  }
-
-  public JsonNode getTaskConfig(String taskKey, String displayName) {
-    if (!config.getExecutorCatalog().isEnabled()) {
-      return objectMapper.valueToTree(Map.of("success", false, "error", "executor_catalog_disabled"));
-    }
-
-    try {
-      StringBuilder url = new StringBuilder(config.getExecutorCatalog().getBaseUrl() + "/api/v1/config");
-      String sep = "?";
-      if (taskKey != null && !taskKey.isBlank()) {
-        url.append(sep)
-            .append("task_key=")
-            .append(URLEncoder.encode(taskKey, StandardCharsets.UTF_8));
-        sep = "&";
-      }
-      if (displayName != null && !displayName.isBlank()) {
-        url.append(sep)
-            .append("display_name=")
-            .append(URLEncoder.encode(displayName, StandardCharsets.UTF_8));
-      }
-
-      HttpRequest request =
-          HttpRequest.newBuilder()
-              .uri(URI.create(url.toString()))
-              .timeout(Duration.ofMillis(config.getExecutorCatalog().getTimeoutMs()))
-              .GET()
-              .build();
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      if (response.statusCode() >= 400) {
-        throw new IllegalStateException("Config fetch failed: HTTP " + response.statusCode());
-      }
-      return objectMapper.readTree(response.body());
-    } catch (Exception e) {
-      log.warn("Failed to fetch Micro6 task config: {}", e.getMessage());
-      String errorMessage =
-          e.getMessage() != null && !e.getMessage().isBlank()
-              ? e.getMessage()
-              : "Micro6 task config unavailable";
-      return objectMapper.valueToTree(Map.of("success", false, "error", errorMessage));
+          Map.of("enabled", true, "error", e.getMessage(), "tasks", java.util.List.of()));
     }
   }
 }

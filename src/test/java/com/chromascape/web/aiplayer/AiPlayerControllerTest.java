@@ -44,7 +44,9 @@ class AiPlayerControllerTest {
     ResponseEntity<Object> response = controller.getStatus();
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat((Map<?, ?>) response.getBody())
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body)
         .containsEntry("controlEnabled", false)
         .containsEntry("controlAllowed", false)
         .containsEntry("scheduledPatchOutcomeExports", true);
@@ -70,7 +72,9 @@ class AiPlayerControllerTest {
     ResponseEntity<Object> response = controller.buildPatchOutcomeDataset(Map.of());
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat((Map<?, ?>) response.getBody())
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body)
         .containsEntry("manifestPath", "/tmp/out.manifest.json")
         .containsEntry("recordCount", 3)
         .containsEntry("excludedRecordCount", 2);
@@ -88,6 +92,8 @@ class AiPlayerControllerTest {
         controller.evaluatePatchOutcomes("2026-06-01T00:00:00", "2026-06-02T00:00:00", "QuestScript");
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat((Map<?, ?>) response.getBody()).containsEntry("eligibleItems", 4);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("eligibleItems", 4);
   }
 }

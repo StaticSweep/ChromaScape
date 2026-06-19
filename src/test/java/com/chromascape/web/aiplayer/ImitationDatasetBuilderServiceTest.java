@@ -67,9 +67,13 @@ class ImitationDatasetBuilderServiceTest {
     assertThat(result.getRecordCount()).isEqualTo(1);
     assertThat(result.getManifestPath()).endsWith(".manifest.json");
     assertThat(Files.readString(Path.of(result.getOutputPath()))).contains("\"tick\":123");
-    Map<?, ?> manifest = new ObjectMapper().readValue(Path.of(result.getManifestPath()).toFile(), Map.class);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> manifest =
+        new ObjectMapper().readValue(Path.of(result.getManifestPath()).toFile(), Map.class);
     assertThat(manifest).containsEntry("dataset_kind", "logs");
-    assertThat((Map<?, ?>) manifest.get("feature_flags")).containsEntry("control_enabled", false);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> featureFlags = (Map<String, Object>) manifest.get("feature_flags");
+    assertThat(featureFlags).containsEntry("control_enabled", false);
   }
 
   @Test
@@ -113,9 +117,14 @@ class ImitationDatasetBuilderServiceTest {
     assertThat(result.getRecordCount()).isEqualTo(1);
     assertThat(result.getExcludedRecordCount()).isEqualTo(1);
     assertThat(Files.readString(Path.of(result.getOutputPath()))).contains("Train questing");
-    Map<?, ?> manifest = new ObjectMapper().readValue(Path.of(result.getManifestPath()).toFile(), Map.class);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> manifest =
+        new ObjectMapper().readValue(Path.of(result.getManifestPath()).toFile(), Map.class);
     assertThat(manifest).containsEntry("dataset_kind", "patch_outcomes");
-    assertThat((Map<?, ?>) manifest.get("evidence_triplet_filter"))
+    @SuppressWarnings("unchecked")
+    Map<String, Object> evidenceTripletFilter =
+        (Map<String, Object>) manifest.get("evidence_triplet_filter");
+    assertThat(evidenceTripletFilter)
         .containsEntry("included_records", 1)
         .containsEntry("excluded_records", 1);
   }

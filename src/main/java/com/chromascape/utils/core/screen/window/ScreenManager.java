@@ -2,7 +2,6 @@ package com.chromascape.utils.core.screen.window;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
-import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.GDI32;
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef;
@@ -20,6 +19,8 @@ import java.awt.Rectangle;
 import java.awt.Robot;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Utility class for capturing screen regions, retrieving window bounds, and interacting with native
@@ -35,10 +36,7 @@ import java.awt.image.DataBufferInt;
  */
 public class ScreenManager {
 
-  private static HWND cachedTargetWindow;
-  private static HWND cachedCanvasHwnd;
-  private static HWND cachedSelectedHwnd;
-  private static boolean cachedUsingSelection;
+  private static final Logger logger = LoggerFactory.getLogger(ScreenManager.class);
 
   /**
    * Reference to the WindowSelectionService for accessing the user's selected window. Set via
@@ -52,14 +50,6 @@ public class ScreenManager {
    */
   public static void setWindowSelectionService(WindowSelectionService service) {
     windowSelectionService = service;
-    clearWindowCache();
-  }
-
-  public static synchronized void clearWindowCache() {
-    cachedTargetWindow = null;
-    cachedCanvasHwnd = null;
-    cachedSelectedHwnd = null;
-    cachedUsingSelection = false;
   }
 
   /**
@@ -75,66 +65,53 @@ public class ScreenManager {
    *
    * @return the window handle, or null if RuneLite is not running
    */
-  private static synchronized HWND getCanvasHwnd() {
-    HWND selectedHwnd = windowSelectionService != null ? windowSelectionService.getSelectedHwnd() : null;
-    boolean usingSelection = selectedHwnd != null;
+  private static HWND getCanvasHwnd() {
+    HWND targetWindow = null;
+    boolean usingSelection = false;
 
-    if (hasValidCachedWindow(usingSelection, selectedHwnd)) {
-      return cachedCanvasHwnd;
+    // Check if a window has been selected via the UI
+    if (windowSelectionService != null) {
+      HWND selectedHwnd = windowSelectionService.getSelectedHwnd();
+      if (selectedHwnd != null) {
+        targetWindow = selectedHwnd;
+        usingSelection = true;
+        logger.debug("Using explicitly selected window {}", selectedHwnd);
+      }
     }
 
-    HWND targetWindow = usingSelection ? selectedHwnd : WindowHandler.getTargetWindow();
-    if (!isValidWindow(targetWindow)) {
-      clearWindowCache();
+    // Fall back to default window lookup if no selection
+    if (targetWindow == null) {
+      targetWindow = WindowHandler.getTargetWindow();
+      if (targetWindow != null) {
+        logger.debug("Using auto-detected window {}", targetWindow);
+      }
+    }
+
+    if (targetWindow == null) {
+      logger.warn("No target window available for capture");
       return null;
     }
 
-    HWND canvasHwnd = resolveCanvasHwnd(targetWindow);
-    if (!isValidWindow(canvasHwnd)) {
-      clearWindowCache();
-      return null;
-    }
-
-    cachedTargetWindow = targetWindow;
-    cachedCanvasHwnd = canvasHwnd;
-    cachedSelectedHwnd = usingSelection ? selectedHwnd : null;
-    cachedUsingSelection = usingSelection;
-    return canvasHwnd;
-  }
-
-  private static boolean hasValidCachedWindow(boolean usingSelection, HWND selectedHwnd) {
-    if (!isValidWindow(cachedTargetWindow) || !isValidWindow(cachedCanvasHwnd)) {
-      return false;
-    }
-    if (cachedUsingSelection != usingSelection) {
-      return false;
-    }
-    if (!usingSelection) {
-      return true;
-    }
-    return sameWindow(cachedSelectedHwnd, selectedHwnd);
-  }
-
-  private static HWND resolveCanvasHwnd(HWND targetWindow) {
     HWND canvasHwnd = WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 2);
+
+    // Fallback: try 1st canvas if 2nd doesn't exist
     if (canvasHwnd == null) {
+      logger.debug("Secondary SunAwtCanvas not found for {}, trying primary canvas", targetWindow);
       canvasHwnd = WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 1);
     }
-    return canvasHwnd != null ? canvasHwnd : targetWindow;
-  }
 
-  private static boolean isValidWindow(HWND hwnd) {
-    return hwnd != null && User32.INSTANCE.IsWindow(hwnd);
-  }
+    // Last resort: use parent window directly
+    if (canvasHwnd == null) {
+      logger.warn("No SunAwtCanvas found for window {}, using parent window directly", targetWindow);
+      canvasHwnd = targetWindow;
+    }
 
-  private static boolean sameWindow(HWND left, HWND right) {
-    if (left == right) {
-      return true;
-    }
-    if (left == null || right == null) {
-      return false;
-    }
-    return Pointer.nativeValue(left.getPointer()) == Pointer.nativeValue(right.getPointer());
+    logger.debug(
+        "Resolved capture HWND {} via {}",
+        canvasHwnd,
+        usingSelection ? "explicit selection" : "auto-detection");
+
+    return canvasHwnd;
   }
 
   /**
