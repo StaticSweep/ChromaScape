@@ -19,6 +19,8 @@ import java.awt.Rectangle;
 import java.awt.Robot;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Utility class for capturing screen regions, retrieving window bounds, and interacting with native
@@ -33,6 +35,8 @@ import java.awt.image.DataBufferInt;
  * </ul>
  */
 public class ScreenManager {
+
+  private static final Logger logger = LoggerFactory.getLogger(ScreenManager.class);
 
   /**
    * Reference to the WindowSelectionService for accessing the user's selected window. Set via
@@ -68,26 +72,23 @@ public class ScreenManager {
     // Check if a window has been selected via the UI
     if (windowSelectionService != null) {
       HWND selectedHwnd = windowSelectionService.getSelectedHwnd();
-      System.err.println(
-          "[VIEWPORT DEBUG] windowSelectionService is NOT null, checking selection...");
       if (selectedHwnd != null) {
         targetWindow = selectedHwnd;
         usingSelection = true;
-        System.err.println("[VIEWPORT DEBUG] Found selected HWND: " + selectedHwnd);
-      } else {
-        System.err.println("[VIEWPORT DEBUG] selectedHwnd is NULL - no window selected");
+        logger.debug("Using explicitly selected window {}", selectedHwnd);
       }
-    } else {
-      System.err.println("[VIEWPORT DEBUG] windowSelectionService is NULL!");
     }
 
     // Fall back to default window lookup if no selection
     if (targetWindow == null) {
       targetWindow = WindowHandler.getTargetWindow();
-      System.err.println("[VIEWPORT DEBUG] Using fallback window: " + targetWindow);
+      if (targetWindow != null) {
+        logger.debug("Using auto-detected window {}", targetWindow);
+      }
     }
 
     if (targetWindow == null) {
+      logger.warn("No target window available for capture");
       return null;
     }
 
@@ -95,23 +96,20 @@ public class ScreenManager {
 
     // Fallback: try 1st canvas if 2nd doesn't exist
     if (canvasHwnd == null) {
-      System.err.println("[VIEWPORT DEBUG] 2nd canvas not found, trying 1st canvas");
+      logger.debug("Secondary SunAwtCanvas not found for {}, trying primary canvas", targetWindow);
       canvasHwnd = WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 1);
     }
 
     // Last resort: use parent window directly
     if (canvasHwnd == null) {
-      System.err.println("[VIEWPORT DEBUG] No canvas found, using parent window directly");
+      logger.warn("No SunAwtCanvas found for window {}, using parent window directly", targetWindow);
       canvasHwnd = targetWindow;
     }
 
-    // Debug logging
-    if (usingSelection) {
-      System.err.println("[VIEWPORT DEBUG] Using SELECTED window, canvas HWND: " + canvasHwnd);
-    } else {
-      System.err.println(
-          "[VIEWPORT DEBUG] Using FALLBACK (default) window, canvas HWND: " + canvasHwnd);
-    }
+    logger.debug(
+        "Resolved capture HWND {} via {}",
+        canvasHwnd,
+        usingSelection ? "explicit selection" : "auto-detection");
 
     return canvasHwnd;
   }

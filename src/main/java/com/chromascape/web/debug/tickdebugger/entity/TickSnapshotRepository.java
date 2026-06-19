@@ -52,8 +52,8 @@ public interface TickSnapshotRepository extends JpaRepository<TickSnapshot, Long
           FROM tick_snapshots t
           WHERE t.session_id = :sessionId
             AND (
-              (t.player_state ? 'worldX' AND t.player_state ? 'worldY')
-              OR (t.player_state ? 'x' AND t.player_state ? 'z')
+              (jsonb_exists(t.player_state, 'worldX') AND jsonb_exists(t.player_state, 'worldY'))
+              OR (jsonb_exists(t.player_state, 'x') AND jsonb_exists(t.player_state, 'z'))
             )
           """,
       nativeQuery = true)

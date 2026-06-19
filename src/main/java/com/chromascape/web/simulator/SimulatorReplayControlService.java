@@ -7,6 +7,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -54,7 +55,16 @@ public class SimulatorReplayControlService {
    * @return the status response from OpenRune
    */
   public Map<String, Object> getStatus(String playerName) {
-    return sendGet("/api/replay/control/status?player=" + encode(playerName));
+    String path = "/api/replay/control/status";
+    if (playerName != null && !playerName.isBlank()) {
+      path += "?player=" + encode(playerName);
+    }
+    return sendGet(path);
+  }
+
+  /** Lists online DEV players available for replay control. */
+  public Map<String, Object> getPlayers() {
+    return sendGet("/api/replay/control/players");
   }
 
   /**
@@ -68,17 +78,36 @@ public class SimulatorReplayControlService {
    */
   public Map<String, Object> start(
       String playerName, String sessionId, Double speed, String actorId) {
-    Map<String, Object> body =
-        new java.util.HashMap<>(
-            Map.of(
-                "player", playerName,
-                "sessionId", sessionId));
+    return start(playerName, sessionId, speed, actorId, null, null);
+  }
+
+  /**
+   * Starts a replay playback session for a player.
+   *
+   * @param playerName the in-game player name, or null for auto-targeting
+   * @param sessionId the session ID or "latest"
+   * @param speed optional playback speed multiplier
+   * @param actorId optional actor ID to scope playback
+   * @param recordingId optional recording ID for tick-snapshot replay
+   * @param sourceMode optional replay source mode
+   * @return the response from OpenRune
+   */
+  public Map<String, Object> start(
+      String playerName,
+      String sessionId,
+      Double speed,
+      String actorId,
+      String recordingId,
+      String sourceMode) {
+    Map<String, Object> body = new HashMap<>();
+    putIfNotBlank(body, "player", playerName);
+    putIfNotBlank(body, "sessionId", sessionId);
     if (speed != null) {
       body.put("speed", speed);
     }
-    if (actorId != null) {
-      body.put("actorId", actorId);
-    }
+    putIfNotBlank(body, "actorId", actorId);
+    putIfNotBlank(body, "recordingId", recordingId);
+    putIfNotBlank(body, "sourceMode", sourceMode);
     return sendPost("/api/replay/control/start", body);
   }
 
@@ -89,7 +118,7 @@ public class SimulatorReplayControlService {
    * @return the response from OpenRune
    */
   public Map<String, Object> pause(String playerName) {
-    return sendPost("/api/replay/control/pause", Map.of("player", playerName));
+    return sendPost("/api/replay/control/pause", bodyWithOptionalPlayer(playerName));
   }
 
   /**
@@ -99,7 +128,7 @@ public class SimulatorReplayControlService {
    * @return the response from OpenRune
    */
   public Map<String, Object> resume(String playerName) {
-    return sendPost("/api/replay/control/resume", Map.of("player", playerName));
+    return sendPost("/api/replay/control/resume", bodyWithOptionalPlayer(playerName));
   }
 
   /**
@@ -109,7 +138,7 @@ public class SimulatorReplayControlService {
    * @return the response from OpenRune
    */
   public Map<String, Object> stop(String playerName) {
-    return sendPost("/api/replay/control/stop", Map.of("player", playerName));
+    return sendPost("/api/replay/control/stop", bodyWithOptionalPlayer(playerName));
   }
 
   /**
@@ -120,7 +149,9 @@ public class SimulatorReplayControlService {
    * @return the response from OpenRune
    */
   public Map<String, Object> seek(String playerName, double seconds) {
-    return sendPost("/api/replay/control/seek", Map.of("player", playerName, "seconds", seconds));
+    Map<String, Object> body = bodyWithOptionalPlayer(playerName);
+    body.put("seconds", seconds);
+    return sendPost("/api/replay/control/seek", body);
   }
 
   /**
@@ -131,7 +162,15 @@ public class SimulatorReplayControlService {
    * @return the response from OpenRune
    */
   public Map<String, Object> setSpeed(String playerName, double speed) {
-    return sendPost("/api/replay/control/speed", Map.of("player", playerName, "speed", speed));
+    Map<String, Object> body = bodyWithOptionalPlayer(playerName);
+    body.put("speed", speed);
+    return sendPost("/api/replay/control/speed", body);
+  }
+
+  private Map<String, Object> bodyWithOptionalPlayer(String playerName) {
+    Map<String, Object> body = new HashMap<>();
+    putIfNotBlank(body, "player", playerName);
+    return body;
   }
 
   private Map<String, Object> sendGet(String path) {
@@ -212,6 +251,12 @@ public class SimulatorReplayControlService {
       return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
     } catch (Exception e) {
       return value;
+    }
+  }
+
+  private static void putIfNotBlank(Map<String, Object> body, String key, String value) {
+    if (value != null && !value.isBlank()) {
+      body.put(key, value);
     }
   }
 }

@@ -543,7 +543,7 @@ function renderWindowList(windows) {
 async function loadCurrentWindowSelection() {
     try {
         const response = await fetch("/api/windows/current");
-        if (response.status === 404) {
+        if (response.status === 204 || response.status === 404) {
             // No selection - auto-detect mode
             updateSelectedWindowLabel("", "Auto-detect");
             return;
@@ -672,4 +672,3 @@ initializeUI = async function() {
     // Refresh window list periodically (every 5 seconds)
     setInterval(fetchAndRenderWindows, 5000);
 };
-

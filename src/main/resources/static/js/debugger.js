@@ -22,6 +22,8 @@ let lastDrawnSeq = 0;
 let latestSeq = 0;
 let pendingBitmap = null;
 let pendingSeq = 0;
+let pendingSourceWidth = 0;
+let pendingSourceHeight = 0;
 let rafScheduled = false;
 let decodeInFlight = false;
 let viewportCanvas = null;
@@ -3472,6 +3474,7 @@ function connectViewportWebSocket() {
 
   const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
   viewportWebSocket = new WebSocket(`${wsProtocol}://${location.host}/ws/viewport`);
+  viewportWebSocket.binaryType = 'arraybuffer';
 
   viewportWebSocket.onopen = () => {
     console.log('Connected to viewport WebSocket');
@@ -3482,35 +3485,28 @@ function connectViewportWebSocket() {
     elements.viewportLoader.style.display = 'none';
     elements.viewportCanvas.style.display = 'block';
 
-    let seq, dataUrl;
-
-    // Parse frame payload
     try {
-      const payload = JSON.parse(event.data);
-      seq = payload.seq;
-      dataUrl = payload.data;
-    } catch {
-      // Fallback: raw data URI (old server without metadata)
-      seq = ++latestSeq;
-      dataUrl = event.data;
-    }
+      const frame = await parseViewportFramePayload(event.data);
 
-    // Track highest seq seen
-    if (seq > latestSeq) latestSeq = seq;
+      // Track highest seq seen
+      if (frame.seq > latestSeq) latestSeq = frame.seq;
 
-    // Drop immediately if already drawn
-    if (seq <= lastDrawnSeq) {
-      if (window.DEBUG_FRAME_SEQ) {
-        console.log(`[FRAME] Dropped frame ${seq} - already drawn ${lastDrawnSeq}`);
+      // Drop immediately if already drawn
+      if (frame.seq <= lastDrawnSeq) {
+        if (window.DEBUG_FRAME_SEQ) {
+          console.log(`[FRAME] Dropped frame ${frame.seq} - already drawn ${lastDrawnSeq}`);
+        }
+        return;
       }
-      return;
+
+      // Buffer the frame
+      bufferFrame(frame);
+
+      // Trigger drain (idempotent, safe to call always)
+      drainFrameBuffer();
+    } catch (error) {
+      console.warn('Failed to parse viewport frame', error);
     }
-
-    // Buffer the frame
-    bufferFrame(seq, dataUrl);
-
-    // Trigger drain (idempotent, safe to call always)
-    drainFrameBuffer();
   };
 
   viewportWebSocket.onerror = (error) => {
@@ -3576,6 +3572,39 @@ async function loadCurrentFps() {
   }
 }
 
+async function parseViewportFramePayload(rawData) {
+  if (rawData instanceof Blob) {
+    return parseViewportFramePayload(await rawData.arrayBuffer());
+  }
+
+  if (rawData instanceof ArrayBuffer) {
+    if (rawData.byteLength < 16) {
+      throw new Error(`Viewport frame too small: ${rawData.byteLength}`);
+    }
+
+    const view = new DataView(rawData);
+    const seq = Number(view.getBigUint64(0, false));
+    const sourceWidth = view.getInt32(8, false);
+    const sourceHeight = view.getInt32(12, false);
+    const jpegBytes = rawData.slice(16);
+
+    return {
+      seq,
+      blob: new Blob([jpegBytes], { type: 'image/jpeg' }),
+      sourceWidth,
+      sourceHeight
+    };
+  }
+
+  const payload = JSON.parse(rawData);
+  return {
+    seq: payload.seq ?? ++latestSeq,
+    dataUrl: payload.data,
+    sourceWidth: payload.sourceWidth ?? 0,
+    sourceHeight: payload.sourceHeight ?? 0
+  };
+}
+
 /**
  * Converts a data URL to a Blob without using fetch().
  * Handles both base64 and non-base64 (URL-encoded) data URLs.
@@ -3609,7 +3638,27 @@ function dataUrlToBlob(dataUrl) {
  * Decode a data URL into an ImageBitmap or Image element.
  * Uses direct conversion (faster), with fallbacks for edge cases.
  */
-async function decodeFrame(dataUrl) {
+async function decodeFrame(frame) {
+  if (frame.blob) {
+    if (window.createImageBitmap) {
+      return await createImageBitmap(frame.blob);
+    }
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(frame.blob);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(img);
+      };
+      img.onerror = (error) => {
+        URL.revokeObjectURL(objectUrl);
+        reject(error);
+      };
+      img.src = objectUrl;
+    });
+  }
+
+  const dataUrl = frame.dataUrl;
   if (window.createImageBitmap) {
     try {
       const blob = dataUrlToBlob(dataUrl);
@@ -3659,8 +3708,12 @@ function renderViewportFrame() {
 
   const bitmap = pendingBitmap;
   const seq = pendingSeq;
+  const sourceWidth = pendingSourceWidth;
+  const sourceHeight = pendingSourceHeight;
   pendingBitmap = null;
   pendingSeq = 0;
+  pendingSourceWidth = 0;
+  pendingSourceHeight = 0;
 
   // Only drop if we've already drawn a newer frame
   if (seq <= lastDrawnSeq) {
@@ -3676,10 +3729,15 @@ function renderViewportFrame() {
   }
 
   // Resize canvas to match bitmap
-  if (elements.viewportCanvas.width !== bitmap.width) {
+  if (
+    elements.viewportCanvas.width !== bitmap.width ||
+    elements.viewportCanvas.height !== bitmap.height
+  ) {
     elements.viewportCanvas.width = bitmap.width;
     elements.viewportCanvas.height = bitmap.height;
   }
+  elements.viewportCanvas.dataset.sourceWidth = String(sourceWidth || bitmap.width);
+  elements.viewportCanvas.dataset.sourceHeight = String(sourceHeight || bitmap.height);
 
   // Clear and draw
   viewportCtx.clearRect(0, 0, bitmap.width, bitmap.height);
@@ -3703,7 +3761,8 @@ function renderViewportFrame() {
  * - De-duplicates by seq (removes existing same seq)
  * - Keeps only newest FRAME_BUFFER_SIZE frames
  */
-function bufferFrame(seq, dataUrl) {
+function bufferFrame(frame) {
+  const { seq } = frame;
   // Drop frames already rendered
   if (seq <= lastDrawnSeq) {
     if (window.DEBUG_FRAME_SEQ) {
@@ -3716,7 +3775,7 @@ function bufferFrame(seq, dataUrl) {
   frameBuffer = frameBuffer.filter(f => f.seq !== seq);
 
   // Add new frame
-  frameBuffer.push({ seq, dataUrl });
+  frameBuffer.push(frame);
 
   // Sort by seq ascending (oldest first)
   frameBuffer.sort((a, b) => a.seq - b.seq);
@@ -3763,6 +3822,12 @@ function clearFrameState() {
   if (pendingBitmap?.close) pendingBitmap.close();
   pendingBitmap = null;
   pendingSeq = 0;
+  pendingSourceWidth = 0;
+  pendingSourceHeight = 0;
+  if (elements.viewportCanvas?.dataset) {
+    delete elements.viewportCanvas.dataset.sourceWidth;
+    delete elements.viewportCanvas.dataset.sourceHeight;
+  }
 
   // Reset decode state
   decodeInFlight = false;
@@ -3796,7 +3861,7 @@ async function drainFrameBuffer() {
       console.log(`[FRAME] Decoding frame ${frame.seq}`);
     }
 
-    const bitmap = await decodeFrame(frame.dataUrl);
+    const bitmap = await decodeFrame(frame);
 
     // Check if still valid after decode (could have been superseded)
     // Also check latestSeq - a newer frame may have arrived while decoding
@@ -3810,6 +3875,8 @@ async function drainFrameBuffer() {
       if (pendingBitmap?.close) pendingBitmap.close();
       pendingBitmap = bitmap;
       pendingSeq = frame.seq;
+      pendingSourceWidth = frame.sourceWidth || bitmap.width;
+      pendingSourceHeight = frame.sourceHeight || bitmap.height;
 
       // Schedule RAF render
       if (!rafScheduled) {
@@ -3910,8 +3977,16 @@ function getViewportMetrics() {
   if (!displayWidth || !displayHeight) return null;
 
   // Get source dimensions (actual canvas/video resolution)
-  const sourceWidth = activeElement.width || activeElement.videoWidth || displayWidth;
-  const sourceHeight = activeElement.height || activeElement.videoHeight || displayHeight;
+  const sourceWidth =
+    Number(activeElement.dataset?.sourceWidth || 0) ||
+    activeElement.width ||
+    activeElement.videoWidth ||
+    displayWidth;
+  const sourceHeight =
+    Number(activeElement.dataset?.sourceHeight || 0) ||
+    activeElement.height ||
+    activeElement.videoHeight ||
+    displayHeight;
 
   // Canvas uses object-fit: contain, so compute actual displayed size accounting for letterboxing
   const sourceAspect = sourceWidth / sourceHeight;

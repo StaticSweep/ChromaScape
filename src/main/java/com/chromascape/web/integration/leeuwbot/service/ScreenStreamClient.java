@@ -3,21 +3,16 @@ package com.chromascape.web.integration.leeuwbot.service;
 import com.chromascape.utils.core.screen.FrameEvent;
 import com.chromascape.utils.core.screen.FrameListener;
 import com.chromascape.web.integration.leeuwbot.config.LeeuwBotConfig;
+import com.chromascape.web.viewport.JpegFrameEncoder;
 import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
 import com.chromascape.web.viewport.service.UnifiedFrameCaptureService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.net.URI;
-import java.util.Iterator;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.java_websocket.client.WebSocketClient;
@@ -47,6 +42,7 @@ public class ScreenStreamClient implements FrameListener {
   private final LeeuwBotConfig config;
   private final UnifiedCaptureConfig unifiedConfig;
   private final UnifiedFrameCaptureService unifiedCaptureService;
+  private final JpegFrameEncoder jpegFrameEncoder;
   private final String streamId = UUID.randomUUID().toString();
   private final ObjectMapper objectMapper = new ObjectMapper();
   private WebSocketClient wsClient;
@@ -57,10 +53,12 @@ public class ScreenStreamClient implements FrameListener {
   public ScreenStreamClient(
       LeeuwBotConfig config,
       UnifiedCaptureConfig unifiedConfig,
-      UnifiedFrameCaptureService unifiedCaptureService) {
+      UnifiedFrameCaptureService unifiedCaptureService,
+      JpegFrameEncoder jpegFrameEncoder) {
     this.config = config;
     this.unifiedConfig = unifiedConfig;
     this.unifiedCaptureService = unifiedCaptureService;
+    this.jpegFrameEncoder = jpegFrameEncoder;
   }
 
   /** Start the screen stream client when application is ready. */
@@ -267,24 +265,7 @@ public class ScreenStreamClient implements FrameListener {
       if (image == null) {
         return null;
       }
-
-      // Convert to JPEG with quality
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
-      if (writers.hasNext()) {
-        ImageWriter writer = writers.next();
-        ImageWriteParam param = writer.getDefaultWriteParam();
-        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-        param.setCompressionQuality(quality / 100.0f);
-
-        try (var ios = ImageIO.createImageOutputStream(baos)) {
-          writer.setOutput(ios);
-          writer.write(null, new IIOImage(image, null, null), param);
-        }
-        writer.dispose();
-      }
-
-      return baos.toByteArray();
+      return jpegFrameEncoder.encode(image, quality);
     } catch (Exception e) {
       logger.error("Failed to encode frame to JPEG", e);
       return null;

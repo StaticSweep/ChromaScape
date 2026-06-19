@@ -6,6 +6,7 @@ import com.chromascape.utils.core.screen.window.ScreenManager;
 import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
 import jakarta.annotation.PreDestroy;
 import java.awt.image.BufferedImage;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,6 +43,8 @@ public class UnifiedFrameCaptureService {
   private final AtomicLong captureErrors = new AtomicLong(0);
   private final AtomicLong subscriberDispatchAttempts = new AtomicLong(0);
   private final AtomicLong subscriberDispatchErrors = new AtomicLong(0);
+  private final AtomicLong totalCaptureDurationMs = new AtomicLong(0);
+  private final AtomicLong maxCaptureDurationMs = new AtomicLong(0);
 
   private ScheduledExecutorService captureScheduler;
   private ExecutorService dispatchExecutor;
@@ -219,9 +222,9 @@ public class UnifiedFrameCaptureService {
       if (captureCount % 30 == 0) {
         double avgJitter = (double) totalCaptureJitterMs / captureCount;
         logger.info(
-            "Capture FPS check: expected {}ms interval, avg jitter: {:.1f}ms, count: {}",
+            "Capture FPS check: expected {}ms interval, avg jitter: {}ms, count: {}",
             expectedInterval,
-            avgJitter,
+            String.format(Locale.US, "%.1f", avgJitter),
             captureCount);
       }
     }
@@ -231,6 +234,8 @@ public class UnifiedFrameCaptureService {
       BufferedImage frame = ScreenManager.captureWindow();
       long captureEnd = System.currentTimeMillis();
       long captureMs = captureEnd - captureStart;
+      totalCaptureDurationMs.addAndGet(captureMs);
+      maxCaptureDurationMs.accumulateAndGet(captureMs, Math::max);
 
       // Log slow captures
       if (captureMs > 50) {
@@ -315,6 +320,15 @@ public class UnifiedFrameCaptureService {
 
   public long getSubscriberDispatchErrors() {
     return subscriberDispatchErrors.get();
+  }
+
+  public double getAverageCaptureDurationMs() {
+    long successes = captureSuccesses.get();
+    return successes == 0 ? 0.0 : (double) totalCaptureDurationMs.get() / successes;
+  }
+
+  public long getMaxCaptureDurationMs() {
+    return maxCaptureDurationMs.get();
   }
 
   /**

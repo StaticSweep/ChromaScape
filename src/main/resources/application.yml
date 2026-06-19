@@ -87,6 +87,14 @@ unified-capture:
   # Frames per second for all consumers (viewport, recording, streaming)
   fps: ${UNIFIED_CAPTURE_FPS:30}
 
+viewport-stream:
+  # Target FPS for the browser viewport only (recording and other consumers still use unified-capture.fps)
+  target-fps: ${VIEWPORT_STREAM_FPS:15}
+  # JPEG quality for browser viewport frames
+  jpeg-quality: ${VIEWPORT_STREAM_JPEG_QUALITY:70}
+  # Downscale long edge before encode to reduce browser latency and payload size
+  max-long-edge: ${VIEWPORT_STREAM_MAX_LONG_EDGE:960}
+
 # Screen Capture Configuration - Continuous viewport display
 screencapture:
   # Enable continuous screen capture to viewport
