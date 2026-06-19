@@ -11,10 +11,13 @@ import com.sun.jna.win32.StdCallLibrary;
 import java.awt.Rectangle;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +31,10 @@ import org.slf4j.LoggerFactory;
 public class WindowHandler {
   private static final Logger logger = LoggerFactory.getLogger(WindowHandler.class);
   private static final String _windowName = "RuneLite";
+  private static final String CANVAS_CLASS_NAME = "SunAwtCanvas";
   private static final String[] SUPPORTED_CLIENTS = {"RuneLite", "Leeuwbot", "VitaLite"};
+  private static final AtomicReference<String> lastPreferredWindowLogKey =
+      new AtomicReference<>("<unset>");
 
   /**
    * JNA interface for accessing low-level Win32 User32 functions that are not provided by the
@@ -130,7 +136,7 @@ public class WindowHandler {
     List<String> sampleTitles = new ArrayList<>();
 
     // Tier 1: Try exact match
-    AtomicReference<HWND> exactMatch = new AtomicReference<>();
+    AtomicReference<WindowInfo> exactMatch = new AtomicReference<>();
     user32.EnumWindows(
         (hwnd, arg) -> {
           totalWindows.incrementAndGet();
@@ -144,7 +150,9 @@ public class WindowHandler {
           }
 
           if (title.trim().equals(resolvedWindowName)) {
-            exactMatch.set(hwnd);
+            int pid = getPid(hwnd);
+            Rectangle bounds = getWindowBounds(user32, hwnd);
+            exactMatch.set(new WindowInfo("0", hwnd, title.trim(), selectedAccount, pid, bounds));
             logger.info("Found exact match: {}", title);
             return false; // stop enumeration
           }
@@ -152,44 +160,36 @@ public class WindowHandler {
         },
         null);
 
-    logger.info("Enumerated {} total windows. Sample titles: {}", totalWindows.get(), sampleTitles);
-
-    if (exactMatch.get() != null) {
-      return exactMatch.get();
+    if (exactMatch.get() != null && isGameClientWindow(exactMatch.get())) {
+      logPreferredTargetSelection(
+          exactMatch.get(),
+          detectCaptureSignature(exactMatch.get()),
+          "exact title match",
+          true,
+          totalWindows.get(),
+          sampleTitles);
+      return exactMatch.get().getHwnd();
     }
 
-    // Tier 2: Try partial match (case-insensitive) for windows containing "runelite", "leeuwbot",
-    // or "vitalite" - with process verification to exclude IDE windows
-    AtomicReference<HWND> partialMatch = new AtomicReference<>();
-    user32.EnumWindows(
-        (hwnd, arg) -> {
-          byte[] buffer = new byte[512];
-          user32.GetWindowTextA(hwnd, buffer, 512);
-          String title = Native.toString(buffer);
-
-          String titleLower = title.toLowerCase();
-          if (titleLower.contains("runelite")
-              || titleLower.contains("leeuwbot")
-              || titleLower.contains("vitalite")) {
-            // Verify it's a standalone Java process (not IDE)
-            int pid = getPid(hwnd);
-            if (!ProcessVerificationUtil.isStandaloneJavaProcess(pid)) {
-              logger.debug("Skipping IDE window with matching title: {} (PID: {})", title, pid);
-              return true; // continue enumeration
-            }
-            logger.info("Found partial match: {} (PID: {})", title, pid);
-            partialMatch.set(hwnd);
-            return false; // stop enumeration
-          }
-          return true;
-        },
-        null);
-
-    if (partialMatch.get() != null) {
-      return partialMatch.get();
+    List<WindowInfo> filteredTargets =
+        getAllTargetWindows().stream().filter(WindowHandler::isGameClientWindow).toList();
+    WindowInfo preferredTarget = selectBestWindow(filteredTargets, WindowHandler::detectCaptureSignature);
+    if (preferredTarget != null) {
+      CaptureSignature signature = detectCaptureSignature(preferredTarget);
+      logPreferredTargetSelection(
+          preferredTarget,
+          signature,
+          describeSelectionReason(filteredTargets, preferredTarget, signature),
+          false,
+          totalWindows.get(),
+          sampleTitles);
+      return preferredTarget.getHwnd();
     }
 
-    logger.warn("No matching window found. Total windows enumerated: {}", totalWindows.get());
+    logger.warn(
+        "No matching window found. Enumerated {} total windows. Sample titles: {}",
+        totalWindows.get(),
+        sampleTitles);
 
     // Tier 3: Final fallback - get first Java window (manual selection via UI/API preferred)
     HWND javaWindow = getFirstJavaWindow();
@@ -241,6 +241,29 @@ public class WindowHandler {
     return result.get(); // may be null if no match found
   }
 
+  private static int countChildWindowsByClass(HWND parent, String className) {
+    if (parent == null || className == null || className.isBlank()) {
+      return 0;
+    }
+
+    AtomicInteger count = new AtomicInteger();
+    User32 user32 = User32.INSTANCE;
+    user32.EnumChildWindows(
+        parent,
+        (hwnd, data) -> {
+          byte[] buffer = new byte[512];
+          user32.GetClassNameA(hwnd, buffer, buffer.length);
+          String clsName = Native.toString(buffer).trim();
+          if (className.equals(clsName)) {
+            count.incrementAndGet();
+          }
+          return true;
+        },
+        null);
+
+    return count.get();
+  }
+
   /**
    * Retrieves the process ID associated with a given window handle.
    *
@@ -251,6 +274,41 @@ public class WindowHandler {
     IntByReference pid = new IntByReference();
     User32.INSTANCE.GetWindowThreadProcessId(hwnd, pid);
     return pid.getValue();
+  }
+
+  /**
+   * Returns whether a window is a supported standalone game client window.
+   *
+   * @param window the window to evaluate
+   * @return true if this window should be considered for selection/capture
+   */
+  static boolean isGameClientWindow(WindowInfo window) {
+    if (window == null) {
+      return false;
+    }
+
+    String title = window.getTitle();
+    Rectangle bounds = window.getBounds();
+    if (title == null || bounds == null) {
+      return false;
+    }
+
+    if (bounds.width < 400 || bounds.height < 400) {
+      return false;
+    }
+
+    if (!ProcessVerificationUtil.isStandaloneJavaProcess(window.getPid())) {
+      return false;
+    }
+
+    String titleLower = title.toLowerCase();
+    if (!titleLower.contains("runelite")
+        && !titleLower.contains("leeuwbot")
+        && !titleLower.contains("vitalite")) {
+      return false;
+    }
+
+    return !titleLower.contains("inspector") && !titleLower.contains("shell");
   }
 
   /**
@@ -310,6 +368,20 @@ public class WindowHandler {
         null);
 
     return windows;
+  }
+
+  /**
+   * Returns the list of game client windows that should be exposed to the UI and selection API.
+   *
+   * <p>When a single process exposes both wrapper and render windows, this keeps the best capture
+   * candidate for that PID rather than the largest top-level window.
+   *
+   * @return selectable target windows, one preferred candidate per PID
+   */
+  public static List<WindowInfo> getSelectableTargetWindows() {
+    List<WindowInfo> filtered =
+        getAllTargetWindows().stream().filter(WindowHandler::isGameClientWindow).toList();
+    return deduplicateWindowsByPid(filtered);
   }
 
   /**
@@ -398,15 +470,31 @@ public class WindowHandler {
   }
 
   /**
-   * Deduplicates windows by PID, keeping only the largest window per process.
+   * Deduplicates windows by PID, keeping the best capture candidate per process.
    *
    * <p>This is useful when a client (like Leeuwbot) creates multiple windows for the same process.
-   * We want to show only the largest window per PID to avoid duplicate entries.
+   * We prefer the window most likely to contain the actual render canvas rather than the largest
+   * wrapper window.
    *
    * @param windows the list of windows to deduplicate
-   * @return a new list with only the largest window per PID, sorted by original ID order
+   * @return a new list with one preferred window per PID, sorted by original ID order
    */
   public static List<WindowInfo> deduplicateWindowsByPid(List<WindowInfo> windows) {
+    return deduplicateWindowsByPid(windows, WindowHandler::detectCaptureSignature);
+  }
+
+  static List<WindowInfo> deduplicateWindowsByPid(
+      List<WindowInfo> windows, Predicate<WindowInfo> captureDetector) {
+    Function<WindowInfo, CaptureSignature> signatureProvider =
+        window ->
+            captureDetector.test(window)
+                ? new CaptureSignature(1, false, windowArea(window))
+                : new CaptureSignature(0, false, windowArea(window));
+    return deduplicateWindowsByPid(windows, signatureProvider);
+  }
+
+  static List<WindowInfo> deduplicateWindowsByPid(
+      List<WindowInfo> windows, Function<WindowInfo, CaptureSignature> captureSignatureProvider) {
     if (windows == null || windows.isEmpty()) {
       return windows;
     }
@@ -415,15 +503,12 @@ public class WindowHandler {
     Map<Integer, List<WindowInfo>> windowsByPid =
         windows.stream().collect(Collectors.groupingBy(WindowInfo::getPid));
 
-    // For each PID, keep only the largest window (by area)
+    // For each PID, keep only the best capture target for that process.
     List<WindowInfo> deduplicated = new ArrayList<>();
     for (List<WindowInfo> pidWindows : windowsByPid.values()) {
-      WindowInfo largestWindow =
-          pidWindows.stream()
-              .max(Comparator.comparing(w -> w.getBounds().width * w.getBounds().height))
-              .orElse(null);
-      if (largestWindow != null) {
-        deduplicated.add(largestWindow);
+      WindowInfo bestWindow = selectBestWindow(pidWindows, captureSignatureProvider);
+      if (bestWindow != null) {
+        deduplicated.add(bestWindow);
       }
     }
 
@@ -431,5 +516,192 @@ public class WindowHandler {
     return deduplicated.stream()
         .sorted(Comparator.comparingInt(w -> Integer.parseInt(w.getId())))
         .collect(Collectors.toList());
+  }
+
+  static WindowInfo selectBestWindow(
+      List<WindowInfo> windows, Predicate<WindowInfo> captureDetector) {
+    Function<WindowInfo, CaptureSignature> signatureProvider =
+        window ->
+            captureDetector != null && captureDetector.test(window)
+                ? new CaptureSignature(1, false, windowArea(window))
+                : new CaptureSignature(0, false, windowArea(window));
+    return selectBestWindow(windows, signatureProvider);
+  }
+
+  static WindowInfo selectBestWindow(
+      List<WindowInfo> windows, Function<WindowInfo, CaptureSignature> captureSignatureProvider) {
+    if (windows == null || windows.isEmpty()) {
+      return null;
+    }
+
+    Function<WindowInfo, CaptureSignature> signatureSource =
+        captureSignatureProvider != null
+            ? captureSignatureProvider
+            : WindowHandler::detectCaptureSignature;
+    Map<WindowInfo, CaptureSignature> signatureCache = new IdentityHashMap<>();
+    Function<WindowInfo, CaptureSignature> signatures =
+        window -> signatureCache.computeIfAbsent(window, signatureSource);
+
+    boolean hasCaptureableCandidates =
+        windows.stream().anyMatch(window -> signatures.apply(window).canvasCount() > 0);
+    List<WindowInfo> captureableCandidates = preferCaptureableCandidates(windows, signatures);
+    List<WindowInfo> candidates =
+        hasCaptureableCandidates ? captureableCandidates : preferRenderableCandidates(windows);
+
+    Comparator<WindowInfo> comparator =
+        hasCaptureableCandidates
+            ? Comparator.comparingInt((WindowInfo window) -> signatures.apply(window).canvasPriority())
+                .thenComparingInt(window -> signatures.apply(window).canvasCount())
+                .thenComparingInt(WindowHandler::renderClientPriority)
+                .thenComparingInt(WindowHandler::clientTitlePriority)
+                .thenComparingInt(window -> signatures.apply(window).area())
+            : Comparator.comparingInt((WindowInfo window) -> renderClientPriority(window))
+                .thenComparingInt(WindowHandler::clientTitlePriority)
+                .thenComparingInt(window -> signatures.apply(window).area());
+
+    return candidates.stream().max(comparator).orElse(null);
+  }
+
+  private static List<WindowInfo> preferCaptureableCandidates(
+      List<WindowInfo> windows, Function<WindowInfo, CaptureSignature> signatures) {
+    List<WindowInfo> captureableCandidates =
+        windows.stream().filter(window -> signatures.apply(window).canvasCount() > 0).toList();
+    return captureableCandidates.isEmpty() ? windows : captureableCandidates;
+  }
+
+  private static List<WindowInfo> preferRenderableCandidates(List<WindowInfo> windows) {
+    List<WindowInfo> renderCandidates =
+        windows.stream()
+            .filter(window -> clientRole(window) == ClientWindowRole.RENDER_CLIENT)
+            .toList();
+    return renderCandidates.isEmpty() ? windows : renderCandidates;
+  }
+
+  private static CaptureSignature detectCaptureSignature(WindowInfo window) {
+    if (window == null || window.getHwnd() == null) {
+      return new CaptureSignature(0, false, windowArea(window));
+    }
+
+    int canvasCount = countChildWindowsByClass(window.getHwnd(), CANVAS_CLASS_NAME);
+    return new CaptureSignature(canvasCount, canvasCount >= 2, windowArea(window));
+  }
+
+  private static int renderClientPriority(WindowInfo window) {
+    return switch (clientRole(window)) {
+      case RENDER_CLIENT -> 2;
+      case WRAPPER -> 1;
+      case OTHER -> 0;
+    };
+  }
+
+  private static ClientWindowRole clientRole(WindowInfo window) {
+    if (window == null || window.getTitle() == null) {
+      return ClientWindowRole.OTHER;
+    }
+
+    String titleLower = window.getTitle().toLowerCase();
+    if (titleLower.contains("runelite") || titleLower.contains("vitalite")) {
+      return ClientWindowRole.RENDER_CLIENT;
+    }
+    if (titleLower.contains("leeuwbot")) {
+      return ClientWindowRole.WRAPPER;
+    }
+    return ClientWindowRole.OTHER;
+  }
+
+  private static int clientTitlePriority(WindowInfo window) {
+    if (window == null || window.getTitle() == null) {
+      return 0;
+    }
+
+    String titleLower = window.getTitle().toLowerCase();
+    if (titleLower.contains("runelite")) {
+      return 3;
+    }
+    if (titleLower.contains("vitalite")) {
+      return 2;
+    }
+    if (titleLower.contains("leeuwbot")) {
+      return 1;
+    }
+    return 0;
+  }
+
+  private static int windowArea(WindowInfo window) {
+    if (window == null || window.getBounds() == null) {
+      return 0;
+    }
+    return window.getBounds().width * window.getBounds().height;
+  }
+
+  private static String describeSelectionReason(
+      List<WindowInfo> candidates, WindowInfo selectedWindow, CaptureSignature signature) {
+    if (selectedWindow == null) {
+      return "no selection";
+    }
+
+    if (!preferCaptureableCandidates(candidates, WindowHandler::detectCaptureSignature)
+        .equals(candidates)) {
+      return "captureable window preferred over zero-canvas sibling";
+    }
+    if (!preferRenderableCandidates(candidates).equals(candidates)) {
+      return "render-client preferred over wrapper sibling";
+    }
+    if (signature.hasSecondaryCanvas()) {
+      return "secondary SunAwtCanvas available";
+    }
+    if (signature.canvasCount() > 0) {
+      return "direct capture canvas available";
+    }
+    return "title/size fallback";
+  }
+
+  private static void logPreferredTargetSelection(
+      WindowInfo window,
+      CaptureSignature signature,
+      String reason,
+      boolean exactMatch,
+      int totalWindows,
+      List<String> sampleTitles) {
+    String logKey =
+        (window != null ? window.getPid() : -1)
+            + "|"
+            + (window != null ? window.getTitle() : "<none>")
+            + "|"
+            + reason
+            + "|"
+            + signature.canvasCount()
+            + "|"
+            + signature.hasSecondaryCanvas();
+
+    String previous = lastPreferredWindowLogKey.getAndSet(logKey);
+    if (!logKey.equals(previous)) {
+      logger.info(
+          "Preferred target window changed: title='{}', pid={}, role={}, canvases={}, secondaryCanvas={}, exactMatch={}, reason={}, enumeratedWindows={}, sampleTitles={}",
+          window != null ? window.getTitle() : "<none>",
+          window != null ? window.getPid() : -1,
+          window != null ? clientRole(window) : ClientWindowRole.OTHER,
+          signature.canvasCount(),
+          signature.hasSecondaryCanvas(),
+          exactMatch,
+          reason,
+          totalWindows,
+          sampleTitles);
+    }
+  }
+
+  private enum ClientWindowRole {
+    RENDER_CLIENT,
+    WRAPPER,
+    OTHER
+  }
+
+  record CaptureSignature(int canvasCount, boolean hasSecondaryCanvas, int area) {
+    int canvasPriority() {
+      if (hasSecondaryCanvas) {
+        return 2;
+      }
+      return canvasCount > 0 ? 1 : 0;
+    }
   }
 }
