@@ -357,6 +357,46 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="7">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label mb-0">Builder Goal Runner</label>
+            <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+          <div class="small text-muted mb-2">
+            Import a preconfigured Micro6 task payload, publish it into a selected Micro6 AccountBuilder queue, then manually analyze or fix/relaunch it if the published run fails.
+          </div>
+          <textarea
+            id="builderGoalPayloadInput"
+            class="form-control form-control-sm mb-2 font-monospace"
+            rows="8"
+            placeholder='Paste builder payload JSON here'></textarea>
+          <div class="mb-2">
+            <label class="form-label small mb-1" for="builderGoalClientSelect">Online Client</label>
+            <select id="builderGoalClientSelect" class="form-select form-select-sm">
+              <option value="">Loading online Micro6 clients...</option>
+            </select>
+            <div id="builderGoalClientStatus" class="small text-muted mt-1">
+              Waiting for online Micro6 clients.
+            </div>
+          </div>
+          <div class="d-flex gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-primary flex-fill" id="importBuilderGoalBtn">
+              <i class="bi bi-box-arrow-in-down me-1"></i>Import
+            </button>
+            <button class="btn btn-sm btn-primary flex-fill" id="runBuilderGoalBtn" disabled>
+              <i class="bi bi-upload me-1"></i>Publish to Selected Client
+            </button>
+          </div>
+          <div id="builderGoalImportResult" class="small text-muted mb-2">
+            Import a builder payload to validate it against the Micro6 catalog.
+          </div>
+          <div id="builderGoalRunsList" class="task-plans-list">
+            <div class="text-muted small fst-italic">No builder goal runs yet.</div>
+          </div>
+        </div>
+
         <!-- Generate New Plan -->
         <div class="task-planner-section">
           <label class="form-label">Generate Task Plan</label>
@@ -650,9 +690,58 @@
     </div>
   </div>
 
+  <div class="modal fade" id="builderGoalAnalysisModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-lightbulb me-2"></i>Analyze Builder Goal Failure
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="builderGoalAnalysisStatus" class="small text-muted mb-3">
+            Load a failed run to edit the analysis prompt and choose evidence.
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Prompt</label>
+            <textarea id="builderGoalAnalysisPrompt" class="form-control form-control-sm font-monospace" rows="4"
+              placeholder="Describe exactly what the analysis should focus on."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Context</label>
+            <textarea id="builderGoalAnalysisContext" class="form-control form-control-sm font-monospace" rows="5"
+              placeholder="Additional context, observations, or implementation guidance."></textarea>
+          </div>
+          <div class="d-flex gap-2 mb-3">
+            <button class="btn btn-sm btn-outline-secondary" id="builderGoalAnalysisResetBtn" type="button">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Prompt/Context
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="builderGoalAnalysisSelectAllBtn" type="button">
+              <i class="bi bi-check2-square me-1"></i>Select All Evidence
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="builderGoalAnalysisClearAllBtn" type="button">
+              <i class="bi bi-square me-1"></i>Clear All Evidence
+            </button>
+          </div>
+          <div id="builderGoalAnalysisEvidenceMeta" class="small text-muted mb-2"></div>
+          <div id="builderGoalAnalysisEvidenceGroups" class="d-flex flex-column gap-3">
+            <div class="text-muted small fst-italic">No evidence loaded yet.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="submitBuilderGoalAnalysisBtn">
+            <i class="bi bi-lightbulb-fill me-1"></i>Run Analysis
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/debugger.js?v=12"></script>
   <script src="/js/patchloop.js?v=2"></script>
-  <script src="/js/account-task-planner.js?v=1"></script>
+  <script src="/js/account-task-planner.js?v=7"></script>
 </body>
 
 </html>

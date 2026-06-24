@@ -64,4 +64,8 @@ public interface PatchLoopIterationRepository extends JpaRepository<PatchLoopIte
    */
   List<PatchLoopIteration> findByScriptNameAndStatusOrderByCreatedAtDesc(
       String scriptName, PatchLoopStatus status);
+
+  List<PatchLoopIteration> findBySourceTypeOrderByCreatedAtDesc(String sourceType);
+
+  List<PatchLoopIteration> findByParentIterationIdOrderByCreatedAtDesc(String parentIterationId);
 }

@@ -61,11 +61,14 @@ public class ScriptExecutionService {
     final String backend;
     final Integer micro6EntryId;
     final ScriptInstance localInstance;
+    final String micro6BaseUrl;
 
-    ActiveRun(String backend, Integer micro6EntryId, ScriptInstance localInstance) {
+    ActiveRun(
+        String backend, Integer micro6EntryId, ScriptInstance localInstance, String micro6BaseUrl) {
       this.backend = backend;
       this.micro6EntryId = micro6EntryId;
       this.localInstance = localInstance;
+      this.micro6BaseUrl = micro6BaseUrl;
     }
   }
 
@@ -127,6 +130,50 @@ public class ScriptExecutionService {
           false, backend, "TIMEOUT", true, "Script execution timed out", 0);
     }
   }
+
+  public record Micro6PublishResult(
+      boolean published,
+      String backend,
+      String publishStatus,
+      Integer entryId,
+      boolean attachedToExisting,
+      String micro6BaseUrl,
+      String errorMessage) {
+
+    public static Micro6PublishResult success(
+        Integer entryId,
+        boolean attachedToExisting,
+        String micro6BaseUrl,
+        String publishStatus) {
+      return new Micro6PublishResult(
+          true,
+          BACKEND_MICRO6_LOCAL_EXECUTOR,
+          publishStatus,
+          entryId,
+          attachedToExisting,
+          micro6BaseUrl,
+          null);
+    }
+
+    public static Micro6PublishResult failure(String errorMessage, String micro6BaseUrl) {
+      return new Micro6PublishResult(
+          false,
+          BACKEND_MICRO6_LOCAL_EXECUTOR,
+          "PUBLISH_FAILED",
+          null,
+          false,
+          micro6BaseUrl,
+          errorMessage);
+    }
+  }
+
+  public record Micro6RunStatusResult(
+      boolean found,
+      String status,
+      String errorMessage,
+      JsonNode rawResponse,
+      String micro6BaseUrl,
+      Integer entryId) {}
 
   /**
    * Runs a script and waits for completion (backward-compatible overload, unscoped).
@@ -191,7 +238,7 @@ public class ScriptExecutionService {
       ScriptInstance instance = new ScriptInstance(runConfig, stateHandler, taskDetectionService);
       instanceManager.setInstance(instance);
       if (executionId != null) {
-        activeRuns.put(executionId, new ActiveRun(BACKEND_LOCAL_INSTANCE, null, instance));
+        activeRuns.put(executionId, new ActiveRun(BACKEND_LOCAL_INSTANCE, null, instance, null));
       }
 
       // Create a custom thread wrapper to track completion
@@ -258,77 +305,37 @@ public class ScriptExecutionService {
     final long startTime = System.currentTimeMillis();
     final int entryId = micro6EntryIdSeq.incrementAndGet();
     int trackedEntryId = entryId;
+    final String targetBaseUrl = resolveMicro6BaseUrl(taskMetadata);
     micro6EntryToScript.put(entryId, scriptName);
     activeMicro6EntryId.set(entryId);
 
     if (executionId != null) {
-      activeRuns.put(executionId, new ActiveRun(BACKEND_MICRO6_LOCAL_EXECUTOR, entryId, null));
+      activeRuns.put(
+          executionId,
+          new ActiveRun(BACKEND_MICRO6_LOCAL_EXECUTOR, entryId, null, targetBaseUrl));
     }
 
     try {
-      String taskKey = resolveMicro6TaskKey(scriptName, taskMetadata);
-      if (taskKey == null || taskKey.isBlank()) {
+      Micro6PublishResult publishResult =
+          publishMicro6TaskInternal(scriptName, taskMetadata, entryId, targetBaseUrl, timeoutMs);
+      if (!publishResult.published()) {
         return ScriptExecutionResult.failure(
-            BACKEND_MICRO6_LOCAL_EXECUTOR,
-            "FAILED",
-            "Missing Micro6 task identity: taskMetadata.task_key, taskMetadata.task_name, or scriptName is required");
+            BACKEND_MICRO6_LOCAL_EXECUTOR, "FAILED", publishResult.errorMessage());
       }
-
-      Map<String, Object> mergedTaskMetadata = new LinkedHashMap<>();
-      mergedTaskMetadata.put("display_name", scriptName);
-      mergedTaskMetadata.put("task_name", scriptName);
-      mergedTaskMetadata.put("task_key", taskKey);
-      if (taskMetadata != null && !taskMetadata.isEmpty()) {
-        mergedTaskMetadata.putAll(taskMetadata);
-      }
-
-      String requestBody =
-          objectMapper.writeValueAsString(
-              Map.of(
-                  "task_key", taskKey,
-                  "entry_id", entryId,
-                  "timeout_ms", timeoutMs,
-                  "task_metadata", mergedTaskMetadata));
-
-      HttpRequest executeRequest =
-          HttpRequest.newBuilder()
-              .uri(URI.create(micro6ExecutorBaseUrl + "/api/v1/execute"))
-              .header("Content-Type", "application/json")
-              .timeout(Duration.ofSeconds(10))
-              .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-              .build();
-
-      HttpResponse<String> executeResponse =
-          httpClient.send(executeRequest, HttpResponse.BodyHandlers.ofString());
-
-      if (executeResponse.statusCode() >= 400) {
-        Integer existingEntryId = tryResolveAlreadyQueuedEntry(executeResponse);
-        if (existingEntryId != null) {
-          trackedEntryId = existingEntryId;
-          micro6EntryToScript.put(trackedEntryId, scriptName);
-          activeMicro6EntryId.set(trackedEntryId);
-          if (executionId != null) {
-            activeRuns.put(
-                executionId, new ActiveRun(BACKEND_MICRO6_LOCAL_EXECUTOR, trackedEntryId, null));
-          }
-          logger.info(
-              "Attached to existing Micro6 run for task {} (existing_entry_id={})",
-              scriptName,
-              trackedEntryId);
-        } else {
-          return ScriptExecutionResult.failure(
-              BACKEND_MICRO6_LOCAL_EXECUTOR,
-              "FAILED",
-              "Micro6 executor rejected task (HTTP "
-                  + executeResponse.statusCode()
-                  + "): "
-                  + executeResponse.body());
+      if (publishResult.entryId() != null) {
+        trackedEntryId = publishResult.entryId();
+        micro6EntryToScript.put(trackedEntryId, scriptName);
+        activeMicro6EntryId.set(trackedEntryId);
+        if (executionId != null) {
+          activeRuns.put(
+              executionId,
+              new ActiveRun(BACKEND_MICRO6_LOCAL_EXECUTOR, trackedEntryId, null, targetBaseUrl));
         }
       }
 
       long deadline = System.currentTimeMillis() + timeoutMs;
       while (System.currentTimeMillis() <= deadline) {
-        HttpResponse<String> statusResponse = queryMicro6Status(trackedEntryId);
+        HttpResponse<String> statusResponse = queryMicro6Status(targetBaseUrl, trackedEntryId);
 
         if (statusResponse.statusCode() == 200) {
           JsonNode statusJson = objectMapper.readTree(statusResponse.body());
@@ -359,7 +366,7 @@ public class ScriptExecutionService {
         Thread.sleep(1000);
       }
 
-      stopMicro6Run(trackedEntryId, "Timed out while waiting for completion");
+      stopMicro6Run(targetBaseUrl, trackedEntryId, "Timed out while waiting for completion");
       return ScriptExecutionResult.timeout(BACKEND_MICRO6_LOCAL_EXECUTOR);
 
     } catch (InterruptedException e) {
@@ -403,6 +410,67 @@ public class ScriptExecutionService {
     return null;
   }
 
+  private Micro6PublishResult publishMicro6TaskInternal(
+      String scriptName,
+      Map<String, Object> taskMetadata,
+      int entryId,
+      String targetBaseUrl,
+      long timeoutMs)
+      throws Exception {
+    String taskKey = resolveMicro6TaskKey(scriptName, taskMetadata);
+    if (taskKey == null || taskKey.isBlank()) {
+      return Micro6PublishResult.failure(
+          "Missing Micro6 task identity: taskMetadata.task_key, taskMetadata.task_name, or scriptName is required",
+          targetBaseUrl);
+    }
+
+    Map<String, Object> mergedTaskMetadata = new LinkedHashMap<>();
+    mergedTaskMetadata.put("display_name", scriptName);
+    mergedTaskMetadata.put("task_name", scriptName);
+    mergedTaskMetadata.put("task_key", taskKey);
+    if (taskMetadata != null && !taskMetadata.isEmpty()) {
+      mergedTaskMetadata.putAll(taskMetadata);
+    }
+
+    String requestBody =
+        objectMapper.writeValueAsString(
+            Map.of(
+                "task_key", taskKey,
+                "entry_id", entryId,
+                "timeout_ms", timeoutMs,
+                "task_metadata", mergedTaskMetadata));
+
+    HttpRequest executeRequest =
+        HttpRequest.newBuilder()
+            .uri(URI.create(targetBaseUrl + "/api/v1/execute"))
+            .header("Content-Type", "application/json")
+            .timeout(Duration.ofSeconds(10))
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
+    HttpResponse<String> executeResponse =
+        httpClient.send(executeRequest, HttpResponse.BodyHandlers.ofString());
+
+    if (executeResponse.statusCode() >= 400) {
+      Integer existingEntryId = tryResolveAlreadyQueuedEntry(executeResponse);
+      if (existingEntryId != null) {
+        logger.info(
+            "Attached to existing Micro6 run for task {} (existing_entry_id={})",
+            scriptName,
+            existingEntryId);
+        return Micro6PublishResult.success(existingEntryId, true, targetBaseUrl, "PUBLISHED");
+      }
+      return Micro6PublishResult.failure(
+          "Micro6 executor rejected task (HTTP "
+              + executeResponse.statusCode()
+              + "): "
+              + executeResponse.body(),
+          targetBaseUrl);
+    }
+
+    return Micro6PublishResult.success(entryId, false, targetBaseUrl, "PUBLISHED");
+  }
+
   /** Gets the current script instance if running. */
   public ScriptInstance getCurrentInstance() {
     return instanceManager.getInstanceRef();
@@ -431,7 +499,7 @@ public class ScriptExecutionService {
     if (BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(getActiveBackendOrDefault())) {
       Integer entryId = activeMicro6EntryId.get();
       if (entryId != null) {
-        stopMicro6Run(entryId, "Cancelled from patch loop");
+        stopMicro6Run(micro6ExecutorBaseUrl, entryId, "Cancelled from patch loop");
         return;
       }
     }
@@ -463,7 +531,7 @@ public class ScriptExecutionService {
     if (BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(getActiveBackendOrDefault())) {
       Integer entryId = activeMicro6EntryId.get();
       if (entryId != null) {
-        controlMicro6Run(entryId, "pause");
+        controlMicro6Run(micro6ExecutorBaseUrl, entryId, "pause");
       }
     }
   }
@@ -490,7 +558,7 @@ public class ScriptExecutionService {
     if (BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(getActiveBackendOrDefault())) {
       Integer entryId = activeMicro6EntryId.get();
       if (entryId != null) {
-        controlMicro6Run(entryId, "resume");
+        controlMicro6Run(micro6ExecutorBaseUrl, entryId, "resume");
       }
     }
   }
@@ -503,7 +571,7 @@ public class ScriptExecutionService {
       return;
     }
     if (BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(run.backend) && run.micro6EntryId != null) {
-      controlMicro6Run(run.micro6EntryId, "pause");
+      controlMicro6Run(resolveRunMicro6BaseUrl(run), run.micro6EntryId, "pause");
     } else {
       logger.info(
           "pauseScript: pause not supported for backend={}, executionId={}",
@@ -520,7 +588,7 @@ public class ScriptExecutionService {
       return;
     }
     if (BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(run.backend) && run.micro6EntryId != null) {
-      controlMicro6Run(run.micro6EntryId, "resume");
+      controlMicro6Run(resolveRunMicro6BaseUrl(run), run.micro6EntryId, "resume");
     } else {
       logger.info(
           "resumeScript: resume not supported for backend={}, executionId={}",
@@ -537,7 +605,7 @@ public class ScriptExecutionService {
       return;
     }
     if (BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(run.backend) && run.micro6EntryId != null) {
-      stopMicro6Run(run.micro6EntryId, reason);
+      stopMicro6Run(resolveRunMicro6BaseUrl(run), run.micro6EntryId, reason);
     } else if (run.localInstance != null) {
       try {
         run.localInstance.stop();
@@ -632,10 +700,32 @@ public class ScriptExecutionService {
     return text.isEmpty() ? null : text;
   }
 
-  private HttpResponse<String> queryMicro6Status(int entryId) throws Exception {
+  @SuppressWarnings("unchecked")
+  private String resolveMicro6BaseUrl(Map<String, Object> taskMetadata) {
+    if (taskMetadata != null) {
+      Object target = taskMetadata.get("micro6_target");
+      if (target instanceof Map<?, ?> targetMap) {
+        Object value = ((Map<String, Object>) targetMap).get("advertised_base_url");
+        if (value != null && !value.toString().isBlank()) {
+          return normalizeBaseUrl(value.toString());
+        }
+      }
+    }
+    return normalizeBaseUrl(micro6ExecutorBaseUrl);
+  }
+
+  private String resolveRunMicro6BaseUrl(ActiveRun run) {
+    if (run != null && run.micro6BaseUrl != null && !run.micro6BaseUrl.isBlank()) {
+      return normalizeBaseUrl(run.micro6BaseUrl);
+    }
+    return normalizeBaseUrl(micro6ExecutorBaseUrl);
+  }
+
+  private HttpResponse<String> queryMicro6Status(String micro6BaseUrl, int entryId)
+      throws Exception {
     HttpRequest statusRequest =
         HttpRequest.newBuilder()
-            .uri(URI.create(micro6ExecutorBaseUrl + "/api/v1/runs/" + entryId + "/status"))
+            .uri(URI.create(micro6BaseUrl + "/api/v1/runs/" + entryId + "/status"))
             .timeout(Duration.ofSeconds(10))
             .GET()
             .build();
@@ -644,7 +734,7 @@ public class ScriptExecutionService {
     if (response.statusCode() == 404) {
       HttpRequest fallback =
           HttpRequest.newBuilder()
-              .uri(URI.create(micro6ExecutorBaseUrl + "/api/v1/status/" + entryId))
+              .uri(URI.create(micro6BaseUrl + "/api/v1/status/" + entryId))
               .timeout(Duration.ofSeconds(10))
               .GET()
               .build();
@@ -653,15 +743,16 @@ public class ScriptExecutionService {
     return response;
   }
 
-  private void stopMicro6Run(int entryId, String reason) {
-    controlMicro6Run(entryId, "stop", reason);
+  private void stopMicro6Run(String micro6BaseUrl, int entryId, String reason) {
+    controlMicro6Run(micro6BaseUrl, entryId, "stop", reason);
   }
 
-  private void controlMicro6Run(int entryId, String action) {
-    controlMicro6Run(entryId, action, null);
+  private void controlMicro6Run(String micro6BaseUrl, int entryId, String action) {
+    controlMicro6Run(micro6BaseUrl, entryId, action, null);
   }
 
-  private void controlMicro6Run(int entryId, String action, String reason) {
+  private void controlMicro6Run(
+      String micro6BaseUrl, int entryId, String action, String reason) {
     try {
       String body =
           reason == null || reason.isBlank()
@@ -669,7 +760,7 @@ public class ScriptExecutionService {
               : objectMapper.writeValueAsString(Map.of("reason", reason));
       HttpRequest request =
           HttpRequest.newBuilder()
-              .uri(URI.create(micro6ExecutorBaseUrl + "/api/v1/runs/" + entryId + "/" + action))
+              .uri(URI.create(micro6BaseUrl + "/api/v1/runs/" + entryId + "/" + action))
               .header("Content-Type", "application/json")
               .timeout(Duration.ofSeconds(10))
               .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -688,6 +779,77 @@ public class ScriptExecutionService {
       logger.warn(
           "Micro6 run control '{}' failed for entry {}: {}", action, entryId, e.getMessage());
     }
+  }
+
+  public Micro6PublishResult publishMicro6Task(String scriptName, Map<String, Object> taskMetadata) {
+    String normalizedScript = normalizeScriptName(scriptName);
+    String selectedBackend = resolveBackend(scriptName);
+    if (!BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(selectedBackend)) {
+      return Micro6PublishResult.failure(
+          "Publish is only supported for the Micro6 executor backend", micro6ExecutorBaseUrl);
+    }
+    final int entryId = micro6EntryIdSeq.incrementAndGet();
+    final String targetBaseUrl = resolveMicro6BaseUrl(taskMetadata);
+    try {
+      return publishMicro6TaskInternal(normalizedScript, taskMetadata, entryId, targetBaseUrl, 0);
+    } catch (Exception e) {
+      logger.warn("Failed to publish Micro6 task {}: {}", normalizedScript, e.getMessage());
+      return Micro6PublishResult.failure("Micro6 executor error: " + e.getMessage(), targetBaseUrl);
+    }
+  }
+
+  public Micro6RunStatusResult getMicro6RunStatus(
+      Map<String, Object> taskMetadata, Integer entryId) {
+    String targetBaseUrl = resolveMicro6BaseUrl(taskMetadata);
+    if (entryId == null || entryId <= 0) {
+      return new Micro6RunStatusResult(
+          false, "UNKNOWN", "Missing Micro6 entry_id", null, targetBaseUrl, entryId);
+    }
+
+    try {
+      HttpResponse<String> response = queryMicro6Status(targetBaseUrl, entryId);
+      if (response.statusCode() == 404) {
+        return new Micro6RunStatusResult(
+            false, "UNKNOWN", "entry_id not tracked", null, targetBaseUrl, entryId);
+      }
+      if (response.statusCode() >= 400) {
+        return new Micro6RunStatusResult(
+            false,
+            "UNKNOWN",
+            "Micro6 status polling failed (HTTP " + response.statusCode() + ")",
+            null,
+            targetBaseUrl,
+            entryId);
+      }
+      JsonNode payload = objectMapper.readTree(response.body());
+      return new Micro6RunStatusResult(
+          true,
+          payload.path("status").asText("UNKNOWN"),
+          payload.path("error_message").asText(null),
+          payload,
+          targetBaseUrl,
+          entryId);
+    } catch (Exception e) {
+      logger.warn("Failed to poll Micro6 status for entry {}: {}", entryId, e.getMessage());
+      return new Micro6RunStatusResult(
+          false,
+          "UNKNOWN",
+          "Micro6 status polling failed: " + e.getMessage(),
+          null,
+          targetBaseUrl,
+          entryId);
+    }
+  }
+
+  private String normalizeBaseUrl(String value) {
+    if (value == null || value.isBlank()) {
+      return micro6ExecutorBaseUrl;
+    }
+    String normalized = value.trim();
+    while (normalized.endsWith("/")) {
+      normalized = normalized.substring(0, normalized.length() - 1);
+    }
+    return normalized;
   }
 
   private String getActiveBackendOrDefault() {

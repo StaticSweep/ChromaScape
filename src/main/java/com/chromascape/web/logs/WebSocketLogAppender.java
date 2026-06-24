@@ -1,6 +1,9 @@
 package com.chromascape.web.logs;
 
 import com.chromascape.utils.core.statistics.StatisticsManager;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import org.apache.logging.log4j.core.Appender;
@@ -43,6 +46,9 @@ public class WebSocketLogAppender extends AbstractAppender {
 
   /** ISO 8601 formatter for timestamps in WebSocket payload. */
   private static final DateTimeFormatter ISO_INSTANT = DateTimeFormatter.ISO_INSTANT;
+  /** Raw stderr stream that bypasses the application's redirected System.err logger bridge. */
+  private static final PrintStream RAW_STDERR =
+      new PrintStream(new FileOutputStream(FileDescriptor.err), true);
 
   /**
    * The handler managing WebSocket sessions. This is set by Spring after context initialization.
@@ -115,8 +121,8 @@ public class WebSocketLogAppender extends AbstractAppender {
     try {
       webSocketHandler.broadcast(json);
     } catch (Exception e) {
-      // Use System.err to avoid recursive logging
-      System.err.println("Failed to broadcast log: " + e.getMessage());
+      // Use the raw stderr stream to avoid feeding failures back into Log4j.
+      RAW_STDERR.println("Failed to broadcast log: " + e.getMessage());
     }
   }
 

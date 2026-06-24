@@ -42,6 +42,10 @@ public class AnalysisV2Request {
   @JsonProperty("evidenceSelectors")
   private List<AnalysisV2EvidenceSelector> evidenceSelectors;
 
+  /** Concrete evidence bundle to analyze (optional, used when the caller preselects evidence). */
+  @JsonProperty("evidenceBundle")
+  private AnalysisV1EvidenceBundle evidenceBundle;
+
   /** Configuration options for the analysis (optional). */
   @JsonProperty("config")
   private AnalysisV1Config config;
@@ -111,6 +115,14 @@ public class AnalysisV2Request {
     this.evidenceSelectors = evidenceSelectors;
   }
 
+  public AnalysisV1EvidenceBundle getEvidenceBundle() {
+    return evidenceBundle;
+  }
+
+  public void setEvidenceBundle(AnalysisV1EvidenceBundle evidenceBundle) {
+    this.evidenceBundle = evidenceBundle;
+  }
+
   public AnalysisV1Config getConfig() {
     return config;
   }
@@ -130,13 +142,14 @@ public class AnalysisV2Request {
         && Objects.equals(prompt, that.prompt)
         && Objects.equals(context, that.context)
         && Objects.equals(evidenceSelectors, that.evidenceSelectors)
+        && Objects.equals(evidenceBundle, that.evidenceBundle)
         && Objects.equals(config, that.config);
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(
-        schemaVersion, promptType, target, prompt, context, evidenceSelectors, config);
+        schemaVersion, promptType, target, prompt, context, evidenceSelectors, evidenceBundle, config);
   }
 
   @Override
@@ -157,6 +170,8 @@ public class AnalysisV2Request {
         + '\''
         + ", evidenceSelectors="
         + evidenceSelectors.size()
+        + ", evidenceBundle="
+        + (evidenceBundle != null ? evidenceBundle.getTotalEvidenceCount() : 0)
         + ", config="
         + config
         + '}';

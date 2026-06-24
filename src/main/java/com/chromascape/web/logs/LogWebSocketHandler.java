@@ -1,12 +1,13 @@
 package com.chromascape.web.logs;
 
 import java.io.IOException;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -33,8 +34,9 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 @Component
 public class LogWebSocketHandler extends TextWebSocketHandler {
 
-  /** SLF4J logger for connection and error events. */
-  private static final Logger logger = LoggerFactory.getLogger(LogWebSocketHandler.class);
+  /** Raw stderr stream that bypasses the application's redirected System.err logger bridge. */
+  private static final PrintStream RAW_STDERR =
+      new PrintStream(new FileOutputStream(FileDescriptor.err), true);
 
   /**
    * Thread-safe set of active WebSocket sessions. {@link CopyOnWriteArraySet} is used to avoid
@@ -54,10 +56,6 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
   @Override
   public void afterConnectionEstablished(@Nullable WebSocketSession session) {
     sessions.add(session);
-    // Defensive null check; session is typically non-null after establishment.
-    if (session != null) {
-      logger.info("WebSocket client connected");
-    }
   }
 
   /**
@@ -71,9 +69,6 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
   public void afterConnectionClosed(
       @Nullable WebSocketSession session, @Nullable CloseStatus status) {
     sessions.remove(session);
-    if (session != null) {
-      logger.info("WebSocket client disconnected");
-    }
   }
 
   /**
@@ -90,8 +85,9 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
     sessions.remove(session);
     if (session != null) {
       session.close(CloseStatus.SERVER_ERROR);
-      assert exception != null;
-      logger.error("WebSocket transport error for session: {}", exception.getMessage());
+      if (exception != null) {
+        RAW_STDERR.println("WebSocket transport error for session: " + exception.getMessage());
+      }
     }
   }
 
@@ -113,7 +109,7 @@ public class LogWebSocketHandler extends TextWebSocketHandler {
               }
             } catch (IOException e) {
               sessions.remove(session);
-              logger.warn("Failed to send message to session: {}", e.getMessage());
+              RAW_STDERR.println("Failed to send message to session: " + e.getMessage());
             }
           });
     }

@@ -2,6 +2,7 @@ package com.chromascape.web.debug.patchloop.service.provider;
 
 import com.chromascape.web.debug.patchloop.constants.AnalysisV2ErrorCode;
 import com.chromascape.web.debug.patchloop.dto.AnalysisStatus;
+import com.chromascape.web.debug.patchloop.dto.AnalysisV1EvidenceBundle;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV1Error;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV2Diagnosis;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV2PatchDraft;
@@ -242,7 +243,9 @@ public class OpenAiCodexAnalysisProvider implements AnalysisProvider {
       }
       msg.append("\n");
     }
-    msg.append("\nPlease analyze this request and provide a complete V2 response in JSON format.");
+    msg.append("\n");
+    appendEvidenceBundle(msg, request.getEvidenceBundle());
+    msg.append("Please analyze this request and provide a complete V2 response in JSON format.");
     return msg.toString();
   }
 
@@ -252,6 +255,67 @@ public class OpenAiCodexAnalysisProvider implements AnalysisProvider {
         + "Error: "
         + errorMessage
         + "\n\nPlease fix your response to match the exact schema and return ONLY valid JSON.";
+  }
+
+  private void appendEvidenceBundle(StringBuilder msg, AnalysisV1EvidenceBundle evidenceBundle) {
+    if (evidenceBundle == null || !evidenceBundle.hasEvidence()) {
+      return;
+    }
+
+    msg.append("## Selected Evidence\n\n");
+
+    if (!evidenceBundle.getLogs().isEmpty()) {
+      msg.append("### Logs\n");
+      for (var log : evidenceBundle.getLogs()) {
+        msg.append(
+            String.format(
+                "- [%s] %s %s :: %s%n",
+                safe(log.getLevel()),
+                safe(log.getTimestamp()),
+                safe(log.getSource()),
+                safe(log.getMessage())));
+      }
+      msg.append('\n');
+    }
+
+    if (!evidenceBundle.getTickLogs().isEmpty()) {
+      msg.append("### Tick Logs\n");
+      for (var tickLog : evidenceBundle.getTickLogs()) {
+        msg.append(
+            String.format(
+                "- [tick %s] %s %s/%s :: %s",
+                safe(tickLog.getTick()),
+                safe(tickLog.getTimestamp()),
+                safe(tickLog.getSubsystem()),
+                safe(tickLog.getSeverity()),
+                safe(tickLog.getMessage())));
+        if (tickLog.getDetails() != null && !tickLog.getDetails().isBlank()) {
+          msg.append(String.format(" | details=%s", tickLog.getDetails()));
+        }
+        msg.append('\n');
+      }
+      msg.append('\n');
+    }
+
+    if (!evidenceBundle.getDecisions().isEmpty()) {
+      msg.append("### Decisions\n");
+      for (var decision : evidenceBundle.getDecisions()) {
+        msg.append(
+            String.format(
+                "- [%s] %s success=%s failure=%s target=%s context=%s%n",
+                safe(decision.getDecisionType()),
+                safe(decision.getTimestamp()),
+                safe(decision.getSuccess()),
+                safe(decision.getFailureCode()),
+                safe(decision.getTargetEntity()),
+                safe(decision.getContext())));
+      }
+      msg.append('\n');
+    }
+  }
+
+  private String safe(Object value) {
+    return value == null ? "-" : value.toString();
   }
 
   private String callOpenAiApi(String systemPrompt, String userMessage, boolean isRetry)

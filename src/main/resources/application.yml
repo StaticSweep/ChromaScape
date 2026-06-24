@@ -6,9 +6,9 @@ spring:
 
   # Database configuration
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/chromascape}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/chromascape?sslmode=disable}
     username: ${SPRING_DATASOURCE_USERNAME:chromascape}
-    password: ${SPRING_DATASCAPE_PASSWORD:chromascape123}
+    password: ${SPRING_DATASOURCE_PASSWORD:chromascape123}
   jpa:
     hibernate:
       ddl-auto: update

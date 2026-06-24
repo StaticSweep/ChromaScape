@@ -175,6 +175,7 @@ public class PatchLoopPersistenceService {
       PatchLoopIteration iteration, AnalysisV2Response response, JsonNode responseNode) {
     iteration.setAnalysisResponseJson(responseNode);
     iteration.setAnalysisId(response.getAnalysisId());
+    iteration.setResultType(response.getStatus() != null ? response.getStatus().name() : null);
 
     if (response.getDiagnosis() != null) {
       iteration.setDiagnosisSummary(response.getDiagnosis().getSummary());
@@ -193,9 +194,19 @@ public class PatchLoopPersistenceService {
     // V2: Store patchDraft metadata in separate field (no mutation of diagnosisSummary)
     if (response.getPatchDraft() != null) {
       iteration.setPatchId(response.getPatchDraft().getPatchId());
+      iteration.setPatchDraftSummary(response.getPatchDraft().getDescription());
+    } else {
+      iteration.setPatchDraftSummary(null);
     }
 
-    // V2: impactedModules stored in JSONB response, not separate column
+    if (response.getRetestPlan() != null) {
+      iteration.setRetestPlanSummary(response.getRetestPlan().getEstimatedDuration());
+    } else {
+      iteration.setRetestPlanSummary(null);
+    }
+
+    iteration.setImpactedModulesCount(
+        response.getImpactedModules() != null ? response.getImpactedModules().size() : 0);
 
     iterationRepository.save(iteration);
   }

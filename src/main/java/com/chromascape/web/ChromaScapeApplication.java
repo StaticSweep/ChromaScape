@@ -2,15 +2,11 @@ package com.chromascape.web;
 
 import com.chromascape.utils.core.screen.viewport.ViewportManager;
 import com.chromascape.utils.core.state.StateManager;
-import com.chromascape.web.logs.LogOutputStream;
 import com.chromascape.web.logs.LogWebSocketHandler;
 import com.chromascape.web.logs.WebSocketLogAppender;
 import com.chromascape.web.state.WebsocketBotStateListener;
 import com.chromascape.web.viewport.WebsocketViewport;
 import jakarta.annotation.PostConstruct;
-import java.io.PrintStream;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -87,13 +83,7 @@ public class ChromaScapeApplication {
    */
   @PostConstruct
   public void redirectSystemStreams() {
-    // Redirect System.out to Log4j2 at INFO level
-    System.setOut(
-        new PrintStream(new LogOutputStream(LogManager.getLogger("System.out"), Level.INFO), true));
-
-    // Redirect System.err to Log4j2 at ERROR level
-    System.setErr(
-        new PrintStream(
-            new LogOutputStream(LogManager.getLogger("System.err"), Level.ERROR), true));
+    // Intentionally left empty. Redirecting System.out/System.err into Log4j causes
+    // recursive logging when Log4j's own Console appender writes to standard streams.
   }
 }

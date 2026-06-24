@@ -211,6 +211,36 @@ public class PatchLoopIteration {
   @Column(name = "task_item_id", length = 100)
   private String taskItemId;
 
+  /** Source of this run (planner, builder_goal, builder_goal_analysis, etc.). */
+  @Column(name = "source_type", length = 50)
+  private String sourceType;
+
+  /** Patch target for recovery flows (repo_local, micro6_task_source, etc.). */
+  @Column(name = "patch_target", length = 50)
+  private String patchTarget;
+
+  /** Imported builder payload snapshot or other source payload metadata. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "imported_payload_json", columnDefinition = "jsonb")
+  private JsonNode importedPayloadJson;
+
+  /** Executor task metadata snapshot used to launch the run. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "task_metadata_json", columnDefinition = "jsonb")
+  private JsonNode taskMetadataJson;
+
+  /** Parent iteration ID for child analyze/relaunch runs. */
+  @Column(name = "parent_iteration_id", length = 100)
+  private String parentIterationId;
+
+  /** Latest Micro6 task source revision applied to this run family. */
+  @Column(name = "micro6_revision_id", length = 100)
+  private String micro6RevisionId;
+
+  /** Timestamp of the last Micro6 source patch apply. */
+  @Column(name = "micro6_patched_at")
+  private LocalDateTime micro6PatchedAt;
+
   public PatchLoopIteration() {
     this.createdAt = LocalDateTime.now();
     this.lastStateAt = LocalDateTime.now();
@@ -644,6 +674,62 @@ public class PatchLoopIteration {
 
   public void setTaskItemId(String taskItemId) {
     this.taskItemId = taskItemId;
+  }
+
+  public String getSourceType() {
+    return sourceType;
+  }
+
+  public void setSourceType(String sourceType) {
+    this.sourceType = sourceType;
+  }
+
+  public String getPatchTarget() {
+    return patchTarget;
+  }
+
+  public void setPatchTarget(String patchTarget) {
+    this.patchTarget = patchTarget;
+  }
+
+  public JsonNode getImportedPayloadJson() {
+    return importedPayloadJson;
+  }
+
+  public void setImportedPayloadJson(JsonNode importedPayloadJson) {
+    this.importedPayloadJson = importedPayloadJson;
+  }
+
+  public JsonNode getTaskMetadataJson() {
+    return taskMetadataJson;
+  }
+
+  public void setTaskMetadataJson(JsonNode taskMetadataJson) {
+    this.taskMetadataJson = taskMetadataJson;
+  }
+
+  public String getParentIterationId() {
+    return parentIterationId;
+  }
+
+  public void setParentIterationId(String parentIterationId) {
+    this.parentIterationId = parentIterationId;
+  }
+
+  public String getMicro6RevisionId() {
+    return micro6RevisionId;
+  }
+
+  public void setMicro6RevisionId(String micro6RevisionId) {
+    this.micro6RevisionId = micro6RevisionId;
+  }
+
+  public LocalDateTime getMicro6PatchedAt() {
+    return micro6PatchedAt;
+  }
+
+  public void setMicro6PatchedAt(LocalDateTime micro6PatchedAt) {
+    this.micro6PatchedAt = micro6PatchedAt;
   }
 
   /** Increments the current attempt counter. */
