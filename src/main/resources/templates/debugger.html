@@ -357,7 +357,7 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
-        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="7">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="16">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Builder Goal Runner</label>
             <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
@@ -365,33 +365,74 @@
             </button>
           </div>
           <div class="small text-muted mb-2">
-            Import a preconfigured Micro6 task payload, publish it into a selected Micro6 AccountBuilder queue, then manually analyze or fix/relaunch it if the published run fails.
+            Select an account and the local launcher machine, choose a Micro6 task, paste or edit the task settings JSON, and run it. ChromaScape will launch the local micro6 workspace, wait for the executor heartbeat, and then publish the task.
           </div>
-          <textarea
-            id="builderGoalPayloadInput"
-            class="form-control form-control-sm mb-2 font-monospace"
-            rows="8"
-            placeholder='Paste builder payload JSON here'></textarea>
           <div class="mb-2">
-            <label class="form-label small mb-1" for="builderGoalClientSelect">Online Client</label>
-            <select id="builderGoalClientSelect" class="form-select form-select-sm">
-              <option value="">Loading online Micro6 clients...</option>
+            <label class="form-label small mb-1" for="builderGoalAccountSelect">Account</label>
+            <select id="builderGoalAccountSelect" class="form-select form-select-sm">
+              <option value="">Loading launcher accounts...</option>
             </select>
-            <div id="builderGoalClientStatus" class="small text-muted mt-1">
-              Waiting for online Micro6 clients.
+            <div id="builderGoalAccountSummary" class="small text-muted mt-1">
+              Select an account to run a task.
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1" for="builderGoalMachineSelect">Machine</label>
+            <select id="builderGoalMachineSelect" class="form-select form-select-sm">
+              <option value="">Loading launcher machines...</option>
+            </select>
+            <div id="builderGoalMachineSummary" class="small text-muted mt-1">
+              Select the local launcher machine that should run the micro6 workspace.
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1" for="builderGoalTaskSearchInput">Task</label>
+            <input type="text" id="builderGoalTaskSearchInput" class="form-control form-control-sm mb-1"
+              placeholder="Search Micro6 task catalog...">
+            <select id="builderGoalTaskSelect" class="form-select form-select-sm">
+              <option value="">Select a Micro6 task</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small mb-1" for="builderGoalConfigInput">Task Settings JSON</label>
+            <textarea
+              id="builderGoalConfigInput"
+              class="form-control form-control-sm font-monospace"
+              rows="10"
+              placeholder='Paste either {"treeType":"WILLOW"} or a full builder payload with task_key/settings'></textarea>
+            <div id="builderGoalConfigMeta" class="small text-muted mt-1">
+              Paste a raw settings object, a <code>{"settings":{...}}</code> envelope, or a full builder payload. If the JSON includes a <code>task_key</code>, ChromaScape will auto-select that task.
             </div>
           </div>
           <div class="d-flex gap-2 mb-2">
-            <button class="btn btn-sm btn-outline-primary flex-fill" id="importBuilderGoalBtn">
-              <i class="bi bi-box-arrow-in-down me-1"></i>Import
-            </button>
             <button class="btn btn-sm btn-primary flex-fill" id="runBuilderGoalBtn" disabled>
-              <i class="bi bi-upload me-1"></i>Publish to Selected Client
+              <i class="bi bi-play-fill me-1"></i>Run Task
             </button>
           </div>
-          <div id="builderGoalImportResult" class="small text-muted mb-2">
-            Import a builder payload to validate it against the Micro6 catalog.
+          <div id="builderGoalClientStatus" class="small text-muted mb-3">
+            Select an account and task to run.
           </div>
+          <details class="mb-3">
+            <summary class="small text-muted" style="cursor:pointer;">Advanced: import raw builder payload</summary>
+            <div class="mt-2">
+              <textarea
+                id="builderGoalPayloadInput"
+                class="form-control form-control-sm mb-2 font-monospace"
+                rows="8"
+                placeholder='Paste builder payload JSON here'></textarea>
+              <div class="d-flex gap-2 mb-2">
+                <button class="btn btn-sm btn-outline-primary flex-fill" id="importBuilderGoalBtn">
+                  <i class="bi bi-box-arrow-in-down me-1"></i>Import
+                </button>
+                <button class="btn btn-sm btn-outline-secondary flex-fill" id="runImportedBuilderGoalBtn" disabled>
+                  <i class="bi bi-upload me-1"></i>Run Imported Payload
+                </button>
+              </div>
+              <div id="builderGoalImportResult" class="small text-muted mb-2">
+                Import a builder payload to validate it against the Micro6 catalog. Imported payloads still run against the selected account.
+              </div>
+            </div>
+          </details>
           <div id="builderGoalRunsList" class="task-plans-list">
             <div class="text-muted small fst-italic">No builder goal runs yet.</div>
           </div>
@@ -695,23 +736,41 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">
-            <i class="bi bi-lightbulb me-2"></i>Analyze Builder Goal Failure
+            <i class="bi bi-lightbulb me-2"></i>Builder Goal Recovery Workspace
           </h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
           <div id="builderGoalAnalysisStatus" class="small text-muted mb-3">
-            Load a failed run to edit the analysis prompt and choose evidence.
+            Load a failed run, add your observations, pick the relevant time window and evidence, then generate a Micro6 patch plan.
           </div>
           <div class="mb-3">
             <label class="form-label">Prompt</label>
             <textarea id="builderGoalAnalysisPrompt" class="form-control form-control-sm font-monospace" rows="4"
-              placeholder="Describe exactly what the analysis should focus on."></textarea>
+              placeholder="Describe the issue, what got stuck, and what needs to be updated."></textarea>
           </div>
           <div class="mb-3">
             <label class="form-label">Context</label>
             <textarea id="builderGoalAnalysisContext" class="form-control form-control-sm font-monospace" rows="5"
               placeholder="Additional context, observations, or implementation guidance."></textarea>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-md-4">
+              <label class="form-label">Clip Start</label>
+              <input id="builderGoalAnalysisStartTime" class="form-control form-control-sm font-monospace" type="text"
+                placeholder="00:13">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Clip End</label>
+              <input id="builderGoalAnalysisEndTime" class="form-control form-control-sm font-monospace" type="text"
+                placeholder="00:20">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Available Range</label>
+              <div id="builderGoalAnalysisRangeHint" class="form-control form-control-sm bg-body-tertiary">
+                00:00 → 00:00
+              </div>
+            </div>
           </div>
           <div class="d-flex gap-2 mb-3">
             <button class="btn btn-sm btn-outline-secondary" id="builderGoalAnalysisResetBtn" type="button">
@@ -732,7 +791,7 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="button" class="btn btn-primary" id="submitBuilderGoalAnalysisBtn">
-            <i class="bi bi-lightbulb-fill me-1"></i>Run Analysis
+            <i class="bi bi-lightbulb-fill me-1"></i>Generate Patch Plan
           </button>
         </div>
       </div>
@@ -741,7 +800,7 @@
 
   <script src="/js/debugger.js?v=12"></script>
   <script src="/js/patchloop.js?v=2"></script>
-  <script src="/js/account-task-planner.js?v=7"></script>
+  <script src="/js/account-task-planner.js?v=16"></script>
 </body>
 
 </html>

@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
@@ -45,12 +46,23 @@ public class McpBridgeLifecycleManager {
   private final BridgeOutputStreamHandler outputHandler;
   private volatile String bridgeMode = "managed";
   private volatile String availabilityReason = "initializing";
+  private volatile boolean shutdownHookRegistered;
+  private volatile Instant lastRecoveryAttemptAt = Instant.EPOCH;
 
   @Value("${analysis.mcp.bridge-directory:scripts/mcp-bridge}")
   private String bridgeDirectory;
 
   @Value("${analysis.mcp.startup-timeout:30}")
   private int startupTimeoutSeconds;
+
+  @Value("${analysis.mcp.monitor-interval-ms:30000}")
+  private long monitorIntervalMs;
+
+  @Value("${analysis.mcp.monitor-initial-delay-ms:45000}")
+  private long monitorInitialDelayMs;
+
+  @Value("${analysis.mcp.recovery-cooldown-ms:30000}")
+  private long recoveryCooldownMs;
 
   /**
    * Creates a new MCP bridge lifecycle manager.
@@ -80,6 +92,10 @@ public class McpBridgeLifecycleManager {
    */
   @PostConstruct
   public void startBridge() {
+    startBridgeIfNeeded(false);
+  }
+
+  private synchronized void startBridgeIfNeeded(boolean recoveryAttempt) {
     logger.info("===========================================");
     logger.info("MCP Bridge Lifecycle Manager");
     logger.info("===========================================");
@@ -94,6 +110,7 @@ public class McpBridgeLifecycleManager {
         return;
       }
 
+      cleanupManagedProcessIfNecessary();
       logger.info("Starting MCP bridge automatically...");
 
       // Ensure .env configured
@@ -112,10 +129,11 @@ public class McpBridgeLifecycleManager {
       waitForBridgeReady(Duration.ofSeconds(startupTimeoutSeconds));
 
       // Register shutdown hook
-      Runtime.getRuntime().addShutdownHook(new Thread(this::stopBridge, "MCP-Bridge-Shutdown"));
+      registerShutdownHookIfNeeded();
 
       bridgeMode = "managed";
       availabilityReason = "provider_ready";
+      lastRecoveryAttemptAt = Instant.now();
       logger.info("MCP bridge started successfully on port {}", getBridgePort());
       logger.info("===========================================");
 
@@ -134,6 +152,45 @@ public class McpBridgeLifecycleManager {
     }
   }
 
+  @Scheduled(
+      fixedDelayString = "${analysis.mcp.monitor-interval-ms:30000}",
+      initialDelayString = "${analysis.mcp.monitor-initial-delay-ms:45000}")
+  public void monitorBridgeAvailability() {
+    if (isBridgeRunning()) {
+      availabilityReason = "provider_ready";
+      return;
+    }
+
+    if (!shouldAttemptRecoveryNow()) {
+      return;
+    }
+
+    synchronized (this) {
+      if (isBridgeRunning()) {
+        availabilityReason = "provider_ready";
+        return;
+      }
+
+      lastRecoveryAttemptAt = Instant.now();
+
+      if ("external".equalsIgnoreCase(bridgeMode) && isPortInUse(getBridgePort())) {
+        availabilityReason = "external_bridge_unhealthy";
+        logger.warn(
+            "MCP bridge previously attached as external is unhealthy on port {}."
+                + " Waiting for the external instance to recover before taking over.",
+            getBridgePort());
+        return;
+      }
+
+      logger.warn(
+          "MCP bridge unavailable (mode={}, reason={}). Attempting runtime recovery.",
+          bridgeMode,
+          availabilityReason);
+
+      startBridgeIfNeeded(true);
+    }
+  }
+
   /**
    * Checks if the MCP bridge is already running by attempting a health check.
    *
@@ -146,6 +203,36 @@ public class McpBridgeLifecycleManager {
     } catch (McpTransportException e) {
       return false;
     }
+  }
+
+  private boolean shouldAttemptRecoveryNow() {
+    return Duration.between(lastRecoveryAttemptAt, Instant.now()).toMillis() >= recoveryCooldownMs;
+  }
+
+  private void registerShutdownHookIfNeeded() {
+    if (!shutdownHookRegistered) {
+      Runtime.getRuntime().addShutdownHook(new Thread(this::stopBridge, "MCP-Bridge-Shutdown"));
+      shutdownHookRegistered = true;
+    }
+  }
+
+  private void cleanupManagedProcessIfNecessary() {
+    if (bridgeProcess == null) {
+      return;
+    }
+    if (bridgeProcess.isAlive()) {
+      logger.info("Stopping existing managed MCP bridge process before restart");
+      bridgeProcess.destroy();
+      try {
+        if (!bridgeProcess.waitFor(10, TimeUnit.SECONDS)) {
+          bridgeProcess.destroyForcibly();
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        bridgeProcess.destroyForcibly();
+      }
+    }
+    bridgeProcess = null;
   }
 
   /**

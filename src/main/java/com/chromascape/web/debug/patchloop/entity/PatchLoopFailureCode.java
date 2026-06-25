@@ -37,6 +37,7 @@ public final class PatchLoopFailureCode {
   public static final String INVALID_REQUEST = "INVALID_REQUEST";
   public static final String AUTOFIX_DISABLED = "AUTOFIX_DISABLED";
   public static final String STATE_TRANSITION_FAILED = "STATE_TRANSITION_FAILED";
+  public static final String TARGET_UNREACHABLE = "TARGET_UNREACHABLE";
 
   private PatchLoopFailureCode() {
     // Prevent instantiation

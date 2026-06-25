@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -57,6 +58,10 @@ public class MicrobotAgentServerAdapter implements BotRuntimeAdapter {
   @Override
   public String getDisplayName() {
     return "Microbot Agent Server";
+  }
+
+  public String getBaseUrl() {
+    return config.getBaseUrl();
   }
 
   @Override
@@ -122,6 +127,12 @@ public class MicrobotAgentServerAdapter implements BotRuntimeAdapter {
           action.getParameters() != null ? action.getParameters() : Map.of();
       HttpResponse<String> response;
       switch (actionType) {
+        case "login.status":
+          response = get("/login");
+          break;
+        case "login.start":
+          response = postJson("/login", params);
+          break;
         case "script.start":
           response = postJson("/scripts/start", params);
           break;
@@ -173,6 +184,50 @@ public class MicrobotAgentServerAdapter implements BotRuntimeAdapter {
     }
   }
 
+  public LoginStatus fetchLoginStatus() {
+    try {
+      HttpResponse<String> response = get("/login");
+      if (response.statusCode() != 200) {
+        throw new IllegalStateException("Agent login status failed with HTTP " + response.statusCode());
+      }
+      JsonNode root = objectMapper.readTree(response.body());
+      return new LoginStatus(
+          root.path("loggedIn").asBoolean(false),
+          textValue(root.path("gameState")),
+          root.path("loginAttemptActive").asBoolean(false),
+          intValue(root.path("loginIndex")),
+          textValue(root.path("loginError")),
+          textValue(root.path("currentWorld")),
+          textValue(root.path("activeProfile").path("name")));
+    } catch (Exception e) {
+      throw new IllegalStateException("Failed to fetch agent login status: " + e.getMessage(), e);
+    }
+  }
+
+  public LoginResult triggerLogin(Integer world, int timeoutSeconds) {
+    try {
+      Map<String, Object> body = new HashMap<>();
+      body.put("wait", true);
+      body.put("timeout", timeoutSeconds);
+      if (world != null && world > 0) {
+        body.put("world", world);
+      }
+      HttpResponse<String> response = postJson("/login", body);
+      if (response.statusCode() < 200 || response.statusCode() >= 300) {
+        throw new IllegalStateException("Agent login failed with HTTP " + response.statusCode());
+      }
+      JsonNode root = objectMapper.readTree(response.body());
+      return new LoginResult(
+          root.path("success").asBoolean(false),
+          textValue(root.path("message")),
+          intValue(root.path("currentWorld")),
+          intValue(root.path("loginIndex")),
+          textValue(root.path("loginError")));
+    } catch (Exception e) {
+      throw new IllegalStateException("Failed to trigger agent login: " + e.getMessage(), e);
+    }
+  }
+
   private HttpResponse<String> postJson(String path, Map<String, Object> body) throws Exception {
     HttpRequest request =
         HttpRequest.newBuilder()
@@ -206,4 +261,55 @@ public class MicrobotAgentServerAdapter implements BotRuntimeAdapter {
     }
     return joiner.length() > 1 ? joiner.toString() : "";
   }
+
+  private String textValue(JsonNode node) {
+    if (node == null || node.isMissingNode() || node.isNull()) {
+      return null;
+    }
+    String text = node.asText(null);
+    return text == null || text.isBlank() ? null : text.trim();
+  }
+
+  private Integer intValue(JsonNode node) {
+    if (node == null || node.isMissingNode() || node.isNull()) {
+      return null;
+    }
+    if (node.isInt() || node.isLong()) {
+      return node.asInt();
+    }
+    String text = textValue(node);
+    if (text == null) {
+      return null;
+    }
+    try {
+      return Integer.parseInt(text);
+    } catch (NumberFormatException ignored) {
+      return null;
+    }
+  }
+
+  public record LoginStatus(
+      boolean loggedIn,
+      String gameState,
+      boolean loginAttemptActive,
+      Integer loginIndex,
+      String loginError,
+      String currentWorld,
+      String activeProfileName) {
+    public boolean matchesProfile(String expectedProfileName) {
+      if (expectedProfileName == null || expectedProfileName.isBlank()) {
+        return true;
+      }
+      return Objects.equals(
+          activeProfileName == null ? null : activeProfileName.trim(),
+          expectedProfileName.trim());
+    }
+  }
+
+  public record LoginResult(
+      boolean success,
+      String message,
+      Integer currentWorld,
+      Integer loginIndex,
+      String loginError) {}
 }

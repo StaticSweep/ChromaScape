@@ -1,8 +1,10 @@
 package com.chromascape.web.debug.patchloop.service.provider.mcp;
 
 import com.chromascape.web.debug.patchloop.dto.AnalysisV2Response;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
@@ -22,7 +24,7 @@ public class McpAnalyzeResponse {
   private final Map<String, Object> metadata;
 
   @JsonProperty("error")
-  private final String error;
+  private final JsonNode rawError;
 
   /** Creates a new analyze response. */
   public McpAnalyzeResponse() {
@@ -46,10 +48,10 @@ public class McpAnalyzeResponse {
    * @param error optional error message
    */
   public McpAnalyzeResponse(
-      AnalysisV2Response analysisResponse, Map<String, Object> metadata, String error) {
+      AnalysisV2Response analysisResponse, Map<String, Object> metadata, JsonNode rawError) {
     this.analysisResponse = analysisResponse;
     this.metadata = metadata != null ? metadata : Collections.emptyMap();
-    this.error = error;
+    this.rawError = rawError;
   }
 
   public AnalysisV2Response getAnalysisResponse() {
@@ -60,8 +62,21 @@ public class McpAnalyzeResponse {
     return metadata;
   }
 
+  @JsonProperty("error")
+  public JsonNode getRawError() {
+    return rawError;
+  }
+
+  @JsonIgnore
   public String getError() {
-    return error;
+    if (rawError == null || rawError.isNull()) {
+      return null;
+    }
+    if (rawError.isTextual()) {
+      String text = rawError.asText();
+      return text == null || text.isBlank() ? null : text.trim();
+    }
+    return rawError.toString();
   }
 
   @Override
@@ -71,12 +86,12 @@ public class McpAnalyzeResponse {
     McpAnalyzeResponse that = (McpAnalyzeResponse) o;
     return Objects.equals(analysisResponse, that.analysisResponse)
         && Objects.equals(metadata, that.metadata)
-        && Objects.equals(error, that.error);
+        && Objects.equals(rawError, that.rawError);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(analysisResponse, metadata, error);
+    return Objects.hash(analysisResponse, metadata, rawError);
   }
 
   @Override
@@ -86,8 +101,8 @@ public class McpAnalyzeResponse {
         + analysisResponse
         + ", metadata="
         + metadata
-        + ", error='"
-        + error
+        + ", rawError="
+        + rawError
         + '\''
         + '}';
   }

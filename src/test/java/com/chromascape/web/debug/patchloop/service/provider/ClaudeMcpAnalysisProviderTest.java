@@ -22,6 +22,7 @@ import com.chromascape.web.debug.patchloop.service.provider.mcp.McpConfigPropert
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportException;
+import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -353,7 +354,7 @@ class ClaudeMcpAnalysisProviderTest {
   void testAnalyzeEvidenceThrowsOnErrorInResponse() throws Exception {
     // Arrange: MCP response with error field populated
     McpAnalyzeResponse mcpResponse =
-        new McpAnalyzeResponse(null, null, "MCP server internal error");
+        new McpAnalyzeResponse(null, null, TextNode.valueOf("MCP server internal error"));
     when(transport.analyze(any(McpAnalyzeRequest.class))).thenReturn(mcpResponse);
 
     AnalysisV2Request v2Request = createMinimalV2Request();

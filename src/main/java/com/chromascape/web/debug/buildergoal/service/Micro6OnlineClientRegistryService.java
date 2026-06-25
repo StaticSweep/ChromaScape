@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -74,6 +75,52 @@ public class Micro6OnlineClientRegistryService {
             state.lastSeenAt));
   }
 
+  public Optional<TargetClient> findRunnableClientForRecovery(
+      String accountHash, String accountName, Integer expectedPort, Instant seenAfter) {
+    pruneExpired();
+    Stream<ClientState> stream = clients.values().stream().filter(this::isRunnable);
+    if (accountHash != null && !accountHash.isBlank()) {
+      String normalizedHash = accountHash.trim().toLowerCase(Locale.ENGLISH);
+      stream =
+          stream.filter(
+              state ->
+                  state.accountHash != null
+                      && state.accountHash.trim().toLowerCase(Locale.ENGLISH).equals(normalizedHash));
+    }
+    if (accountName != null && !accountName.isBlank()) {
+      String normalizedAccount = accountName.trim().toLowerCase(Locale.ENGLISH);
+      stream =
+          stream.filter(
+              state ->
+                  state.accountName != null
+                      && state.accountName.trim().toLowerCase(Locale.ENGLISH).equals(normalizedAccount));
+    }
+    if (expectedPort != null && expectedPort > 0) {
+      stream = stream.filter(state -> expectedPort.equals(resolvePort(state)));
+    }
+    if (seenAfter != null) {
+      stream =
+          stream.filter(
+              state -> state.lastSeenAt != null && !state.lastSeenAt.isBefore(seenAfter));
+    }
+    return stream
+        .sorted(Comparator.comparing((ClientState state) -> state.lastSeenAt, Comparator.reverseOrder()))
+        .findFirst()
+        .map(
+            state ->
+                new TargetClient(
+                    state.clientId,
+                    state.accountName,
+                    state.accountHash,
+                    state.advertisedBaseUrl,
+                    state.executorBindAddr,
+                    state.sourceClientType,
+                    state.executorProfile,
+                    normalizedStatus(state, false),
+                    state.currentTask,
+                    state.lastSeenAt));
+  }
+
   private Map<String, Object> toSummary(ClientState state, boolean stale) {
     Map<String, Object> summary = new LinkedHashMap<>();
     summary.put("clientId", state.clientId);
@@ -106,6 +153,29 @@ public class Micro6OnlineClientRegistryService {
     return state == null
         || state.lastSeenAt == null
         || Instant.now().isAfter(state.lastSeenAt.plus(STALE_AFTER));
+  }
+
+  private Integer resolvePort(ClientState state) {
+    if (state == null) {
+      return null;
+    }
+    String candidate = firstNonBlank(state.advertisedBaseUrl, state.executorBindAddr);
+    if (candidate == null) {
+      return null;
+    }
+    int colon = candidate.lastIndexOf(':');
+    if (colon < 0 || colon == candidate.length() - 1) {
+      return null;
+    }
+    String portText = candidate.substring(colon + 1).replaceAll("[^0-9].*$", "").trim();
+    if (portText.isEmpty()) {
+      return null;
+    }
+    try {
+      return Integer.parseInt(portText);
+    } catch (NumberFormatException ignored) {
+      return null;
+    }
   }
 
   private void pruneExpired() {

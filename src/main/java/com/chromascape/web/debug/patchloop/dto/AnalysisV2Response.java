@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.patchloop.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -230,6 +231,7 @@ public class AnalysisV2Response {
   }
 
   /** Metadata about the analysis execution (reused from V1). */
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static class AnalysisMetadata {
 
     /** Model used for analysis. */
@@ -247,6 +249,10 @@ public class AnalysisV2Response {
     /** API tokens used (if applicable). */
     @JsonProperty("tokensUsed")
     private Integer tokensUsed;
+
+    /** Provider identifier used for analysis. */
+    @JsonProperty("provider")
+    private String provider;
 
     /** Additional metadata fields. */
     @JsonProperty("extra")
@@ -288,6 +294,14 @@ public class AnalysisV2Response {
       this.tokensUsed = tokensUsed;
     }
 
+    public String getProvider() {
+      return provider;
+    }
+
+    public void setProvider(String provider) {
+      this.provider = provider;
+    }
+
     public Map<String, Object> getExtra() {
       return extra != null ? extra : new HashMap<>();
     }
@@ -305,12 +319,13 @@ public class AnalysisV2Response {
           && Objects.equals(analysisTimeMs, that.analysisTimeMs)
           && Objects.equals(evidenceCount, that.evidenceCount)
           && Objects.equals(tokensUsed, that.tokensUsed)
+          && Objects.equals(provider, that.provider)
           && Objects.equals(extra, that.extra);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(model, analysisTimeMs, evidenceCount, tokensUsed, extra);
+      return Objects.hash(model, analysisTimeMs, evidenceCount, tokensUsed, provider, extra);
     }
 
     @Override
@@ -325,6 +340,9 @@ public class AnalysisV2Response {
           + evidenceCount
           + ", tokensUsed="
           + tokensUsed
+          + ", provider='"
+          + provider
+          + '\''
           + ", extra="
           + extra
           + '}';

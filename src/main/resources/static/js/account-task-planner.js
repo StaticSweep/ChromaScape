@@ -5,9 +5,10 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '7';
+  static BUILDER_GOAL_BUNDLE_VERSION = '16';
+  static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
-  static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 8000;
+  static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
 
   constructor() {
     this.plans = [];
@@ -19,11 +20,19 @@ class AccountTaskPlanner {
     this.itemSelectionState = new Map();
     this.selectedAccountName = localStorage.getItem('taskPlanner.selectedAccount') || '';
     this.importedBuilderGoal = null;
+    this.builderGoalAccounts = [];
+    this.builderGoalMachines = [];
     this.builderGoalRuns = [];
-    this.builderGoalClients = [];
-    this.selectedBuilderGoalClientId = localStorage.getItem('taskPlanner.selectedBuilderGoalClient') || '';
-    this.builderGoalClientRefreshHandle = null;
+    this.selectedBuilderGoalAccountId =
+      localStorage.getItem('taskPlanner.selectedBuilderGoalAccountId') || '';
+    this.selectedBuilderGoalMachineUuid =
+      localStorage.getItem('taskPlanner.selectedBuilderGoalMachineUuid') || '';
+    this.selectedBuilderGoalTaskKey =
+      localStorage.getItem('taskPlanner.selectedBuilderGoalTaskKey') || '';
+    this.builderGoalRefreshHandle = null;
     this.builderGoalBundleMismatch = false;
+    this.builderGoalConfigDirty = false;
+    this.builderGoalConfigLoadedKey = '';
     this.builderGoalAnalysisModal = null;
     this.builderGoalAnalysisDraft = null;
     this.builderGoalAnalysisIterationId = null;
@@ -43,13 +52,13 @@ class AccountTaskPlanner {
     this.loadSourceSessions();
     this.loadScriptCatalog();
     if (!this.builderGoalBundleMismatch) {
-      this.loadBuilderGoalClients();
+      this.loadBuilderGoalMachines();
+      this.loadBuilderGoalAccounts();
       this.loadBuilderGoalRuns();
     }
     this.loadStabilizationKpis();
-    if (!this.builderGoalBundleMismatch && !this.builderGoalClientRefreshHandle) {
-      this.builderGoalClientRefreshHandle = setInterval(() => {
-        this.loadBuilderGoalClients();
+    if (!this.builderGoalBundleMismatch && !this.builderGoalRefreshHandle) {
+      this.builderGoalRefreshHandle = setInterval(() => {
         this.loadBuilderGoalRuns();
       }, 10000);
     }
@@ -70,10 +79,18 @@ class AccountTaskPlanner {
     this.sourceSessionSelect = document.getElementById('taskPlanSourceSession');
     this.generateBtn = document.getElementById('generatePlanBtn');
     this.builderGoalRunnerSection = document.getElementById('builderGoalRunnerSection');
+    this.builderGoalAccountSelect = document.getElementById('builderGoalAccountSelect');
+    this.builderGoalAccountSummary = document.getElementById('builderGoalAccountSummary');
+    this.builderGoalMachineSelect = document.getElementById('builderGoalMachineSelect');
+    this.builderGoalMachineSummary = document.getElementById('builderGoalMachineSummary');
+    this.builderGoalTaskSearchInput = document.getElementById('builderGoalTaskSearchInput');
+    this.builderGoalTaskSelect = document.getElementById('builderGoalTaskSelect');
+    this.builderGoalConfigInput = document.getElementById('builderGoalConfigInput');
+    this.builderGoalConfigMeta = document.getElementById('builderGoalConfigMeta');
     this.builderGoalPayloadInput = document.getElementById('builderGoalPayloadInput');
     this.importBuilderGoalBtn = document.getElementById('importBuilderGoalBtn');
     this.runBuilderGoalBtn = document.getElementById('runBuilderGoalBtn');
-    this.builderGoalClientSelect = document.getElementById('builderGoalClientSelect');
+    this.runImportedBuilderGoalBtn = document.getElementById('runImportedBuilderGoalBtn');
     this.builderGoalClientStatus = document.getElementById('builderGoalClientStatus');
     this.builderGoalImportResult = document.getElementById('builderGoalImportResult');
     this.builderGoalRunsList = document.getElementById('builderGoalRunsList');
@@ -81,6 +98,9 @@ class AccountTaskPlanner {
     this.builderGoalAnalysisModalElement = document.getElementById('builderGoalAnalysisModal');
     this.builderGoalAnalysisPrompt = document.getElementById('builderGoalAnalysisPrompt');
     this.builderGoalAnalysisContext = document.getElementById('builderGoalAnalysisContext');
+    this.builderGoalAnalysisStartTime = document.getElementById('builderGoalAnalysisStartTime');
+    this.builderGoalAnalysisEndTime = document.getElementById('builderGoalAnalysisEndTime');
+    this.builderGoalAnalysisRangeHint = document.getElementById('builderGoalAnalysisRangeHint');
     this.builderGoalAnalysisStatus = document.getElementById('builderGoalAnalysisStatus');
     this.builderGoalAnalysisEvidenceMeta = document.getElementById('builderGoalAnalysisEvidenceMeta');
     this.builderGoalAnalysisEvidenceGroups = document.getElementById('builderGoalAnalysisEvidenceGroups');
@@ -111,7 +131,6 @@ class AccountTaskPlanner {
     this.stabilizationScripts = document.getElementById('stabilizationScripts');
     this.stabilizationHistory = document.getElementById('stabilizationHistory');
     this.stabilizationRegressions = document.getElementById('stabilizationRegressions');
-
     if (this.builderGoalAnalysisModalElement && window.bootstrap?.Modal) {
       this.builderGoalAnalysisModal = new bootstrap.Modal(this.builderGoalAnalysisModalElement);
     }
@@ -136,9 +155,22 @@ class AccountTaskPlanner {
     if (this.builderGoalPayloadInput) {
       this.builderGoalPayloadInput.disabled = true;
     }
-    if (this.builderGoalClientSelect) {
-      this.builderGoalClientSelect.disabled = true;
-      this.builderGoalClientSelect.innerHTML =
+    if (this.builderGoalAccountSelect) {
+      this.builderGoalAccountSelect.disabled = true;
+      this.builderGoalAccountSelect.innerHTML =
+        '<option value="">Refresh debugger to load the latest Builder Goal Runner</option>';
+    }
+    if (this.builderGoalMachineSelect) {
+      this.builderGoalMachineSelect.disabled = true;
+      this.builderGoalMachineSelect.innerHTML =
+        '<option value="">Refresh debugger to load the latest Builder Goal Runner</option>';
+    }
+    if (this.builderGoalTaskSearchInput) {
+      this.builderGoalTaskSearchInput.disabled = true;
+    }
+    if (this.builderGoalTaskSelect) {
+      this.builderGoalTaskSelect.disabled = true;
+      this.builderGoalTaskSelect.innerHTML =
         '<option value="">Refresh debugger to load the latest Builder Goal Runner</option>';
     }
     if (this.importBuilderGoalBtn) {
@@ -146,6 +178,9 @@ class AccountTaskPlanner {
     }
     if (this.runBuilderGoalBtn) {
       this.runBuilderGoalBtn.disabled = true;
+    }
+    if (this.runImportedBuilderGoalBtn) {
+      this.runImportedBuilderGoalBtn.disabled = true;
     }
     if (this.refreshBuilderGoalRunsBtn) {
       this.refreshBuilderGoalRunsBtn.disabled = true;
@@ -198,21 +233,71 @@ class AccountTaskPlanner {
     if (this.runBuilderGoalBtn) {
       this.runBuilderGoalBtn.addEventListener('click', () => this.runBuilderGoal());
     }
-    if (this.builderGoalClientSelect) {
-      this.builderGoalClientSelect.addEventListener('change', () => {
-        this.selectedBuilderGoalClientId = this.builderGoalClientSelect.value || '';
-        if (this.selectedBuilderGoalClientId) {
-          localStorage.setItem('taskPlanner.selectedBuilderGoalClient', this.selectedBuilderGoalClientId);
+    if (this.runImportedBuilderGoalBtn) {
+      this.runImportedBuilderGoalBtn.addEventListener('click', () => this.runImportedBuilderGoal());
+    }
+    if (this.builderGoalAccountSelect) {
+      this.builderGoalAccountSelect.addEventListener('change', async () => {
+        this.selectedBuilderGoalAccountId = this.builderGoalAccountSelect.value || '';
+        if (this.selectedBuilderGoalAccountId) {
+          localStorage.setItem(
+            'taskPlanner.selectedBuilderGoalAccountId',
+            this.selectedBuilderGoalAccountId
+          );
         } else {
-          localStorage.removeItem('taskPlanner.selectedBuilderGoalClient');
+          localStorage.removeItem('taskPlanner.selectedBuilderGoalAccountId');
         }
+        this.renderBuilderGoalAccountSummary();
+        await this.prefillBuilderGoalConfigForSelection();
         this.renderBuilderGoalClientStatus();
         this.updateBuilderGoalRunButtonState();
       });
     }
+    if (this.builderGoalMachineSelect) {
+      this.builderGoalMachineSelect.addEventListener('change', () => {
+        this.selectedBuilderGoalMachineUuid = this.builderGoalMachineSelect.value || '';
+        if (this.selectedBuilderGoalMachineUuid) {
+          localStorage.setItem(
+            'taskPlanner.selectedBuilderGoalMachineUuid',
+            this.selectedBuilderGoalMachineUuid
+          );
+        } else {
+          localStorage.removeItem('taskPlanner.selectedBuilderGoalMachineUuid');
+        }
+        this.renderBuilderGoalMachineSummary();
+        this.renderBuilderGoalClientStatus();
+        this.updateBuilderGoalRunButtonState();
+      });
+    }
+    if (this.builderGoalTaskSearchInput) {
+      this.builderGoalTaskSearchInput.addEventListener('input', () => {
+        this.renderBuilderGoalTaskOptions(this.builderGoalTaskSearchInput.value || '');
+      });
+    }
+    if (this.builderGoalTaskSelect) {
+      this.builderGoalTaskSelect.addEventListener('change', async () => {
+        this.selectedBuilderGoalTaskKey = this.builderGoalTaskSelect.value || '';
+        if (this.selectedBuilderGoalTaskKey) {
+          localStorage.setItem(
+            'taskPlanner.selectedBuilderGoalTaskKey',
+            this.selectedBuilderGoalTaskKey
+          );
+        } else {
+          localStorage.removeItem('taskPlanner.selectedBuilderGoalTaskKey');
+        }
+        await this.prefillBuilderGoalConfigForSelection();
+        this.renderBuilderGoalClientStatus();
+        this.updateBuilderGoalRunButtonState();
+      });
+    }
+    if (this.builderGoalConfigInput) {
+      this.builderGoalConfigInput.addEventListener('input', () => {
+        this.builderGoalConfigDirty = true;
+        this.renderBuilderGoalConfigMeta();
+      });
+    }
     if (this.refreshBuilderGoalRunsBtn) {
       this.refreshBuilderGoalRunsBtn.addEventListener('click', () => {
-        this.loadBuilderGoalClients();
         this.loadBuilderGoalRuns();
       });
     }
@@ -227,6 +312,10 @@ class AccountTaskPlanner {
           this.openBuilderGoalAnalysisEditor(iterationId);
         } else if (action === 'fix') {
           this.fixAndRelaunchBuilderGoalRun(iterationId);
+        } else if (action === 'load-config') {
+          this.loadBuilderGoalRunConfig(iterationId);
+        } else if (action === 'rerun') {
+          this.rerunBuilderGoal(iterationId);
         }
       });
     }
@@ -424,10 +513,500 @@ class AccountTaskPlanner {
       if (!response.ok) return;
       const payload = await response.json();
       this.scriptCatalog = Array.isArray(payload.tasks) ? payload.tasks : [];
+      this.renderBuilderGoalTaskOptions(this.builderGoalTaskSearchInput?.value || '');
+      if (this.selectedBuilderGoalTaskKey) {
+        await this.prefillBuilderGoalConfigForSelection();
+      }
     } catch (error) {
       console.debug('Could not load script catalog:', error);
       this.scriptCatalog = [];
+      this.renderBuilderGoalTaskOptions(this.builderGoalTaskSearchInput?.value || '');
     }
+  }
+
+  async loadBuilderGoalAccounts() {
+    if (this.builderGoalBundleMismatch) return;
+    try {
+      const response = await fetch('/api/debug/builder-goals/accounts');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      this.builderGoalAccounts = await response.json();
+      this.renderBuilderGoalAccounts();
+      await this.prefillBuilderGoalConfigForSelection();
+    } catch (error) {
+      console.error('Failed to load builder goal accounts:', error);
+      this.builderGoalAccounts = [];
+      this.renderBuilderGoalAccounts(error.message);
+    }
+  }
+
+  renderBuilderGoalAccounts(loadError = null) {
+    if (!this.builderGoalAccountSelect || this.builderGoalBundleMismatch) return;
+
+    const accounts = Array.isArray(this.builderGoalAccounts) ? this.builderGoalAccounts : [];
+    const previous = this.selectedBuilderGoalAccountId;
+    const stillVisible = accounts.some(account => account.accountId === previous);
+    this.selectedBuilderGoalAccountId = stillVisible ? previous : '';
+    if (!this.selectedBuilderGoalAccountId && accounts.length === 1) {
+      this.selectedBuilderGoalAccountId = accounts[0].accountId || '';
+    }
+    if (this.selectedBuilderGoalAccountId) {
+      localStorage.setItem(
+        'taskPlanner.selectedBuilderGoalAccountId',
+        this.selectedBuilderGoalAccountId
+      );
+    } else {
+      localStorage.removeItem('taskPlanner.selectedBuilderGoalAccountId');
+    }
+
+    if (loadError) {
+      this.builderGoalAccountSelect.innerHTML =
+        '<option value="">Failed to load accounts</option>';
+      this.builderGoalAccountSelect.disabled = true;
+      this.renderBuilderGoalAccountSummary(`Failed to load accounts: ${loadError}`, 'danger');
+      this.renderBuilderGoalClientStatus();
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+
+    if (accounts.length === 0) {
+      this.builderGoalAccountSelect.innerHTML = '<option value="">No accounts available</option>';
+      this.builderGoalAccountSelect.disabled = true;
+      this.renderBuilderGoalAccountSummary(
+        'No launcher accounts are currently available for Builder Goal Runner.',
+        'warning'
+      );
+      this.renderBuilderGoalClientStatus();
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+
+    this.builderGoalAccountSelect.disabled = false;
+    const options = ['<option value="">Select an account</option>'];
+    accounts.forEach(account => {
+      const label = this.formatBuilderGoalAccountLabel(account);
+      options.push(
+        `<option value="${this.escapeAttr(account.accountId || '')}">${this.escapeHtml(label)}</option>`
+      );
+    });
+    this.builderGoalAccountSelect.innerHTML = options.join('');
+    this.builderGoalAccountSelect.value = this.selectedBuilderGoalAccountId || '';
+    this.renderBuilderGoalAccountSummary();
+    this.renderBuilderGoalConfigMeta();
+    this.renderBuilderGoalClientStatus();
+    this.updateBuilderGoalRunButtonState();
+  }
+
+  async loadBuilderGoalMachines() {
+    if (!this.builderGoalMachineSelect || this.builderGoalBundleMismatch) return;
+
+    try {
+      const response = await fetch('/api/debug/builder-goals/machines');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      this.builderGoalMachines = await response.json();
+      this.renderBuilderGoalMachines();
+    } catch (error) {
+      console.error('Failed to load builder goal launcher machines:', error);
+      this.builderGoalMachines = [];
+      this.renderBuilderGoalMachines(error.message);
+    }
+  }
+
+  getSelectedBuilderGoalAccount() {
+    const selectedId = this.builderGoalAccountSelect
+      ? this.builderGoalAccountSelect.value
+      : this.selectedBuilderGoalAccountId;
+    return (this.builderGoalAccounts || []).find(account => account.accountId === selectedId) || null;
+  }
+
+  renderBuilderGoalMachines(loadError = null) {
+    if (!this.builderGoalMachineSelect || this.builderGoalBundleMismatch) return;
+
+    const machines = Array.isArray(this.builderGoalMachines) ? this.builderGoalMachines : [];
+    const previous = this.selectedBuilderGoalMachineUuid;
+    const stillVisible = machines.some(machine => machine.machineUuid === previous);
+    this.selectedBuilderGoalMachineUuid = stillVisible ? previous : '';
+    if (!this.selectedBuilderGoalMachineUuid) {
+      const defaultMachine = machines.find(machine => machine.defaultSelected);
+      if (defaultMachine?.machineUuid) {
+        this.selectedBuilderGoalMachineUuid = defaultMachine.machineUuid;
+      } else if (machines.length === 1) {
+        this.selectedBuilderGoalMachineUuid = machines[0].machineUuid || '';
+      }
+    }
+    if (this.selectedBuilderGoalMachineUuid) {
+      localStorage.setItem(
+        'taskPlanner.selectedBuilderGoalMachineUuid',
+        this.selectedBuilderGoalMachineUuid
+      );
+    } else {
+      localStorage.removeItem('taskPlanner.selectedBuilderGoalMachineUuid');
+    }
+
+    if (loadError) {
+      this.builderGoalMachineSelect.innerHTML =
+        '<option value="">Failed to load machines</option>';
+      this.builderGoalMachineSelect.disabled = true;
+      this.renderBuilderGoalMachineSummary(`Failed to load launcher machines: ${loadError}`, 'danger');
+      this.renderBuilderGoalClientStatus();
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+
+    if (machines.length === 0) {
+      this.builderGoalMachineSelect.innerHTML =
+        '<option value="">No launcher machines available</option>';
+      this.builderGoalMachineSelect.disabled = true;
+      this.renderBuilderGoalMachineSummary(
+        'No launcher machines are currently available. Builder Goal Runner cannot launch until launcher-control reports at least one machine.',
+        'warning'
+      );
+      this.renderBuilderGoalClientStatus();
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+
+    this.builderGoalMachineSelect.disabled = false;
+    const options = ['<option value="">Select a launcher machine</option>'];
+    machines.forEach(machine => {
+      options.push(
+        `<option value="${this.escapeAttr(machine.machineUuid || '')}">${this.escapeHtml(this.formatBuilderGoalMachineLabel(machine))}</option>`
+      );
+    });
+    this.builderGoalMachineSelect.innerHTML = options.join('');
+    this.builderGoalMachineSelect.value = this.selectedBuilderGoalMachineUuid || '';
+    this.renderBuilderGoalMachineSummary();
+    this.renderBuilderGoalClientStatus();
+    this.updateBuilderGoalRunButtonState();
+  }
+
+  getSelectedBuilderGoalMachine() {
+    const selectedUuid = this.builderGoalMachineSelect
+      ? this.builderGoalMachineSelect.value
+      : this.selectedBuilderGoalMachineUuid;
+    return (this.builderGoalMachines || []).find(machine => machine.machineUuid === selectedUuid) || null;
+  }
+
+  renderBuilderGoalAccountSummary(message = null, tone = 'muted') {
+    if (!this.builderGoalAccountSummary) return;
+    if (message) {
+      this.builderGoalAccountSummary.innerHTML =
+        `<span class="text-${tone}">${this.escapeHtml(message)}</span>`;
+      return;
+    }
+    const account = this.getSelectedBuilderGoalAccount();
+    if (!account) {
+      this.builderGoalAccountSummary.innerHTML =
+        '<span class="text-muted">Select an account from launcher control to inspect launch readiness and run availability.</span>';
+      return;
+    }
+    const parts = [];
+    if (account.displayName || account.accountName) {
+      parts.push(account.displayName || account.accountName);
+    }
+    if (account.accountHash) {
+      parts.push(`hash ${account.accountHash}`);
+    }
+    if (account.source) {
+      parts.push(this.formatBuilderGoalAccountSourceLabel(account.source));
+    }
+    if (account.online) {
+      parts.push('online now');
+    } else {
+      parts.push('offline');
+    }
+    if (!account.runnable && account.disabledReason) {
+      parts.push(account.disabledReason);
+    }
+    this.builderGoalAccountSummary.innerHTML =
+      `<span class="text-muted">${this.escapeHtml(parts.join(' • '))}</span>`;
+  }
+
+  renderBuilderGoalMachineSummary(message = null, tone = 'muted') {
+    if (!this.builderGoalMachineSummary) return;
+    if (message) {
+      this.builderGoalMachineSummary.innerHTML =
+        `<span class="text-${tone}">${this.escapeHtml(message)}</span>`;
+      return;
+    }
+    const machine = this.getSelectedBuilderGoalMachine();
+    if (!machine) {
+      this.builderGoalMachineSummary.innerHTML =
+        '<span class="text-muted">Select the launcher machine that should start the account.</span>';
+      return;
+    }
+    const parts = [];
+    parts.push(machine.displayName || machine.machineUuid || 'Unknown machine');
+    if (machine.machineUuid) {
+      parts.push(machine.machineUuid);
+    }
+    if (machine.status) {
+      parts.push(String(machine.status).toLowerCase());
+    }
+    if (machine.defaultSelected) {
+      parts.push('default');
+    }
+    if (!machine.builderGoalRunnable && machine.builderGoalDisabledReason) {
+      parts.push(machine.builderGoalDisabledReason);
+    }
+    this.builderGoalMachineSummary.innerHTML =
+      `<span class="text-muted">${this.escapeHtml(parts.join(' • '))}</span>`;
+  }
+
+  formatBuilderGoalAccountLabel(account) {
+    const label = account.displayName || account.accountName || account.email || account.accountId || 'Unknown account';
+    const tags = [];
+    if (account.source) {
+      tags.push(this.formatBuilderGoalAccountSourceLabel(account.source));
+    }
+    tags.push(account.online ? 'online' : 'offline');
+    if (!account.runnable) {
+      tags.push('setup needed');
+    }
+    return tags.length ? `${label} • ${tags.join(' • ')}` : label;
+  }
+
+  formatBuilderGoalAccountSourceLabel(source) {
+    return String(source || '')
+      .split('+')
+      .filter(Boolean)
+      .map(part => part.replaceAll('_', ' '))
+      .map(part => (part === 'launcher' ? 'launcher control' : part))
+      .join(' + ');
+  }
+
+  formatBuilderGoalMachineLabel(machine) {
+    const label = machine.displayName || machine.machineUuid || 'Unknown machine';
+    const tags = [];
+    if (machine.status) {
+      tags.push(String(machine.status).toUpperCase());
+    }
+    tags.push(machine.localMachine ? 'local dev host' : 'remote host');
+    if (machine.defaultSelected) {
+      tags.push('default');
+    }
+    if (!machine.builderGoalRunnable) {
+      tags.push('setup needed');
+    }
+    if (machine.machineUuid && machine.machineUuid !== label) {
+      tags.push(machine.machineUuid);
+    }
+    return tags.length ? `${label} • ${tags.join(' • ')}` : label;
+  }
+
+  renderBuilderGoalTaskOptions(searchQuery = '') {
+    if (!this.builderGoalTaskSelect) return;
+
+    const query = (searchQuery || '').trim().toLowerCase();
+    const tasks = (this.scriptCatalog || []).filter(task => {
+      const haystack = [
+        task?.display_name,
+        task?.panel_display_name,
+        task?.task_key,
+        task?.category
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return !query || haystack.includes(query);
+    });
+
+    if (tasks.length === 0) {
+      this.builderGoalTaskSelect.innerHTML =
+        '<option value="">No Micro6 tasks match the current search</option>';
+      this.builderGoalTaskSelect.disabled = true;
+      this.selectedBuilderGoalTaskKey = '';
+      this.renderBuilderGoalConfigMeta();
+      return;
+    }
+
+    this.builderGoalTaskSelect.disabled = false;
+    const options = ['<option value="">Select a Micro6 task</option>'];
+    const groups = new Map();
+    tasks.forEach(task => {
+      const category = (task?.category || 'other').toString();
+      if (!groups.has(category)) groups.set(category, []);
+      groups.get(category).push(task);
+    });
+    Array.from(groups.keys())
+      .sort((a, b) => a.localeCompare(b))
+      .forEach(category => {
+        const optionHtml = groups
+          .get(category)
+          .slice()
+          .sort((a, b) =>
+            (a?.display_name || a?.task_key || '')
+              .toString()
+              .localeCompare((b?.display_name || b?.task_key || '').toString())
+          )
+          .map(task => {
+            const selected =
+              this.selectedBuilderGoalTaskKey &&
+              this.selectedBuilderGoalTaskKey === task?.task_key
+                ? ' selected'
+                : '';
+            return `<option value="${this.escapeAttr(task?.task_key || '')}"${selected}>${this.escapeHtml(this.buildCatalogTaskLabel(task))}</option>`;
+          })
+          .join('');
+        options.push(`<optgroup label="${this.escapeAttr(category)}">${optionHtml}</optgroup>`);
+      });
+    this.builderGoalTaskSelect.innerHTML = options.join('');
+    this.builderGoalTaskSelect.value = this.selectedBuilderGoalTaskKey || '';
+    this.renderBuilderGoalConfigMeta();
+  }
+
+  getSelectedBuilderGoalTask() {
+    const selectedKey = this.builderGoalTaskSelect
+      ? this.builderGoalTaskSelect.value
+      : this.selectedBuilderGoalTaskKey;
+    return this.getCatalogTaskByKey(selectedKey);
+  }
+
+  selectBuilderGoalTask(taskKey) {
+    const resolvedTask = this.findCatalogTaskByKeyFlexible(taskKey);
+    if (!resolvedTask?.task_key) {
+      return null;
+    }
+    this.selectedBuilderGoalTaskKey = resolvedTask.task_key;
+    localStorage.setItem('taskPlanner.selectedBuilderGoalTaskKey', this.selectedBuilderGoalTaskKey);
+    if (this.builderGoalTaskSearchInput && this.builderGoalTaskSearchInput.value) {
+      this.builderGoalTaskSearchInput.value = '';
+      this.renderBuilderGoalTaskOptions('');
+    }
+    if (this.builderGoalTaskSelect) {
+      this.builderGoalTaskSelect.value = resolvedTask.task_key;
+    }
+    return resolvedTask;
+  }
+
+  getBuilderGoalConfigContextKey(accountId = null, taskKey = null) {
+    const resolvedAccountId = accountId || this.selectedBuilderGoalAccountId || '';
+    const resolvedTaskKey = taskKey || this.selectedBuilderGoalTaskKey || '';
+    return `${resolvedAccountId}::${resolvedTaskKey}`;
+  }
+
+  async prefillBuilderGoalConfigForSelection(options = {}) {
+    const force = Boolean(options.force);
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    if (!this.builderGoalConfigInput) {
+      return;
+    }
+
+    if (!selectedTask || !selectedAccount) {
+      if (!this.builderGoalConfigInput.value.trim() || force) {
+        this.builderGoalConfigInput.value = '{}';
+        this.builderGoalConfigDirty = false;
+        this.builderGoalConfigLoadedKey = this.getBuilderGoalConfigContextKey();
+      }
+      this.renderBuilderGoalConfigMeta();
+      return;
+    }
+
+    const nextKey = this.getBuilderGoalConfigContextKey(selectedAccount.accountId, selectedTask.task_key);
+    if (!force && this.builderGoalConfigDirty) {
+      this.renderBuilderGoalConfigMeta();
+      return;
+    }
+    if (!force && this.builderGoalConfigLoadedKey === nextKey && this.builderGoalConfigInput.value.trim()) {
+      this.renderBuilderGoalConfigMeta();
+      return;
+    }
+
+    try {
+      const query = new URLSearchParams({
+        accountId: selectedAccount.accountId || '',
+        taskKey: selectedTask.task_key || ''
+      });
+      const response = await fetch(`/api/debug/builder-goals/config/last?${query.toString()}`);
+      if (response.ok) {
+        const payload = await response.json();
+        if (payload?.configAvailable && payload.settings && typeof payload.settings === 'object') {
+          this.setBuilderGoalConfigEditor(payload.settings, {
+            accountId: payload.accountId,
+            taskKey: payload.taskKey,
+            displayName: payload.displayName,
+            dirty: false
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      console.debug('Could not load latest builder goal config:', error);
+    }
+
+    this.setBuilderGoalConfigEditor({}, {
+      accountId: selectedAccount.accountId,
+      taskKey: selectedTask.task_key,
+      displayName: selectedTask.display_name || selectedTask.panel_display_name || selectedTask.task_key,
+      dirty: false
+    });
+  }
+
+  setBuilderGoalConfigEditor(settings, options = {}) {
+    if (!this.builderGoalConfigInput) return;
+    const configObject =
+      settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+    this.builderGoalConfigInput.value = JSON.stringify(configObject, null, 2);
+    this.builderGoalConfigDirty = Boolean(options.dirty);
+    this.builderGoalConfigLoadedKey = this.getBuilderGoalConfigContextKey(
+      options.accountId,
+      options.taskKey
+    );
+    this.renderBuilderGoalConfigMeta({
+      savedDisplayName: options.displayName || null,
+      loadedFromRun: options.loadedFromRun || false,
+      loadedRunLabel: options.loadedRunLabel || null
+    });
+  }
+
+  renderBuilderGoalConfigMeta(extra = {}) {
+    if (!this.builderGoalConfigMeta) return;
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const parts = [];
+    if (extra.loadedFromRun && extra.loadedRunLabel) {
+      parts.push(`Loaded saved config from ${extra.loadedRunLabel}.`);
+    } else if (extra.savedDisplayName || selectedTask?.display_name || selectedTask?.task_key) {
+      parts.push(
+        `Editing config for ${extra.savedDisplayName || selectedTask?.display_name || selectedTask?.task_key}.`
+      );
+    } else {
+      parts.push('Paste a raw settings object, a {"settings": {...}} envelope, or a full builder payload.');
+    }
+    if (selectedAccount?.displayName || selectedAccount?.accountName) {
+      parts.push(`Account: ${selectedAccount.displayName || selectedAccount.accountName}.`);
+    }
+    if (this.builderGoalConfigDirty) {
+      parts.push('Unsaved draft changes are being kept in this session.');
+    } else {
+      parts.push('The editor will prefill from the last saved run for this account and task when available.');
+    }
+    parts.push('If the JSON includes task_key, ChromaScape will auto-select that task.');
+    this.builderGoalConfigMeta.innerHTML = `<span class="text-muted">${this.escapeHtml(parts.join(' '))}</span>`;
+  }
+
+  parseBuilderGoalConfigInput() {
+    const raw = this.builderGoalConfigInput ? this.builderGoalConfigInput.value.trim() : '';
+    if (!raw) {
+      return { settings: {}, taskKey: null, requirements: {} };
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      return { error: `Invalid JSON: ${error.message}` };
+    }
+
+    const normalized = this.normalizePastedConfig(parsed);
+    if (normalized.error) {
+      return normalized;
+    }
+    return normalized;
   }
 
   async loadBuilderGoalRuns(options = {}) {
@@ -451,88 +1030,6 @@ class AccountTaskPlanner {
     }
   }
 
-  async loadBuilderGoalClients() {
-    if (!this.builderGoalClientSelect || this.builderGoalBundleMismatch) return;
-
-    try {
-      const response = await fetch('/api/debug/builder-goals/clients');
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      this.builderGoalClients = await response.json();
-      this.renderBuilderGoalClients();
-    } catch (error) {
-      console.error('Failed to load builder goal clients:', error);
-      this.builderGoalClients = [];
-      this.renderBuilderGoalClients(error.message);
-    }
-  }
-
-  renderBuilderGoalClients(loadError = null) {
-    if (!this.builderGoalClientSelect || this.builderGoalBundleMismatch) return;
-
-    const clients = Array.isArray(this.builderGoalClients) ? this.builderGoalClients : [];
-    const previousSelection = this.selectedBuilderGoalClientId;
-    const previousStillVisible = clients.some(client => client.clientId === previousSelection);
-    const runnableClients = clients.filter(client => Boolean(client.runnable));
-
-    if (previousStillVisible) {
-      this.selectedBuilderGoalClientId = previousSelection;
-    } else if (runnableClients.length === 1) {
-      this.selectedBuilderGoalClientId = runnableClients[0].clientId || '';
-    } else {
-      this.selectedBuilderGoalClientId = '';
-    }
-
-    if (this.selectedBuilderGoalClientId) {
-      localStorage.setItem('taskPlanner.selectedBuilderGoalClient', this.selectedBuilderGoalClientId);
-    } else {
-      localStorage.removeItem('taskPlanner.selectedBuilderGoalClient');
-    }
-
-    if (loadError) {
-      this.builderGoalClientSelect.innerHTML = '<option value="">Failed to load online clients</option>';
-      this.builderGoalClientSelect.disabled = true;
-      this.renderBuilderGoalClientStatus(`Failed to load online clients: ${loadError}`, 'danger');
-      this.updateBuilderGoalRunButtonState();
-      return;
-    }
-
-    if (clients.length === 0) {
-      this.builderGoalClientSelect.innerHTML = '<option value="">No online Micro6 clients</option>';
-      this.builderGoalClientSelect.disabled = true;
-      this.renderBuilderGoalClientStatus('No online Micro6 clients are currently available.', 'warning');
-      this.updateBuilderGoalRunButtonState();
-      return;
-    }
-
-    this.builderGoalClientSelect.disabled = false;
-    const options = ['<option value="">Select an online Micro6 client</option>'];
-    clients.forEach(client => {
-      const label = this.formatBuilderGoalClientLabel(client);
-      options.push(
-        `<option value="${this.escapeAttr(client.clientId || '')}">${this.escapeHtml(label)}</option>`
-      );
-    });
-    this.builderGoalClientSelect.innerHTML = options.join('');
-    this.builderGoalClientSelect.value = this.selectedBuilderGoalClientId || '';
-
-    this.renderBuilderGoalClientStatus();
-    this.updateBuilderGoalRunButtonState();
-  }
-
-  formatBuilderGoalClientLabel(client) {
-    const account = client.accountName || 'Unknown account';
-    const status = client.status || 'UNKNOWN';
-    const location = client.advertisedBaseUrl || client.executorBindAddr || client.clientId || 'unknown target';
-    return `${account} • ${status} • ${location}`;
-  }
-
-  getSelectedBuilderGoalClient() {
-    const selectedId = this.builderGoalClientSelect ? this.builderGoalClientSelect.value : this.selectedBuilderGoalClientId;
-    return (this.builderGoalClients || []).find(client => client.clientId === selectedId) || null;
-  }
-
   renderBuilderGoalClientStatus(message = null, tone = null) {
     if (!this.builderGoalClientStatus) return;
     if (this.builderGoalBundleMismatch) {
@@ -545,44 +1042,75 @@ class AccountTaskPlanner {
       return;
     }
 
-    const selectedClient = this.getSelectedBuilderGoalClient();
-    if (!selectedClient) {
-      const runnableCount = (this.builderGoalClients || []).filter(client => Boolean(client.runnable)).length;
-      if (runnableCount === 1) {
-        this.builderGoalClientStatus.innerHTML =
-          '<span class="text-success">One runnable client is online and has been preselected.</span>';
-      } else if (runnableCount > 1) {
-        this.builderGoalClientStatus.innerHTML =
-          '<span class="text-muted">Select which online Micro6 client should receive this task.</span>';
-      } else {
-        this.builderGoalClientStatus.innerHTML =
-          '<span class="text-warning">No runnable Micro6 clients are currently online.</span>';
-      }
-      return;
-    }
-
-    if (!selectedClient.runnable) {
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    if (!selectedAccount) {
       this.builderGoalClientStatus.innerHTML =
-        '<span class="text-warning">The selected client is stale or unreachable and cannot receive tasks.</span>';
+        '<span class="text-muted">Select a launcher account, then select a launcher machine, choose a task, paste or edit the settings JSON, and then run the task.</span>';
       return;
     }
 
-    const currentTask = selectedClient.currentTask
-      ? ` Current task: ${this.escapeHtml(selectedClient.currentTask)}.`
-      : '';
+    if (!selectedAccount.runnable) {
+      this.builderGoalClientStatus.innerHTML =
+        `<span class="text-warning">${this.escapeHtml(selectedAccount.disabledReason || 'This account is visible but not launch-ready yet.')}</span>`;
+      return;
+    }
+
+    if (!selectedMachine) {
+      this.builderGoalClientStatus.innerHTML =
+        '<span class="text-warning">Select a launcher machine before running a task.</span>';
+      return;
+    }
+
+    if (!selectedMachine.builderGoalRunnable) {
+      this.builderGoalClientStatus.innerHTML =
+        `<span class="text-warning">${this.escapeHtml(selectedMachine.builderGoalDisabledReason || 'The selected launcher machine is not ready for local Builder Goal launches.')}</span>`;
+      return;
+    }
+
+    const taskLabel = this.escapeHtml(
+      selectedTask?.display_name || selectedTask?.task_key || 'the selected task'
+    );
+    const accountLabel = this.escapeHtml(
+      selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId
+    );
+    const machineLabel = this.escapeHtml(
+      selectedMachine.displayName || selectedMachine.machineUuid || 'the selected machine'
+    );
     this.builderGoalClientStatus.innerHTML =
-      `<span class="text-success">Publish target: ${this.escapeHtml(this.formatBuilderGoalClientLabel(selectedClient))}.${currentTask}</span>`;
+      `<span class="text-info">ChromaScape will launch the local micro6 workspace for ${accountLabel} on ${machineLabel}, wait for the executor heartbeat, and then publish ${taskLabel} using the JSON settings from the editor.</span>`;
   }
 
   updateBuilderGoalRunButtonState() {
     if (!this.runBuilderGoalBtn) return;
     if (this.builderGoalBundleMismatch) {
       this.runBuilderGoalBtn.disabled = true;
+      if (this.runImportedBuilderGoalBtn) {
+        this.runImportedBuilderGoalBtn.disabled = true;
+      }
       return;
     }
-    const importedRunnable = Boolean(this.importedBuilderGoal?.result?.runnableNow);
-    const selectedClient = this.getSelectedBuilderGoalClient();
-    this.runBuilderGoalBtn.disabled = !(importedRunnable && selectedClient && selectedClient.runnable);
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    const canPrimaryRun = Boolean(
+      selectedAccount &&
+        selectedAccount.runnable &&
+        selectedMachine &&
+        selectedMachine.builderGoalRunnable &&
+        selectedTask
+    );
+    this.runBuilderGoalBtn.disabled = !canPrimaryRun;
+    if (this.runImportedBuilderGoalBtn) {
+      this.runImportedBuilderGoalBtn.disabled = !Boolean(
+        selectedAccount &&
+          selectedAccount.runnable &&
+          selectedMachine &&
+          selectedMachine.builderGoalRunnable &&
+          this.importedBuilderGoal?.result?.runnableNow
+      );
+    }
   }
 
   renderBuilderGoalRuns() {
@@ -595,8 +1123,10 @@ class AccountTaskPlanner {
 
     this.builderGoalRunsList.innerHTML = this.builderGoalRuns.map(run => {
       const status = (run.status || 'QUEUED').toLowerCase();
-      const canAnalyze = Boolean(run.canAnalyze);
-      const canFix = Boolean(run.canFixAndRelaunch);
+      const canReview = Boolean(run.canAnalyze);
+      const canApprove = Boolean(run.approvalAvailable);
+      const canRerun = Boolean(run.canRerun);
+      const canLoadConfig = Boolean(run.configAvailable);
       const actionStepLine = this.renderBuilderGoalActionStep(run);
       const blockedReasonLine = this.renderBuilderGoalBlockedReason(run);
       const analysisUsageLine = this.renderBuilderGoalAnalysisUsage(run);
@@ -606,12 +1136,20 @@ class AccountTaskPlanner {
       const diagnosisLine = run.diagnosisSummary
         ? `<div class="plan-card-intent">${this.escapeHtml(run.diagnosisSummary)}</div>`
         : '';
+      const recoveryParts = [run.recoveryPhase, run.recoveryMessage].filter(Boolean);
+      const recoveryLine = recoveryParts.length
+        ? `<div class="small text-muted mt-1"><i class="bi bi-tools me-1"></i>${this.escapeHtml(recoveryParts.join(' • '))}</div>`
+        : '';
       const revisionLine = run.micro6RevisionId
         ? `<div class="small text-muted mt-1"><i class="bi bi-git me-1"></i>${this.escapeHtml(run.micro6RevisionId)}</div>`
         : '';
       const targetParts = [run.targetAccountName, run.targetBaseUrl].filter(Boolean);
       const targetLine = targetParts.length
         ? `<div class="small text-muted mt-1"><i class="bi bi-broadcast-pin me-1"></i>${this.escapeHtml(targetParts.join(' • '))}</div>`
+        : '';
+      const launchParts = [run.launcherMachineUuid, run.launcherCommandId, run.launcherCommandStatus].filter(Boolean);
+      const launchLine = launchParts.length
+        ? `<div class="small text-muted mt-1"><i class="bi bi-box-arrow-up-right me-1"></i>${this.escapeHtml(launchParts.join(' • '))}</div>`
         : '';
       const publishMeta = [];
       if (run.publishEntryId) {
@@ -633,9 +1171,11 @@ class AccountTaskPlanner {
           </div>
           <div class="small text-muted">${this.escapeHtml(run.taskKey || '')}</div>
           ${targetLine}
+          ${launchLine}
           ${publishLine}
           ${failureLine}
           ${diagnosisLine}
+          ${recoveryLine}
           ${revisionLine}
           ${analysisUsageLine}
           <div class="plan-card-meta">
@@ -644,11 +1184,19 @@ class AccountTaskPlanner {
           </div>
           ${actionStepLine}
           <div class="d-flex gap-2 mt-2">
-            <button class="btn btn-sm btn-outline-primary flex-fill" data-builder-run-action="analyze" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canAnalyze ? '' : 'disabled'}>
-              <i class="bi bi-lightbulb me-1"></i>Analyze Failure
+            <button class="btn btn-sm btn-outline-secondary flex-fill" data-builder-run-action="load-config" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canLoadConfig ? '' : 'disabled'}>
+              <i class="bi bi-download me-1"></i>Load Into Editor
             </button>
-            <button class="btn btn-sm btn-outline-success flex-fill" data-builder-run-action="fix" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canFix ? '' : 'disabled'}>
-              <i class="bi bi-arrow-repeat me-1"></i>Fix + Relaunch
+            <button class="btn btn-sm btn-outline-dark flex-fill" data-builder-run-action="rerun" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canRerun ? '' : 'disabled'}>
+              <i class="bi bi-play-circle me-1"></i>Rerun
+            </button>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-primary flex-fill" data-builder-run-action="analyze" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canReview ? '' : 'disabled'}>
+              <i class="bi bi-lightbulb me-1"></i>${this.escapeHtml(this.builderGoalReviewLabel(run))}
+            </button>
+            <button class="btn btn-sm btn-outline-success flex-fill" data-builder-run-action="fix" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canApprove ? '' : 'disabled'}>
+              <i class="bi bi-arrow-repeat me-1"></i>${this.escapeHtml(this.builderGoalApprovalLabel(run))}
             </button>
           </div>
           ${blockedReasonLine}
@@ -662,22 +1210,31 @@ class AccountTaskPlanner {
     if (status !== 'FAILED') {
       return '';
     }
-    if (!run.analysisAvailable) {
-      return '<div class="small text-muted mt-2">1. Analyze failure</div>';
+    if (run.recoveryPhase === 'AWAITING_OPERATOR_PROMPT') {
+      return '<div class="small text-muted mt-2">1. Open the recovery workspace, describe the issue, and choose the evidence/time clip to send for patch planning.</div>';
     }
-    if (run.patchDraftAvailable) {
-      return '<div class="small text-muted mt-2">2. Fix and relaunch</div>';
+    if (run.approvalAvailable) {
+      return '<div class="small text-muted mt-2">2. Review the generated patch plan and apply it to restart and republish the task.</div>';
     }
-    return '<div class="small text-muted mt-2">2. Fix and relaunch is unavailable until analysis produces a patch draft</div>';
+    if (run.analysisAvailable && run.patchDraftAvailable) {
+      return '<div class="small text-muted mt-2">Patch plan is ready; waiting for apply/relaunch.</div>';
+    }
+    if (run.analysisAvailable) {
+      return '<div class="small text-muted mt-2">Patch planning completed, but MCP did not produce a patch draft.</div>';
+    }
+    return '<div class="small text-muted mt-2">Waiting for an operator-authored patch request.</div>';
   }
 
   renderBuilderGoalBlockedReason(run) {
     const reasons = [];
+    if (!run.canRerun && run.rerunBlockedReason) {
+      reasons.push(run.rerunBlockedReason);
+    }
     if (!run.canAnalyze && run.analyzeBlockedReason) {
       reasons.push(run.analyzeBlockedReason);
     }
-    if (!run.canFixAndRelaunch && run.fixBlockedReason && !reasons.includes(run.fixBlockedReason)) {
-      reasons.push(run.fixBlockedReason);
+    if (!run.approvalAvailable && run.approvalBlockedReason && !reasons.includes(run.approvalBlockedReason)) {
+      reasons.push(run.approvalBlockedReason);
     }
     if (reasons.length === 0) {
       return '';
@@ -687,11 +1244,17 @@ class AccountTaskPlanner {
 
   renderBuilderGoalAnalysisUsage(run) {
     const parts = [];
+    if (run.analysisMode === 'OPERATOR_EDITED_MCP') {
+      parts.push('Patch plan generated from operator-authored recovery request');
+    }
     if (run.analysisCustomized) {
-      parts.push('Analysis used custom operator prompt');
+      parts.push('Used custom operator prompt/context');
     }
     if (Number.isFinite(run.analysisSelectedEvidenceCount) && Number.isFinite(run.analysisTotalEvidenceCount)) {
       parts.push(`Selected evidence: ${run.analysisSelectedEvidenceCount}/${run.analysisTotalEvidenceCount}`);
+    }
+    if (Number.isFinite(run.analysisTimeRangeStartSeconds) && Number.isFinite(run.analysisTimeRangeEndSeconds)) {
+      parts.push(`Clip: ${this.formatSecondsAsClock(run.analysisTimeRangeStartSeconds)} → ${this.formatSecondsAsClock(run.analysisTimeRangeEndSeconds)}`);
     }
     if (parts.length === 0) {
       return '';
@@ -737,7 +1300,18 @@ class AccountTaskPlanner {
       }
 
       this.importedBuilderGoal = { payload, result };
+      const resolvedTask = this.selectBuilderGoalTask(result.taskKey);
+      this.setBuilderGoalConfigEditor(result.settings || {}, {
+        accountId: this.selectedBuilderGoalAccountId,
+        taskKey: resolvedTask?.task_key || result.taskKey || '',
+        displayName: result.displayName || result.title || result.taskKey || null,
+        dirty: true
+      });
       this.renderBuilderGoalImportResult(result);
+      this.renderBuilderGoalClientStatus(
+        `Imported config for ${result.displayName || result.taskKey || 'the selected task'}. Review the JSON editor and click Run Task when ready.`,
+        'info'
+      );
       this.updateBuilderGoalRunButtonState();
     } catch (error) {
       console.error('Failed to import builder payload:', error);
@@ -792,26 +1366,196 @@ class AccountTaskPlanner {
       );
       return;
     }
-    if (!this.importedBuilderGoal || !this.importedBuilderGoal.payload) {
-      alert('Import a builder payload first.');
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    if (!selectedAccount) {
+      alert('Select an account first.');
       return;
     }
-    const selectedClient = this.getSelectedBuilderGoalClient();
-    if (!selectedClient || !selectedClient.runnable) {
-      this.renderBuilderGoalClientStatus('Select a runnable online Micro6 client before running the task.', 'warning');
-      this.updateBuilderGoalRunButtonState();
+    if (!selectedAccount.runnable) {
+      alert(selectedAccount.disabledReason || 'This account cannot be launched yet.');
+      return;
+    }
+    if (!selectedMachine) {
+      alert('Select a launcher machine first.');
+      return;
+    }
+    if (!selectedMachine.builderGoalRunnable) {
+      alert(
+        selectedMachine.builderGoalDisabledReason ||
+          'This launcher machine cannot run local Builder Goal launches yet.'
+      );
+      return;
+    }
+
+    const parsedConfig = this.parseBuilderGoalConfigInput();
+    if (parsedConfig.error) {
+      this.renderBuilderGoalClientStatus(parsedConfig.error, 'danger');
+      alert(parsedConfig.error);
+      return;
+    }
+
+    if (parsedConfig.taskKey) {
+      const resolvedTask = this.selectBuilderGoalTask(parsedConfig.taskKey);
+      if (!resolvedTask) {
+        const message = `Task from pasted JSON was not found in the Micro6 catalog: ${parsedConfig.taskKey}`;
+        this.renderBuilderGoalClientStatus(message, 'danger');
+        alert(message);
+        return;
+      }
+    }
+
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    if (!selectedTask) {
+      const message = 'Select a Micro6 task first, or paste JSON that includes task_key.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
       return;
     }
 
     if (this.runBuilderGoalBtn) {
       this.runBuilderGoalBtn.disabled = true;
-      this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Publishing...';
+      this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Launching...';
     }
-    this.renderBuilderGoalClientStatus(`Publishing task to ${this.formatBuilderGoalClientLabel(selectedClient)}...`, 'info');
-    console.info('[AccountTaskPlanner] Publish to Selected Client clicked', {
-      taskKey: this.importedBuilderGoal?.result?.taskKey || null,
-      targetClientId: selectedClient.clientId || null
+    this.renderBuilderGoalClientStatus(
+      `Launching the local micro6 workspace for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} on ${selectedMachine.displayName || selectedMachine.machineUuid} and then publishing ${selectedTask.display_name || selectedTask.task_key}...`,
+      'info'
+    );
+    console.info('[AccountTaskPlanner] Run Task clicked', {
+      accountId: selectedAccount.accountId || null,
+      launcherMachineUuid: selectedMachine.machineUuid || null,
+      taskKey: selectedTask.task_key || null
     });
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(
+      () => controller.abort(),
+      AccountTaskPlanner.BUILDER_GOAL_PUBLISH_TIMEOUT_MS
+    );
+    let publishSucceeded = false;
+    let publishWarning = null;
+
+    try {
+      const settings = parsedConfig.settings && typeof parsedConfig.settings === 'object'
+        ? parsedConfig.settings
+        : {};
+      const response = await fetch('/api/debug/builder-goals/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          accountId: selectedAccount.accountId,
+          launcherMachineUuid: selectedMachine.machineUuid,
+          taskKey: selectedTask.task_key,
+          settings,
+          displayName:
+            selectedTask.display_name ||
+            selectedTask.panel_display_name ||
+            selectedTask.task_key,
+          source: 'catalog_task'
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      if (result.published === false) {
+        await this.loadBuilderGoalRuns();
+        throw new Error(result.publishError || 'Publish failed');
+      }
+      publishSucceeded = true;
+      this.builderGoalConfigDirty = false;
+      this.builderGoalConfigLoadedKey = this.getBuilderGoalConfigContextKey(
+        selectedAccount.accountId,
+        selectedTask.task_key
+      );
+      this.renderBuilderGoalConfigMeta();
+      this.renderBuilderGoalClientStatus(
+        `Local micro6 workspace launched for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId}, the executor heartbeat returned, and ${selectedTask.display_name || selectedTask.task_key} was published to the Micro6 queue.`,
+        'success'
+      );
+    } catch (error) {
+      console.error('Failed to publish builder goal task:', error);
+      const timedOut = error && error.name === 'AbortError';
+      const message = timedOut
+        ? 'Publish timed out before Micro6 acknowledged the task.'
+        : error.message;
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(
+        `Failed to run task: ${message}`,
+        'danger'
+      );
+      alert('Failed to run task: ' + message);
+    } finally {
+      clearTimeout(timeoutHandle);
+      if (publishSucceeded) {
+        try {
+          await this.loadBuilderGoalRuns({ throwOnError: true });
+        } catch (error) {
+          console.warn('Published successfully, but failed to refresh builder goal runs:', error);
+          publishWarning = error?.message || 'Failed to refresh builder goal runs.';
+        }
+        if (publishWarning) {
+          this.renderBuilderGoalClientStatus(
+            `Task published successfully, but failed to refresh the run list: ${publishWarning}`,
+            'warning'
+          );
+        }
+      }
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+    }
+  }
+
+  async runImportedBuilderGoal() {
+    if (this.builderGoalBundleMismatch) {
+      this.renderBuilderGoalClientStatus(
+        'Hard refresh this page to load the latest Builder Goal Runner before running an imported payload.',
+        'danger'
+      );
+      return;
+    }
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    if (!selectedAccount) {
+      alert('Select an account first.');
+      return;
+    }
+    if (!selectedAccount.runnable) {
+      alert(selectedAccount.disabledReason || 'This account cannot be launched yet.');
+      return;
+    }
+    if (!selectedMachine) {
+      alert('Select a launcher machine first.');
+      return;
+    }
+    if (!selectedMachine.builderGoalRunnable) {
+      alert(
+        selectedMachine.builderGoalDisabledReason ||
+          'This launcher machine cannot run local Builder Goal launches yet.'
+      );
+      return;
+    }
+    if (!this.importedBuilderGoal?.payload) {
+      alert('Import a builder payload first.');
+      return;
+    }
+
+    if (this.runImportedBuilderGoalBtn) {
+      this.runImportedBuilderGoalBtn.disabled = true;
+      this.runImportedBuilderGoalBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Running...';
+    }
+    this.renderBuilderGoalClientStatus(
+      `Launching the local micro6 workspace for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} on ${selectedMachine.displayName || selectedMachine.machineUuid} and then publishing the imported payload...`,
+      'info'
+    );
+    console.info('[AccountTaskPlanner] Run Imported Payload clicked', {
+      accountId: selectedAccount.accountId || null,
+      launcherMachineUuid: selectedMachine.machineUuid || null,
+      taskKey: this.importedBuilderGoal?.result?.taskKey || null
+    });
+
     const controller = new AbortController();
     const timeoutHandle = setTimeout(
       () => controller.abort(),
@@ -826,8 +1570,9 @@ class AccountTaskPlanner {
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
-          builderPayload: this.importedBuilderGoal.payload,
-          targetClientId: selectedClient.clientId
+          accountId: selectedAccount.accountId,
+          launcherMachineUuid: selectedMachine.machineUuid,
+          builderPayload: this.importedBuilderGoal.payload
         })
       });
       const result = await response.json();
@@ -840,18 +1585,18 @@ class AccountTaskPlanner {
       }
       publishSucceeded = true;
       this.renderBuilderGoalClientStatus(
-        `Published to ${this.formatBuilderGoalClientLabel(selectedClient)} queue.`,
+        `Local micro6 workspace launched for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId}, the executor heartbeat returned, and the imported payload was published to the Micro6 queue.`,
         'success'
       );
     } catch (error) {
-      console.error('Failed to publish builder goal:', error);
+      console.error('Failed to run imported builder goal:', error);
       const timedOut = error && error.name === 'AbortError';
       const message = timedOut
-        ? 'Publish timed out before Micro6 acknowledged the task.'
+        ? 'Publish timed out before Micro6 acknowledged the imported task.'
         : error.message;
       await this.loadBuilderGoalRuns();
-      this.renderBuilderGoalClientStatus(`Failed to publish task: ${message}`, 'danger');
-      alert('Failed to publish task: ' + message);
+      this.renderBuilderGoalClientStatus(`Failed to run imported payload: ${message}`, 'danger');
+      alert('Failed to run imported payload: ' + message);
     } finally {
       clearTimeout(timeoutHandle);
       if (publishSucceeded) {
@@ -863,19 +1608,156 @@ class AccountTaskPlanner {
         }
         if (publishWarning) {
           this.renderBuilderGoalClientStatus(
-            `Published to ${this.formatBuilderGoalClientLabel(selectedClient)} queue, but failed to refresh the run list: ${publishWarning}`,
+            `Imported payload published successfully, but failed to refresh the run list: ${publishWarning}`,
             'warning'
           );
         }
       }
-      if (this.runBuilderGoalBtn) {
-        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-upload me-1"></i>Publish to Selected Client';
+      if (this.runImportedBuilderGoalBtn) {
+        this.runImportedBuilderGoalBtn.innerHTML =
+          '<i class="bi bi-upload me-1"></i>Run Imported Payload';
       }
       this.updateBuilderGoalRunButtonState();
     }
   }
 
+  async loadBuilderGoalRunConfig(iterationId) {
+    if (!iterationId) return;
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/config`);
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+
+      const account = (this.builderGoalAccounts || []).find(
+        candidate => candidate.accountId === result.accountId
+      );
+      if (!account) {
+        throw new Error('The saved run account is no longer available in launcher control.');
+      }
+      const task = this.selectBuilderGoalTask(result.taskKey);
+      if (!task) {
+        throw new Error(`Saved task is no longer available in the Micro6 catalog: ${result.taskKey}`);
+      }
+      if (result.launcherMachineUuid) {
+        const machine = (this.builderGoalMachines || []).find(
+          candidate => candidate.machineUuid === result.launcherMachineUuid
+        );
+        if (!machine) {
+          throw new Error('The saved run machine is no longer available in launcher control.');
+        }
+        this.selectedBuilderGoalMachineUuid = result.launcherMachineUuid;
+        localStorage.setItem(
+          'taskPlanner.selectedBuilderGoalMachineUuid',
+          this.selectedBuilderGoalMachineUuid
+        );
+        if (this.builderGoalMachineSelect) {
+          this.builderGoalMachineSelect.value = this.selectedBuilderGoalMachineUuid;
+        }
+      }
+
+      this.selectedBuilderGoalAccountId = result.accountId || '';
+      localStorage.setItem('taskPlanner.selectedBuilderGoalAccountId', this.selectedBuilderGoalAccountId);
+      if (this.builderGoalAccountSelect) {
+        this.builderGoalAccountSelect.value = this.selectedBuilderGoalAccountId;
+      }
+
+      this.setBuilderGoalConfigEditor(result.settings || {}, {
+        accountId: result.accountId,
+        taskKey: result.taskKey,
+        displayName: result.displayName,
+        loadedFromRun: true,
+        loadedRunLabel:
+          result.createdAt
+            ? `${result.displayName || result.taskKey} (${this.formatTimeAgo(result.createdAt)})`
+            : (result.displayName || result.taskKey || 'saved run')
+      });
+      this.renderBuilderGoalAccountSummary();
+      this.renderBuilderGoalMachineSummary();
+      this.renderBuilderGoalClientStatus(
+        `Loaded the saved config for ${result.displayName || result.taskKey} on ${account.displayName || account.accountName || account.accountId} into the editor. Review the JSON and click Run Task when ready.`,
+        'info'
+      );
+      this.updateBuilderGoalRunButtonState();
+    } catch (error) {
+      console.error('Failed to load builder goal run config:', error);
+      this.renderBuilderGoalClientStatus(`Failed to load saved config: ${error.message}`, 'danger');
+      alert('Failed to load saved config: ' + error.message);
+    }
+  }
+
+  async rerunBuilderGoal(iterationId) {
+    if (!iterationId) return;
+    this.renderBuilderGoalClientStatus(
+      'Reusing the saved builder-goal config, launching the local micro6 workspace, and republishing the task...',
+      'info'
+    );
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/rerun`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await this.loadBuilderGoalRuns();
+      const run = result.run || {};
+      this.renderBuilderGoalClientStatus(
+        `Saved config relaunched for ${run.displayName || run.taskKey || 'the selected task'} on ${run.accountName || run.targetAccountName || 'the selected account'}.`,
+        'success'
+      );
+    } catch (error) {
+      console.error('Failed to rerun builder goal:', error);
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(`Failed to rerun task: ${error.message}`, 'danger');
+      alert('Failed to rerun task: ' + error.message);
+    }
+  }
+
   describeBuilderGoalRunProgress(run) {
+    const preparationState = (run.targetPreparationState || '').toUpperCase();
+    if (preparationState === 'PREPARING_TARGET') {
+      return 'Preparing Micro6 target';
+    }
+    if (preparationState === 'WAITING_FOR_AGENT') {
+      return 'Waiting for Microbot Agent Server';
+    }
+    if (preparationState === 'LOGGING_IN') {
+      return 'Logging into Micro6 profile';
+    }
+    if (preparationState === 'READY_TO_PUBLISH' && (run.status || '').toUpperCase() === 'READY_TO_PUBLISH') {
+      return 'Target is ready to publish';
+    }
+    const recoveryPhase = (run.recoveryPhase || '').toUpperCase();
+    if (recoveryPhase === 'AWAITING_OPERATOR_PROMPT') {
+      return 'Awaiting operator patch request';
+    }
+    if (recoveryPhase === 'PATCH_PLAN_READY') {
+      return 'Patch plan is ready for application';
+    }
+    if (recoveryPhase === 'APPLYING_PATCH') {
+      return 'Applying approved patch to Micro6 source';
+    }
+    if (recoveryPhase === 'RESTARTING_TARGET') {
+      return 'Restarting Micro6 target';
+    }
+    if (recoveryPhase === 'RELOGGING_IN') {
+      return 'Logging back into Micro6 after restart';
+    }
+    if (recoveryPhase === 'WAITING_FOR_EXECUTOR') {
+      return 'Waiting for Micro6 executor heartbeat to return';
+    }
+    if (recoveryPhase === 'REPUBLISHING') {
+      return 'Republishing patched task';
+    }
+    if (recoveryPhase === 'RELAUNCHED') {
+      return 'Recovery approved and task relaunched';
+    }
+    if (recoveryPhase === 'RECOVERY_FAILED') {
+      return 'Recovery failed';
+    }
     const status = (run.status || '').toUpperCase();
     if (status === 'PUBLISHED') {
       return 'Published to Micro6 queue';
@@ -916,6 +1798,15 @@ class AccountTaskPlanner {
     if (this.builderGoalAnalysisContext) {
       this.builderGoalAnalysisContext.value = '';
     }
+    if (this.builderGoalAnalysisStartTime) {
+      this.builderGoalAnalysisStartTime.value = '';
+    }
+    if (this.builderGoalAnalysisEndTime) {
+      this.builderGoalAnalysisEndTime.value = '';
+    }
+    if (this.builderGoalAnalysisRangeHint) {
+      this.builderGoalAnalysisRangeHint.textContent = '00:00 → 00:00';
+    }
 
     try {
       const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/analysis-draft`, {
@@ -932,18 +1823,28 @@ class AccountTaskPlanner {
       if (this.builderGoalAnalysisContext) {
         this.builderGoalAnalysisContext.value = result.context || '';
       }
+      if (this.builderGoalAnalysisStartTime) {
+        this.builderGoalAnalysisStartTime.value = result.timeRangeStartDisplay || '00:00';
+      }
+      if (this.builderGoalAnalysisEndTime) {
+        this.builderGoalAnalysisEndTime.value = result.timeRangeEndDisplay || result.timeRangeMaxDisplay || '00:00';
+      }
+      if (this.builderGoalAnalysisRangeHint) {
+        this.builderGoalAnalysisRangeHint.textContent =
+          `00:00 → ${result.timeRangeMaxDisplay || '00:00'}`;
+      }
       this.renderBuilderGoalAnalysisEvidence(result);
       if (result.canAnalyze === false && result.analysisBlockedReason) {
         this.renderBuilderGoalAnalysisStatus(result.analysisBlockedReason, 'warning');
       } else {
-        this.renderBuilderGoalAnalysisStatus('Edit the prompt/context, choose evidence, then run analysis.', 'muted');
+        this.renderBuilderGoalAnalysisStatus('Describe the issue, choose the exact clip/evidence, then generate a patch plan for Micro6.', 'muted');
       }
-      this.setBuilderGoalAnalysisSubmitState(Boolean(result.canAnalyze) === false, 'Run Analysis');
+      this.setBuilderGoalAnalysisSubmitState(Boolean(result.canAnalyze) === false, 'Generate Patch Plan');
       this.builderGoalAnalysisModal?.show();
     } catch (error) {
       console.error('Failed to analyze builder goal run:', error);
       this.renderBuilderGoalAnalysisStatus(`Failed to load analysis draft: ${error.message}`, 'danger');
-      this.setBuilderGoalAnalysisSubmitState(true, 'Run Analysis');
+      this.setBuilderGoalAnalysisSubmitState(true, 'Generate Patch Plan');
       alert('Failed to load analysis draft: ' + error.message);
     }
   }
@@ -1006,6 +1907,13 @@ class AccountTaskPlanner {
     if (this.builderGoalAnalysisContext) {
       this.builderGoalAnalysisContext.value = this.builderGoalAnalysisDraft.context || '';
     }
+    if (this.builderGoalAnalysisStartTime) {
+      this.builderGoalAnalysisStartTime.value = this.builderGoalAnalysisDraft.timeRangeStartDisplay || '00:00';
+    }
+    if (this.builderGoalAnalysisEndTime) {
+      this.builderGoalAnalysisEndTime.value =
+        this.builderGoalAnalysisDraft.timeRangeEndDisplay || this.builderGoalAnalysisDraft.timeRangeMaxDisplay || '00:00';
+    }
   }
 
   setAllBuilderGoalEvidenceSelections(selected) {
@@ -1038,7 +1946,7 @@ class AccountTaskPlanner {
     this.builderGoalAnalysisStatus.innerHTML = `<span class="text-${tone}">${this.escapeHtml(message || '')}</span>`;
   }
 
-  setBuilderGoalAnalysisSubmitState(disabled, label = 'Run Analysis') {
+  setBuilderGoalAnalysisSubmitState(disabled, label = 'Generate Patch Plan') {
     if (!this.submitBuilderGoalAnalysisBtn) {
       return;
     }
@@ -1066,8 +1974,19 @@ class AccountTaskPlanner {
       return;
     }
 
-    this.setBuilderGoalAnalysisSubmitState(true, 'Analyzing...');
-    this.renderBuilderGoalAnalysisStatus('Running analysis with your edited prompt and selected evidence...', 'info');
+    const timeRangeStartSeconds = this.parseClockToSeconds(this.builderGoalAnalysisStartTime?.value);
+    const timeRangeEndSeconds = this.parseClockToSeconds(this.builderGoalAnalysisEndTime?.value);
+    if (timeRangeStartSeconds == null || timeRangeEndSeconds == null) {
+      this.renderBuilderGoalAnalysisStatus('Enter a valid clip range like 00:13 to 00:20.', 'warning');
+      return;
+    }
+    if (timeRangeEndSeconds <= timeRangeStartSeconds) {
+      this.renderBuilderGoalAnalysisStatus('Clip end must be after clip start.', 'warning');
+      return;
+    }
+
+    this.setBuilderGoalAnalysisSubmitState(true, 'Generating...');
+    this.renderBuilderGoalAnalysisStatus('Generating a Micro6 patch plan from your prompt, clip, and selected evidence...', 'info');
 
     try {
       const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.builderGoalAnalysisIterationId)}/analyze`, {
@@ -1076,7 +1995,9 @@ class AccountTaskPlanner {
         body: JSON.stringify({
           prompt: this.builderGoalAnalysisPrompt ? this.builderGoalAnalysisPrompt.value : '',
           context: this.builderGoalAnalysisContext ? this.builderGoalAnalysisContext.value : '',
-          selectedEvidenceIds
+          selectedEvidenceIds,
+          timeRangeStartSeconds,
+          timeRangeEndSeconds
         })
       });
       const result = await response.json();
@@ -1087,22 +2008,22 @@ class AccountTaskPlanner {
       await this.loadBuilderGoalRuns();
       this.builderGoalAnalysisModal?.hide();
       if (result.patchId) {
-        this.renderBuilderGoalClientStatus('Analysis completed and produced a patch draft. Fix + Relaunch is now available.', 'success');
+        this.renderBuilderGoalClientStatus('Patch plan updated. Apply Plan + Relaunch is now available.', 'success');
       } else {
-        this.renderBuilderGoalClientStatus('Analysis completed, but it did not produce a patch draft.', 'warning');
+        this.renderBuilderGoalClientStatus('Patch planning completed, but MCP did not produce a patch draft.', 'warning');
       }
     } catch (error) {
       console.error('Failed to analyze builder goal run:', error);
-      this.renderBuilderGoalAnalysisStatus(`Failed to analyze builder goal run: ${error.message}`, 'danger');
-      alert('Failed to analyze builder goal run: ' + error.message);
+      this.renderBuilderGoalAnalysisStatus(`Failed to generate a patch plan: ${error.message}`, 'danger');
+      alert('Failed to generate a patch plan: ' + error.message);
     } finally {
-      this.setBuilderGoalAnalysisSubmitState(false, 'Run Analysis');
+      this.setBuilderGoalAnalysisSubmitState(false, 'Generate Patch Plan');
     }
   }
 
   async fixAndRelaunchBuilderGoalRun(iterationId) {
     try {
-      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/fix-and-relaunch`, {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/approve-recovery`, {
         method: 'POST'
       });
       const result = await response.json();
@@ -1110,11 +2031,49 @@ class AccountTaskPlanner {
         throw new Error(result.error || `HTTP ${response.status}`);
       }
       await this.loadBuilderGoalRuns();
-      this.renderBuilderGoalClientStatus('Patch applied and task republished to the selected Micro6 client.', 'success');
+      this.renderBuilderGoalClientStatus('Patch plan approved. ChromaScape is applying the patch, restarting Micro6, logging back in, and republishing the task.', 'success');
     } catch (error) {
       console.error('Failed to fix and relaunch builder goal run:', error);
-      alert('Failed to fix and relaunch builder goal run: ' + error.message);
+      alert('Failed to approve builder goal recovery: ' + error.message);
     }
+  }
+
+  builderGoalReviewLabel(run) {
+    return 'Open Recovery Workspace';
+  }
+
+  builderGoalApprovalLabel(run) {
+    if (run.approvalAvailable) {
+      return 'Apply Plan + Relaunch';
+    }
+    if ((run.recoveryPhase || '') === 'RECOVERY_RELAUNCHED') {
+      return 'Relaunched';
+    }
+    return 'Awaiting Patch Plan';
+  }
+
+  parseClockToSeconds(value) {
+    const raw = (value || '').trim();
+    if (!raw) {
+      return 0;
+    }
+    const parts = raw.split(':').map(part => part.trim());
+    if (parts.length !== 2) {
+      return null;
+    }
+    const minutes = Number(parts[0]);
+    const seconds = Number(parts[1]);
+    if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || minutes < 0 || seconds < 0 || seconds >= 60) {
+      return null;
+    }
+    return (minutes * 60) + seconds;
+  }
+
+  formatSecondsAsClock(totalSeconds) {
+    const safeSeconds = Math.max(0, Number(totalSeconds) || 0);
+    const minutes = Math.floor(safeSeconds / 60);
+    const seconds = safeSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
 
   async loadStabilizationKpis() {
