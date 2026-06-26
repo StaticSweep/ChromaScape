@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '16';
+  static BUILDER_GOAL_BUNDLE_VERSION = '18';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -36,6 +36,10 @@ class AccountTaskPlanner {
     this.builderGoalAnalysisModal = null;
     this.builderGoalAnalysisDraft = null;
     this.builderGoalAnalysisIterationId = null;
+    this.builderGoalCatalogAvailable = false;
+    this.builderGoalCatalogDegraded = false;
+    this.builderGoalCatalogReason = '';
+    this.builderGoalCatalogSource = '';
   }
 
   /**
@@ -83,6 +87,7 @@ class AccountTaskPlanner {
     this.builderGoalAccountSummary = document.getElementById('builderGoalAccountSummary');
     this.builderGoalMachineSelect = document.getElementById('builderGoalMachineSelect');
     this.builderGoalMachineSummary = document.getElementById('builderGoalMachineSummary');
+    this.builderGoalWorldInput = document.getElementById('builderGoalWorldInput');
     this.builderGoalTaskSearchInput = document.getElementById('builderGoalTaskSearchInput');
     this.builderGoalTaskSelect = document.getElementById('builderGoalTaskSelect');
     this.builderGoalConfigInput = document.getElementById('builderGoalConfigInput');
@@ -172,6 +177,9 @@ class AccountTaskPlanner {
       this.builderGoalTaskSelect.disabled = true;
       this.builderGoalTaskSelect.innerHTML =
         '<option value="">Refresh debugger to load the latest Builder Goal Runner</option>';
+    }
+    if (this.builderGoalWorldInput) {
+      this.builderGoalWorldInput.disabled = true;
     }
     if (this.importBuilderGoalBtn) {
       this.importBuilderGoalBtn.disabled = true;
@@ -288,6 +296,12 @@ class AccountTaskPlanner {
         await this.prefillBuilderGoalConfigForSelection();
         this.renderBuilderGoalClientStatus();
         this.updateBuilderGoalRunButtonState();
+      });
+    }
+    if (this.builderGoalWorldInput) {
+      this.builderGoalWorldInput.addEventListener('input', () => {
+        this.renderBuilderGoalConfigMeta();
+        this.renderBuilderGoalClientStatus();
       });
     }
     if (this.builderGoalConfigInput) {
@@ -509,18 +523,29 @@ class AccountTaskPlanner {
    */
   async loadScriptCatalog() {
     try {
-      const response = await fetch('/api/account-tasks/stabilization/catalog');
+      const response = await fetch('/api/debug/builder-goals/catalog');
       if (!response.ok) return;
       const payload = await response.json();
       this.scriptCatalog = Array.isArray(payload.tasks) ? payload.tasks : [];
+      this.builderGoalCatalogAvailable = Boolean(payload.catalogAvailable);
+      this.builderGoalCatalogDegraded = Boolean(payload.degraded);
+      this.builderGoalCatalogReason = payload.degradedReason || '';
+      this.builderGoalCatalogSource = payload.source || '';
       this.renderBuilderGoalTaskOptions(this.builderGoalTaskSearchInput?.value || '');
       if (this.selectedBuilderGoalTaskKey) {
         await this.prefillBuilderGoalConfigForSelection();
       }
+      this.renderBuilderGoalClientStatus();
     } catch (error) {
       console.debug('Could not load script catalog:', error);
       this.scriptCatalog = [];
+      this.builderGoalCatalogAvailable = false;
+      this.builderGoalCatalogDegraded = true;
+      this.builderGoalCatalogReason =
+        error?.message || 'Could not load the Builder Goal catalog.';
+      this.builderGoalCatalogSource = 'error';
       this.renderBuilderGoalTaskOptions(this.builderGoalTaskSearchInput?.value || '');
+      this.renderBuilderGoalClientStatus();
     }
   }
 
@@ -661,7 +686,7 @@ class AccountTaskPlanner {
         '<option value="">No launcher machines available</option>';
       this.builderGoalMachineSelect.disabled = true;
       this.renderBuilderGoalMachineSummary(
-        'No launcher machines are currently available. Builder Goal Runner cannot launch until launcher-control reports at least one machine.',
+        'No local launch host is currently available. Builder Goal Runner cannot launch until launcher-control reports at least one local machine.',
         'warning'
       );
       this.renderBuilderGoalClientStatus();
@@ -735,7 +760,7 @@ class AccountTaskPlanner {
     const machine = this.getSelectedBuilderGoalMachine();
     if (!machine) {
       this.builderGoalMachineSummary.innerHTML =
-        '<span class="text-muted">Select the launcher machine that should start the account.</span>';
+        '<span class="text-muted">ChromaScape will auto-select the local machine for Builder Goal launches when one is available.</span>';
       return;
     }
     const parts = [];
@@ -747,7 +772,7 @@ class AccountTaskPlanner {
       parts.push(String(machine.status).toLowerCase());
     }
     if (machine.defaultSelected) {
-      parts.push('default');
+      parts.push('auto-selected');
     }
     if (!machine.builderGoalRunnable && machine.builderGoalDisabledReason) {
       parts.push(machine.builderGoalDisabledReason);
@@ -865,8 +890,48 @@ class AccountTaskPlanner {
     return this.getCatalogTaskByKey(selectedKey);
   }
 
+  buildBuilderGoalTaskPlaceholder(taskKey, options = {}) {
+    const resolvedTaskKey = (taskKey || '').toString().trim();
+    if (!resolvedTaskKey) return null;
+    const displayName =
+      options.displayName ||
+      options.panelDisplayName ||
+      resolvedTaskKey;
+    return {
+      client_type: 'micro6',
+      execution_mode: 'queue',
+      queueable: true,
+      source: options.source || 'imported_payload',
+      task_key: resolvedTaskKey,
+      display_name: displayName,
+      panel_display_name: options.panelDisplayName || displayName,
+      category: options.category || 'saved_imported',
+      runnable: options.runnable !== false,
+      placeholder: true,
+      supports_task_metadata: false,
+      settings_unavailable_reason:
+        options.settingsUnavailableReason || 'catalog_unavailable'
+    };
+  }
+
+  ensureBuilderGoalTaskPlaceholder(taskKey, options = {}) {
+    const existing = this.findCatalogTaskByKeyFlexible(taskKey);
+    if (existing) {
+      return existing;
+    }
+    const placeholder = this.buildBuilderGoalTaskPlaceholder(taskKey, options);
+    if (!placeholder) {
+      return null;
+    }
+    this.scriptCatalog = [placeholder, ...(Array.isArray(this.scriptCatalog) ? this.scriptCatalog : [])];
+    this.renderBuilderGoalTaskOptions(this.builderGoalTaskSearchInput?.value || '');
+    return placeholder;
+  }
+
   selectBuilderGoalTask(taskKey) {
-    const resolvedTask = this.findCatalogTaskByKeyFlexible(taskKey);
+    const resolvedTask =
+      this.findCatalogTaskByKeyFlexible(taskKey) ||
+      this.ensureBuilderGoalTaskPlaceholder(taskKey);
     if (!resolvedTask?.task_key) {
       return null;
     }
@@ -925,6 +990,7 @@ class AccountTaskPlanner {
       if (response.ok) {
         const payload = await response.json();
         if (payload?.configAvailable && payload.settings && typeof payload.settings === 'object') {
+          this.setBuilderGoalWorldValue(payload.world);
           this.setBuilderGoalConfigEditor(payload.settings, {
             accountId: payload.accountId,
             taskKey: payload.taskKey,
@@ -938,6 +1004,7 @@ class AccountTaskPlanner {
       console.debug('Could not load latest builder goal config:', error);
     }
 
+    this.setBuilderGoalWorldValue(360);
     this.setBuilderGoalConfigEditor({}, {
       accountId: selectedAccount.accountId,
       taskKey: selectedTask.task_key,
@@ -980,6 +1047,10 @@ class AccountTaskPlanner {
     if (selectedAccount?.displayName || selectedAccount?.accountName) {
       parts.push(`Account: ${selectedAccount.displayName || selectedAccount.accountName}.`);
     }
+    const world = this.getBuilderGoalWorldValue();
+    if (world) {
+      parts.push(`World: ${world}.`);
+    }
     if (this.builderGoalConfigDirty) {
       parts.push('Unsaved draft changes are being kept in this session.');
     } else {
@@ -1007,6 +1078,31 @@ class AccountTaskPlanner {
       return normalized;
     }
     return normalized;
+  }
+
+  getBuilderGoalWorldValue() {
+    if (!this.builderGoalWorldInput) {
+      return 360;
+    }
+    const raw = String(this.builderGoalWorldInput.value || '').trim();
+    if (!raw) {
+      return 360;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed < 300 || parsed > 700) {
+      return null;
+    }
+    return parsed;
+  }
+
+  setBuilderGoalWorldValue(world) {
+    if (!this.builderGoalWorldInput) return;
+    const numericWorld = Number.parseInt(world, 10);
+    this.builderGoalWorldInput.value = String(
+      Number.isFinite(numericWorld) && numericWorld >= 300 && numericWorld <= 700
+        ? numericWorld
+        : 360
+    );
   }
 
   async loadBuilderGoalRuns(options = {}) {
@@ -1045,9 +1141,10 @@ class AccountTaskPlanner {
     const selectedAccount = this.getSelectedBuilderGoalAccount();
     const selectedMachine = this.getSelectedBuilderGoalMachine();
     const selectedTask = this.getSelectedBuilderGoalTask();
+    const world = this.getBuilderGoalWorldValue();
     if (!selectedAccount) {
       this.builderGoalClientStatus.innerHTML =
-        '<span class="text-muted">Select a launcher account, then select a launcher machine, choose a task, paste or edit the settings JSON, and then run the task.</span>';
+        '<span class="text-muted">Select an account, choose a task, set the task settings and world, and then run the task.</span>';
       return;
     }
 
@@ -1059,7 +1156,7 @@ class AccountTaskPlanner {
 
     if (!selectedMachine) {
       this.builderGoalClientStatus.innerHTML =
-        '<span class="text-warning">Select a launcher machine before running a task.</span>';
+        '<span class="text-warning">No local launch host is available for Builder Goal Runner yet.</span>';
       return;
     }
 
@@ -1068,6 +1165,17 @@ class AccountTaskPlanner {
         `<span class="text-warning">${this.escapeHtml(selectedMachine.builderGoalDisabledReason || 'The selected launcher machine is not ready for local Builder Goal launches.')}</span>`;
       return;
     }
+
+    if (!world) {
+      this.builderGoalClientStatus.innerHTML =
+        '<span class="text-warning">Enter a valid world between 300 and 700 before running the task.</span>';
+      return;
+    }
+
+    const degradedCatalogWarning =
+      this.builderGoalCatalogDegraded && this.builderGoalCatalogReason
+        ? `<div class="text-warning mb-1">${this.escapeHtml(this.builderGoalCatalogReason)}</div>`
+        : '';
 
     const taskLabel = this.escapeHtml(
       selectedTask?.display_name || selectedTask?.task_key || 'the selected task'
@@ -1079,7 +1187,7 @@ class AccountTaskPlanner {
       selectedMachine.displayName || selectedMachine.machineUuid || 'the selected machine'
     );
     this.builderGoalClientStatus.innerHTML =
-      `<span class="text-info">ChromaScape will launch the local micro6 workspace for ${accountLabel} on ${machineLabel}, wait for the executor heartbeat, and then publish ${taskLabel} using the JSON settings from the editor.</span>`;
+      `${degradedCatalogWarning}<span class="text-info">ChromaScape will launch the local micro6 workspace for ${accountLabel} on ${machineLabel} in world ${world}, wait for the executor to become dispatch-ready, and then publish ${taskLabel} using the JSON settings from the editor.</span>`;
   }
 
   updateBuilderGoalRunButtonState() {
@@ -1094,12 +1202,17 @@ class AccountTaskPlanner {
     const selectedAccount = this.getSelectedBuilderGoalAccount();
     const selectedMachine = this.getSelectedBuilderGoalMachine();
     const selectedTask = this.getSelectedBuilderGoalTask();
+    const parsedConfig = this.parseBuilderGoalConfigInput();
+    const importedTaskKey =
+      !parsedConfig.error && parsedConfig.taskKey ? parsedConfig.taskKey : null;
+    const world = this.getBuilderGoalWorldValue();
     const canPrimaryRun = Boolean(
       selectedAccount &&
         selectedAccount.runnable &&
         selectedMachine &&
         selectedMachine.builderGoalRunnable &&
-        selectedTask
+        (selectedTask || importedTaskKey) &&
+        world
     );
     this.runBuilderGoalBtn.disabled = !canPrimaryRun;
     if (this.runImportedBuilderGoalBtn) {
@@ -1108,6 +1221,7 @@ class AccountTaskPlanner {
           selectedAccount.runnable &&
           selectedMachine &&
           selectedMachine.builderGoalRunnable &&
+          world &&
           this.importedBuilderGoal?.result?.runnableNow
       );
     }
@@ -1151,6 +1265,9 @@ class AccountTaskPlanner {
       const launchLine = launchParts.length
         ? `<div class="small text-muted mt-1"><i class="bi bi-box-arrow-up-right me-1"></i>${this.escapeHtml(launchParts.join(' • '))}</div>`
         : '';
+      const worldLine = run.world
+        ? `<div class="small text-muted mt-1"><i class="bi bi-globe2 me-1"></i>${this.escapeHtml(`world ${run.world}`)}</div>`
+        : '';
       const publishMeta = [];
       if (run.publishEntryId) {
         publishMeta.push(`entry ${run.publishEntryId}`);
@@ -1172,6 +1289,7 @@ class AccountTaskPlanner {
           <div class="small text-muted">${this.escapeHtml(run.taskKey || '')}</div>
           ${targetLine}
           ${launchLine}
+          ${worldLine}
           ${publishLine}
           ${failureLine}
           ${diagnosisLine}
@@ -1300,7 +1418,17 @@ class AccountTaskPlanner {
       }
 
       this.importedBuilderGoal = { payload, result };
-      const resolvedTask = this.selectBuilderGoalTask(result.taskKey);
+      let resolvedTask = this.selectBuilderGoalTask(result.taskKey);
+      if (!resolvedTask && result.taskKey) {
+        resolvedTask = this.ensureBuilderGoalTaskPlaceholder(result.taskKey, {
+          displayName: result.displayName || result.title || result.taskKey,
+          source: 'imported_payload',
+          runnable: Boolean(result.runnableNow)
+        });
+        if (resolvedTask?.task_key) {
+          this.selectBuilderGoalTask(resolvedTask.task_key);
+        }
+      }
       this.setBuilderGoalConfigEditor(result.settings || {}, {
         accountId: this.selectedBuilderGoalAccountId,
         taskKey: resolvedTask?.task_key || result.taskKey || '',
@@ -1344,6 +1472,10 @@ class AccountTaskPlanner {
       return;
     }
 
+    const warning = result.catalogWarning
+      ? `<div class="text-warning">${this.escapeHtml(result.catalogWarning)}</div>`
+      : '';
+
     const disabledReason = result.disabledReason
       ? `, disabled: ${this.escapeHtml(result.disabledReason)}`
       : '';
@@ -1355,6 +1487,7 @@ class AccountTaskPlanner {
         ignored ${this.escapeHtml(String(result.ignoredSettingsCount ?? 0))},
         runnable=${this.escapeHtml(String(Boolean(result.runnableNow)))}${disabledReason}
       </div>
+      ${warning}
     `;
   }
 
@@ -1395,19 +1528,30 @@ class AccountTaskPlanner {
       return;
     }
 
+    let selectedTask = this.getSelectedBuilderGoalTask();
     if (parsedConfig.taskKey) {
-      const resolvedTask = this.selectBuilderGoalTask(parsedConfig.taskKey);
-      if (!resolvedTask) {
-        const message = `Task from pasted JSON was not found in the Micro6 catalog: ${parsedConfig.taskKey}`;
-        this.renderBuilderGoalClientStatus(message, 'danger');
-        alert(message);
-        return;
-      }
+      selectedTask =
+        this.selectBuilderGoalTask(parsedConfig.taskKey) ||
+        this.ensureBuilderGoalTaskPlaceholder(parsedConfig.taskKey, {
+          displayName:
+            this.importedBuilderGoal?.result?.displayName ||
+            this.importedBuilderGoal?.result?.title ||
+            parsedConfig.taskKey,
+          source: 'imported_payload',
+          runnable: true
+        }) ||
+        selectedTask;
     }
 
-    const selectedTask = this.getSelectedBuilderGoalTask();
+    const world = this.getBuilderGoalWorldValue();
     if (!selectedTask) {
       const message = 'Select a Micro6 task first, or paste JSON that includes task_key.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+    if (!world) {
+      const message = 'Enter a valid world between 300 and 700.';
       this.renderBuilderGoalClientStatus(message, 'danger');
       alert(message);
       return;
@@ -1418,13 +1562,14 @@ class AccountTaskPlanner {
       this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Launching...';
     }
     this.renderBuilderGoalClientStatus(
-      `Launching the local micro6 workspace for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} on ${selectedMachine.displayName || selectedMachine.machineUuid} and then publishing ${selectedTask.display_name || selectedTask.task_key}...`,
+      `Launching the local micro6 workspace for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} on ${selectedMachine.displayName || selectedMachine.machineUuid} in world ${world} and then publishing ${selectedTask.display_name || selectedTask.task_key}...`,
       'info'
     );
     console.info('[AccountTaskPlanner] Run Task clicked', {
       accountId: selectedAccount.accountId || null,
       launcherMachineUuid: selectedMachine.machineUuid || null,
-      taskKey: selectedTask.task_key || null
+      taskKey: selectedTask.task_key || null,
+      world
     });
     const controller = new AbortController();
     const timeoutHandle = setTimeout(
@@ -1445,6 +1590,7 @@ class AccountTaskPlanner {
         body: JSON.stringify({
           accountId: selectedAccount.accountId,
           launcherMachineUuid: selectedMachine.machineUuid,
+          world,
           taskKey: selectedTask.task_key,
           settings,
           displayName:
@@ -1470,7 +1616,7 @@ class AccountTaskPlanner {
       );
       this.renderBuilderGoalConfigMeta();
       this.renderBuilderGoalClientStatus(
-        `Local micro6 workspace launched for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId}, the executor heartbeat returned, and ${selectedTask.display_name || selectedTask.task_key} was published to the Micro6 queue.`,
+        `Local micro6 workspace launched for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}, the executor became dispatch-ready, and ${selectedTask.display_name || selectedTask.task_key} was published to the Micro6 queue.`,
         'success'
       );
     } catch (error) {
@@ -1518,6 +1664,7 @@ class AccountTaskPlanner {
     }
     const selectedAccount = this.getSelectedBuilderGoalAccount();
     const selectedMachine = this.getSelectedBuilderGoalMachine();
+    const world = this.getBuilderGoalWorldValue();
     if (!selectedAccount) {
       alert('Select an account first.');
       return;
@@ -1541,19 +1688,26 @@ class AccountTaskPlanner {
       alert('Import a builder payload first.');
       return;
     }
+    if (!world) {
+      const message = 'Enter a valid world between 300 and 700.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
 
     if (this.runImportedBuilderGoalBtn) {
       this.runImportedBuilderGoalBtn.disabled = true;
       this.runImportedBuilderGoalBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Running...';
     }
     this.renderBuilderGoalClientStatus(
-      `Launching the local micro6 workspace for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} on ${selectedMachine.displayName || selectedMachine.machineUuid} and then publishing the imported payload...`,
+      `Launching the local micro6 workspace for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} on ${selectedMachine.displayName || selectedMachine.machineUuid} in world ${world} and then publishing the imported payload...`,
       'info'
     );
     console.info('[AccountTaskPlanner] Run Imported Payload clicked', {
       accountId: selectedAccount.accountId || null,
       launcherMachineUuid: selectedMachine.machineUuid || null,
-      taskKey: this.importedBuilderGoal?.result?.taskKey || null
+      taskKey: this.importedBuilderGoal?.result?.taskKey || null,
+      world
     });
 
     const controller = new AbortController();
@@ -1572,6 +1726,7 @@ class AccountTaskPlanner {
         body: JSON.stringify({
           accountId: selectedAccount.accountId,
           launcherMachineUuid: selectedMachine.machineUuid,
+          world,
           builderPayload: this.importedBuilderGoal.payload
         })
       });
@@ -1585,7 +1740,7 @@ class AccountTaskPlanner {
       }
       publishSucceeded = true;
       this.renderBuilderGoalClientStatus(
-        `Local micro6 workspace launched for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId}, the executor heartbeat returned, and the imported payload was published to the Micro6 queue.`,
+        `Local micro6 workspace launched for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}, the executor became dispatch-ready, and the imported payload was published to the Micro6 queue.`,
         'success'
       );
     } catch (error) {
@@ -1636,9 +1791,15 @@ class AccountTaskPlanner {
       if (!account) {
         throw new Error('The saved run account is no longer available in launcher control.');
       }
-      const task = this.selectBuilderGoalTask(result.taskKey);
+      const task =
+        this.selectBuilderGoalTask(result.taskKey) ||
+        this.ensureBuilderGoalTaskPlaceholder(result.taskKey, {
+          displayName: result.displayName || result.taskKey,
+          source: 'saved_config',
+          runnable: true
+        });
       if (!task) {
-        throw new Error(`Saved task is no longer available in the Micro6 catalog: ${result.taskKey}`);
+        throw new Error(`Saved task is no longer available: ${result.taskKey}`);
       }
       if (result.launcherMachineUuid) {
         const machine = (this.builderGoalMachines || []).find(
@@ -1655,6 +1816,9 @@ class AccountTaskPlanner {
         if (this.builderGoalMachineSelect) {
           this.builderGoalMachineSelect.value = this.selectedBuilderGoalMachineUuid;
         }
+      }
+      if (this.builderGoalWorldInput) {
+        this.builderGoalWorldInput.value = String(result.world || 360);
       }
 
       this.selectedBuilderGoalAccountId = result.accountId || '';
@@ -1676,7 +1840,7 @@ class AccountTaskPlanner {
       this.renderBuilderGoalAccountSummary();
       this.renderBuilderGoalMachineSummary();
       this.renderBuilderGoalClientStatus(
-        `Loaded the saved config for ${result.displayName || result.taskKey} on ${account.displayName || account.accountName || account.accountId} into the editor. Review the JSON and click Run Task when ready.`,
+        `Loaded the saved config for ${result.displayName || result.taskKey} on ${account.displayName || account.accountName || account.accountId} into the editor with world ${result.world || 360}. Review the JSON and click Run Task when ready.`,
         'info'
       );
       this.updateBuilderGoalRunButtonState();

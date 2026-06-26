@@ -65,6 +65,12 @@ public class BuilderGoalRunnerController {
     return ResponseEntity.ok(builderGoalRunnerService.listAccounts());
   }
 
+  @GetMapping("/catalog")
+  public ResponseEntity<Object> listCatalog(
+      @RequestParam(name = "refresh", defaultValue = "false") boolean refresh) {
+    return ResponseEntity.ok(builderGoalRunnerService.listCatalog(refresh));
+  }
+
   @GetMapping("/machines")
   public ResponseEntity<List<Map<String, Object>>> listMachines() {
     return ResponseEntity.ok(launcherControlService.listMachineSummaries());
@@ -101,6 +107,7 @@ public class BuilderGoalRunnerController {
       String accountId = textValue(payload.path("accountId"));
       String launcherMachineUuid = textValue(payload.path("launcherMachineUuid"));
       String taskKey = textValue(payload.path("taskKey"));
+      Integer world = intValue(payload.path("world"));
       if (accountId != null && taskKey != null) {
         @SuppressWarnings("unchecked")
         Map<String, Object> settings =
@@ -110,13 +117,13 @@ public class BuilderGoalRunnerController {
         String displayName = textValue(payload.path("displayName"));
         return ResponseEntity.ok(
             builderGoalRunnerService.startCatalogTaskRun(
-                accountId, launcherMachineUuid, taskKey, settings, displayName));
+                accountId, launcherMachineUuid, taskKey, settings, displayName, world));
       }
 
       JsonNode builderPayload = payload.path("builderPayload").isObject() ? payload.path("builderPayload") : payload;
       return ResponseEntity.ok(
           builderGoalRunnerService.startRun(
-              builderPayload, accountId, null, null, null, launcherMachineUuid));
+              builderPayload, accountId, null, null, null, launcherMachineUuid, world));
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (IllegalStateException e) {
@@ -220,5 +227,23 @@ public class BuilderGoalRunnerController {
     }
     String text = node.asText(null);
     return text == null || text.isBlank() ? null : text.trim();
+  }
+
+  private Integer intValue(JsonNode node) {
+    if (node == null || node.isMissingNode() || node.isNull()) {
+      return null;
+    }
+    if (node.isInt() || node.isLong()) {
+      return node.asInt();
+    }
+    String text = node.asText(null);
+    if (text == null || text.isBlank()) {
+      return null;
+    }
+    try {
+      return Integer.parseInt(text.trim());
+    } catch (NumberFormatException ignored) {
+      return null;
+    }
   }
 }

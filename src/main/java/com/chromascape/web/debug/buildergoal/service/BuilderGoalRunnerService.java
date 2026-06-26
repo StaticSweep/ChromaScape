@@ -131,13 +131,26 @@ public class BuilderGoalRunnerService {
 
   public Map<String, Object> importPayload(JsonNode payload) {
     NormalizedPayload normalized = normalizePayload(payload);
-    JsonNode catalogTask = resolveCatalogTask(normalized.taskKey());
-    return buildImportResponse(normalized, catalogTask);
+    BuilderGoalCatalogSnapshot catalogSnapshot = getBuilderGoalCatalogSnapshot(false);
+    JsonNode catalogTask = findTaskInCatalog(normalized.taskKey(), catalogSnapshot.catalogPayload());
+    return buildImportResponse(normalized, catalogTask, catalogSnapshot);
   }
 
   @Transactional(readOnly = true)
   public List<Map<String, Object>> listAccounts() {
     return accountCatalogService.listAccounts();
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> listCatalog(boolean refresh) {
+    BuilderGoalCatalogSnapshot snapshot = getBuilderGoalCatalogSnapshot(refresh);
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("tasks", snapshot.tasks());
+    response.put("catalogAvailable", snapshot.catalogAvailable());
+    response.put("degraded", snapshot.degraded());
+    response.put("degradedReason", snapshot.degradedReason());
+    response.put("source", snapshot.source());
+    return response;
   }
 
   @Transactional(readOnly = true)
@@ -201,7 +214,12 @@ public class BuilderGoalRunnerService {
     String launcherMachineUuid = stringValue(accountMetadata.get("launcher_machine_uuid"));
     NormalizedPayload normalized = normalizeStoredIteration(iteration);
     return startCatalogTaskRun(
-        accountId, launcherMachineUuid, normalized.taskKey(), normalized.settings(), normalized.displayName());
+        accountId,
+        launcherMachineUuid,
+        normalized.taskKey(),
+        normalized.settings(),
+        normalized.displayName(),
+        normalized.world());
   }
 
   @Transactional(readOnly = true)
@@ -253,7 +271,8 @@ public class BuilderGoalRunnerService {
       String targetClientId,
       String launchProfileName,
       String launchExtraArgs,
-      String launcherMachineUuid) {
+      String launcherMachineUuid,
+      Integer world) {
     NormalizedPayload normalized = normalizePayload(payload);
     BuilderGoalAccountCatalogService.AccountDefinition selectedAccount =
         resolveSelectedAccount(accountId);
@@ -300,13 +319,14 @@ public class BuilderGoalRunnerService {
       preparationResult =
           targetPreparationService.ensureReady(
               new Micro6TargetPreparationService.PreparationRequest(
-                  firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId()),
-                  selectedAccount.accountHash(),
-                  selectedAccount.displayName(),
-                  selectedAccount.email(),
-                  selectedAccount.password(),
-                  selectedMachine.machineUuid(),
-                  null));
+              firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId()),
+              selectedAccount.accountHash(),
+              selectedAccount.displayName(),
+              selectedAccount.email(),
+              selectedAccount.password(),
+              world,
+              selectedMachine.machineUuid(),
+              null));
     } catch (Micro6TargetPreparationService.PreparationException e) {
       updatePreparationState(iteration, readTaskMetadata(iteration), e.getPhase(), e.getMessage());
       persistenceService.markIterationFailed(
@@ -323,12 +343,20 @@ public class BuilderGoalRunnerService {
     iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
     persistenceService.saveIteration(iteration);
     updatePreparationState(
-        iteration, readTaskMetadata(iteration), PREPARATION_STATE_READY_TO_PUBLISH, "Target ready to publish");
+        iteration,
+        readTaskMetadata(iteration),
+        PREPARATION_STATE_READY_TO_PUBLISH,
+        "Target dispatch-ready and ready to publish");
 
     ScriptExecutionService.Micro6PublishResult publishResult = publishIteration(iteration);
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("run", toRunSummary(iteration));
-    response.put("import", buildImportResponse(normalized, catalogValidation.catalogTask()));
+    response.put(
+        "import",
+        buildImportResponse(
+            normalized,
+            catalogValidation.catalogTask(),
+            getBuilderGoalCatalogSnapshot(false)));
     response.put("published", publishResult.published());
     response.put("entryId", publishResult.entryId());
     response.put("targetClientId", preparationResult.targetClient().clientId());
@@ -350,7 +378,8 @@ public class BuilderGoalRunnerService {
       String launcherMachineUuid,
       String taskKey,
       Map<String, Object> settings,
-      String displayName) {
+      String displayName,
+      Integer world) {
     if (accountId == null || accountId.isBlank()) {
       throw new IllegalArgumentException("accountId is required");
     }
@@ -370,7 +399,10 @@ public class BuilderGoalRunnerService {
     payload.put("settings", settings != null ? settings : Map.of());
     payload.put("source", "catalog_task");
     payload.put("account_id", accountId);
-    return startRun(objectMapper.valueToTree(payload), accountId, null, null, null, launcherMachineUuid);
+    if (world != null) {
+      payload.put("world", world);
+    }
+    return startRun(objectMapper.valueToTree(payload), accountId, null, null, null, launcherMachineUuid, world);
   }
 
   @Transactional
@@ -524,10 +556,11 @@ public class BuilderGoalRunnerService {
           iteration, taskMetadata, RECOVERY_RESTARTING_TARGET, "Restarting Micro6 target to load patched code");
       Map<String, Object> targetMetadata = readTargetMetadata(taskMetadata);
       Map<String, Object> accountMetadata = readAccountMetadata(taskMetadata);
+      NormalizedPayload normalized = normalizeStoredIteration(iteration);
       Micro6TargetPreparationService.PreparationResult preparationResult =
           targetPreparationService.ensureReady(
               new Micro6TargetPreparationService.PreparationRequest(
-                  firstNonBlank(
+              firstNonBlank(
                       stringValue(accountMetadata.get("account_hash")),
                       stringValue(accountMetadata.get("account_id"))),
                   stringValue(accountMetadata.get("account_hash")),
@@ -536,6 +569,7 @@ public class BuilderGoalRunnerService {
                       stringValue(targetMetadata.get("account_name"))),
                   stringValue(accountMetadata.get("email")),
                   resolveAccountPassword(accountMetadata),
+                  normalized.world(),
                   stringValue(accountMetadata.get("launcher_machine_uuid")),
                   resolveTargetBaseUrl(taskMetadata)));
 
@@ -545,7 +579,10 @@ public class BuilderGoalRunnerService {
           RECOVERY_RELOGGING_IN,
           "Local Micro6 workspace restarted for the selected account");
       updateRecoveryState(
-          iteration, taskMetadata, RECOVERY_WAITING_FOR_EXECUTOR, "Executor heartbeat returned; preparing republish");
+          iteration,
+          taskMetadata,
+          RECOVERY_WAITING_FOR_EXECUTOR,
+          "Executor became dispatch-ready; preparing republish");
       mergeTargetPreparationMetadata(taskMetadata, preparationResult.metadata());
       taskMetadata.put("micro6_target", buildTargetMetadata(preparationResult.targetClient()));
       iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
@@ -553,7 +590,6 @@ public class BuilderGoalRunnerService {
       updateRecoveryState(
           iteration, readTaskMetadata(iteration), RECOVERY_REPUBLISHING, "Republishing patched task to relaunched target");
       JsonNode importedPayload = iteration.getImportedPayloadJson();
-      NormalizedPayload normalized = normalizeStoredIteration(iteration);
       PatchLoopIteration relaunched =
           createRunIteration(
               normalized,
@@ -788,21 +824,54 @@ public class BuilderGoalRunnerService {
         "Task failed. Add your observations, select the relevant evidence, and generate a patch plan.");
   }
 
-  private Map<String, Object> buildImportResponse(NormalizedPayload normalized, JsonNode catalogTask) {
+  private Map<String, Object> buildImportResponse(
+      NormalizedPayload normalized, JsonNode catalogTask, BuilderGoalCatalogSnapshot catalogSnapshot) {
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("title", normalized.displayName());
     response.put("taskKey", normalized.taskKey());
     response.put("settings", normalized.settings());
     response.put("settingsCount", normalized.settings().size());
+    response.put("catalogAvailable", catalogSnapshot.catalogAvailable());
+    response.put("catalogDegraded", catalogSnapshot.degraded());
+    response.put("catalogSource", catalogSnapshot.source());
+    response.put("catalogWarning", catalogSnapshot.degradedReason());
+
+    boolean degradedCatalog =
+        catalogSnapshot.degraded()
+            && (!catalogSnapshot.catalogAvailable()
+                || (catalogTask != null && catalogTask.path("placeholder").asBoolean(false)));
 
     if (catalogTask == null || catalogTask.isMissingNode() || catalogTask.isNull()) {
-      response.put("catalogAvailable", false);
-      response.put("runnableNow", false);
+      response.put("runnableNow", degradedCatalog);
+      if (degradedCatalog) {
+        response.put(
+            "displayName",
+            firstNonBlank(normalized.displayName(), normalized.taskKey()));
+        response.put("matchedSettingsCount", normalized.settings().size());
+        response.put("ignoredSettingsCount", 0);
+        response.put("matchedSettings", new ArrayList<>(normalized.settings().keySet()));
+        response.put("ignoredSettings", List.of());
+        response.put("settingsValidationSkipped", true);
+        return response;
+      }
       response.put("error", "Task was not found in the Micro6 catalog");
       response.put("matchedSettingsCount", 0);
       response.put("ignoredSettingsCount", normalized.settings().size());
       response.put("matchedSettings", List.of());
       response.put("ignoredSettings", new ArrayList<>(normalized.settings().keySet()));
+      return response;
+    }
+
+    if (degradedCatalog) {
+      response.put("runnableNow", catalogTask.path("runnable").asBoolean(true));
+      response.put("displayName", catalogTask.path("display_name").asText(normalized.displayName()));
+      response.put("panelDisplayName", catalogTask.path("panel_display_name").asText(normalized.displayName()));
+      response.put("matchedSettingsCount", normalized.settings().size());
+      response.put("ignoredSettingsCount", 0);
+      response.put("matchedSettings", new ArrayList<>(normalized.settings().keySet()));
+      response.put("ignoredSettings", List.of());
+      response.put("settingsValidationSkipped", true);
+      response.put("disabledReason", textValue(catalogTask.path("disabled_reason")));
       return response;
     }
 
@@ -823,7 +892,6 @@ public class BuilderGoalRunnerService {
             .sorted()
             .collect(Collectors.toList());
 
-    response.put("catalogAvailable", true);
     response.put("runnableNow", catalogTask.path("runnable").asBoolean(true));
     response.put("displayName", catalogTask.path("display_name").asText(normalized.displayName()));
     response.put("panelDisplayName", catalogTask.path("panel_display_name").asText(normalized.displayName()));
@@ -850,6 +918,7 @@ public class BuilderGoalRunnerService {
     response.put("accountName", stringValue(accountMetadata.get("account_name")));
     response.put("launcherMachineUuid", stringValue(accountMetadata.get("launcher_machine_uuid")));
     response.put("launcherMachineName", stringValue(accountMetadata.get("launcher_machine_name")));
+    response.put("world", normalized.world());
     response.put("taskKey", normalized.taskKey());
     response.put("displayName", normalized.displayName());
     response.put("settings", normalized.settings());
@@ -951,9 +1020,105 @@ public class BuilderGoalRunnerService {
   }
 
   private JsonNode resolveCatalogTask(String taskKey) {
-    return findTaskInCatalog(
-        taskKey,
-        micro6ExecutorCatalogService.getCatalog(false));
+    return findTaskInCatalog(taskKey, getBuilderGoalCatalogSnapshot(false).catalogPayload());
+  }
+
+  private BuilderGoalCatalogSnapshot getBuilderGoalCatalogSnapshot(boolean refresh) {
+    JsonNode liveCatalog = micro6ExecutorCatalogService.getCatalog(refresh);
+    if (hasNonEmptyCatalogTasks(liveCatalog)) {
+      return new BuilderGoalCatalogSnapshot(
+          true,
+          false,
+          null,
+          firstNonBlank(textValue(liveCatalog.path("catalog_source")), "micro6_executor"),
+          liveCatalog,
+          catalogTasksAsMaps(liveCatalog));
+    }
+
+    JsonNode cachedCatalog = micro6ExecutorCatalogService.peekCatalog();
+    if (hasNonEmptyCatalogTasks(cachedCatalog)) {
+      return new BuilderGoalCatalogSnapshot(
+          true,
+          false,
+          null,
+          firstNonBlank(textValue(cachedCatalog.path("catalog_source")), "micro6_executor_cache"),
+          cachedCatalog,
+          catalogTasksAsMaps(cachedCatalog));
+    }
+
+    List<Map<String, Object>> fallbackTasks = collectSavedCatalogFallbackTasks();
+    JsonNode fallbackPayload =
+        objectMapper.valueToTree(
+            Map.of(
+                "tasks", fallbackTasks,
+                "catalog_source", "builder_goal_saved_config_fallback"));
+    String degradedReason =
+        fallbackTasks.isEmpty()
+            ? "Live Micro6 catalog unavailable and no saved Builder Goal tasks were found."
+            : "Live Micro6 catalog unavailable; using saved/imported task keys only.";
+    return new BuilderGoalCatalogSnapshot(
+        false,
+        true,
+        degradedReason,
+        fallbackTasks.isEmpty() ? "unavailable" : "builder_goal_saved_config_fallback",
+        fallbackPayload,
+        fallbackTasks);
+  }
+
+  private boolean hasNonEmptyCatalogTasks(JsonNode catalog) {
+    return catalog != null && !catalog.isNull() && catalog.path("tasks").isArray() && catalog.path("tasks").size() > 0;
+  }
+
+  private List<Map<String, Object>> catalogTasksAsMaps(JsonNode catalog) {
+    if (catalog == null || catalog.isNull() || !catalog.path("tasks").isArray()) {
+      return List.of();
+    }
+    List<Map<String, Object>> tasks = new ArrayList<>();
+    catalog.path("tasks").forEach(
+        node ->
+            tasks.add(
+                objectMapper.convertValue(
+                    node, new TypeReference<LinkedHashMap<String, Object>>() {})));
+    return tasks;
+  }
+
+  private List<Map<String, Object>> collectSavedCatalogFallbackTasks() {
+    Map<String, Map<String, Object>> byTaskKey = new LinkedHashMap<>();
+    iterationRepository.findBySourceTypeOrderByCreatedAtDesc(SOURCE_TYPE_BUILDER_GOAL).stream()
+        .filter(this::hasStoredConfig)
+        .forEach(
+            iteration -> {
+              Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+              String taskKey = firstNonBlank(stringValue(taskMetadata.get("task_key")), iteration.getScriptName());
+              if (taskKey == null || taskKey.isBlank()) {
+                return;
+              }
+              String normalizedTaskKey = normalizeTaskKey(taskKey);
+              if (byTaskKey.containsKey(normalizedTaskKey)) {
+                return;
+              }
+              String displayName =
+                  firstNonBlank(
+                      stringValue(taskMetadata.get("panel_display_name")),
+                      stringValue(taskMetadata.get("display_name")),
+                      iteration.getPrompt(),
+                      taskKey);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("client_type", "micro6");
+              row.put("execution_mode", "queue");
+              row.put("queueable", true);
+              row.put("source", "saved_config");
+              row.put("task_key", taskKey);
+              row.put("display_name", displayName);
+              row.put("panel_display_name", displayName);
+              row.put("category", "saved_configs");
+              row.put("runnable", true);
+              row.put("supports_task_metadata", false);
+              row.put("settings_unavailable_reason", "catalog_unavailable");
+              row.put("placeholder", true);
+              byTaskKey.put(normalizedTaskKey, row);
+            });
+    return new ArrayList<>(byTaskKey.values());
   }
 
   private JsonNode findTaskInCatalog(String taskKey, JsonNode catalog) {
@@ -990,7 +1155,11 @@ public class BuilderGoalRunnerService {
             stringValue(taskMetadata.get("display_name")),
             iteration.getPrompt(),
             iteration.getScriptName());
-    return new NormalizedPayload(iteration.getScriptName(), displayName, new LinkedHashMap<>(settings));
+    return new NormalizedPayload(
+        iteration.getScriptName(),
+        displayName,
+        new LinkedHashMap<>(settings),
+        intValue(taskMetadata.get("world")));
   }
 
   private Map<String, Object> readTaskMetadata(PatchLoopIteration iteration) {
@@ -1018,6 +1187,7 @@ public class BuilderGoalRunnerService {
     metadata.put("persist_settings", true);
     metadata.put("source", "builder_goal_runner");
     metadata.put("settings", normalized.settings());
+    metadata.put("world", normalized.world());
     if (targetMetadata != null && !targetMetadata.isEmpty()) {
       metadata.put("micro6_target", targetMetadata);
     }
@@ -1125,8 +1295,12 @@ public class BuilderGoalRunnerService {
             textValue(queuePreview.path("name")),
             textValue(payload.path("title")),
             taskKey);
+    Integer world = intValue(payload.path("world"));
+    if (world == null) {
+      world = intValue(payload.path("queue_payload_preview").path("world"));
+    }
 
-    return new NormalizedPayload(taskKey, displayName, settings);
+    return new NormalizedPayload(taskKey, displayName, settings, world);
   }
 
   private void resolveRunSession(PatchLoopIteration iteration) {
@@ -1576,6 +1750,8 @@ public class BuilderGoalRunnerService {
     response.put("launchProfileName", null);
     response.put("launchArgsPreview", stringValue(targetPreparationMetadata.get("launch_args_preview")));
     response.put("launchArgsConfigured", targetPreparationMetadata.get("launch_args_preview") != null);
+    response.put("effectiveGradleTask", stringValue(targetPreparationMetadata.get("effective_gradle_task")));
+    response.put("world", intValue(taskMetadata.get("world")));
     response.put("launcherMachineUuid", firstNonBlank(
         stringValue(targetPreparationMetadata.get("launcher_machine_uuid")),
         stringValue(accountMetadata.get("launcher_machine_uuid"))));
@@ -2299,9 +2475,17 @@ public class BuilderGoalRunnerService {
   }
 
   private record NormalizedPayload(
-      String taskKey, String displayName, Map<String, Object> settings) {}
+      String taskKey, String displayName, Map<String, Object> settings, Integer world) {}
 
   private record AnalysisPromptData(String prompt, String context) {}
+
+  private record BuilderGoalCatalogSnapshot(
+      boolean catalogAvailable,
+      boolean degraded,
+      String degradedReason,
+      String source,
+      JsonNode catalogPayload,
+      List<Map<String, Object>> tasks) {}
 
   private record AnalysisInputMetadata(
       String prompt,
