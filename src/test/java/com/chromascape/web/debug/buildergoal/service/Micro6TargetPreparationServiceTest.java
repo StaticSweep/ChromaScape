@@ -61,14 +61,35 @@ class Micro6TargetPreparationServiceTest {
                 "hash-1",
                 "IlaWalter280@outlook.com",
                 "spook2586",
-                "http://100.120.100.78:8098"))
+                null,
+                "http://100.120.100.78:8098",
+                null))
         .thenReturn(
             new Micro6TargetRelaunchService.RelaunchResult(
                 targetClient,
                 List.of("cmd.exe", "/c", "gradlew.bat", ":runelite-client:run"),
                 12345L,
                 Path.of("F:/Dev/IdeaProjects/micro6/micro6-recovery-launch.log"),
-                "--clean-jagex-launcher --profile=bigGreenMeat --profile-email=IlaWalter280@***:*** --world=380"));
+                "--clean-jagex-launcher --profile=bigGreenMeat --profile-email=IlaWalter280@***:*** --world=380",
+                ":runelite-client:run",
+                380,
+                "http://127.0.0.1:8098",
+                "READY_TO_PUBLISH",
+                null,
+                "bigGreenMeat",
+                "hash-1",
+                "bigGreenMeat",
+                "hash-1",
+                22222L,
+                "IDLE",
+                false,
+                "ready_for_dispatch",
+                "accountbuilder_ready",
+                "logged_in",
+                0,
+                30,
+                null,
+                false));
 
     Micro6TargetPreparationService.PreparationResult result =
         service.ensureReady(
@@ -78,6 +99,7 @@ class Micro6TargetPreparationServiceTest {
                 "bigGreenMeat",
                 "IlaWalter280@outlook.com",
                 "spook2586",
+                null,
                 "machine-1",
                 "http://100.120.100.78:8098"));
 
@@ -107,7 +129,7 @@ class Micro6TargetPreparationServiceTest {
             () ->
                 service.ensureReady(
                     new Micro6TargetPreparationService.PreparationRequest(
-                        "hash-1", "hash-1", "bigGreenMeat", null, null, "machine-2", null)))
+                        "hash-1", "hash-1", "bigGreenMeat", null, null, null, "machine-2", null)))
         .isInstanceOf(Micro6TargetPreparationService.PreparationException.class)
         .hasMessage("Builder Goal local dev launches only run on the local ChromaScape host");
   }

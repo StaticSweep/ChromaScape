@@ -36,6 +36,9 @@ public class RecordingConfig {
   /** Whether to automatically record when game starts. */
   private boolean autoRecord = false;
 
+  /** Whether task-bound auto sessions should start recordings even if generic auto-record is off. */
+  private boolean autoRecordTaskSessions = true;
+
   public boolean isEnabled() {
     return enabled;
   }
@@ -100,6 +103,14 @@ public class RecordingConfig {
     this.autoRecord = autoRecord;
   }
 
+  public boolean isAutoRecordTaskSessions() {
+    return autoRecordTaskSessions;
+  }
+
+  public void setAutoRecordTaskSessions(boolean autoRecordTaskSessions) {
+    this.autoRecordTaskSessions = autoRecordTaskSessions;
+  }
+
   @Override
   public String toString() {
     return "RecordingConfig{"
@@ -119,6 +130,8 @@ public class RecordingConfig {
         + maxDurationMinutes
         + ", autoRecord="
         + autoRecord
+        + ", autoRecordTaskSessions="
+        + autoRecordTaskSessions
         + '}';
   }
 }

@@ -102,6 +102,8 @@ public class WindowHandler {
      * @return true if successful, false otherwise.
      */
     boolean GetWindowRect(HWND hwnd, RECT rect);
+
+    boolean IsWindowVisible(HWND hwnd);
   }
 
   /**
@@ -152,7 +154,9 @@ public class WindowHandler {
           if (title.trim().equals(resolvedWindowName)) {
             int pid = getPid(hwnd);
             Rectangle bounds = getWindowBounds(user32, hwnd);
-            exactMatch.set(new WindowInfo("0", hwnd, title.trim(), selectedAccount, pid, bounds));
+            exactMatch.set(
+                new WindowInfo(
+                    "0", hwnd, title.trim(), selectedAccount, pid, isWindowVisible(user32, hwnd), bounds));
             logger.info("Found exact match: {}", title);
             return false; // stop enumeration
           }
@@ -160,11 +164,13 @@ public class WindowHandler {
         },
         null);
 
-    if (exactMatch.get() != null && isGameClientWindow(exactMatch.get())) {
+    if (exactMatch.get() != null
+        && isGameClientWindow(exactMatch.get())
+        && exactMatch.get().isVisible()) {
       logPreferredTargetSelection(
           exactMatch.get(),
           detectCaptureSignature(exactMatch.get()),
-          "exact title match",
+          "visible exact title match",
           true,
           totalWindows.get(),
           sampleTitles);
@@ -297,17 +303,11 @@ public class WindowHandler {
       return false;
     }
 
-    if (!ProcessVerificationUtil.isStandaloneJavaProcess(window.getPid())) {
+    if (!isSupportedClientWindowTitle(title)) {
       return false;
     }
 
     String titleLower = title.toLowerCase();
-    if (!titleLower.contains("runelite")
-        && !titleLower.contains("leeuwbot")
-        && !titleLower.contains("vitalite")) {
-      return false;
-    }
-
     return !titleLower.contains("inspector") && !titleLower.contains("shell");
   }
 
@@ -332,34 +332,22 @@ public class WindowHandler {
 
           // Check if title matches any supported client (RuneLite, Leeuwbot, VitaLite)
           String titleLower = title.toLowerCase();
-          String matchedClient = null;
-          for (String client : SUPPORTED_CLIENTS) {
-            if (titleLower.contains(client.toLowerCase())) {
-              matchedClient = client;
-              break;
-            }
-          }
+          String matchedClient = findMatchedSupportedClient(titleLower);
 
           if (matchedClient != null) {
-            // Extract account name from title (format: "Client - accountname" or just "Client")
-            String accountName = null;
-            int clientIndex = titleLower.indexOf(matchedClient.toLowerCase());
-            if (clientIndex >= 0) {
-              String suffix = title.substring(clientIndex + matchedClient.length()).trim();
-              if (suffix.startsWith("-")) {
-                accountName = suffix.substring(1).trim();
-              }
-            }
+            String accountName = extractAccountName(title, matchedClient);
 
             // Get process ID
             int pid = getPid(hwnd);
 
             // Get window bounds
             Rectangle bounds = getWindowBounds(user32, hwnd);
+            boolean visible = isWindowVisible(user32, hwnd);
 
             // Create WindowInfo with sequential ID
             WindowInfo windowInfo =
-                new WindowInfo(String.valueOf(index.get()), hwnd, title, accountName, pid, bounds);
+                new WindowInfo(
+                    String.valueOf(index.get()), hwnd, title, accountName, pid, visible, bounds);
             windows.add(windowInfo);
             index.incrementAndGet();
           }
@@ -382,6 +370,59 @@ public class WindowHandler {
     List<WindowInfo> filtered =
         getAllTargetWindows().stream().filter(WindowHandler::isGameClientWindow).toList();
     return deduplicateWindowsByPid(filtered);
+  }
+
+  /**
+   * Returns the window candidates that should be exposed to the debugger UI.
+   *
+   * <p>This prefers strict supported-client windows, but falls back to standalone Java windows when
+   * the strict list is empty so the UI does not report "No windows found" while capture can still
+   * auto-detect a usable client window.
+   *
+   * @return preferred window candidates with fallback metadata
+   */
+  public static List<WindowCandidate> getUiWindowCandidates() {
+    List<WindowInfo> strictCandidates = getSelectableTargetWindows();
+    List<WindowInfo> fallbackCandidates = getFallbackJavaWindows();
+    return buildUiWindowCandidates(strictCandidates, fallbackCandidates);
+  }
+
+  static List<WindowCandidate> buildUiWindowCandidates(
+      List<WindowInfo> strictCandidates, List<WindowInfo> fallbackCandidates) {
+    strictCandidates = strictCandidates != null ? strictCandidates : List.of();
+    fallbackCandidates = fallbackCandidates != null ? fallbackCandidates : List.of();
+
+    if (!strictCandidates.isEmpty()) {
+      return strictCandidates.stream()
+          .map(
+              window ->
+                  new WindowCandidate(
+                      window,
+                      false,
+                      "supported-client",
+                      true,
+                      describeSelectionReason(List.of(window), window, detectCaptureSignature(window))))
+          .toList();
+    }
+
+    if (!fallbackCandidates.isEmpty()) {
+      logger.info(
+          "No strict supported-client windows found; exposing {} fallback Java window candidates",
+          fallbackCandidates.size());
+      return fallbackCandidates.stream()
+          .map(
+              window ->
+                  new WindowCandidate(
+                      window,
+                      true,
+                      "java-fallback",
+                      true,
+                      "fallback standalone Java window"))
+          .toList();
+    }
+
+    logger.warn("No supported-client or fallback Java windows were discovered");
+    return List.of();
   }
 
   /**
@@ -426,27 +467,20 @@ public class WindowHandler {
               className.contains("Awt") || className.contains("Sun") || className.contains("awt");
 
           // Check if title matches any supported client
-          boolean isSupportedClient = false;
+          boolean isSupportedClient = isSupportedClientWindowTitle(title);
           String titleLower = title.toLowerCase();
-          for (String client : SUPPORTED_CLIENTS) {
-            if (titleLower.contains(client.toLowerCase())) {
-              isSupportedClient = true;
-              break;
-            }
-          }
 
           if ((isJavaWindow || isSupportedClient) && !title.isEmpty()) {
             int pid = getPid(hwnd);
             Rectangle bounds = getWindowBounds(user32, hwnd);
+            boolean visible = isWindowVisible(user32, hwnd);
 
+            String matchedClient = findMatchedSupportedClient(titleLower);
+            String accountName =
+                matchedClient != null ? extractAccountName(title, matchedClient) : null;
             WindowInfo windowInfo =
                 new WindowInfo(
-                    String.valueOf(index.get()),
-                    hwnd,
-                    title,
-                    null, // No account name for generic Java windows
-                    pid,
-                    bounds);
+                    String.valueOf(index.get()), hwnd, title, accountName, pid, visible, bounds);
             windows.add(windowInfo);
             index.incrementAndGet();
           }
@@ -467,6 +501,12 @@ public class WindowHandler {
   public static HWND getFirstJavaWindow() {
     List<WindowInfo> windows = getAllJavaWindows();
     return windows.isEmpty() ? null : windows.get(0).getHwnd();
+  }
+
+  private static List<WindowInfo> getFallbackJavaWindows() {
+    List<WindowInfo> fallbackCandidates =
+        getAllJavaWindows().stream().filter(WindowHandler::isFallbackJavaWindow).toList();
+    return deduplicateWindowsByPid(fallbackCandidates);
   }
 
   /**
@@ -542,11 +582,14 @@ public class WindowHandler {
     Function<WindowInfo, CaptureSignature> signatures =
         window -> signatureCache.computeIfAbsent(window, signatureSource);
 
+    List<WindowInfo> visibleCandidates = preferVisibleCandidates(windows);
     boolean hasCaptureableCandidates =
-        windows.stream().anyMatch(window -> signatures.apply(window).canvasCount() > 0);
-    List<WindowInfo> captureableCandidates = preferCaptureableCandidates(windows, signatures);
+        visibleCandidates.stream().anyMatch(window -> signatures.apply(window).canvasCount() > 0);
+    List<WindowInfo> captureableCandidates = preferCaptureableCandidates(visibleCandidates, signatures);
     List<WindowInfo> candidates =
-        hasCaptureableCandidates ? captureableCandidates : preferRenderableCandidates(windows);
+        hasCaptureableCandidates
+            ? captureableCandidates
+            : preferRenderableCandidates(visibleCandidates);
 
     Comparator<WindowInfo> comparator =
         hasCaptureableCandidates
@@ -567,6 +610,12 @@ public class WindowHandler {
     List<WindowInfo> captureableCandidates =
         windows.stream().filter(window -> signatures.apply(window).canvasCount() > 0).toList();
     return captureableCandidates.isEmpty() ? windows : captureableCandidates;
+  }
+
+  private static List<WindowInfo> preferVisibleCandidates(List<WindowInfo> windows) {
+    List<WindowInfo> visibleCandidates =
+        windows.stream().filter(WindowInfo::isVisible).toList();
+    return visibleCandidates.isEmpty() ? windows : visibleCandidates;
   }
 
   private static List<WindowInfo> preferRenderableCandidates(List<WindowInfo> windows) {
@@ -695,6 +744,112 @@ public class WindowHandler {
     WRAPPER,
     OTHER
   }
+
+  static String findMatchedSupportedClient(String titleLower) {
+    if (titleLower == null || titleLower.isBlank()) {
+      return null;
+    }
+    for (String client : SUPPORTED_CLIENTS) {
+      if (isSupportedClientWindowTitle(titleLower) && titleLower.contains(client.toLowerCase())) {
+        return client;
+      }
+    }
+    return null;
+  }
+
+  static boolean isSupportedClientWindowTitle(String title) {
+    if (title == null || title.isBlank()) {
+      return false;
+    }
+
+    String titleLower = title.toLowerCase().trim();
+    if (isObviousBrowserTabTitle(titleLower)) {
+      return false;
+    }
+
+    return isSupportedClientTitleForm(titleLower, "leeuwbot")
+        || isSupportedClientTitleForm(titleLower, "runelite")
+        || isSupportedClientTitleForm(titleLower, "vitalite");
+  }
+
+  private static boolean isObviousBrowserTabTitle(String titleLower) {
+    return titleLower.endsWith(" - google chrome")
+        || titleLower.endsWith(" — google chrome")
+        || titleLower.endsWith(" - mozilla firefox")
+        || titleLower.endsWith(" — mozilla firefox")
+        || titleLower.endsWith(" - microsoft edge")
+        || titleLower.endsWith(" — microsoft edge");
+  }
+
+  private static boolean isSupportedClientTitleForm(String titleLower, String clientLower) {
+    if (titleLower.equals(clientLower)) {
+      return true;
+    }
+    if (titleLower.startsWith(clientLower + " -")) {
+      return true;
+    }
+    if (titleLower.startsWith(clientLower + " v")) {
+      return true;
+    }
+    if (titleLower.startsWith("- " + clientLower)) {
+      return true;
+    }
+    return titleLower.contains(" - " + clientLower);
+  }
+
+  static String extractAccountName(String title, String matchedClient) {
+    if (title == null || title.isBlank() || matchedClient == null || matchedClient.isBlank()) {
+      return null;
+    }
+
+    String titleLower = title.toLowerCase();
+    int clientIndex = titleLower.indexOf(matchedClient.toLowerCase());
+    if (clientIndex < 0) {
+      return null;
+    }
+
+    int separatorIndex = title.indexOf(" - ", clientIndex + matchedClient.length());
+    if (separatorIndex < 0) {
+      return null;
+    }
+
+    String accountName = title.substring(separatorIndex + 3).trim();
+    return accountName.isEmpty() ? null : accountName;
+  }
+
+  static boolean isFallbackJavaWindow(WindowInfo window) {
+    if (window == null) {
+      return false;
+    }
+
+    String title = window.getTitle();
+    Rectangle bounds = window.getBounds();
+    if (title == null || title.isBlank() || bounds == null) {
+      return false;
+    }
+
+    if (bounds.width < 300 || bounds.height < 250) {
+      return false;
+    }
+
+    if (!ProcessVerificationUtil.isStandaloneJavaProcess(window.getPid())) {
+      return false;
+    }
+
+    String titleLower = title.toLowerCase();
+    return !titleLower.contains("inspector") && !titleLower.contains("shell");
+  }
+
+  private static boolean isWindowVisible(User32 user32, HWND hwnd) {
+    return user32 != null && hwnd != null && user32.IsWindowVisible(hwnd);
+  }
+
+  public record WindowCandidate(
+      WindowInfo window,
+      boolean fallback,
+      String source,
+      boolean captureable,
+      String selectionReason) {}
 
   record CaptureSignature(int canvasCount, boolean hasSecondaryCanvas, int area) {
     int canvasPriority() {

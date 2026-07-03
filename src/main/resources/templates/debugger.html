@@ -357,7 +357,7 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
-        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="18">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="21">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Builder Goal Runner</label>
             <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
@@ -450,6 +450,28 @@
           </details>
           <div id="builderGoalRunsList" class="task-plans-list">
             <div class="text-muted small fst-italic">No builder goal runs yet.</div>
+          </div>
+          <div id="builderGoalLogsPanel" class="mt-3 d-none">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <div class="form-label mb-0">Builder Goal Run Logs</div>
+                <div id="builderGoalLogsSummary" class="small text-muted">Select a run to inspect logs.</div>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary" id="closeBuilderGoalLogsBtn" type="button">
+                <i class="bi bi-x-lg me-1"></i>Close
+              </button>
+            </div>
+            <div id="builderGoalLogsStatus" class="small text-muted mb-2">No run selected.</div>
+            <div class="mb-2">
+              <div class="small fw-semibold mb-1">Launch Log Tail</div>
+              <pre id="builderGoalLaunchLogTail" class="form-control form-control-sm font-monospace" style="min-height: 160px; max-height: 260px; overflow:auto;">Select a run to inspect launch logs.</pre>
+            </div>
+            <div>
+              <div class="small fw-semibold mb-1">Historical ChromaScape Logs</div>
+              <div id="builderGoalHistoricalLogs" class="border rounded p-2 bg-body-tertiary" style="max-height: 320px; overflow:auto;">
+                <div class="text-muted small fst-italic">No run selected.</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -815,7 +837,7 @@
 
   <script src="/js/debugger.js?v=12"></script>
   <script src="/js/patchloop.js?v=2"></script>
-  <script src="/js/account-task-planner.js?v=18"></script>
+  <script src="/js/account-task-planner.js?v=21"></script>
 </body>
 
 </html>

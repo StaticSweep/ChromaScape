@@ -27,14 +27,27 @@ public class SessionStartResponse {
   @JsonProperty("startTick")
   private Long startTick;
 
+  @JsonProperty("recordingFailureReason")
+  private String recordingFailureReason;
+
   public SessionStartResponse() {}
 
   public SessionStartResponse(
       String sessionId, Boolean recordingEnabled, String recordingId, Long startTick) {
+    this(sessionId, recordingEnabled, recordingId, startTick, null);
+  }
+
+  public SessionStartResponse(
+      String sessionId,
+      Boolean recordingEnabled,
+      String recordingId,
+      Long startTick,
+      String recordingFailureReason) {
     this.sessionId = sessionId;
     this.recordingEnabled = recordingEnabled;
     this.recordingId = recordingId;
     this.startTick = startTick;
+    this.recordingFailureReason = recordingFailureReason;
   }
 
   public String getSessionId() {
@@ -67,5 +80,13 @@ public class SessionStartResponse {
 
   public void setStartTick(Long startTick) {
     this.startTick = startTick;
+  }
+
+  public String getRecordingFailureReason() {
+    return recordingFailureReason;
+  }
+
+  public void setRecordingFailureReason(String recordingFailureReason) {
+    this.recordingFailureReason = recordingFailureReason;
   }
 }

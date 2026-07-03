@@ -114,12 +114,14 @@ public class DebugSessionService {
     String sessionId = session.getSessionId();
     Long startTick = session.getStartTick() != null ? session.getStartTick() : 0L;
     String recordingId = null;
+    String recordingFailureReason = null;
     LocalDateTime sessionStartTime;
 
     // Optionally start video recording
-    if (Boolean.TRUE.equals(recordingEnabled)
-        && (triggerSource == RecordingTriggerSource.MANUAL
-            || recordingService.isAutoRecordEnabled())) {
+    boolean shouldStartRecording =
+        Boolean.TRUE.equals(recordingEnabled) && shouldStartRecording(triggerSource);
+
+    if (shouldStartRecording) {
       try {
         recordingId = recordingService.startRecording(triggerSource);
         sessionStartTime = recordingService.getRecordingStartTimeAsLocalDateTime();
@@ -172,10 +174,11 @@ public class DebugSessionService {
             "Returning partial success for session {}: "
                 + "session created in FAILED state, recording not started",
             sessionId);
-        return new SessionStartResponse(sessionId, false, null, startTick);
+        return new SessionStartResponse(sessionId, false, null, startTick, errorMsg);
       }
     } else if (Boolean.TRUE.equals(recordingEnabled)) {
-      log.warn("Auto-recording blocked (recording.autoRecord=false): source={}", triggerSource);
+      recordingFailureReason = recordingBlockedReason(triggerSource);
+      log.warn("Auto-recording blocked: source={}, reason={}", triggerSource, recordingFailureReason);
       recordingEnabled = false;
     }
 
@@ -189,7 +192,8 @@ public class DebugSessionService {
         session.getLifecycleState(),
         recordingId);
 
-    return new SessionStartResponse(sessionId, recordingEnabled, recordingId, startTick);
+    return new SessionStartResponse(
+        sessionId, recordingEnabled, recordingId, startTick, recordingFailureReason);
   }
 
   /**
@@ -350,6 +354,22 @@ public class DebugSessionService {
   /** Get a debug session by ID. */
   public Optional<DebugSession> getSession(String sessionId) {
     return sessionRepository.findBySessionId(sessionId);
+  }
+
+  private boolean shouldStartRecording(RecordingTriggerSource triggerSource) {
+    return switch (triggerSource) {
+      case MANUAL -> true;
+      case TASK_AUTO -> recordingService.isTaskAutoRecordEnabled();
+      case MICRO6_AUTO -> recordingService.isAutoRecordEnabled();
+    };
+  }
+
+  private String recordingBlockedReason(RecordingTriggerSource triggerSource) {
+    return switch (triggerSource) {
+      case TASK_AUTO -> "Task auto-recording is disabled";
+      case MICRO6_AUTO -> "Generic Micro6 auto-recording is disabled";
+      case MANUAL -> "Recording was not permitted";
+    };
   }
 
   /** Get all active sessions. */

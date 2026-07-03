@@ -2,14 +2,29 @@ package com.chromascape.utils.core.screen.window;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Rectangle;
+import java.util.List;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class WindowHandlerTest {
+
+  @Test
+  void extractAccountNameSupportsVersionedLeeuwbotTitles() {
+    assertEquals(
+        "bigGreenMeat",
+        WindowHandler.extractAccountName("Leeuwbot V2.0.61 - bigGreenMeat", "Leeuwbot"));
+    assertEquals("alpha", WindowHandler.extractAccountName("RuneLite - alpha", "RuneLite"));
+    assertEquals(
+        "bigGreenMeat",
+        WindowHandler.extractAccountName("Leeuwbot - bigGreenMeat", "Leeuwbot"));
+    assertNull(WindowHandler.extractAccountName("Leeuwbot V2.0.61", "Leeuwbot"));
+  }
 
   @Test
   void selectBestWindowPrefersCaptureableRuneliteWindowOverLargerLeeuwbotWrapper() {
@@ -34,6 +49,18 @@ class WindowHandlerTest {
             List.of(wrapper, runelite), (Predicate<WindowInfo>) window -> false);
 
     assertEquals("3", best.getId());
+  }
+
+  @Test
+  void selectBestWindowPrefersVisibleWindowOverHiddenSibling() {
+    WindowInfo hiddenWrapper = window("1", "Leeuwbot", 26304, false, 850, 542);
+    WindowInfo visibleWrapper = window("2", "Leeuwbot", 26304, true, 850, 542);
+
+    WindowInfo best =
+        WindowHandler.selectBestWindow(
+            List.of(hiddenWrapper, visibleWrapper), (Predicate<WindowInfo>) window -> false);
+
+    assertEquals("2", best.getId());
   }
 
   @Test
@@ -104,8 +131,47 @@ class WindowHandlerTest {
     assertEquals("2", best.getId());
   }
 
+  @Test
+  void uiCandidatesFallBackToJavaWindowListWhenStrictTargetListIsEmpty() {
+    WindowInfo wrapper = window("1", "Leeuwbot V2.0.61 - bigGreenMeat", 26304, 850, 542);
+
+    List<WindowHandler.WindowCandidate> candidates =
+        WindowHandler.buildUiWindowCandidates(List.of(), List.of(wrapper));
+
+    assertEquals(1, candidates.size());
+    assertEquals("1", candidates.get(0).window().getId());
+    assertEquals("bigGreenMeat", candidates.get(0).window().getAccountName());
+    assertEquals("java-fallback", candidates.get(0).source());
+  }
+
+  @Test
+  void supportedClientTitleClassifierAcceptsLeeuwbotButRejectsBrowserTabs() {
+    assertTrue(WindowHandler.isSupportedClientWindowTitle("Leeuwbot"));
+    assertTrue(WindowHandler.isSupportedClientWindowTitle("Leeuwbot V2.0.61 - bigGreenMeat"));
+    assertTrue(WindowHandler.isSupportedClientWindowTitle("- RuneLite"));
+    assertFalse(
+        WindowHandler.isSupportedClientWindowTitle(
+            "Merge pull request #1811 from bgatfa/fix/walker-opens-nonblocking-doors · infuse21/Microbot@b0a4607 - Google Chrome"));
+    assertFalse(
+        WindowHandler.isSupportedClientWindowTitle(
+            "runelite – gradle.properties [runelite]"));
+  }
+
   private static WindowInfo window(String id, String title, int pid, int width, int height) {
-    return new WindowInfo(id, null, title, null, pid, new Rectangle(0, 0, width, height));
+    return window(id, title, pid, true, width, height);
+  }
+
+  private static WindowInfo window(
+      String id, String title, int pid, boolean visible, int width, int height) {
+    String matchedClient = WindowHandler.findMatchedSupportedClient(title.toLowerCase());
+    return new WindowInfo(
+        id,
+        null,
+        title,
+        WindowHandler.extractAccountName(title, matchedClient),
+        pid,
+        visible,
+        new Rectangle(0, 0, width, height));
   }
 
   private static int area(WindowInfo window) {

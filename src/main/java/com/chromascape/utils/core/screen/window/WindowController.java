@@ -42,19 +42,25 @@ public class WindowController {
    */
   @GetMapping
   public ResponseEntity<List<Map<String, Object>>> listWindows() {
-    List<WindowInfo> deduplicated = WindowHandler.getSelectableTargetWindows();
-    logger.debug("Returning {} selectable game client windows", deduplicated.size());
+    List<WindowHandler.WindowCandidate> candidates = WindowHandler.getUiWindowCandidates();
+    logger.debug("Returning {} debugger window candidates", candidates.size());
 
     List<Map<String, Object>> response =
-        deduplicated.stream()
+        candidates.stream()
             .map(
-                window -> {
+                candidate -> {
+                  WindowInfo window = candidate.window();
                   Map<String, Object> map = new HashMap<>();
                   map.put("id", window.getId());
                   map.put("title", window.getTitle());
                   map.put("accountName", window.getAccountName());
+                  map.put("pid", window.getPid());
+                  map.put("visible", window.isVisible());
+                  map.put("source", candidate.source());
+                  map.put("fallback", candidate.fallback());
+                  map.put("captureable", candidate.captureable());
+                  map.put("selectionReason", candidate.selectionReason());
 
-                  // Convert bounds to map
                   Rectangle bounds = window.getBounds();
                   Map<String, Object> boundsMap = new HashMap<>();
                   boundsMap.put("x", bounds.x);
@@ -87,6 +93,7 @@ public class WindowController {
     response.put("id", selected.getId());
     response.put("title", selected.getTitle());
     response.put("accountName", selected.getAccountName());
+    response.put("visible", selected.isVisible());
 
     Rectangle bounds = selected.getBounds();
     Map<String, Object> boundsMap = new HashMap<>();
@@ -117,11 +124,13 @@ public class WindowController {
       return ResponseEntity.ok(Map.of("status", "cleared"));
     }
 
-    // Find the window with the given ID from filtered game clients
-    List<WindowInfo> deduplicated = WindowHandler.getSelectableTargetWindows();
+    List<WindowInfo> candidates =
+        WindowHandler.getUiWindowCandidates().stream()
+            .map(WindowHandler.WindowCandidate::window)
+            .toList();
 
     WindowInfo selectedWindow =
-        deduplicated.stream().filter(w -> w.getId().equals(windowId)).findFirst().orElse(null);
+        candidates.stream().filter(w -> w.getId().equals(windowId)).findFirst().orElse(null);
 
     if (selectedWindow == null) {
       return ResponseEntity.notFound().build();

@@ -19,12 +19,21 @@ import com.chromascape.web.debug.patchloop.service.PatchLoopSessionResolverServi
 import com.chromascape.web.debug.patchloop.service.ScriptExecutionService;
 import com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider;
 import com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService;
+import com.chromascape.web.logs.LogEntity;
+import com.chromascape.web.logs.LogRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayDeque;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -38,6 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
@@ -46,6 +56,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class BuilderGoalRunnerService {
@@ -69,6 +81,8 @@ public class BuilderGoalRunnerService {
   private static final String PREPARATION_STATE_WAITING_FOR_AGENT = "WAITING_FOR_AGENT";
   private static final String PREPARATION_STATE_LOGGING_IN = "LOGGING_IN";
   private static final String PREPARATION_STATE_READY_TO_PUBLISH = "READY_TO_PUBLISH";
+  private static final String DISPLAY_STATUS_WAITING_FOR_TASK_START = "WAITING_FOR_TASK_START";
+  private static final String DISPLAY_STATUS_WAITING_FOR_DEBUG_BIND = "WAITING_FOR_DEBUG_BIND";
 
   private final PatchLoopIterationRepository iterationRepository;
   private final PatchLoopPersistenceService persistenceService;
@@ -77,6 +91,7 @@ public class BuilderGoalRunnerService {
   private final ScriptExecutionService scriptExecutionService;
   private final AnalysisProvider analysisProvider;
   private final Micro6ExecutorCatalogService micro6ExecutorCatalogService;
+  private final LogRepository logRepository;
   private final BuilderGoalLauncherControlService launcherControlService;
   private final BuilderGoalAccountCatalogService accountCatalogService;
   private final Micro6OnlineClientRegistryService clientRegistryService;
@@ -88,6 +103,7 @@ public class BuilderGoalRunnerService {
   private final long runTimeoutMs;
   private final int maxConsecutiveStatusFailures;
   private final long statusFailureGraceMs;
+  private final Set<String> pendingLaunchIterations = ConcurrentHashMap.newKeySet();
 
   public BuilderGoalRunnerService(
       PatchLoopIterationRepository iterationRepository,
@@ -97,6 +113,7 @@ public class BuilderGoalRunnerService {
       ScriptExecutionService scriptExecutionService,
       AnalysisProvider analysisProvider,
       Micro6ExecutorCatalogService micro6ExecutorCatalogService,
+      LogRepository logRepository,
       BuilderGoalLauncherControlService launcherControlService,
       BuilderGoalAccountCatalogService accountCatalogService,
       Micro6OnlineClientRegistryService clientRegistryService,
@@ -116,6 +133,7 @@ public class BuilderGoalRunnerService {
     this.scriptExecutionService = scriptExecutionService;
     this.analysisProvider = analysisProvider;
     this.micro6ExecutorCatalogService = micro6ExecutorCatalogService;
+    this.logRepository = logRepository;
     this.launcherControlService = launcherControlService;
     this.accountCatalogService = accountCatalogService;
     this.clientRegistryService = clientRegistryService;
@@ -197,6 +215,31 @@ public class BuilderGoalRunnerService {
       throw new IllegalStateException("This builder goal run does not have a saved launch config");
     }
     return buildStoredConfigResponse(iteration);
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> getRunLogs(String iterationId) {
+    PatchLoopIteration iteration = loadBuilderRun(iterationId);
+    Map<String, Object> run = toRunSummary(iteration);
+    LocalDateTime windowStart = resolveLogWindowStart(iteration);
+    LocalDateTime windowEnd = resolveLogWindowEnd(iteration);
+    List<LogEntity> windowLogs =
+        logRepository.findByTimestampBetweenOrderByTimestampAsc(windowStart, windowEnd);
+    List<Map<String, Object>> matchedLogs = buildMatchedRunLogs(iteration, run, windowLogs);
+    boolean fallbackToWindow = matchedLogs.isEmpty();
+    List<Map<String, Object>> renderedLogs =
+        fallbackToWindow ? buildWindowLogViews(windowLogs) : matchedLogs;
+    Map<String, Object> launchLog = readLaunchLogTail(run);
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("success", true);
+    response.put("run", run);
+    response.put("filter", buildRunLogFilter(iteration, run, windowStart, windowEnd, fallbackToWindow));
+    response.put("historicalLogs", renderedLogs);
+    response.put("windowLogCount", windowLogs.size());
+    response.put("matchedLogCount", matchedLogs.size());
+    response.put("launchLog", launchLog);
+    return response;
   }
 
   @Transactional
@@ -312,43 +355,10 @@ public class BuilderGoalRunnerService {
         iteration,
         taskMetadata,
         PREPARATION_STATE_PREPARING_TARGET,
-        "Launching the local Micro6 workspace for the selected account");
+        "Launch accepted. Waiting for the local Micro6 workspace and executor readiness.");
+    queuePendingLaunch(iteration.getIterationId());
 
-    Micro6TargetPreparationService.PreparationResult preparationResult;
-    try {
-      preparationResult =
-          targetPreparationService.ensureReady(
-              new Micro6TargetPreparationService.PreparationRequest(
-              firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId()),
-              selectedAccount.accountHash(),
-              selectedAccount.displayName(),
-              selectedAccount.email(),
-              selectedAccount.password(),
-              world,
-              selectedMachine.machineUuid(),
-              null));
-    } catch (Micro6TargetPreparationService.PreparationException e) {
-      updatePreparationState(iteration, readTaskMetadata(iteration), e.getPhase(), e.getMessage());
-      persistenceService.markIterationFailed(
-          iteration,
-          PatchLoopFailureCode.SCRIPT_START_FAILED,
-          e.getMessage(),
-          "account=" + firstNonBlank(selectedAccount.displayName(), selectedAccount.accountId(), "(none)"));
-      throw e;
-    }
-
-    taskMetadata = readTaskMetadata(iteration);
-    mergeTargetPreparationMetadata(taskMetadata, preparationResult.metadata());
-    taskMetadata.put("micro6_target", buildTargetMetadata(preparationResult.targetClient()));
-    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
-    persistenceService.saveIteration(iteration);
-    updatePreparationState(
-        iteration,
-        readTaskMetadata(iteration),
-        PREPARATION_STATE_READY_TO_PUBLISH,
-        "Target dispatch-ready and ready to publish");
-
-    ScriptExecutionService.Micro6PublishResult publishResult = publishIteration(iteration);
+    iteration = iterationRepository.findByIterationId(iteration.getIterationId()).orElse(iteration);
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("run", toRunSummary(iteration));
     response.put(
@@ -357,18 +367,19 @@ public class BuilderGoalRunnerService {
             normalized,
             catalogValidation.catalogTask(),
             getBuilderGoalCatalogSnapshot(false)));
-    response.put("published", publishResult.published());
-    response.put("entryId", publishResult.entryId());
-    response.put("targetClientId", preparationResult.targetClient().clientId());
-    response.put("targetAccountName", preparationResult.targetClient().accountName());
+    response.put("accepted", true);
+    response.put("published", null);
+    response.put("entryId", null);
+    response.put("targetClientId", null);
+    response.put("targetAccountName", selectedAccount.displayName());
     response.put("accountId", selectedAccount.accountId());
     response.put("accountHash", selectedAccount.accountHash());
     response.put("accountName", selectedAccount.displayName());
-    response.put("publishStatus", publishResult.publishStatus());
-    response.put("publishError", publishResult.errorMessage());
+    response.put("publishStatus", null);
+    response.put("publishError", null);
     response.put("catalogValidation", catalogValidation.status());
     response.put("catalogValidationSkipped", catalogValidation.skipped());
-    response.put("targetPreparation", preparationResult.metadata());
+    response.put("targetPreparation", readTargetPreparationMetadata(readTaskMetadata(iteration)));
     return response;
   }
 
@@ -403,6 +414,243 @@ public class BuilderGoalRunnerService {
       payload.put("world", world);
     }
     return startRun(objectMapper.valueToTree(payload), accountId, null, null, null, launcherMachineUuid, world);
+  }
+
+  private void queuePendingLaunch(String iterationId) {
+    if (iterationId == null || iterationId.isBlank()) {
+      return;
+    }
+    if (TransactionSynchronizationManager.isActualTransactionActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              patchLoopExecutor.execute(() -> continuePendingLaunchSafely(iterationId));
+            }
+          });
+      return;
+    }
+    patchLoopExecutor.execute(() -> continuePendingLaunchSafely(iterationId));
+  }
+
+  private void continuePendingLaunchSafely(String iterationId) {
+    if (iterationId == null || iterationId.isBlank() || !pendingLaunchIterations.add(iterationId)) {
+      return;
+    }
+    try {
+      continuePendingLaunch(iterationId);
+    } finally {
+      pendingLaunchIterations.remove(iterationId);
+    }
+  }
+
+  private void continuePendingLaunch(String iterationId) {
+    PatchLoopIteration iteration =
+        iterationRepository.findByIterationId(iterationId).orElse(null);
+    if (iteration == null || iteration.getStatus() == null || iteration.getStatus().isTerminal()) {
+      return;
+    }
+
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    Map<String, Object> publishMetadata = readPublishMetadata(taskMetadata);
+    Integer entryId = intValue(publishMetadata.get("entry_id"));
+    if (entryId != null && entryId > 0) {
+      return;
+    }
+
+    Map<String, Object> accountMetadata = readAccountMetadata(taskMetadata);
+    String accountId =
+        firstNonBlank(
+            stringValue(accountMetadata.get("account_id")),
+            stringValue(accountMetadata.get("account_hash")));
+    String launcherMachineUuid = stringValue(accountMetadata.get("launcher_machine_uuid"));
+    if (accountId == null || launcherMachineUuid == null) {
+      persistenceService.markIterationFailed(
+          iteration,
+          PatchLoopFailureCode.INVALID_REQUEST,
+          "Saved launch metadata is incomplete for this Builder Goal run",
+          "iterationId=" + iteration.getIterationId());
+      return;
+    }
+
+    BuilderGoalAccountCatalogService.AccountDefinition selectedAccount = resolveSelectedAccount(accountId);
+    if (selectedAccount == null) {
+      persistenceService.markIterationFailed(
+          iteration,
+          PatchLoopFailureCode.INVALID_REQUEST,
+          "Saved launcher account is no longer available",
+          "accountId=" + accountId);
+      return;
+    }
+
+    try {
+      Micro6TargetPreparationService.PreparationResult preparationResult =
+          targetPreparationService.ensureReady(
+              new Micro6TargetPreparationService.PreparationRequest(
+                  firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId()),
+                  selectedAccount.accountHash(),
+                  selectedAccount.displayName(),
+                  selectedAccount.email(),
+                  selectedAccount.password(),
+                  intValue(taskMetadata.get("world")),
+                  launcherMachineUuid,
+                  null),
+              progress ->
+                  updatePreparationProgress(
+                      iterationId, selectedAccount, launcherMachineUuid, progress));
+
+      iteration = iterationRepository.findByIterationId(iterationId).orElse(iteration);
+      taskMetadata = readTaskMetadata(iteration);
+      mergeTargetPreparationMetadata(taskMetadata, preparationResult.metadata());
+      taskMetadata.put("micro6_target", buildTargetMetadata(preparationResult.targetClient()));
+      iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+      persistenceService.saveIteration(iteration);
+      updatePreparationState(
+          iteration,
+          readTaskMetadata(iteration),
+          PREPARATION_STATE_READY_TO_PUBLISH,
+          "Target dispatch-ready and ready to publish");
+
+      publishIteration(iteration);
+    } catch (Micro6TargetPreparationService.PreparationException e) {
+      iteration = iterationRepository.findByIterationId(iterationId).orElse(iteration);
+      Map<String, Object> currentTaskMetadata = readTaskMetadata(iteration);
+      Throwable cause = e.getCause();
+      if (cause instanceof Micro6TargetRelaunchService.RelaunchException relaunchException) {
+        Map<String, Object> updates = new LinkedHashMap<>();
+        updates.put("state", Micro6TargetRelaunchService.PHASE_PROCESS_EXITED);
+        updates.put("readiness_phase", Micro6TargetRelaunchService.PHASE_PROCESS_EXITED);
+        updates.put("readiness_reason", relaunchException.getMessage());
+        updates.put("launcher_log_file", relaunchException.getLaunchLogFile() != null
+            ? relaunchException.getLaunchLogFile().toString()
+            : null);
+        updates.put("effective_gradle_task", relaunchException.getEffectiveGradleTask());
+        updates.put("launch_args_preview", relaunchException.getMaskedLaunchArgs());
+        updates.put("launch_failure_kind", relaunchException.getFailureKind());
+        updates.put("launch_failure_detail", relaunchException.getFailureDetail());
+        updates.put("last_observed_readiness_phase", relaunchException.getLastObservedReadinessPhase());
+        mergeTargetPreparationMetadata(currentTaskMetadata, updates);
+        iteration.setTaskMetadataJson(objectMapper.valueToTree(currentTaskMetadata));
+        persistenceService.saveIteration(iteration);
+      }
+      updatePreparationState(iteration, currentTaskMetadata, e.getPhase(), e.getMessage());
+      if (!e.isTerminal()) {
+        return;
+      }
+      persistenceService.markIterationFailed(
+          iteration,
+          PatchLoopFailureCode.SCRIPT_START_FAILED,
+          e.getMessage(),
+          "account="
+              + firstNonBlank(selectedAccount.displayName(), selectedAccount.accountId(), "(none)"));
+    } catch (Exception e) {
+      iteration = iterationRepository.findByIterationId(iterationId).orElse(iteration);
+      updatePreparationState(
+          iteration,
+          readTaskMetadata(iteration),
+          PREPARATION_STATE_PREPARING_TARGET,
+          firstNonBlank(e.getMessage(), "Failed to continue local Micro6 launch"));
+      persistenceService.markIterationFailed(
+          iteration,
+          PatchLoopFailureCode.INTERNAL_ERROR,
+          firstNonBlank(e.getMessage(), "Failed to continue local Micro6 launch"),
+          stackTrace(e));
+    }
+  }
+
+  @Scheduled(fixedDelayString = "${builder-goal.pending-launch-sync-interval-ms:3000}")
+  public void syncPendingLaunches() {
+    iterationRepository.findBySourceTypeOrderByCreatedAtDesc(SOURCE_TYPE_BUILDER_GOAL).stream()
+        .filter(iteration -> iteration.getStatus() != null && iteration.getStatus().isActive())
+        .filter(this::shouldContinuePendingLaunch)
+        .limit(10)
+        .forEach(iteration -> queuePendingLaunch(iteration.getIterationId()));
+  }
+
+  private boolean shouldContinuePendingLaunch(PatchLoopIteration iteration) {
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    Map<String, Object> publishMetadata = readPublishMetadata(taskMetadata);
+    Integer entryId = intValue(publishMetadata.get("entry_id"));
+    if (entryId != null && entryId > 0) {
+      return false;
+    }
+    String preparationState = stringValue(readTargetPreparationMetadata(taskMetadata).get("state"));
+    if (PREPARATION_STATE_READY_TO_PUBLISH.equalsIgnoreCase(preparationState)) {
+      return true;
+    }
+    return preparationState == null
+        || preparationState.isBlank()
+        || PREPARATION_STATE_PREPARING_TARGET.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_LAUNCHING_PROCESS.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_WAITING_FOR_PORT.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_WAITING_FOR_HEALTH.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_WAITING_FOR_ACCOUNT.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_WAITING_FOR_DISPATCH.equalsIgnoreCase(preparationState);
+  }
+
+  private void updatePreparationProgress(
+      String iterationId,
+      BuilderGoalAccountCatalogService.AccountDefinition selectedAccount,
+      String launcherMachineUuid,
+      Micro6TargetRelaunchService.RelaunchProgress progress) {
+    if (progress == null) {
+      return;
+    }
+    PatchLoopIteration iteration = iterationRepository.findByIterationId(iterationId).orElse(null);
+    if (iteration == null || iteration.getStatus() == null || iteration.getStatus().isTerminal()) {
+      return;
+    }
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    Map<String, Object> updates = new LinkedHashMap<>();
+    updates.put("state", progress.phase());
+    updates.put("message", progress.reason());
+    updates.put("readiness_phase", progress.phase());
+    updates.put("readiness_reason", progress.reason());
+    updates.put("local_executor_base_url", progress.localExecutorBaseUrl());
+    updates.put("resolved_account_name", progress.resolvedAccountName());
+    updates.put("resolved_account_hash", progress.resolvedAccountHash());
+    updates.put("requested_account_name", progress.requestedAccountName());
+    updates.put("requested_account_hash", progress.requestedAccountHash());
+    updates.put("port_owner_pid", progress.portOwnerPid());
+    updates.put("dispatch_hold", progress.dispatchHold());
+    updates.put("dispatch_hold_reason", progress.dispatchHoldReason());
+    updates.put("startup_state", progress.startupState());
+    updates.put("login_state", progress.loginState());
+    updates.put("login_attempt", progress.loginAttempt());
+    updates.put("login_attempt_max", progress.loginAttemptMax());
+    updates.put("login_terminal_reason", progress.loginTerminalReason());
+    updates.put("effective_gradle_task", progress.effectiveGradleTask());
+    updates.put("launch_args_preview", progress.maskedLaunchArgs());
+    updates.put("reused_executor", progress.reusedExecutor());
+    updates.put("launcher_log_file", progress.launchLogFile());
+    updates.put("launch_failure_kind", progress.launchFailureKind());
+    updates.put("launch_failure_detail", progress.launchFailureDetail());
+    updates.put("launch_mode", "local_micro6_project");
+    updates.put("launcher_machine_uuid", launcherMachineUuid);
+    updates.put(
+        "launcher_machine_name",
+        firstNonBlank(
+            stringValue(readTargetPreparationMetadata(taskMetadata).get("launcher_machine_name")),
+            stringValue(readAccountMetadata(taskMetadata).get("launcher_machine_name"))));
+    mergeTargetPreparationMetadata(taskMetadata, updates);
+    Map<String, Object> targetMetadata = new LinkedHashMap<>(readTargetMetadata(taskMetadata));
+    targetMetadata.put(
+        "requested_account_name",
+        firstNonBlank(progress.requestedAccountName(), selectedAccount.displayName()));
+    targetMetadata.put(
+        "requested_account_hash",
+        firstNonBlank(progress.requestedAccountHash(), selectedAccount.accountHash()));
+    if (progress.resolvedAccountName() != null) {
+      targetMetadata.put("resolved_account_name", progress.resolvedAccountName());
+    }
+    if (progress.resolvedAccountHash() != null) {
+      targetMetadata.put("resolved_account_hash", progress.resolvedAccountHash());
+    }
+    if (!targetMetadata.isEmpty()) {
+      taskMetadata.put("micro6_target", targetMetadata);
+    }
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    persistenceService.saveIteration(iteration);
   }
 
   @Transactional
@@ -676,16 +924,20 @@ public class BuilderGoalRunnerService {
     iteration.setParentIterationId(parentIterationId);
     iteration.setImportedPayloadJson(importedPayload);
     iteration.setTaskMetadataJson(
-        objectMapper.valueToTree(buildTaskMetadata(normalized, targetMetadata, catalogTask)));
+        objectMapper.valueToTree(
+            buildTaskMetadata(
+                iteration.getIterationId(), normalized, targetMetadata, catalogTask)));
     iteration.setPromptType(PromptType.ISSUE.name());
     if (revisionId != null && !revisionId.isBlank()) {
       iteration.setMicro6RevisionId(revisionId);
       iteration.setMicro6PatchedAt(LocalDateTime.now());
     }
+    validateStoredSettingsConsistency(iteration);
     return iterationRepository.save(iteration);
   }
 
   private ScriptExecutionService.Micro6PublishResult publishIteration(PatchLoopIteration iteration) {
+    validateStoredSettingsConsistency(iteration);
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
     ScriptExecutionService.Micro6PublishResult publishResult =
         scriptExecutionService.publishMicro6Task("micro6:" + iteration.getScriptName(), taskMetadata);
@@ -759,6 +1011,7 @@ public class BuilderGoalRunnerService {
 
     String micro6Status = firstNonBlank(statusResult.status(), "UNKNOWN");
     String mappedStatus = mapPublishStatus(micro6Status);
+    boolean taskStartConfirmed = isTaskStartConfirmed(statusResult);
     boolean metadataChanged = false;
     if (!mappedStatus.equals(stringValue(publishMetadata.get("status")))) {
       publishMetadata.put("status", mappedStatus);
@@ -768,6 +1021,7 @@ public class BuilderGoalRunnerService {
       }
       metadataChanged = true;
     }
+    metadataChanged |= applyTaskStartMetadata(iteration, taskMetadata, publishMetadata, statusResult);
     metadataChanged |= recordSuccessfulStatusPoll(taskMetadata, publishMetadata);
     if (metadataChanged) {
       taskMetadata.put("micro6_publish", publishMetadata);
@@ -776,12 +1030,21 @@ public class BuilderGoalRunnerService {
     }
 
     if ("RUNNING".equalsIgnoreCase(micro6Status) || "PAUSED".equalsIgnoreCase(micro6Status)) {
-      if (iteration.getStatus() == PatchLoopStatus.QUEUED) {
+      if (taskStartConfirmed && iteration.getStatus() == PatchLoopStatus.QUEUED) {
         persistenceService.updateIterationStatus(iteration, PatchLoopStatus.RUNNING_SCRIPT);
+        return;
+      }
+      if (!taskStartConfirmed && hasTaskStartTimedOut(iteration, publishMetadata)) {
+        finalizeTaskStartTimeout(iteration, publishMetadata, statusResult);
       }
       return;
     }
-    if ("PENDING".equalsIgnoreCase(micro6Status)) {
+    if ("PENDING".equalsIgnoreCase(micro6Status)
+        || "QUEUED".equalsIgnoreCase(micro6Status)
+        || "ACCEPTED".equalsIgnoreCase(micro6Status)) {
+      if (hasTaskStartTimedOut(iteration, publishMetadata)) {
+        finalizeTaskStartTimeout(iteration, publishMetadata, statusResult);
+      }
       return;
     }
 
@@ -947,9 +1210,30 @@ public class BuilderGoalRunnerService {
     return accountId != null;
   }
 
+  private boolean hasMissingStoredSettings(PatchLoopIteration iteration) {
+    if (iteration == null) {
+      return false;
+    }
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    if (!(taskMetadata.get("settings") instanceof Map<?, ?> settingsMap)) {
+      return false;
+    }
+    if (!settingsMap.isEmpty()) {
+      return false;
+    }
+    JsonNode importedPayload = iteration.getImportedPayloadJson();
+    if (importedPayload == null || importedPayload.isNull()) {
+      return false;
+    }
+    return isNonEmptyObject(importedPayload.path("settings"));
+  }
+
   private String determineRerunBlockedReason(PatchLoopIteration iteration) {
     if (!hasStoredConfig(iteration)) {
       return "This run does not have a saved launch config";
+    }
+    if (hasMissingStoredSettings(iteration)) {
+      return "This run was saved without its task settings and cannot be rerun safely";
     }
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
     Map<String, Object> accountMetadata = readAccountMetadata(taskMetadata);
@@ -1171,8 +1455,12 @@ public class BuilderGoalRunnerService {
   }
 
   private Map<String, Object> buildTaskMetadata(
-      NormalizedPayload normalized, Map<String, Object> targetMetadata, JsonNode catalogTask) {
+      String iterationId,
+      NormalizedPayload normalized,
+      Map<String, Object> targetMetadata,
+      JsonNode catalogTask) {
     Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("iteration_id", iterationId);
     metadata.put("task_key", normalized.taskKey());
     metadata.put("task_name", normalized.taskKey());
     metadata.put("display_name", normalized.displayName());
@@ -1262,10 +1550,10 @@ public class BuilderGoalRunnerService {
       throw new IllegalArgumentException("Builder payload must be a JSON object");
     }
 
-    JsonNode builderExecution = objectNode(payload.path("builder_execution"));
-    JsonNode queuePreview = objectNode(payload.path("queue_payload_preview"));
-    JsonNode builderMetadata = objectNode(builderExecution.path("task_metadata"));
-    JsonNode queueMetadata = objectNode(queuePreview.path("task_metadata"));
+    JsonNode builderExecution = payload.path("builder_execution");
+    JsonNode queuePreview = payload.path("queue_payload_preview");
+    JsonNode builderMetadata = builderExecution.path("task_metadata");
+    JsonNode queueMetadata = queuePreview.path("task_metadata");
 
     String taskKey =
         firstNonBlank(
@@ -1277,10 +1565,11 @@ public class BuilderGoalRunnerService {
     }
 
     JsonNode settingsNode =
-        builderMetadata.isObject()
-            ? builderMetadata
-            : queueMetadata.isObject() ? queueMetadata : objectNode(payload.path("settings"));
-    if (!settingsNode.isObject()) {
+        firstNonEmptyObjectNode(
+            builderMetadata,
+            queueMetadata,
+            payload.path("settings"));
+    if (!isNonEmptyObject(settingsNode)) {
       settingsNode = payload;
     }
 
@@ -1667,6 +1956,8 @@ public class BuilderGoalRunnerService {
     Map<String, Object> recoveryMetadata = readRecoveryMetadata(taskMetadata);
     AnalysisInputMetadata analysisInputMetadata = readAnalysisInputMetadata(taskMetadata);
     String publishStatus = stringValue(publishMetadata.get("status"));
+    boolean taskStartedObserved = Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"));
+    boolean taskStartConfirmed = taskStartedObserved && iteration.getRunSessionId() != null;
     String displayStatus = deriveDisplayStatus(iteration, publishStatus);
     boolean analysisAvailable =
         iteration.getAnalysisResponseJson() != null && !iteration.getAnalysisResponseJson().isNull();
@@ -1707,6 +1998,9 @@ public class BuilderGoalRunnerService {
     response.put("runEndTime", iteration.getRunEndTime());
     response.put("runSessionId", iteration.getRunSessionId());
     response.put("runRecordingId", iteration.getRunRecordingId());
+    response.put("taskStartedObserved", taskStartedObserved);
+    response.put("taskStartConfirmed", taskStartConfirmed);
+    response.put("taskStartedAt", stringValue(taskMetadata.get("task_started_at")));
     response.put("runSuccess", iteration.getRunSuccess());
     response.put("failureCode", iteration.getFailureCode());
     response.put("failureReason", iteration.getFailureReason());
@@ -1730,6 +2024,7 @@ public class BuilderGoalRunnerService {
     response.put("evidenceDecisionCount", iteration.getEvidenceDecisionCount());
     response.put("accountId", stringValue(accountMetadata.get("account_id")));
     response.put("accountHash", stringValue(accountMetadata.get("account_hash")));
+    response.put("launcherAccountHash", stringValue(accountMetadata.get("account_hash")));
     response.put(
         "accountName",
         firstNonBlank(
@@ -1737,6 +2032,7 @@ public class BuilderGoalRunnerService {
             stringValue(targetMetadata.get("account_name"))));
     response.put("accountSource", stringValue(accountMetadata.get("source")));
     response.put("accountOnline", Boolean.TRUE.equals(accountMetadata.get("online")));
+    response.put("launcherOnline", Boolean.TRUE.equals(accountMetadata.get("online")));
     response.put("accountRunnable", Boolean.TRUE.equals(accountMetadata.get("runnable")));
     response.put("accountDisabledReason", stringValueAllowBlank(accountMetadata.get("disabled_reason")));
     response.put("configAvailable", configAvailable);
@@ -1746,11 +2042,36 @@ public class BuilderGoalRunnerService {
     response.put("targetAccountName", stringValue(targetMetadata.get("account_name")));
     response.put("targetBaseUrl", stringValue(targetMetadata.get("advertised_base_url")));
     response.put("targetStatus", stringValue(targetMetadata.get("status")));
+    response.put(
+        "micro6ResolvedAccountName",
+        firstNonBlank(
+            stringValue(targetPreparationMetadata.get("resolved_account_name")),
+            stringValue(targetMetadata.get("resolved_account_name")),
+            stringValue(targetMetadata.get("account_name"))));
+    response.put(
+        "micro6ResolvedAccountHash",
+        firstNonBlank(
+            stringValue(targetPreparationMetadata.get("resolved_account_hash")),
+            stringValue(targetMetadata.get("resolved_account_hash")),
+            stringValue(targetMetadata.get("account_hash"))));
+    response.put(
+        "micro6RequestedAccountName",
+        firstNonBlank(
+            stringValue(targetPreparationMetadata.get("requested_account_name")),
+            stringValue(targetMetadata.get("requested_account_name"))));
+    response.put(
+        "micro6RequestedAccountHash",
+        firstNonBlank(
+            stringValue(targetPreparationMetadata.get("requested_account_hash")),
+            stringValue(targetMetadata.get("requested_account_hash"))));
     response.put("agentServerBaseUrl", stringValue(targetPreparationMetadata.get("agent_server_base_url")));
     response.put("launchProfileName", null);
     response.put("launchArgsPreview", stringValue(targetPreparationMetadata.get("launch_args_preview")));
     response.put("launchArgsConfigured", targetPreparationMetadata.get("launch_args_preview") != null);
     response.put("effectiveGradleTask", stringValue(targetPreparationMetadata.get("effective_gradle_task")));
+    response.put("localExecutorBaseUrl", stringValue(targetPreparationMetadata.get("local_executor_base_url")));
+    response.put("targetReadinessPhase", stringValue(targetPreparationMetadata.get("readiness_phase")));
+    response.put("targetReadinessReason", stringValueAllowBlank(targetPreparationMetadata.get("readiness_reason")));
     response.put("world", intValue(taskMetadata.get("world")));
     response.put("launcherMachineUuid", firstNonBlank(
         stringValue(targetPreparationMetadata.get("launcher_machine_uuid")),
@@ -1766,6 +2087,36 @@ public class BuilderGoalRunnerService {
     response.put("launchMode", stringValue(targetPreparationMetadata.get("launch_mode")));
     response.put("launcherPid", longValue(targetPreparationMetadata.get("launcher_pid")));
     response.put("launchLogFile", stringValue(targetPreparationMetadata.get("launcher_log_file")));
+    response.put("portOwnerPid", longValue(targetPreparationMetadata.get("port_owner_pid")));
+    response.put("dispatchHold", boolValue(targetPreparationMetadata.get("dispatch_hold")));
+    response.put("dispatchHoldReason", stringValue(targetPreparationMetadata.get("dispatch_hold_reason")));
+    response.put("startupState", stringValue(targetPreparationMetadata.get("startup_state")));
+    response.put("loginState", stringValue(targetPreparationMetadata.get("login_state")));
+    response.put("loginAttempt", intValue(targetPreparationMetadata.get("login_attempt")));
+    response.put("loginAttemptMax", intValue(targetPreparationMetadata.get("login_attempt_max")));
+    response.put(
+        "loginTerminalReason",
+        stringValueAllowBlank(targetPreparationMetadata.get("login_terminal_reason")));
+    response.put("reusedExecutor", boolValue(targetPreparationMetadata.get("reused_executor")));
+    response.put("launchFailureKind", stringValue(targetPreparationMetadata.get("launch_failure_kind")));
+    response.put(
+        "launchFailureDetail",
+        stringValueAllowBlank(targetPreparationMetadata.get("launch_failure_detail")));
+    response.put(
+        "lastObservedReadinessPhase",
+        stringValue(targetPreparationMetadata.get("last_observed_readiness_phase")));
+    boolean localExecutorObserved =
+        response.get("portOwnerPid") != null
+            || response.get("micro6ResolvedAccountName") != null
+            || response.get("targetClientId") != null;
+    boolean localExecutorReady =
+        PREPARATION_STATE_READY_TO_PUBLISH.equalsIgnoreCase(
+                stringValue(targetPreparationMetadata.get("state")))
+            || publishStatus != null
+            || Boolean.FALSE.equals(boolValue(targetPreparationMetadata.get("dispatch_hold")))
+                && response.get("micro6ResolvedAccountName") != null;
+    response.put("localExecutorObserved", localExecutorObserved);
+    response.put("localExecutorReady", localExecutorReady);
     response.put("targetPreparationState", stringValue(targetPreparationMetadata.get("state")));
     response.put("targetPreparationMessage", stringValueAllowBlank(targetPreparationMetadata.get("message")));
     response.put("analysisCustomized", analysisInputMetadata.customized());
@@ -1800,6 +2151,176 @@ public class BuilderGoalRunnerService {
     }
     if ("PUBLISH_FAILED".equalsIgnoreCase(publishStatus)) {
       return "Publish failed; there is no task run to analyze";
+    }
+    return null;
+  }
+
+  private LocalDateTime resolveLogWindowStart(PatchLoopIteration iteration) {
+    LocalDateTime base =
+        firstNonNull(iteration.getRunStartTime(), iteration.getCreatedAt(), LocalDateTime.now());
+    return base.minusSeconds(30);
+  }
+
+  private LocalDateTime resolveLogWindowEnd(PatchLoopIteration iteration) {
+    LocalDateTime base =
+        firstNonNull(iteration.getRunEndTime(), iteration.getCompletedAt(), LocalDateTime.now());
+    return base.plusSeconds(30);
+  }
+
+  private Map<String, Object> buildRunLogFilter(
+      PatchLoopIteration iteration,
+      Map<String, Object> run,
+      LocalDateTime windowStart,
+      LocalDateTime windowEnd,
+      boolean fallbackToWindow) {
+    Map<String, Object> filter = new LinkedHashMap<>();
+    filter.put("iterationId", iteration.getIterationId());
+    filter.put("taskKey", iteration.getScriptName());
+    filter.put("accountName", stringValue(run.get("accountName")));
+    filter.put("sessionId", stringValue(run.get("runSessionId")));
+    filter.put("recordingId", stringValue(run.get("runRecordingId")));
+    filter.put("windowStart", windowStart.atOffset(ZoneOffset.UTC).toString());
+    filter.put("windowEnd", windowEnd.atOffset(ZoneOffset.UTC).toString());
+    filter.put("matchMode", fallbackToWindow ? "window_fallback" : "run_filtered");
+    return filter;
+  }
+
+  private List<Map<String, Object>> buildMatchedRunLogs(
+      PatchLoopIteration iteration, Map<String, Object> run, List<LogEntity> logs) {
+    String iterationId = iteration.getIterationId();
+    String accountName = stringValue(run.get("accountName"));
+    String sessionId = stringValue(run.get("runSessionId"));
+    String recordingId = stringValue(run.get("runRecordingId"));
+    String taskKey = iteration.getScriptName();
+    return logs.stream()
+        .filter(
+            log ->
+                matchesRunLog(log, iterationId, accountName, sessionId, recordingId, taskKey))
+        .map(log -> buildLogView(log, true))
+        .toList();
+  }
+
+  private List<Map<String, Object>> buildWindowLogViews(List<LogEntity> logs) {
+    return logs.stream().map(log -> buildLogView(log, false)).toList();
+  }
+
+  private boolean matchesRunLog(
+      LogEntity log,
+      String iterationId,
+      String accountName,
+      String sessionId,
+      String recordingId,
+      String taskKey) {
+    if (equalsIgnoreCase(log.getScriptName(), taskKey)) {
+      return true;
+    }
+    String haystack =
+        String.join(
+            "\n",
+            safeString(log.getSource()),
+            safeString(log.getMessage()),
+            safeString(log.getStructuredData()),
+            safeString(log.getScriptName()));
+    return containsIgnoreCase(haystack, iterationId)
+        || containsIgnoreCase(haystack, accountName)
+        || containsIgnoreCase(haystack, sessionId)
+        || containsIgnoreCase(haystack, recordingId)
+        || containsIgnoreCase(haystack, taskKey);
+  }
+
+  private Map<String, Object> buildLogView(LogEntity log, boolean matched) {
+    Map<String, Object> view = new LinkedHashMap<>();
+    view.put("timestamp", log.getTimestamp() != null ? log.getTimestamp().atOffset(ZoneOffset.UTC).toString() : null);
+    view.put("level", log.getLevel());
+    view.put("source", log.getSource());
+    view.put("scriptName", log.getScriptName());
+    view.put("message", log.getMessage());
+    view.put("logType", log.getLogType());
+    view.put("tick", log.getTick());
+    view.put("structuredData", log.getStructuredData());
+    view.put("matched", matched);
+    return view;
+  }
+
+  private Map<String, Object> readLaunchLogTail(Map<String, Object> run) {
+    String launchLogFile = stringValue(run.get("launchLogFile"));
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("path", launchLogFile);
+    if (launchLogFile == null || launchLogFile.isBlank()) {
+      response.put("available", false);
+      response.put("message", "This run does not have a saved launch log file.");
+      response.put("lines", List.of());
+      return response;
+    }
+    Path logPath = Path.of(launchLogFile);
+    if (!Files.exists(logPath)) {
+      response.put("available", false);
+      response.put("message", "Launch log file is missing on disk.");
+      response.put("lines", List.of());
+      return response;
+    }
+    try {
+      response.put("available", true);
+      response.put("message", null);
+      response.put("lines", tailFile(logPath, 200));
+      return response;
+    } catch (IOException e) {
+      response.put("available", false);
+      response.put("message", "Failed to read launch log file: " + e.getMessage());
+      response.put("lines", List.of());
+      return response;
+    }
+  }
+
+  private List<String> tailFile(Path path, int maxLines) throws IOException {
+    try {
+      return tailFile(path, maxLines, StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      return tailFile(path, maxLines, Charset.forName("windows-1252"));
+    }
+  }
+
+  private List<String> tailFile(Path path, int maxLines, Charset charset) throws IOException {
+    ArrayDeque<String> lines = new ArrayDeque<>(maxLines);
+    try (BufferedReader reader = Files.newBufferedReader(path, charset)) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        if (lines.size() == maxLines) {
+          lines.removeFirst();
+        }
+        lines.addLast(line);
+      }
+    }
+    return new ArrayList<>(lines);
+  }
+
+  private boolean containsIgnoreCase(String haystack, String needle) {
+    if (haystack == null || haystack.isBlank() || needle == null || needle.isBlank()) {
+      return false;
+    }
+    return haystack.toLowerCase(Locale.ROOT).contains(needle.toLowerCase(Locale.ROOT));
+  }
+
+  private boolean equalsIgnoreCase(String left, String right) {
+    if (left == null || right == null) {
+      return false;
+    }
+    return left.equalsIgnoreCase(right);
+  }
+
+  private String safeString(Object value) {
+    return value == null ? "" : value.toString();
+  }
+
+  @SafeVarargs
+  private final <T> T firstNonNull(T... values) {
+    if (values == null) {
+      return null;
+    }
+    for (T value : values) {
+      if (value != null) {
+        return value;
+      }
     }
     return null;
   }
@@ -2130,6 +2651,30 @@ public class BuilderGoalRunnerService {
     return node != null && node.isObject() ? node : objectMapper.createObjectNode();
   }
 
+  private JsonNode firstNonEmptyObjectNode(JsonNode... candidates) {
+    if (candidates == null) {
+      return objectMapper.createObjectNode();
+    }
+    for (JsonNode candidate : candidates) {
+      if (isNonEmptyObject(candidate)) {
+        return candidate;
+      }
+    }
+    return objectMapper.createObjectNode();
+  }
+
+  private boolean isNonEmptyObject(JsonNode node) {
+    return node != null && node.isObject() && node.fields().hasNext();
+  }
+
+  private void validateStoredSettingsConsistency(PatchLoopIteration iteration) {
+    if (!hasMissingStoredSettings(iteration)) {
+      return;
+    }
+    throw new IllegalStateException(
+        "Builder Goal run has imported task settings, but saved launch settings are empty");
+  }
+
   private String firstNonBlank(String... values) {
     for (String value : values) {
       if (value != null && !value.isBlank()) {
@@ -2323,6 +2868,21 @@ public class BuilderGoalRunnerService {
     return null;
   }
 
+  private Boolean boolValue(Object value) {
+    if (value instanceof Boolean booleanValue) {
+      return booleanValue;
+    }
+    if (value instanceof String text && !text.isBlank()) {
+      if ("true".equalsIgnoreCase(text.trim())) {
+        return Boolean.TRUE;
+      }
+      if ("false".equalsIgnoreCase(text.trim())) {
+        return Boolean.FALSE;
+      }
+    }
+    return null;
+  }
+
   private BuilderGoalAccountCatalogService.AccountDefinition resolveSelectedAccount(String accountId) {
     if (accountId == null || accountId.isBlank()) {
       return null;
@@ -2408,6 +2968,9 @@ public class BuilderGoalRunnerService {
     if (micro6Status == null || micro6Status.isBlank()) {
       return "PUBLISHED";
     }
+    if ("QUEUED".equalsIgnoreCase(micro6Status) || "ACCEPTED".equalsIgnoreCase(micro6Status)) {
+      return "QUEUED";
+    }
     if ("FAILED".equalsIgnoreCase(micro6Status) || "CANCELLED".equalsIgnoreCase(micro6Status)) {
       return "FAILED";
     }
@@ -2423,6 +2986,8 @@ public class BuilderGoalRunnerService {
   private String deriveDisplayStatus(PatchLoopIteration iteration, String publishStatus) {
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
     String preparationState = stringValue(readTargetPreparationMetadata(taskMetadata).get("state"));
+    boolean taskStarted = Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"));
+    boolean taskStartConfirmed = taskStarted && iteration.getRunSessionId() != null;
     if ("PUBLISH_FAILED".equalsIgnoreCase(publishStatus)) {
       return "PUBLISH_FAILED";
     }
@@ -2437,7 +3002,132 @@ public class BuilderGoalRunnerService {
         && !PREPARATION_STATE_READY_TO_PUBLISH.equals(preparationState)) {
       return preparationState;
     }
+    if (taskStarted
+        && !taskStartConfirmed
+        && ("RUNNING".equalsIgnoreCase(publishStatus)
+            || "PAUSED".equalsIgnoreCase(publishStatus)
+            || "QUEUED".equalsIgnoreCase(publishStatus)
+            || "ACCEPTED".equalsIgnoreCase(publishStatus)
+            || "PUBLISHED".equalsIgnoreCase(publishStatus))
+        && iteration.getStatus() != PatchLoopStatus.COMPLETED
+        && iteration.getStatus() != PatchLoopStatus.FAILED) {
+      return DISPLAY_STATUS_WAITING_FOR_DEBUG_BIND;
+    }
+    if (!taskStartConfirmed
+        && ("PUBLISHED".equalsIgnoreCase(publishStatus)
+            || "RUNNING".equalsIgnoreCase(publishStatus)
+            || "QUEUED".equalsIgnoreCase(publishStatus)
+            || "ACCEPTED".equalsIgnoreCase(publishStatus))
+        && iteration.getStatus() != PatchLoopStatus.COMPLETED
+        && iteration.getStatus() != PatchLoopStatus.FAILED) {
+      return DISPLAY_STATUS_WAITING_FOR_TASK_START;
+    }
     return firstNonBlank(publishStatus, iteration.getStatus() != null ? iteration.getStatus().name() : null, "QUEUED");
+  }
+
+  private boolean applyTaskStartMetadata(
+      PatchLoopIteration iteration,
+      Map<String, Object> taskMetadata,
+      Map<String, Object> publishMetadata,
+      ScriptExecutionService.Micro6RunStatusResult statusResult) {
+    JsonNode raw = statusResult.rawResponse();
+    if (raw == null || raw.isNull()) {
+      return false;
+    }
+    boolean changed = false;
+    boolean taskStarted = raw.path("task_started").asBoolean(false);
+    if (taskStarted != Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"))) {
+      taskMetadata.put("task_start_confirmed", taskStarted);
+      changed = true;
+    }
+    String startedAt = textValue(raw.path("started_at"));
+    if (!Objects.equals(startedAt, stringValue(taskMetadata.get("task_started_at")))) {
+      if (startedAt != null) {
+        taskMetadata.put("task_started_at", startedAt);
+      } else {
+        taskMetadata.remove("task_started_at");
+      }
+      changed = true;
+    }
+    String currentTask = textValue(raw.path("current_task"));
+    if (!Objects.equals(currentTask, stringValue(taskMetadata.get("current_task")))) {
+      if (currentTask != null) {
+        taskMetadata.put("current_task", currentTask);
+      } else {
+        taskMetadata.remove("current_task");
+      }
+      changed = true;
+    }
+    String debugSessionId = textValue(raw.path("debug_session_id"));
+    if (debugSessionId != null && !Objects.equals(debugSessionId, iteration.getRunSessionId())) {
+      iteration.setRunSessionId(debugSessionId);
+      changed = true;
+    }
+    String recordingId = textValue(raw.path("recording_id"));
+    if (recordingId != null && !Objects.equals(recordingId, iteration.getRunRecordingId())) {
+      iteration.setRunRecordingId(recordingId);
+      changed = true;
+    }
+    if (debugSessionId != null && !Objects.equals(debugSessionId, stringValue(publishMetadata.get("debug_session_id")))) {
+      publishMetadata.put("debug_session_id", debugSessionId);
+      changed = true;
+    }
+    if (recordingId != null && !Objects.equals(recordingId, stringValue(publishMetadata.get("recording_id")))) {
+      publishMetadata.put("recording_id", recordingId);
+      changed = true;
+    }
+    return changed;
+  }
+
+  private boolean isTaskStartConfirmed(ScriptExecutionService.Micro6RunStatusResult statusResult) {
+    JsonNode raw = statusResult.rawResponse();
+    return raw != null
+        && raw.path("task_started").asBoolean(false)
+        && textValue(raw.path("debug_session_id")) != null;
+  }
+
+  private boolean isTaskStartedObserved(ScriptExecutionService.Micro6RunStatusResult statusResult) {
+    JsonNode raw = statusResult.rawResponse();
+    return raw != null && raw.path("task_started").asBoolean(false);
+  }
+
+  private boolean hasTaskStartTimedOut(
+      PatchLoopIteration iteration, Map<String, Object> publishMetadata) {
+    String publishedAtRaw = stringValue(publishMetadata.get("published_at"));
+    if (publishedAtRaw == null || publishedAtRaw.isBlank()) {
+      return false;
+    }
+    try {
+      LocalDateTime publishedAt = LocalDateTime.parse(publishedAtRaw);
+      return publishedAt.plus(runTimeoutMs, ChronoUnit.MILLIS).isBefore(LocalDateTime.now());
+    } catch (Exception ignored) {
+      return false;
+    }
+  }
+
+  private void finalizeTaskStartTimeout(
+      PatchLoopIteration iteration,
+      Map<String, Object> publishMetadata,
+      ScriptExecutionService.Micro6RunStatusResult statusResult) {
+    boolean taskStartedObserved = isTaskStartedObserved(statusResult);
+    String failureCode =
+        taskStartedObserved
+            ? PatchLoopFailureCode.DEBUG_BIND_TIMEOUT
+            : PatchLoopFailureCode.TASK_NOT_STARTED_TIMEOUT;
+    String failureMessage =
+        taskStartedObserved
+            ? "Task started but never attached a ChromaScape debug session"
+            : "Task was published but task start was never observed";
+    String failureReason =
+        firstNonBlank(
+            textValue(statusResult.rawResponse() != null ? statusResult.rawResponse().path("dispatch_hold_reason") : null),
+            statusResult.errorMessage(),
+            failureMessage);
+    persistenceService.markIterationFailed(
+        iteration,
+        failureCode,
+        failureMessage,
+        "publishStatus=" + stringValue(publishMetadata.get("status")) + ", reason=" + failureReason);
   }
 
   private Integer intValue(Object value) {

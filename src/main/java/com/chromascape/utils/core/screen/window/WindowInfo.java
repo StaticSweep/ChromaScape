@@ -17,6 +17,7 @@ public class WindowInfo {
   private final String title;
   private final String accountName;
   private final int pid;
+  private final boolean visible;
   private final Rectangle bounds;
 
   /**
@@ -30,12 +31,19 @@ public class WindowInfo {
    * @param bounds The window bounds on screen
    */
   public WindowInfo(
-      String id, HWND hwnd, String title, String accountName, int pid, Rectangle bounds) {
+      String id,
+      HWND hwnd,
+      String title,
+      String accountName,
+      int pid,
+      boolean visible,
+      Rectangle bounds) {
     this.id = id;
     this.hwnd = hwnd;
     this.title = title;
     this.accountName = accountName;
     this.pid = pid;
+    this.visible = visible;
     this.bounds = bounds;
   }
 
@@ -50,13 +58,14 @@ public class WindowInfo {
    * @param rect The window RECT from Win32 API
    */
   public static WindowInfo fromRect(
-      String id, HWND hwnd, String title, String accountName, int pid, RECT rect) {
+      String id, HWND hwnd, String title, String accountName, int pid, boolean visible, RECT rect) {
     return new WindowInfo(
         id,
         hwnd,
         title,
         accountName,
         pid,
+        visible,
         new Rectangle(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top));
   }
 
@@ -80,6 +89,10 @@ public class WindowInfo {
     return pid;
   }
 
+  public boolean isVisible() {
+    return visible;
+  }
+
   public Rectangle getBounds() {
     return bounds;
   }
@@ -98,6 +111,8 @@ public class WindowInfo {
         + '\''
         + ", pid="
         + pid
+        + ", visible="
+        + visible
         + ", bounds="
         + bounds
         + '}';

@@ -122,12 +122,18 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
       SessionStartResponse response =
           sessionService.startSession(
-              request.getAccountName(), request.getScriptName(), request.getRecordingEnabled());
+              request.getAccountName(),
+              request.getScriptName(),
+              request.getRecordingEnabled(),
+              request.getTriggerSource());
 
       log.info(
-          "SESSION_START result: sessionId={}, recordingId={}",
+          "SESSION_START result: sessionId={}, recordingId={}, failureReason={}",
           response.getSessionId(),
-          response.getRecordingId() != null ? response.getRecordingId() : "none");
+          response.getRecordingId() != null ? response.getRecordingId() : "none",
+          response.getRecordingFailureReason() != null
+              ? response.getRecordingFailureReason()
+              : "none");
 
       // Send response back to Micro6 with the sessionId
       String responseJson = objectMapper.writeValueAsString(response);
@@ -177,8 +183,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           request.getSessionId(),
           request.getEndTick());
 
-      // Do not stop recording automatically on Micro6 session stop
-      sessionService.stopSession(request.getSessionId(), request.getEndTick(), false);
+      sessionService.stopSession(request.getSessionId(), request.getEndTick(), true);
     } catch (Exception e) {
       log.error("Error handling SESSION_STOP: {}", e.getMessage(), e);
     }

@@ -460,15 +460,51 @@ public class ScriptExecutionService {
             existingEntryId);
         return Micro6PublishResult.success(existingEntryId, true, targetBaseUrl, "PUBLISHED");
       }
+      String parsedExecutorError = parseMicro6ExecuteError(executeResponse);
       return Micro6PublishResult.failure(
           "Micro6 executor rejected task (HTTP "
               + executeResponse.statusCode()
               + "): "
-              + executeResponse.body(),
+              + parsedExecutorError,
           targetBaseUrl);
     }
 
     return Micro6PublishResult.success(entryId, false, targetBaseUrl, "PUBLISHED");
+  }
+
+  private String parseMicro6ExecuteError(HttpResponse<String> executeResponse) {
+    if (executeResponse == null) {
+      return "unknown executor error";
+    }
+    String body = executeResponse.body();
+    if (body == null || body.isBlank()) {
+      return "empty response body";
+    }
+    try {
+      JsonNode errorJson = objectMapper.readTree(body);
+      String errorCode = errorJson.path("error_code").asText("");
+      String errorMessage = errorJson.path("error_message").asText("");
+      String configurationSource = errorJson.path("configuration_source").asText("");
+      StringBuilder summary = new StringBuilder();
+      if (!errorCode.isBlank()) {
+        summary.append(errorCode);
+      }
+      if (!errorMessage.isBlank()) {
+        if (summary.length() > 0) {
+          summary.append(": ");
+        }
+        summary.append(errorMessage);
+      }
+      if (!configurationSource.isBlank()) {
+        if (summary.length() > 0) {
+          summary.append(" ");
+        }
+        summary.append("(source=").append(configurationSource).append(")");
+      }
+      return summary.length() > 0 ? summary.toString() : body;
+    } catch (Exception ignored) {
+      return body;
+    }
   }
 
   /** Gets the current script instance if running. */

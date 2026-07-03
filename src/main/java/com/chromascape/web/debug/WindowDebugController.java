@@ -45,6 +45,18 @@ public class WindowDebugController {
   public record WindowDebugInfo(
       int index, String title, String className, boolean visible, String hwnd) {}
 
+  public record TargetWindowDebugInfo(
+      String id,
+      String title,
+      String accountName,
+      int pid,
+      boolean visible,
+      String hwnd,
+      int x,
+      int y,
+      int width,
+      int height) {}
+
   /**
    * Enumerates all windows on the system for debugging purposes.
    *
@@ -126,11 +138,27 @@ public class WindowDebugController {
    * @return List of detected target windows
    */
   @GetMapping("/targets")
-  public ResponseEntity<List<WindowInfo>> getTargetWindows() {
+  public ResponseEntity<List<TargetWindowDebugInfo>> getTargetWindows() {
     logger.info("Getting target windows via WindowHandler.getAllTargetWindows()...");
     List<WindowInfo> windows = WindowHandler.getAllTargetWindows();
     logger.info("Found {} target windows", windows.size());
-    return ResponseEntity.ok(windows);
+    List<TargetWindowDebugInfo> response =
+        windows.stream()
+            .map(
+                window ->
+                    new TargetWindowDebugInfo(
+                        window.getId(),
+                        window.getTitle(),
+                        window.getAccountName(),
+                        window.getPid(),
+                        window.isVisible(),
+                        window.getHwnd() != null ? window.getHwnd().toString() : null,
+                        window.getBounds() != null ? window.getBounds().x : 0,
+                        window.getBounds() != null ? window.getBounds().y : 0,
+                        window.getBounds() != null ? window.getBounds().width : 0,
+                        window.getBounds() != null ? window.getBounds().height : 0))
+            .toList();
+    return ResponseEntity.ok(response);
   }
 
   /**

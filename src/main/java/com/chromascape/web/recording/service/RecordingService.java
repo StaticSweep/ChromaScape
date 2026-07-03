@@ -600,6 +600,11 @@ public class RecordingService implements FrameListener {
     return config.isAutoRecord();
   }
 
+  /** Returns whether task-bound auto-recording is enabled per configuration. */
+  public boolean isTaskAutoRecordEnabled() {
+    return config.isAutoRecordTaskSessions();
+  }
+
   /** Returns the current recording ID if recording, or null otherwise. */
   public String getCurrentRecordingId() {
     return recording.get() ? currentRecordingId : null;

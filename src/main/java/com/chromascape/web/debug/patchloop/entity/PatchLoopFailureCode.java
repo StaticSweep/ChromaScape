@@ -38,6 +38,9 @@ public final class PatchLoopFailureCode {
   public static final String AUTOFIX_DISABLED = "AUTOFIX_DISABLED";
   public static final String STATE_TRANSITION_FAILED = "STATE_TRANSITION_FAILED";
   public static final String TARGET_UNREACHABLE = "TARGET_UNREACHABLE";
+  public static final String TASK_START_TIMEOUT = "TASK_START_TIMEOUT";
+  public static final String TASK_NOT_STARTED_TIMEOUT = "TASK_NOT_STARTED_TIMEOUT";
+  public static final String DEBUG_BIND_TIMEOUT = "DEBUG_BIND_TIMEOUT";
 
   private PatchLoopFailureCode() {
     // Prevent instantiation

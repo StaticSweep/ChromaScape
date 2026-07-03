@@ -121,21 +121,6 @@ class BuilderGoalRunnerServiceTest {
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.peekCatalogForBaseUrl(any())).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
-    when(targetPreparationService.ensureReady(any()))
-        .thenReturn(
-            new Micro6TargetPreparationService.PreparationResult(
-                targetClient,
-                Map.of(
-                    "state", "READY_TO_PUBLISH",
-                    "launcher_machine_uuid", "machine-1",
-                    "launch_mode", "local_micro6_project"),
-                null,
-                null));
-    when(scriptExecutionService.publishMicro6Task(any(), any()))
-        .thenReturn(
-            ScriptExecutionService.Micro6PublishResult.success(
-                1337, false, "http://100.120.100.78:8098", "PUBLISHED"));
-
     Map<String, Object> response =
         service.startRun(
             objectMapper.readTree(
@@ -151,13 +136,16 @@ class BuilderGoalRunnerServiceTest {
             null,
             null,
             null,
-            "machine-1");
+            "machine-1",
+            null);
 
-    assertThat(response.get("published")).isEqualTo(true);
-    assertThat(response.get("entryId")).isEqualTo(1337);
+    assertThat(response.get("accepted")).isEqualTo(true);
+    assertThat(response.get("published")).isNull();
+    assertThat(response.get("entryId")).isNull();
     assertThat(response.get("catalogValidation")).isEqualTo("SKIPPED_NO_CACHE");
     assertThat(response.get("catalogValidationSkipped")).isEqualTo(true);
-    assertThat(((Map<?, ?>) response.get("targetPreparation")).get("state")).isEqualTo("READY_TO_PUBLISH");
+    assertThat(((Map<?, ?>) response.get("targetPreparation")).get("state"))
+        .isEqualTo("PREPARING_TARGET");
     verify(micro6ExecutorCatalogService, never())
         .getCatalogForBaseUrl("http://100.120.100.78:8098", false);
   }
@@ -476,31 +464,15 @@ class BuilderGoalRunnerServiceTest {
 
     when(iterationRepository.findByIterationId("buildergoal_rerun0001")).thenReturn(Optional.of(iteration));
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.peekCatalogForBaseUrl(any())).thenReturn(null);
-    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
-    when(targetPreparationService.ensureReady(any()))
-        .thenReturn(
-            new Micro6TargetPreparationService.PreparationResult(
-                targetClient, Map.of("state", "READY_TO_PUBLISH", "launch_mode", "local_micro6_project"), null, null));
-    when(scriptExecutionService.publishMicro6Task(any(), any()))
-        .thenReturn(
-            ScriptExecutionService.Micro6PublishResult.success(
-                1444, false, "http://100.120.100.78:8098", "PUBLISHED"));
-
     Map<String, Object> response = service.rerun("buildergoal_rerun0001");
 
-    assertThat(response.get("published")).isEqualTo(true);
+    assertThat(response.get("accepted")).isEqualTo(true);
+    assertThat(response.get("published")).isNull();
     @SuppressWarnings("unchecked")
     Map<String, Object> run = (Map<String, Object>) response.get("run");
     assertThat(run.get("taskKey")).isEqualTo("configurable_woodcutting");
     assertThat(run.get("accountId")).isEqualTo("hash-1");
     assertThat(run.get("launcherMachineUuid")).isEqualTo("machine-1");
-    verify(scriptExecutionService).publishMicro6Task(eq("micro6:configurable_woodcutting"), any());
-    ArgumentCaptor<Micro6TargetPreparationService.PreparationRequest> preparationCaptor =
-        ArgumentCaptor.forClass(Micro6TargetPreparationService.PreparationRequest.class);
-    verify(targetPreparationService).ensureReady(preparationCaptor.capture());
-    assertThat(preparationCaptor.getValue().launcherMachineUuid()).isEqualTo("machine-1");
-    assertThat(preparationCaptor.getValue().targetBaseUrl()).isNull();
   }
 
   private AnalysisV1EvidenceBundle sampleEvidenceBundle() {

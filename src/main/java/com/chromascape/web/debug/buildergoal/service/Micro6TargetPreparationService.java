@@ -2,6 +2,7 @@ package com.chromascape.web.debug.buildergoal.service;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,6 +23,11 @@ public class Micro6TargetPreparationService {
   }
 
   public PreparationResult ensureReady(PreparationRequest request) {
+    return ensureReady(request, null);
+  }
+
+  public PreparationResult ensureReady(
+      PreparationRequest request, Consumer<Micro6TargetRelaunchService.RelaunchProgress> progressListener) {
     String accountHash = firstNonBlank(request.accountHash(), request.accountIdentifier());
     String accountName = firstNonBlank(request.accountName(), request.accountIdentifier(), accountHash);
     if (accountName == null) {
@@ -56,7 +62,15 @@ public class Micro6TargetPreparationService {
               request.accountHash(),
               request.accountEmail(),
               request.accountPassword(),
-              request.targetBaseUrl());
+              request.world(),
+              request.targetBaseUrl(),
+              progressListener);
+    } catch (Micro6TargetRelaunchService.RelaunchException e) {
+      throw new PreparationException(
+          e.getPhase(),
+          firstNonBlank(e.getMessage(), "Failed while waiting for local Micro6 executor"),
+          e,
+          e.isTerminal());
     } catch (Exception e) {
       throw new PreparationException(
           PHASE_PREPARING_TARGET,
@@ -66,7 +80,7 @@ public class Micro6TargetPreparationService {
 
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("state", PHASE_READY_TO_PUBLISH);
-    metadata.put("message", "Local Micro6 workspace launched and executor heartbeat returned");
+    metadata.put("message", "Local Micro6 workspace launched and executor is dispatch-ready");
     metadata.put("launch_mode", "local_micro6_project");
     metadata.put("launcher_machine_uuid", selectedMachine.machineUuid());
     metadata.put("launcher_machine_name", selectedMachine.displayName());
@@ -75,8 +89,26 @@ public class Micro6TargetPreparationService {
         ? relaunchResult.launchLogFile().toString()
         : null);
     metadata.put("launch_args_preview", relaunchResult.maskedLaunchArgs());
+    metadata.put("effective_gradle_task", relaunchResult.effectiveGradleTask());
+    metadata.put("local_executor_base_url", relaunchResult.localExecutorBaseUrl());
+    metadata.put("readiness_phase", relaunchResult.readinessPhase());
+    metadata.put("readiness_reason", relaunchResult.readinessReason());
+    metadata.put("resolved_account_name", relaunchResult.resolvedAccountName());
+    metadata.put("resolved_account_hash", relaunchResult.resolvedAccountHash());
+    metadata.put("requested_account_name", relaunchResult.requestedAccountName());
+    metadata.put("requested_account_hash", relaunchResult.requestedAccountHash());
+    metadata.put("port_owner_pid", relaunchResult.portOwnerPid());
+    metadata.put("observed_executor_status", relaunchResult.observedExecutorStatus());
+    metadata.put("dispatch_hold", relaunchResult.dispatchHold());
+    metadata.put("dispatch_hold_reason", relaunchResult.dispatchHoldReason());
+    metadata.put("startup_state", relaunchResult.startupState());
+    metadata.put("login_state", relaunchResult.loginState());
+    metadata.put("login_attempt", relaunchResult.loginAttempt());
+    metadata.put("login_attempt_max", relaunchResult.loginAttemptMax());
+    metadata.put("login_terminal_reason", relaunchResult.loginTerminalReason());
+    metadata.put("reused_executor", relaunchResult.reusedExecutor());
+    metadata.put("world", relaunchResult.world());
     metadata.put("account_name", accountName);
-    metadata.put("resolved_account_hash", accountHash);
     metadata.put("resolved_from", "local_micro6_project");
     metadata.put("resolved_path_source", "micro6_project_dir");
 
@@ -98,6 +130,7 @@ public class Micro6TargetPreparationService {
       String accountName,
       String accountEmail,
       String accountPassword,
+      Integer world,
       String launcherMachineUuid,
       String targetBaseUrl) {}
 
@@ -109,19 +142,32 @@ public class Micro6TargetPreparationService {
 
   public static class PreparationException extends IllegalStateException {
     private final String phase;
+    private final boolean terminal;
 
     public PreparationException(String phase, String message) {
-      super(message);
-      this.phase = phase;
+      this(phase, message, null, true);
+    }
+
+    public PreparationException(String phase, String message, boolean terminal) {
+      this(phase, message, null, terminal);
     }
 
     public PreparationException(String phase, String message, Throwable cause) {
+      this(phase, message, cause, true);
+    }
+
+    public PreparationException(String phase, String message, Throwable cause, boolean terminal) {
       super(message, cause);
       this.phase = phase;
+      this.terminal = terminal;
     }
 
     public String getPhase() {
       return phase;
+    }
+
+    public boolean isTerminal() {
+      return terminal;
     }
   }
 }

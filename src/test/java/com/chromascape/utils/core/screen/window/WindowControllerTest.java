@@ -24,7 +24,8 @@ class WindowControllerTest {
   void getCurrentWindowReturnsSelectedWindowPayload() {
     WindowSelectionService selectionService = new WindowSelectionService();
     selectionService.setSelectedWindow(
-        new WindowInfo("7", null, "RuneLite - test", "test", 1234, new Rectangle(10, 20, 300, 400)));
+        new WindowInfo(
+            "7", null, "RuneLite - test", "test", 1234, true, new Rectangle(10, 20, 300, 400)));
     WindowController controller = new WindowController(selectionService);
 
     ResponseEntity<Map<String, Object>> response = controller.getCurrentWindow();

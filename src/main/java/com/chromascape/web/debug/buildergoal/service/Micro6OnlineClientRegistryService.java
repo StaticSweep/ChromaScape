@@ -79,14 +79,6 @@ public class Micro6OnlineClientRegistryService {
       String accountHash, String accountName, Integer expectedPort, Instant seenAfter) {
     pruneExpired();
     Stream<ClientState> stream = clients.values().stream().filter(this::isRunnable);
-    if (accountHash != null && !accountHash.isBlank()) {
-      String normalizedHash = accountHash.trim().toLowerCase(Locale.ENGLISH);
-      stream =
-          stream.filter(
-              state ->
-                  state.accountHash != null
-                      && state.accountHash.trim().toLowerCase(Locale.ENGLISH).equals(normalizedHash));
-    }
     if (accountName != null && !accountName.isBlank()) {
       String normalizedAccount = accountName.trim().toLowerCase(Locale.ENGLISH);
       stream =
@@ -94,6 +86,13 @@ public class Micro6OnlineClientRegistryService {
               state ->
                   state.accountName != null
                       && state.accountName.trim().toLowerCase(Locale.ENGLISH).equals(normalizedAccount));
+    } else if (accountHash != null && !accountHash.isBlank()) {
+      String normalizedHash = accountHash.trim().toLowerCase(Locale.ENGLISH);
+      stream =
+          stream.filter(
+              state ->
+                  state.accountHash != null
+                      && state.accountHash.trim().toLowerCase(Locale.ENGLISH).equals(normalizedHash));
     }
     if (expectedPort != null && expectedPort > 0) {
       stream = stream.filter(state -> expectedPort.equals(resolvePort(state)));

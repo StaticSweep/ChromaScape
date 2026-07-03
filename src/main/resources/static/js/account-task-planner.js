@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '18';
+  static BUILDER_GOAL_BUNDLE_VERSION = '21';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -40,6 +40,7 @@ class AccountTaskPlanner {
     this.builderGoalCatalogDegraded = false;
     this.builderGoalCatalogReason = '';
     this.builderGoalCatalogSource = '';
+    this.builderGoalLogsIterationId = null;
   }
 
   /**
@@ -100,6 +101,12 @@ class AccountTaskPlanner {
     this.builderGoalImportResult = document.getElementById('builderGoalImportResult');
     this.builderGoalRunsList = document.getElementById('builderGoalRunsList');
     this.refreshBuilderGoalRunsBtn = document.getElementById('refreshBuilderGoalRunsBtn');
+    this.builderGoalLogsPanel = document.getElementById('builderGoalLogsPanel');
+    this.builderGoalLogsSummary = document.getElementById('builderGoalLogsSummary');
+    this.builderGoalLogsStatus = document.getElementById('builderGoalLogsStatus');
+    this.builderGoalLaunchLogTail = document.getElementById('builderGoalLaunchLogTail');
+    this.builderGoalHistoricalLogs = document.getElementById('builderGoalHistoricalLogs');
+    this.closeBuilderGoalLogsBtn = document.getElementById('closeBuilderGoalLogsBtn');
     this.builderGoalAnalysisModalElement = document.getElementById('builderGoalAnalysisModal');
     this.builderGoalAnalysisPrompt = document.getElementById('builderGoalAnalysisPrompt');
     this.builderGoalAnalysisContext = document.getElementById('builderGoalAnalysisContext');
@@ -330,8 +337,13 @@ class AccountTaskPlanner {
           this.loadBuilderGoalRunConfig(iterationId);
         } else if (action === 'rerun') {
           this.rerunBuilderGoal(iterationId);
+        } else if (action === 'view-logs') {
+          this.loadBuilderGoalRunLogs(iterationId);
         }
       });
+    }
+    if (this.closeBuilderGoalLogsBtn) {
+      this.closeBuilderGoalLogsBtn.addEventListener('click', () => this.closeBuilderGoalRunLogs());
     }
     if (this.builderGoalAnalysisResetBtn) {
       this.builderGoalAnalysisResetBtn.addEventListener('click', () => this.resetBuilderGoalAnalysisPrompt());
@@ -739,9 +751,9 @@ class AccountTaskPlanner {
       parts.push(this.formatBuilderGoalAccountSourceLabel(account.source));
     }
     if (account.online) {
-      parts.push('online now');
+      parts.push('launcher online');
     } else {
-      parts.push('offline');
+      parts.push('launcher offline');
     }
     if (!account.runnable && account.disabledReason) {
       parts.push(account.disabledReason);
@@ -787,7 +799,7 @@ class AccountTaskPlanner {
     if (account.source) {
       tags.push(this.formatBuilderGoalAccountSourceLabel(account.source));
     }
-    tags.push(account.online ? 'online' : 'offline');
+    tags.push(account.online ? 'launcher online' : 'launcher offline');
     if (!account.runnable) {
       tags.push('setup needed');
     }
@@ -1116,6 +1128,9 @@ class AccountTaskPlanner {
       }
       this.builderGoalRuns = await response.json();
       this.renderBuilderGoalRuns();
+      if (this.builderGoalLogsIterationId) {
+        this.loadBuilderGoalRunLogs(this.builderGoalLogsIterationId, { silent: true });
+      }
     } catch (error) {
       console.error('Failed to load builder goal runs:', error);
       this.builderGoalRunsList.innerHTML =
@@ -1187,7 +1202,7 @@ class AccountTaskPlanner {
       selectedMachine.displayName || selectedMachine.machineUuid || 'the selected machine'
     );
     this.builderGoalClientStatus.innerHTML =
-      `${degradedCatalogWarning}<span class="text-info">ChromaScape will launch the local micro6 workspace for ${accountLabel} on ${machineLabel} in world ${world}, wait for the executor to become dispatch-ready, and then publish ${taskLabel} using the JSON settings from the editor.</span>`;
+      `${degradedCatalogWarning}<span class="text-info">ChromaScape will launch or attach to the local micro6 workspace for ${accountLabel} on ${machineLabel} in world ${world}, wait for that account's local executor to become dispatch-ready, and only then publish ${taskLabel} using the JSON settings from the editor.</span>`;
   }
 
   updateBuilderGoalRunButtonState() {
@@ -1241,6 +1256,7 @@ class AccountTaskPlanner {
       const canApprove = Boolean(run.approvalAvailable);
       const canRerun = Boolean(run.canRerun);
       const canLoadConfig = Boolean(run.configAvailable);
+      const showingLogs = this.builderGoalLogsIterationId === run.iterationId;
       const actionStepLine = this.renderBuilderGoalActionStep(run);
       const blockedReasonLine = this.renderBuilderGoalBlockedReason(run);
       const analysisUsageLine = this.renderBuilderGoalAnalysisUsage(run);
@@ -1310,6 +1326,11 @@ class AccountTaskPlanner {
             </button>
           </div>
           <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-info flex-fill" data-builder-run-action="view-logs" data-iteration-id="${this.escapeAttr(run.iterationId || '')}">
+              <i class="bi bi-journal-text me-1"></i>${showingLogs ? 'Refresh Logs' : 'View Logs'}
+            </button>
+          </div>
+          <div class="d-flex gap-2 mt-2">
             <button class="btn btn-sm btn-outline-primary flex-fill" data-builder-run-action="analyze" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canReview ? '' : 'disabled'}>
               <i class="bi bi-lightbulb me-1"></i>${this.escapeHtml(this.builderGoalReviewLabel(run))}
             </button>
@@ -1324,7 +1345,7 @@ class AccountTaskPlanner {
   }
 
   renderBuilderGoalActionStep(run) {
-    const status = (run.status || '').toUpperCase();
+    const runStatus = (run.status || '').toUpperCase();
     if (status !== 'FAILED') {
       return '';
     }
@@ -1616,7 +1637,7 @@ class AccountTaskPlanner {
       );
       this.renderBuilderGoalConfigMeta();
       this.renderBuilderGoalClientStatus(
-        `Local micro6 workspace launched for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}, the executor became dispatch-ready, and ${selectedTask.display_name || selectedTask.task_key} was published to the Micro6 queue.`,
+        `Launch accepted for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. ChromaScape is now waiting for that account's local micro6 executor to become dispatch-ready and will publish ${selectedTask.display_name || selectedTask.task_key} automatically when it is ready.`,
         'success'
       );
     } catch (error) {
@@ -1637,12 +1658,12 @@ class AccountTaskPlanner {
         try {
           await this.loadBuilderGoalRuns({ throwOnError: true });
         } catch (error) {
-          console.warn('Published successfully, but failed to refresh builder goal runs:', error);
+          console.warn('Builder-goal launch accepted, but failed to refresh builder goal runs:', error);
           publishWarning = error?.message || 'Failed to refresh builder goal runs.';
         }
         if (publishWarning) {
           this.renderBuilderGoalClientStatus(
-            `Task published successfully, but failed to refresh the run list: ${publishWarning}`,
+            `Launch was accepted, but failed to refresh the run list: ${publishWarning}`,
             'warning'
           );
         }
@@ -1740,7 +1761,7 @@ class AccountTaskPlanner {
       }
       publishSucceeded = true;
       this.renderBuilderGoalClientStatus(
-        `Local micro6 workspace launched for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}, the executor became dispatch-ready, and the imported payload was published to the Micro6 queue.`,
+        `Launch accepted for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. ChromaScape is now waiting for that account's local micro6 executor to become dispatch-ready and will publish the imported payload automatically when it is ready.`,
         'success'
       );
     } catch (error) {
@@ -1758,12 +1779,12 @@ class AccountTaskPlanner {
         try {
           await this.loadBuilderGoalRuns({ throwOnError: true });
         } catch (error) {
-          console.warn('Published successfully, but failed to refresh builder goal runs:', error);
+          console.warn('Imported builder-goal launch accepted, but failed to refresh builder goal runs:', error);
           publishWarning = error?.message || 'Failed to refresh builder goal runs.';
         }
         if (publishWarning) {
           this.renderBuilderGoalClientStatus(
-            `Imported payload published successfully, but failed to refresh the run list: ${publishWarning}`,
+            `Launch was accepted, but failed to refresh the run list: ${publishWarning}`,
             'warning'
           );
         }
@@ -1869,7 +1890,7 @@ class AccountTaskPlanner {
       await this.loadBuilderGoalRuns();
       const run = result.run || {};
       this.renderBuilderGoalClientStatus(
-        `Saved config relaunched for ${run.displayName || run.taskKey || 'the selected task'} on ${run.accountName || run.targetAccountName || 'the selected account'}.`,
+        `Rerun accepted for ${run.displayName || run.taskKey || 'the selected task'} on ${run.accountName || run.targetAccountName || 'the selected account'}. ChromaScape is waiting for that account's local micro6 executor to become dispatch-ready and will republish automatically when it is ready.`,
         'success'
       );
     } catch (error) {
@@ -1880,10 +1901,158 @@ class AccountTaskPlanner {
     }
   }
 
+  closeBuilderGoalRunLogs() {
+    this.builderGoalLogsIterationId = null;
+    if (this.builderGoalLogsPanel) {
+      this.builderGoalLogsPanel.classList.add('d-none');
+    }
+    if (this.builderGoalLogsSummary) {
+      this.builderGoalLogsSummary.textContent = 'Select a run to inspect logs.';
+    }
+    if (this.builderGoalLogsStatus) {
+      this.builderGoalLogsStatus.innerHTML = '<span class="text-muted">No run selected.</span>';
+    }
+    if (this.builderGoalLaunchLogTail) {
+      this.builderGoalLaunchLogTail.textContent = 'Select a run to inspect launch logs.';
+    }
+    if (this.builderGoalHistoricalLogs) {
+      this.builderGoalHistoricalLogs.innerHTML =
+        '<div class="text-muted small fst-italic">No run selected.</div>';
+    }
+    this.renderBuilderGoalRuns();
+  }
+
+  async loadBuilderGoalRunLogs(iterationId, options = {}) {
+    if (!iterationId) return;
+    const silent = Boolean(options.silent);
+    const run = Array.isArray(this.builderGoalRuns)
+      ? this.builderGoalRuns.find(item => item.iterationId === iterationId)
+      : null;
+    this.builderGoalLogsIterationId = iterationId;
+    if (this.builderGoalLogsPanel) {
+      this.builderGoalLogsPanel.classList.remove('d-none');
+    }
+    if (this.builderGoalLogsSummary) {
+      this.builderGoalLogsSummary.textContent = run
+        ? `${run.displayName || run.taskKey || 'Builder Goal'} / ${run.accountName || run.targetAccountName || 'unknown account'}`
+        : iterationId;
+    }
+    if (this.builderGoalLogsStatus && !silent) {
+      this.builderGoalLogsStatus.innerHTML =
+        '<span class="text-info">Loading run logs and launch output...</span>';
+    }
+    try {
+      const response = await fetch(
+        `/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/logs`
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || `HTTP ${response.status}`);
+      }
+      this.renderBuilderGoalRunLogs(payload);
+      this.renderBuilderGoalRuns();
+    } catch (error) {
+      console.error('Failed to load builder goal run logs:', error);
+      if (this.builderGoalLogsStatus) {
+        this.builderGoalLogsStatus.innerHTML = `<span class="text-danger">${this.escapeHtml(`Failed to load run logs: ${error.message}`)}</span>`;
+      }
+    }
+  }
+
+  renderBuilderGoalRunLogs(payload) {
+    const run = payload?.run || {};
+    const filter = payload?.filter || {};
+    const launchLog = payload?.launchLog || {};
+    const historicalLogs = Array.isArray(payload?.historicalLogs) ? payload.historicalLogs : [];
+
+    if (this.builderGoalLogsPanel) {
+      this.builderGoalLogsPanel.classList.remove('d-none');
+    }
+    if (this.builderGoalLogsSummary) {
+      this.builderGoalLogsSummary.textContent = `${run.displayName || run.taskKey || 'Builder Goal'} / ${run.accountName || run.targetAccountName || 'unknown account'}`;
+    }
+    if (this.builderGoalLogsStatus) {
+      const parts = [];
+      if (run.status) parts.push(`status ${run.status}`);
+      if (run.targetPreparationState) parts.push(`prep ${run.targetPreparationState}`);
+      if (run.publishStatus) parts.push(`publish ${run.publishStatus}`);
+      if (filter.matchMode) {
+        parts.push(
+          filter.matchMode === 'run_filtered'
+            ? `${payload.matchedLogCount || 0} matched logs`
+            : `${payload.windowLogCount || 0} window logs`
+        );
+      }
+      if (run.failureReason) parts.push(run.failureReason);
+      this.builderGoalLogsStatus.innerHTML = `<span class="text-muted">${this.escapeHtml(parts.join(' • '))}</span>`;
+    }
+    if (this.builderGoalLaunchLogTail) {
+      if (launchLog?.available) {
+        this.builderGoalLaunchLogTail.textContent = Array.isArray(launchLog.lines) && launchLog.lines.length
+          ? launchLog.lines.join('\n')
+          : '(launch log file is currently empty)';
+      } else {
+        this.builderGoalLaunchLogTail.textContent = launchLog?.message || 'Launch log is unavailable.';
+      }
+    }
+    if (this.builderGoalHistoricalLogs) {
+      if (!historicalLogs.length) {
+        this.builderGoalHistoricalLogs.innerHTML =
+          '<div class="text-muted small fst-italic">No persisted ChromaScape logs matched this run yet.</div>';
+        return;
+      }
+      this.builderGoalHistoricalLogs.innerHTML = historicalLogs
+        .map(log => {
+          const meta = [log.timestamp ? this.formatAbsoluteTime(log.timestamp) : null, log.level, log.source]
+            .filter(Boolean)
+            .join(' • ');
+          const structured = log.structuredData
+            ? `<div class="small text-muted font-monospace mt-1">${this.escapeHtml(log.structuredData)}</div>`
+            : '';
+          return `
+            <div class="border-bottom pb-2 mb-2">
+              <div class="small text-muted">${this.escapeHtml(meta)}</div>
+              <div>${this.escapeHtml(log.message || '')}</div>
+              ${structured}
+            </div>
+          `;
+        })
+        .join('');
+    }
+  }
+
   describeBuilderGoalRunProgress(run) {
+    const runStatus = (run.status || '').toUpperCase();
     const preparationState = (run.targetPreparationState || '').toUpperCase();
+    const launcherOnline = Boolean(run.launcherOnline);
+    const localExecutorReady = Boolean(run.localExecutorReady);
+    const localExecutorObserved = Boolean(run.localExecutorObserved);
+    if (runStatus === 'FAILED' && preparationState === 'PROCESS_EXITED') {
+      return run.launchFailureDetail || run.failureReason || run.targetPreparationMessage || 'Local Micro6 relaunch process exited';
+    }
     if (preparationState === 'PREPARING_TARGET') {
       return 'Preparing Micro6 target';
+    }
+    if (preparationState === 'LAUNCHING_PROCESS') {
+      return run.targetPreparationMessage || 'Launching local micro6 workspace';
+    }
+    if (preparationState === 'WAITING_FOR_PORT') {
+      if (launcherOnline) {
+        return 'Launcher account is online; waiting for the local micro6 executor port';
+      }
+      return run.targetPreparationMessage || 'Waiting for local executor port';
+    }
+    if (preparationState === 'WAITING_FOR_HEALTH') {
+      if (localExecutorObserved) {
+        return run.targetPreparationMessage || 'Local executor is present; waiting for healthy /health';
+      }
+      return run.targetPreparationMessage || 'Waiting for local executor health';
+    }
+    if (preparationState === 'WAITING_FOR_ACCOUNT') {
+      return run.targetPreparationMessage || 'Waiting for selected account to appear on executor health';
+    }
+    if (preparationState === 'WAITING_FOR_DISPATCH') {
+      return run.targetPreparationMessage || 'Waiting for executor dispatch readiness';
     }
     if (preparationState === 'WAITING_FOR_AGENT') {
       return 'Waiting for Microbot Agent Server';
@@ -1892,7 +2061,10 @@ class AccountTaskPlanner {
       return 'Logging into Micro6 profile';
     }
     if (preparationState === 'READY_TO_PUBLISH' && (run.status || '').toUpperCase() === 'READY_TO_PUBLISH') {
-      return 'Target is ready to publish';
+      return run.targetPreparationMessage || 'Target is ready to publish';
+    }
+    if (localExecutorReady && !run.publishEntryId && (run.status || '').toUpperCase() === 'QUEUED') {
+      return 'Local executor is ready; waiting for automatic publish';
     }
     const recoveryPhase = (run.recoveryPhase || '').toUpperCase();
     if (recoveryPhase === 'AWAITING_OPERATOR_PROMPT') {
@@ -1922,14 +2094,19 @@ class AccountTaskPlanner {
     if (recoveryPhase === 'RECOVERY_FAILED') {
       return 'Recovery failed';
     }
-    const status = (run.status || '').toUpperCase();
-    if (status === 'PUBLISHED') {
+    if (runStatus === 'PUBLISHED') {
       return 'Published to Micro6 queue';
     }
-    if (status === 'RUNNING') {
+    if (runStatus === 'WAITING_FOR_TASK_START') {
+      return 'Published to Micro6 queue and waiting for task start';
+    }
+    if (runStatus === 'WAITING_FOR_DEBUG_BIND') {
+      return 'Task started; waiting for ChromaScape debug binding';
+    }
+    if (runStatus === 'RUNNING') {
       return 'Running from Micro6 queue';
     }
-    if (status === 'COMPLETED') {
+    if (runStatus === 'COMPLETED') {
       return 'Published run completed';
     }
     if (status === 'FAILED') {
@@ -3372,6 +3549,15 @@ class AccountTaskPlanner {
       if (diffMins < 60) return `${diffMins}m ago`;
       if (diffHours < 24) return `${diffHours}h ago`;
       return `${diffDays}d ago`;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  formatAbsoluteTime(dateStr) {
+    try {
+      const date = new Date(dateStr);
+      return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
     } catch (e) {
       return '';
     }
