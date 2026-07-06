@@ -108,11 +108,14 @@ register-mcp-clients.bat     # Windows (cmd.exe)
 ./register-mcp-clients.sh    # Unix/Linux/macOS
 ```
 
+For restart and recovery instructions, use the [ChromaScape Restart Runbook](docs/CHROMASCAPE_RESTART_RUNBOOK.md).
+
 ### Documentation
 
 - [MCP Quick Start Guide](docs/MCP_QUICK_START.md) - Get started in minutes
 - [MCP Bridge Implementation](docs/MCP_BRIDGE_AUTO_START_SUMMARY.md) - Technical details
 - [MCP Bridge README](scripts/mcp-bridge/README.md) - Bridge configuration
+- [ChromaScape Restart Runbook](docs/CHROMASCAPE_RESTART_RUNBOOK.md) - Canonical restart and recovery steps
 
 ### Access Points
 

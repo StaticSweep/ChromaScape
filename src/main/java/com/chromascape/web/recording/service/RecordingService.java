@@ -421,17 +421,37 @@ public class RecordingService implements FrameListener {
       logger.info("Recording is disabled, ignoring auto-start request");
       return null;
     }
-    if (!config.isAutoRecord()) {
-      logger.warn(
-          "Auto-recording is disabled (recording.autoRecord=false), ignoring auto-start"
-              + " request: source={}",
-          triggerSource);
+    if (!isAutoStartAllowed(triggerSource)) {
+      logger.info(
+          "Auto-recording is disabled for source={} (autoRecord={}, autoRecordTaskSessions={})",
+          triggerSource,
+          config.isAutoRecord(),
+          config.isAutoRecordTaskSessions());
       return null;
     }
 
     logger.info("Auto-starting recording for script: {} (source: {})", scriptName, triggerSource);
 
     return startRecording(triggerSource);
+  }
+
+  /**
+   * Returns whether auto-start is permitted for the given trigger source, considering the
+   * per-source config flags. The global {@code enabled} flag must be checked separately.
+   *
+   * <p>This honors the documented {@code recording.auto-record-task-sessions} flag so that
+   * task-bound auto sessions (TASK_AUTO) start even when generic {@code recording.auto-record} is
+   * off, matching the per-source gating already used by {@code DebugSessionService}.
+   *
+   * @param triggerSource what initiated this auto-start
+   * @return true if this source is permitted to auto-start
+   */
+  boolean isAutoStartAllowed(RecordingTriggerSource triggerSource) {
+    return switch (triggerSource) {
+      case TASK_AUTO -> config.isAutoRecordTaskSessions();
+      case MICRO6_AUTO -> config.isAutoRecord();
+      case MANUAL -> true;
+    };
   }
 
   /**

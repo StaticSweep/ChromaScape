@@ -95,10 +95,10 @@ public class ScriptInstance {
               tickStartTime = System.currentTimeMillis();
               StatisticsManager.reset();
 
-              // Detect task type and auto-record if enabled
+              // Detect task type and auto-record if enabled. Plan-linked runs use the
+              // plan-task path; otherwise heuristic detection from the script name is used.
               if (taskDetectionService != null) {
-                TaskType taskType = detectTaskFromScriptName(scriptName);
-                taskDetectionService.onTaskDetected(taskType, scriptName);
+                dispatchTaskDetection(taskDetectionService, taskPlanId, taskItemId, scriptName);
               }
 
               try {
@@ -114,8 +114,34 @@ public class ScriptInstance {
     thread.start();
   }
 
+  /**
+   * Dispatches the appropriate task-detection callback based on whether plan context is present.
+   *
+   * <p>Plan-linked runs (non-blank {@code taskPlanId}) use {@link
+   * TaskDetectionService#onPlanTaskDetected}; heuristic runs use {@link
+   * TaskDetectionService#onTaskDetected}. Extracted as a static helper so it can be unit-tested
+   * without constructing a {@link BaseScript} (which binds native input/hook resources).
+   *
+   * @param taskDetectionService the detection service to dispatch to
+   * @param taskPlanId optional task plan ID; non-blank triggers the plan path
+   * @param taskItemId optional task plan item ID
+   * @param scriptName the script name (used for heuristic detection and logging)
+   */
+  static void dispatchTaskDetection(
+      TaskDetectionService taskDetectionService,
+      String taskPlanId,
+      String taskItemId,
+      String scriptName) {
+    if (taskPlanId != null && !taskPlanId.isBlank()) {
+      taskDetectionService.onPlanTaskDetected(taskPlanId, taskItemId, scriptName);
+    } else {
+      TaskType taskType = detectTaskFromScriptName(scriptName);
+      taskDetectionService.onTaskDetected(taskType, scriptName);
+    }
+  }
+
   /** Simple task detection based on script name */
-  private TaskType detectTaskFromScriptName(String scriptName) {
+  private static TaskType detectTaskFromScriptName(String scriptName) {
     String lower = scriptName.toLowerCase();
     if (lower.contains("combat") || lower.contains("fight") || lower.contains("kill")) {
       return TaskType.COMBAT;
