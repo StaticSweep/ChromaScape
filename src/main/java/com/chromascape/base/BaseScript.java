@@ -23,6 +23,7 @@ public abstract class BaseScript {
   private static final Logger logger = LogManager.getLogger(BaseScript.class);
   private volatile boolean running = true;
   private Thread scriptThread;
+  private boolean initialised = false;
 
   /** Constructs a BaseScript. */
   public BaseScript() {
@@ -51,6 +52,10 @@ public abstract class BaseScript {
           break;
         }
         try {
+          if (!initialised) {
+            onFirstCycle();
+            initialised = true;
+          }
           cycle();
         } catch (ScriptStoppedException e) {
           logger.error("Cycle interrupted: {}", e.getMessage());
@@ -66,6 +71,14 @@ public abstract class BaseScript {
       controller.shutdown();
     }
     logger.info("Finished running script.");
+  }
+
+  /**
+   * Will run operations on the first cycle and then never again. Useful for initialising data such
+   * as custom zones, or for setup actions.
+   */
+  protected void onFirstCycle() {
+    // override this
   }
 
   /**

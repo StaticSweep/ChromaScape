@@ -4,6 +4,7 @@ import com.chromascape.base.BaseScript;
 import com.chromascape.utils.actions.Idler;
 import com.chromascape.utils.actions.ItemDropper;
 import com.chromascape.utils.actions.PointSelector;
+import com.chromascape.utils.core.screen.topology.MatchResult;
 import com.chromascape.utils.core.screen.topology.TemplateMatching;
 import com.chromascape.utils.core.screen.window.ScreenManager;
 import java.awt.Point;
@@ -71,9 +72,13 @@ public class DemoMiningScript extends BaseScript {
    * @return {@code true} if the inventory is full, otherwise {@code false}
    */
   private boolean isInventoryFull() {
+    // Get the zone
     Rectangle invSlot = controller().zones().getInventorySlots().get(27);
+    // Create a snapshot of the zone
     BufferedImage invSlotImg = ScreenManager.captureZone(invSlot);
-    Rectangle match = TemplateMatching.match(ironOre, invSlotImg, 0.05).bounds();
-    return match != null;
+    // Run template matching
+    MatchResult match = TemplateMatching.match(ironOre, invSlotImg, 0.05);
+    // Return the result
+    return match.success();
   }
 }

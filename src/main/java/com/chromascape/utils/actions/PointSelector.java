@@ -26,8 +26,8 @@ import org.apache.logging.log4j.Logger;
  * <ul>
  *   <li>Finds a random point within the bounding box of a detected image template.
  *   <li>Finds a random point inside the contour of the first detected object of a specified colour.
- *   <li>Supports both <b>heuristic-based</b> distributions (dynamic sizing) and <b>explicit
- *       tightness</b> control.
+ *   <li>Contains overloads for a tightness parameter for the user to choose how closely towards the
+ *       center the clicks should bias.
  * </ul>
  *
  * <p>These utilities are commonly reused across scripts. The class does not perform any input
@@ -39,7 +39,7 @@ import org.apache.logging.log4j.Logger;
  * // Default heuristic distribution
  * Point imgPoint = PointSelector.getRandomPointInImage(templatePath, gameView, 0.15);
  * // Custom tightness (maybe clicking a ground item)
- * Point colorPoint = PointSelector.getRandomPointInColour(gameView, "Purple", 5, 15.0);
+ * Point colorPoint = PointSelector.getRandomPointInColour(gameView, "Purple", 0.05, 15.0);
  * </pre>
  *
  * <p>All methods are static and thread-safe.
@@ -58,7 +58,7 @@ public class PointSelector {
    *
    * @param templatePath the BufferedImage template to locate within the larger image
    * @param image the larger image to search inside (e.g. game view)
-   * @param threshold the match confidence threshold (0.0 to 1.0) required to consider a detection
+   * @param threshold the match confidence threshold (0.01 to 0.15) required to consider a detection
    *     valid
    * @return a valid {@link Point} within the detected region, or {@code null} if no match is found
    */
@@ -78,7 +78,7 @@ public class PointSelector {
    *
    * @param templatePath the BufferedImage template to search for within the larger image view
    * @param image the larger image to search inside (e.g. game view)
-   * @param threshold the match confidence threshold (0.0 to 1.0) required to consider a detection
+   * @param threshold the match confidence threshold (0.01 to 0.15) required to consider a detection
    *     valid
    * @param tightness the distribution divisor. Higher values (e.g., 15.0) result in a tighter
    *     cluster around the center

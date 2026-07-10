@@ -25,11 +25,6 @@ public class Screenshotter extends BaseScript {
 
   public static final String ORIGINAL_IMAGE_PATH = "output/original.png";
 
-  /** Same constructor as super (BaseScript). */
-  public Screenshotter() {
-    super();
-  }
-
   /**
    * Takes a screenshot and saves it in the "/output" directory on the same level as /src. Although
    * in the BaseScript - this function is repeated until the specified time duration is met - Here,

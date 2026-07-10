@@ -68,8 +68,9 @@ public class ProfileManager {
     String home = System.getProperty("user.home");
     String os = System.getProperty("os.name").toLowerCase();
 
+    Path windowsPath = Path.of(home, ".runelite/profiles2");
     if (os.contains("win")) {
-      return Path.of(home, "AppData", "Local", "RuneLite", "profiles2");
+      return windowsPath;
     }
 
     if (os.contains("linux")) {
@@ -85,8 +86,8 @@ public class ProfileManager {
       return Path.of(home, "Library/Application Support/RuneLite/profiles2");
     }
 
-    // Fallback (Linux standard or unknown OS)
-    return Path.of(home, ".runelite/profiles2");
+    // Fallback
+    return windowsPath;
   }
 
   /**
