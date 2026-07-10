@@ -7,8 +7,6 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Map;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 /**
  * Manages the detection and mapping of key UI zones within the RuneLite client window, including
@@ -56,8 +54,6 @@ public class ZoneManager {
     "/images/ui/minimap_fixed.png"
   };
 
-  private static final Logger logger = LogManager.getLogger(ZoneManager.class.getName());
-
   /** Constructs a new ZoneManager configured for either fixed or resizable mode. */
   public ZoneManager() {
     this.isFixed = checkIfFixed();
@@ -70,7 +66,6 @@ public class ZoneManager {
    * <p>Any exceptions during mapping are caught and logged to standard error.
    */
   public void mapper() {
-    // Cache the bounds first
     chatBounds = locateUiElement(zoneTemplates[2]);
     ctrlPanelBounds = locateUiElement(zoneTemplates[1]);
 
@@ -80,14 +75,15 @@ public class ZoneManager {
 
     mouseOver = new Rectangle(0, 0, 407, 26);
 
+    Rectangle windowBounds = ScreenManager.getWindowBounds();
+    gridInfo = SubZoneMapper.mapGridInfo(new Rectangle(5, windowBounds.height - 226, 129, 56));
+
     if (isFixed) {
       minimapBounds = locateUiElement(zoneTemplates[3]);
       minimap = SubZoneMapper.mapFixedMinimap(minimapBounds);
-      gridInfo = SubZoneMapper.mapGridInfo(new Rectangle(9, 24, 129, 56));
     } else {
       minimapBounds = locateUiElement(zoneTemplates[0]);
       minimap = SubZoneMapper.mapMinimap(minimapBounds);
-      gridInfo = SubZoneMapper.mapGridInfo(new Rectangle(5, 20, 129, 56));
     }
   }
 
