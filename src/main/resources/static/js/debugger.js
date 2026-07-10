@@ -4502,7 +4502,7 @@ async function loadRecording(recordingId) {
         alert('Failed to load recording. Please try again.');
       }
       // DON'T set currentRecording on failure
-      return;
+      return false;
     }
 
     // Only set currentRecording after successful fetch
@@ -4519,14 +4519,14 @@ async function loadRecording(recordingId) {
     if (recording.videoError) {
       console.error('Video error for recording:', recording.videoError);
       alert(`Cannot load video: ${recording.videoError}\n\nPlease check the server logs for details.`);
-      return;
+      return false;
     }
 
     // Validate videoUrl exists
     if (!recording.videoUrl) {
       console.error('No video URL in response:', recording);
       alert('Video is not available. The recording may not have completed properly.\n\nTry stopping and restarting the recording.');
-      return;
+      return false;
     }
 
     // Load video
@@ -4625,9 +4625,12 @@ async function loadRecording(recordingId) {
       }
     })();
 
+    return true;
+
   } catch (error) {
     console.error('Failed to load recording:', error);
     alert('An error occurred while loading the recording:\n' + error.message);
+    return false;
   }
 }
 
@@ -5975,10 +5978,12 @@ async function loadDebugSession(sessionId) {
 
     // Get session info
     const sessionResponse = await fetch(`/api/debug/replay/session-info/${sessionId}`);
-    if (!sessionResponse.ok) return;
+    if (!sessionResponse.ok) return false;
 
     const sessionInfo = await sessionResponse.json();
     currentDebugSession = sessionId;
+    currentReplayDebugSessionId = sessionId;
+    history.replaceState({}, '', `/debugger?sessionId=${encodeURIComponent(sessionId)}&mode=replay`);
     tickRange.min = sessionInfo.minTick || sessionInfo.startTick || 0;
     tickRange.max = sessionInfo.maxTick || sessionInfo.endTick || tickRange.min;
 
@@ -6001,9 +6006,11 @@ async function loadDebugSession(sessionId) {
 
     // Jump to start tick
     jumpToTick(tickRange.min);
+    return true;
 
   } catch (error) {
     console.error('Failed to load debug session', error);
+    return false;
   }
 }
 
@@ -6910,11 +6917,44 @@ async function updateProviderStatus() {
     const badge = document.getElementById('providerStatusBadge');
     const nameText = document.getElementById('providerNameText');
 
+    // Update headline badge
+    const headlineBadge = document.getElementById('codexMcpHeadlineBadge');
+    const headlineText = document.getElementById('codexMcpHeadlineText');
+    if (headlineBadge && headlineText) {
+      const stateClasses = ['badge-verified', 'badge-unverified', 'badge-wrong-provider',
+        'badge-down', 'badge-unknown', 'badge-failed'];
+      headlineBadge.classList.remove(...stateClasses);
+      headlineText.textContent = status.statusHeadline || 'Checking Codex MCP status...';
+      const state = status.connectionState || '';
+      if (state === 'CODEX_CONNECTED_VERIFIED') headlineBadge.classList.add('badge-verified');
+      else if (state === 'CODEX_CONNECTED_UNVERIFIED') headlineBadge.classList.add('badge-unverified');
+      else if (state === 'MCP_UP_WRAPPER_NOT_CODEX') headlineBadge.classList.add('badge-wrong-provider');
+      else if (state === 'MCP_DOWN') headlineBadge.classList.add('badge-down');
+      else if (state === 'VERIFICATION_FAILED') headlineBadge.classList.add('badge-failed');
+      else headlineBadge.classList.add('badge-unknown');
+    }
+
+    // Update one-line detail
+    const detailText = document.getElementById('codexMcpDetailText');
+    if (detailText) {
+      detailText.textContent = status.statusDetail || '';
+    }
+
     if (!badge || !nameText) return;
 
-    if (status.available) {
+    const connectionState = status.connectionState || '';
+    if (connectionState === 'CODEX_CONNECTED_VERIFIED') {
       badge.className = 'badge bg-success';
-      badge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Available';
+      badge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Codex Ready';
+    } else if (connectionState === 'CODEX_CONNECTED_UNVERIFIED') {
+      badge.className = 'badge bg-warning text-dark';
+      badge.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Unverified';
+    } else if (connectionState === 'MCP_UP_WRAPPER_NOT_CODEX') {
+      badge.className = 'badge bg-warning text-dark';
+      badge.innerHTML = '<i class="bi bi-arrow-left-right me-1"></i>Wrong Wrapper';
+    } else if (connectionState === 'VERIFICATION_FAILED') {
+      badge.className = 'badge bg-warning text-dark';
+      badge.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Verify Failed';
     } else {
       badge.className = 'badge bg-danger';
       badge.innerHTML = '<i class="bi bi-x-circle me-1"></i>Unavailable';
@@ -6933,8 +6973,113 @@ async function updateProviderStatus() {
       if (bridgeMode) bridgeMode.textContent = 'mode: ' + (status.bridgeMode || 'unknown');
       detailRow.style.display = 'block';
     }
+
+    // Update verification row with secondary metadata
+    const verificationRow = document.getElementById('providerVerificationRow');
+    if (verificationRow) {
+      const verificationText = document.getElementById('providerVerificationText');
+      if (verificationText) {
+        const parts = [];
+        parts.push('Framework: ' + (status.frameworkProvider || 'unknown'));
+        parts.push('Wrapper: ' + (status.runtimeProvider || 'unknown'));
+        if (status.runtimeModel) parts.push('Model: ' + status.runtimeModel);
+        if (status.bridgeMode) parts.push('Bridge: ' + status.bridgeMode);
+        if (status.lastVerifiedAt) {
+          const d = new Date(status.lastVerifiedAt);
+          parts.push('Verified: ' + d.toLocaleTimeString());
+        }
+        if (status.lastVerificationError) {
+          parts.push('Last error: ' + status.lastVerificationError);
+        }
+        verificationText.textContent = parts.join(' | ');
+      }
+      verificationRow.style.display = 'block';
+    }
+
+    // Show/hide verify button based on backend config
+    const verifyBtn = document.getElementById('verifyCodexMcpBtn');
+    if (verifyBtn) {
+      verifyBtn.style.display = status.verificationAvailable ? 'inline-block' : 'none';
+    }
   } catch (error) {
     console.error('Error fetching provider status:', error);
+  }
+}
+
+/**
+ * Trigger manual Codex MCP verification and refresh status.
+ */
+async function triggerCodexMcpVerification() {
+  const verifyBtn = document.getElementById('verifyCodexMcpBtn');
+  const recoveryVerifyBtn = document.getElementById('recoveryVerifyCodexMcpBtn');
+  if (verifyBtn) {
+    verifyBtn.disabled = true;
+    verifyBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Verifying...';
+  }
+  if (recoveryVerifyBtn) {
+    recoveryVerifyBtn.disabled = true;
+    recoveryVerifyBtn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+  }
+  try {
+    const response = await fetch('/api/debug/patch-loop/provider/verify', { method: 'POST' });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || 'HTTP ' + response.status);
+    }
+    const status = await response.json();
+    if (typeof renderRecoveryCodexMcpStatus === 'function') {
+      renderRecoveryCodexMcpStatus(status);
+    }
+    const verificationSucceeded =
+      status.connectionState === 'CODEX_CONNECTED_VERIFIED' && status.endToEndVerified === true;
+    await updateProviderStatus();
+    if (verificationSucceeded) {
+      showNotification('Codex MCP verification complete', 'success');
+    } else {
+      const detail = status.lastVerificationError || status.statusHeadline || 'Verification did not confirm Codex MCP.';
+      showNotification('Verification failed: ' + detail, 'error');
+    }
+  } catch (error) {
+    console.error('Codex MCP verification failed:', error);
+    await updateProviderStatus();
+    showNotification('Verification failed: ' + error.message, 'error');
+  } finally {
+    if (verifyBtn) {
+      verifyBtn.disabled = false;
+      verifyBtn.innerHTML = '<i class="bi bi-shield-check me-1"></i>Verify Codex MCP';
+    }
+    if (recoveryVerifyBtn) {
+      recoveryVerifyBtn.disabled = false;
+      recoveryVerifyBtn.innerHTML = '<i class="bi bi-shield-check"></i>';
+    }
+  }
+}
+
+/**
+ * Render Codex MCP status for the recovery mode toolbar.
+ */
+function renderRecoveryCodexMcpStatus(status) {
+  const badge = document.getElementById('recoveryCodexMcpBadge');
+  const text = document.getElementById('recoveryCodexMcpText');
+  const btn = document.getElementById('recoveryVerifyCodexMcpBtn');
+
+  if (!badge || !text) return;
+
+  text.textContent = status.statusHeadline || 'Codex MCP status unknown';
+
+  const stateClasses = ['badge-verified', 'badge-unverified', 'badge-wrong-provider',
+    'badge-down', 'badge-unknown', 'badge-failed'];
+  badge.classList.remove(...stateClasses);
+  const state = status.connectionState || '';
+  if (state === 'CODEX_CONNECTED_VERIFIED') badge.classList.add('badge-verified');
+  else if (state === 'CODEX_CONNECTED_UNVERIFIED') badge.classList.add('badge-unverified');
+  else if (state === 'MCP_UP_WRAPPER_NOT_CODEX') badge.classList.add('badge-wrong-provider');
+  else if (state === 'MCP_DOWN') badge.classList.add('badge-down');
+  else if (state === 'VERIFICATION_FAILED') badge.classList.add('badge-failed');
+  else badge.classList.add('badge-unknown');
+
+  if (btn) {
+    btn.style.display = status.verificationAvailable ? 'inline-block' : 'none';
   }
 }
 
@@ -7052,6 +7197,18 @@ function initPatchLoopControls() {
 
   // Poll provider status every 15 seconds
   setInterval(updateProviderStatus, 15000);
+
+  // Verify Codex MCP button
+  const verifyBtn = document.getElementById('verifyCodexMcpBtn');
+  if (verifyBtn) {
+    verifyBtn.addEventListener('click', triggerCodexMcpVerification);
+  }
+
+  // Recovery mode Codex MCP verify button
+  const recoveryVerifyBtn = document.getElementById('recoveryVerifyCodexMcpBtn');
+  if (recoveryVerifyBtn) {
+    recoveryVerifyBtn.addEventListener('click', triggerCodexMcpVerification);
+  }
 
   // Poll script catalog periodically and allow manual refresh.
   if (patchLoopCatalogPollTimer) {
@@ -7622,3 +7779,99 @@ async function updateFeedStatus() {
     }
   }
 }
+
+/* =========================================================================
+ * Recovery Mode replay accessor (added for same-screen recovery editing).
+ * Exposes the current replay position / session so account-task-planner.js can
+ * drive inline recovery range editing without duplicating the replay surface.
+ * ========================================================================= */
+window.ChromaScapeReplay = window.ChromaScapeReplay || {
+  getReplayVideo() {
+    return document.getElementById('replayVideo');
+  },
+  getCurrentTimeSeconds() {
+    const el = document.getElementById('currentTime');
+    if (!el || !el.textContent || el.textContent.indexOf('--') === 0) {
+      const video = this.getReplayVideo();
+      return video && Number.isFinite(video.currentTime) ? video.currentTime : null;
+    }
+    const parts = el.textContent.trim().split(':');
+    if (parts.length < 2) {
+      return null;
+    }
+    const minutes = Number(parts[0]);
+    const seconds = Number(parts[1]);
+    if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+      return null;
+    }
+    return (minutes * 60) + seconds;
+  },
+  getCurrentTick() {
+    const el = document.getElementById('currentTick');
+    if (!el || !el.textContent || el.textContent === '--') {
+      return typeof currentTick !== 'undefined' ? currentTick : null;
+    }
+    const tick = Number(el.textContent);
+    return Number.isFinite(tick) ? tick : (typeof currentTick !== 'undefined' ? currentTick : null);
+  },
+  getCurrentFrame() {
+    const el = document.getElementById('currentFrame');
+    if (!el || !el.textContent || el.textContent === '--') {
+      return null;
+    }
+    const frame = Number(el.textContent);
+    return Number.isFinite(frame) ? frame : null;
+  },
+  getReplayDebugSessionId() {
+    if (typeof currentReplayDebugSessionId !== 'undefined' && currentReplayDebugSessionId) {
+      return currentReplayDebugSessionId;
+    }
+    if (typeof currentDebugSessionId !== 'undefined' && currentDebugSessionId) {
+      return currentDebugSessionId;
+    }
+    return null;
+  },
+  getReplayState() {
+    return {
+      mode: typeof currentMode !== 'undefined' ? currentMode : null,
+      currentTimeSeconds: this.getCurrentTimeSeconds(),
+      currentTick: this.getCurrentTick(),
+      currentFrame: this.getCurrentFrame(),
+      replayDebugSessionId: this.getReplayDebugSessionId()
+    };
+  },
+  switchMode(mode) {
+    if (typeof switchMode === 'function') {
+      switchMode(mode);
+    }
+  },
+  loadRecording(recordingId) {
+    if (typeof loadRecording === 'function') {
+      return loadRecording(recordingId);
+    }
+  },
+  loadDebugSession(sessionId) {
+    if (typeof loadDebugSession === 'function') {
+      return loadDebugSession(sessionId);
+    }
+  },
+  // Poll-safe variant: probes the recording endpoint first and only loads on success, returning
+  // false (without alert spam) when the recording is unavailable. Used during recovery bind polls.
+  async loadRecordingQuietly(recordingId) {
+    if (!recordingId || typeof loadRecording !== 'function') {
+      return false;
+    }
+    try {
+      const probe = await fetch(`/api/recordings/${recordingId}`);
+      if (!probe.ok) {
+        console.debug('[Recovery] Recording not yet available:', recordingId, probe.status);
+        return false;
+      }
+      loadRecording(recordingId);
+      return true;
+    } catch (error) {
+      console.debug('[Recovery] Recording probe failed:', error);
+      return false;
+    }
+  }
+};

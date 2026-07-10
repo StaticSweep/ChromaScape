@@ -817,6 +817,49 @@ public class ScriptExecutionService {
     }
   }
 
+  /**
+   * Sends a Micro6 run control request and reports whether it was accepted by the executor.
+   *
+   * <p>Unlike {@link #controlMicro6Run(String, int, String, String)}, this variant returns
+   * {@code true} only when the executor responds with an HTTP status below 400, allowing callers
+   * to distinguish a delivered control request from a fire-and-forget attempt.
+   *
+   * @return {@code true} if the executor accepted the request (HTTP &lt; 400); {@code false} on a
+   *     non-2xx/3xx response or any network/serialization failure
+   */
+  private boolean controlMicro6RunRequested(
+      String micro6BaseUrl, int entryId, String action, String reason) {
+    try {
+      String body =
+          reason == null || reason.isBlank()
+              ? "{}"
+              : objectMapper.writeValueAsString(Map.of("reason", reason));
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create(micro6BaseUrl + "/api/v1/runs/" + entryId + "/" + action))
+              .header("Content-Type", "application/json")
+              .timeout(Duration.ofSeconds(10))
+              .POST(HttpRequest.BodyPublishers.ofString(body))
+              .build();
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() >= 400) {
+        logger.warn(
+            "Micro6 run control '{}' failed for entry {} (HTTP {}): {}",
+            action,
+            entryId,
+            response.statusCode(),
+            response.body());
+        return false;
+      }
+      return true;
+    } catch (Exception e) {
+      logger.warn(
+          "Micro6 run control '{}' failed for entry {}: {}", action, entryId, e.getMessage());
+      return false;
+    }
+  }
+
   public Micro6PublishResult publishMicro6Task(String scriptName, Map<String, Object> taskMetadata) {
     String normalizedScript = normalizeScriptName(scriptName);
     String selectedBackend = resolveBackend(scriptName);
@@ -875,6 +918,28 @@ public class ScriptExecutionService {
           targetBaseUrl,
           entryId);
     }
+  }
+
+  /**
+   * Stop request for a Builder Goal published Micro6 run, reporting delivery success.
+   *
+   * <p>Resolves the target base URL from the stored task metadata and posts a stop control request
+   * to the Micro6 executor for the given entry id. Used by the Builder Goal Runner to request
+   * cancellation of a run that has already been published. The published-run status sync loop
+   * reconciles the final cancellation state afterwards.
+   *
+   * @param taskMetadata the stored executor task metadata (used to resolve the target base URL)
+   * @param entryId the Micro6 publish entry id to stop
+   * @param reason the human-readable stop reason forwarded to the executor
+   * @return {@code true} if the executor accepted the stop request (HTTP &lt; 400); {@code false}
+   *     on a non-2xx/3xx response or any network/serialization failure
+   */
+  public boolean stopMicro6PublishedRun(Map<String, Object> taskMetadata, Integer entryId, String reason) {
+    if (entryId == null || entryId <= 0) {
+      return false;
+    }
+    String targetBaseUrl = resolveMicro6BaseUrl(taskMetadata);
+    return controlMicro6RunRequested(targetBaseUrl, entryId, "stop", reason);
   }
 
   private String normalizeBaseUrl(String value) {

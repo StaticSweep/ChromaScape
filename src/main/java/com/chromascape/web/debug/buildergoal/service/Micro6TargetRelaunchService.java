@@ -657,6 +657,7 @@ public class Micro6TargetRelaunchService {
       String accountName, String accountEmail, String accountPassword, Integer world) {
     StringBuilder builder = new StringBuilder();
     builder.append("--clean-jagex-launcher");
+    builder.append(" --auto-enable-accountbuilder");
     builder.append(" --profile=").append(accountName.trim());
     builder
         .append(" --profile-email=")

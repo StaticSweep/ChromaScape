@@ -18,6 +18,9 @@ public class SessionStartRequest {
   @JsonProperty("triggerSource")
   private RecordingTriggerSource triggerSource;
 
+  @JsonProperty("preferredSessionId")
+  private String preferredSessionId;
+
   public SessionStartRequest() {}
 
   public SessionStartRequest(
@@ -29,6 +32,19 @@ public class SessionStartRequest {
     this.scriptName = scriptName;
     this.recordingEnabled = recordingEnabled;
     this.triggerSource = triggerSource;
+  }
+
+  public SessionStartRequest(
+      String accountName,
+      String scriptName,
+      Boolean recordingEnabled,
+      RecordingTriggerSource triggerSource,
+      String preferredSessionId) {
+    this.accountName = accountName;
+    this.scriptName = scriptName;
+    this.recordingEnabled = recordingEnabled;
+    this.triggerSource = triggerSource;
+    this.preferredSessionId = preferredSessionId;
   }
 
   public String getAccountName() {
@@ -61,5 +77,19 @@ public class SessionStartRequest {
 
   public void setTriggerSource(RecordingTriggerSource triggerSource) {
     this.triggerSource = triggerSource;
+  }
+
+  /**
+   * Optional reserved debug session id to bind this client restart to.
+   *
+   * <p>When provided and the session is still active, the recording and tick ingestion reuse that
+   * session so run-to-session continuity is preserved across a patch relaunch.
+   */
+  public String getPreferredSessionId() {
+    return preferredSessionId;
+  }
+
+  public void setPreferredSessionId(String preferredSessionId) {
+    this.preferredSessionId = preferredSessionId;
   }
 }

@@ -11,12 +11,14 @@ import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteRequest;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopIterationResponse;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
+import com.chromascape.web.debug.patchloop.service.McpVerificationService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportException;
+import com.chromascape.web.debug.patchloop.service.provider.mcp.McpVerificationResult;
 import com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Field;
@@ -44,6 +46,7 @@ class PatchLoopControllerTest {
   @Mock private PatchLoopGraphOrchestratorService graphOrchestratorService;
   @Mock private PatchLoopAnalysisClient analysisClient;
   @Mock private McpTransportClient mcpTransportClient;
+  @Mock private McpVerificationService mcpVerificationService;
   @Mock private Micro6ExecutorCatalogService micro6ExecutorCatalogService;
 
   private PatchLoopController controller;
@@ -56,6 +59,7 @@ class PatchLoopControllerTest {
             graphOrchestratorService,
             analysisClient,
             mcpTransportClient,
+            mcpVerificationService,
             micro6ExecutorCatalogService);
     setAutofixEnabled(true);
   }
@@ -599,16 +603,19 @@ class PatchLoopControllerTest {
   }
 
   @Test
-  @DisplayName("GET /provider/status returns provider status")
+  @DisplayName("GET /provider/status returns provider status with normalized Codex MCP fields")
   void testGetProviderStatusReturns200() throws Exception {
     // Arrange
     when(analysisClient.getProviderName()).thenReturn("codex-mcp");
     Map<String, Object> metadata = new HashMap<>();
-    metadata.put("provider", "codex-cli");
+    metadata.put("provider", "codex");
     metadata.put("model", "claude-opus-4-6");
     metadata.put("backend", "mcp");
+    metadata.put("wrapper_status", "ready");
     when(mcpTransportClient.healthCheck())
         .thenReturn(new McpHealthResponse(true, "2.0.0", metadata));
+    when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(true);
+    when(mcpVerificationService.getCachedResult()).thenReturn(null);
 
     // Act
     ResponseEntity<Object> response = controller.getProviderStatus();
@@ -629,6 +636,15 @@ class PatchLoopControllerTest {
     assertEquals("analysis_only", body.get("defaultMode"));
     assertEquals("external", body.get("bridgeMode"));
     assertEquals("provider_ready", body.get("availabilityReason"));
+    // New normalized fields
+    assertEquals(true, body.get("bridgeHealthy"));
+    assertEquals(true, body.get("wrapperReady"));
+    assertEquals(true, body.get("usingCodexMcp"));
+    assertEquals(false, body.get("endToEndVerified"));
+    assertEquals("CODEX_CONNECTED_UNVERIFIED", body.get("connectionState"));
+    assertEquals("Codex configured via MCP, not yet verified", body.get("statusHeadline"));
+    assertEquals(true, body.get("verificationAvailable"));
+    assertNull(body.get("lastVerifiedAt"));
 
     verify(analysisClient, times(1)).getProviderName();
     verify(analysisClient, never()).isProviderAvailable();
@@ -641,6 +657,8 @@ class PatchLoopControllerTest {
     // Arrange
     when(analysisClient.getProviderName()).thenReturn("claude-api");
     when(analysisClient.isProviderAvailable()).thenReturn(true);
+    when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(true);
+    when(mcpVerificationService.getCachedResult()).thenReturn(null);
 
     // Act
     ResponseEntity<Object> response = controller.getProviderStatus();
@@ -659,6 +677,10 @@ class PatchLoopControllerTest {
     assertEquals(true, body.get("available"));
     assertEquals("managed", body.get("bridgeMode"));
     assertEquals("provider_ready", body.get("availabilityReason"));
+    // Non-MCP providers should not be marked as using Codex
+    assertEquals(false, body.get("usingCodexMcp"));
+    assertEquals("PROVIDER_MISCONFIGURED", body.get("connectionState"));
+    assertEquals("Not using MCP", body.get("statusHeadline"));
 
     verify(analysisClient, times(1)).getProviderName();
     verify(analysisClient, times(1)).isProviderAvailable();
@@ -671,6 +693,8 @@ class PatchLoopControllerTest {
     // Arrange
     when(analysisClient.getProviderName()).thenReturn("openai-codex");
     when(analysisClient.isProviderAvailable()).thenReturn(true);
+    when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(true);
+    when(mcpVerificationService.getCachedResult()).thenReturn(null);
 
     // Act
     ResponseEntity<Object> response = controller.getProviderStatus();
@@ -736,6 +760,164 @@ class PatchLoopControllerTest {
 
     // Assert
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+  }
+
+  @Test
+  @DisplayName("GET /provider/status returns MCP_DOWN when bridge health check fails")
+  void testGetProviderStatusReturnsMcpDownWhenBridgeFails() throws Exception {
+    when(analysisClient.getProviderName()).thenReturn("codex-mcp");
+    when(mcpTransportClient.healthCheck())
+        .thenThrow(
+            new McpTransportException(
+                McpTransportException.McpErrorType.CONNECTION_REFUSED,
+                "Connection refused",
+                false));
+    when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(true);
+    when(mcpVerificationService.getCachedResult()).thenReturn(null);
+
+    ResponseEntity<Object> response = controller.getProviderStatus();
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals(false, body.get("available"));
+    assertEquals(false, body.get("bridgeHealthy"));
+    assertEquals("MCP_DOWN", body.get("connectionState"));
+    assertEquals("MCP bridge unavailable", body.get("statusHeadline"));
+  }
+
+  @Test
+  @DisplayName("GET /provider/status returns MCP_UP_WRAPPER_NOT_CODEX when runtime is not codex")
+  void testGetProviderStatusReturnsNotCodex() throws Exception {
+    when(analysisClient.getProviderName()).thenReturn("codex-mcp");
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("provider", "claude");
+    metadata.put("model", "claude-sonnet-4-5");
+    metadata.put("backend", "mcp");
+    when(mcpTransportClient.healthCheck())
+        .thenReturn(new McpHealthResponse(true, "2.0.0", metadata));
+    when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(true);
+    when(mcpVerificationService.getCachedResult()).thenReturn(null);
+
+    ResponseEntity<Object> response = controller.getProviderStatus();
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals(true, body.get("available"));
+    assertEquals(true, body.get("bridgeHealthy"));
+    assertEquals(false, body.get("usingCodexMcp"));
+    assertEquals("MCP_UP_WRAPPER_NOT_CODEX", body.get("connectionState"));
+    assertEquals("MCP bridge connected, but wrapper is not Codex", body.get("statusHeadline"));
+  }
+
+  @Test
+  @DisplayName("GET /provider/status returns CODEX_CONNECTED_VERIFIED when cached verification succeeded")
+  void testGetProviderStatusReturnsVerified() throws Exception {
+    when(analysisClient.getProviderName()).thenReturn("codex-mcp");
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("provider", "codex");
+    metadata.put("model", "claude-opus-4-6");
+    metadata.put("backend", "mcp");
+    when(mcpTransportClient.healthCheck())
+        .thenReturn(new McpHealthResponse(true, "2.0.0", metadata));
+    when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(true);
+    when(mcpVerificationService.getCachedResult())
+        .thenReturn(McpVerificationResult.success("codex-cli", "claude-opus-4-6"));
+
+    ResponseEntity<Object> response = controller.getProviderStatus();
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals(true, body.get("endToEndVerified"));
+    assertEquals("CODEX_CONNECTED_VERIFIED", body.get("connectionState"));
+    assertEquals("Codex connected via MCP", body.get("statusHeadline"));
+    assertNotNull(body.get("lastVerifiedAt"));
+    assertEquals("verified", body.get("lastVerificationOutcome"));
+  }
+
+  @Test
+  @DisplayName("GET /provider/status does not keep verified Codex state when wrapper drifts away")
+  void testGetProviderStatusDoesNotKeepVerifiedStateAfterWrapperDrift() throws Exception {
+    when(analysisClient.getProviderName()).thenReturn("codex-mcp");
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("provider", "claude");
+    metadata.put("model", "claude-sonnet-4-5");
+    metadata.put("backend", "mcp");
+    when(mcpTransportClient.healthCheck())
+        .thenReturn(new McpHealthResponse(true, "2.0.0", metadata));
+    when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(true);
+    when(mcpVerificationService.getCachedResult())
+        .thenReturn(McpVerificationResult.success("codex-cli", "claude-opus-4-6"));
+
+    ResponseEntity<Object> response = controller.getProviderStatus();
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals(false, body.get("endToEndVerified"));
+    assertEquals(false, body.get("usingCodexMcp"));
+    assertEquals("MCP_UP_WRAPPER_NOT_CODEX", body.get("connectionState"));
+    assertEquals("MCP bridge connected, but wrapper is not Codex", body.get("statusHeadline"));
+  }
+
+  @Test
+  @DisplayName("POST /provider/verify returns service unavailable when disabled")
+  void testVerifyProviderReturns503WhenDisabled() throws Exception {
+    when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(false);
+
+    ResponseEntity<Object> response = controller.verifyProvider();
+    assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+  }
+
+  @Test
+  @DisplayName("POST /provider/verify runs verification and returns updated status")
+  void testVerifyProviderRunsVerification() throws Exception {
+    when(analysisClient.getProviderName()).thenReturn("codex-mcp");
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("provider", "codex");
+    metadata.put("model", "claude-opus-4-6");
+    metadata.put("backend", "mcp");
+    when(mcpTransportClient.healthCheck())
+        .thenReturn(new McpHealthResponse(true, "2.0.0", metadata));
+    when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(true);
+    when(mcpVerificationService.getCachedResult()).thenReturn(null);
+    when(mcpVerificationService.verify())
+        .thenReturn(McpVerificationResult.success("codex-cli", "claude-opus-4-6"));
+
+    ResponseEntity<Object> response = controller.verifyProvider();
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+
+    // verify() should have been called
+    verify(mcpVerificationService, times(1)).verify();
+  }
+
+  @Test
+  @DisplayName("GET /provider/status returns VERIFICATION_FAILED when cached result is failure")
+  void testGetProviderStatusReturnsVerificationFailed() throws Exception {
+    when(analysisClient.getProviderName()).thenReturn("codex-mcp");
+    Map<String, Object> metadata = new HashMap<>();
+    metadata.put("provider", "codex");
+    metadata.put("model", "claude-opus-4-6");
+    metadata.put("backend", "mcp");
+    when(mcpTransportClient.healthCheck())
+        .thenReturn(new McpHealthResponse(true, "2.0.0", metadata));
+    when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(true);
+    when(mcpVerificationService.getCachedResult())
+        .thenReturn(McpVerificationResult.failure("Verification analyze call failed: timeout",
+            "codex-cli"));
+
+    ResponseEntity<Object> response = controller.getProviderStatus();
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertEquals(false, body.get("endToEndVerified"));
+    assertEquals("VERIFICATION_FAILED", body.get("connectionState"));
+    assertEquals("Codex MCP verification failed", body.get("statusHeadline"));
+    assertEquals("failed", body.get("lastVerificationOutcome"));
+    assertNotNull(body.get("lastVerificationError"));
   }
 
   @Test

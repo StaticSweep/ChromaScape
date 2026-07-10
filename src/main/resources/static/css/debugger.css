@@ -1939,3 +1939,156 @@ body {
     transform: none;
   }
 }
+
+/* =========================================================================
+ * Same-screen Recovery Mode styles (added for debugger recovery mode).
+ * ========================================================================= */
+.recovery-mode-shell {
+  margin: 0 auto;
+  max-width: 1400px;
+  padding: 12px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.recovery-mode-active .debugger-page {
+  padding-bottom: 0;
+}
+
+.recovery-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bs-warning, #ffc107);
+  color: #212529;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 2px 10px;
+  border-radius: 1rem;
+}
+
+.recovery-mode-toolbar {
+  background: rgba(255, 193, 7, 0.08);
+  border: 1px solid rgba(255, 193, 7, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.recovery-mode-body {
+  background: var(--bs-body-bg, #0d1117);
+  border: 1px solid var(--bs-border-color, #30363d);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.recovery-active-range,
+.recovery-annotations,
+.recovery-evidence,
+.recovery-patchplan,
+.recovery-relaunch {
+  background: var(--bs-tertiary-bg, #161b22);
+}
+
+.recovery-annotation-card {
+  background: var(--bs-body-bg, #0d1117);
+}
+
+.recovery-annotation-card.border-warning {
+  background: rgba(255, 193, 7, 0.06);
+}
+
+.recovery-evidence-checkbox:checked {
+  background-color: var(--bs-primary, #0d6efd);
+  border-color: var(--bs-primary, #0d6efd);
+}
+
+.recovery-relaunch {
+  border-color: rgba(25, 135, 84, 0.4) !important;
+  background: rgba(25, 135, 84, 0.06);
+}
+
+/* When recovery mode is active, give the replay surface a subtle highlight so the
+   operator knows the replay video/scrubber is the canonical editing surface. */
+body.recovery-mode-active .replay-section,
+body.recovery-mode-active .debugger-scrubber {
+  outline: 2px solid rgba(255, 193, 7, 0.35);
+  outline-offset: 2px;
+}
+
+
+/* Codex MCP Connection Visibility Styles */
+.codex-mcp-headline-badge {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+  transition: all 0.2s ease;
+}
+
+.codex-mcp-headline-badge i {
+  font-size: 0.9rem;
+}
+
+.codex-mcp-detail {
+  font-size: 0.72rem;
+  color: var(--text-muted, #aaa);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+/* Badge state colors */
+.codex-mcp-headline-badge.badge-verified,
+.recovery-codex-mcp-badge.badge-verified {
+  background: rgba(40, 167, 69, 0.15);
+  border: 1px solid rgba(40, 167, 69, 0.4);
+  color: #6fcf97;
+}
+
+.codex-mcp-headline-badge.badge-unverified,
+.recovery-codex-mcp-badge.badge-unverified {
+  background: rgba(255, 193, 7, 0.15);
+  border: 1px solid rgba(255, 193, 7, 0.4);
+  color: #f8d24e;
+}
+
+.codex-mcp-headline-badge.badge-wrong-provider,
+.recovery-codex-mcp-badge.badge-wrong-provider {
+  background: rgba(255, 152, 0, 0.15);
+  border: 1px solid rgba(255, 152, 0, 0.4);
+  color: #ffb74d;
+}
+
+.codex-mcp-headline-badge.badge-down,
+.recovery-codex-mcp-badge.badge-down {
+  background: rgba(220, 53, 69, 0.15);
+  border: 1px solid rgba(220, 53, 69, 0.4);
+  color: #f08080;
+}
+
+.codex-mcp-headline-badge.badge-failed,
+.recovery-codex-mcp-badge.badge-failed {
+  background: rgba(220, 53, 69, 0.12);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  color: #f08080;
+}
+
+.codex-mcp-headline-badge.badge-unknown,
+.recovery-codex-mcp-badge.badge-unknown {
+  background: rgba(171, 178, 191, 0.1);
+  border: 1px solid rgba(171, 178, 191, 0.3);
+  color: #abb2bf;
+}
+
+/* Recovery Mode Codex MCP status strip */
+.recovery-codex-mcp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 4px;
+}

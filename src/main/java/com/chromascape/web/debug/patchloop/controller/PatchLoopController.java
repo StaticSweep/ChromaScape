@@ -7,11 +7,13 @@ import com.chromascape.web.debug.patchloop.dto.PatchLoopExecuteResponse;
 import com.chromascape.web.debug.patchloop.dto.PatchLoopIterationResponse;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
 import com.chromascape.web.debug.patchloop.exception.PatchLoopRequestException;
+import com.chromascape.web.debug.patchloop.service.McpVerificationService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpHealthResponse;
 import com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient;
+import com.chromascape.web.debug.patchloop.service.provider.mcp.McpVerificationResult;
 import com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,6 +53,7 @@ public class PatchLoopController {
   private final PatchLoopGraphOrchestratorService graphOrchestratorService;
   private final PatchLoopAnalysisClient analysisClient;
   private final McpTransportClient mcpTransportClient;
+  private final McpVerificationService mcpVerificationService;
   private final Micro6ExecutorCatalogService micro6ExecutorCatalogService;
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final HttpClient catalogHttpClient =
@@ -77,11 +80,13 @@ public class PatchLoopController {
       PatchLoopGraphOrchestratorService graphOrchestratorService,
       PatchLoopAnalysisClient analysisClient,
       McpTransportClient mcpTransportClient,
+      McpVerificationService mcpVerificationService,
       Micro6ExecutorCatalogService micro6ExecutorCatalogService) {
     this.orchestratorService = orchestratorService;
     this.graphOrchestratorService = graphOrchestratorService;
     this.analysisClient = analysisClient;
     this.mcpTransportClient = mcpTransportClient;
+    this.mcpVerificationService = mcpVerificationService;
     this.micro6ExecutorCatalogService = micro6ExecutorCatalogService;
   }
 
@@ -417,9 +422,9 @@ public class PatchLoopController {
   }
 
   /**
-   * Gets the current analysis provider status.
+   * Gets the current analysis provider status with normalized Codex MCP fields.
    *
-   * @return provider status with name and availability
+   * @return provider status with name, availability, and connection verdict
    */
   @GetMapping("/provider/status")
   public ResponseEntity<Object> getProviderStatus() {
@@ -434,13 +439,17 @@ public class PatchLoopController {
       String backend =
           frameworkProvider != null && frameworkProvider.endsWith("-mcp") ? "mcp" : "api";
       boolean available;
+      boolean bridgeHealthy = false;
+      boolean wrapperReady = false;
       String availabilityReason = "unknown";
+      String resolvedRuntimeProvider = inferRuntimeProvider(frameworkProvider, backend);
+      String runtimeModel = "unknown";
 
       // Keep providerName for backward compatibility with older clients.
       status.put("providerName", frameworkProvider);
       status.put("frameworkProvider", frameworkProvider);
       status.put("backend", backend);
-      status.put("runtimeProvider", inferRuntimeProvider(frameworkProvider, backend));
+      status.put("runtimeProvider", resolvedRuntimeProvider);
       status.put("bridgeMode", resolveBridgeMode(backend));
       status.put("defaultMode", "analysis_only"); // Current default
 
@@ -449,21 +458,28 @@ public class PatchLoopController {
         try {
           McpHealthResponse health = mcpTransportClient.healthCheck();
           if (health != null) {
-            status.put("bridgeHealthy", health.isHealthy());
-            available = health.isHealthy();
+            bridgeHealthy = health.isHealthy();
+            status.put("bridgeHealthy", bridgeHealthy);
+            available = bridgeHealthy;
             Map<String, Object> metadata = health.getMetadata();
-            status.put(
-                "runtimeProvider",
+            resolvedRuntimeProvider =
                 normalizeRuntimeProvider(
                     readStringMetadata(
-                        metadata, "provider", String.valueOf(status.get("runtimeProvider")))));
-            status.put("runtimeModel", readStringMetadata(metadata, "model", "unknown"));
+                        metadata, "provider", String.valueOf(resolvedRuntimeProvider)));
+            runtimeModel = readStringMetadata(metadata, "model", "unknown");
+            status.put("runtimeProvider", resolvedRuntimeProvider);
+            status.put("runtimeModel", runtimeModel);
             status.put("backend", readStringMetadata(metadata, "backend", backend));
+            // Determine wrapper readiness from metadata
+            // Determine wrapper readiness from metadata (may not always be present)
+            String wrapperStatus = readStringMetadata(metadata, "wrapper_status", null);
+            wrapperReady = "ready".equalsIgnoreCase(
+                wrapperStatus != null ? wrapperStatus : "unknown");
             availabilityReason =
                 readStringMetadata(
                     metadata,
                     "readiness",
-                    health.isHealthy() ? "provider_ready" : "provider_unavailable");
+                    bridgeHealthy ? "provider_ready" : "provider_unavailable");
           }
         } catch (Exception e) {
           logger.debug("MCP runtime metadata unavailable while building provider status", e);
@@ -471,13 +487,17 @@ public class PatchLoopController {
         }
       } else if ("claude-api".equals(frameworkProvider)) {
         available = analysisClient.isProviderAvailable();
-        status.put("runtimeProvider", "claude-api");
-        status.put("runtimeModel", claudeApiModel);
+        resolvedRuntimeProvider = "claude-api";
+        runtimeModel = claudeApiModel;
+        status.put("runtimeProvider", resolvedRuntimeProvider);
+        status.put("runtimeModel", runtimeModel);
         availabilityReason = available ? "provider_ready" : "claude_api_unavailable";
       } else if ("openai-codex".equals(frameworkProvider)) {
         available = analysisClient.isProviderAvailable();
-        status.put("runtimeProvider", "openai-codex");
-        status.put("runtimeModel", openAiCodexModel);
+        resolvedRuntimeProvider = "openai-codex";
+        runtimeModel = openAiCodexModel;
+        status.put("runtimeProvider", resolvedRuntimeProvider);
+        status.put("runtimeModel", runtimeModel);
         availabilityReason = available ? "provider_ready" : "openai_codex_unavailable";
       } else {
         available = analysisClient.isProviderAvailable();
@@ -486,6 +506,43 @@ public class PatchLoopController {
       status.put("available", available);
       status.put("availabilityReason", availabilityReason);
 
+      // --- Normalized Codex MCP fields ---
+      status.put("bridgeHealthy", bridgeHealthy);
+      status.put("wrapperReady", wrapperReady);
+      status.put(
+          "usingCodexMcp",
+          computeUsingCodexMcp(frameworkProvider, resolvedRuntimeProvider, backend));
+      status.put("endToEndVerified", computeEndToEndVerified(resolvedRuntimeProvider));
+      status.put(
+          "connectionState",
+          computeConnectionState(
+              frameworkProvider, backend, available, bridgeHealthy, resolvedRuntimeProvider));
+      status.put(
+          "statusHeadline",
+          computeStatusHeadline(
+              frameworkProvider, backend, available, bridgeHealthy, resolvedRuntimeProvider));
+      status.put("statusDetail", buildStatusDetail(frameworkProvider, resolvedRuntimeProvider,
+          runtimeModel, backend, bridgeHealthy));
+
+      // Verification cache details
+      McpVerificationResult cachedVr = mcpVerificationService.getCachedResult();
+      if (cachedVr != null) {
+        status.put("lastVerifiedAt", cachedVr.getVerifiedAt() != null
+            ? cachedVr.getVerifiedAt().toString() : null);
+        status.put("lastVerificationOutcome", cachedVr.getOutcome());
+        status.put("lastVerificationError", cachedVr.getError());
+      } else {
+        status.put("lastVerifiedAt", null);
+        status.put("lastVerificationOutcome", null);
+        status.put("lastVerificationError", null);
+      }
+
+      // Verification availability
+      status.put(
+          "verificationAvailable",
+          computeVerificationAvailable(
+              backend, bridgeHealthy, resolvedRuntimeProvider));
+
       return ResponseEntity.ok(status);
 
     } catch (Exception e) {
@@ -493,6 +550,125 @@ public class PatchLoopController {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body("Failed to get provider status: " + e.getMessage());
     }
+  }
+
+  /**
+   * Runs a live end-to-end Codex MCP verification through the real analyze path.
+   *
+   * <p>Returns the updated normalized provider status payload including the fresh verification
+   * result.
+   *
+   * @return provider status with fresh verification result
+   */
+  @PostMapping("/provider/verify")
+  public ResponseEntity<Object> verifyProvider() {
+    logger.info("POST /api/debug/patch-loop/provider/verify");
+
+    try {
+      if (!mcpVerificationService.isManualVerificationEnabled()) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .body("Manual verification is disabled by configuration.");
+      }
+
+      McpVerificationResult result = mcpVerificationService.verify();
+      return getProviderStatus();
+    } catch (Exception e) {
+      logger.error("Failed to run provider verification", e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body("Verification failed: " + e.getMessage());
+    }
+  }
+
+  // ========== Normalized status helpers ==========
+
+  private boolean computeUsingCodexMcp(String frameworkProvider, String runtimeProvider,
+      String backend) {
+    if (!"mcp".equals(backend)) {
+      return false;
+    }
+    return frameworkProvider != null
+        && frameworkProvider.endsWith("-mcp")
+        && "codex-cli".equals(runtimeProvider);
+  }
+
+  private boolean computeEndToEndVerified(String runtimeProvider) {
+    McpVerificationResult cached = mcpVerificationService.getCachedResult();
+    return cached != null && cached.isSuccess() && "codex-cli".equals(runtimeProvider);
+  }
+
+  private String computeConnectionState(String frameworkProvider, String backend,
+      boolean available, boolean bridgeHealthy, String runtimeProvider) {
+    if ("api".equals(backend)) {
+      return "PROVIDER_MISCONFIGURED";
+    }
+    if (!available && !bridgeHealthy) {
+      return "MCP_DOWN";
+    }
+    if (bridgeHealthy && !"codex-cli".equals(runtimeProvider)) {
+      return "MCP_UP_WRAPPER_NOT_CODEX";
+    }
+    if (computeEndToEndVerified(runtimeProvider)) {
+      return "CODEX_CONNECTED_VERIFIED";
+    }
+    McpVerificationResult cached = mcpVerificationService.getCachedResult();
+    if (cached != null && !cached.isSuccess()) {
+      return "VERIFICATION_FAILED";
+    }
+    if ("codex-cli".equals(runtimeProvider)) {
+      return "CODEX_CONNECTED_UNVERIFIED";
+    }
+    return "PROVIDER_MISCONFIGURED";
+  }
+
+  private String computeStatusHeadline(String frameworkProvider, String backend,
+      boolean available, boolean bridgeHealthy, String runtimeProvider) {
+    if ("api".equals(backend)) {
+      return "Not using MCP";
+    }
+    if (!bridgeHealthy) {
+      return "MCP bridge unavailable";
+    }
+    if (computeEndToEndVerified(runtimeProvider)) {
+      return "Codex connected via MCP";
+    }
+    McpVerificationResult cached = mcpVerificationService.getCachedResult();
+    if (cached != null && !cached.isSuccess()) {
+      return "Codex MCP verification failed";
+    }
+    if ("codex-cli".equals(runtimeProvider)) {
+      return "Codex configured via MCP, not yet verified";
+    }
+    if (!"codex-cli".equals(runtimeProvider)) {
+      return "MCP bridge connected, but wrapper is not Codex";
+    }
+    return "Checking MCP status...";
+  }
+
+  private boolean computeVerificationAvailable(
+      String backend, boolean bridgeHealthy, String runtimeProvider) {
+    if (!mcpVerificationService.isManualVerificationEnabled() || !"mcp".equals(backend)) {
+      return false;
+    }
+    if (bridgeHealthy) {
+      return "codex-cli".equals(runtimeProvider);
+    }
+    return true;
+  }
+
+  private String buildStatusDetail(String frameworkProvider, String runtimeProvider,
+      String runtimeModel, String backend, boolean bridgeHealthy) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Framework: ").append(frameworkProvider);
+    sb.append(", wrapper: ").append(runtimeProvider);
+    sb.append(", model: ").append(runtimeModel);
+    if ("mcp".equals(backend)) {
+      sb.append(bridgeHealthy ? ", bridge: healthy" : ", bridge: unhealthy");
+    }
+    McpVerificationResult cached = mcpVerificationService.getCachedResult();
+    if (cached != null && !cached.isSuccess() && cached.getError() != null) {
+      sb.append(", last verification: ").append(cached.getError());
+    }
+    return sb.toString();
   }
 
   /**

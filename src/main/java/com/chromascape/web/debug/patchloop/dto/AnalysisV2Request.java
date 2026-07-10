@@ -55,6 +55,27 @@ public class AnalysisV2Request {
     this.evidenceSelectors = new ArrayList<>();
   }
 
+  /**
+   * Creates a minimal verification request for end-to-end provider verification.
+   *
+   * <p>Used by {@code McpVerificationService} to run a lightweight real analysis call through
+   * the production MCP path without requiring full evidence.
+   *
+   * @return a minimal request suitable for provider verification
+   */
+  public static AnalysisV2Request createMinimalVerificationRequest() {
+    AnalysisV2Request request = new AnalysisV2Request();
+    request.setPromptType(PromptType.ISSUE);
+    request.setTarget(new AnalysisV2Target("_mcp_verification_probe"));
+    request.setPrompt("Respond with exactly: OK");
+    request.setContext("MCP end-to-end verification probe - no real analysis needed");
+    // Add a minimal evidence selector to satisfy validator requirements
+    AnalysisV2EvidenceSelector selector = new AnalysisV2EvidenceSelector();
+    selector.setType(EvidenceType.GENERAL_LOGS);
+    request.getEvidenceSelectors().add(selector);
+    return request;
+  }
+
   public AnalysisV2Request(
       PromptType promptType,
       AnalysisV2Target target,

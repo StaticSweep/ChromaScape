@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.atLeastOnce;
 
 import com.chromascape.web.debug.patchloop.dto.AnalysisStatus;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV1EvidenceBundle;
@@ -25,6 +26,7 @@ import com.chromascape.web.debug.patchloop.service.PatchLoopSessionResolverServi
 import com.chromascape.web.debug.patchloop.service.ScriptExecutionService;
 import com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider;
 import com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService;
+import com.chromascape.web.logs.LogRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -49,6 +51,7 @@ class BuilderGoalRunnerServiceTest {
   @Mock private ScriptExecutionService scriptExecutionService;
   @Mock private AnalysisProvider analysisProvider;
   @Mock private Micro6ExecutorCatalogService micro6ExecutorCatalogService;
+  @Mock private LogRepository logRepository;
   @Mock private BuilderGoalLauncherControlService launcherControlService;
   @Mock private BuilderGoalAccountCatalogService accountCatalogService;
   @Mock private Micro6OnlineClientRegistryService clientRegistryService;
@@ -71,6 +74,7 @@ class BuilderGoalRunnerServiceTest {
             scriptExecutionService,
             analysisProvider,
             micro6ExecutorCatalogService,
+            logRepository,
             launcherControlService,
             accountCatalogService,
             clientRegistryService,
@@ -473,6 +477,193 @@ class BuilderGoalRunnerServiceTest {
     assertThat(run.get("taskKey")).isEqualTo("configurable_woodcutting");
     assertThat(run.get("accountId")).isEqualTo("hash-1");
     assertThat(run.get("launcherMachineUuid")).isEqualTo("machine-1");
+  }
+
+  @Test
+  void openRecoveryWorkspace_entersRecoveryModeAndPersistsWorkspaceMetadata() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_rec0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setPrompt("35 Woodcutting");
+    iteration.setPatchTarget(BuilderGoalRunnerService.PATCH_TARGET_MICRO6_TASK_SOURCE);
+    iteration.setFailureReason("Inventory full");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setRunSessionId("debug_orig_session");
+    iteration.setRunRecordingId("rec_orig_1");
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "display_name", "35 Woodcutting",
+                "task_key", "configurable_woodcutting",
+                "micro6_publish", Map.of("status", "FAILED"))));
+    when(iterationRepository.findByIterationId("buildergoal_rec0001")).thenReturn(Optional.of(iteration));
+    when(evidenceService.collectEvidence(eq(iteration), any())).thenReturn(sampleEvidenceBundle());
+
+    Map<String, Object> workspace = service.openRecoveryWorkspace("buildergoal_rec0001");
+
+    assertThat(workspace.get("recoveryState")).isEqualTo("AWAITING_OPERATOR_PROMPT");
+    assertThat(workspace.get("debugSessionId")).isEqualTo("debug_orig_session");
+    assertThat(workspace.get("recordingId")).isEqualTo("rec_orig_1");
+    assertThat(workspace.get("run")).isNotNull();
+    ArgumentCaptor<PatchLoopIteration> captor = ArgumentCaptor.forClass(PatchLoopIteration.class);
+    verify(persistenceService, atLeastOnce()).saveIteration(captor.capture());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> savedMetadata = objectMapper.convertValue(captor.getValue().getTaskMetadataJson(), Map.class);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> recoveryWorkspace = (Map<String, Object>) savedMetadata.get("recovery_workspace");
+    assertThat(recoveryWorkspace).isNotNull();
+    assertThat(recoveryWorkspace.get("last_loaded_at")).isNotNull();
+  }
+
+  @Test
+  void saveRecoveryAnnotations_persistsAnnotationsAndSelectedEvidence() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_ann0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "display_name", "35 Woodcutting",
+                "task_key", "configurable_woodcutting",
+                "micro6_publish", Map.of("status", "FAILED"))));
+    when(iterationRepository.findByIterationId("buildergoal_ann0001")).thenReturn(Optional.of(iteration));
+
+    Map<String, Object> result =
+        service.saveRecoveryAnnotations(
+            "buildergoal_ann0001",
+            objectMapper.valueToTree(
+                Map.of(
+                    "annotations",
+                        java.util.List.of(
+                            Map.of(
+                                "label", "stuck at bank",
+                                "note", "bot loops here",
+                                "important", true,
+                                "startSeconds", 13,
+                                "endSeconds", 20)),
+                    "activeRangeStartSeconds", 13,
+                    "activeRangeEndSeconds", 20,
+                    "selectedEvidenceIds", java.util.List.of("log_1"))));
+
+    assertThat(result.get("saved")).isEqualTo(true);
+    @SuppressWarnings("unchecked")
+    java.util.List<Map<String, Object>> annotations = (java.util.List<Map<String, Object>>) result.get("annotations");
+    assertThat(annotations).hasSize(1);
+    assertThat(annotations.get(0).get("label")).isEqualTo("stuck at bank");
+    assertThat(annotations.get(0).get("important")).isEqualTo(true);
+    ArgumentCaptor<PatchLoopIteration> captor = ArgumentCaptor.forClass(PatchLoopIteration.class);
+    verify(persistenceService, atLeastOnce()).saveIteration(captor.capture());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> savedMetadata = objectMapper.convertValue(captor.getValue().getTaskMetadataJson(), Map.class);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> workspace = (Map<String, Object>) savedMetadata.get("recovery_workspace");
+    assertThat(workspace.get("active_start_seconds")).isEqualTo(13);
+    assertThat(workspace.get("active_end_seconds")).isEqualTo(20);
+  }
+
+  @Test
+  void getRecoveryState_returnsPhaseAndChildLinkage() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_state0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setRunSessionId("debug_bound_1");
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "display_name", "35 Woodcutting",
+                "task_key", "configurable_woodcutting",
+                "recovery", Map.of("phase", "WAITING_FOR_DEBUG_BIND", "message", "waiting"),
+                "recovery_workspace", Map.of("preferred_session_id", "debug_reserved_7"),
+                "micro6_publish", Map.of("status", "FAILED"))));
+    when(iterationRepository.findByIterationId("buildergoal_state0001")).thenReturn(Optional.of(iteration));
+    when(iterationRepository.findByParentIterationIdOrderByCreatedAtDesc("buildergoal_state0001"))
+        .thenReturn(java.util.List.of());
+
+    Map<String, Object> state = service.getRecoveryState("buildergoal_state0001");
+
+    assertThat(state.get("recoveryPhase")).isEqualTo("WAITING_FOR_DEBUG_BIND");
+    assertThat(state.get("preferredSessionId")).isEqualTo("debug_reserved_7");
+    assertThat(state.get("relaunchStatus")).isEqualTo("WAITING_FOR_DEBUG_BIND");
+    assertThat(state.get("bindStatus")).isEqualTo("WAITING_FOR_DEBUG_BIND");
+  }
+
+  @Test
+  void openRecoveryWorkspace_restoresPersistedActiveRangeAndSelectedEvidence() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_restore0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setPrompt("35 Woodcutting");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "display_name", "35 Woodcutting",
+                "task_key", "configurable_woodcutting",
+                "micro6_publish", Map.of("status", "FAILED"),
+                "recovery_workspace",
+                    Map.of(
+                        "active_start_seconds", 13,
+                        "active_end_seconds", 20,
+                        "selected_evidence_ids", java.util.List.of("log_restore_1")))));
+    when(iterationRepository.findByIterationId("buildergoal_restore0001"))
+        .thenReturn(Optional.of(iteration));
+    when(evidenceService.collectEvidence(eq(iteration), any())).thenReturn(sampleEvidenceBundle());
+
+    Map<String, Object> workspace = service.openRecoveryWorkspace("buildergoal_restore0001");
+
+    assertThat(workspace.get("activeRangeStartSeconds")).isEqualTo(13);
+    assertThat(workspace.get("activeRangeEndSeconds")).isEqualTo(20);
+    @SuppressWarnings("unchecked")
+    java.util.List<String> selectedIds = (java.util.List<String>) workspace.get("selectedEvidenceIds");
+    assertThat(selectedIds).contains("log_restore_1");
+  }
+
+  @Test
+  void getRecoveryState_includesChildRunSummary() {
+    PatchLoopIteration parent = new PatchLoopIteration();
+    parent.setIterationId("buildergoal_parent0001");
+    parent.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    parent.setScriptName("configurable_woodcutting");
+    parent.setStatus(PatchLoopStatus.FAILED);
+    parent.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "display_name", "35 Woodcutting",
+                "task_key", "configurable_woodcutting",
+                "recovery", Map.of("phase", "WAITING_FOR_DEBUG_BIND"),
+                "recovery_workspace", Map.of("preferred_session_id", "debug_child_42"),
+                "micro6_publish", Map.of("status", "FAILED"))));
+
+    PatchLoopIteration child = new PatchLoopIteration();
+    child.setIterationId("buildergoal_child0001");
+    child.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    child.setScriptName("configurable_woodcutting");
+    child.setStatus(PatchLoopStatus.QUEUED);
+    child.setRunSessionId("debug_child_42");
+    child.setRunRecordingId("rec_child_42");
+    child.setParentIterationId("buildergoal_parent0001");
+
+    when(iterationRepository.findByIterationId("buildergoal_parent0001"))
+        .thenReturn(Optional.of(parent));
+    when(iterationRepository.findByIterationId("buildergoal_child0001"))
+        .thenReturn(Optional.of(child));
+    when(iterationRepository.findByParentIterationIdOrderByCreatedAtDesc("buildergoal_parent0001"))
+        .thenReturn(java.util.List.of(child));
+
+    Map<String, Object> state = service.getRecoveryState("buildergoal_parent0001");
+
+    assertThat(state.get("childIterationId")).isEqualTo("buildergoal_child0001");
+    assertThat(state.get("childRun")).isNotNull();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> childRun = (Map<String, Object>) state.get("childRun");
+    assertThat(childRun.get("runSessionId")).isEqualTo("debug_child_42");
+    assertThat(childRun.get("runRecordingId")).isEqualTo("rec_child_42");
   }
 
   private AnalysisV1EvidenceBundle sampleEvidenceBundle() {

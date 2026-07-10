@@ -125,7 +125,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
               request.getAccountName(),
               request.getScriptName(),
               request.getRecordingEnabled(),
-              request.getTriggerSource());
+              request.getTriggerSource(),
+              request.getPreferredSessionId());
 
       log.info(
           "SESSION_START result: sessionId={}, recordingId={}, failureReason={}",

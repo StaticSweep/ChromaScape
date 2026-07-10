@@ -235,6 +235,93 @@ public class BuilderGoalRunnerController {
     }
   }
 
+  @PostMapping("/runs/{iterationId}/recovery-workspace")
+  public ResponseEntity<Object> openRecoveryWorkspace(@PathVariable String iterationId) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.openRecoveryWorkspace(iterationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(
+              Map.of(
+                  "error", "Failed to open recovery workspace", "details", e.getMessage()));
+    }
+  }
+
+  @PostMapping("/runs/{iterationId}/recovery-annotations")
+  public ResponseEntity<Object> saveRecoveryAnnotations(
+      @PathVariable String iterationId, @RequestBody(required = false) JsonNode payload) {
+    try {
+      return ResponseEntity.ok(
+          builderGoalRunnerService.saveRecoveryAnnotations(iterationId, payload));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(
+              Map.of(
+                  "error",
+                  "Failed to save recovery annotations",
+                  "details",
+                  e.getMessage()));
+    }
+  }
+
+  @PostMapping("/runs/{iterationId}/recovery-evidence")
+  public ResponseEntity<Object> resolveRecoveryEvidence(
+      @PathVariable String iterationId, @RequestBody(required = false) JsonNode payload) {
+    try {
+      return ResponseEntity.ok(
+          builderGoalRunnerService.resolveRecoveryEvidence(iterationId, payload));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(
+              Map.of(
+                  "error",
+                  "Failed to resolve recovery evidence",
+                  "details",
+                  e.getMessage()));
+    }
+  }
+
+  @GetMapping("/runs/{iterationId}/recovery-state")
+  public ResponseEntity<Object> getRecoveryState(@PathVariable String iterationId) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.getRecoveryState(iterationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(
+              Map.of(
+                  "error", "Failed to load recovery state", "details", e.getMessage()));
+    }
+  }
+
+  @PostMapping("/runs/{iterationId}/stop")
+  public ResponseEntity<Object> stopRun(
+      @PathVariable String iterationId, @RequestBody(required = false) JsonNode payload) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.stopRun(iterationId, payload));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", "Failed to stop builder goal run", "details", e.getMessage()));
+    }
+  }
+
   private String textValue(JsonNode node) {
     if (node == null || node.isMissingNode() || node.isNull()) {
       return null;

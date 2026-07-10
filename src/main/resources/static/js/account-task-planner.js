@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '21';
+  static BUILDER_GOAL_BUNDLE_VERSION = '22';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -41,6 +41,16 @@ class AccountTaskPlanner {
     this.builderGoalCatalogReason = '';
     this.builderGoalCatalogSource = '';
     this.builderGoalLogsIterationId = null;
+    // Same-screen recovery mode state
+    this.recoveryModeActive = false;
+    this.recoveryIterationId = null;
+    this.recoveryDraft = null;
+    this.recoveryAnnotations = [];
+    this.recoveryActiveStartSeconds = null;
+    this.recoveryActiveEndSeconds = null;
+    this.recoveryActiveImportant = false;
+    this.recoveryPollHandle = null;
+    this.recoveryChildLoaded = false;
   }
 
   /**
@@ -120,6 +130,40 @@ class AccountTaskPlanner {
     this.builderGoalAnalysisSelectAllBtn = document.getElementById('builderGoalAnalysisSelectAllBtn');
     this.builderGoalAnalysisClearAllBtn = document.getElementById('builderGoalAnalysisClearAllBtn');
     this.submitBuilderGoalAnalysisBtn = document.getElementById('submitBuilderGoalAnalysisBtn');
+
+    // Same-screen recovery mode elements
+    this.recoveryShell = document.getElementById('recoveryModeShell');
+    this.recoveryRunLabel = document.getElementById('recoveryModeRunLabel');
+    this.recoveryMarkStartBtn = document.getElementById('recoveryMarkStartBtn');
+    this.recoveryMarkEndBtn = document.getElementById('recoveryMarkEndBtn');
+    this.recoverySaveRangeBtn = document.getElementById('recoverySaveRangeBtn');
+    this.recoveryClearRangeBtn = document.getElementById('recoveryClearRangeBtn');
+    this.recoveryImportantBtn = document.getElementById('recoveryImportantBtn');
+    this.recoveryPinFrameBtn = document.getElementById('recoveryPinFrameBtn');
+    this.recoveryExitBtn = document.getElementById('recoveryExitBtn');
+    this.recoveryActiveRangeHint = document.getElementById('recoveryActiveRangeHint');
+    this.recoveryActiveStart = document.getElementById('recoveryActiveStart');
+    this.recoveryActiveEnd = document.getElementById('recoveryActiveEnd');
+    this.recoveryActiveLabel = document.getElementById('recoveryActiveLabel');
+    this.recoveryActiveTick = document.getElementById('recoveryActiveTick');
+    this.recoveryActiveFrame = document.getElementById('recoveryActiveFrame');
+    this.recoveryActiveNote = document.getElementById('recoveryActiveNote');
+    this.recoveryAnnotationList = document.getElementById('recoveryAnnotationList');
+    this.recoveryAnnotationCount = document.getElementById('recoveryAnnotationCount');
+    this.recoveryEvidenceMeta = document.getElementById('recoveryEvidenceMeta');
+    this.recoveryEvidenceGroups = document.getElementById('recoveryEvidenceGroups');
+    this.recoverySelectAllEvidenceBtn = document.getElementById('recoverySelectAllEvidenceBtn');
+    this.recoveryClearEvidenceBtn = document.getElementById('recoveryClearEvidenceBtn');
+    this.recoveryRefreshEvidenceBtn = document.getElementById('recoveryRefreshEvidenceBtn');
+    this.recoveryGeneratePatchBtn = document.getElementById('recoveryGeneratePatchBtn');
+    this.recoveryApproveBtn = document.getElementById('recoveryApproveBtn');
+    this.recoveryPrompt = document.getElementById('recoveryPrompt');
+    this.recoveryContext = document.getElementById('recoveryContext');
+    this.recoveryPatchPlanReview = document.getElementById('recoveryPatchPlanReview');
+    this.recoveryRelaunchPanel = document.getElementById('recoveryRelaunchPanel');
+    this.recoveryRelaunchStatus = document.getElementById('recoveryRelaunchStatus');
+    this.recoveryPreferredSession = document.getElementById('recoveryPreferredSession');
+    this.recoveryChildIteration = document.getElementById('recoveryChildIteration');
 
     // Plans list
     this.plansList = document.getElementById('plansList');
@@ -330,13 +374,15 @@ class AccountTaskPlanner {
         if (!iterationId) return;
         const action = button.dataset.builderRunAction;
         if (action === 'analyze') {
-          this.openBuilderGoalAnalysisEditor(iterationId);
+          this.enterRecoveryMode(iterationId);
         } else if (action === 'fix') {
           this.fixAndRelaunchBuilderGoalRun(iterationId);
         } else if (action === 'load-config') {
           this.loadBuilderGoalRunConfig(iterationId);
         } else if (action === 'rerun') {
           this.rerunBuilderGoal(iterationId);
+        } else if (action === 'stop') {
+          this.stopBuilderGoalRun(iterationId);
         } else if (action === 'view-logs') {
           this.loadBuilderGoalRunLogs(iterationId);
         }
@@ -368,6 +414,51 @@ class AccountTaskPlanner {
       this.builderGoalAnalysisModalElement.addEventListener('hidden.bs.modal', () => {
         this.builderGoalAnalysisDraft = null;
         this.builderGoalAnalysisIterationId = null;
+      });
+    }
+    // Same-screen recovery mode event listeners
+    if (this.recoveryMarkStartBtn) {
+      this.recoveryMarkStartBtn.addEventListener('click', () => this.recoveryMarkStart());
+    }
+    if (this.recoveryMarkEndBtn) {
+      this.recoveryMarkEndBtn.addEventListener('click', () => this.recoveryMarkEnd());
+    }
+    if (this.recoverySaveRangeBtn) {
+      this.recoverySaveRangeBtn.addEventListener('click', () => this.recoverySaveRange());
+    }
+    if (this.recoveryClearRangeBtn) {
+      this.recoveryClearRangeBtn.addEventListener('click', () => this.recoveryClearActiveRange());
+    }
+    if (this.recoveryImportantBtn) {
+      this.recoveryImportantBtn.addEventListener('click', () => this.recoveryToggleImportant());
+    }
+    if (this.recoveryPinFrameBtn) {
+      this.recoveryPinFrameBtn.addEventListener('click', () => this.recoveryPinCurrentFrame());
+    }
+    if (this.recoveryExitBtn) {
+      this.recoveryExitBtn.addEventListener('click', () => this.exitRecoveryMode());
+    }
+    if (this.recoverySelectAllEvidenceBtn) {
+      this.recoverySelectAllEvidenceBtn.addEventListener('click', () => this.setAllRecoveryEvidenceSelections(true));
+    }
+    if (this.recoveryClearEvidenceBtn) {
+      this.recoveryClearEvidenceBtn.addEventListener('click', () => this.setAllRecoveryEvidenceSelections(false));
+    }
+    if (this.recoveryRefreshEvidenceBtn) {
+      this.recoveryRefreshEvidenceBtn.addEventListener('click', () => this.refreshRecoveryEvidence());
+    }
+    if (this.recoveryGeneratePatchBtn) {
+      this.recoveryGeneratePatchBtn.addEventListener('click', () => this.generateRecoveryPatchPlan());
+    }
+    if (this.recoveryApproveBtn) {
+      this.recoveryApproveBtn.addEventListener('click', () => this.approveRecoveryRelaunch());
+    }
+    if (this.recoveryEvidenceGroups) {
+      this.recoveryEvidenceGroups.addEventListener('change', (event) => {
+        if (event.target?.matches('.recovery-evidence-checkbox')) {
+          this.updateRecoveryEvidenceMeta();
+          this.persistRecoveryAnnotations();
+        }
       });
     }
     if (this.approvePlanBtn) {
@@ -1256,12 +1347,18 @@ class AccountTaskPlanner {
       const canApprove = Boolean(run.approvalAvailable);
       const canRerun = Boolean(run.canRerun);
       const canLoadConfig = Boolean(run.configAvailable);
+      const canStop = Boolean(run.canStop);
+      const stopLabel = run.stopping ? 'Stopping...' : 'Stop Task';
+      const stopDisabled = !canStop || Boolean(run.stopping);
       const showingLogs = this.builderGoalLogsIterationId === run.iterationId;
       const actionStepLine = this.renderBuilderGoalActionStep(run);
       const blockedReasonLine = this.renderBuilderGoalBlockedReason(run);
       const analysisUsageLine = this.renderBuilderGoalAnalysisUsage(run);
       const failureLine = run.failureReason
         ? `<div class="plan-card-intent text-danger">${this.escapeHtml(run.failureReason)}</div>`
+        : '';
+      const stopSendErrorLine = run.stopSendError
+        ? `<div class="plan-card-intent text-warning">${this.escapeHtml(run.stopSendError)}</div>`
         : '';
       const diagnosisLine = run.diagnosisSummary
         ? `<div class="plan-card-intent">${this.escapeHtml(run.diagnosisSummary)}</div>`
@@ -1308,6 +1405,7 @@ class AccountTaskPlanner {
           ${worldLine}
           ${publishLine}
           ${failureLine}
+          ${stopSendErrorLine}
           ${diagnosisLine}
           ${recoveryLine}
           ${revisionLine}
@@ -1328,6 +1426,11 @@ class AccountTaskPlanner {
           <div class="d-flex gap-2 mt-2">
             <button class="btn btn-sm btn-outline-info flex-fill" data-builder-run-action="view-logs" data-iteration-id="${this.escapeAttr(run.iterationId || '')}">
               <i class="bi bi-journal-text me-1"></i>${showingLogs ? 'Refresh Logs' : 'View Logs'}
+            </button>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-danger flex-fill" data-builder-run-action="stop" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${stopDisabled ? 'disabled' : ''}>
+              <i class="bi bi-stop-circle me-1"></i>${this.escapeHtml(stopLabel)}
             </button>
           </div>
           <div class="d-flex gap-2 mt-2">
@@ -1374,6 +1477,9 @@ class AccountTaskPlanner {
     }
     if (!run.approvalAvailable && run.approvalBlockedReason && !reasons.includes(run.approvalBlockedReason)) {
       reasons.push(run.approvalBlockedReason);
+    }
+    if (run.stopSendError && !reasons.includes(run.stopSendError)) {
+      reasons.push(run.stopSendError);
     }
     if (reasons.length === 0) {
       return '';
@@ -1809,9 +1915,7 @@ class AccountTaskPlanner {
       const account = (this.builderGoalAccounts || []).find(
         candidate => candidate.accountId === result.accountId
       );
-      if (!account) {
-        throw new Error('The saved run account is no longer available in launcher control.');
-      }
+      const accountAvailable = Boolean(account);
       const task =
         this.selectBuilderGoalTask(result.taskKey) ||
         this.ensureBuilderGoalTaskPlaceholder(result.taskKey, {
@@ -1822,20 +1926,21 @@ class AccountTaskPlanner {
       if (!task) {
         throw new Error(`Saved task is no longer available: ${result.taskKey}`);
       }
+      let machineAvailable = true;
       if (result.launcherMachineUuid) {
         const machine = (this.builderGoalMachines || []).find(
           candidate => candidate.machineUuid === result.launcherMachineUuid
         );
-        if (!machine) {
-          throw new Error('The saved run machine is no longer available in launcher control.');
-        }
-        this.selectedBuilderGoalMachineUuid = result.launcherMachineUuid;
-        localStorage.setItem(
-          'taskPlanner.selectedBuilderGoalMachineUuid',
-          this.selectedBuilderGoalMachineUuid
-        );
-        if (this.builderGoalMachineSelect) {
-          this.builderGoalMachineSelect.value = this.selectedBuilderGoalMachineUuid;
+        machineAvailable = Boolean(machine);
+        if (machine) {
+          this.selectedBuilderGoalMachineUuid = result.launcherMachineUuid;
+          localStorage.setItem(
+            'taskPlanner.selectedBuilderGoalMachineUuid',
+            this.selectedBuilderGoalMachineUuid
+          );
+          if (this.builderGoalMachineSelect) {
+            this.builderGoalMachineSelect.value = this.selectedBuilderGoalMachineUuid;
+          }
         }
       }
       if (this.builderGoalWorldInput) {
@@ -1843,8 +1948,10 @@ class AccountTaskPlanner {
       }
 
       this.selectedBuilderGoalAccountId = result.accountId || '';
-      localStorage.setItem('taskPlanner.selectedBuilderGoalAccountId', this.selectedBuilderGoalAccountId);
-      if (this.builderGoalAccountSelect) {
+      if (accountAvailable) {
+        localStorage.setItem('taskPlanner.selectedBuilderGoalAccountId', this.selectedBuilderGoalAccountId);
+      }
+      if (this.builderGoalAccountSelect && accountAvailable) {
         this.builderGoalAccountSelect.value = this.selectedBuilderGoalAccountId;
       }
 
@@ -1860,10 +1967,49 @@ class AccountTaskPlanner {
       });
       this.renderBuilderGoalAccountSummary();
       this.renderBuilderGoalMachineSummary();
-      this.renderBuilderGoalClientStatus(
-        `Loaded the saved config for ${result.displayName || result.taskKey} on ${account.displayName || account.accountName || account.accountId} into the editor with world ${result.world || 360}. Review the JSON and click Run Task when ready.`,
-        'info'
-      );
+      // Replay-first: switch the existing /debugger replay surface to this run's
+      // recording/session so the failed run is the visible primary result of the
+      // action. Falls back to the cached run summary when the config response does
+      // not carry a recording/session id (e.g. older server builds).
+      const cachedRun = Array.isArray(this.builderGoalRuns)
+        ? this.builderGoalRuns.find(item => item.iterationId === iterationId)
+        : null;
+      const replayResult = await this.focusBuilderGoalRunReplay({
+        runRecordingId: result.runRecordingId || (cachedRun && cachedRun.runRecordingId),
+        recordingId: result.recordingId || (cachedRun && cachedRun.recordingId),
+        runSessionId: result.runSessionId || (cachedRun && cachedRun.runSessionId),
+        debugSessionId: result.debugSessionId || (cachedRun && cachedRun.debugSessionId)
+      });
+      const staleLauncherWarnings = [];
+      if (!accountAvailable) {
+        staleLauncherWarnings.push('The saved launcher account is no longer available in launcher control.');
+      }
+      if (!machineAvailable) {
+        staleLauncherWarnings.push('The saved launcher machine is no longer available in launcher control.');
+      }
+      const accountLabel =
+        (account && (account.displayName || account.accountName || account.accountId)) ||
+        result.accountName ||
+        result.accountId ||
+        'the saved account';
+      const warningText = staleLauncherWarnings.length > 0
+        ? ` ${staleLauncherWarnings.join(' ')}`
+        : '';
+      const configMessage =
+        `Loaded the saved config for ${result.displayName || result.taskKey} on ` +
+        `${accountLabel} into the editor ` +
+        `with world ${result.world || 360}.`;
+      if (replayResult.loaded) {
+        this.renderBuilderGoalClientStatus(
+          `${configMessage} ${replayResult.reason}${warningText} Review the JSON and click Run Task when ready.`,
+          staleLauncherWarnings.length === 0 ? 'success' : 'warning'
+        );
+      } else {
+        this.renderBuilderGoalClientStatus(
+          `${configMessage} ${replayResult.reason}${warningText}`,
+          'warning'
+        );
+      }
       this.updateBuilderGoalRunButtonState();
     } catch (error) {
       console.error('Failed to load builder goal run config:', error);
@@ -1898,6 +2044,46 @@ class AccountTaskPlanner {
       await this.loadBuilderGoalRuns();
       this.renderBuilderGoalClientStatus(`Failed to rerun task: ${error.message}`, 'danger');
       alert('Failed to rerun task: ' + error.message);
+    }
+  }
+
+  async stopBuilderGoalRun(iterationId) {
+    if (!iterationId) return;
+    const run = Array.isArray(this.builderGoalRuns)
+      ? this.builderGoalRuns.find(item => item.iterationId === iterationId)
+      : null;
+    const alreadyStopping = Boolean(run && (run.stopping || run.cancelled));
+    const confirmMessage = alreadyStopping
+      ? 'This task is already stopping. Request stop again?'
+      : 'Stop this Builder Goal task? The local Micro6 client will remain running.';
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    this.renderBuilderGoalClientStatus('Requesting stop for the selected Builder Goal task...', 'info');
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Stopped from debugger' })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await this.loadBuilderGoalRuns();
+      if (this.builderGoalLogsIterationId === iterationId) {
+        await this.loadBuilderGoalRunLogs(iterationId, { silent: true });
+      }
+      const message = result.message
+        || (run && run.publishEntryId
+          ? 'Stop requested. Waiting for Micro6 to confirm cancellation.'
+          : 'Task cancelled before publish.');
+      this.renderBuilderGoalClientStatus(message, 'success');
+    } catch (error) {
+      console.error('Failed to stop builder goal run:', error);
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(`Failed to stop task: ${error.message}`, 'danger');
+      alert('Failed to stop task: ' + error.message);
     }
   }
 
@@ -2415,6 +2601,741 @@ class AccountTaskPlanner {
     const minutes = Math.floor(safeSeconds / 60);
     const seconds = safeSeconds % 60;
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  /* ========================================================================
+   * Same-screen Recovery Mode. The operator stays on /debugger and switches
+   * the existing replay surface into a recovery editing mode.
+   * ====================================================================== */
+
+  /**
+   * Returns the first non-blank string representation of a value, or null.
+   * Mirrors the backend firstNonBlank semantics for replay target resolution.
+   */
+  firstNonBlankString(value) {
+    if (value == null) {
+      return null;
+    }
+    const text = String(value).trim();
+    return text === '' ? null : text;
+  }
+
+  /**
+   * Scrolls the existing /debugger replay surface into view so the operator can
+   * see the recording that was just loaded. Targets the main debugger viewport
+   * section that houses the replay video, with sensible fallbacks.
+   */
+  scrollReplaySurfaceIntoView() {
+    const scrollTarget =
+      document.querySelector('.debugger-main') ||
+      document.getElementById('viewportStage') ||
+      document.getElementById('replayVideo') ||
+      document.getElementById('replayModeBtn');
+    if (scrollTarget && typeof scrollTarget.scrollIntoView === 'function') {
+      scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  /**
+   * Shared replay-first focus helper for Builder Goal run actions. Resolves the
+   * best available replay target, switches the existing /debugger replay surface
+   * into replay mode, loads the recording or debug session, and scrolls the
+   * replay surface into view.
+   *
+   * Preferred replay target resolution order:
+   *   1. runRecordingId
+   *   2. recordingId (workspace/root)
+   *   3. runSessionId
+   *   4. debugSessionId (workspace/root)
+   *
+   * @param {object} target - Flattened object that may contain any of:
+   *   runRecordingId, recordingId, runSessionId, debugSessionId.
+   * @returns {Promise<{loaded: boolean, kind: string|null, reason: string}>}
+   *   Describes whether a replay target was loaded so callers can render an
+   *   appropriate status message instead of silently doing nothing.
+   */
+  async focusBuilderGoalRunReplay(target) {
+    const replay = window.ChromaScapeReplay;
+    if (!replay || typeof replay.switchMode !== 'function') {
+      return {
+        loaded: false,
+        kind: null,
+        reason: 'The replay surface is not available on this page.'
+      };
+    }
+
+    const runRecordingId = this.firstNonBlankString(target?.runRecordingId);
+    const recordingId = this.firstNonBlankString(target?.recordingId);
+    const runSessionId = this.firstNonBlankString(target?.runSessionId);
+    const debugSessionId = this.firstNonBlankString(target?.debugSessionId);
+
+    const resolvedRecordingId = runRecordingId || recordingId || null;
+    const resolvedSessionId =
+      !resolvedRecordingId && (runSessionId || debugSessionId)
+        ? (runSessionId || debugSessionId)
+        : null;
+
+    if (!resolvedRecordingId && !resolvedSessionId) {
+      return {
+        loaded: false,
+        kind: null,
+        reason:
+          'No recording or debug session is available for this run to open in replay.'
+      };
+    }
+
+    try {
+      replay.switchMode('replay');
+      if (resolvedRecordingId) {
+        const loadResult = replay.loadRecording(resolvedRecordingId);
+        const loadedRecording =
+          loadResult && typeof loadResult.then === 'function'
+            ? await loadResult
+            : Boolean(loadResult);
+        if (loadedRecording) {
+          this.scrollReplaySurfaceIntoView();
+          return {
+            loaded: true,
+            kind: 'recording',
+            reason: `Loaded recording ${resolvedRecordingId} into the replay viewer.`
+          };
+        }
+      }
+
+      if (!resolvedSessionId) {
+        return {
+          loaded: false,
+          kind: null,
+          reason: `Replay could not be opened for recording ${resolvedRecordingId}.`
+        };
+      }
+
+      const loadResult = replay.loadDebugSession(resolvedSessionId);
+      const loadedSession =
+        loadResult && typeof loadResult.then === 'function'
+          ? await loadResult
+          : Boolean(loadResult);
+      if (loadedSession) {
+        this.scrollReplaySurfaceIntoView();
+        return {
+          loaded: true,
+          kind: 'session',
+          reason: `Loaded debug session ${resolvedSessionId} into the replay viewer.`
+        };
+      }
+
+      return {
+        loaded: false,
+        kind: null,
+        reason: resolvedRecordingId
+          ? `Replay could not be opened for recording ${resolvedRecordingId} or debug session ${resolvedSessionId}.`
+          : `Replay could not be opened for debug session ${resolvedSessionId}.`
+      };
+    } catch (error) {
+      console.error('[BuilderGoal] Failed to focus replay surface:', error);
+      return {
+        loaded: false,
+        kind: null,
+        reason: `Replay could not be opened: ${error?.message || error}`
+      };
+    }
+  }
+
+  getRecoveryReplayState() {
+    if (window.ChromaScapeReplay && typeof window.ChromaScapeReplay.getReplayState === 'function') {
+      return window.ChromaScapeReplay.getReplayState();
+    }
+    return { currentTimeSeconds: null, currentTick: null, currentFrame: null, replayDebugSessionId: null };
+  }
+
+  async enterRecoveryMode(iterationId) {
+    if (!iterationId) {
+      return;
+    }
+    this.recoveryModeActive = true;
+    this.recoveryIterationId = iterationId;
+    this.recoveryAnnotations = [];
+    this.recoveryActiveStartSeconds = null;
+    this.recoveryActiveEndSeconds = null;
+    this.recoveryActiveImportant = false;
+    this.recoveryChildLoaded = false;
+    if (this.recoveryShell) {
+      this.recoveryShell.hidden = false;
+    }
+    document.body.classList.add('recovery-mode-active');
+    this.renderRecoveryAnnotations();
+    this.setRecoveryGenerateState(true, 'Loading...');
+    this.setRecoveryApproveState(true);
+    if (this.recoveryPatchPlanReview) {
+      this.recoveryPatchPlanReview.innerHTML = '<div class="text-muted fst-italic">Loading recovery workspace...</div>';
+    }
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/recovery-workspace`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      this.recoveryDraft = result;
+      if (this.recoveryRunLabel) {
+        const name = result.run?.displayName || result.run?.taskKey || iterationId;
+        this.recoveryRunLabel.textContent = `Recovering: ${this.escapeHtml(name)}`;
+      }
+      if (this.recoveryPrompt) {
+        this.recoveryPrompt.value = result.prompt || '';
+      }
+      if (this.recoveryContext) {
+        this.recoveryContext.value = result.context || '';
+      }
+      this.recoveryAnnotations = Array.isArray(result.annotations) ? result.annotations : [];
+      this.renderRecoveryAnnotations();
+      this.renderRecoveryEvidence(result);
+      // Restore persisted promoted-evidence selection as the single source of truth so saved
+      // checkboxes reopen correctly even if analysis_input drifted from recovery_workspace.
+      this.applyRecoverySelectedEvidenceIds(result.selectedEvidenceIds);
+      // Restore persisted active range into the inline editor.
+      this.restoreRecoveryActiveRange(result.activeRangeStartSeconds, result.activeRangeEndSeconds);
+      // Drive the existing replay surface so the failed run's recording/scrubber is the editing
+      // surface, fulfilling the same-/debugger-screen promise. Uses the shared replay-first
+      // helper so both Load Into Editor and Open Recovery Workspace behave identically.
+      const replayResult = await this.focusBuilderGoalRunReplay({
+        runRecordingId: result.run?.runRecordingId,
+        recordingId: result.recordingId,
+        runSessionId: result.run?.runSessionId,
+        debugSessionId: result.debugSessionId
+      });
+      if (result.analysisAvailable) {
+        this.renderRecoveryPatchPlan(result.run || result);
+      }
+      this.setRecoveryApproveState(!Boolean(result.approvalAvailable));
+      this.setRecoveryGenerateState(Boolean(result.canAnalyze) === false, 'Generate Patch Plan');
+      this.startRecoveryPolling();
+      // Surface a visible warning when the replay target could not be opened so the
+      // operator understands why the replay viewer did not switch, without aborting
+      // the recovery workspace load.
+      if (!replayResult.loaded && this.recoveryPatchPlanReview) {
+        const replayWarning =
+          `<div class="text-warning mb-2"><i class="bi bi-exclamation-triangle me-1"></i>` +
+          `${this.escapeHtml(replayResult.reason)}</div>`;
+        this.recoveryPatchPlanReview.insertAdjacentHTML('afterbegin', replayWarning);
+      }
+    } catch (error) {
+      console.error('Failed to open recovery workspace:', error);
+      if (this.recoveryPatchPlanReview) {
+        this.recoveryPatchPlanReview.innerHTML = `<div class="text-danger">Failed to load recovery workspace: ${this.escapeHtml(error.message)}</div>`;
+      }
+      this.setRecoveryGenerateState(false, 'Generate Patch Plan');
+    }
+  }
+
+  exitRecoveryMode() {
+    this.recoveryModeActive = false;
+    this.recoveryIterationId = null;
+    this.recoveryDraft = null;
+    this.recoveryAnnotations = [];
+    this.recoveryActiveStartSeconds = null;
+    this.recoveryActiveEndSeconds = null;
+    this.recoveryActiveImportant = false;
+    this.recoveryChildLoaded = false;
+    this.stopRecoveryPolling();
+    if (this.recoveryShell) {
+      this.recoveryShell.hidden = true;
+    }
+    document.body.classList.remove('recovery-mode-active');
+    if (this.recoveryRunLabel) {
+      this.recoveryRunLabel.textContent = '';
+    }
+  }
+
+  /**
+   * Switches the existing /debugger replay surface to the failed run's
+   * recording/session. Thin wrapper around the shared focusBuilderGoalRunReplay
+   * helper so recovery callers use the same replay-first behavior, resolution
+   * order, scroll-into-view, and fallback messaging as Load Into Editor.
+   */
+  loadRecoveryRunReplay(workspace) {
+    return this.focusBuilderGoalRunReplay({
+      runRecordingId: workspace?.run?.runRecordingId,
+      recordingId: workspace?.recordingId,
+      runSessionId: workspace?.run?.runSessionId,
+      debugSessionId: workspace?.debugSessionId
+    });
+  }
+
+  /** Restores the persisted active range into the inline range editor. */
+  restoreRecoveryActiveRange(startSeconds, endSeconds) {
+    const start = startSeconds != null ? Number(startSeconds) : null;
+    const end = endSeconds != null ? Number(endSeconds) : null;
+    if (start != null && Number.isFinite(start)) {
+      this.recoveryActiveStartSeconds = start;
+      if (this.recoveryActiveStart) {
+        this.recoveryActiveStart.value = this.formatSecondsAsClock(start);
+      }
+    }
+    if (end != null && Number.isFinite(end)) {
+      this.recoveryActiveEndSeconds = end;
+      if (this.recoveryActiveEnd) {
+        this.recoveryActiveEnd.value = this.formatSecondsAsClock(end);
+      }
+    }
+    if (start != null || end != null) {
+      this.updateRecoveryRangeHint();
+    }
+  }
+
+  /** Applies a saved promoted-evidence id list as the single source of truth for checkboxes. */
+  applyRecoverySelectedEvidenceIds(ids) {
+    if (!this.recoveryEvidenceGroups) {
+      return;
+    }
+    const wanted = Array.isArray(ids) ? ids.map(String) : [];
+    const wantedSet = new Set(wanted);
+    this.recoveryEvidenceGroups
+      .querySelectorAll('.recovery-evidence-checkbox')
+      .forEach(checkbox => {
+        checkbox.checked = wantedSet.has(checkbox.value);
+      });
+    this.updateRecoveryEvidenceMeta();
+  }
+
+  recoveryMarkStart() {
+    const state = this.getRecoveryReplayState();
+    const seconds = state.currentTimeSeconds != null ? Math.floor(state.currentTimeSeconds) : null;
+    if (seconds == null) {
+      this.renderRecoveryRangeHint('No replay time available. Start replay first.');
+      return;
+    }
+    this.recoveryActiveStartSeconds = seconds;
+    if (this.recoveryActiveStart) {
+      this.recoveryActiveStart.value = this.formatSecondsAsClock(seconds);
+    }
+    this.updateRecoveryRangeHint();
+  }
+
+  recoveryMarkEnd() {
+    const state = this.getRecoveryReplayState();
+    const seconds = state.currentTimeSeconds != null ? Math.floor(state.currentTimeSeconds) : null;
+    if (seconds == null) {
+      this.renderRecoveryRangeHint('No replay time available. Start replay first.');
+      return;
+    }
+    this.recoveryActiveEndSeconds = seconds;
+    if (this.recoveryActiveEnd) {
+      this.recoveryActiveEnd.value = this.formatSecondsAsClock(seconds);
+    }
+    this.updateRecoveryRangeHint();
+  }
+
+  recoveryClearActiveRange() {
+    this.recoveryActiveStartSeconds = null;
+    this.recoveryActiveEndSeconds = null;
+    this.recoveryActiveImportant = false;
+    ['recoveryActiveStart', 'recoveryActiveEnd', 'recoveryActiveLabel', 'recoveryActiveTick', 'recoveryActiveFrame', 'recoveryActiveNote'].forEach(key => {
+      if (this[key]) this[key].value = '';
+    });
+    if (this.recoveryImportantBtn) {
+      this.recoveryImportantBtn.classList.remove('active');
+    }
+    this.updateRecoveryRangeHint();
+  }
+
+  recoveryToggleImportant() {
+    this.recoveryActiveImportant = !this.recoveryActiveImportant;
+    if (this.recoveryImportantBtn) {
+      this.recoveryImportantBtn.classList.toggle('active', this.recoveryActiveImportant);
+    }
+  }
+
+  recoveryPinCurrentFrame() {
+    const state = this.getRecoveryReplayState();
+    if (state.currentTick != null && this.recoveryActiveTick) {
+      this.recoveryActiveTick.value = String(state.currentTick);
+    }
+    if (state.currentFrame != null && this.recoveryActiveFrame) {
+      this.recoveryActiveFrame.value = String(state.currentFrame);
+    }
+  }
+
+  updateRecoveryRangeHint() {
+    const start = this.recoveryActiveStartSeconds;
+    const end = this.recoveryActiveEndSeconds;
+    this.renderRecoveryRangeHint(
+      start != null && end != null
+        ? `Active: ${this.formatSecondsAsClock(start)} → ${this.formatSecondsAsClock(end)}`
+        : start != null
+          ? `Start marked at ${this.formatSecondsAsClock(start)}`
+          : end != null
+            ? `End marked at ${this.formatSecondsAsClock(end)}`
+            : 'No active range');
+  }
+
+  renderRecoveryRangeHint(message) {
+    if (this.recoveryActiveRangeHint) {
+      this.recoveryActiveRangeHint.textContent = message;
+    }
+  }
+
+  async recoverySaveRange() {
+    const startSeconds = this.parseClockToSeconds(this.recoveryActiveStart?.value);
+    const endSeconds = this.parseClockToSeconds(this.recoveryActiveEnd?.value);
+    if (startSeconds == null || endSeconds == null) {
+      this.renderRecoveryRangeHint('Mark both start and end before saving.');
+      return;
+    }
+    if (endSeconds <= startSeconds) {
+      this.renderRecoveryRangeHint('End must be after start.');
+      return;
+    }
+    const tickVal = this.parseRecoveryNumber(this.recoveryActiveTick?.value);
+    const frameVal = this.parseRecoveryNumber(this.recoveryActiveFrame?.value);
+    const annotation = {
+      id: 'ann_' + Date.now(),
+      label: (this.recoveryActiveLabel?.value || '').trim(),
+      note: (this.recoveryActiveNote?.value || '').trim(),
+      important: Boolean(this.recoveryActiveImportant),
+      startSeconds,
+      endSeconds,
+      startTick: tickVal,
+      endTick: tickVal,
+      startFrame: frameVal,
+      endFrame: frameVal
+    };
+    this.recoveryAnnotations.push(annotation);
+    this.renderRecoveryAnnotations();
+    this.recoveryClearActiveRange();
+    await this.persistRecoveryAnnotations();
+    await this.refreshRecoveryEvidence();
+  }
+
+  parseRecoveryNumber(value) {
+    if (value == null || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  renderRecoveryAnnotations() {
+    if (!this.recoveryAnnotationList) return;
+    if (this.recoveryAnnotationCount) {
+      this.recoveryAnnotationCount.textContent = `${this.recoveryAnnotations.length} range(s)`;
+    }
+    if (this.recoveryAnnotations.length === 0) {
+      this.recoveryAnnotationList.innerHTML =
+        '<div class="text-muted small fst-italic">No ranges marked yet. Use the replay scrubber, then Mark Start / Mark End / Save Range.</div>';
+      return;
+    }
+    this.recoveryAnnotationList.innerHTML = this.recoveryAnnotations.map((a, idx) => `
+      <div class="recovery-annotation-card border rounded p-2 ${a.important ? 'border-warning' : ''}">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="fw-semibold small">
+            ${a.important ? '<i class="bi bi-star-fill text-warning me-1"></i>' : ''}${this.escapeHtml(a.label || `Range ${idx + 1}`)}
+            <span class="text-muted ms-1">${this.formatSecondsAsClock(a.startSeconds)} → ${this.formatSecondsAsClock(a.endSeconds)}</span>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" data-recovery-annotation-remove="${this.escapeAttr(a.id)}">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+        ${a.note ? `<div class="small text-muted mt-1">${this.escapeHtml(a.note)}</div>` : ''}
+        ${(a.startTick != null || a.startFrame != null) ? `<div class="small text-muted">Tick: ${a.startTick ?? '-'} • Frame: ${a.startFrame ?? '-'}</div>` : ''}
+      </div>
+    `).join('');
+    this.recoveryAnnotationList.querySelectorAll('[data-recovery-annotation-remove]').forEach(btn => {
+      btn.addEventListener('click', () => this.removeRecoveryAnnotation(btn.dataset.recoveryAnnotationRemove));
+    });
+  }
+
+  removeRecoveryAnnotation(id) {
+    this.recoveryAnnotations = this.recoveryAnnotations.filter(a => a.id !== id);
+    this.renderRecoveryAnnotations();
+    this.persistRecoveryAnnotations();
+    this.refreshRecoveryEvidence();
+  }
+
+  async persistRecoveryAnnotations() {
+    if (!this.recoveryIterationId) return;
+    try {
+      await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/recovery-annotations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          annotations: this.recoveryAnnotations,
+          activeRangeStartSeconds: this.recoveryActiveStartSeconds,
+          activeRangeEndSeconds: this.recoveryActiveEndSeconds,
+          selectedEvidenceIds: this.collectRecoverySelectedEvidenceIds()
+        })
+      });
+    } catch (error) {
+      console.error('Failed to persist recovery annotations:', error);
+    }
+  }
+
+  async refreshRecoveryEvidence() {
+    if (!this.recoveryIterationId) return;
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/recovery-evidence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          annotations: this.recoveryAnnotations,
+          selectedEvidenceIds: this.collectRecoverySelectedEvidenceIds()
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      this.renderRecoveryEvidence(result);
+    } catch (error) {
+      console.error('Failed to resolve recovery evidence:', error);
+    }
+  }
+
+  renderRecoveryEvidence(draft) {
+    const groups = Array.isArray(draft?.evidenceGroups) ? draft.evidenceGroups : [];
+    const selectedCount = Number(draft?.selectedEvidenceCount ?? 0);
+    const totalCount = Number(draft?.totalEvidenceCount ?? 0);
+    if (this.recoveryEvidenceMeta) {
+      this.recoveryEvidenceMeta.textContent = `${selectedCount} of ${totalCount} evidence items selected`;
+    }
+    if (!this.recoveryEvidenceGroups) return;
+    if (groups.length === 0) {
+      this.recoveryEvidenceGroups.innerHTML =
+        '<div class="text-muted small fst-italic">No evidence was collected for this failed run.</div>';
+      return;
+    }
+    this.recoveryEvidenceGroups.innerHTML = groups.map(group => {
+      const items = Array.isArray(group.items) ? group.items : [];
+      const itemsHtml = items.length
+        ? items.map(item => `
+            <label class="form-check border rounded p-2 mb-1">
+              <input class="form-check-input recovery-evidence-checkbox" type="checkbox"
+                value="${this.escapeAttr(item.id || '')}" ${item.selected ? 'checked' : ''}>
+              <span class="form-check-label">
+                <div class="fw-semibold small">${this.escapeHtml(item.title || '(untitled evidence)')}</div>
+                <div class="small text-muted">${this.escapeHtml(item.subtitle || '')}</div>
+                ${item.detail ? `<div class="small mt-1 font-monospace">${this.escapeHtml(item.detail)}</div>` : ''}
+              </span>
+            </label>
+          `).join('')
+        : '<div class="text-muted small fst-italic">No evidence in this group.</div>';
+      return `
+        <div class="border rounded p-2">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="fw-semibold small">${this.escapeHtml(group.label || group.key || 'Evidence')}</div>
+            <div class="small text-muted">${items.length} item(s)</div>
+          </div>
+          ${itemsHtml}
+        </div>
+      `;
+    }).join('');
+    this.updateRecoveryEvidenceMeta();
+  }
+
+  setAllRecoveryEvidenceSelections(selected) {
+    if (!this.recoveryEvidenceGroups) return;
+    this.recoveryEvidenceGroups
+      .querySelectorAll('.recovery-evidence-checkbox')
+      .forEach(checkbox => { checkbox.checked = Boolean(selected); });
+    this.updateRecoveryEvidenceMeta();
+    this.persistRecoveryAnnotations();
+  }
+
+  updateRecoveryEvidenceMeta() {
+    if (!this.recoveryEvidenceGroups || !this.recoveryEvidenceMeta) return;
+    const total = this.recoveryEvidenceGroups.querySelectorAll('.recovery-evidence-checkbox').length;
+    const selected = this.recoveryEvidenceGroups.querySelectorAll('.recovery-evidence-checkbox:checked').length;
+    this.recoveryEvidenceMeta.textContent = `${selected} of ${total} evidence items selected`;
+  }
+
+  collectRecoverySelectedEvidenceIds() {
+    if (!this.recoveryEvidenceGroups) return [];
+    return Array.from(
+      this.recoveryEvidenceGroups.querySelectorAll('.recovery-evidence-checkbox:checked')
+    ).map(checkbox => checkbox.value).filter(Boolean);
+  }
+
+  async generateRecoveryPatchPlan() {
+    if (!this.recoveryIterationId) return;
+    const selectedEvidenceIds = this.collectRecoverySelectedEvidenceIds();
+    if (selectedEvidenceIds.length === 0) {
+      this.renderRecoveryPatchPlan(null, 'Select at least one evidence item before generating a patch plan.', 'warning');
+      return;
+    }
+    const activeStart = this.parseClockToSeconds(this.recoveryActiveStart?.value);
+    const activeEnd = this.parseClockToSeconds(this.recoveryActiveEnd?.value);
+    this.setRecoveryGenerateState(true, 'Generating...');
+    this.renderRecoveryPatchPlan(null, 'Generating a Micro6 patch plan from your prompt, annotations, and selected evidence...', 'info');
+    try {
+      const body = {
+        prompt: this.recoveryPrompt ? this.recoveryPrompt.value : '',
+        context: this.recoveryContext ? this.recoveryContext.value : '',
+        selectedEvidenceIds,
+        annotations: this.recoveryAnnotations
+      };
+      if (activeStart != null) body.timeRangeStartSeconds = activeStart;
+      if (activeEnd != null) body.timeRangeEndSeconds = activeEnd;
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await this.loadBuilderGoalRuns();
+      this.renderRecoveryPatchPlan(result, result.patchId ? 'Patch plan generated. Approve Patch + Relaunch is now available.' : 'Patch planning completed, but no patch draft was produced.', result.patchId ? 'success' : 'warning');
+      this.setRecoveryApproveState(!Boolean(result.patchId));
+    } catch (error) {
+      console.error('Failed to generate recovery patch plan:', error);
+      this.renderRecoveryPatchPlan(null, `Failed to generate a patch plan: ${error.message}`, 'danger');
+    } finally {
+      this.setRecoveryGenerateState(false, 'Generate Patch Plan');
+    }
+  }
+
+  renderRecoveryPatchPlan(run, message, tone = 'muted') {
+    if (!this.recoveryPatchPlanReview) return;
+    if (message) {
+      this.recoveryPatchPlanReview.innerHTML = `<div class="text-${tone} mb-2">${this.escapeHtml(message)}</div>`;
+    }
+    if (run && (run.diagnosisSummary || run.patchId)) {
+      const parts = [];
+      if (run.diagnosisSummary) parts.push(`<div><strong>Diagnosis:</strong> ${this.escapeHtml(run.diagnosisSummary)}</div>`);
+      if (run.rootCause) parts.push(`<div><strong>Root cause:</strong> ${this.escapeHtml(run.rootCause)}</div>`);
+      if (run.confidence) parts.push(`<div><strong>Confidence:</strong> ${this.escapeHtml(run.confidence)}</div>`);
+      if (run.patchDraftSummary) parts.push(`<div><strong>Patch draft:</strong> ${this.escapeHtml(run.patchDraftSummary)}</div>`);
+      if (run.retestPlanSummary) parts.push(`<div><strong>Retest plan:</strong> ${this.escapeHtml(run.retestPlanSummary)}</div>`);
+      if (run.patchId) parts.push(`<div class="small text-muted">Patch ID: ${this.escapeHtml(run.patchId)}</div>`);
+      this.recoveryPatchPlanReview.innerHTML += parts.join('');
+    }
+  }
+
+  async approveRecoveryRelaunch() {
+    if (!this.recoveryIterationId) return;
+    this.setRecoveryApproveState(true, 'Approving...');
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/approve-recovery`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await this.loadBuilderGoalRuns();
+      this.showRecoveryRelaunchPanel(result);
+      this.setRecoveryApproveState(true, 'Relaunching...');
+    } catch (error) {
+      console.error('Failed to approve recovery relaunch:', error);
+      alert('Failed to approve recovery relaunch: ' + error.message);
+      this.setRecoveryApproveState(false);
+    }
+  }
+
+  showRecoveryRelaunchPanel(result) {
+    if (this.recoveryRelaunchPanel) {
+      this.recoveryRelaunchPanel.hidden = false;
+    }
+    if (this.recoveryRelaunchStatus) {
+      this.recoveryRelaunchStatus.textContent = result.recoveryPhase || 'Relaunching...';
+    }
+    if (this.recoveryPreferredSession && result.preferredSessionId) {
+      this.recoveryPreferredSession.textContent = `Preferred session: ${result.preferredSessionId}`;
+    }
+    if (this.recoveryChildIteration && result.childIterationId) {
+      this.recoveryChildIteration.textContent = `Child run: ${result.childIterationId}`;
+    }
+  }
+
+  startRecoveryPolling() {
+    this.stopRecoveryPolling();
+    this.recoveryPollHandle = setInterval(() => {
+      this.pollRecoveryState();
+      this.pollRecoveryCodexMcpStatus();
+    }, 5000);
+  }
+
+  stopRecoveryPolling() {
+    if (this.recoveryPollHandle) {
+      clearInterval(this.recoveryPollHandle);
+      this.recoveryPollHandle = null;
+    }
+  }
+
+  /**
+   * Polls Codex MCP provider status and renders the verdict in the recovery toolbar.
+   */
+  async pollRecoveryCodexMcpStatus() {
+    try {
+      const response = await fetch('/api/debug/patch-loop/provider/status');
+      if (!response.ok) return;
+      const status = await response.json();
+      if (typeof renderRecoveryCodexMcpStatus === 'function') {
+        renderRecoveryCodexMcpStatus(status);
+      }
+    } catch (error) {
+      console.debug('Recovery Codex MCP status poll failed:', error);
+    }
+  }
+
+  async pollRecoveryState() {
+    if (!this.recoveryModeActive || !this.recoveryIterationId) return;
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/recovery-state`);
+      if (!response.ok) return;
+      const state = await response.json();
+      if (this.recoveryRelaunchStatus) {
+        this.recoveryRelaunchStatus.textContent = state.relaunchStatus || state.recoveryPhase || '--';
+      }
+      if (this.recoveryPreferredSession && state.preferredSessionId) {
+        this.recoveryPreferredSession.textContent = `Preferred session: ${state.preferredSessionId}`;
+      }
+      if (this.recoveryChildIteration && state.childIterationId) {
+        this.recoveryChildIteration.textContent = `Child run: ${state.childIterationId}`;
+      }
+      if (state.bindStatus === 'BOUND' || state.recoveryPhase === 'RELAUNCHED') {
+        if (this.recoveryRelaunchPanel) {
+          this.recoveryRelaunchPanel.hidden = false;
+        }
+        if (this.recoveryRelaunchStatus) {
+          this.recoveryRelaunchStatus.textContent = 'Debug session bound. Following child run.';
+        }
+        // Switch the replay surface to the child run's recording once, so the operator stays on
+        // the same debugger surface and follows the relaunched run.
+        if (!this.recoveryChildLoaded && state.childRun && state.childRun.runRecordingId) {
+          const replay = window.ChromaScapeReplay;
+          if (replay && replay.loadRecordingQuietly) {
+            const childRecordingId = state.childRun.runRecordingId;
+            replay.loadRecordingQuietly(childRecordingId).then(loaded => {
+              if (loaded) {
+                this.recoveryChildLoaded = true;
+                if (this.recoveryRunLabel) {
+                  const name = state.childRun.displayName || state.childRun.taskKey || state.childIterationId;
+                  this.recoveryRunLabel.textContent = `Following child run: ${this.escapeHtml(name)}`;
+                }
+              }
+            });
+          }
+        }
+      }
+      this.setRecoveryApproveState(!state.approvalAvailable);
+    } catch (error) {
+      console.debug('Recovery state poll failed:', error);
+    }
+  }
+
+  setRecoveryGenerateState(disabled, label = 'Generate Patch Plan') {
+    if (!this.recoveryGeneratePatchBtn) return;
+    this.recoveryGeneratePatchBtn.disabled = Boolean(disabled);
+    this.recoveryGeneratePatchBtn.innerHTML = `<i class="bi bi-lightbulb-fill me-1"></i>${this.escapeHtml(label)}`;
+  }
+
+  setRecoveryApproveState(disabled, label = 'Approve Patch + Relaunch') {
+    if (!this.recoveryApproveBtn) return;
+    this.recoveryApproveBtn.disabled = Boolean(disabled);
+    if (label) {
+      this.recoveryApproveBtn.innerHTML = `<i class="bi bi-play-fill me-1"></i>${this.escapeHtml(label)}`;
+    }
   }
 
   async loadStabilizationKpis() {

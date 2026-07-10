@@ -75,6 +75,7 @@ public class BuilderGoalRunnerService {
   private static final String RECOVERY_RELOGGING_IN = "RELOGGING_IN";
   private static final String RECOVERY_WAITING_FOR_EXECUTOR = "WAITING_FOR_EXECUTOR";
   private static final String RECOVERY_REPUBLISHING = "REPUBLISHING";
+  private static final String RECOVERY_WAITING_FOR_DEBUG_BIND = "WAITING_FOR_DEBUG_BIND";
   private static final String RECOVERY_RELAUNCHED = "RELAUNCHED";
   private static final String RECOVERY_FAILED = "RECOVERY_FAILED";
   private static final String PREPARATION_STATE_PREPARING_TARGET = "PREPARING_TARGET";
@@ -500,6 +501,9 @@ public class BuilderGoalRunnerService {
                       iterationId, selectedAccount, launcherMachineUuid, progress));
 
       iteration = iterationRepository.findByIterationId(iterationId).orElse(iteration);
+      if (iteration.getStatus() != null && iteration.getStatus().isTerminal()) {
+        return;
+      }
       taskMetadata = readTaskMetadata(iteration);
       mergeTargetPreparationMetadata(taskMetadata, preparationResult.metadata());
       taskMetadata.put("micro6_target", buildTargetMetadata(preparationResult.targetClient()));
@@ -673,6 +677,180 @@ public class BuilderGoalRunnerService {
     return executeApprovedRecovery(iterationId);
   }
 
+  /**
+   * Opens the same-screen recovery workspace for a failed builder-goal run.
+   *
+   * <p>Enters recovery mode (setting the {@code AWAITING_OPERATOR_PROMPT} phase when no later phase
+   * is active), records the load timestamp, and returns the run, prompt/context defaults, evidence
+   * groups, time range, persisted annotations, recording/debug-session metadata, and recovery
+   * state so the inline debugger surface can hydrate without a separate page.
+   */
+  @Transactional
+  public Map<String, Object> openRecoveryWorkspace(String iterationId) {
+    PatchLoopIteration iteration = loadBuilderRun(iterationId);
+    // Build the editable draft from the currently persisted analysis_input state.
+    Map<String, Object> draft = buildAnalysisDraft(iterationId);
+
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    Map<String, Object> recoveryMetadata = readRecoveryMetadata(taskMetadata);
+    Map<String, Object> workspace = readRecoveryWorkspace(taskMetadata);
+    String phase = stringValue(recoveryMetadata.get("phase"));
+
+    Map<String, Object> updatedWorkspace = new LinkedHashMap<>(workspace);
+    updatedWorkspace.put("last_loaded_at", LocalDateTime.now().toString());
+    String recordingId =
+        firstNonBlank(stringValue(updatedWorkspace.get("recording_id")), iteration.getRunRecordingId());
+    if (recordingId != null) {
+      updatedWorkspace.putIfAbsent("recording_id", recordingId);
+    }
+    String debugSessionId =
+        firstNonBlank(stringValue(updatedWorkspace.get("debug_session_id")), iteration.getRunSessionId());
+    if (debugSessionId != null) {
+      updatedWorkspace.putIfAbsent("debug_session_id", debugSessionId);
+    }
+    taskMetadata.put("recovery_workspace", updatedWorkspace);
+    if (!isRecoveryPhaseActive(phase)) {
+      Map<String, Object> recovery = new LinkedHashMap<>();
+      recovery.put("phase", RECOVERY_AWAITING_OPERATOR_PROMPT);
+      recovery.put("message", "Recovery workspace opened for inline editing");
+      recovery.put("updated_at", LocalDateTime.now().toString());
+      taskMetadata.put("recovery", recovery);
+    }
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    persistenceService.saveIteration(iteration);
+
+    Map<String, Object> run = toRunSummary(iteration);
+    Map<String, Object> response = new LinkedHashMap<>(draft);
+    response.put("run", run);
+    response.put("recordingSessionId", stringValue(updatedWorkspace.get("recording_session_id")));
+    response.put("recordingId", recordingId);
+    response.put("debugSessionId", debugSessionId);
+    response.put("annotations", updatedWorkspace.getOrDefault("annotations", List.of()));
+    response.put("selectedEvidenceIds", readStoredSelectedEvidenceIds(updatedWorkspace, taskMetadata));
+    response.put(
+        "activeRangeStartSeconds", intValue(updatedWorkspace.get("active_start_seconds")));
+    response.put(
+        "activeRangeEndSeconds", intValue(updatedWorkspace.get("active_end_seconds")));
+    response.put("recoveryState", stringValue(readRecoveryMetadata(taskMetadata).get("phase")));
+    response.put("analysisAvailable", run.get("analysisAvailable"));
+    response.put("approvalAvailable", run.get("approvalAvailable"));
+    return response;
+  }
+
+  /**
+   * Persists operator-authored recovery annotations, the active range, and promoted evidence ids
+   * onto the iteration's {@code recovery_workspace} metadata so the inline editing state survives
+   * reloads and feeds the structured Codex payload.
+   */
+  @Transactional
+  public Map<String, Object> saveRecoveryAnnotations(String iterationId, JsonNode payload) {
+    PatchLoopIteration iteration = loadBuilderRun(iterationId);
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    Map<String, Object> workspace = readRecoveryWorkspace(taskMetadata);
+    Map<String, Object> updated = new LinkedHashMap<>(workspace);
+    updated.put("annotations", parseAnnotations(payload));
+    Integer activeStart = intValue(payload != null ? payload.get("activeRangeStartSeconds") : null);
+    Integer activeEnd = intValue(payload != null ? payload.get("activeRangeEndSeconds") : null);
+    if (activeStart != null) {
+      updated.put("active_start_seconds", activeStart);
+    }
+    if (activeEnd != null) {
+      updated.put("active_end_seconds", activeEnd);
+    }
+    List<String> selectedIds = selectedEvidenceIds(payload);
+    if (selectedIds != null) {
+      updated.put("selected_evidence_ids", selectedIds);
+    }
+    updated.put("updated_at", LocalDateTime.now().toString());
+    taskMetadata.put("recovery_workspace", updated);
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    persistenceService.saveIteration(iteration);
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("iterationId", iterationId);
+    response.put("annotations", updated.get("annotations"));
+    response.put("selectedEvidenceIds", updated.getOrDefault("selected_evidence_ids", List.of()));
+    response.put("activeRangeStartSeconds", updated.get("active_start_seconds"));
+    response.put("activeRangeEndSeconds", updated.get("active_end_seconds"));
+    response.put("saved", true);
+    return response;
+  }
+
+  /**
+   * Resolves filtered evidence for the current annotation/selection state without persisting.
+   *
+   * <p>Evidence is clipped to the active range (payload active range, the union of annotation
+   * ranges, or the last persisted selection) and the requested promoted evidence ids are honored.
+   */
+  @Transactional(readOnly = true)
+  public Map<String, Object> resolveRecoveryEvidence(String iterationId, JsonNode payload) {
+    PatchLoopIteration iteration = loadBuilderRun(iterationId);
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    AnalysisV1EvidenceBundle evidence = evidenceService.collectEvidence(iteration, null);
+    AnalysisInputMetadata existingInput = readAnalysisInputMetadata(taskMetadata);
+
+    List<Map<String, Object>> annotations = parseAnnotations(payload);
+    TimeRangeSelection timeRange =
+        resolveRecoveryTimeRange(annotations, payload, existingInput, evidence);
+    AnalysisV1EvidenceBundle clippedEvidence = clipEvidenceToTimeRange(evidence, timeRange);
+
+    List<String> requestedIds = selectedEvidenceIds(payload);
+    boolean defaultSelectAll;
+    if (requestedIds == null) {
+      requestedIds = readStoredSelectedEvidenceIds(readRecoveryWorkspace(taskMetadata), taskMetadata);
+      defaultSelectAll = requestedIds == null || requestedIds.isEmpty();
+    } else {
+      defaultSelectAll = requestedIds.isEmpty();
+    }
+    SelectionResult selectionResult =
+        buildSelectionResult(clippedEvidence, requestedIds, defaultSelectAll);
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("evidenceGroups", selectionResult.groups());
+    response.put("selectedEvidenceIds", selectionResult.selectedIds());
+    response.put("selectedEvidenceCount", selectionResult.selectedCount());
+    response.put("totalEvidenceCount", selectionResult.totalCount());
+    response.put("resolvedTimeWindow", buildResolvedTimeWindow(timeRange));
+    return response;
+  }
+
+  /**
+   * Returns the current recovery state for UI hydration and polling: run summary, recovery phase,
+   * relaunch/bind status, preferred debug-session id, and child iteration linkage.
+   */
+  @Transactional(readOnly = true)
+  public Map<String, Object> getRecoveryState(String iterationId) {
+    PatchLoopIteration iteration = loadBuilderRun(iterationId);
+    Map<String, Object> run = toRunSummary(iteration);
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    Map<String, Object> recoveryMetadata = readRecoveryMetadata(taskMetadata);
+    Map<String, Object> workspace = readRecoveryWorkspace(taskMetadata);
+    String phase = stringValue(recoveryMetadata.get("phase"));
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("iterationId", iterationId);
+    response.put("run", run);
+    response.put("recoveryPhase", phase);
+    response.put("recoveryMessage", stringValueAllowBlank(recoveryMetadata.get("message")));
+    response.put("recoveryUpdatedAt", stringValue(recoveryMetadata.get("updated_at")));
+    response.put("relaunchStatus", deriveRelaunchStatus(phase));
+    response.put("bindStatus", deriveBindStatus(iteration, run, phase));
+    response.put("preferredSessionId", stringValue(workspace.get("preferred_session_id")));
+    response.put("childIterationId", findChildIterationId(iterationId));
+    // Include the child run's summary (with runRecordingId/runSessionId) so the same-screen
+    // surface can switch the replay to the child run once the debug bind succeeds.
+    String childId = findChildIterationId(iterationId);
+    if (childId != null) {
+      PatchLoopIteration child = iterationRepository.findByIterationId(childId).orElse(null);
+      if (child != null) {
+        response.put("childRun", toRunSummary(child));
+      }
+    }
+    response.put("analysisAvailable", run.get("analysisAvailable"));
+    response.put("approvalAvailable", run.get("approvalAvailable"));
+    return response;
+  }
+
   private Map<String, Object> analyzeFailure(
       String iterationId, JsonNode payload, String analysisMode) throws Exception {
     PatchLoopIteration iteration = loadBuilderRun(iterationId);
@@ -714,13 +892,37 @@ public class BuilderGoalRunnerService {
       throw new IllegalArgumentException("At least one evidence item must be selected for analysis");
     }
 
+    // Persist inline recovery annotations + promoted evidence on the recovery_workspace so the
+    // structured Codex payload reflects the operator's same-screen editing state.
+    List<Map<String, Object>> annotations = parseAnnotations(payload);
+    Map<String, Object> recoveryWorkspace = readRecoveryWorkspace(taskMetadata);
+    Map<String, Object> updatedWorkspace = new LinkedHashMap<>(recoveryWorkspace);
+    if (!annotations.isEmpty()) {
+      updatedWorkspace.put("annotations", annotations);
+    }
+    updatedWorkspace.put("selected_evidence_ids", selectionResult.selectedIds());
+    if (timeRange != null) {
+      updatedWorkspace.put("active_start_seconds", timeRange.startSeconds());
+      updatedWorkspace.put("active_end_seconds", timeRange.endSeconds());
+    }
+    updatedWorkspace.put("updated_at", LocalDateTime.now().toString());
+    taskMetadata.put("recovery_workspace", updatedWorkspace);
+
+    String providerContext = context;
+    String annotationsSummary = buildAnnotationsContext(annotations);
+    if (!annotationsSummary.isEmpty()) {
+      providerContext =
+          context + "\n\nAnnotated replay ranges from operator:\n" + annotationsSummary;
+    }
+
     AnalysisV1EvidenceBundle selectedEvidence = selectionResult.bundle();
     persistenceService.saveEvidenceCounts(iteration, selectedEvidence);
     if (!evidenceService.validateEvidenceSufficiency(selectedEvidence)) {
       throw new IllegalStateException("Insufficient evidence available for analysis");
     }
 
-    AnalysisV2Request request = buildAnalysisRequest(iteration, selectedEvidence, prompt, context);
+    AnalysisV2Request request =
+        buildAnalysisRequest(iteration, selectedEvidence, prompt, providerContext);
     updateAnalysisInputMetadata(
         iteration,
         taskMetadata,
@@ -837,6 +1039,10 @@ public class BuilderGoalRunnerService {
       persistenceService.saveIteration(iteration);
       updateRecoveryState(
           iteration, readTaskMetadata(iteration), RECOVERY_REPUBLISHING, "Republishing patched task to relaunched target");
+      // Reserve a deterministic debug session id so the restarted client can rebind to the same
+      // session on the same debugger surface (carried via SessionStartRequest.preferredSessionId
+      // and honored by DebugSessionService.resolveOrCreateSession).
+      String preferredSessionId = reservePreferredDebugSession(iteration, readTaskMetadata(iteration));
       JsonNode importedPayload = iteration.getImportedPayloadJson();
       PatchLoopIteration relaunched =
           createRunIteration(
@@ -848,16 +1054,37 @@ public class BuilderGoalRunnerService {
               null);
       Map<String, Object> relaunchedMetadata = readTaskMetadata(relaunched);
       mergeTargetPreparationMetadata(relaunchedMetadata, preparationResult.metadata());
+      Map<String, Object> childWorkspace = readRecoveryWorkspace(relaunchedMetadata);
+      childWorkspace.put("preferred_session_id", preferredSessionId);
+      childWorkspace.put("parent_iteration_id", iteration.getIterationId());
+      relaunchedMetadata.put("recovery_workspace", childWorkspace);
+      // Surface the reserved preferred session id at a top-level, discoverable key in the task
+      // metadata blob that publishMicro6TaskInternal forwards to the executor. The out-of-repo
+      // Micro6 client reads task_metadata.preferred_session_id and echoes it into its
+      // SESSION_START.preferredSessionId; the in-repo consumer (TickStreamWebSocketHandler ->
+      // DebugSessionService.resolveOrCreateSession) then reuses the active reserved session.
+      relaunchedMetadata.put("preferred_session_id", preferredSessionId);
       relaunched.setTaskMetadataJson(objectMapper.valueToTree(relaunchedMetadata));
       persistenceService.saveIteration(relaunched);
       ScriptExecutionService.Micro6PublishResult publishResult = publishIteration(relaunched);
+      // Keep WAITING_FOR_DEBUG_BIND as a nonterminal same-screen recovery state until the
+      // restarted client binds to the reserved debug session (syncManualRecoveryStates transitions
+      // the parent to RELAUNCHED once the child run reports a bound debug_session_id).
       updateRecoveryState(
           iteration,
-          taskMetadata,
-          RECOVERY_RELAUNCHED,
-          "Patched task republished to " + preparationResult.targetClient().accountName());
+          readTaskMetadata(iteration),
+          RECOVERY_WAITING_FOR_DEBUG_BIND,
+          "Patched task republished to " + preparationResult.targetClient().accountName()
+              + ". Waiting for the restarted client to bind to debug session "
+              + preferredSessionId
+              + ".");
 
       Map<String, Object> response = new LinkedHashMap<>();
+      response.put("iterationId", iteration.getIterationId());
+      response.put("childIterationId", relaunched.getIterationId());
+      response.put("preferredSessionId", preferredSessionId);
+      response.put("recoveryPhase", RECOVERY_WAITING_FOR_DEBUG_BIND);
+      response.put("status", stringValue(toRunSummary(iteration).get("status")));
       response.put("patched", true);
       response.put("patchId", patchDraft.getPatchId());
       response.put("revisionId", patchResult.revisionId());
@@ -884,6 +1111,129 @@ public class BuilderGoalRunnerService {
     }
   }
 
+  public Map<String, Object> stopRun(String iterationId, JsonNode payload) {
+    PatchLoopIteration iteration = loadBuilderRun(iterationId);
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    Map<String, Object> publishMetadata = readPublishMetadata(taskMetadata);
+    String publishStatus = stringValue(publishMetadata.get("status"));
+    String reason = textValue(payload != null ? payload.get("reason") : null);
+    if (reason == null || reason.isBlank()) {
+      reason = "Stopped from debugger";
+    }
+
+    String blockedReason = determineStopBlockedReason(iteration, publishStatus);
+    if (blockedReason != null) {
+      throw new IllegalStateException(blockedReason);
+    }
+
+    Integer entryId = intValue(publishMetadata.get("entry_id"));
+    boolean prePublish = entryId == null || entryId <= 0;
+    if (prePublish) {
+      pendingLaunchIterations.remove(iterationId);
+      markRunCancelled(iteration, taskMetadata, reason, "pre_publish");
+    } else {
+      boolean stopSent = scriptExecutionService.stopMicro6PublishedRun(taskMetadata, entryId, reason);
+      if (!stopSent) {
+        publishMetadata.put("stop_send_error", "Stop request did not reach Micro6 executor");
+        taskMetadata.put("micro6_publish", publishMetadata);
+        iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+        persistenceService.saveIteration(iteration);
+        throw new IllegalStateException(
+            "Failed to deliver stop request to Micro6; the executor may still be running the task. Check the target base URL and retry.");
+      }
+      markStopRequested(iteration, taskMetadata, publishMetadata, reason);
+    }
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("success", true);
+    response.put("run", toRunSummary(iteration));
+    response.put(
+        "message",
+        prePublish
+            ? "Task cancelled before publish."
+            : "Stop requested. Waiting for Micro6 to confirm cancellation.");
+    return response;
+  }
+
+  private String determineStopBlockedReason(PatchLoopIteration iteration, String publishStatus) {
+    if (iteration == null || iteration.getStatus() == null) {
+      return "Run is malformed and cannot be stopped";
+    }
+    if (iteration.getStatus().isTerminal()) {
+      return "Run is already in a terminal state and cannot be stopped";
+    }
+    if ("COMPLETED".equalsIgnoreCase(publishStatus)) {
+      return "Run has already completed and cannot be stopped";
+    }
+    if ("FAILED".equalsIgnoreCase(publishStatus)) {
+      return "Run has already failed and cannot be stopped";
+    }
+    if ("CANCELLED".equalsIgnoreCase(publishStatus)) {
+      return "Run has already been cancelled";
+    }
+    Map<String, Object> recoveryMetadata = readRecoveryMetadata(readTaskMetadata(iteration));
+    if (RECOVERY_RELAUNCHED.equals(stringValue(recoveryMetadata.get("phase")))) {
+      return "Run has been relaunched and is no longer the active target";
+    }
+    return null;
+  }
+
+  private boolean isStopRequested(Map<String, Object> taskMetadata, Map<String, Object> publishMetadata) {
+    if (taskMetadata != null) {
+      Object stopAt = taskMetadata.get("stop_requested_at");
+      if (stopAt != null && !stopAt.toString().isBlank()) {
+        return true;
+      }
+    }
+    if (publishMetadata != null) {
+      Object stopAt = publishMetadata.get("stop_requested_at");
+      if (stopAt != null && !stopAt.toString().isBlank()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private void markStopRequested(
+      PatchLoopIteration iteration,
+      Map<String, Object> taskMetadata,
+      Map<String, Object> publishMetadata,
+      String reason) {
+    String now = LocalDateTime.now().toString();
+    taskMetadata.put("stop_requested_at", now);
+    taskMetadata.put("stop_reason", reason);
+    publishMetadata.put("stop_requested_at", now);
+    publishMetadata.put("stop_reason", reason);
+    publishMetadata.remove("stop_send_error");
+    publishMetadata.put("status", "STOPPING");
+    publishMetadata.put("last_status_at", now);
+    taskMetadata.put("micro6_publish", publishMetadata);
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    persistenceService.saveIteration(iteration);
+  }
+
+  private void markRunCancelled(
+      PatchLoopIteration iteration,
+      Map<String, Object> taskMetadata,
+      String reason,
+      String phase) {
+    taskMetadata.put("stop_requested_at", LocalDateTime.now().toString());
+    taskMetadata.put("stop_reason", reason);
+    Map<String, Object> targetPreparation = readTargetPreparationMetadata(taskMetadata);
+    targetPreparation.put("state", "CANCELLED");
+    targetPreparation.put("message", reason);
+    targetPreparation.put("readiness_reason", reason);
+    taskMetadata.put("target_preparation", targetPreparation);
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    iteration.setRunSuccess(null);
+    iteration.setRunEndTime(LocalDateTime.now());
+    iteration.setFailureCode(null);
+    iteration.setFailureReason(null);
+    iteration.setFailureContext(null);
+    persistenceService.saveIteration(iteration);
+    persistenceService.updateIterationStatus(iteration, PatchLoopStatus.CANCELLED);
+  }
+
   @Scheduled(fixedDelayString = "${builder-goal.status-sync-interval-ms:3000}")
   public void syncPublishedRuns() {
     iterationRepository.findBySourceTypeOrderByCreatedAtDesc(SOURCE_TYPE_BUILDER_GOAL).stream()
@@ -901,6 +1251,36 @@ public class BuilderGoalRunnerService {
                 moveToAwaitingOperatorPrompt(
                     iteration,
                     "Task failed. Add your observations, select the relevant evidence, and generate a patch plan."));
+    // Transition parents waiting for a debug bind to RELAUNCHED once their child run binds to a
+    // debug session, completing the same-screen recovery loop.
+    iterationRepository.findBySourceTypeOrderByCreatedAtDesc(SOURCE_TYPE_BUILDER_GOAL).stream()
+        .filter(this::shouldMoveToRelaunched)
+        .limit(10)
+        .forEach(this::moveToRelaunched);
+  }
+
+  private boolean shouldMoveToRelaunched(PatchLoopIteration iteration) {
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    String phase = stringValue(readRecoveryMetadata(taskMetadata).get("phase"));
+    if (!RECOVERY_WAITING_FOR_DEBUG_BIND.equals(phase)) {
+      return false;
+    }
+    String childId = findChildIterationId(iteration.getIterationId());
+    if (childId == null) {
+      return false;
+    }
+    PatchLoopIteration child = iterationRepository.findByIterationId(childId).orElse(null);
+    return child != null && child.getRunSessionId() != null && !child.getRunSessionId().isBlank();
+  }
+
+  private void moveToRelaunched(PatchLoopIteration iteration) {
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    String childId = findChildIterationId(iteration.getIterationId());
+    updateRecoveryState(
+        iteration,
+        taskMetadata,
+        RECOVERY_RELAUNCHED,
+        "Restarted client bound to debug session. Following child run " + childId + ".");
   }
 
   private PatchLoopIteration createRunIteration(
@@ -937,6 +1317,20 @@ public class BuilderGoalRunnerService {
   }
 
   private ScriptExecutionService.Micro6PublishResult publishIteration(PatchLoopIteration iteration) {
+    // Reload the latest persisted state so a stop/cancel that landed while the caller was
+    // blocked (e.g. inside ensureReady) is honoured before we publish.
+    PatchLoopIteration latest =
+        iterationRepository.findByIterationId(iteration.getIterationId()).orElse(iteration);
+    Map<String, Object> latestMetadata = readTaskMetadata(latest);
+    Map<String, Object> latestPublish = readPublishMetadata(latestMetadata);
+    Integer existingEntryId = intValue(latestPublish.get("entry_id"));
+    if ((latest.getStatus() != null && latest.getStatus().isTerminal())
+        || isStopRequested(latestMetadata, latestPublish)
+        || (existingEntryId != null && existingEntryId > 0)) {
+      return ScriptExecutionService.Micro6PublishResult.failure(
+          "Run was cancelled or already published before publish", null);
+    }
+    iteration = latest;
     validateStoredSettingsConsistency(iteration);
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
     ScriptExecutionService.Micro6PublishResult publishResult =
@@ -995,11 +1389,17 @@ public class BuilderGoalRunnerService {
       return;
     }
 
+    boolean stopRequested = isStopRequested(taskMetadata, publishMetadata);
+
     ScriptExecutionService.Micro6RunStatusResult statusResult =
         scriptExecutionService.getMicro6RunStatus(taskMetadata, entryId);
     if (!statusResult.found()) {
       recordStatusPollFailure(iteration, taskMetadata, publishMetadata, statusResult.errorMessage());
-      if (shouldFailForLostTarget(iteration, publishMetadata)) {
+      if (stopRequested) {
+        // Do not finalize as cancelled on a mere poll failure: the stop request may not
+        // have reached the executor (bad base URL, transient network, rejected stop).
+        // Keep the run active in STOPPING and let subsequent polls reconcile.
+      } else if (shouldFailForLostTarget(iteration, publishMetadata)) {
         finalizeLostTargetRun(
             iteration,
             firstNonBlank(
@@ -1010,6 +1410,44 @@ public class BuilderGoalRunnerService {
     }
 
     String micro6Status = firstNonBlank(statusResult.status(), "UNKNOWN");
+
+    if (stopRequested) {
+      if ("COMPLETED".equalsIgnoreCase(micro6Status)) {
+        // The task finished normally before (or despite) the stop request landing.
+        // Preserve the genuine success result rather than rewriting it as cancelled.
+        finalizePublishedRun(iteration, true, null);
+        return;
+      }
+      if ("FAILED".equalsIgnoreCase(micro6Status)
+          || "CANCELLED".equalsIgnoreCase(micro6Status)) {
+        if (statusResult.errorMessage() != null && !statusResult.errorMessage().isBlank()) {
+          publishMetadata.put("last_error", statusResult.errorMessage());
+        }
+        if ("FAILED".equalsIgnoreCase(micro6Status)) {
+          finalizePublishedRun(iteration, false, statusResult.errorMessage());
+          return;
+        }
+        publishMetadata.put("status", "CANCELLED");
+        publishMetadata.put("last_status_at", LocalDateTime.now().toString());
+        taskMetadata.put("micro6_publish", publishMetadata);
+        iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+        finalizeCancelledRun(
+            iteration,
+            firstNonBlank(statusResult.errorMessage(), "Micro6 confirmed cancellation"));
+        return;
+      }
+      // Still running/queued/published after a stop request: keep the run active so the
+      // display status resolves to STOPPING while awaiting executor confirmation.
+      if (!"STOPPING".equalsIgnoreCase(stringValue(publishMetadata.get("status")))) {
+        publishMetadata.put("status", "STOPPING");
+        publishMetadata.put("last_status_at", LocalDateTime.now().toString());
+        taskMetadata.put("micro6_publish", publishMetadata);
+        iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+        persistenceService.saveIteration(iteration);
+      }
+      return;
+    }
+
     String mappedStatus = mapPublishStatus(micro6Status);
     boolean taskStartConfirmed = isTaskStartConfirmed(statusResult);
     boolean metadataChanged = false;
@@ -1188,6 +1626,8 @@ public class BuilderGoalRunnerService {
     response.put("source", stringValue(taskMetadata.get("source")));
     response.put("iterationId", iteration.getIterationId());
     response.put("createdAt", iteration.getCreatedAt());
+    response.put("runRecordingId", iteration.getRunRecordingId());
+    response.put("runSessionId", iteration.getRunSessionId());
     return response;
   }
 
@@ -1928,6 +2368,25 @@ public class BuilderGoalRunnerService {
         "Target became unreachable. Add your observations, select the relevant evidence, and generate a patch plan.");
   }
 
+  private void finalizeCancelledRun(PatchLoopIteration iteration, String reason) {
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    String now = LocalDateTime.now().toString();
+    if (stringValue(taskMetadata.get("stop_requested_at")) == null) {
+      taskMetadata.put("stop_requested_at", now);
+    }
+    if (stringValue(taskMetadata.get("stop_reason")) == null && reason != null && !reason.isBlank()) {
+      taskMetadata.put("stop_reason", reason);
+    }
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    iteration.setRunEndTime(LocalDateTime.now());
+    iteration.setRunSuccess(null);
+    iteration.setFailureCode(null);
+    iteration.setFailureReason(null);
+    iteration.setFailureContext(null);
+    persistenceService.saveIteration(iteration);
+    persistenceService.updateIterationStatus(iteration, PatchLoopStatus.CANCELLED);
+  }
+
   private boolean putIfChanged(Map<String, Object> target, String key, Object value) {
     Object existing = target.get(key);
     if (Objects.equals(existing, value)) {
@@ -1959,6 +2418,16 @@ public class BuilderGoalRunnerService {
     boolean taskStartedObserved = Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"));
     boolean taskStartConfirmed = taskStartedObserved && iteration.getRunSessionId() != null;
     String displayStatus = deriveDisplayStatus(iteration, publishStatus);
+    boolean cancelled =
+        iteration.getStatus() == PatchLoopStatus.CANCELLED
+            || "CANCELLED".equalsIgnoreCase(publishStatus);
+    boolean stopRequested = isStopRequested(taskMetadata, publishMetadata);
+    boolean stopping =
+        stopRequested
+            && iteration.getStatus() != null
+            && !iteration.getStatus().isTerminal();
+    String stopBlockedReason = determineStopBlockedReason(iteration, publishStatus);
+    boolean canStop = stopBlockedReason == null;
     boolean analysisAvailable =
         iteration.getAnalysisResponseJson() != null && !iteration.getAnalysisResponseJson().isNull();
     boolean patchDraftAvailable = iteration.getPatchId() != null && !iteration.getPatchId().isBlank();
@@ -1966,12 +2435,15 @@ public class BuilderGoalRunnerService {
         iteration.getStatus() == PatchLoopStatus.FAILED
             && !"PUBLISH_FAILED".equalsIgnoreCase(publishStatus);
     boolean approvalAvailable =
-        approvalRequired
+        !cancelled
+            && approvalRequired
             && analysisAvailable
             && patchDraftAvailable
             && RECOVERY_PATCH_PLAN_READY.equals(stringValue(recoveryMetadata.get("phase")));
     boolean canAnalyze =
-        iteration.getStatus() == PatchLoopStatus.FAILED && !"PUBLISH_FAILED".equalsIgnoreCase(publishStatus);
+        !cancelled
+            && iteration.getStatus() == PatchLoopStatus.FAILED
+            && !"PUBLISH_FAILED".equalsIgnoreCase(publishStatus);
     boolean canFixAndRelaunch = approvalAvailable;
     boolean configAvailable = hasStoredConfig(iteration);
     String rerunBlockedReason = determineRerunBlockedReason(iteration);
@@ -2009,6 +2481,7 @@ public class BuilderGoalRunnerService {
     response.put("publishAttachedToExisting", Boolean.TRUE.equals(publishMetadata.get("attached_to_existing")));
     response.put("publishedAt", stringValue(publishMetadata.get("published_at")));
     response.put("publishError", stringValue(publishMetadata.get("last_error")));
+    response.put("stopSendError", stringValue(publishMetadata.get("stop_send_error")));
     response.put("analysisId", iteration.getAnalysisId());
     response.put("analysisAvailable", analysisAvailable);
     response.put("patchId", iteration.getPatchId());
@@ -2142,10 +2615,20 @@ public class BuilderGoalRunnerService {
     response.put(
         "fixBlockedReason",
         determineApprovalBlockedReason(iteration, publishStatus, recoveryMetadata));
+    response.put("canStop", canStop);
+    response.put("stopBlockedReason", stopBlockedReason);
+    response.put("stopRequestedAt", stringValue(taskMetadata.get("stop_requested_at")));
+    response.put("stopReason", stringValue(taskMetadata.get("stop_reason")));
+    response.put("stopping", stopping);
+    response.put("cancelled", cancelled);
     return response;
   }
 
   private String determineAnalyzeBlockedReason(PatchLoopIteration iteration, String publishStatus) {
+    if (iteration.getStatus() == PatchLoopStatus.CANCELLED
+        || "CANCELLED".equalsIgnoreCase(publishStatus)) {
+      return "Run was cancelled";
+    }
     if (iteration.getStatus() != PatchLoopStatus.FAILED) {
       return "Run must fail before it can be analyzed";
     }
@@ -2329,6 +2812,10 @@ public class BuilderGoalRunnerService {
       PatchLoopIteration iteration,
       String publishStatus,
       Map<String, Object> recoveryMetadata) {
+    if (iteration.getStatus() == PatchLoopStatus.CANCELLED
+        || "CANCELLED".equalsIgnoreCase(publishStatus)) {
+      return "Run was cancelled";
+    }
     if (iteration.getStatus() != PatchLoopStatus.FAILED) {
       return "Run must fail before it can be recovered";
     }
@@ -2928,6 +3415,229 @@ public class BuilderGoalRunnerService {
     return Map.of();
   }
 
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> readRecoveryWorkspace(Map<String, Object> taskMetadata) {
+    if (taskMetadata == null) {
+      return new LinkedHashMap<>();
+    }
+    Object value = taskMetadata.get("recovery_workspace");
+    if (value instanceof Map<?, ?> mapValue) {
+      return new LinkedHashMap<>((Map<String, Object>) mapValue);
+    }
+    return new LinkedHashMap<>();
+  }
+
+  private List<String> readStoredSelectedEvidenceIds(
+      Map<String, Object> workspace, Map<String, Object> taskMetadata) {
+    Object value = workspace.get("selected_evidence_ids");
+    if (value instanceof List<?> list) {
+      List<String> ids = new ArrayList<>();
+      for (Object item : list) {
+        if (item != null && !item.toString().isBlank()) {
+          ids.add(item.toString().trim());
+        }
+      }
+      if (!ids.isEmpty()) {
+        return ids;
+      }
+    }
+    return readAnalysisInputMetadata(taskMetadata).selectedEvidenceIds();
+  }
+
+  /**
+   * Parses the inline recovery annotations submitted from the debugger surface into a stable map
+   * list. Missing ids are generated so annotations remain addressable across save/refresh cycles.
+   */
+  private List<Map<String, Object>> parseAnnotations(JsonNode payload) {
+    if (payload == null || payload.isNull()) {
+      return List.of();
+    }
+    JsonNode node = payload.path("annotations");
+    if (!node.isArray()) {
+      return List.of();
+    }
+    List<Map<String, Object>> annotations = new ArrayList<>();
+    for (JsonNode item : node) {
+      if (item == null || !item.isObject()) {
+        continue;
+      }
+      Map<String, Object> annotation = new LinkedHashMap<>();
+      String id = textValue(item.path("id"));
+      annotation.put("id", id != null ? id : UUID.randomUUID().toString());
+      annotation.put("label", firstNonBlank(textValue(item.path("label")), ""));
+      annotation.put("note", stringValueAllowBlank(textValue(item.path("note"))));
+      annotation.put("important", Boolean.TRUE.equals(item.path("important").asBoolean(false)));
+      annotation.put("startSeconds", intValue(item.path("startSeconds")));
+      annotation.put("endSeconds", intValue(item.path("endSeconds")));
+      annotation.put("startTick", intValue(item.path("startTick")));
+      annotation.put("endTick", intValue(item.path("endTick")));
+      annotation.put("startFrame", intValue(item.path("startFrame")));
+      annotation.put("endFrame", intValue(item.path("endFrame")));
+      annotations.add(annotation);
+    }
+    return annotations;
+  }
+
+  /** Builds a compact human-readable summary of annotations to append to the Codex context. */
+  private String buildAnnotationsContext(List<Map<String, Object>> annotations) {
+    if (annotations == null || annotations.isEmpty()) {
+      return "";
+    }
+    StringBuilder sb = new StringBuilder();
+    int index = 1;
+    for (Map<String, Object> a : annotations) {
+      sb.append("Range ").append(index++).append(": ");
+      sb.append(formatDurationSeconds(intValueOrZero(a.get("startSeconds"))));
+      sb.append(" -> ").append(formatDurationSeconds(intValueOrZero(a.get("endSeconds"))));
+      if (Boolean.TRUE.equals(a.get("important"))) {
+        sb.append(" [IMPORTANT]");
+      }
+      String label = stringValue(a.get("label"));
+      if (label != null && !label.isBlank()) {
+        sb.append(" label=").append(label);
+      }
+      String note = stringValueAllowBlank(a.get("note"));
+      if (note != null && !note.isBlank()) {
+        sb.append(" note=").append(note);
+      }
+      Integer startTick = intValue(a.get("startTick"));
+      Integer endTick = intValue(a.get("endTick"));
+      if (startTick != null || endTick != null) {
+        sb.append(" ticks=").append(startTick).append("-").append(endTick);
+      }
+      sb.append("\n");
+    }
+    return sb.toString().trim();
+  }
+
+  private int intValueOrZero(Object value) {
+    Integer parsed = intValue(value);
+    return parsed != null ? parsed : 0;
+  }
+
+  /**
+   * Resolves the evidence time window for recovery evidence resolution: payload active range wins,
+   * then the union of annotation ranges, then the last persisted selection, then the full range.
+   */
+  private TimeRangeSelection resolveRecoveryTimeRange(
+      List<Map<String, Object>> annotations,
+      JsonNode payload,
+      AnalysisInputMetadata existingInput,
+      AnalysisV1EvidenceBundle evidence) {
+    int maxSeconds = computeMaxRangeSeconds(evidence);
+    Integer start = intValue(payload != null ? payload.get("activeRangeStartSeconds") : null);
+    Integer end = intValue(payload != null ? payload.get("activeRangeEndSeconds") : null);
+    if (start == null || end == null) {
+      int annStart = Integer.MAX_VALUE;
+      int annEnd = Integer.MIN_VALUE;
+      for (Map<String, Object> a : annotations) {
+        Integer s = intValue(a.get("startSeconds"));
+        Integer e = intValue(a.get("endSeconds"));
+        if (s != null) {
+          annStart = Math.min(annStart, s);
+        }
+        if (e != null) {
+          annEnd = Math.max(annEnd, e);
+        }
+      }
+      if (annStart != Integer.MAX_VALUE && annEnd != Integer.MIN_VALUE) {
+        start = annStart;
+        end = annEnd;
+      } else {
+        start = existingInput.timeRangeStartSeconds();
+        end = existingInput.timeRangeEndSeconds();
+      }
+    }
+    int startSeconds = clampRangeValue(start, 0, maxSeconds);
+    int endSeconds = clampRangeValue(end, maxSeconds, maxSeconds);
+    if (endSeconds <= startSeconds) {
+      endSeconds = maxSeconds;
+      startSeconds = 0;
+    }
+    return new TimeRangeSelection(startSeconds, endSeconds, maxSeconds);
+  }
+
+  private Map<String, Object> buildResolvedTimeWindow(TimeRangeSelection timeRange) {
+    Map<String, Object> window = new LinkedHashMap<>();
+    window.put("startSeconds", timeRange.startSeconds());
+    window.put("endSeconds", timeRange.endSeconds());
+    window.put("maxSeconds", timeRange.maxSeconds());
+    window.put("startDisplay", formatDurationSeconds(timeRange.startSeconds()));
+    window.put("endDisplay", formatDurationSeconds(timeRange.endSeconds()));
+    window.put("maxDisplay", formatDurationSeconds(timeRange.maxSeconds()));
+    return window;
+  }
+
+  private String findChildIterationId(String iterationId) {
+    List<PatchLoopIteration> children =
+        iterationRepository.findByParentIterationIdOrderByCreatedAtDesc(iterationId);
+    return children.isEmpty() ? null : children.get(0).getIterationId();
+  }
+
+  private String deriveRelaunchStatus(String phase) {
+    if (phase == null) {
+      return "IDLE";
+    }
+    return switch (phase) {
+      case RECOVERY_APPLYING_PATCH -> "APPLYING_PATCH";
+      case RECOVERY_RESTARTING_TARGET -> "RESTARTING_TARGET";
+      case RECOVERY_RELOGGING_IN -> "RELOGGING_IN";
+      case RECOVERY_WAITING_FOR_EXECUTOR -> "WAITING_FOR_EXECUTOR";
+      case RECOVERY_REPUBLISHING -> "REPUBLISHING";
+      case RECOVERY_WAITING_FOR_DEBUG_BIND -> "WAITING_FOR_DEBUG_BIND";
+      case RECOVERY_RELAUNCHED -> "RELAUNCHED";
+      case RECOVERY_FAILED -> "FAILED";
+      default -> "IDLE";
+    };
+  }
+
+  private String deriveBindStatus(
+      PatchLoopIteration iteration, Map<String, Object> run, String phase) {
+    String displayStatus = stringValue(run.get("status"));
+    if (DISPLAY_STATUS_WAITING_FOR_DEBUG_BIND.equals(displayStatus)
+        || RECOVERY_WAITING_FOR_DEBUG_BIND.equals(phase)) {
+      return "WAITING_FOR_DEBUG_BIND";
+    }
+    if (iteration.getRunSessionId() != null && !iteration.getRunSessionId().isBlank()) {
+      return "BOUND";
+    }
+    return "UNBOUND";
+  }
+
+  /**
+   * Reserves a preferred debug session id for the relaunched client to rebind to. Prefers the
+   * existing reserved id, then the failed run's bound session (for continuity), then a fresh
+   * deterministic id. Persists the reservation on the parent's recovery_workspace metadata.
+   */
+  private String reservePreferredDebugSession(
+      PatchLoopIteration iteration, Map<String, Object> taskMetadata) {
+    Map<String, Object> workspace = readRecoveryWorkspace(taskMetadata);
+    String preferred =
+        firstNonBlank(
+            stringValue(workspace.get("preferred_session_id")),
+            iteration.getRunSessionId(),
+            "debug_" + System.currentTimeMillis());
+    Map<String, Object> updated = new LinkedHashMap<>(workspace);
+    updated.put("preferred_session_id", preferred);
+    updated.put("reserved_at", LocalDateTime.now().toString());
+    taskMetadata.put("recovery_workspace", updated);
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    persistenceService.saveIteration(iteration);
+    return preferred;
+  }
+
+  private boolean isRecoveryPhaseActive(String phase) {
+    return RECOVERY_AWAITING_OPERATOR_PROMPT.equals(phase)
+        || RECOVERY_PATCH_PLAN_READY.equals(phase)
+        || RECOVERY_APPLYING_PATCH.equals(phase)
+        || RECOVERY_RESTARTING_TARGET.equals(phase)
+        || RECOVERY_RELOGGING_IN.equals(phase)
+        || RECOVERY_WAITING_FOR_EXECUTOR.equals(phase)
+        || RECOVERY_REPUBLISHING.equals(phase)
+        || RECOVERY_WAITING_FOR_DEBUG_BIND.equals(phase)
+        || RECOVERY_RELAUNCHED.equals(phase);
+  }
+
   private String resolveTargetBaseUrl(Map<String, Object> taskMetadata) {
     Map<String, Object> targetMetadata =
         taskMetadata != null && taskMetadata.containsKey("advertised_base_url")
@@ -2988,6 +3698,9 @@ public class BuilderGoalRunnerService {
     String preparationState = stringValue(readTargetPreparationMetadata(taskMetadata).get("state"));
     boolean taskStarted = Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"));
     boolean taskStartConfirmed = taskStarted && iteration.getRunSessionId() != null;
+    if (iteration.getStatus() == PatchLoopStatus.CANCELLED) {
+      return "CANCELLED";
+    }
     if ("PUBLISH_FAILED".equalsIgnoreCase(publishStatus)) {
       return "PUBLISH_FAILED";
     }
@@ -2996,6 +3709,11 @@ public class BuilderGoalRunnerService {
     }
     if (iteration.getStatus() == PatchLoopStatus.FAILED || Boolean.FALSE.equals(iteration.getRunSuccess())) {
       return "FAILED";
+    }
+    if (isStopRequested(taskMetadata, readPublishMetadata(taskMetadata))
+        && iteration.getStatus() != null
+        && !iteration.getStatus().isTerminal()) {
+      return "STOPPING";
     }
     if (preparationState != null
         && (publishStatus == null || publishStatus.isBlank())

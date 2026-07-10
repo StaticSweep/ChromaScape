@@ -224,6 +224,12 @@ analysis:
     # Maximum retry attempts
     max-retries: ${MCP_MAX_RETRIES:3}
 
+    # Verification configuration
+    # How long a cached verification result is considered fresh (seconds)
+    verification-ttl-seconds: ${MCP_VERIFICATION_TTL:300}
+    # Enable manual Codex MCP verification from /debugger
+    enable-manual-verification: ${MCP_ENABLE_VERIFICATION:true}
+
   # OpenAI/Codex API configuration (used when provider is openai-codex)
   openai:
     # OpenAI API key (set via ANALYSIS_OPENAI_API_KEY environment variable)
