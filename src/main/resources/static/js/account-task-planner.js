@@ -51,6 +51,8 @@ class AccountTaskPlanner {
     this.recoveryActiveImportant = false;
     this.recoveryPollHandle = null;
     this.recoveryChildLoaded = false;
+    this.codexSessionId = localStorage.getItem('taskPlanner.builderGoalCodexSessionId') || '';
+    this.codexSession = null;
   }
 
   /**
@@ -70,6 +72,7 @@ class AccountTaskPlanner {
       this.loadBuilderGoalMachines();
       this.loadBuilderGoalAccounts();
       this.loadBuilderGoalRuns();
+      this.initBuilderGoalCodexSession();
     }
     this.loadStabilizationKpis();
     if (!this.builderGoalBundleMismatch && !this.builderGoalRefreshHandle) {
@@ -110,6 +113,11 @@ class AccountTaskPlanner {
     this.builderGoalClientStatus = document.getElementById('builderGoalClientStatus');
     this.builderGoalImportResult = document.getElementById('builderGoalImportResult');
     this.builderGoalRunsList = document.getElementById('builderGoalRunsList');
+    this.builderGoalCodexSessionMeta = document.getElementById('builderGoalCodexSessionMeta');
+    this.builderGoalCodexTranscript = document.getElementById('builderGoalCodexTranscript');
+    this.builderGoalCodexMessageInput = document.getElementById('builderGoalCodexMessageInput');
+    this.sendBuilderGoalCodexMessageBtn = document.getElementById('sendBuilderGoalCodexMessageBtn');
+    this.refreshBuilderGoalCodexSessionBtn = document.getElementById('refreshBuilderGoalCodexSessionBtn');
     this.refreshBuilderGoalRunsBtn = document.getElementById('refreshBuilderGoalRunsBtn');
     this.builderGoalLogsPanel = document.getElementById('builderGoalLogsPanel');
     this.builderGoalLogsSummary = document.getElementById('builderGoalLogsSummary');
@@ -364,6 +372,20 @@ class AccountTaskPlanner {
     if (this.refreshBuilderGoalRunsBtn) {
       this.refreshBuilderGoalRunsBtn.addEventListener('click', () => {
         this.loadBuilderGoalRuns();
+      });
+    }
+    if (this.refreshBuilderGoalCodexSessionBtn) {
+      this.refreshBuilderGoalCodexSessionBtn.addEventListener('click', () => this.loadBuilderGoalCodexSession());
+    }
+    if (this.sendBuilderGoalCodexMessageBtn) {
+      this.sendBuilderGoalCodexMessageBtn.addEventListener('click', () => this.sendBuilderGoalCodexMessage());
+    }
+    if (this.builderGoalCodexMessageInput) {
+      this.builderGoalCodexMessageInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          this.sendBuilderGoalCodexMessage();
+        }
       });
     }
     if (this.builderGoalRunsList) {
@@ -1736,6 +1758,9 @@ class AccountTaskPlanner {
         throw new Error(result.publishError || 'Publish failed');
       }
       publishSucceeded = true;
+      if (result?.run?.iterationId) {
+        await this.bindBuilderGoalCodexRun(result.run.iterationId, { silent: true });
+      }
       this.builderGoalConfigDirty = false;
       this.builderGoalConfigLoadedKey = this.getBuilderGoalConfigContextKey(
         selectedAccount.accountId,
@@ -1866,6 +1891,9 @@ class AccountTaskPlanner {
         throw new Error(result.publishError || 'Publish failed');
       }
       publishSucceeded = true;
+      if (result?.run?.iterationId) {
+        await this.bindBuilderGoalCodexRun(result.run.iterationId, { silent: true });
+      }
       this.renderBuilderGoalClientStatus(
         `Launch accepted for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. ChromaScape is now waiting for that account's local micro6 executor to become dispatch-ready and will publish the imported payload automatically when it is ready.`,
         'success'
@@ -1900,6 +1928,190 @@ class AccountTaskPlanner {
           '<i class="bi bi-upload me-1"></i>Run Imported Payload';
       }
       this.updateBuilderGoalRunButtonState();
+    }
+  }
+
+  async initBuilderGoalCodexSession() {
+    if (!this.builderGoalCodexTranscript) {
+      return;
+    }
+    if (!this.codexSessionId) {
+      try {
+        const response = await fetch('/api/debug/builder-goals/codex/sessions', {
+          method: 'POST'
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || `HTTP ${response.status}`);
+        }
+        this.codexSessionId = result.sessionId || '';
+        if (this.codexSessionId) {
+          localStorage.setItem('taskPlanner.builderGoalCodexSessionId', this.codexSessionId);
+        }
+      } catch (error) {
+        console.error('Failed to create Builder Goal Codex session:', error);
+        if (this.builderGoalCodexSessionMeta) {
+          this.builderGoalCodexSessionMeta.textContent = `Failed to create Codex session: ${error.message}`;
+        }
+        return;
+      }
+    }
+    await this.loadBuilderGoalCodexSession();
+  }
+
+  async loadBuilderGoalCodexSession() {
+    if (!this.codexSessionId) {
+      await this.initBuilderGoalCodexSession();
+      return;
+    }
+    try {
+      const response = await fetch(`/api/debug/builder-goals/codex/sessions/${encodeURIComponent(this.codexSessionId)}`);
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      this.codexSession = result;
+      this.renderBuilderGoalCodexSession(result);
+    } catch (error) {
+      console.error('Failed to load Builder Goal Codex session:', error);
+      if (this.builderGoalCodexSessionMeta) {
+        this.builderGoalCodexSessionMeta.textContent = `Failed to load Codex session: ${error.message}`;
+      }
+    }
+  }
+
+  renderBuilderGoalCodexSession(session) {
+    if (this.builderGoalCodexSessionMeta) {
+      const parts = [
+        session?.sessionId ? `Session ${session.sessionId}` : null,
+        session?.activeIterationId ? `run ${session.activeIterationId}` : 'no active run'
+      ].filter(Boolean);
+      this.builderGoalCodexSessionMeta.textContent = parts.join(' • ');
+    }
+    if (!this.builderGoalCodexTranscript) {
+      return;
+    }
+    const messages = Array.isArray(session?.messages) ? session.messages : [];
+    if (messages.length === 0) {
+      this.builderGoalCodexTranscript.innerHTML =
+        '<div class="text-muted small fst-italic">Codex transcript will appear here.</div>';
+      return;
+    }
+    this.builderGoalCodexTranscript.innerHTML = messages.map(message => {
+      const role = message.role === 'user' ? 'You' : 'Codex';
+      const tone = message.role === 'user' ? 'text-primary' : 'text-dark';
+      return `
+        <div class="mb-2">
+          <div class="small fw-semibold ${tone}">${this.escapeHtml(role)}</div>
+          <div class="small">${this.escapeHtml(message.content || '')}</div>
+        </div>
+      `;
+    }).join('');
+    this.builderGoalCodexTranscript.scrollTop = this.builderGoalCodexTranscript.scrollHeight;
+  }
+
+  buildBuilderGoalCodexContext() {
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    const selectedTask = this.getSelectedBuilderGoalTask();
+    const parsedConfig = this.parseBuilderGoalConfigInput();
+    const world = this.getBuilderGoalWorldValue();
+    const payload = {
+      accountId: selectedAccount?.accountId || null,
+      launcherMachineUuid: selectedMachine?.machineUuid || null,
+      taskKey: selectedTask?.task_key || parsedConfig?.taskKey || null,
+      displayName: selectedTask?.display_name || selectedTask?.panel_display_name || selectedTask?.task_key || null,
+      world: world || null,
+      settings: !parsedConfig?.error && parsedConfig?.settings && typeof parsedConfig.settings === 'object'
+        ? parsedConfig.settings
+        : {},
+      context: this.recoveryContext?.value || '',
+      selectedEvidenceIds: this.collectRecoverySelectedEvidenceIds(),
+      annotations: Array.isArray(this.recoveryAnnotations) ? this.recoveryAnnotations : []
+    };
+    if (this.recoveryPrompt?.value) {
+      payload.prompt = this.recoveryPrompt.value;
+    }
+    return payload;
+  }
+
+  async sendBuilderGoalCodexMessage() {
+    const message = (this.builderGoalCodexMessageInput?.value || '').trim();
+    if (!message) {
+      return;
+    }
+    if (!this.codexSessionId) {
+      await this.initBuilderGoalCodexSession();
+      if (!this.codexSessionId) {
+        return;
+      }
+    }
+    if (this.sendBuilderGoalCodexMessageBtn) {
+      this.sendBuilderGoalCodexMessageBtn.disabled = true;
+    }
+    try {
+      const response = await fetch(
+        `/api/debug/builder-goals/codex/sessions/${encodeURIComponent(this.codexSessionId)}/messages`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            ...this.buildBuilderGoalCodexContext()
+          })
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      this.builderGoalCodexMessageInput.value = '';
+      await this.loadBuilderGoalCodexSession();
+      if (result.activeIterationId) {
+        await this.bindBuilderGoalCodexRun(result.activeIterationId, { silent: true });
+      }
+      await this.loadBuilderGoalRuns();
+    } catch (error) {
+      console.error('Failed to send Builder Goal Codex message:', error);
+      this.renderBuilderGoalClientStatus(`Codex message failed: ${error.message}`, 'danger');
+      alert('Codex message failed: ' + error.message);
+    } finally {
+      if (this.sendBuilderGoalCodexMessageBtn) {
+        this.sendBuilderGoalCodexMessageBtn.disabled = false;
+      }
+    }
+  }
+
+  async bindBuilderGoalCodexRun(iterationId, options = {}) {
+    if (!iterationId) {
+      return;
+    }
+    if (!this.codexSessionId) {
+      await this.initBuilderGoalCodexSession();
+      if (!this.codexSessionId) {
+        return;
+      }
+    }
+    try {
+      const response = await fetch(
+        `/api/debug/builder-goals/codex/sessions/${encodeURIComponent(this.codexSessionId)}/bind-run`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iterationId })
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      this.codexSession = result;
+      this.renderBuilderGoalCodexSession(result);
+      if (!options.silent) {
+        this.renderBuilderGoalClientStatus(`Codex session bound to run ${iterationId}.`, 'info');
+      }
+    } catch (error) {
+      console.error('Failed to bind Builder Goal Codex run:', error);
     }
   }
 
@@ -2032,6 +2244,9 @@ class AccountTaskPlanner {
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      if (result?.run?.iterationId) {
+        await this.bindBuilderGoalCodexRun(result.run.iterationId, { silent: true });
       }
       await this.loadBuilderGoalRuns();
       const run = result.run || {};
@@ -2636,6 +2851,30 @@ class AccountTaskPlanner {
     }
   }
 
+  seedPatchLoopFromRecoveryWorkspace(workspace) {
+    const patchLoop = window.ChromaScapePatchLoop;
+    if (!patchLoop || typeof patchLoop.seedRecoveryWorkspace !== 'function') {
+      return {
+        seeded: false,
+        reason: 'The patch-loop workspace is not available on this page.'
+      };
+    }
+    const seed = workspace?.patchLoopSeed;
+    if (!seed || typeof seed !== 'object') {
+      return {
+        seeded: false,
+        reason: 'No patch-loop seed was returned for this recovery workspace.'
+      };
+    }
+    const seeded = patchLoop.seedRecoveryWorkspace(seed);
+    return {
+      seeded: Boolean(seeded),
+      reason: seeded
+        ? `Patch loop seeded for ${seed.displayName || seed.taskKey || 'the failed run'}.`
+        : 'Patch-loop seed data could not be applied.'
+    };
+  }
+
   /**
    * Shared replay-first focus helper for Builder Goal run actions. Resolves the
    * best available replay target, switches the existing /debugger replay surface
@@ -2752,6 +2991,7 @@ class AccountTaskPlanner {
     if (!iterationId) {
       return;
     }
+    await this.bindBuilderGoalCodexRun(iterationId, { silent: true });
     this.recoveryModeActive = true;
     this.recoveryIterationId = iterationId;
     this.recoveryAnnotations = [];
@@ -2791,6 +3031,7 @@ class AccountTaskPlanner {
       this.recoveryAnnotations = Array.isArray(result.annotations) ? result.annotations : [];
       this.renderRecoveryAnnotations();
       this.renderRecoveryEvidence(result);
+      const patchLoopSeedResult = this.seedPatchLoopFromRecoveryWorkspace(result);
       // Restore persisted promoted-evidence selection as the single source of truth so saved
       // checkboxes reopen correctly even if analysis_input drifted from recovery_workspace.
       this.applyRecoverySelectedEvidenceIds(result.selectedEvidenceIds);
@@ -2811,6 +3052,22 @@ class AccountTaskPlanner {
       this.setRecoveryApproveState(!Boolean(result.approvalAvailable));
       this.setRecoveryGenerateState(Boolean(result.canAnalyze) === false, 'Generate Patch Plan');
       this.startRecoveryPolling();
+      const statusParts = [];
+      statusParts.push(
+        replayResult.loaded
+          ? 'Recovery workspace opened on the replay surface.'
+          : 'Recovery workspace opened without a replay target.'
+      );
+      statusParts.push(
+        patchLoopSeedResult.seeded
+          ? patchLoopSeedResult.reason
+          : `Patch loop was not seeded: ${patchLoopSeedResult.reason}`
+      );
+      this.renderBuilderGoalClientStatus(
+        statusParts.join(' '),
+        patchLoopSeedResult.seeded ? 'info' : 'warning'
+      );
+      this.scrollReplaySurfaceIntoView();
       // Surface a visible warning when the replay target could not be opened so the
       // operator understands why the replay viewer did not switch, without aborting
       // the recovery workspace load.
@@ -2819,6 +3076,12 @@ class AccountTaskPlanner {
           `<div class="text-warning mb-2"><i class="bi bi-exclamation-triangle me-1"></i>` +
           `${this.escapeHtml(replayResult.reason)}</div>`;
         this.recoveryPatchPlanReview.insertAdjacentHTML('afterbegin', replayWarning);
+      }
+      if (!patchLoopSeedResult.seeded && this.recoveryPatchPlanReview) {
+        const patchLoopWarning =
+          `<div class="text-warning mb-2"><i class="bi bi-exclamation-triangle me-1"></i>` +
+          `${this.escapeHtml(patchLoopSeedResult.reason)}</div>`;
+        this.recoveryPatchPlanReview.insertAdjacentHTML('afterbegin', patchLoopWarning);
       }
     } catch (error) {
       console.error('Failed to open recovery workspace:', error);
@@ -2846,6 +3109,7 @@ class AccountTaskPlanner {
     if (this.recoveryRunLabel) {
       this.recoveryRunLabel.textContent = '';
     }
+    window.ChromaScapePatchLoop?.clearSeed?.();
   }
 
   /**

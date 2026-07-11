@@ -78,6 +78,21 @@ public class BuilderGoalRunnerService {
   private static final String RECOVERY_WAITING_FOR_DEBUG_BIND = "WAITING_FOR_DEBUG_BIND";
   private static final String RECOVERY_RELAUNCHED = "RELAUNCHED";
   private static final String RECOVERY_FAILED = "RECOVERY_FAILED";
+  private static final String PATCH_LOOP_DEFAULT_TEMPLATE =
+      """
+      graph TD;
+      A[start] --> B[run_script]
+      B --> C[collect_evidence]
+      C --> D[analyze]
+      D --> E[generate_patch]
+      E --> F[apply_patch]
+      F --> G[validate]
+      G --> H[retest]
+      H --> I[evaluate_success]
+      I -.success.-> J[end]
+      I -.retry.-> D
+      I -.failure.-> J
+      """;
   private static final String PREPARATION_STATE_PREPARING_TARGET = "PREPARING_TARGET";
   private static final String PREPARATION_STATE_WAITING_FOR_AGENT = "WAITING_FOR_AGENT";
   private static final String PREPARATION_STATE_LOGGING_IN = "LOGGING_IN";
@@ -241,6 +256,12 @@ public class BuilderGoalRunnerService {
     response.put("matchedLogCount", matchedLogs.size());
     response.put("launchLog", launchLog);
     return response;
+  }
+
+  @Transactional(readOnly = true)
+  public Map<String, Object> getRunSummary(String iterationId) {
+    PatchLoopIteration iteration = loadBuilderRun(iterationId);
+    return toRunSummary(iteration);
   }
 
   @Transactional
@@ -731,9 +752,66 @@ public class BuilderGoalRunnerService {
         "activeRangeStartSeconds", intValue(updatedWorkspace.get("active_start_seconds")));
     response.put(
         "activeRangeEndSeconds", intValue(updatedWorkspace.get("active_end_seconds")));
+    response.put(
+        "patchLoopSeed",
+        buildRecoveryPatchLoopSeed(
+            iteration,
+            taskMetadata,
+            updatedWorkspace,
+            stringValue(response.get("prompt")),
+            stringValueAllowBlank(response.get("context")),
+            recordingId,
+            debugSessionId));
     response.put("recoveryState", stringValue(readRecoveryMetadata(taskMetadata).get("phase")));
     response.put("analysisAvailable", run.get("analysisAvailable"));
     response.put("approvalAvailable", run.get("approvalAvailable"));
+    return response;
+  }
+
+  @Transactional
+  public Map<String, Object> setRecoveryIssueStatement(
+      String iterationId, String prompt, String context) {
+    PatchLoopIteration iteration = loadBuilderRun(iterationId);
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    AnalysisPromptData defaults = buildDefaultAnalysisPromptData(iteration);
+
+    String resolvedPrompt = firstNonBlank(prompt, defaults.prompt());
+    String resolvedContext =
+        context != null ? context : firstNonBlank(stringValueAllowBlank(context), defaults.context());
+
+    AnalysisInputMetadata existingInput = readAnalysisInputMetadata(taskMetadata);
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("prompt", resolvedPrompt);
+    metadata.put("context", resolvedContext);
+    metadata.put("selected_evidence_ids", existingInput.selectedEvidenceIds());
+    metadata.put("selected_evidence_count", existingInput.selectedEvidenceCount());
+    metadata.put("total_evidence_count", existingInput.totalEvidenceCount());
+    metadata.put("time_range_start_seconds", existingInput.timeRangeStartSeconds());
+    metadata.put("time_range_end_seconds", existingInput.timeRangeEndSeconds());
+    metadata.put(
+        "mode",
+        firstNonBlank(existingInput.mode(), ANALYSIS_MODE_OPERATOR_EDITED_MCP));
+    metadata.put(
+        "customized",
+        !Objects.equals(resolvedPrompt, defaults.prompt())
+            || !Objects.equals(resolvedContext, defaults.context()));
+    taskMetadata.put("analysis_input", metadata);
+
+    Map<String, Object> workspace = readRecoveryWorkspace(taskMetadata);
+    Map<String, Object> updatedWorkspace = new LinkedHashMap<>(workspace);
+    updatedWorkspace.put("issue_statement", resolvedPrompt);
+    updatedWorkspace.put("issue_context", resolvedContext);
+    updatedWorkspace.put("updated_at", LocalDateTime.now().toString());
+    taskMetadata.put("recovery_workspace", updatedWorkspace);
+
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    persistenceService.saveIteration(iteration);
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("iterationId", iterationId);
+    response.put("prompt", resolvedPrompt);
+    response.put("context", resolvedContext);
+    response.put("saved", true);
     return response;
   }
 
@@ -1920,6 +1998,89 @@ public class BuilderGoalRunnerService {
       metadata.put("micro6_target", targetMetadata);
     }
     return metadata;
+  }
+
+  private Map<String, Object> buildRecoveryPatchLoopSeed(
+      PatchLoopIteration iteration,
+      Map<String, Object> taskMetadata,
+      Map<String, Object> workspace,
+      String prompt,
+      String context,
+      String recordingId,
+      String debugSessionId) {
+    String taskKey = firstNonBlank(stringValue(taskMetadata.get("task_key")), iteration.getScriptName());
+    String displayName =
+        firstNonBlank(
+            stringValue(taskMetadata.get("display_name")),
+            stringValue(taskMetadata.get("panel_display_name")),
+            iteration.getPrompt(),
+            taskKey);
+    Map<String, Object> seed = new LinkedHashMap<>();
+    seed.put("source", "builder_goal_recovery_workspace");
+    seed.put("iterationId", iteration.getIterationId());
+    seed.put("taskKey", taskKey);
+    seed.put("scriptName", taskKey);
+    seed.put("displayName", displayName);
+    seed.put("goalPrompt", firstNonBlank(prompt, "Investigate and fix failed builder-goal run"));
+    seed.put("context", stringValueAllowBlank(context));
+    seed.put("executionMode", "analysis_only");
+    seed.put("mermaidTemplate", PATCH_LOOP_DEFAULT_TEMPLATE);
+
+    Map<String, Object> sessionContext = new LinkedHashMap<>();
+    if (debugSessionId != null) {
+      sessionContext.put("debugSessionId", debugSessionId);
+    }
+    if (recordingId != null) {
+      sessionContext.put("recordingId", recordingId);
+    }
+    sessionContext.put("resolutionSource", "builder_goal_recovery_workspace");
+    seed.put("sessionContext", sessionContext);
+
+    Map<String, Object> executionTaskMetadata = new LinkedHashMap<>();
+    if (taskKey != null) {
+      executionTaskMetadata.put("task_key", taskKey);
+      executionTaskMetadata.put(
+          "task_name", firstNonBlank(stringValue(taskMetadata.get("task_name")), taskKey));
+    }
+    if (displayName != null) {
+      executionTaskMetadata.put("display_name", displayName);
+      executionTaskMetadata.put(
+          "panel_display_name",
+          firstNonBlank(stringValue(taskMetadata.get("panel_display_name")), displayName));
+    }
+    executionTaskMetadata.put("persist_settings", true);
+    executionTaskMetadata.put("source", "builder_goal_recovery_workspace");
+    executionTaskMetadata.put("builder_goal_iteration_id", iteration.getIterationId());
+    if (taskMetadata.get("settings") instanceof Map<?, ?> settingsMap) {
+      executionTaskMetadata.put(
+          "settings", new LinkedHashMap<>(objectMapper.convertValue(settingsMap, new TypeReference<Map<String, Object>>() {})));
+    }
+    Integer world = intValue(taskMetadata.get("world"));
+    if (world != null) {
+      executionTaskMetadata.put("world", world);
+    }
+    Map<String, Object> targetMetadata = readTargetMetadata(taskMetadata);
+    if (!targetMetadata.isEmpty()) {
+      executionTaskMetadata.put("micro6_target", new LinkedHashMap<>(targetMetadata));
+    }
+    String preferredSessionId = stringValue(workspace.get("preferred_session_id"));
+    if (preferredSessionId != null) {
+      executionTaskMetadata.put("preferred_session_id", preferredSessionId);
+    }
+    seed.put("taskMetadata", executionTaskMetadata);
+
+    List<String> summaryParts = new ArrayList<>();
+    if (displayName != null) {
+      summaryParts.add(displayName);
+    }
+    if (recordingId != null) {
+      summaryParts.add("recording " + recordingId);
+    }
+    if (debugSessionId != null) {
+      summaryParts.add("session " + debugSessionId);
+    }
+    seed.put("summary", String.join(" • ", summaryParts));
+    return seed;
   }
 
   private CatalogValidationResult resolvePublishCatalogValidation(String taskKey, String targetBaseUrl) {

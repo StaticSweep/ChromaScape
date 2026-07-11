@@ -506,6 +506,15 @@ class BuilderGoalRunnerServiceTest {
     assertThat(workspace.get("debugSessionId")).isEqualTo("debug_orig_session");
     assertThat(workspace.get("recordingId")).isEqualTo("rec_orig_1");
     assertThat(workspace.get("run")).isNotNull();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> patchLoopSeed = (Map<String, Object>) workspace.get("patchLoopSeed");
+    assertThat(patchLoopSeed).isNotNull();
+    assertThat(patchLoopSeed.get("taskKey")).isEqualTo("configurable_woodcutting");
+    assertThat(patchLoopSeed.get("executionMode")).isEqualTo("analysis_only");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> sessionContext = (Map<String, Object>) patchLoopSeed.get("sessionContext");
+    assertThat(sessionContext.get("recordingId")).isEqualTo("rec_orig_1");
+    assertThat(sessionContext.get("debugSessionId")).isEqualTo("debug_orig_session");
     ArgumentCaptor<PatchLoopIteration> captor = ArgumentCaptor.forClass(PatchLoopIteration.class);
     verify(persistenceService, atLeastOnce()).saveIteration(captor.capture());
     @SuppressWarnings("unchecked")
@@ -622,6 +631,10 @@ class BuilderGoalRunnerServiceTest {
     @SuppressWarnings("unchecked")
     java.util.List<String> selectedIds = (java.util.List<String>) workspace.get("selectedEvidenceIds");
     assertThat(selectedIds).contains("log_restore_1");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> patchLoopSeed = (Map<String, Object>) workspace.get("patchLoopSeed");
+    assertThat(patchLoopSeed).isNotNull();
+    assertThat(patchLoopSeed.get("taskKey")).isEqualTo("configurable_woodcutting");
   }
 
   @Test

@@ -203,6 +203,9 @@
           </select>
           <input type="text" id="patchScriptSearchInput" class="form-control form-control-sm mt-2" placeholder="Search scripts (name, key, category, tags)">
           <div id="patchScriptCatalogStatus" class="form-text text-muted mt-1"></div>
+          <div id="patchLoopSeedStatus" class="form-text text-muted mt-1">
+            Patch loop is waiting for a manual selection or recovery workspace seed.
+          </div>
           <div class="mt-2">
             <label class="form-label small">Goal Prompt <span class="text-muted">(required for analysis graphs)</span></label>
             <input type="text" id="goalPromptInput" class="form-control form-control-sm" placeholder="What should the loop achieve?">
@@ -448,6 +451,29 @@
           </div>
           <div id="builderGoalClientStatus" class="small text-muted mb-3">
             Select an account and task to run.
+          </div>
+          <div class="border rounded p-2 mb-3 bg-body-tertiary">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <div class="form-label mb-0">Codex Session</div>
+                <div id="builderGoalCodexSessionMeta" class="small text-muted">
+                  Creating Codex orchestration session...
+                </div>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalCodexSessionBtn" type="button">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+              </button>
+            </div>
+            <div id="builderGoalCodexTranscript" class="border rounded p-2 bg-white mb-2" style="min-height: 180px; max-height: 260px; overflow:auto;">
+              <div class="text-muted small fst-italic">Codex transcript will appear here.</div>
+            </div>
+            <div class="input-group input-group-sm">
+              <input id="builderGoalCodexMessageInput" class="form-control" type="text"
+                placeholder='Try: "run it", "stop it", "open recovery", "generate patch plan", or describe the issue'>
+              <button class="btn btn-primary" id="sendBuilderGoalCodexMessageBtn" type="button">
+                <i class="bi bi-send me-1"></i>Send
+              </button>
+            </div>
           </div>
           <details class="mb-3">
             <summary class="small text-muted" style="cursor:pointer;">Advanced: import raw builder payload</summary>

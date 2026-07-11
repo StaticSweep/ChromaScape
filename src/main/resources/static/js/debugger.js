@@ -6688,6 +6688,19 @@ async function updatePauseButtonState() {
 const PATCH_LOOP_CATALOG_POLL_INTERVAL_MS = 30000;
 let patchLoopCatalogPollTimer = null;
 let patchLoopCatalogEntries = [];
+const DEFAULT_PATCH_LOOP_TEMPLATE = `graph TD;
+A[start] --> B[run_script]
+B --> C[collect_evidence]
+C --> D[analyze]
+D --> E[generate_patch]
+E --> F[apply_patch]
+F --> G[validate]
+G --> H[retest]
+H --> I[evaluate_success]
+I -.success.-> J[end]
+I -.retry.-> D
+I -.failure.-> J`;
+let activePatchLoopSeed = null;
 
 function setPatchScriptCatalogStatus(message, tone = 'muted') {
   const status = document.getElementById('patchScriptCatalogStatus');
@@ -6702,6 +6715,131 @@ function setPatchScriptCatalogStatus(message, tone = 'muted') {
 
   status.className = `form-text mt-1 ${toneClass}`;
   status.textContent = message;
+}
+
+function renderPatchLoopSeedStatus(message, tone = 'muted') {
+  const status = document.getElementById('patchLoopSeedStatus');
+  if (!status) return;
+
+  const toneClass = {
+    muted: 'text-muted',
+    success: 'text-success',
+    warning: 'text-warning',
+    error: 'text-danger',
+    info: 'text-info'
+  }[tone] || 'text-muted';
+
+  status.className = `form-text mt-1 ${toneClass}`;
+  status.textContent = message;
+}
+
+function clonePatchLoopSeed(seed) {
+  if (!seed || typeof seed !== 'object') {
+    return null;
+  }
+  return JSON.parse(JSON.stringify(seed));
+}
+
+function findPatchLoopCatalogValueForTaskKey(taskKey) {
+  const normalizedTaskKey = String(taskKey || '').trim();
+  if (!normalizedTaskKey) {
+    return '';
+  }
+  const entry = patchLoopCatalogEntries.find(candidate => {
+    if (!candidate || candidate.disabled) {
+      return false;
+    }
+    return candidate.value === normalizedTaskKey
+      || candidate.value === `micro6:${normalizedTaskKey}`
+      || candidate.value.endsWith(`:${normalizedTaskKey}`);
+  });
+  return entry?.value || '';
+}
+
+function applyPatchLoopSeedToInputs(seed) {
+  if (!seed) {
+    return;
+  }
+  const mermaidInput = document.getElementById('mermaidInput');
+  const scriptSelect = document.getElementById('patchScriptSelect');
+  const goalPromptInput = document.getElementById('goalPromptInput');
+  const executionModeSelect = document.getElementById('executionModeSelect');
+  const patchPanel = document.getElementById('patchLoopPanel');
+  const patchPanelContent = document.getElementById('patchPanelContent');
+  const togglePatchLoopBtn = document.getElementById('togglePatchLoopBtn');
+
+  if (patchPanel && patchPanel.style.display === 'none') {
+    patchPanel.style.display = 'block';
+  }
+  if (patchPanelContent && patchPanelContent.style.display === 'none') {
+    patchPanelContent.style.display = 'block';
+    const icon = togglePatchLoopBtn?.querySelector('i');
+    if (icon) {
+      icon.classList.remove('bi-chevron-down');
+      icon.classList.add('bi-chevron-up');
+    }
+  }
+
+  if (goalPromptInput) {
+    goalPromptInput.value = seed.goalPrompt || '';
+  }
+  if (executionModeSelect) {
+    executionModeSelect.value = seed.executionMode || 'analysis_only';
+  }
+  if (mermaidInput && !mermaidInput.value.trim()) {
+    mermaidInput.value = seed.mermaidTemplate || DEFAULT_PATCH_LOOP_TEMPLATE;
+  }
+
+  const resolvedScriptValue =
+    findPatchLoopCatalogValueForTaskKey(seed.taskKey || seed.scriptName || '');
+  if (scriptSelect && resolvedScriptValue) {
+    scriptSelect.value = resolvedScriptValue;
+    activePatchLoopSeed.scriptSelectValue = resolvedScriptValue;
+  }
+
+  const summary = seed.summary || seed.displayName || seed.taskKey || 'recovery workspace';
+  renderPatchLoopSeedStatus(`Seeded from recovery workspace: ${summary}`, 'info');
+}
+
+function seedPatchLoopFromRecoveryWorkspace(seed) {
+  activePatchLoopSeed = clonePatchLoopSeed(seed);
+  if (!activePatchLoopSeed) {
+    renderPatchLoopSeedStatus(
+      'Recovery workspace opened, but patch-loop seed data was unavailable.',
+      'warning'
+    );
+    return false;
+  }
+  applyPatchLoopSeedToInputs(activePatchLoopSeed);
+  return true;
+}
+
+function clearPatchLoopSeed() {
+  activePatchLoopSeed = null;
+  renderPatchLoopSeedStatus(
+    'Patch loop is waiting for a manual selection or recovery workspace seed.',
+    'muted'
+  );
+}
+
+function scriptMatchesActivePatchLoopSeed(scriptName) {
+  if (!activePatchLoopSeed || !scriptName) {
+    return false;
+  }
+  const candidates = new Set([
+    activePatchLoopSeed.scriptSelectValue,
+    activePatchLoopSeed.scriptName,
+    activePatchLoopSeed.taskKey,
+    activePatchLoopSeed.taskKey ? `micro6:${activePatchLoopSeed.taskKey}` : null
+  ].filter(Boolean));
+  return candidates.has(scriptName);
+}
+
+function getPatchLoopExecutionSeed(scriptName) {
+  if (!scriptMatchesActivePatchLoopSeed(scriptName)) {
+    return null;
+  }
+  return clonePatchLoopSeed(activePatchLoopSeed);
 }
 
 function buildPatchLoopSearchIndex(task) {
@@ -6756,12 +6894,19 @@ function renderPatchLoopScriptOptions(selectedValue = '') {
     createPatchLoopOption(select, '', emptyLabel, true);
   }
 
-  if (selectedValue) {
+  const desiredValue =
+    selectedValue
+    || activePatchLoopSeed?.scriptSelectValue
+    || findPatchLoopCatalogValueForTaskKey(activePatchLoopSeed?.taskKey || activePatchLoopSeed?.scriptName || '');
+  if (desiredValue) {
     const matching = Array.from(select.options).find(
-      option => option.value === selectedValue && option.disabled !== true
+      option => option.value === desiredValue && option.disabled !== true
     );
     if (matching) {
-      select.value = selectedValue;
+      select.value = desiredValue;
+      if (activePatchLoopSeed) {
+        activePatchLoopSeed.scriptSelectValue = desiredValue;
+      }
     }
   }
 }
@@ -7261,21 +7406,9 @@ function initPatchLoopControls() {
   const loadTemplateBtn = document.getElementById('loadTemplateBtn');
   if (loadTemplateBtn) {
     loadTemplateBtn.addEventListener('click', function() {
-      const template = `graph TD;
-A[start] --> B[run_script]
-B --> C[collect_evidence]
-C --> D[analyze]
-D --> E[generate_patch]
-E --> F[apply_patch]
-F --> G[validate]
-G --> H[retest]
-H --> I[evaluate_success]
-I -.success.-> J[end]
-I -.retry.-> D
-I -.failure.-> J`;
       const mermaidInput = document.getElementById('mermaidInput');
       if (mermaidInput) {
-        mermaidInput.value = template;
+        mermaidInput.value = DEFAULT_PATCH_LOOP_TEMPLATE;
       }
     });
   }
@@ -7395,6 +7528,7 @@ I -.failure.-> J`;
       const scriptName = scriptSelect ? scriptSelect.value : null;
       const goalPrompt = goalPromptInput ? goalPromptInput.value : '';
       const executionMode = executionModeSelect ? executionModeSelect.value : 'analysis_only';
+      const seededExecution = getPatchLoopExecutionSeed(scriptName);
 
       if (!mermaid.trim()) {
         console.warn('No Mermaid graph provided');
@@ -7454,7 +7588,11 @@ I -.failure.-> J`;
           mermaid,
           scriptName,
           goalPrompt,
-          { executionMode }
+          {
+            executionMode,
+            sessionContext: seededExecution?.sessionContext || null,
+            taskMetadata: seededExecution?.taskMetadata || null
+          }
         );
 
         console.log('Graph execution started:', result);
@@ -7675,6 +7813,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   })();
 });
+
+window.ChromaScapePatchLoop = window.ChromaScapePatchLoop || {
+  getDefaultTemplate() {
+    return DEFAULT_PATCH_LOOP_TEMPLATE;
+  },
+  seedRecoveryWorkspace(seed) {
+    return seedPatchLoopFromRecoveryWorkspace(seed);
+  },
+  getActiveSeed() {
+    return clonePatchLoopSeed(activePatchLoopSeed);
+  },
+  clearSeed() {
+    clearPatchLoopSeed();
+  }
+};
 
 /**
  * Poll recording metrics and update diagnostics strip

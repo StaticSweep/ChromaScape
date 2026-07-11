@@ -1,0 +1,93 @@
+package com.chromascape.web.debug.buildergoal.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+
+import com.chromascape.web.debug.buildergoal.service.BuilderGoalCodexOrchestrationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+
+@ExtendWith(MockitoExtension.class)
+class BuilderGoalCodexControllerTest {
+
+  @Mock private BuilderGoalCodexOrchestrationService orchestrationService;
+
+  private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+  private BuilderGoalCodexController controller;
+
+  @BeforeEach
+  void setUp() {
+    controller = new BuilderGoalCodexController(orchestrationService);
+  }
+
+  @Test
+  void createSession_returnsOk() {
+    when(orchestrationService.createSession()).thenReturn(Map.of("sessionId", "codex_bg_1"));
+
+    ResponseEntity<Object> response = controller.createSession();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody()).isEqualTo(Map.of("sessionId", "codex_bg_1"));
+  }
+
+  @Test
+  void startRun_returnsOk() throws Exception {
+    when(orchestrationService.startRun(
+            eq("codex_bg_1"),
+            eq("account-1"),
+            eq("machine-1"),
+            eq("task-1"),
+            eq(360),
+            eq("Task One"),
+            any()))
+        .thenReturn(Map.of("activeIterationId", "buildergoal_1"));
+
+    ResponseEntity<Object> response =
+        controller.startRun(
+            "codex_bg_1",
+            objectMapper.readTree(
+                """
+                {
+                  "accountId": "account-1",
+                  "launcherMachineUuid": "machine-1",
+                  "taskKey": "task-1",
+                  "world": 360,
+                  "displayName": "Task One",
+                  "settings": { "treeType": "WILLOW" }
+                }
+                """));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody()).isEqualTo(Map.of("activeIterationId", "buildergoal_1"));
+  }
+
+  @Test
+  void processMessage_conflictReturns409() throws Exception {
+    when(orchestrationService.processMessage(eq("codex_bg_1"), eq("stop it"), any()))
+        .thenThrow(new IllegalStateException("No active run"));
+
+    ResponseEntity<Object> response =
+        controller.postMessage(
+            "codex_bg_1",
+            objectMapper.readTree(
+                """
+                {
+                  "message": "stop it"
+                }
+                """));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body.get("error")).isEqualTo("No active run");
+  }
+}

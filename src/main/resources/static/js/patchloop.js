@@ -107,7 +107,9 @@ class PatchLoopManager {
       executionMode: options.executionMode || 'analysis_only',
       successCriteria: options.successCriteria || {},
       policy: options.policy || null,
-      evidenceConfig: options.evidenceConfig || null
+      evidenceConfig: options.evidenceConfig || null,
+      sessionContext: options.sessionContext || null,
+      taskMetadata: options.taskMetadata || null
     };
 
     try {
