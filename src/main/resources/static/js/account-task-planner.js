@@ -2842,12 +2842,74 @@ class AccountTaskPlanner {
    */
   scrollReplaySurfaceIntoView() {
     const scrollTarget =
-      document.querySelector('.debugger-main') ||
-      document.getElementById('viewportStage') ||
       document.getElementById('replayVideo') ||
+      document.querySelector('.scrubber-bar') ||
+      document.getElementById('recoveryModeShell') ||
+      document.querySelector('.debugger-container') ||
       document.getElementById('replayModeBtn');
     if (scrollTarget && typeof scrollTarget.scrollIntoView === 'function') {
       scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  resetRecoveryWorkspaceUi() {
+    this.renderRecoveryRangeHint('No active range');
+    if (this.recoveryActiveStart) {
+      this.recoveryActiveStart.value = '';
+    }
+    if (this.recoveryActiveEnd) {
+      this.recoveryActiveEnd.value = '';
+    }
+    if (this.recoveryActiveLabel) {
+      this.recoveryActiveLabel.value = '';
+    }
+    if (this.recoveryActiveTick) {
+      this.recoveryActiveTick.value = '';
+    }
+    if (this.recoveryActiveFrame) {
+      this.recoveryActiveFrame.value = '';
+    }
+    if (this.recoveryActiveNote) {
+      this.recoveryActiveNote.value = '';
+    }
+    if (this.recoveryImportantBtn) {
+      this.recoveryImportantBtn.classList.remove('active');
+    }
+    if (this.recoveryAnnotationCount) {
+      this.recoveryAnnotationCount.textContent = '0 range(s)';
+    }
+    if (this.recoveryAnnotationList) {
+      this.recoveryAnnotationList.innerHTML =
+        '<div class="text-muted small fst-italic">Loading recovery annotations...</div>';
+    }
+    if (this.recoveryEvidenceMeta) {
+      this.recoveryEvidenceMeta.textContent = '';
+    }
+    if (this.recoveryEvidenceGroups) {
+      this.recoveryEvidenceGroups.innerHTML =
+        '<div class="text-muted small fst-italic">Loading recovery evidence...</div>';
+    }
+    if (this.recoveryPrompt) {
+      this.recoveryPrompt.value = '';
+    }
+    if (this.recoveryContext) {
+      this.recoveryContext.value = '';
+    }
+    if (this.recoveryPatchPlanReview) {
+      this.recoveryPatchPlanReview.innerHTML =
+        '<div class="text-muted fst-italic">Loading recovery workspace...</div>';
+    }
+    if (this.recoveryRelaunchPanel) {
+      this.recoveryRelaunchPanel.hidden = true;
+    }
+    if (this.recoveryRelaunchStatus) {
+      this.recoveryRelaunchStatus.textContent = 'Waiting for debug bind...';
+    }
+    if (this.recoveryPreferredSession) {
+      this.recoveryPreferredSession.textContent = '';
+    }
+    if (this.recoveryChildIteration) {
+      this.recoveryChildIteration.textContent = '';
     }
   }
 
@@ -3003,11 +3065,11 @@ class AccountTaskPlanner {
       this.recoveryShell.hidden = false;
     }
     document.body.classList.add('recovery-mode-active');
-    this.renderRecoveryAnnotations();
+    this.resetRecoveryWorkspaceUi();
     this.setRecoveryGenerateState(true, 'Loading...');
     this.setRecoveryApproveState(true);
-    if (this.recoveryPatchPlanReview) {
-      this.recoveryPatchPlanReview.innerHTML = '<div class="text-muted fst-italic">Loading recovery workspace...</div>';
+    if (this.recoveryRunLabel) {
+      this.recoveryRunLabel.textContent = `Opening recovery workspace...`;
     }
     try {
       const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/recovery-workspace`, {
@@ -3018,9 +3080,20 @@ class AccountTaskPlanner {
         throw new Error(result.error || `HTTP ${response.status}`);
       }
       this.recoveryDraft = result;
+      // Seed patch loop immediately so inputs are pre-filled during replay load.
+      const patchLoopSeedResult = this.seedPatchLoopFromRecoveryWorkspace(result);
+      // Drive the existing replay surface first so the failed run's recording/scrubber
+      // is the editing surface before recovery controls hydrate under it.
+      const replayResult = await this.focusBuilderGoalRunReplay({
+        runRecordingId: result.run?.runRecordingId,
+        recordingId: result.recordingId,
+        runSessionId: result.run?.runSessionId,
+        debugSessionId: result.debugSessionId
+      });
+      // Hydrate recovery workspace UI after replay load completes (or fails).
+      const runName = result.run?.displayName || result.run?.taskKey || iterationId;
       if (this.recoveryRunLabel) {
-        const name = result.run?.displayName || result.run?.taskKey || iterationId;
-        this.recoveryRunLabel.textContent = `Recovering: ${this.escapeHtml(name)}`;
+        this.recoveryRunLabel.textContent = `Recovering: ${runName}`;
       }
       if (this.recoveryPrompt) {
         this.recoveryPrompt.value = result.prompt || '';
@@ -3031,46 +3104,33 @@ class AccountTaskPlanner {
       this.recoveryAnnotations = Array.isArray(result.annotations) ? result.annotations : [];
       this.renderRecoveryAnnotations();
       this.renderRecoveryEvidence(result);
-      const patchLoopSeedResult = this.seedPatchLoopFromRecoveryWorkspace(result);
-      // Restore persisted promoted-evidence selection as the single source of truth so saved
-      // checkboxes reopen correctly even if analysis_input drifted from recovery_workspace.
       this.applyRecoverySelectedEvidenceIds(result.selectedEvidenceIds);
-      // Restore persisted active range into the inline editor.
       this.restoreRecoveryActiveRange(result.activeRangeStartSeconds, result.activeRangeEndSeconds);
-      // Drive the existing replay surface so the failed run's recording/scrubber is the editing
-      // surface, fulfilling the same-/debugger-screen promise. Uses the shared replay-first
-      // helper so both Load Into Editor and Open Recovery Workspace behave identically.
-      const replayResult = await this.focusBuilderGoalRunReplay({
-        runRecordingId: result.run?.runRecordingId,
-        recordingId: result.recordingId,
-        runSessionId: result.run?.runSessionId,
-        debugSessionId: result.debugSessionId
-      });
       if (result.analysisAvailable) {
         this.renderRecoveryPatchPlan(result.run || result);
       }
       this.setRecoveryApproveState(!Boolean(result.approvalAvailable));
       this.setRecoveryGenerateState(Boolean(result.canAnalyze) === false, 'Generate Patch Plan');
       this.startRecoveryPolling();
+      this.scrollReplaySurfaceIntoView();
+      // Build descriptive status message.
       const statusParts = [];
-      statusParts.push(
-        replayResult.loaded
-          ? 'Recovery workspace opened on the replay surface.'
-          : 'Recovery workspace opened without a replay target.'
-      );
+      statusParts.push(`Recovery workspace opened for ${runName}.`);
+      if (replayResult.loaded) {
+        statusParts.push('Replay loaded.');
+      } else {
+        statusParts.push(`Replay could not be loaded: ${replayResult.reason}.`);
+      }
       statusParts.push(
         patchLoopSeedResult.seeded
-          ? patchLoopSeedResult.reason
-          : `Patch loop was not seeded: ${patchLoopSeedResult.reason}`
+          ? 'Patch loop seeded.'
+          : `Patch loop was not seeded: ${patchLoopSeedResult.reason}.`
       );
       this.renderBuilderGoalClientStatus(
         statusParts.join(' '),
-        patchLoopSeedResult.seeded ? 'info' : 'warning'
+        patchLoopSeedResult.seeded && replayResult.loaded ? 'info' : 'warning'
       );
-      this.scrollReplaySurfaceIntoView();
-      // Surface a visible warning when the replay target could not be opened so the
-      // operator understands why the replay viewer did not switch, without aborting
-      // the recovery workspace load.
+      // Surface visible warnings in the recovery workspace when something didn't load.
       if (!replayResult.loaded && this.recoveryPatchPlanReview) {
         const replayWarning =
           `<div class="text-warning mb-2"><i class="bi bi-exclamation-triangle me-1"></i>` +
@@ -3575,7 +3635,7 @@ class AccountTaskPlanner {
                 this.recoveryChildLoaded = true;
                 if (this.recoveryRunLabel) {
                   const name = state.childRun.displayName || state.childRun.taskKey || state.childIterationId;
-                  this.recoveryRunLabel.textContent = `Following child run: ${this.escapeHtml(name)}`;
+                  this.recoveryRunLabel.textContent = `Following child run: ${name}`;
                 }
               }
             });

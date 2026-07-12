@@ -110,7 +110,8 @@ body {
 
 .debugger-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(400px, 1fr) minmax(260px, 0.8fr);
   gap: 12px;
   min-height: 0;
 }
@@ -560,10 +561,6 @@ body {
 }
 
 @media (max-width: 1200px) {
-  .debugger-main {
-    grid-template-columns: 1fr;
-  }
-
   .debugger-bottom {
     grid-template-columns: 1fr;
   }
@@ -1944,9 +1941,8 @@ body {
  * Same-screen Recovery Mode styles (added for debugger recovery mode).
  * ========================================================================= */
 .recovery-mode-shell {
-  margin: 0 auto;
-  max-width: 1400px;
-  padding: 12px 16px 24px;
+  margin: 4px 0 0 0;
+  padding: 12px 8px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2009,10 +2005,21 @@ body.recovery-mode-active .debugger-page {
 
 /* When recovery mode is active, give the replay surface a subtle highlight so the
    operator knows the replay video/scrubber is the canonical editing surface. */
-body.recovery-mode-active .replay-section,
-body.recovery-mode-active .debugger-scrubber {
+body.recovery-mode-active .viewport-panel {
   outline: 2px solid rgba(255, 193, 7, 0.35);
   outline-offset: 2px;
+}
+body.recovery-mode-active .scrubber-bar {
+  outline: 2px solid rgba(255, 193, 7, 0.35);
+  outline-offset: 2px;
+}
+body.recovery-mode-active .logs-panel {
+  outline: 2px solid rgba(255, 193, 7, 0.35);
+  outline-offset: 2px;
+}
+body.recovery-mode-active .recovery-mode-shell {
+  border-top: 2px solid rgba(255, 193, 7, 0.35);
+  margin: 8px 0 0 0;
 }
 
 
