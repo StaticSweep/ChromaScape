@@ -2,6 +2,7 @@ package com.chromascape.web.debug.buildergoal.controller;
 
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalCodexOrchestrationService;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class BuilderGoalCodexController {
 
   private final BuilderGoalCodexOrchestrationService orchestrationService;
+  private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
   public BuilderGoalCodexController(BuilderGoalCodexOrchestrationService orchestrationService) {
     this.orchestrationService = orchestrationService;
@@ -165,6 +167,75 @@ public class BuilderGoalCodexController {
     }
   }
 
+  @GetMapping("/sessions/{sessionId}/run-logs")
+  public ResponseEntity<Object> getRunLogs(
+      @PathVariable String sessionId,
+      @org.springframework.web.bind.annotation.RequestParam(required = false) String iterationId) {
+    try {
+      return ResponseEntity.ok(orchestrationService.getRunLogs(sessionId, iterationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    }
+  }
+
+  @GetMapping("/sessions/{sessionId}/replay-context")
+  public ResponseEntity<Object> getReplayContext(
+      @PathVariable String sessionId,
+      @org.springframework.web.bind.annotation.RequestParam(required = false) String iterationId) {
+    try {
+      return ResponseEntity.ok(orchestrationService.getReplayContext(sessionId, iterationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    }
+  }
+
+  @GetMapping("/sessions/{sessionId}/replay-session-info")
+  public ResponseEntity<Object> getReplaySessionInfo(
+      @PathVariable String sessionId,
+      @org.springframework.web.bind.annotation.RequestParam(required = false) String debugSessionId) {
+    try {
+      return ResponseEntity.ok(orchestrationService.getReplaySessionInfo(sessionId, debugSessionId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    }
+  }
+
+  @GetMapping("/sessions/{sessionId}/replay-tick-range")
+  public ResponseEntity<Object> getReplayTickRange(
+      @PathVariable String sessionId,
+      @org.springframework.web.bind.annotation.RequestParam(required = false) String debugSessionId,
+      @org.springframework.web.bind.annotation.RequestParam(required = false) Long startTick,
+      @org.springframework.web.bind.annotation.RequestParam(required = false) Long endTick) {
+    try {
+      return ResponseEntity.ok(
+          orchestrationService.getReplayTickRange(sessionId, debugSessionId, startTick, endTick));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    }
+  }
+
+  @GetMapping("/sessions/{sessionId}/replay-tick/{tick}")
+  public ResponseEntity<Object> getReplayTick(
+      @PathVariable String sessionId,
+      @PathVariable Long tick,
+      @org.springframework.web.bind.annotation.RequestParam(required = false) String debugSessionId) {
+    try {
+      return ResponseEntity.ok(orchestrationService.getReplayTick(sessionId, debugSessionId, tick));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    }
+  }
+
   @PostMapping("/sessions/{sessionId}/messages")
   public ResponseEntity<Object> postMessage(
       @PathVariable String sessionId, @RequestBody(required = false) JsonNode payload) {
@@ -244,6 +315,6 @@ public class BuilderGoalCodexController {
     if (node == null || !node.isObject()) {
       return Map.of();
     }
-    return new com.fasterxml.jackson.databind.ObjectMapper().convertValue(node, Map.class);
+    return objectMapper.convertValue(node, Map.class);
   }
 }

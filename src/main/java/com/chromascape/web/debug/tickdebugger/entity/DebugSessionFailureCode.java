@@ -22,6 +22,10 @@ public final class DebugSessionFailureCode {
   /** Session finalization operation failed. */
   public static final String SESSION_FINALIZE_FAILED = "SESSION_FINALIZE_FAILED";
 
+  /** Session could not be finalized on disconnect or transport error. */
+  public static final String SESSION_DISCONNECT_FINALIZE_FAILED =
+      "SESSION_DISCONNECT_FINALIZE_FAILED";
+
   private DebugSessionFailureCode() {
     // Utility class
   }

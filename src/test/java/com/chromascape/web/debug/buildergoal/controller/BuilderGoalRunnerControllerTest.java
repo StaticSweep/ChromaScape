@@ -142,4 +142,70 @@ class BuilderGoalRunnerControllerTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
   }
+
+  @Test
+  void getRunByRecordingId_returnsResolvedRun() {
+    Map<String, Object> run = new LinkedHashMap<>();
+    run.put("iterationId", "buildergoal_rec0001");
+    run.put("runRecordingId", "recording_123");
+    when(builderGoalRunnerService.getRunSummaryByRecordingId("recording_123")).thenReturn(run);
+
+    ResponseEntity<Object> response = controller.getRunByRecordingId("recording_123");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.get("iterationId")).isEqualTo("buildergoal_rec0001");
+  }
+
+  @Test
+  void getRunLogsByRecordingId_returnsResolvedLogs() {
+    Map<String, Object> logs = new LinkedHashMap<>();
+    logs.put("success", true);
+    logs.put("historicalLogs", List.of(Map.of("message", "task log")));
+    when(builderGoalRunnerService.getRunLogsByRecordingId("recording_123")).thenReturn(logs);
+
+    ResponseEntity<Object> response = controller.getRunLogsByRecordingId("recording_123");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.get("success")).isEqualTo(true);
+  }
+
+  @Test
+  void openRecoveryWorkspaceByRecordingId_delegatesToServiceAndReturnsOk() {
+    Map<String, Object> workspace = new LinkedHashMap<>();
+    workspace.put("iterationId", "buildergoal_rec0001");
+    workspace.put("recordingId", "recording_123");
+    when(builderGoalRunnerService.openRecoveryWorkspaceByRecordingId("recording_123"))
+        .thenReturn(workspace);
+
+    ResponseEntity<Object> response = controller.openRecoveryWorkspaceByRecordingId("recording_123");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.get("recordingId")).isEqualTo("recording_123");
+  }
+
+  @Test
+  void getRecoveryStateByRecordingId_returnsResolvedState() {
+    Map<String, Object> state = new LinkedHashMap<>();
+    state.put("iterationId", "buildergoal_rec0001");
+    state.put("recoveryPhase", "AWAITING_OPERATOR_PROMPT");
+    when(builderGoalRunnerService.getRecoveryStateByRecordingId("recording_123"))
+        .thenReturn(state);
+
+    ResponseEntity<Object> response = controller.getRecoveryStateByRecordingId("recording_123");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.get("recoveryPhase")).isEqualTo("AWAITING_OPERATOR_PROMPT");
+  }
 }

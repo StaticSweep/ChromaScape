@@ -1,6 +1,13 @@
 package com.chromascape.web.debug.buildergoal.service;
 
 import com.chromascape.web.integration.adapter.RuntimeAdapterRegistry;
+import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
+import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
+import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
+import com.chromascape.web.debug.tickdebugger.entity.TickOverlayRepository;
+import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
+import com.chromascape.web.recording.entity.RecordingSession;
+import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
@@ -8,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
@@ -17,15 +25,30 @@ public class BuilderGoalCodexOrchestrationService {
 
   private final BuilderGoalRunnerService builderGoalRunnerService;
   private final RuntimeAdapterRegistry runtimeAdapterRegistry;
+  private final DebugSessionRepository debugSessionRepository;
+  private final TickSnapshotRepository tickSnapshotRepository;
+  private final TickLogRepository tickLogRepository;
+  private final TickOverlayRepository tickOverlayRepository;
+  private final RecordingSessionRepository recordingSessionRepository;
   private final ObjectMapper objectMapper;
   private final Map<String, CodexSession> sessions = new ConcurrentHashMap<>();
 
   public BuilderGoalCodexOrchestrationService(
       BuilderGoalRunnerService builderGoalRunnerService,
       RuntimeAdapterRegistry runtimeAdapterRegistry,
+      DebugSessionRepository debugSessionRepository,
+      TickSnapshotRepository tickSnapshotRepository,
+      TickLogRepository tickLogRepository,
+      TickOverlayRepository tickOverlayRepository,
+      RecordingSessionRepository recordingSessionRepository,
       ObjectMapper objectMapper) {
     this.builderGoalRunnerService = builderGoalRunnerService;
     this.runtimeAdapterRegistry = runtimeAdapterRegistry;
+    this.debugSessionRepository = debugSessionRepository;
+    this.tickSnapshotRepository = tickSnapshotRepository;
+    this.tickLogRepository = tickLogRepository;
+    this.tickOverlayRepository = tickOverlayRepository;
+    this.recordingSessionRepository = recordingSessionRepository;
     this.objectMapper = objectMapper;
   }
 
@@ -264,6 +287,109 @@ public class BuilderGoalCodexOrchestrationService {
     return response;
   }
 
+  public Map<String, Object> getRunLogs(String sessionId, String iterationId) {
+    String resolvedIterationId = resolveIterationId(sessionId, iterationId);
+    return builderGoalRunnerService.getRunLogs(resolvedIterationId);
+  }
+
+  public Map<String, Object> getReplayContext(String sessionId, String iterationId) {
+    String resolvedIterationId = resolveIterationId(sessionId, iterationId);
+    Map<String, Object> run = builderGoalRunnerService.getRunSummary(resolvedIterationId);
+
+    String runRecordingId = stringValue(run.get("runRecordingId"));
+    String runSessionId = stringValue(run.get("runSessionId"));
+    Optional<DebugSession> debugSession =
+        firstPresent(
+            runSessionId != null
+                ? debugSessionRepository.findBySessionId(runSessionId)
+                : Optional.empty(),
+            runRecordingId != null
+                ? debugSessionRepository.findByRecordingId(runRecordingId)
+                : Optional.empty());
+    String debugSessionId =
+        debugSession.map(DebugSession::getSessionId).orElse(runSessionId);
+    String recordingId =
+        firstNonBlank(
+            debugSession.map(DebugSession::getRecordingId).orElse(null),
+            runRecordingId);
+    Optional<RecordingSession> recordingSession =
+        recordingId != null ? recordingSessionRepository.findByRecordingId(recordingId) : Optional.empty();
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("iterationId", resolvedIterationId);
+    response.put("run", run);
+    response.put("runRecordingId", runRecordingId);
+    response.put("runSessionId", runSessionId);
+    response.put("recordingId", recordingId);
+    response.put("debugSessionId", debugSessionId);
+    response.put("recordingAvailable", recordingSession.isPresent());
+    response.put("debugSessionAvailable", debugSession.isPresent());
+    response.put("recording", recordingSession.map(this::toRecordingSummary).orElse(null));
+    response.put("debugSession", debugSession.map(this::toDebugSessionSummary).orElse(null));
+    if (debugSessionId != null) {
+      response.put("replaySessionInfo", buildReplaySessionInfo(debugSessionId));
+    } else {
+      response.put("replaySessionInfo", null);
+    }
+    return response;
+  }
+
+  public Map<String, Object> getReplaySessionInfo(String sessionId, String debugSessionId) {
+    String resolvedDebugSessionId = resolveDebugSessionId(sessionId, null, debugSessionId);
+    return buildReplaySessionInfo(resolvedDebugSessionId);
+  }
+
+  public Map<String, Object> getReplayTickRange(
+      String sessionId, String debugSessionId, Long startTick, Long endTick) {
+    String resolvedDebugSessionId = resolveDebugSessionId(sessionId, null, debugSessionId);
+    long resolvedStart = startTick != null ? startTick : 0L;
+    Long resolvedEnd = endTick;
+    if (resolvedEnd == null) {
+      long maxTick = Optional.ofNullable(tickLogRepository.findMaxTickBySessionId(resolvedDebugSessionId))
+          .orElseGet(() -> tickSnapshotRepository.findMaxTickBySessionId(resolvedDebugSessionId).orElse(0L));
+      resolvedEnd = Math.min(maxTick, resolvedStart + 25);
+      if (resolvedEnd < resolvedStart) {
+        resolvedEnd = resolvedStart;
+      }
+    }
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("debugSessionId", resolvedDebugSessionId);
+    response.put("startTick", resolvedStart);
+    response.put("endTick", resolvedEnd);
+    response.put(
+        "snapshots",
+        tickSnapshotRepository.findBySessionIdAndTickBetweenOrderByTick(
+            resolvedDebugSessionId, resolvedStart, resolvedEnd));
+    response.put(
+        "logs",
+        tickLogRepository.findBySessionIdAndTickBetweenOrderByTickAsc(
+            resolvedDebugSessionId, resolvedStart, resolvedEnd));
+    response.put(
+        "overlays",
+        tickOverlayRepository.findBySessionIdAndTickBetweenOrderByTickAsc(
+            resolvedDebugSessionId, resolvedStart, resolvedEnd));
+    return response;
+  }
+
+  public Map<String, Object> getReplayTick(String sessionId, String debugSessionId, Long tick) {
+    if (tick == null) {
+      throw new IllegalArgumentException("tick is required");
+    }
+    String resolvedDebugSessionId = resolveDebugSessionId(sessionId, null, debugSessionId);
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("debugSessionId", resolvedDebugSessionId);
+    response.put("tick", tick);
+    response.put(
+        "snapshot",
+        tickSnapshotRepository.findBySessionIdAndTick(resolvedDebugSessionId, tick).orElse(null));
+    response.put("logs", tickLogRepository.findBySessionIdAndTick(resolvedDebugSessionId, tick));
+    response.put(
+        "overlays",
+        tickOverlayRepository.findBySessionIdAndTick(resolvedDebugSessionId, tick));
+    return response;
+  }
+
   private Map<String, Object> toSessionResponse(CodexSession session, boolean includeMessages) {
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("sessionId", session.sessionId);
@@ -329,6 +455,91 @@ public class BuilderGoalCodexOrchestrationService {
       response.put("error", e.getMessage());
     }
     return response;
+  }
+
+  private Map<String, Object> buildReplaySessionInfo(String debugSessionId) {
+    DebugSession session =
+        debugSessionRepository
+            .findBySessionId(debugSessionId)
+            .orElseThrow(() -> new IllegalArgumentException("Debug session not found: " + debugSessionId));
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("sessionId", session.getSessionId());
+    response.put("scriptName", session.getScriptName());
+    response.put("accountName", session.getAccountName());
+    response.put("recordingId", session.getRecordingId());
+    response.put("startTick", session.getStartTick());
+    response.put("endTick", session.getEndTick());
+    response.put("startTime", session.getStartTime());
+    response.put("endTime", session.getEndTime());
+    response.put("lifecycleState", session.getLifecycleStateOrDefault().name());
+    response.put("failureCode", session.getFailureCode());
+    response.put("failureReason", session.getFailureReason());
+    response.put("minTick", tickSnapshotRepository.findMinTickBySessionId(debugSessionId).orElse(null));
+    response.put("maxTick", tickSnapshotRepository.findMaxTickBySessionId(debugSessionId).orElse(null));
+    return response;
+  }
+
+  private Map<String, Object> toRecordingSummary(RecordingSession recordingSession) {
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("recordingId", recordingSession.getRecordingId());
+    response.put("accountName", recordingSession.getAccountName());
+    response.put("scriptName", recordingSession.getScriptName());
+    response.put("startTime", recordingSession.getStartTime());
+    response.put("endTime", recordingSession.getEndTime());
+    response.put("durationMs", recordingSession.getDurationMs());
+    response.put("frameCount", recordingSession.getFrameCount());
+    response.put("fps", recordingSession.getFps());
+    response.put("videoCodec", recordingSession.getVideoCodec());
+    response.put("videoPath", recordingSession.getVideoPath());
+    return response;
+  }
+
+  private Map<String, Object> toDebugSessionSummary(DebugSession session) {
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("sessionId", session.getSessionId());
+    response.put("accountName", session.getAccountName());
+    response.put("scriptName", session.getScriptName());
+    response.put("recordingId", session.getRecordingId());
+    response.put("startTick", session.getStartTick());
+    response.put("endTick", session.getEndTick());
+    response.put("startTime", session.getStartTime());
+    response.put("endTime", session.getEndTime());
+    response.put("lifecycleState", session.getLifecycleStateOrDefault().name());
+    response.put("failureCode", session.getFailureCode());
+    response.put("failureReason", session.getFailureReason());
+    return response;
+  }
+
+  private String resolveIterationId(String sessionId, String iterationId) {
+    if (iterationId != null && !iterationId.isBlank()) {
+      return iterationId.trim();
+    }
+    if (sessionId == null || sessionId.isBlank()) {
+      throw new IllegalArgumentException("sessionId or iterationId is required");
+    }
+    return requireActiveIterationId(requireSession(sessionId));
+  }
+
+  private String resolveDebugSessionId(String sessionId, String iterationId, String debugSessionId) {
+    if (debugSessionId != null && !debugSessionId.isBlank()) {
+      return debugSessionId.trim();
+    }
+    Map<String, Object> replayContext = getReplayContext(sessionId, iterationId);
+    String resolved = stringValue(replayContext.get("debugSessionId"));
+    if (resolved == null) {
+      throw new IllegalStateException("No debug session is available for this Builder Goal run");
+    }
+    return resolved;
+  }
+
+  @SafeVarargs
+  private final <T> Optional<T> firstPresent(Optional<T>... optionals) {
+    for (Optional<T> optional : optionals) {
+      if (optional != null && optional.isPresent()) {
+        return optional;
+      }
+    }
+    return Optional.empty();
   }
 
   private void addMessage(

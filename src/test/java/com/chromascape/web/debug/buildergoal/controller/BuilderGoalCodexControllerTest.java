@@ -90,4 +90,40 @@ class BuilderGoalCodexControllerTest {
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(body.get("error")).isEqualTo("No active run");
   }
+
+  @Test
+  void getRunLogs_returnsOk() {
+    when(orchestrationService.getRunLogs("codex_bg_1", "buildergoal_1"))
+        .thenReturn(Map.of("success", true, "matchedLogCount", 3));
+
+    ResponseEntity<Object> response = controller.getRunLogs("codex_bg_1", "buildergoal_1");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody()).isEqualTo(Map.of("success", true, "matchedLogCount", 3));
+  }
+
+  @Test
+  void getReplayContext_returnsOk() {
+    when(orchestrationService.getReplayContext("codex_bg_1", "buildergoal_1"))
+        .thenReturn(Map.of("debugSessionId", "debug_1", "recordingId", "recording_1"));
+
+    ResponseEntity<Object> response = controller.getReplayContext("codex_bg_1", "buildergoal_1");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody())
+        .isEqualTo(Map.of("debugSessionId", "debug_1", "recordingId", "recording_1"));
+  }
+
+  @Test
+  void getReplayTick_returnsBadRequestWhenSessionMissing() {
+    when(orchestrationService.getReplayTick("codex_bg_1", null, 412L))
+        .thenThrow(new IllegalArgumentException("Codex session not found: codex_bg_1"));
+
+    ResponseEntity<Object> response = controller.getReplayTick("codex_bg_1", 412L, null);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body.get("error")).isEqualTo("Codex session not found: codex_bg_1");
+  }
 }

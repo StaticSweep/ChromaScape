@@ -10,7 +10,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
     integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPgv6ud+Mvd" crossorigin="anonymous" />
   <link rel="stylesheet" href="/css/style.css" />
-  <link rel="stylesheet" href="/css/debugger.css?v=9" />
+  <link rel="stylesheet" href="/css/debugger.css?v=11" />
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
     crossorigin="anonymous"></script>
@@ -382,7 +382,7 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
-        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="22">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="23">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Builder Goal Runner</label>
             <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
@@ -584,6 +584,9 @@
               <i class="bi bi-pause-fill" id="pauseIcon"></i>
             </button>
           </div>
+
+          <!-- Inline recovery replay state (loading / missing / failed) shown next to the canonical replay surface -->
+          <div id="recoveryReplayAlert" class="recovery-replay-alert" hidden></div>
 
           <div class="viewport-stage" id="viewportStage">
             <div id="viewport-loader" class="loader-container">
@@ -800,61 +803,112 @@
       </section>
 
       <section id="recoveryModeShell" class="recovery-mode-shell" hidden>
-        <div class="recovery-mode-toolbar d-flex flex-wrap align-items-center gap-2 mb-2">
-          <span class="recovery-mode-badge"><i class="bi bi-tools me-1"></i>Recovery Mode</span>
-          <span id="recoveryModeRunLabel" class="small text-muted me-2"></span>
-          <!-- Codex MCP status strip -->
-          <span id="recoveryCodexMcpBadge" class="recovery-codex-mcp-badge badge-unknown" title="Codex MCP connection status">
-            <i class="bi bi-question-circle me-1"></i><span id="recoveryCodexMcpText">...</span>
-          </span>
-          <button type="button" id="recoveryVerifyCodexMcpBtn" class="btn btn-sm btn-outline-info"
-            title="Run a live end-to-end Codex MCP verification" style="display:none;">
-            <i class="bi bi-shield-check"></i>
-          </button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryMarkStartBtn">
-            <i class="bi bi-skip-start-fill me-1"></i>Mark Start
-          </button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryMarkEndBtn">
-            <i class="bi bi-skip-end-fill me-1"></i>Mark End
-          </button>
-          <button type="button" class="btn btn-sm btn-primary" id="recoverySaveRangeBtn">
-            <i class="bi bi-save me-1"></i>Save Range
-          </button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryClearRangeBtn">
-            <i class="bi bi-x-circle me-1"></i>Clear Range
-          </button>
-          <button type="button" class="btn btn-sm btn-outline-warning" id="recoveryImportantBtn">
-            <i class="bi bi-star me-1"></i>Mark Important
-          </button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryPinFrameBtn">
-            <i class="bi bi-pin-angle me-1"></i>Pin Tick/Frame
-          </button>
-          <span class="ms-auto small text-muted" id="recoveryActiveRangeHint">No active range</span>
-          <button type="button" class="btn btn-sm btn-outline-danger ms-2" id="recoveryExitBtn">
-            <i class="bi bi-box-arrow-right me-1"></i>Exit Recovery
-          </button>
+        <!-- Foreground banner: workspace title, run summary, primary actions -->
+        <div class="recovery-workspace-banner">
+          <div class="recovery-banner-row">
+            <span class="recovery-mode-badge"><i class="bi bi-tools me-1"></i>Recovery Workspace</span>
+            <span id="recoveryModeRunLabel" class="recovery-run-label small"></span>
+            <div class="recovery-banner-actions">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="recoveryLoadRunConfigBtn"
+                title="Load this run's saved task config into the editor">
+                <i class="bi bi-download me-1"></i>Load Run Config
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryBannerRefreshEvidenceBtn"
+                title="Refresh evidence for the current ranges and selection">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh Evidence
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger" id="recoveryExitBtn">
+                <i class="bi bi-box-arrow-right me-1"></i>Exit Recovery
+              </button>
+            </div>
+          </div>
+          <!-- Persistent recovery status strip -->
+          <div class="recovery-status-strip" id="recoveryStatusStrip">
+            <span class="recovery-status-chip" id="recoveryStatusRun" title="Run iteration id">
+              <i class="bi bi-hash me-1"></i>Run: --
+            </span>
+            <span class="recovery-status-chip" id="recoveryStatusTask" title="Task">
+              <i class="bi bi-list-task me-1"></i>Task: --
+            </span>
+            <span class="recovery-status-chip" id="recoveryStatusAccount" title="Account">
+              <i class="bi bi-person me-1"></i>Account: --
+            </span>
+            <span class="recovery-status-chip" id="recoveryStatusWorld" title="World">
+              <i class="bi bi-globe2 me-1"></i>World: --
+            </span>
+            <span class="recovery-status-chip" id="recoveryStatusRecording" title="Recording / debug session loaded state">
+              <i class="bi bi-camera-video me-1"></i>Recording: --
+            </span>
+            <span class="recovery-status-chip" id="recoveryStatusEvidence" title="Evidence loaded state">
+              <i class="bi bi-funnel me-1"></i>Evidence: --
+            </span>
+            <span id="recoveryCodexMcpBadge" class="recovery-codex-mcp-badge badge-unknown" title="Codex MCP connection status">
+              <i class="bi bi-question-circle me-1"></i><span id="recoveryCodexMcpText">...</span>
+            </span>
+            <button type="button" id="recoveryVerifyCodexMcpBtn" class="btn btn-sm btn-outline-info"
+              title="Run a live end-to-end Codex MCP verification" style="display:none;">
+              <i class="bi bi-shield-check"></i>
+            </button>
+            <span class="recovery-status-chip recovery-status-chip-error" id="recoveryStatusError" hidden></span>
+          </div>
+          <!-- Prominent inline error for workspace-level failures -->
+          <div id="recoveryErrorBanner" class="recovery-error-banner" hidden></div>
         </div>
-        <div class="recovery-mode-body d-flex flex-column gap-3">
-          <div class="recovery-active-range border rounded p-2">
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-              <label class="form-label mb-0 small fw-semibold">Active Range</label>
-              <div class="input-group input-group-sm" style="max-width: 110px;">
+
+        <div class="recovery-mode-body">
+          <!-- Range selector: typed + button-based selection, note, saved range cards -->
+          <div class="recovery-section recovery-range-selector">
+            <div class="recovery-section-header">
+              <h6 class="mb-0"><i class="bi bi-sliders me-1"></i>Range Selector</h6>
+              <span class="small text-muted" id="recoveryActiveRangeHint">No active range</span>
+            </div>
+            <div class="recovery-range-controls">
+              <div class="input-group input-group-sm recovery-range-field">
                 <span class="input-group-text">Start</span>
-                <input id="recoveryActiveStart" class="form-control font-monospace" type="text" placeholder="00:00" />
+                <input id="recoveryActiveStart" class="form-control font-monospace" type="text" placeholder="00:15" />
               </div>
-              <div class="input-group input-group-sm" style="max-width: 110px;">
+              <div class="input-group input-group-sm recovery-range-field">
                 <span class="input-group-text">End</span>
-                <input id="recoveryActiveEnd" class="form-control font-monospace" type="text" placeholder="00:00" />
+                <input id="recoveryActiveEnd" class="form-control font-monospace" type="text" placeholder="00:20" />
               </div>
-              <div class="input-group input-group-sm flex-grow-1" style="min-width: 180px;">
+              <div class="input-group input-group-sm recovery-range-field recovery-range-typed">
+                <span class="input-group-text">Typed</span>
+                <input id="recoveryTypedRange" class="form-control font-monospace" type="text"
+                  placeholder="00:15-00:20 or 15-20" />
+                <button type="button" class="btn btn-outline-secondary" id="recoveryApplyTypedRangeBtn">Apply</button>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryMarkStartBtn"
+                title="Set range start from the current replay time">
+                <i class="bi bi-skip-start-fill me-1"></i>Mark Start
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryMarkEndBtn"
+                title="Set range end from the current replay time">
+                <i class="bi bi-skip-end-fill me-1"></i>Mark End
+              </button>
+              <button type="button" class="btn btn-sm btn-primary" id="recoverySaveRangeBtn">
+                <i class="bi bi-save me-1"></i>Save Range
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryClearRangeBtn">
+                <i class="bi bi-x-circle me-1"></i>Clear
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-warning" id="recoveryImportantBtn">
+                <i class="bi bi-star me-1"></i>Important
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryPinFrameBtn"
+                title="Copy the current replay tick/frame into the range">
+                <i class="bi bi-pin-angle me-1"></i>Pin Tick/Frame
+              </button>
+            </div>
+            <div class="recovery-range-controls">
+              <div class="input-group input-group-sm recovery-range-field-wide">
                 <span class="input-group-text">Label</span>
                 <input id="recoveryActiveLabel" class="form-control" type="text" placeholder="Range label (optional)" />
               </div>
-              <div class="input-group input-group-sm" style="max-width: 90px;">
+              <div class="input-group input-group-sm recovery-range-field-sm">
                 <span class="input-group-text">Tick</span>
                 <input id="recoveryActiveTick" class="form-control font-monospace" type="text" placeholder="#" />
               </div>
-              <div class="input-group input-group-sm" style="max-width: 90px;">
+              <div class="input-group input-group-sm recovery-range-field-sm">
                 <span class="input-group-text">Frame</span>
                 <input id="recoveryActiveFrame" class="form-control font-monospace" type="text" placeholder="#" />
               </div>
@@ -864,38 +918,60 @@
               <textarea id="recoveryActiveNote" class="form-control form-control-sm font-monospace" rows="2"
                 placeholder="Describe what happens in this range and why it matters."></textarea>
             </div>
-          </div>
-          <div class="recovery-annotations border rounded p-2">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0"><i class="bi bi-bookmark me-1"></i>Annotated Ranges</h6>
-              <span class="small text-muted" id="recoveryAnnotationCount">0 range(s)</span>
-            </div>
-            <div id="recoveryAnnotationList" class="d-flex flex-column gap-2">
-              <div class="text-muted small fst-italic">No ranges marked yet. Use the replay scrubber, then Mark Start / Mark End / Save Range.</div>
-            </div>
-          </div>
-          <div class="recovery-evidence border rounded p-2">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0"><i class="bi bi-funnel me-1"></i>Filtered Evidence</h6>
-              <div class="d-flex gap-2">
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="recoverySelectAllEvidenceBtn">
-                  <i class="bi bi-check2-square me-1"></i>Select All
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryClearEvidenceBtn">
-                  <i class="bi bi-square me-1"></i>Clear
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-primary" id="recoveryRefreshEvidenceBtn">
-                  <i class="bi bi-arrow-clockwise me-1"></i>Refresh
-                </button>
+            <div class="recovery-annotations border rounded p-2">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0"><i class="bi bi-bookmark me-1"></i>Saved Ranges</h6>
+                <span class="small text-muted" id="recoveryAnnotationCount">0 range(s)</span>
+              </div>
+              <div id="recoveryAnnotationList" class="d-flex flex-column gap-2 recovery-annotation-list">
+                <div class="text-muted small fst-italic">No ranges marked yet. Use the replay scrubber, then Mark Start / Mark End / Save Range.</div>
               </div>
             </div>
-            <div id="recoveryEvidenceMeta" class="small text-muted mb-2"></div>
-            <div id="recoveryEvidenceGroups" class="d-flex flex-column gap-2">
-              <div class="text-muted small fst-italic">Open a recovery workspace and mark a range to filter evidence.</div>
+          </div>
+
+          <!-- Evidence + patch prompt side by side -->
+          <div class="recovery-split-row">
+            <div class="recovery-section recovery-evidence">
+              <div class="recovery-section-header">
+                <h6 class="mb-0"><i class="bi bi-funnel me-1"></i>Evidence</h6>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="recoverySelectAllEvidenceBtn">
+                    <i class="bi bi-check2-square me-1"></i>Select All
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="recoveryClearEvidenceBtn">
+                    <i class="bi bi-square me-1"></i>Clear
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-primary" id="recoveryRefreshEvidenceBtn">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                  </button>
+                </div>
+              </div>
+              <div id="recoveryEvidenceMeta" class="small text-muted mb-2"></div>
+              <div id="recoveryEvidenceError" class="recovery-inline-error" hidden></div>
+              <div id="recoveryEvidenceGroups" class="d-flex flex-column gap-2 recovery-evidence-groups">
+                <div class="text-muted small fst-italic">Open a recovery workspace and mark a range to filter evidence.</div>
+              </div>
+            </div>
+            <div class="recovery-section recovery-prompt">
+              <div class="recovery-section-header">
+                <h6 class="mb-0"><i class="bi bi-chat-square-text me-1"></i>Patch Prompt</h6>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">Issue</label>
+                <textarea id="recoveryPrompt" class="form-control form-control-sm font-monospace" rows="3"
+                  placeholder="Describe the issue and what needs to change."></textarea>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">Additional context</label>
+                <textarea id="recoveryContext" class="form-control form-control-sm font-monospace" rows="4"
+                  placeholder="Additional observations or implementation guidance."></textarea>
+              </div>
             </div>
           </div>
-          <div class="recovery-patchplan border rounded p-2">
-            <div class="d-flex justify-content-between align-items-center mb-2">
+
+          <!-- Patch plan generation + review -->
+          <div class="recovery-section recovery-patchplan">
+            <div class="recovery-section-header">
               <h6 class="mb-0"><i class="bi bi-lightbulb me-1"></i>Patch Plan</h6>
               <div class="d-flex gap-2">
                 <button type="button" class="btn btn-sm btn-primary" id="recoveryGeneratePatchBtn">
@@ -906,27 +982,28 @@
                 </button>
               </div>
             </div>
-            <div class="mb-2">
-              <label class="form-label small fw-semibold">Prompt</label>
-              <textarea id="recoveryPrompt" class="form-control form-control-sm font-monospace" rows="3"
-                placeholder="Describe the issue and what needs to change."></textarea>
-            </div>
-            <div class="mb-2">
-              <label class="form-label small fw-semibold">Context</label>
-              <textarea id="recoveryContext" class="form-control form-control-sm font-monospace" rows="4"
-                placeholder="Additional observations or implementation guidance."></textarea>
-            </div>
-            <div id="recoveryPatchPlanReview" class="small">
+            <div id="recoveryPatchPlanReview" class="small recovery-patchplan-output">
               <div class="text-muted fst-italic">No patch plan generated yet.</div>
             </div>
           </div>
-          <div class="recovery-relaunch border rounded p-2" id="recoveryRelaunchPanel" hidden>
+
+          <!-- Relaunch status (revealed once a relaunch is in flight) -->
+          <div class="recovery-section recovery-relaunch" id="recoveryRelaunchPanel" hidden>
             <div class="d-flex flex-wrap align-items-center gap-2">
               <h6 class="mb-0"><i class="bi bi-arrow-repeat me-1"></i>Relaunch &amp; Rebind</h6>
               <span class="small text-muted" id="recoveryRelaunchStatus">Waiting for debug bind...</span>
               <span class="small" id="recoveryPreferredSession"></span>
               <span class="small" id="recoveryChildIteration"></span>
             </div>
+          </div>
+
+          <!-- Raw plain-text log console -->
+          <div class="recovery-rawlogs-pane">
+            <div class="recovery-rawlogs-header">
+              <h6 class="mb-0"><i class="bi bi-file-code me-1"></i>Raw Logs</h6>
+              <span id="recoveryRawLogsMeta" class="small text-muted"></span>
+            </div>
+            <pre id="recoveryRawLogsContainer" class="recovery-raw-console"></pre>
           </div>
         </div>
       </section>
@@ -1017,7 +1094,7 @@
 
   <script src="/js/debugger.js?v=14"></script>
   <script src="/js/patchloop.js?v=2"></script>
-  <script src="/js/account-task-planner.js?v=23"></script>
+  <script src="/js/account-task-planner.js?v=24"></script>
 </body>
 
 </html>

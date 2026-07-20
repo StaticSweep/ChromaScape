@@ -705,7 +705,7 @@ public class PatchLoopController {
       HttpRequest request =
           HttpRequest.newBuilder()
               .uri(URI.create(catalogUrl))
-              .timeout(Duration.ofSeconds(10))
+              .timeout(Duration.ofSeconds(2))
               .GET()
               .build();
       HttpResponse<String> response =

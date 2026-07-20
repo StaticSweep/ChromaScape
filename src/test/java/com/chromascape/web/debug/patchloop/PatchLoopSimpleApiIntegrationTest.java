@@ -9,6 +9,7 @@ import com.chromascape.web.debug.patchloop.dto.*;
 import com.chromascape.web.debug.patchloop.dto.SessionContextDto;
 import com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService;
+import com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Integration tests for simple API wrapper path.
@@ -31,13 +33,15 @@ class PatchLoopSimpleApiIntegrationTest {
 
   @Mock private PatchLoopOrchestratorService orchestratorService;
   @Mock private PatchLoopGraphOrchestratorService graphOrchestratorService;
+  @Mock private Micro6ExecutorCatalogService micro6ExecutorCatalogService;
 
   private PatchLoopController controller;
 
   @BeforeEach
   void setUp() {
     controller =
-        new PatchLoopController(orchestratorService, graphOrchestratorService, null, null, null);
+        new PatchLoopController(
+            orchestratorService, graphOrchestratorService, null, null, null, micro6ExecutorCatalogService);
   }
 
   @Test
@@ -84,6 +88,8 @@ class PatchLoopSimpleApiIntegrationTest {
   @DisplayName("POST /execute persists all new E6.5 request fields")
   void testExecutePersistsE65Fields() {
     // Arrange
+    ReflectionTestUtils.setField(controller, "patchLoopAutofixEnabled", true);
+
     PatchLoopExecuteRequest request = new PatchLoopExecuteRequest();
     request.setScriptName("TestScript");
     request.setPrompt("Test prompt");
@@ -127,6 +133,8 @@ class PatchLoopSimpleApiIntegrationTest {
   @DisplayName("POST /execute with autofix_loop mode enables retesting")
   void testExecuteWithAutofixLoopMode() {
     // Arrange
+    ReflectionTestUtils.setField(controller, "patchLoopAutofixEnabled", true);
+
     PatchLoopExecuteRequest request = new PatchLoopExecuteRequest();
     request.setScriptName("TestScript");
     request.setPrompt("Fix the issue");
@@ -184,8 +192,9 @@ class PatchLoopSimpleApiIntegrationTest {
     PatchLoopExecuteRequest request = new PatchLoopExecuteRequest();
     request.setPrompt("Test prompt");
 
-    when(orchestratorService.executeIteration(any()))
-        .thenThrow(new IllegalArgumentException("Script name is required"));
+    doThrow(new IllegalArgumentException("Script name is required"))
+        .when(orchestratorService)
+        .executeIteration(any());
 
     // Act
     ResponseEntity<Object> response = controller.executeIteration(request);
@@ -197,8 +206,9 @@ class PatchLoopSimpleApiIntegrationTest {
     PatchLoopExecuteRequest request2 = new PatchLoopExecuteRequest();
     request2.setScriptName("TestScript");
 
-    when(orchestratorService.executeIteration(any()))
-        .thenThrow(new IllegalArgumentException("Prompt is required"));
+    doThrow(new IllegalArgumentException("Prompt is required"))
+        .when(orchestratorService)
+        .executeIteration(any());
 
     // Act
     ResponseEntity<Object> response2 = controller.executeIteration(request2);

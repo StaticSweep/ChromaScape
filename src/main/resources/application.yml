@@ -105,9 +105,11 @@ builder-goal:
     refresh-seconds: ${BUILDER_GOAL_ACCOUNT_CATALOG_REFRESH_SECONDS:30}
   recovery:
     micro6-project-dir: ${BUILDER_GOAL_MICRO6_PROJECT_DIR:F:/Dev/IdeaProjects/micro6}
+    gradle-run-task: ${BUILDER_GOAL_MICRO6_GRADLE_RUN_TASK::runelite-client:run}
+    launch-command-template: ${BUILDER_GOAL_MICRO6_LAUNCH_COMMAND_TEMPLATE:}
     extra-run-args: ${BUILDER_GOAL_MICRO6_EXTRA_RUN_ARGS:}
     world: ${BUILDER_GOAL_MICRO6_WORLD:360}
-    launch-timeout-ms: ${BUILDER_GOAL_MICRO6_LAUNCH_TIMEOUT_MS:1800000}
+    launch-timeout-ms: ${BUILDER_GOAL_MICRO6_LAUNCH_TIMEOUT_MS:5400000}
     heartbeat-poll-interval-ms: ${BUILDER_GOAL_MICRO6_HEARTBEAT_POLL_INTERVAL_MS:2000}
     launch-log-file: ${BUILDER_GOAL_MICRO6_LAUNCH_LOG_FILE:micro6-recovery-launch.log}
     agent-ready-timeout-ms: ${BUILDER_GOAL_AGENT_READY_TIMEOUT_MS:120000}
@@ -199,7 +201,7 @@ micro6:
     # Micro6 local executor base URL
     base-url: ${MICRO6_EXECUTOR_BASE_URL:http://127.0.0.1:8098}
     # HTTP timeout for catalog fetch
-    timeout-ms: ${MICRO6_EXECUTOR_TIMEOUT_MS:5000}
+    timeout-ms: ${MICRO6_EXECUTOR_TIMEOUT_MS:60000}
     # Cache TTL in seconds
     refresh-seconds: ${MICRO6_EXECUTOR_CATALOG_REFRESH_SECONDS:30}
 

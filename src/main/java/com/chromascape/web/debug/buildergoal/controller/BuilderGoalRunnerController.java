@@ -162,6 +162,32 @@ public class BuilderGoalRunnerController {
     }
   }
 
+  @GetMapping("/recordings/{recordingId}/run")
+  public ResponseEntity<Object> getRunByRecordingId(@PathVariable String recordingId) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.getRunSummaryByRecordingId(recordingId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", "Failed to resolve builder goal run", "details", e.getMessage()));
+    }
+  }
+
+  @GetMapping("/recordings/{recordingId}/logs")
+  public ResponseEntity<Object> getRunLogsByRecordingId(@PathVariable String recordingId) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.getRunLogsByRecordingId(recordingId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", "Failed to load builder goal run logs", "details", e.getMessage()));
+    }
+  }
+
   @PostMapping("/runs/{iterationId}/rerun")
   public ResponseEntity<Object> rerun(@PathVariable String iterationId) {
     try {
@@ -251,6 +277,22 @@ public class BuilderGoalRunnerController {
     }
   }
 
+  @PostMapping("/recordings/{recordingId}/recovery-workspace")
+  public ResponseEntity<Object> openRecoveryWorkspaceByRecordingId(@PathVariable String recordingId) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.openRecoveryWorkspaceByRecordingId(recordingId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(
+              Map.of(
+                  "error", "Failed to open recovery workspace", "details", e.getMessage()));
+    }
+  }
+
   @PostMapping("/runs/{iterationId}/recovery-annotations")
   public ResponseEntity<Object> saveRecoveryAnnotations(
       @PathVariable String iterationId, @RequestBody(required = false) JsonNode payload) {
@@ -297,6 +339,20 @@ public class BuilderGoalRunnerController {
   public ResponseEntity<Object> getRecoveryState(@PathVariable String iterationId) {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.getRecoveryState(iterationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(
+              Map.of(
+                  "error", "Failed to load recovery state", "details", e.getMessage()));
+    }
+  }
+
+  @GetMapping("/recordings/{recordingId}/recovery-state")
+  public ResponseEntity<Object> getRecoveryStateByRecordingId(@PathVariable String recordingId) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.getRecoveryStateByRecordingId(recordingId));
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (Exception e) {

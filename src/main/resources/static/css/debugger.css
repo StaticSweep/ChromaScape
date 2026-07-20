@@ -110,8 +110,8 @@ body {
 
 .debugger-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(400px, 1fr) minmax(260px, 0.8fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(360px, 0.9fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
 }
@@ -560,7 +560,12 @@ body {
   color: #61afef;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 900px) {
+  .debugger-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(320px, auto) minmax(260px, auto);
+  }
+
   .debugger-bottom {
     grid-template-columns: 1fr;
   }
@@ -1942,14 +1947,32 @@ body {
  * ========================================================================= */
 .recovery-mode-shell {
   margin: 4px 0 0 0;
-  padding: 12px 8px 16px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
 }
 
 body.recovery-mode-active .debugger-page {
   padding-bottom: 0;
+}
+
+/* Recovery-mode reflow: replay row, scrubber, then the foreground recovery workspace.
+   The workspace becomes the primary surface instead of a hidden lower panel. */
+body.recovery-mode-active .debugger-container {
+  grid-template-rows: minmax(260px, 0.85fr) auto minmax(0, 1.15fr);
+}
+
+/* Recovery-mode workspace grid: replay video left + logs/tick evidence right */
+body.recovery-mode-active .debugger-main {
+  grid-template-columns: minmax(0, 1.4fr) minmax(360px, 0.9fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* Low-value default panels are hidden in recovery mode */
+body.recovery-mode-active .debugger-bottom {
+  display: none;
 }
 
 .recovery-mode-badge {
@@ -1963,25 +1986,309 @@ body.recovery-mode-active .debugger-page {
   border-radius: 1rem;
 }
 
-.recovery-mode-toolbar {
+/* ── Recovery foreground banner + persistent status strip ────────────── */
+.recovery-workspace-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   background: rgba(255, 193, 7, 0.08);
-  border: 1px solid rgba(255, 193, 7, 0.25);
+  border: 1px solid rgba(255, 193, 7, 0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.recovery-banner-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.recovery-run-label {
+  color: var(--text-muted, #a0a0a0);
+  font-weight: 600;
+}
+
+.recovery-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.recovery-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.recovery-status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 1rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(171, 178, 191, 0.1);
+  border: 1px solid rgba(171, 178, 191, 0.3);
+  color: #abb2bf;
+  white-space: nowrap;
+}
+
+.recovery-status-chip.chip-ok {
+  background: rgba(40, 167, 69, 0.15);
+  border-color: rgba(40, 167, 69, 0.4);
+  color: #6fcf97;
+}
+
+.recovery-status-chip.chip-warn {
+  background: rgba(255, 193, 7, 0.15);
+  border-color: rgba(255, 193, 7, 0.4);
+  color: #f8d24e;
+}
+
+.recovery-status-chip.chip-error,
+.recovery-status-chip.recovery-status-chip-error {
+  background: rgba(220, 53, 69, 0.15);
+  border-color: rgba(220, 53, 69, 0.4);
+  color: #f08080;
+}
+
+.recovery-error-banner {
+  background: rgba(220, 53, 69, 0.12);
+  border: 1px solid rgba(220, 53, 69, 0.45);
   border-radius: 8px;
-  padding: 8px 10px;
+  color: #f08080;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 12px;
+}
+
+/* Inline replay state shown next to the canonical viewport replay surface */
+.recovery-replay-alert {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 193, 7, 0.4);
+  background: rgba(255, 193, 7, 0.12);
+  color: #f8d24e;
+}
+
+.recovery-replay-alert.alert-info {
+  border-color: rgba(13, 110, 253, 0.4);
+  background: rgba(13, 110, 253, 0.12);
+  color: #6ea8fe;
+}
+
+.recovery-replay-alert.alert-danger {
+  border-color: rgba(220, 53, 69, 0.45);
+  background: rgba(220, 53, 69, 0.12);
+  color: #f08080;
+}
+
+/* Inline panel-level error (e.g. evidence refresh failed; stale evidence stays visible) */
+.recovery-inline-error {
+  background: rgba(220, 53, 69, 0.12);
+  border: 1px solid rgba(220, 53, 69, 0.4);
+  border-radius: 6px;
+  color: #f08080;
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  margin-bottom: 8px;
 }
 
 .recovery-mode-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   background: var(--bs-body-bg, #0d1117);
   border: 1px solid var(--bs-border-color, #30363d);
   border-radius: 8px;
   padding: 12px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
-.recovery-active-range,
-.recovery-annotations,
-.recovery-evidence,
-.recovery-patchplan,
-.recovery-relaunch {
+/* ── Recovery workspace sections ─────────────────────────────── */
+/* The canonical replay/video surface stays the existing viewport-panel,
+   scrubber-bar, and logs-panel; the sections below connect ranges,
+   evidence, prompt, and patch plan to them without duplicating panes. */
+.recovery-section {
+  background: var(--bs-tertiary-bg, #161b22);
+  border: 1px solid var(--bs-border-color, #30363d);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.recovery-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.recovery-section-header h6 {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.recovery-range-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.recovery-range-field {
+  max-width: 130px;
+}
+
+.recovery-range-typed {
+  max-width: 280px;
+}
+
+.recovery-range-field-wide {
+  flex: 1 1 220px;
+}
+
+.recovery-range-field-sm {
+  max-width: 100px;
+}
+
+.recovery-annotation-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.recovery-split-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.recovery-evidence-groups {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.recovery-patchplan-output {
+  max-height: 260px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px 12px;
+}
+
+.recovery-rawlogs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  padding: 0 2px;
+}
+
+.recovery-rawlogs-header h6 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* ── Raw log console (bottom pane) ──────────────────────────── */
+.recovery-rawlogs-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.recovery-raw-console {
+  flex: 1;
+  min-height: 120px;
+  max-height: 240px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px 12px;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+.recovery-raw-log-line {
+  padding: 1px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.recovery-raw-log-line .raw-tick {
+  color: #c678dd;
+  font-weight: 600;
+}
+
+.recovery-raw-log-line .raw-source {
+  color: #e5c07b;
+}
+
+.recovery-raw-log-line .raw-level-INFO  { color: #f8fafc; }
+.recovery-raw-log-line .raw-level-WARN  { color: #fde68a; }
+.recovery-raw-log-line .raw-level-ERROR { color: #fecaca; }
+.recovery-raw-log-line .raw-level-DEBUG { color: #94a3b8; }
+
+/* ── Saved-range timeline markers on the scrubber ────────────── */
+.timeline-marker-range {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 193, 7, 0.45);
+  border: 1px solid rgba(255, 193, 7, 0.8);
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.timeline-marker-range.important {
+  background: rgba(220, 53, 69, 0.5);
+  border-color: rgba(220, 53, 69, 0.9);
+}
+
+.timeline-marker-range:hover {
+  box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
+  z-index: 20;
+}
+
+/* Brief highlight used when Load Into Editor focuses the task config editor */
+@keyframes config-editor-flash-animation {
+  0% {
+    box-shadow: 0 0 0 0 rgba(13, 110, 253, 0);
+    border-color: var(--bs-border-color, #30363d);
+  }
+  30% {
+    box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.45);
+    border-color: rgba(13, 110, 253, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(13, 110, 253, 0);
+    border-color: var(--bs-border-color, #30363d);
+  }
+}
+
+.config-editor-flash {
+  animation: config-editor-flash-animation 1.6s ease-out 2;
+}
+
+.recovery-annotations {
   background: var(--bs-tertiary-bg, #161b22);
 }
 
@@ -2017,9 +2324,58 @@ body.recovery-mode-active .logs-panel {
   outline: 2px solid rgba(255, 193, 7, 0.35);
   outline-offset: 2px;
 }
-body.recovery-mode-active .recovery-mode-shell {
-  border-top: 2px solid rgba(255, 193, 7, 0.35);
-  margin: 8px 0 0 0;
+/* ── Recovery workspace mobile/tablet fallback ────────────── */
+@media (max-width: 900px) {
+  body.recovery-mode-active .debugger-container {
+    grid-template-rows: minmax(320px, auto) auto minmax(0, 1fr);
+  }
+
+  body.recovery-mode-active .debugger-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(320px, auto) minmax(260px, auto);
+  }
+
+  .recovery-split-row {
+    grid-template-columns: 1fr;
+  }
+
+  .recovery-raw-console {
+    min-height: 100px;
+    max-height: 180px;
+  }
+}
+
+@media (max-width: 768px) {
+  .recovery-mode-shell {
+    gap: 6px;
+  }
+
+  .recovery-workspace-banner {
+    padding: 8px;
+  }
+
+  .recovery-banner-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .recovery-banner-actions .btn,
+  .recovery-range-controls .btn {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+
+  .recovery-mode-body {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .recovery-raw-console {
+    min-height: 80px;
+    max-height: 140px;
+    font-size: 11px;
+  }
 }
 
 

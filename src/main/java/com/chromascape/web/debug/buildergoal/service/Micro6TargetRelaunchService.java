@@ -31,7 +31,8 @@ import org.springframework.stereotype.Service;
 public class Micro6TargetRelaunchService {
 
   private static final Logger logger = LoggerFactory.getLogger(Micro6TargetRelaunchService.class);
-  private static final String FIXED_GRADLE_RUN_TASK = ":runelite-client:run";
+  private static final String DEFAULT_GRADLE_RUN_TASK = ":runelite-client:run";
+  private static final String CUSTOM_LAUNCH_COMMAND = "custom_launch_command";
   private static final int MAX_LAUNCH_ATTEMPTS = 2;
   private static final long PRELAUNCH_CLEANUP_WAIT_MS = 4_000L;
   private static final String FAILURE_KIND_BUILD_OUTPUT_LOCK = "BUILD_OUTPUT_LOCK";
@@ -49,6 +50,7 @@ public class Micro6TargetRelaunchService {
   private final HttpClient httpClient;
   private final String micro6ProjectDir;
   private final String gradleRunTask;
+  private final String launchCommandTemplate;
   private final String extraRunArgs;
   private final int defaultWorld;
   private final long launchTimeoutMs;
@@ -56,11 +58,16 @@ public class Micro6TargetRelaunchService {
   private final String launchLogFile;
   private final String defaultExecutorBaseUrl;
   private final String chromaScapeBaseUrl;
+  private final String leeuwbotApiUrl;
+  private final boolean reuseExistingExecutor;
 
   public Micro6TargetRelaunchService(
       ObjectMapper objectMapper,
       @Value("${builder-goal.recovery.micro6-project-dir:F:/Dev/IdeaProjects/micro6}")
           String micro6ProjectDir,
+      @Value("${builder-goal.recovery.gradle-run-task::runelite-client:run}")
+          String gradleRunTask,
+      @Value("${builder-goal.recovery.launch-command-template:}") String launchCommandTemplate,
       @Value("${builder-goal.recovery.extra-run-args:}") String extraRunArgs,
       @Value("${builder-goal.recovery.world:360}") int defaultWorld,
       @Value("${builder-goal.recovery.launch-timeout-ms:1800000}") long launchTimeoutMs,
@@ -69,11 +76,19 @@ public class Micro6TargetRelaunchService {
       @Value("${builder-goal.recovery.launch-log-file:micro6-recovery-launch.log}") String launchLogFile,
       @Value("${chromascape.base-url:http://localhost:8090}") String chromaScapeBaseUrl,
       @Value("${chromascape.patchloop.micro6-executor.base-url:http://127.0.0.1:8098}")
-          String defaultExecutorBaseUrl) {
+          String defaultExecutorBaseUrl,
+      @Value("${builder-goal.recovery.leeuwbot-api-url:http://localhost:8086}")
+          String leeuwbotApiUrl,
+      @Value("${builder-goal.recovery.reuse-existing-executor:false}")
+          boolean reuseExistingExecutor) {
     this.objectMapper = objectMapper;
     this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     this.micro6ProjectDir = micro6ProjectDir;
-    this.gradleRunTask = FIXED_GRADLE_RUN_TASK;
+    this.launchCommandTemplate = normalizeOptionalString(launchCommandTemplate);
+    this.gradleRunTask =
+        useStructuredWindowsLaunch() || this.launchCommandTemplate != null
+            ? CUSTOM_LAUNCH_COMMAND
+            : firstNonBlank(normalizeOptionalString(gradleRunTask), DEFAULT_GRADLE_RUN_TASK);
     this.extraRunArgs = extraRunArgs;
     this.defaultWorld = defaultWorld;
     this.launchTimeoutMs = launchTimeoutMs;
@@ -81,14 +96,20 @@ public class Micro6TargetRelaunchService {
     this.launchLogFile = launchLogFile;
     this.chromaScapeBaseUrl = normalizeBaseUrl(chromaScapeBaseUrl);
     this.defaultExecutorBaseUrl = normalizeBaseUrl(defaultExecutorBaseUrl);
+    this.leeuwbotApiUrl = normalizeBaseUrl(leeuwbotApiUrl);
+    this.reuseExistingExecutor = reuseExistingExecutor;
     logIgnoredLegacyGradleTaskOverride();
+    logIgnoredLegacyLaunchTemplateOverride();
     logger.info(
-        "Builder Goal local launch config loaded: projectDir={}, gradleTask={}, defaultWorld={}, executorBaseUrl={}, chromaScapeBaseUrl={}",
+        "Builder Goal local launch config loaded: projectDir={}, gradleTask={}, launchTemplateConfigured={}, defaultWorld={}, executorBaseUrl={}, chromaScapeBaseUrl={}, leeuwbotApiUrl={}, reuseExistingExecutor={}",
         this.micro6ProjectDir,
         this.gradleRunTask,
+        this.launchCommandTemplate != null,
         this.defaultWorld,
         this.defaultExecutorBaseUrl,
-        this.chromaScapeBaseUrl);
+        this.chromaScapeBaseUrl,
+        this.leeuwbotApiUrl,
+        this.reuseExistingExecutor);
   }
 
   private void logIgnoredLegacyGradleTaskOverride() {
@@ -102,7 +123,15 @@ public class Micro6TargetRelaunchService {
     logger.warn(
         "Ignoring legacy Builder Goal Gradle task override '{}'; local Builder Goal launches always use '{}'",
         legacyOverride,
-        FIXED_GRADLE_RUN_TASK);
+        DEFAULT_GRADLE_RUN_TASK);
+  }
+
+  private void logIgnoredLegacyLaunchTemplateOverride() {
+    if (!useStructuredWindowsLaunch() || launchCommandTemplate == null) {
+      return;
+    }
+    logger.warn(
+        "Ignoring legacy Builder Goal launch command template on Windows; automated local launches now use the direct PowerShell payload launcher");
   }
 
   public RelaunchResult restartTarget(
@@ -154,15 +183,25 @@ public class Micro6TargetRelaunchService {
     Integer targetPort = parsePort(resolvedBaseUrl);
     String localExecutorBaseUrl = resolveLocalExecutorBaseUrl(targetPort);
     File logFile = projectDir.resolve(launchLogFile).toFile();
-    String runArgs = buildRunArgs(accountName, accountEmail, accountPassword, world);
-    List<String> command = buildLaunchCommand(runArgs);
+    List<String> clientArgs = buildClientArgs(accountName, accountEmail, accountPassword, world);
+    String maskedLaunchArgs = maskLaunchArgs(clientArgs);
+    List<String> command =
+        buildLaunchCommand(
+            clientArgs,
+            projectDir,
+            accountName,
+            accountEmail,
+            accountPassword,
+            resolveWorld(world),
+            targetPort,
+            localExecutorBaseUrl);
 
     boolean reusedExistingExecutor = false;
 
     HealthCheckResult initialHealthCheck =
         readHealthyExecutorTarget(localExecutorBaseUrl, accountHash, accountName, null, -1L);
     Instant deadline = Instant.now().plusMillis(Math.max(60_000L, launchTimeoutMs));
-    if (canReuseExistingExecutor(initialHealthCheck)) {
+    if (reuseExistingExecutor && canReuseExistingExecutor(initialHealthCheck)) {
       reusedExistingExecutor = true;
       emitProgress(
           progressListener,
@@ -220,7 +259,7 @@ public class Micro6TargetRelaunchService {
             false,
             localExecutorBaseUrl,
             gradleRunTask,
-            maskLaunchArgs(runArgs),
+            maskedLaunchArgs,
             logFile.toPath(),
             null,
             null);
@@ -237,7 +276,7 @@ public class Micro6TargetRelaunchService {
                 resolvedBaseUrl,
                 command,
                 world,
-                runArgs);
+                maskedLaunchArgs);
         if (attemptResult.success() != null) {
           return attemptResult.success();
         }
@@ -252,7 +291,7 @@ public class Micro6TargetRelaunchService {
         }
         throw buildProcessExitedException(
             logFile.toPath(),
-            maskLaunchArgs(runArgs),
+            maskedLaunchArgs,
             failure,
             attemptResult.lastReadinessPhase(),
             attemptResult.lastReadinessReason());
@@ -260,7 +299,7 @@ public class Micro6TargetRelaunchService {
       if (attemptResult != null) {
         throw buildProcessExitedException(
             logFile.toPath(),
-            maskLaunchArgs(runArgs),
+            maskedLaunchArgs,
             attemptResult.failure(),
             attemptResult.lastReadinessPhase(),
             attemptResult.lastReadinessReason());
@@ -272,7 +311,7 @@ public class Micro6TargetRelaunchService {
           true,
           logFile.toPath(),
           gradleRunTask,
-          maskLaunchArgs(runArgs),
+          maskedLaunchArgs,
           FAILURE_KIND_PROCESS_EXITED,
           null,
           PHASE_LAUNCHING_PROCESS);
@@ -346,7 +385,7 @@ public class Micro6TargetRelaunchService {
       String resolvedBaseUrl,
       List<String> command,
       Integer world,
-      String runArgs)
+      String maskedLaunchArgs)
       throws Exception {
     String lastReadinessReason = null;
     String lastReadinessPhase = PHASE_LAUNCHING_PROCESS;
@@ -364,7 +403,7 @@ public class Micro6TargetRelaunchService {
           false,
           localExecutorBaseUrl,
           gradleRunTask,
-          maskLaunchArgs(runArgs),
+          maskedLaunchArgs,
           logFile,
           null,
           null);
@@ -375,7 +414,7 @@ public class Micro6TargetRelaunchService {
                 command,
                 process.pid(),
                 logFile,
-                maskLaunchArgs(runArgs),
+                maskedLaunchArgs,
                 resolveWorld(world),
                 localExecutorBaseUrl,
                 false),
@@ -409,7 +448,7 @@ public class Micro6TargetRelaunchService {
             false,
             localExecutorBaseUrl,
             gradleRunTask,
-            maskLaunchArgs(runArgs),
+            maskedLaunchArgs,
             logFile,
             failure.kind(),
             failure.detail());
@@ -427,7 +466,7 @@ public class Micro6TargetRelaunchService {
         true,
         logFile,
         gradleRunTask,
-        maskLaunchArgs(runArgs),
+        maskedLaunchArgs,
         null,
         null,
         lastReadinessPhase);
@@ -494,11 +533,11 @@ public class Micro6TargetRelaunchService {
 
     Process process = processBuilder.start();
     logger.info(
-        "Started Micro6 relaunch for account {} using Gradle task {} with world {} and command {} (pid={}, localHealthUrl={}, targetBaseUrl={})",
+        "Started Micro6 relaunch for account {} using launch target {} with world {} and command {} (pid={}, localHealthUrl={}, targetBaseUrl={})",
         accountName,
         gradleRunTask,
         resolveWorld(world),
-        command,
+        maskSensitiveCommand(command),
         process.pid(),
         localExecutorBaseUrl,
         resolvedBaseUrl);
@@ -622,7 +661,37 @@ public class Micro6TargetRelaunchService {
     }
   }
 
-  private List<String> buildLaunchCommand(String runArgs) {
+  private List<String> buildLaunchCommand(
+      List<String> clientArgs,
+      Path projectDir,
+      String accountName,
+      String accountEmail,
+      String accountPassword,
+      int world,
+      Integer targetPort,
+      String localExecutorBaseUrl)
+      throws IOException {
+    String runArgs = formatLaunchArgs(clientArgs);
+    if (useStructuredWindowsLaunch()) {
+      return buildStructuredWindowsLaunchCommand(clientArgs, projectDir);
+    }
+    if (launchCommandTemplate != null) {
+      String expanded =
+          expandLaunchCommandTemplate(
+              launchCommandTemplate,
+              runArgs,
+              projectDir,
+              accountName,
+              accountEmail,
+              accountPassword,
+              world,
+              targetPort,
+              localExecutorBaseUrl);
+      if (isWindows()) {
+        return List.of("cmd.exe", "/c", expanded);
+      }
+      return List.of("bash", "-lc", expanded);
+    }
     if (isWindows()) {
       String escapedRunArgs = runArgs.replace("\"", "\\\"");
       String commandLine =
@@ -639,6 +708,55 @@ public class Micro6TargetRelaunchService {
         "./gradlew " + gradleRunTask + " '--args=" + escapeSingleQuotes(runArgs) + "'");
   }
 
+  private List<String> buildStructuredWindowsLaunchCommand(List<String> clientArgs, Path projectDir)
+      throws IOException {
+    Path launcherScript = projectDir.resolve("launch-buildergoal-client.ps1").toAbsolutePath().normalize();
+    if (!Files.isRegularFile(launcherScript)) {
+      throw new IllegalStateException(
+          "Builder Goal launcher script does not exist: " + launcherScript);
+    }
+    Path payloadFile = Files.createTempFile("buildergoal-launch-", ".json");
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("clientArgs", clientArgs);
+    objectMapper.writeValue(payloadFile.toFile(), payload);
+    return List.of(
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        launcherScript.toString(),
+        "-PayloadFile",
+        payloadFile.toString());
+  }
+
+  private String expandLaunchCommandTemplate(
+      String template,
+      String runArgs,
+      Path projectDir,
+      String accountName,
+      String accountEmail,
+      String accountPassword,
+      int world,
+      Integer targetPort,
+      String localExecutorBaseUrl) {
+    String expanded = template;
+    expanded = expanded.replace("{micro6ProjectDir}", projectDir.toAbsolutePath().toString());
+    expanded = expanded.replace("{runArgs}", runArgs);
+    expanded =
+        expanded.replace(
+            "{maskedRunArgs}", firstNonBlank(maskLaunchArgs(tokenizeExtraRunArgs(runArgs)), ""));
+    expanded = expanded.replace("{accountName}", firstNonBlank(accountName, ""));
+    expanded = expanded.replace("{accountEmail}", firstNonBlank(accountEmail, ""));
+    expanded = expanded.replace("{accountPassword}", firstNonBlank(accountPassword, ""));
+    expanded = expanded.replace("{world}", String.valueOf(world));
+    expanded =
+        expanded.replace(
+            "{targetPort}", targetPort != null && targetPort > 0 ? String.valueOf(targetPort) : "");
+    expanded = expanded.replace("{localExecutorBaseUrl}", firstNonBlank(localExecutorBaseUrl, ""));
+    return expanded;
+  }
+
   private void applyBuilderGoalEnvironment(Map<String, String> environment, Integer targetPort) {
     if (environment == null) {
       return;
@@ -651,24 +769,22 @@ public class Micro6TargetRelaunchService {
     if (resolvedChromaScapeBaseUrl != null) {
       environment.put("CHROMASCAPE_BASE_URL", resolvedChromaScapeBaseUrl);
     }
+    String resolvedLeeuwbotApiUrl = firstNonBlank(leeuwbotApiUrl, "http://localhost:8086");
+    if (resolvedLeeuwbotApiUrl != null) {
+      environment.put("LEEUWBOT_API_URL", resolvedLeeuwbotApiUrl);
+    }
   }
 
-  private String buildRunArgs(
+  private List<String> buildClientArgs(
       String accountName, String accountEmail, String accountPassword, Integer world) {
-    StringBuilder builder = new StringBuilder();
-    builder.append("--clean-jagex-launcher");
-    builder.append(" --auto-enable-accountbuilder");
-    builder.append(" --profile=").append(accountName.trim());
-    builder
-        .append(" --profile-email=")
-        .append(accountEmail.trim())
-        .append(":")
-        .append(accountPassword.trim());
-    builder.append(" --world=").append(resolveWorld(world));
-    if (extraRunArgs != null && !extraRunArgs.isBlank()) {
-      builder.append(' ').append(extraRunArgs.trim());
-    }
-    return builder.toString();
+    List<String> clientArgs = new ArrayList<>();
+    clientArgs.add("--clean-jagex-launcher");
+    clientArgs.add("--auto-enable-accountbuilder");
+    clientArgs.add("--profile=" + accountName.trim());
+    clientArgs.add("--profile-email=" + accountEmail.trim() + ":" + accountPassword.trim());
+    clientArgs.add("--world=" + resolveWorld(world));
+    clientArgs.addAll(tokenizeExtraRunArgs(extraRunArgs));
+    return clientArgs;
   }
 
   private int resolveWorld(Integer world) {
@@ -1121,13 +1237,29 @@ public class Micro6TargetRelaunchService {
     return normalized.isBlank() ? null : normalized;
   }
 
-  private String maskLaunchArgs(String launchArgs) {
-    if (launchArgs == null || launchArgs.isBlank()) {
+  private String formatLaunchArgs(List<String> launchArgs) {
+    if (launchArgs == null || launchArgs.isEmpty()) {
       return null;
     }
-    String[] parts = launchArgs.trim().split("\\s+");
+    List<String> formatted = new ArrayList<>();
+    for (String part : launchArgs) {
+      if (part == null || part.isBlank()) {
+        continue;
+      }
+      formatted.add(quoteLaunchArg(part));
+    }
+    return formatted.isEmpty() ? null : String.join(" ", formatted);
+  }
+
+  private String maskLaunchArgs(List<String> launchArgs) {
+    if (launchArgs == null || launchArgs.isEmpty()) {
+      return null;
+    }
     List<String> masked = new ArrayList<>();
-    for (String part : parts) {
+    for (String part : launchArgs) {
+      if (part == null || part.isBlank()) {
+        continue;
+      }
       if (part.startsWith("--profile-email=")) {
         int colonIndex = part.indexOf(':');
         if (colonIndex > 0) {
@@ -1141,7 +1273,71 @@ public class Micro6TargetRelaunchService {
         masked.add(part);
       }
     }
-    return String.join(" ", masked);
+    return formatLaunchArgs(masked);
+  }
+
+  private String maskSensitiveCommand(List<String> command) {
+    if (command == null || command.isEmpty()) {
+      return "[]";
+    }
+    return firstNonBlank(formatLaunchArgs(command), "[]");
+  }
+
+  private List<String> tokenizeExtraRunArgs(String rawArgs) {
+    String normalized = normalizeOptionalString(rawArgs);
+    if (normalized == null) {
+      return List.of();
+    }
+    List<String> tokens = new ArrayList<>();
+    StringBuilder current = new StringBuilder();
+    boolean inSingleQuotes = false;
+    boolean inDoubleQuotes = false;
+    boolean escaping = false;
+    for (int i = 0; i < normalized.length(); i++) {
+      char ch = normalized.charAt(i);
+      if (escaping) {
+        current.append(ch);
+        escaping = false;
+        continue;
+      }
+      if (ch == '\\' && !inSingleQuotes) {
+        escaping = true;
+        continue;
+      }
+      if (ch == '"' && !inSingleQuotes) {
+        inDoubleQuotes = !inDoubleQuotes;
+        continue;
+      }
+      if (ch == '\'' && !inDoubleQuotes) {
+        inSingleQuotes = !inSingleQuotes;
+        continue;
+      }
+      if (Character.isWhitespace(ch) && !inSingleQuotes && !inDoubleQuotes) {
+        if (current.length() > 0) {
+          tokens.add(current.toString());
+          current.setLength(0);
+        }
+        continue;
+      }
+      current.append(ch);
+    }
+    if (escaping) {
+      current.append('\\');
+    }
+    if (current.length() > 0) {
+      tokens.add(current.toString());
+    }
+    return tokens;
+  }
+
+  private String quoteLaunchArg(String arg) {
+    if (arg == null) {
+      return "";
+    }
+    if (!arg.chars().anyMatch(Character::isWhitespace) && arg.indexOf('"') < 0) {
+      return arg;
+    }
+    return "\"" + arg.replace("\"", "\\\"") + "\"";
   }
 
   private Integer parsePort(String targetBaseUrl) {
@@ -1160,12 +1356,16 @@ public class Micro6TargetRelaunchService {
     return System.getProperty("os.name", "").toLowerCase(Locale.ENGLISH).contains("win");
   }
 
+  private boolean useStructuredWindowsLaunch() {
+    return isWindows();
+  }
+
   private String normalizeOptionalString(String value) {
     return value == null || value.isBlank() ? null : value.trim();
   }
 
   private LaunchFailure analyzeLaunchFailure(Path logFile) {
-    List<String> lines = readLogTail(logFile, 120);
+    List<String> lines = readLogTail(logFile, 240);
     String combined = String.join("\n", lines);
     if (combined.contains("Execution failed for task ':runelite-client:compileJava'.")
         && combined.contains("Unable to delete directory")
@@ -1175,6 +1375,15 @@ public class Micro6TargetRelaunchService {
           "Micro6 relaunch compile step failed because runelite-client/build/classes/java/main is locked by an existing micro6 or Gradle process. Check "
               + logFile.toAbsolutePath(),
           true);
+    }
+    String extractedFailureDetail = extractLaunchFailureDetail(lines);
+    if (extractedFailureDetail != null) {
+      return new LaunchFailure(
+          combined.contains("BUILD FAILED")
+              ? FAILURE_KIND_GRADLE_TASK_FAILED
+              : FAILURE_KIND_PROCESS_EXITED,
+          extractedFailureDetail,
+          false);
     }
     if (combined.contains("BUILD FAILED")) {
       return new LaunchFailure(
@@ -1188,6 +1397,207 @@ public class Micro6TargetRelaunchService {
         "Micro6 relaunch process exited before the local executor became ready. Check "
             + logFile.toAbsolutePath(),
         false);
+  }
+
+  private String extractLaunchFailureDetail(List<String> lines) {
+    if (lines == null || lines.isEmpty()) {
+      return null;
+    }
+    LaunchFailureExcerpt latestFailure = null;
+    latestFailure = preferLaterFailure(latestFailure, extractGradleFailureBlock(lines));
+    latestFailure = preferLaterFailure(latestFailure, extractRuneLiteStartupFailure(lines));
+    latestFailure = preferLaterFailure(latestFailure, extractThrowableBlock(lines));
+    latestFailure = preferLaterFailure(latestFailure, extractKnownLaunchError(lines));
+    return latestFailure != null ? latestFailure.detail() : null;
+  }
+
+  private LaunchFailureExcerpt extractGradleFailureBlock(List<String> lines) {
+    int start = lastIndexContaining(lines, "FAILURE: Build failed with an exception.");
+    if (start < 0) {
+      return null;
+    }
+    List<String> excerpt = new ArrayList<>();
+    for (int i = start; i < lines.size(); i++) {
+      String line = lines.get(i);
+      if (!excerpt.isEmpty() && (line.startsWith("BUILD FAILED in ") || line.startsWith("> Task "))) {
+        break;
+      }
+      excerpt.add(line);
+      if (line.startsWith("* What went wrong:")) {
+        for (int j = i + 1; j < lines.size(); j++) {
+          String whatWentWrongLine = lines.get(j);
+          if (whatWentWrongLine.startsWith("* Try:")
+              || whatWentWrongLine.startsWith("BUILD FAILED in ")
+              || whatWentWrongLine.startsWith("> Task ")) {
+            break;
+          }
+          excerpt.add(whatWentWrongLine);
+          i = j;
+        }
+      }
+    }
+    return buildFailureExcerpt(start, compactFailureExcerpt(excerpt));
+  }
+
+  private LaunchFailureExcerpt extractRuneLiteStartupFailure(List<String> lines) {
+    int start = lastIndexContaining(lines, "Failure during startup");
+    if (start < 0) {
+      return null;
+    }
+    List<String> excerpt = new ArrayList<>();
+    for (int i = start; i < lines.size(); i++) {
+      String line = lines.get(i);
+      if (!excerpt.isEmpty()
+          && looksLikeTimestampedLogLine(line)
+          && !line.contains("Failure during startup")
+          && !line.contains("Caused by:")
+          && !line.stripLeading().startsWith("at ")) {
+        break;
+      }
+      excerpt.add(stripLogPrefix(line));
+    }
+    return buildFailureExcerpt(start, compactFailureExcerpt(excerpt));
+  }
+
+  private LaunchFailureExcerpt extractKnownLaunchError(List<String> lines) {
+    LaunchFailureExcerpt latestFailure = null;
+    latestFailure =
+        preferLaterFailure(
+            latestFailure, lastMatchingLine(lines, "Cannot locate tasks that match"));
+    latestFailure =
+        preferLaterFailure(
+            latestFailure, lastMatchingLine(lines, "The command line is too long."));
+    latestFailure =
+        preferLaterFailure(
+            latestFailure, lastMatchingLine(lines, "Error: Could not find or load main class"));
+    latestFailure =
+        preferLaterFailure(latestFailure, lastMatchingLine(lines, "Exception in thread "));
+    latestFailure =
+        preferLaterFailure(latestFailure, lastMatchingLine(lines, "ClassNotFoundException"));
+    latestFailure =
+        preferLaterFailure(latestFailure, lastMatchingLine(lines, "NoClassDefFoundError"));
+    return latestFailure;
+  }
+
+  private LaunchFailureExcerpt extractThrowableBlock(List<String> lines) {
+    for (int i = lines.size() - 1; i >= 0; i--) {
+      String line = stripLogPrefix(lines.get(i));
+      if (!looksLikeThrowableStart(line)) {
+        continue;
+      }
+      List<String> excerpt = new ArrayList<>();
+      for (int j = i; j < lines.size(); j++) {
+        String current = stripLogPrefix(lines.get(j));
+        if (j > i && !looksLikeThrowableContinuation(current)) {
+          break;
+        }
+        excerpt.add(current);
+      }
+      return buildFailureExcerpt(i, compactFailureExcerpt(excerpt));
+    }
+    return null;
+  }
+
+  private LaunchFailureExcerpt preferLaterFailure(
+      LaunchFailureExcerpt current, LaunchFailureExcerpt candidate) {
+    if (candidate == null || candidate.detail() == null || candidate.detail().isBlank()) {
+      return current;
+    }
+    if (current == null || candidate.lineIndex() > current.lineIndex()) {
+      return candidate;
+    }
+    return current;
+  }
+
+  private LaunchFailureExcerpt buildFailureExcerpt(int lineIndex, String detail) {
+    String normalized = normalizeOptionalString(detail);
+    if (lineIndex < 0 || normalized == null) {
+      return null;
+    }
+    return new LaunchFailureExcerpt(lineIndex, normalized);
+  }
+
+  private String compactFailureExcerpt(List<String> excerpt) {
+    if (excerpt == null || excerpt.isEmpty()) {
+      return null;
+    }
+    List<String> cleaned = new ArrayList<>();
+    boolean previousBlank = false;
+    for (String rawLine : excerpt) {
+      String line = rawLine == null ? "" : rawLine.stripTrailing();
+      boolean blank = line.isBlank();
+      if (blank && (cleaned.isEmpty() || previousBlank)) {
+        continue;
+      }
+      cleaned.add(line);
+      previousBlank = blank;
+    }
+    while (!cleaned.isEmpty() && cleaned.get(cleaned.size() - 1).isBlank()) {
+      cleaned.remove(cleaned.size() - 1);
+    }
+    return cleaned.isEmpty() ? null : String.join("\n", cleaned);
+  }
+
+  private int lastIndexContaining(List<String> lines, String needle) {
+    if (lines == null || lines.isEmpty() || needle == null || needle.isBlank()) {
+      return -1;
+    }
+    for (int i = lines.size() - 1; i >= 0; i--) {
+      String line = lines.get(i);
+      if (line != null && line.contains(needle)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private LaunchFailureExcerpt lastMatchingLine(List<String> lines, String needle) {
+    int index = lastIndexContaining(lines, needle);
+    return index >= 0 ? buildFailureExcerpt(index, stripLogPrefix(lines.get(index))) : null;
+  }
+
+  private boolean looksLikeTimestampedLogLine(String line) {
+    return line != null
+        && line.matches("^\\d{4}-\\d{2}-\\d{2} .*\\[(?:.+)]\\s+(?:TRACE|DEBUG|INFO|WARN|ERROR)\\s+.*$");
+  }
+
+  private boolean looksLikeThrowableStart(String line) {
+    if (line == null || line.isBlank()) {
+      return false;
+    }
+    return line.startsWith("Exception in thread ")
+        || line.startsWith("Caused by: ")
+        || line.matches("^[\\w.$]+(?:Exception|Error)(?::|$).*$");
+  }
+
+  private boolean looksLikeThrowableContinuation(String line) {
+    if (line == null || line.isBlank()) {
+      return false;
+    }
+    String trimmed = line.stripLeading();
+    return looksLikeThrowableStart(line)
+        || trimmed.startsWith("at ")
+        || trimmed.startsWith("... ")
+        || trimmed.startsWith("Suppressed: ");
+  }
+
+  private String stripLogPrefix(String line) {
+    if (line == null || line.isBlank()) {
+      return line;
+    }
+    int errorIndex = line.indexOf(" ERROR ");
+    if (errorIndex > 0) {
+      return line.substring(errorIndex + " ERROR ".length()).trim();
+    }
+    int warnIndex = line.indexOf(" WARN ");
+    if (warnIndex > 0) {
+      return line.substring(warnIndex + " WARN ".length()).trim();
+    }
+    int infoIndex = line.indexOf(" INFO ");
+    if (infoIndex > 0) {
+      return line.substring(infoIndex + " INFO ".length()).trim();
+    }
+    return line.trim();
   }
 
   private List<String> readLogTail(Path logFile, int maxLines) {
@@ -1281,6 +1691,8 @@ public class Micro6TargetRelaunchService {
       boolean accountMatched) {}
 
   private record LaunchFailure(String kind, String detail, boolean retryable) {}
+
+  private record LaunchFailureExcerpt(int lineIndex, String detail) {}
 
   private record RelaunchAttemptResult(
       RelaunchResult success,

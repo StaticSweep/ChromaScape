@@ -11,6 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -174,6 +175,25 @@ public class ScriptExecutionService {
       JsonNode rawResponse,
       String micro6BaseUrl,
       Integer entryId) {}
+
+  public record Micro6ExecutorHealthResult(
+      boolean reachable,
+      boolean publishReady,
+      String readinessPhase,
+      String readinessReason,
+      String resolvedAccountName,
+      String resolvedAccountHash,
+      String requestedAccountName,
+      String requestedAccountHash,
+      Boolean dispatchHold,
+      String dispatchHoldReason,
+      String startupState,
+      String loginState,
+      Integer loginAttempt,
+      Integer loginAttemptMax,
+      String loginTerminalReason,
+      String micro6BaseUrl,
+      JsonNode rawResponse) {}
 
   /**
    * Runs a script and waits for completion (backward-compatible overload, unscoped).
@@ -448,8 +468,36 @@ public class ScriptExecutionService {
             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
             .build();
 
-    HttpResponse<String> executeResponse =
-        httpClient.send(executeRequest, HttpResponse.BodyHandlers.ofString());
+    HttpResponse<String> executeResponse;
+    try {
+      executeResponse = httpClient.send(executeRequest, HttpResponse.BodyHandlers.ofString());
+    } catch (HttpTimeoutException timeoutException) {
+      logger.warn(
+          "Micro6 publish request timed out for task {} on {}; probing executor status before retry",
+          scriptName,
+          targetBaseUrl);
+      Micro6PublishResult recoveredPublish =
+          recoverAcceptedPublishAfterTimeout(
+              scriptName, taskKey, entryId, targetBaseUrl, timeoutException);
+      if (recoveredPublish != null) {
+        return recoveredPublish;
+      }
+      logger.warn(
+          "Micro6 publish status recovery did not find entry {} for task {}; retrying once",
+          entryId,
+          scriptName);
+      try {
+        executeResponse = httpClient.send(executeRequest, HttpResponse.BodyHandlers.ofString());
+      } catch (HttpTimeoutException retryTimeoutException) {
+        Micro6PublishResult retryRecoveredPublish =
+            recoverAcceptedPublishAfterTimeout(
+                scriptName, taskKey, entryId, targetBaseUrl, retryTimeoutException);
+        if (retryRecoveredPublish != null) {
+          return retryRecoveredPublish;
+        }
+        throw retryTimeoutException;
+      }
+    }
 
     if (executeResponse.statusCode() >= 400) {
       Integer existingEntryId = tryResolveAlreadyQueuedEntry(executeResponse);
@@ -470,6 +518,103 @@ public class ScriptExecutionService {
     }
 
     return Micro6PublishResult.success(entryId, false, targetBaseUrl, "PUBLISHED");
+  }
+
+  private Micro6PublishResult recoverAcceptedPublishAfterTimeout(
+      String scriptName,
+      String taskKey,
+      int entryId,
+      String targetBaseUrl,
+      HttpTimeoutException timeoutException) {
+    long deadline = System.currentTimeMillis() + 15_000L;
+    while (System.currentTimeMillis() < deadline) {
+      try {
+        Micro6RunStatusResult statusResult =
+            getMicro6RunStatus(Map.of("local_executor_base_url", targetBaseUrl), entryId);
+        if (isAcceptedPublishStatus(statusResult)) {
+          logger.info(
+              "Recovered timed out Micro6 publish for task {} on {} via status {} for entry {}",
+              scriptName,
+              targetBaseUrl,
+              statusResult.status(),
+              entryId);
+          return Micro6PublishResult.success(entryId, false, targetBaseUrl, "PUBLISHED");
+        }
+      } catch (Exception statusException) {
+        logger.debug(
+            "Micro6 publish timeout recovery status poll failed for entry {}: {}",
+            entryId,
+            statusException.getMessage());
+      }
+
+      try {
+        Micro6ExecutorHealthResult healthResult =
+            getMicro6ExecutorHealth(Map.of("local_executor_base_url", targetBaseUrl));
+        JsonNode rawHealth = healthResult.rawResponse();
+        String currentTask = rawHealth == null ? null : textNode(rawHealth, "current_task");
+        if (healthResult.reachable()
+            && currentTask != null
+            && matchesPublishedTask(currentTask, scriptName, taskKey)) {
+          logger.info(
+              "Recovered timed out Micro6 publish for task {} on {} via /health current_task='{}'",
+              scriptName,
+              targetBaseUrl,
+              currentTask);
+          return Micro6PublishResult.success(entryId, false, targetBaseUrl, "PUBLISHED");
+        }
+      } catch (Exception healthException) {
+        logger.debug(
+            "Micro6 publish timeout recovery health probe failed for entry {}: {}",
+            entryId,
+            healthException.getMessage());
+      }
+
+      try {
+        Thread.sleep(1000L);
+      } catch (InterruptedException interruptedException) {
+        Thread.currentThread().interrupt();
+        return Micro6PublishResult.failure(
+            "Micro6 executor error: "
+                + firstNonBlank(interruptedException.getMessage(), timeoutException.getMessage()),
+            targetBaseUrl);
+      }
+    }
+    return null;
+  }
+
+  private boolean isAcceptedPublishStatus(Micro6RunStatusResult statusResult) {
+    if (statusResult == null || !statusResult.found()) {
+      return false;
+    }
+    String status = statusResult.status();
+    if (status == null || status.isBlank()) {
+      return false;
+    }
+    return "PENDING".equalsIgnoreCase(status)
+        || "QUEUED".equalsIgnoreCase(status)
+        || "RUNNING".equalsIgnoreCase(status)
+        || "COMPLETED".equalsIgnoreCase(status)
+        || "ACCEPTED".equalsIgnoreCase(status);
+  }
+
+  private boolean matchesPublishedTask(String currentTask, String scriptName, String taskKey) {
+    if (currentTask == null || currentTask.isBlank()) {
+      return false;
+    }
+    String normalizedCurrentTask = normalizeTaskToken(currentTask);
+    return normalizedCurrentTask.contains(normalizeTaskToken(scriptName))
+        || normalizedCurrentTask.contains(normalizeTaskToken(taskKey));
+  }
+
+  private String normalizeTaskToken(String value) {
+    if (value == null || value.isBlank()) {
+      return "";
+    }
+    String normalized = value;
+    if (normalized.regionMatches(true, 0, SCRIPT_SOURCE_PREFIX_MICRO6, 0, SCRIPT_SOURCE_PREFIX_MICRO6.length())) {
+      normalized = normalized.substring(SCRIPT_SOURCE_PREFIX_MICRO6.length());
+    }
+    return normalized.replaceAll("[^a-zA-Z0-9]+", "").toLowerCase();
   }
 
   private String parseMicro6ExecuteError(HttpResponse<String> executeResponse) {
@@ -920,6 +1065,102 @@ public class ScriptExecutionService {
     }
   }
 
+  public Micro6ExecutorHealthResult getMicro6ExecutorHealth(Map<String, Object> taskMetadata) {
+    String targetBaseUrl = resolveMicro6BaseUrl(taskMetadata);
+    try {
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create(targetBaseUrl + "/health"))
+              .timeout(Duration.ofSeconds(5))
+              .GET()
+              .build();
+      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() >= 400) {
+        return new Micro6ExecutorHealthResult(
+            false,
+            false,
+            "WAITING_FOR_HEALTH",
+            "Micro6 local executor returned HTTP " + response.statusCode() + " from /health",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            targetBaseUrl,
+            null);
+      }
+      JsonNode payload = objectMapper.readTree(response.body());
+      String resolvedAccountHash = textNode(payload, "account_hash");
+      String resolvedAccountName = textNode(payload, "account_name");
+      String requestedAccountName = textNode(payload, "requested_account_name");
+      String requestedAccountHash = textNode(payload, "requested_account_hash");
+      boolean dispatchHold = payload.path("dispatch_hold").asBoolean(false);
+      String dispatchHoldReason = textNode(payload, "dispatch_hold_reason");
+      String startupState = textNode(payload, "startup_state");
+      String loginState = textNode(payload, "login_state");
+      Integer loginAttempt = payload.path("login_attempt").isNumber() ? payload.path("login_attempt").asInt() : null;
+      Integer loginAttemptMax =
+          payload.path("login_attempt_max").isNumber() ? payload.path("login_attempt_max").asInt() : null;
+      String loginTerminalReason = textNode(payload, "login_terminal_reason");
+      boolean publishReady =
+          isMicro6ExecutorPublishReady(dispatchHold, startupState, loginState, loginTerminalReason);
+      String readinessPhase = publishReady ? "READY_TO_PUBLISH" : "WAITING_FOR_DISPATCH";
+      String readinessReason =
+          publishReady
+              ? null
+              : buildMicro6DispatchHoldReason(
+                  dispatchHoldReason,
+                  startupState,
+                  loginState,
+                  loginAttempt,
+                  loginAttemptMax,
+                  loginTerminalReason);
+      return new Micro6ExecutorHealthResult(
+          true,
+          publishReady,
+          readinessPhase,
+          readinessReason,
+          resolvedAccountName,
+          resolvedAccountHash,
+          requestedAccountName,
+          requestedAccountHash,
+          dispatchHold,
+          dispatchHoldReason,
+          startupState,
+          loginState,
+          loginAttempt,
+          loginAttemptMax,
+          loginTerminalReason,
+          targetBaseUrl,
+          payload);
+    } catch (Exception e) {
+      return new Micro6ExecutorHealthResult(
+          false,
+          false,
+          "WAITING_FOR_HEALTH",
+          "Micro6 local executor /health on " + targetBaseUrl + " is not reachable yet",
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          targetBaseUrl,
+          null);
+    }
+  }
+
   /**
    * Stop request for a Builder Goal published Micro6 run, reporting delivery success.
    *
@@ -951,6 +1192,134 @@ public class ScriptExecutionService {
       normalized = normalized.substring(0, normalized.length() - 1);
     }
     return normalized;
+  }
+
+  private String textNode(JsonNode payload, String fieldName) {
+    if (payload == null || fieldName == null || fieldName.isBlank()) {
+      return null;
+    }
+    JsonNode node = payload.path(fieldName);
+    if (node.isMissingNode() || node.isNull()) {
+      return null;
+    }
+    String text = node.asText(null);
+    return text == null || text.isBlank() ? null : text.trim();
+  }
+
+  private boolean isMicro6ExecutorPublishReady(
+      boolean dispatchHold, String startupState, String loginState, String loginTerminalReason) {
+    if (dispatchHold) {
+      return false;
+    }
+    if (!"accountbuilder_ready".equalsIgnoreCase(startupState)) {
+      return false;
+    }
+    if (loginState == null || loginState.isBlank()) {
+      return true;
+    }
+    if ("logged_in".equalsIgnoreCase(loginState)) {
+      return true;
+    }
+    return "auto_login_in_progress".equalsIgnoreCase(loginState) && loginTerminalReason == null
+        ? false
+        : false;
+  }
+
+  private String buildMicro6DispatchHoldReason(
+      String dispatchHoldReason,
+      String startupState,
+      String loginState,
+      Integer loginAttempt,
+      Integer loginAttemptMax,
+      String loginTerminalReason) {
+    if ("initializing_bot_logic".equalsIgnoreCase(startupState)) {
+      return "Micro6 local executor is logged in but AccountBuilder bot logic is still initializing";
+    }
+    if ("bot_initialization_failed".equalsIgnoreCase(startupState)) {
+      return "Micro6 local executor failed to initialize AccountBuilder bot logic";
+    }
+    if ("logged_in".equalsIgnoreCase(loginState)
+        && startupState != null
+        && !"accountbuilder_ready".equalsIgnoreCase(startupState)) {
+      return "Micro6 local executor is logged in but AccountBuilder is not ready yet: "
+          + startupState;
+    }
+    if ("auto_login_failed".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor is waiting for manual login after auto-login exhausted "
+          + firstNonBlank(formatAttemptCounts(loginAttempt, loginAttemptMax), "its attempts");
+    }
+    if ("authenticator_required".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor is waiting for manual authenticator input";
+    }
+    if ("auto_login_in_progress".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor is attempting auto-login"
+          + formatAttemptSuffix(loginAttempt, loginAttemptMax);
+    }
+    if ("profile_bootstrap_pending".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor is preparing the requested profile for auto-login";
+    }
+    if ("waiting_for_profile_lock".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor is waiting to acquire the profile lock before auto-login"
+          + formatAttemptSuffix(loginAttempt, loginAttemptMax);
+    }
+    if ("waiting_for_profile_record".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor could not find the requested profile yet"
+          + formatAttemptSuffix(loginAttempt, loginAttemptMax);
+    }
+    if ("profile_bootstrap_failed".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor failed before auto-login could be armed";
+    }
+    if ("waiting_for_login_screen".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor is waiting for the login screen"
+          + formatAttemptSuffix(loginAttempt, loginAttemptMax);
+    }
+    if ("runtime_not_ready".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor is still initializing the auto-login runtime";
+    }
+    if ("runtime_not_ready_timeout".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor auto-login runtime never became ready";
+    }
+    if ("login_screen_not_ready_timeout".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor login screen never became ready";
+    }
+    if ("waiting_for_login".equalsIgnoreCase(dispatchHoldReason)
+        || "waiting_for_login".equalsIgnoreCase(loginState)) {
+      return "Micro6 local executor is waiting for login";
+    }
+    if ("starting_accountbuilder".equalsIgnoreCase(dispatchHoldReason)
+        && startupState != null
+        && !"starting_accountbuilder".equalsIgnoreCase(startupState)) {
+      return "Micro6 local executor is online but not dispatch-ready: " + startupState;
+    }
+    if (loginTerminalReason != null && !loginTerminalReason.isBlank()) {
+      return "Micro6 local executor is online but not dispatch-ready: " + loginTerminalReason;
+    }
+    return "Micro6 local executor is online but not dispatch-ready: "
+        + firstNonBlank(dispatchHoldReason, startupState, loginState, "dispatch_hold");
+  }
+
+  private String formatAttemptCounts(Integer loginAttempt, Integer loginAttemptMax) {
+    if (loginAttempt == null || loginAttemptMax == null || loginAttemptMax <= 0) {
+      return null;
+    }
+    return loginAttempt + "/" + loginAttemptMax;
+  }
+
+  private String formatAttemptSuffix(Integer loginAttempt, Integer loginAttemptMax) {
+    String counts = formatAttemptCounts(loginAttempt, loginAttemptMax);
+    return counts != null ? " (" + counts + ")" : "";
+  }
+
+  private String firstNonBlank(String... values) {
+    if (values == null) {
+      return null;
+    }
+    for (String value : values) {
+      if (value != null && !value.isBlank()) {
+        return value.trim();
+      }
+    }
+    return null;
   }
 
   private String getActiveBackendOrDefault() {

@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '22';
+  static BUILDER_GOAL_BUNDLE_VERSION = '23';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -51,6 +51,12 @@ class AccountTaskPlanner {
     this.recoveryActiveImportant = false;
     this.recoveryPollHandle = null;
     this.recoveryChildLoaded = false;
+    this.recoveryReplayStatus = 'unknown';
+    this.recoveryReplayError = '';
+    this.recoveryEvidenceStatus = 'unknown';
+    this.recoveryCodexBindError = '';
+    this.recoveryPatchLoopSeedError = '';
+    this.recoveryLastError = '';
     this.codexSessionId = localStorage.getItem('taskPlanner.builderGoalCodexSessionId') || '';
     this.codexSession = null;
   }
@@ -149,9 +155,13 @@ class AccountTaskPlanner {
     this.recoveryImportantBtn = document.getElementById('recoveryImportantBtn');
     this.recoveryPinFrameBtn = document.getElementById('recoveryPinFrameBtn');
     this.recoveryExitBtn = document.getElementById('recoveryExitBtn');
+    this.recoveryLoadRunConfigBtn = document.getElementById('recoveryLoadRunConfigBtn');
+    this.recoveryBannerRefreshEvidenceBtn = document.getElementById('recoveryBannerRefreshEvidenceBtn');
     this.recoveryActiveRangeHint = document.getElementById('recoveryActiveRangeHint');
     this.recoveryActiveStart = document.getElementById('recoveryActiveStart');
     this.recoveryActiveEnd = document.getElementById('recoveryActiveEnd');
+    this.recoveryTypedRange = document.getElementById('recoveryTypedRange');
+    this.recoveryApplyTypedRangeBtn = document.getElementById('recoveryApplyTypedRangeBtn');
     this.recoveryActiveLabel = document.getElementById('recoveryActiveLabel');
     this.recoveryActiveTick = document.getElementById('recoveryActiveTick');
     this.recoveryActiveFrame = document.getElementById('recoveryActiveFrame');
@@ -160,6 +170,7 @@ class AccountTaskPlanner {
     this.recoveryAnnotationCount = document.getElementById('recoveryAnnotationCount');
     this.recoveryEvidenceMeta = document.getElementById('recoveryEvidenceMeta');
     this.recoveryEvidenceGroups = document.getElementById('recoveryEvidenceGroups');
+    this.recoveryEvidenceError = document.getElementById('recoveryEvidenceError');
     this.recoverySelectAllEvidenceBtn = document.getElementById('recoverySelectAllEvidenceBtn');
     this.recoveryClearEvidenceBtn = document.getElementById('recoveryClearEvidenceBtn');
     this.recoveryRefreshEvidenceBtn = document.getElementById('recoveryRefreshEvidenceBtn');
@@ -172,6 +183,17 @@ class AccountTaskPlanner {
     this.recoveryRelaunchStatus = document.getElementById('recoveryRelaunchStatus');
     this.recoveryPreferredSession = document.getElementById('recoveryPreferredSession');
     this.recoveryChildIteration = document.getElementById('recoveryChildIteration');
+    // Recovery status strip + foreground alerts
+    this.recoveryStatusStrip = document.getElementById('recoveryStatusStrip');
+    this.recoveryStatusRun = document.getElementById('recoveryStatusRun');
+    this.recoveryStatusTask = document.getElementById('recoveryStatusTask');
+    this.recoveryStatusAccount = document.getElementById('recoveryStatusAccount');
+    this.recoveryStatusWorld = document.getElementById('recoveryStatusWorld');
+    this.recoveryStatusRecording = document.getElementById('recoveryStatusRecording');
+    this.recoveryStatusEvidence = document.getElementById('recoveryStatusEvidence');
+    this.recoveryStatusError = document.getElementById('recoveryStatusError');
+    this.recoveryErrorBanner = document.getElementById('recoveryErrorBanner');
+    this.recoveryReplayAlert = document.getElementById('recoveryReplayAlert');
 
     // Plans list
     this.plansList = document.getElementById('plansList');
@@ -459,6 +481,43 @@ class AccountTaskPlanner {
     }
     if (this.recoveryExitBtn) {
       this.recoveryExitBtn.addEventListener('click', () => this.exitRecoveryMode());
+    }
+    if (this.recoveryLoadRunConfigBtn) {
+      this.recoveryLoadRunConfigBtn.addEventListener('click', () => {
+        if (this.recoveryIterationId) {
+          this.loadBuilderGoalRunConfig(this.recoveryIterationId);
+        }
+      });
+    }
+    if (this.recoveryBannerRefreshEvidenceBtn) {
+      this.recoveryBannerRefreshEvidenceBtn.addEventListener('click', () => this.refreshRecoveryEvidence());
+    }
+    if (this.recoveryApplyTypedRangeBtn) {
+      this.recoveryApplyTypedRangeBtn.addEventListener('click', () => this.applyRecoveryTypedRange());
+    }
+    if (this.recoveryTypedRange) {
+      this.recoveryTypedRange.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          this.applyRecoveryTypedRange();
+        }
+      });
+    }
+    // Changing the typed start/end fields keeps the active range (and evidence) in sync.
+    if (this.recoveryActiveStart) {
+      this.recoveryActiveStart.addEventListener('change', () => this.applyRecoveryRangeInputs());
+    }
+    if (this.recoveryActiveEnd) {
+      this.recoveryActiveEnd.addEventListener('change', () => this.applyRecoveryRangeInputs());
+    }
+    // Re-render saved-range timeline markers once the replay metadata (duration) is known.
+    const recoveryReplayVideo = document.getElementById('replayVideo');
+    if (recoveryReplayVideo) {
+      recoveryReplayVideo.addEventListener('loadedmetadata', () => {
+        if (this.recoveryModeActive) {
+          this.renderRecoveryTimelineMarkers();
+        }
+      });
     }
     if (this.recoverySelectAllEvidenceBtn) {
       this.recoverySelectAllEvidenceBtn.addEventListener('click', () => this.setAllRecoveryEvidenceSelections(true));
@@ -1376,8 +1435,9 @@ class AccountTaskPlanner {
       const actionStepLine = this.renderBuilderGoalActionStep(run);
       const blockedReasonLine = this.renderBuilderGoalBlockedReason(run);
       const analysisUsageLine = this.renderBuilderGoalAnalysisUsage(run);
-      const failureLine = run.failureReason
-        ? `<div class="plan-card-intent text-danger">${this.escapeHtml(run.failureReason)}</div>`
+      const failureText = run.launchFailureDetail || run.failureReason;
+      const failureLine = failureText
+        ? `<div class="plan-card-intent text-danger">${this.renderMultilineInline(failureText)}</div>`
         : '';
       const stopSendErrorLine = run.stopSendError
         ? `<div class="plan-card-intent text-warning">${this.escapeHtml(run.stopSendError)}</div>`
@@ -1959,7 +2019,8 @@ class AccountTaskPlanner {
     await this.loadBuilderGoalCodexSession();
   }
 
-  async loadBuilderGoalCodexSession() {
+  async loadBuilderGoalCodexSession(options = {}) {
+    const retryOnMissing = options.retryOnMissing !== false;
     if (!this.codexSessionId) {
       await this.initBuilderGoalCodexSession();
       return;
@@ -1973,6 +2034,16 @@ class AccountTaskPlanner {
       this.codexSession = result;
       this.renderBuilderGoalCodexSession(result);
     } catch (error) {
+      const missingSession =
+        retryOnMissing &&
+        /Codex session not found/i.test(error?.message || '');
+      if (missingSession) {
+        this.codexSessionId = '';
+        this.codexSession = null;
+        localStorage.removeItem('taskPlanner.builderGoalCodexSessionId');
+        await this.initBuilderGoalCodexSession();
+        return;
+      }
       console.error('Failed to load Builder Goal Codex session:', error);
       if (this.builderGoalCodexSessionMeta) {
         this.builderGoalCodexSessionMeta.textContent = `Failed to load Codex session: ${error.message}`;
@@ -2084,12 +2155,12 @@ class AccountTaskPlanner {
 
   async bindBuilderGoalCodexRun(iterationId, options = {}) {
     if (!iterationId) {
-      return;
+      return { bound: false, reason: 'No run selected to bind.' };
     }
     if (!this.codexSessionId) {
       await this.initBuilderGoalCodexSession();
       if (!this.codexSessionId) {
-        return;
+        return { bound: false, reason: 'No Codex session is available to bind to this run.' };
       }
     }
     try {
@@ -2110,13 +2181,18 @@ class AccountTaskPlanner {
       if (!options.silent) {
         this.renderBuilderGoalClientStatus(`Codex session bound to run ${iterationId}.`, 'info');
       }
+      return { bound: true, reason: '' };
     } catch (error) {
       console.error('Failed to bind Builder Goal Codex run:', error);
+      return { bound: false, reason: error?.message || String(error) };
     }
   }
 
   async loadBuilderGoalRunConfig(iterationId) {
     if (!iterationId) return;
+    // Immediate visible feedback: make sure the planner panel (with the editor and the
+    // status banner) is on screen before the network round-trip completes.
+    this.showBuilderGoalRunActionBanner(`Loading the saved config for run ${iterationId}...`, 'info');
     try {
       const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/config`);
       const result = await response.json();
@@ -2211,13 +2287,15 @@ class AccountTaskPlanner {
         `Loaded the saved config for ${result.displayName || result.taskKey} on ` +
         `${accountLabel} into the editor ` +
         `with world ${result.world || 360}.`;
+      // Visibly focus the task config editor so the operator can see the loaded run config.
+      this.focusBuilderGoalConfigEditor();
       if (replayResult.loaded) {
-        this.renderBuilderGoalClientStatus(
+        this.showBuilderGoalRunActionBanner(
           `${configMessage} ${replayResult.reason}${warningText} Review the JSON and click Run Task when ready.`,
           staleLauncherWarnings.length === 0 ? 'success' : 'warning'
         );
       } else {
-        this.renderBuilderGoalClientStatus(
+        this.showBuilderGoalRunActionBanner(
           `${configMessage} ${replayResult.reason}${warningText}`,
           'warning'
         );
@@ -2225,8 +2303,51 @@ class AccountTaskPlanner {
       this.updateBuilderGoalRunButtonState();
     } catch (error) {
       console.error('Failed to load builder goal run config:', error);
-      this.renderBuilderGoalClientStatus(`Failed to load saved config: ${error.message}`, 'danger');
-      alert('Failed to load saved config: ' + error.message);
+      this.showBuilderGoalRunActionBanner(`Failed to load saved config: ${error.message}`, 'danger');
+    }
+  }
+
+  /**
+   * Renders a prominent, visible banner for Builder Goal run actions. Ensures the task
+   * planner panel is open and scrolls the banner into view so success/error feedback
+   * is never hidden inside a collapsed panel.
+   */
+  showBuilderGoalRunActionBanner(message, tone = 'info') {
+    this.ensureTaskPlannerPanelVisible();
+    this.renderBuilderGoalClientStatus(message, tone);
+    if (this.builderGoalClientStatus && typeof this.builderGoalClientStatus.scrollIntoView === 'function') {
+      this.builderGoalClientStatus.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  /** Opens the task planner panel if it is currently hidden. */
+  ensureTaskPlannerPanelVisible() {
+    if (this.panel && this.panel.style.display === 'none') {
+      this.panel.style.display = 'block';
+      this.panelVisible = true;
+      if (this.toggleBtn) {
+        this.toggleBtn.classList.add('active');
+      }
+    }
+  }
+
+  /**
+   * Visibly focuses the task config editor: opens the planner panel, scrolls the editor
+   * into view, flashes it, and focuses it so a loaded run config is an obvious result.
+   */
+  focusBuilderGoalConfigEditor() {
+    const editor = this.builderGoalConfigInput;
+    if (!editor) return;
+    this.ensureTaskPlannerPanelVisible();
+    if (typeof editor.scrollIntoView === 'function') {
+      editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    editor.classList.remove('config-editor-flash');
+    // Force a reflow so the flash animation restarts on consecutive loads.
+    void editor.offsetWidth;
+    editor.classList.add('config-editor-flash');
+    if (typeof editor.focus === 'function') {
+      editor.focus({ preventScroll: true });
     }
   }
 
@@ -2384,7 +2505,9 @@ class AccountTaskPlanner {
             : `${payload.windowLogCount || 0} window logs`
         );
       }
-      if (run.failureReason) parts.push(run.failureReason);
+      if (run.launchFailureDetail || run.failureReason) {
+        parts.push((run.launchFailureDetail || run.failureReason).split('\n')[0]);
+      }
       this.builderGoalLogsStatus.innerHTML = `<span class="text-muted">${this.escapeHtml(parts.join(' • '))}</span>`;
     }
     if (this.builderGoalLaunchLogTail) {
@@ -2517,6 +2640,10 @@ class AccountTaskPlanner {
       return 'Publish failed';
     }
     return 'Waiting for Micro6 status';
+  }
+
+  renderMultilineInline(text) {
+    return this.escapeHtml(text || '').replace(/\n/g, '<br>');
   }
 
   async openBuilderGoalAnalysisEditor(iterationId) {
@@ -2818,6 +2945,69 @@ class AccountTaskPlanner {
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
 
+  /**
+   * Lenient time parser for recovery range fields. Accepts "MM:SS", "M:SS",
+   * "HH:MM:SS", or bare seconds ("15", "90.5"). Returns whole seconds or null.
+   */
+  parseRecoveryTimeInput(value) {
+    const raw = (value == null ? '' : String(value)).trim();
+    if (!raw) {
+      return null;
+    }
+    if (/^\d+(\.\d+)?$/.test(raw)) {
+      const seconds = Number(raw);
+      return Number.isFinite(seconds) && seconds >= 0 ? Math.floor(seconds) : null;
+    }
+    const parts = raw.split(':').map(part => part.trim());
+    if (parts.length < 2 || parts.length > 3) {
+      return null;
+    }
+    const numbers = parts.map(part => Number(part));
+    if (numbers.some(num => !Number.isFinite(num) || num < 0)) {
+      return null;
+    }
+    let totalSeconds;
+    if (parts.length === 2) {
+      const [minutes, seconds] = numbers;
+      if (seconds >= 60) {
+        return null;
+      }
+      totalSeconds = (minutes * 60) + seconds;
+    } else {
+      const [hours, minutes, seconds] = numbers;
+      if (minutes >= 60 || seconds >= 60) {
+        return null;
+      }
+      totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+    }
+    return Math.floor(totalSeconds);
+  }
+
+  /**
+   * Parses a typed recovery range such as "00:15-00:20", "15-20", "00:15 - 00:20",
+   * "00:15–00:20", "00:15 → 00:20", or "00:15 to 00:20".
+   * Returns { startSeconds, endSeconds } or null when unparseable.
+   */
+  parseRecoveryRangeInput(value) {
+    const raw = (value == null ? '' : String(value)).trim();
+    if (!raw) {
+      return null;
+    }
+    const segments = raw
+      .split(/\s*(?:–|—|→|\bto\b)\s*|\s*-\s*/i)
+      .map(part => part.trim())
+      .filter(part => part.length > 0);
+    if (segments.length !== 2) {
+      return null;
+    }
+    const startSeconds = this.parseRecoveryTimeInput(segments[0]);
+    const endSeconds = this.parseRecoveryTimeInput(segments[1]);
+    if (startSeconds == null || endSeconds == null) {
+      return null;
+    }
+    return { startSeconds, endSeconds };
+  }
+
   /* ========================================================================
    * Same-screen Recovery Mode. The operator stays on /debugger and switches
    * the existing replay surface into a recovery editing mode.
@@ -2860,6 +3050,9 @@ class AccountTaskPlanner {
     if (this.recoveryActiveEnd) {
       this.recoveryActiveEnd.value = '';
     }
+    if (this.recoveryTypedRange) {
+      this.recoveryTypedRange.value = '';
+    }
     if (this.recoveryActiveLabel) {
       this.recoveryActiveLabel.value = '';
     }
@@ -2885,6 +3078,7 @@ class AccountTaskPlanner {
     if (this.recoveryEvidenceMeta) {
       this.recoveryEvidenceMeta.textContent = '';
     }
+    this.hideRecoveryEvidenceError();
     if (this.recoveryEvidenceGroups) {
       this.recoveryEvidenceGroups.innerHTML =
         '<div class="text-muted small fst-italic">Loading recovery evidence...</div>';
@@ -2971,10 +3165,7 @@ class AccountTaskPlanner {
     const debugSessionId = this.firstNonBlankString(target?.debugSessionId);
 
     const resolvedRecordingId = runRecordingId || recordingId || null;
-    const resolvedSessionId =
-      !resolvedRecordingId && (runSessionId || debugSessionId)
-        ? (runSessionId || debugSessionId)
-        : null;
+    const resolvedSessionId = runSessionId || debugSessionId || null;
 
     if (!resolvedRecordingId && !resolvedSessionId) {
       return {
@@ -3053,7 +3244,8 @@ class AccountTaskPlanner {
     if (!iterationId) {
       return;
     }
-    await this.bindBuilderGoalCodexRun(iterationId, { silent: true });
+    // Keep the clicked run selected and switch into the foreground recovery workspace
+    // immediately, before any network round-trip, so the transition is always visible.
     this.recoveryModeActive = true;
     this.recoveryIterationId = iterationId;
     this.recoveryAnnotations = [];
@@ -3061,16 +3253,24 @@ class AccountTaskPlanner {
     this.recoveryActiveEndSeconds = null;
     this.recoveryActiveImportant = false;
     this.recoveryChildLoaded = false;
-    if (this.recoveryShell) {
-      this.recoveryShell.hidden = false;
-    }
-    document.body.classList.add('recovery-mode-active');
-    this.resetRecoveryWorkspaceUi();
+    this.recoveryReplayStatus = 'loading';
+    this.recoveryReplayError = '';
+    this.recoveryEvidenceStatus = 'loading';
+    this.recoveryCodexBindError = '';
+    this.recoveryPatchLoopSeedError = '';
+    this.recoveryLastError = '';
+    this.showRecoveryWorkspaceShell(iterationId, { phase: 'loading' });
     this.setRecoveryGenerateState(true, 'Loading...');
     this.setRecoveryApproveState(true);
-    if (this.recoveryRunLabel) {
-      this.recoveryRunLabel.textContent = `Opening recovery workspace...`;
-    }
+
+    // Bind the Codex session; a bind failure is reported in the status strip but does
+    // not block manual prompt/evidence review.
+    const codexBindResult = await this.bindBuilderGoalCodexRun(iterationId, { silent: true });
+    this.recoveryCodexBindError =
+      codexBindResult && codexBindResult.bound === false
+        ? (codexBindResult.reason || 'Codex session binding failed.')
+        : '';
+
     try {
       const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/recovery-workspace`, {
         method: 'POST'
@@ -3082,6 +3282,7 @@ class AccountTaskPlanner {
       this.recoveryDraft = result;
       // Seed patch loop immediately so inputs are pre-filled during replay load.
       const patchLoopSeedResult = this.seedPatchLoopFromRecoveryWorkspace(result);
+      this.recoveryPatchLoopSeedError = patchLoopSeedResult.seeded ? '' : (patchLoopSeedResult.reason || '');
       // Drive the existing replay surface first so the failed run's recording/scrubber
       // is the editing surface before recovery controls hydrate under it.
       const replayResult = await this.focusBuilderGoalRunReplay({
@@ -3090,11 +3291,12 @@ class AccountTaskPlanner {
         runSessionId: result.run?.runSessionId,
         debugSessionId: result.debugSessionId
       });
+      this.recoveryReplayStatus = replayResult.loaded
+        ? 'loaded'
+        : ((replayResult.reason || '').indexOf('No recording or debug session') === 0 ? 'missing' : 'error');
+      this.recoveryReplayError = replayResult.loaded ? '' : (replayResult.reason || 'Replay could not be loaded.');
       // Hydrate recovery workspace UI after replay load completes (or fails).
       const runName = result.run?.displayName || result.run?.taskKey || iterationId;
-      if (this.recoveryRunLabel) {
-        this.recoveryRunLabel.textContent = `Recovering: ${runName}`;
-      }
       if (this.recoveryPrompt) {
         this.recoveryPrompt.value = result.prompt || '';
       }
@@ -3104,16 +3306,25 @@ class AccountTaskPlanner {
       this.recoveryAnnotations = Array.isArray(result.annotations) ? result.annotations : [];
       this.renderRecoveryAnnotations();
       this.renderRecoveryEvidence(result);
+      this.recoveryEvidenceStatus = 'loaded';
       this.applyRecoverySelectedEvidenceIds(result.selectedEvidenceIds);
       this.restoreRecoveryActiveRange(result.activeRangeStartSeconds, result.activeRangeEndSeconds);
       if (result.analysisAvailable) {
         this.renderRecoveryPatchPlan(result.run || result);
+      } else if (this.recoveryPatchPlanReview) {
+        this.recoveryPatchPlanReview.innerHTML =
+          '<div class="text-muted fst-italic">No patch plan generated yet. Describe the issue, select evidence, then Generate Patch Plan.</div>';
       }
       this.setRecoveryApproveState(!Boolean(result.approvalAvailable));
       this.setRecoveryGenerateState(Boolean(result.canAnalyze) === false, 'Generate Patch Plan');
       this.startRecoveryPolling();
-      this.scrollReplaySurfaceIntoView();
-      // Build descriptive status message.
+      this.showRecoveryWorkspaceShell(iterationId, {
+        phase: 'ready',
+        draft: result,
+        replayResult,
+        patchLoopSeedResult
+      });
+      // Build descriptive status message for the planner panel as well.
       const statusParts = [];
       statusParts.push(`Recovery workspace opened for ${runName}.`);
       if (replayResult.loaded) {
@@ -3130,27 +3341,214 @@ class AccountTaskPlanner {
         statusParts.join(' '),
         patchLoopSeedResult.seeded && replayResult.loaded ? 'info' : 'warning'
       );
-      // Surface visible warnings in the recovery workspace when something didn't load.
-      if (!replayResult.loaded && this.recoveryPatchPlanReview) {
-        const replayWarning =
-          `<div class="text-warning mb-2"><i class="bi bi-exclamation-triangle me-1"></i>` +
-          `${this.escapeHtml(replayResult.reason)}</div>`;
-        this.recoveryPatchPlanReview.insertAdjacentHTML('afterbegin', replayWarning);
-      }
-      if (!patchLoopSeedResult.seeded && this.recoveryPatchPlanReview) {
-        const patchLoopWarning =
-          `<div class="text-warning mb-2"><i class="bi bi-exclamation-triangle me-1"></i>` +
-          `${this.escapeHtml(patchLoopSeedResult.reason)}</div>`;
-        this.recoveryPatchPlanReview.insertAdjacentHTML('afterbegin', patchLoopWarning);
-      }
     } catch (error) {
       console.error('Failed to open recovery workspace:', error);
-      if (this.recoveryPatchPlanReview) {
-        this.recoveryPatchPlanReview.innerHTML = `<div class="text-danger">Failed to load recovery workspace: ${this.escapeHtml(error.message)}</div>`;
-      }
+      // Do not silently stay on the same screen: keep recovery mode open, keep the
+      // clicked run selected, and show a prominent inline error in the workspace.
+      this.recoveryLastError = error.message || String(error);
+      this.recoveryReplayStatus = 'unknown';
+      this.recoveryEvidenceStatus = 'error';
+      this.showRecoveryWorkspaceShell(iterationId, { phase: 'error', error: this.recoveryLastError });
       this.setRecoveryGenerateState(false, 'Generate Patch Plan');
     }
   }
+
+  /**
+   * Foreground helper that drives every visible transition of the recovery workspace:
+   * unhides the shell, reflows the page into recovery layout, renders the persistent
+   * status strip, shows loading/error state inline, and scrolls the workspace into view.
+   *
+   * @param {string} iterationId - The run the workspace is bound to (stays selected).
+   * @param {object} state - { phase: 'loading'|'ready'|'error', draft, replayResult,
+   *   patchLoopSeedResult, error }
+   */
+  showRecoveryWorkspaceShell(iterationId, state = {}) {
+    const phase = state.phase || 'loading';
+    if (this.recoveryShell) {
+      this.recoveryShell.hidden = false;
+    }
+    document.body.classList.add('recovery-mode-active');
+
+    if (phase === 'loading') {
+      this.resetRecoveryWorkspaceUi();
+      this.hideRecoveryError();
+      if (this.recoveryRunLabel) {
+        this.recoveryRunLabel.textContent = `Opening recovery workspace for run ${iterationId}...`;
+      }
+      this.setRecoveryStatusStrip({
+        run: iterationId,
+        task: '...',
+        account: '...',
+        world: '...',
+        recording: { text: 'Loading...', tone: 'warn' },
+        evidence: { text: 'Loading...', tone: 'warn' },
+        error: ''
+      });
+      this.showRecoveryReplayAlert('Loading recovery workspace and replay...', 'info');
+    } else if (phase === 'ready') {
+      const draft = state.draft || {};
+      const run = draft.run || {};
+      const replayResult = state.replayResult || { loaded: false, reason: 'Replay state unknown.' };
+      const patchLoopSeedResult = state.patchLoopSeedResult || { seeded: true };
+      const runName = run.displayName || run.taskKey || iterationId;
+      this.hideRecoveryError();
+      if (this.recoveryRunLabel) {
+        this.recoveryRunLabel.textContent = `Recovering: ${runName}`;
+      }
+      const errors = [];
+      if (this.recoveryCodexBindError) {
+        errors.push(`Codex bind: ${this.recoveryCodexBindError}`);
+      }
+      if (!patchLoopSeedResult.seeded && patchLoopSeedResult.reason) {
+        errors.push(`Patch loop seed: ${patchLoopSeedResult.reason}`);
+      }
+      const totalEvidence = Number(draft.totalEvidenceCount ?? 0);
+      this.setRecoveryStatusStrip({
+        run: iterationId,
+        task: run.displayName || run.taskKey || '--',
+        account: run.accountName || run.targetAccountName || '--',
+        world: run.world != null ? String(run.world) : '--',
+        recording: replayResult.loaded
+          ? { text: 'Loaded', tone: 'ok' }
+          : (this.recoveryReplayStatus === 'missing'
+            ? { text: 'Missing', tone: 'error' }
+            : { text: 'Failed', tone: 'error' }),
+        evidence: { text: `Loaded (${totalEvidence})`, tone: totalEvidence > 0 ? 'ok' : 'warn' },
+        error: errors.join(' | ')
+      });
+      if (replayResult.loaded) {
+        this.hideRecoveryReplayAlert();
+      } else {
+        // Keep recovery mode open and show the failure inline near the replay panel.
+        this.showRecoveryReplayAlert(
+          replayResult.reason || 'Replay could not be loaded.',
+          this.recoveryReplayStatus === 'missing' ? 'danger' : 'warn'
+        );
+      }
+      // Render saved-range markers on the scrubber once annotations are hydrated.
+      this.renderRecoveryTimelineMarkers();
+    } else if (phase === 'error') {
+      const message = state.error || 'Unknown error';
+      if (this.recoveryRunLabel) {
+        this.recoveryRunLabel.textContent = `Recovery workspace failed for run ${iterationId}`;
+      }
+      this.setRecoveryStatusStrip({
+        run: iterationId,
+        task: '--',
+        account: '--',
+        world: '--',
+        recording: { text: 'Unknown', tone: 'warn' },
+        evidence: { text: 'Unavailable', tone: 'error' },
+        error: message
+      });
+      this.showRecoveryError(`Failed to open recovery workspace: ${message}`);
+      this.showRecoveryReplayAlert(`Recovery workspace could not be loaded: ${message}`, 'danger');
+      if (this.recoveryPatchPlanReview) {
+        this.recoveryPatchPlanReview.innerHTML =
+          `<div class="text-danger">Failed to load recovery workspace: ${this.escapeHtml(message)}</div>`;
+      }
+    }
+
+    this.scrollRecoveryWorkspaceIntoView();
+  }
+
+  /** Scrolls the canonical replay/logs row into view as the foreground recovery surface. */
+  scrollRecoveryWorkspaceIntoView() {
+    const target =
+      document.querySelector('.debugger-main') ||
+      document.querySelector('.viewport-panel') ||
+      this.recoveryShell;
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+
+  /**
+   * Renders the persistent recovery status strip chips.
+   * Each value is either a plain string or { text, tone: 'ok'|'warn'|'error' }.
+   */
+  setRecoveryStatusStrip(fields = {}) {
+    this.setRecoveryStatusChip(this.recoveryStatusRun, 'Run', fields.run);
+    this.setRecoveryStatusChip(this.recoveryStatusTask, 'Task', fields.task);
+    this.setRecoveryStatusChip(this.recoveryStatusAccount, 'Account', fields.account);
+    this.setRecoveryStatusChip(this.recoveryStatusWorld, 'World', fields.world);
+    this.setRecoveryStatusChip(this.recoveryStatusRecording, 'Recording', fields.recording);
+    this.setRecoveryStatusChip(this.recoveryStatusEvidence, 'Evidence', fields.evidence);
+    if (this.recoveryStatusError) {
+      const errorText = (fields.error || '').trim();
+      this.recoveryStatusError.hidden = errorText.length === 0;
+      this.recoveryStatusError.textContent = errorText;
+      this.recoveryStatusError.title = errorText;
+    }
+  }
+
+  setRecoveryStatusChip(el, label, value) {
+    if (!el) return;
+    const normalized = value && typeof value === 'object' ? value : { text: value };
+    const text = (normalized.text == null || normalized.text === '') ? '--' : String(normalized.text);
+    el.innerHTML = `${label}: ${this.escapeHtml(text)}`;
+    el.title = `${label}: ${text}`;
+    el.classList.remove('chip-ok', 'chip-warn', 'chip-error');
+    if (normalized.tone && ['ok', 'warn', 'error'].includes(normalized.tone)) {
+      el.classList.add(`chip-${normalized.tone}`);
+    }
+  }
+
+  showRecoveryError(message) {
+    if (!this.recoveryErrorBanner) return;
+    this.recoveryErrorBanner.innerHTML =
+      `<i class="bi bi-exclamation-octagon me-1"></i>${this.escapeHtml(message)}`;
+    this.recoveryErrorBanner.hidden = false;
+  }
+
+  hideRecoveryError() {
+    if (this.recoveryErrorBanner) {
+      this.recoveryErrorBanner.hidden = true;
+      this.recoveryErrorBanner.textContent = '';
+    }
+    if (this.recoveryStatusError) {
+      this.recoveryStatusError.hidden = true;
+      this.recoveryStatusError.textContent = '';
+    }
+  }
+
+  /** Shows an inline state message next to the canonical replay panel. */
+  showRecoveryReplayAlert(message, tone = 'warn') {
+    if (!this.recoveryReplayAlert) return;
+    this.recoveryReplayAlert.classList.remove('alert-info', 'alert-danger');
+    if (tone === 'info') {
+      this.recoveryReplayAlert.classList.add('alert-info');
+    } else if (tone === 'danger') {
+      this.recoveryReplayAlert.classList.add('alert-danger');
+    }
+    this.recoveryReplayAlert.innerHTML =
+      `<i class="bi bi-camera-video me-1"></i>${this.escapeHtml(message)}`;
+    this.recoveryReplayAlert.hidden = false;
+  }
+
+  hideRecoveryReplayAlert() {
+    if (this.recoveryReplayAlert) {
+      this.recoveryReplayAlert.hidden = true;
+      this.recoveryReplayAlert.textContent = '';
+    }
+  }
+
+  /** Shows an evidence-panel error while keeping previously loaded evidence visible. */
+  showRecoveryEvidenceError(message) {
+    if (!this.recoveryEvidenceError) return;
+    this.recoveryEvidenceError.innerHTML =
+      `<i class="bi bi-exclamation-triangle me-1"></i>${this.escapeHtml(message)}`;
+    this.recoveryEvidenceError.hidden = false;
+  }
+
+  hideRecoveryEvidenceError() {
+    if (this.recoveryEvidenceError) {
+      this.recoveryEvidenceError.hidden = true;
+      this.recoveryEvidenceError.textContent = '';
+    }
+  }
+
 
   exitRecoveryMode() {
     this.recoveryModeActive = false;
@@ -3161,6 +3559,12 @@ class AccountTaskPlanner {
     this.recoveryActiveEndSeconds = null;
     this.recoveryActiveImportant = false;
     this.recoveryChildLoaded = false;
+    this.recoveryReplayStatus = 'unknown';
+    this.recoveryReplayError = '';
+    this.recoveryEvidenceStatus = 'unknown';
+    this.recoveryCodexBindError = '';
+    this.recoveryPatchLoopSeedError = '';
+    this.recoveryLastError = '';
     this.stopRecoveryPolling();
     if (this.recoveryShell) {
       this.recoveryShell.hidden = true;
@@ -3169,6 +3573,10 @@ class AccountTaskPlanner {
     if (this.recoveryRunLabel) {
       this.recoveryRunLabel.textContent = '';
     }
+    this.hideRecoveryError();
+    this.hideRecoveryReplayAlert();
+    this.hideRecoveryEvidenceError();
+    this.clearRecoveryTimelineMarkers();
     window.ChromaScapePatchLoop?.clearSeed?.();
   }
 
@@ -3300,9 +3708,63 @@ class AccountTaskPlanner {
     }
   }
 
+  /**
+   * Applies the combined typed range input ("00:15-00:20", "15-20", ...) into the
+   * active range fields, then persists and refreshes evidence for the new range.
+   */
+  applyRecoveryTypedRange() {
+    const parsed = this.parseRecoveryRangeInput(this.recoveryTypedRange?.value);
+    if (!parsed) {
+      this.renderRecoveryRangeHint('Type a range like 00:15-00:20 or 15-20.');
+      return;
+    }
+    if (parsed.endSeconds <= parsed.startSeconds) {
+      this.renderRecoveryRangeHint('End must be after start.');
+      return;
+    }
+    this.recoveryActiveStartSeconds = parsed.startSeconds;
+    this.recoveryActiveEndSeconds = parsed.endSeconds;
+    if (this.recoveryActiveStart) {
+      this.recoveryActiveStart.value = this.formatSecondsAsClock(parsed.startSeconds);
+    }
+    if (this.recoveryActiveEnd) {
+      this.recoveryActiveEnd.value = this.formatSecondsAsClock(parsed.endSeconds);
+    }
+    this.updateRecoveryRangeHint();
+    this.persistRecoveryAnnotations();
+    this.refreshRecoveryEvidence();
+  }
+
+  /**
+   * Re-parses the separate start/end fields (lenient: "00:15" or "15") after the
+   * operator edits them, keeping the active range and evidence in sync.
+   */
+  applyRecoveryRangeInputs() {
+    const startSeconds = this.parseRecoveryTimeInput(this.recoveryActiveStart?.value);
+    const endSeconds = this.parseRecoveryTimeInput(this.recoveryActiveEnd?.value);
+    if (startSeconds == null && endSeconds == null) {
+      // Both fields blank or unparseable: treat as no active range without spamming.
+      this.recoveryActiveStartSeconds = null;
+      this.recoveryActiveEndSeconds = null;
+      this.updateRecoveryRangeHint();
+      return;
+    }
+    if (startSeconds != null && endSeconds != null && endSeconds <= startSeconds) {
+      this.renderRecoveryRangeHint('End must be after start.');
+      return;
+    }
+    this.recoveryActiveStartSeconds = startSeconds;
+    this.recoveryActiveEndSeconds = endSeconds;
+    this.updateRecoveryRangeHint();
+    if (startSeconds != null && endSeconds != null) {
+      this.persistRecoveryAnnotations();
+      this.refreshRecoveryEvidence();
+    }
+  }
+
   async recoverySaveRange() {
-    const startSeconds = this.parseClockToSeconds(this.recoveryActiveStart?.value);
-    const endSeconds = this.parseClockToSeconds(this.recoveryActiveEnd?.value);
+    const startSeconds = this.parseRecoveryTimeInput(this.recoveryActiveStart?.value);
+    const endSeconds = this.parseRecoveryTimeInput(this.recoveryActiveEnd?.value);
     if (startSeconds == null || endSeconds == null) {
       this.renderRecoveryRangeHint('Mark both start and end before saving.');
       return;
@@ -3339,10 +3801,12 @@ class AccountTaskPlanner {
   }
 
   renderRecoveryAnnotations() {
-    if (!this.recoveryAnnotationList) return;
     if (this.recoveryAnnotationCount) {
       this.recoveryAnnotationCount.textContent = `${this.recoveryAnnotations.length} range(s)`;
     }
+    // Keep the scrubber timeline markers in sync with the saved range cards.
+    this.renderRecoveryTimelineMarkers();
+    if (!this.recoveryAnnotationList) return;
     if (this.recoveryAnnotations.length === 0) {
       this.recoveryAnnotationList.innerHTML =
         '<div class="text-muted small fst-italic">No ranges marked yet. Use the replay scrubber, then Mark Start / Mark End / Save Range.</div>';
@@ -3375,6 +3839,84 @@ class AccountTaskPlanner {
     this.refreshRecoveryEvidence();
   }
 
+  /**
+   * Renders saved ranges as timeline markers on the scrubber, positioned by
+   * percentage of the total replay duration. Clicking a marker seeks the replay.
+   */
+  renderRecoveryTimelineMarkers() {
+    const container = document.getElementById('timelineMarkers');
+    if (!container) return;
+    this.clearRecoveryTimelineMarkers();
+    if (!this.recoveryModeActive || this.recoveryAnnotations.length === 0) {
+      return;
+    }
+    const totalSeconds = this.getRecoveryTimelineTotalSeconds();
+    if (!totalSeconds || totalSeconds <= 0) {
+      return;
+    }
+    this.recoveryAnnotations.forEach(annotation => {
+      const start = Number(annotation.startSeconds);
+      const end = Number(annotation.endSeconds);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+        return;
+      }
+      const leftPct = Math.min(100, Math.max(0, (start / totalSeconds) * 100));
+      const widthPct = Math.min(100 - leftPct, Math.max(0.5, ((end - start) / totalSeconds) * 100));
+      const marker = document.createElement('div');
+      marker.className = 'timeline-marker-range' + (annotation.important ? ' important' : '');
+      marker.style.left = `${leftPct}%`;
+      marker.style.width = `${widthPct}%`;
+      const rangeLabel = `${this.formatSecondsAsClock(start)}-${this.formatSecondsAsClock(end)}`;
+      marker.title =
+        `${annotation.label || 'Range'} (${rangeLabel})` +
+        `${annotation.note ? `: ${annotation.note}` : ''}`;
+      marker.addEventListener('click', () => this.seekRecoveryReplay(start));
+      container.appendChild(marker);
+    });
+  }
+
+  clearRecoveryTimelineMarkers() {
+    const container = document.getElementById('timelineMarkers');
+    if (!container) return;
+    container.querySelectorAll('.timeline-marker-range').forEach(el => el.remove());
+  }
+
+  /**
+   * Best-effort total replay duration in seconds: prefers the loaded video duration,
+   * falls back to the scrubber's total time readout (debug-session replays).
+   */
+  getRecoveryTimelineTotalSeconds() {
+    const video = document.getElementById('replayVideo');
+    if (video && Number.isFinite(video.duration) && video.duration > 0) {
+      return video.duration;
+    }
+    const totalEl = document.getElementById('totalTime');
+    if (totalEl && totalEl.textContent) {
+      const parsed = this.parseRecoveryTimeInput(totalEl.textContent.trim());
+      if (parsed != null && parsed > 0) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  /** Seeks the canonical replay surface to the given second (video or debug session). */
+  seekRecoveryReplay(seconds) {
+    const target = Math.max(0, Number(seconds) || 0);
+    const video = document.getElementById('replayVideo');
+    if (video && Number.isFinite(video.duration) && video.duration > 0) {
+      video.currentTime = Math.min(target, video.duration);
+      return;
+    }
+    // Debug-session replays are tick based (600ms per tick).
+    const tickJumpInput = document.getElementById('scrubberTickJumpInput');
+    const tickJumpBtn = document.getElementById('scrubberTickJumpBtn');
+    if (tickJumpInput && tickJumpBtn) {
+      tickJumpInput.value = String(Math.round(target / 0.6));
+      tickJumpBtn.click();
+    }
+  }
+
   async persistRecoveryAnnotations() {
     if (!this.recoveryIterationId) return;
     try {
@@ -3395,22 +3937,43 @@ class AccountTaskPlanner {
 
   async refreshRecoveryEvidence() {
     if (!this.recoveryIterationId) return;
+    this.hideRecoveryEvidenceError();
+    this.setRecoveryStatusChip(this.recoveryStatusEvidence, 'Evidence', { text: 'Refreshing...', tone: 'warn' });
     try {
+      // Evidence refresh uses the currently selected/saved ranges: the active range
+      // fields take precedence, then the union of saved annotation ranges (backend).
+      const activeStart = this.parseRecoveryTimeInput(this.recoveryActiveStart?.value);
+      const activeEnd = this.parseRecoveryTimeInput(this.recoveryActiveEnd?.value);
+      const body = {
+        annotations: this.recoveryAnnotations,
+        selectedEvidenceIds: this.collectRecoverySelectedEvidenceIds()
+      };
+      if (activeStart != null) body.activeRangeStartSeconds = activeStart;
+      if (activeEnd != null) body.activeRangeEndSeconds = activeEnd;
       const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/recovery-evidence`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          annotations: this.recoveryAnnotations,
-          selectedEvidenceIds: this.collectRecoverySelectedEvidenceIds()
-        })
+        body: JSON.stringify(body)
       });
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.error || `HTTP ${response.status}`);
       }
       this.renderRecoveryEvidence(result);
+      this.recoveryEvidenceStatus = 'loaded';
+      const totalEvidence = Number(result.totalEvidenceCount ?? 0);
+      this.setRecoveryStatusChip(this.recoveryStatusEvidence, 'Evidence', {
+        text: `Loaded (${totalEvidence})`,
+        tone: totalEvidence > 0 ? 'ok' : 'warn'
+      });
     } catch (error) {
       console.error('Failed to resolve recovery evidence:', error);
+      // Keep the existing evidence visible; report the failure inline in the panel.
+      this.recoveryEvidenceStatus = 'error';
+      this.showRecoveryEvidenceError(
+        `Evidence refresh failed: ${error.message}. Previously loaded evidence is still shown.`
+      );
+      this.setRecoveryStatusChip(this.recoveryStatusEvidence, 'Evidence', { text: 'Refresh failed', tone: 'error' });
     }
   }
 
@@ -3480,13 +4043,23 @@ class AccountTaskPlanner {
 
   async generateRecoveryPatchPlan() {
     if (!this.recoveryIterationId) return;
+    // Manual issue text is required before producing a meaningful patch plan.
+    const promptText = (this.recoveryPrompt?.value || '').trim();
+    if (!promptText) {
+      this.renderRecoveryPatchPlan(null, 'Describe the issue in the Patch Prompt before generating a patch plan.', 'warning');
+      if (this.recoveryPrompt && typeof this.recoveryPrompt.focus === 'function') {
+        this.recoveryPrompt.focus();
+      }
+      return;
+    }
     const selectedEvidenceIds = this.collectRecoverySelectedEvidenceIds();
     if (selectedEvidenceIds.length === 0) {
       this.renderRecoveryPatchPlan(null, 'Select at least one evidence item before generating a patch plan.', 'warning');
       return;
     }
-    const activeStart = this.parseClockToSeconds(this.recoveryActiveStart?.value);
-    const activeEnd = this.parseClockToSeconds(this.recoveryActiveEnd?.value);
+    // Patch generation uses the currently selected/saved ranges (lenient parsing).
+    const activeStart = this.parseRecoveryTimeInput(this.recoveryActiveStart?.value);
+    const activeEnd = this.parseRecoveryTimeInput(this.recoveryActiveEnd?.value);
     this.setRecoveryGenerateState(true, 'Generating...');
     this.renderRecoveryPatchPlan(null, 'Generating a Micro6 patch plan from your prompt, annotations, and selected evidence...', 'info');
     try {

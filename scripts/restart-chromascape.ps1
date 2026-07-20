@@ -2,7 +2,7 @@ param(
   [string]$ProjectDir = "F:\Dev\IdeaProjects\ChromaScape",
   [int]$Port = 8090,
   [string]$LanHost = "192.168.1.6",
-  [int]$StartupTimeoutSec = 600,
+  [int]$StartupTimeoutSec = 900,
   [string]$DbHost = "localhost",
   [int]$DbPort = 5433,
   [int]$DbReadyTimeoutSec = 90,

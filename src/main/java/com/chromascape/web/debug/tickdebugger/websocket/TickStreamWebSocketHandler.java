@@ -43,6 +43,15 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   private final DebuggerTickWebSocketHandler debuggerWebSocketHandler;
   private final Set<WebSocketSession> micro6Clients = ConcurrentHashMap.newKeySet();
 
+  /**
+   * Maps WebSocket session IDs to bound debug session IDs.
+   *
+   * <p>Populated on successful SESSION_START, cleared on explicit SESSION_STOP or disconnect
+   * finalization. Used by disconnect/transport-error handlers to implicitly finalize sessions
+   * when Micro6 drops the connection without sending SESSION_STOP.
+   */
+  private final Map<String, String> sessionBindings = new ConcurrentHashMap<>();
+
   public TickStreamWebSocketHandler(
       ObjectMapper objectMapper,
       DebugSessionService sessionService,
@@ -88,6 +97,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   @Override
   public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
     log.info("Micro6 tick stream client disconnected: {}, status: {}", session.getId(), status);
+    // Finalize first, then clean up — ensures binding is consumed before client removal
+    implicitlyFinalizeSession(session, "disconnect");
     micro6Clients.remove(session);
     super.afterConnectionClosed(session, status);
   }
@@ -99,6 +110,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         session.getId(),
         exception.getMessage(),
         exception);
+    implicitlyFinalizeSession(session, "transport error");
     super.handleTransportError(session, exception);
   }
 
@@ -135,6 +147,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           response.getRecordingFailureReason() != null
               ? response.getRecordingFailureReason()
               : "none");
+
+      // Track binding for disconnect finalization
+      sessionBindings.put(wsSession.getId(), response.getSessionId());
+      log.debug(
+          "Bound WS session {} to debug session {}", wsSession.getId(), response.getSessionId());
 
       // Send response back to Micro6 with the sessionId
       String responseJson = objectMapper.writeValueAsString(response);
@@ -185,6 +202,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           request.getEndTick());
 
       sessionService.stopSession(request.getSessionId(), request.getEndTick(), true);
+      // Clear binding — explicit SESSION_STOP handled finalization
+      clearSessionBinding(request.getSessionId());
     } catch (Exception e) {
       log.error("Error handling SESSION_STOP: {}", e.getMessage(), e);
     }
@@ -224,6 +243,53 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     } catch (Exception e) {
       log.error("Failed to broadcast session start to debugger: {}", e.getMessage(), e);
     }
+  }
+
+  /**
+   * Implicitly finalize the debug session bound to a WebSocket session that disconnected or
+   * experienced a transport error without sending an explicit SESSION_STOP.
+   *
+   * <p>This is a fallback path: explicit SESSION_STOP remains the primary finalization trigger.
+   *
+   * @param wsSession the WebSocket session that disconnected/errored
+   * @param cause human-readable cause for logging ("disconnect" or "transport error")
+   */
+  private void implicitlyFinalizeSession(WebSocketSession wsSession, String cause) {
+    String debugSessionId = sessionBindings.remove(wsSession.getId());
+    if (debugSessionId == null) {
+      log.debug(
+          "No debug session bound to WS session {} — nothing to finalize on {}",
+          wsSession.getId(),
+          cause);
+      return;
+    }
+
+    log.info(
+        "Implicit session stop on {} for WS session {}, debugSessionId={}",
+        cause,
+        wsSession.getId(),
+        debugSessionId);
+
+    try {
+      sessionService.finalizeSessionOnDisconnect(debugSessionId, cause);
+    } catch (Exception e) {
+      log.error(
+          "Failed to implicitly finalize session {} on {}: {}",
+          debugSessionId,
+          cause,
+          e.getMessage(),
+          e);
+    }
+  }
+
+  /**
+   * Clear all session bindings that reference the given debug session ID.
+   *
+   * <p>Called after explicit SESSION_STOP to prevent double-finalization on subsequent disconnect.
+   */
+  private void clearSessionBinding(String debugSessionId) {
+    sessionBindings.values().removeIf(debugSessionId::equals);
+    log.debug("Cleared session bindings for debugSessionId={}", debugSessionId);
   }
 
   /**

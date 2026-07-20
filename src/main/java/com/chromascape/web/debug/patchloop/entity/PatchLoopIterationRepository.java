@@ -68,4 +68,7 @@ public interface PatchLoopIterationRepository extends JpaRepository<PatchLoopIte
   List<PatchLoopIteration> findBySourceTypeOrderByCreatedAtDesc(String sourceType);
 
   List<PatchLoopIteration> findByParentIterationIdOrderByCreatedAtDesc(String parentIterationId);
+
+  Optional<PatchLoopIteration> findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
+      String sourceType, String runRecordingId);
 }

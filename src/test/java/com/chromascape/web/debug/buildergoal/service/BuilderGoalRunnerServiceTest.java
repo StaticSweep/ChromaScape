@@ -155,6 +155,138 @@ class BuilderGoalRunnerServiceTest {
   }
 
   @Test
+  void startRun_rejectsWhenAnActiveRunAlreadyExistsForSameAccountAndTask() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of());
+    PatchLoopIteration activeIteration = new PatchLoopIteration();
+    activeIteration.setIterationId("buildergoal_active_1");
+    activeIteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    activeIteration.setScriptName("configurable_woodcutting");
+    activeIteration.setStatus(PatchLoopStatus.RUNNING_SCRIPT);
+    activeIteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"),
+                "settings", Map.of("treeType", "WILLOW"))));
+    activeIteration.setImportedPayloadJson(
+        objectMapper.readTree(
+            """
+            {
+              "task_key": "configurable_woodcutting",
+              "settings": {
+                "treeType": "WILLOW"
+              }
+            }
+            """));
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(List.of(activeIteration));
+
+    assertThatThrownBy(
+            () ->
+                service.startRun(
+                    objectMapper.readTree(
+                        """
+                        {
+                          "task_key": "configurable_woodcutting",
+                          "settings": {
+                            "treeType": "WILLOW"
+                          }
+                        }
+                        """),
+                    "hash-1",
+                    null,
+                    null,
+                    null,
+                    "machine-1",
+                    null))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("A Builder Goal run is already active for this account and task");
+  }
+
+  @Test
+  void startRun_allowsNewRunWhenOlderActiveIterationOnlyHasStaleProcessExitedDisplayState()
+      throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of());
+    PatchLoopIteration staleIteration = new PatchLoopIteration();
+    staleIteration.setIterationId("buildergoal_stale_1");
+    staleIteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    staleIteration.setScriptName("configurable_woodcutting");
+    staleIteration.setStatus(PatchLoopStatus.QUEUED);
+    staleIteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"),
+                "target_preparation",
+                    Map.of(
+                        "state", "PROCESS_EXITED",
+                        "message", "Gradle task failed before the executor became ready"),
+                "settings", Map.of("treeType", "WILLOW"))));
+    staleIteration.setImportedPayloadJson(
+        objectMapper.readTree(
+            """
+            {
+              "task_key": "configurable_woodcutting",
+              "settings": {
+                "treeType": "WILLOW"
+              }
+            }
+            """));
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(List.of(staleIteration));
+    when(micro6ExecutorCatalogService.peekCatalogForBaseUrl(any())).thenReturn(null);
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+
+    Map<String, Object> response =
+        service.startRun(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "configurable_woodcutting",
+                  "settings": {
+                    "treeType": "WILLOW"
+                  }
+                }
+                """),
+            "hash-1",
+            null,
+            null,
+            null,
+            "machine-1",
+            null);
+
+    assertThat(response.get("accepted")).isEqualTo(true);
+  }
+
+  @Test
   void listRuns_exposesBlockedReasonsForFailedUnanalyzedRun() {
     PatchLoopIteration iteration = new PatchLoopIteration();
     iteration.setIterationId("buildergoal_test1234");
@@ -677,6 +809,45 @@ class BuilderGoalRunnerServiceTest {
     Map<String, Object> childRun = (Map<String, Object>) state.get("childRun");
     assertThat(childRun.get("runSessionId")).isEqualTo("debug_child_42");
     assertThat(childRun.get("runRecordingId")).isEqualTo("rec_child_42");
+  }
+
+  @Test
+  void getRunSummaryByRecordingId_resolvesBuilderGoalRun() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_recording0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setRunRecordingId("recording_123");
+    iteration.setRunSessionId("debug_123");
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "display_name", "35 Woodcutting",
+                "task_key", "configurable_woodcutting",
+                "micro6_publish", Map.of("status", "FAILED"))));
+    when(
+            iterationRepository.findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
+                BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL, "recording_123"))
+        .thenReturn(Optional.of(iteration));
+
+    Map<String, Object> run = service.getRunSummaryByRecordingId("recording_123");
+
+    assertThat(run.get("iterationId")).isEqualTo("buildergoal_recording0001");
+    assertThat(run.get("runRecordingId")).isEqualTo("recording_123");
+    assertThat(run.get("runSessionId")).isEqualTo("debug_123");
+  }
+
+  @Test
+  void getRunSummaryByRecordingId_rejectsMissingRecording() {
+    when(
+            iterationRepository.findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
+                BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL, "missing_recording"))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getRunSummaryByRecordingId("missing_recording"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Builder goal run not found for recordingId");
   }
 
   private AnalysisV1EvidenceBundle sampleEvidenceBundle() {

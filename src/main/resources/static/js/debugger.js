@@ -521,6 +521,9 @@ function cacheElements() {
   elements.debugSessionStatus = document.getElementById('debugSessionStatus');
   elements.resetFiltersBtn = document.getElementById('resetFiltersBtn');
   elements.debugFeedToggleBtn = document.getElementById('debugFeedToggleBtn');
+  // Recovery workspace containers
+  elements.recoveryRawLogsContainer = document.getElementById('recoveryRawLogsContainer');
+  elements.recoveryRawLogsMeta = document.getElementById('recoveryRawLogsMeta');
 }
 
 function switchMode(mode) {
@@ -5005,6 +5008,46 @@ function renderReplayLogs(logs, currentReplayTick = null) {
       lastProgrammaticScrollTime = Date.now(); // Mark as programmatic scroll
       container.scrollTop = container.scrollHeight;
     }
+
+    renderRecoveryWorkspacePanes();
+  }
+}
+
+function renderRecoveryWorkspacePanes() {
+  if (!document.body.classList.contains('recovery-mode-active')) {
+    return;
+  }
+  renderRecoveryRawLogs();
+}
+
+/**
+ * Render raw plain-text log lines to the recovery raw-logs container.
+ */
+function renderRecoveryRawLogs() {
+  const container = elements.recoveryRawLogsContainer;
+  if (!container) return;
+
+  const lines = [];
+  replayLogHistory.forEach(entry => {
+    const tick = entry.tick != null ? String(entry.tick).padStart(6, ' ') : '      ';
+    const source = (entry.source || '').padEnd(18).slice(0, 18);
+    const level = (entry.level || 'INFO').padEnd(5);
+    const message = entry.message || '';
+    const levelClass = `raw-level-${(entry.level || 'INFO').toUpperCase()}`;
+    lines.push(
+      `<span class="recovery-raw-log-line">` +
+      `<span class="raw-tick">[${tick}]</span> ` +
+      `<span class="raw-source">[${escapeHtml(source)}]</span> ` +
+      `<span class="${levelClass}">[${escapeHtml(level)}]</span> ` +
+      `${escapeHtml(message)}` +
+      `</span>`
+    );
+  });
+
+  container.innerHTML = lines.join('\n') || '<span class="text-muted fst-italic">No raw log entries</span>';
+
+  if (elements.recoveryRawLogsMeta) {
+    elements.recoveryRawLogsMeta.textContent = `${lines.length} raw lines`;
   }
 }
 
@@ -5036,11 +5079,12 @@ function scrollToCurrentTick(tick) {
   const container = elements.logsContainer;
   if (!container) return;
 
-  // Find exact group or nearest by numeric distance
+  // Find exact group or nearest by numeric distance.
   let target = container.querySelector(`.tick-group[data-tick="${tick}"]`);
   if (!target) {
     let minDiff = Infinity;
-    container.querySelectorAll('.tick-group[data-tick]').forEach(g => {
+    const allGroups = document.querySelectorAll('.tick-group[data-tick]');
+    allGroups.forEach(g => {
       const diff = Math.abs(parseInt(g.dataset.tick) - tick);
       if (diff < minDiff) { minDiff = diff; target = g; }
     });
@@ -5177,6 +5221,7 @@ function initLogFilters() {
 
 function filterLogs() {
   renderLogHistory();
+  renderRecoveryWorkspacePanes();
 }
 
 // ==================== WINDOW SELECTION ====================
@@ -5501,6 +5546,7 @@ function updatePanelsForTick(data) {
       // Re-render logs to show new events
       if (currentMode === 'live') {
         renderLogHistory();
+        renderRecoveryWorkspacePanes();
       }
     }
 
@@ -5581,10 +5627,12 @@ function updateTickDisplay(tick) {
 
   // Calculate time from tick (600ms per tick)
   const currentTimeEl = document.getElementById('currentTime');
+  let timeStr = '--:--.-';
   if (currentTimeEl) {
     if (tick != null) {
       const timeSeconds = (tick * 0.6).toFixed(1);
-      currentTimeEl.textContent = formatTickTime(timeSeconds);
+      timeStr = formatTickTime(timeSeconds);
+      currentTimeEl.textContent = timeStr;
     } else {
       currentTimeEl.textContent = '--:--.-';
     }
@@ -5592,15 +5640,18 @@ function updateTickDisplay(tick) {
 
   // Calculate frame - use recording FPS if available, else default 30
   const currentFrameEl = document.getElementById('currentFrame');
+  let frameStr = '--';
   if (currentFrameEl) {
     if (tick != null) {
       const fps = currentRecordingFps || 30;
       const frame = Math.floor(tick * 0.6 * fps);
+      frameStr = String(frame);
       currentFrameEl.textContent = frame;
     } else {
       currentFrameEl.textContent = '--';
     }
   }
+
 }
 
 /**
@@ -5687,6 +5738,7 @@ function renderTickLogs(logs) {
       container.scrollTop = container.scrollHeight;
     }
     highlightCurrentTickGroup(currentTick);
+    renderRecoveryWorkspacePanes();
     return;
   }
 

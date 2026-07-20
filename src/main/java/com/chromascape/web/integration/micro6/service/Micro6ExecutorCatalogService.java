@@ -90,7 +90,7 @@ public class Micro6ExecutorCatalogService {
     try {
       HttpRequest request =
           HttpRequest.newBuilder()
-              .uri(URI.create(normalizedBaseUrl + "/api/v1/catalog"))
+              .uri(URI.create(normalizedBaseUrl + "/api/v1/catalog?mode=lightweight"))
               .timeout(Duration.ofMillis(config.getExecutorCatalog().getTimeoutMs()))
               .GET()
               .build();
