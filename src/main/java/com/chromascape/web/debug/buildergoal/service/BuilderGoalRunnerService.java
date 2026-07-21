@@ -2407,7 +2407,10 @@ public class BuilderGoalRunnerService {
   }
 
   private CatalogValidationResult resolvePublishCatalogValidation(String taskKey, String targetBaseUrl) {
-    JsonNode targetCatalog = micro6ExecutorCatalogService.peekCatalogForBaseUrl(targetBaseUrl);
+    JsonNode targetCatalog =
+        targetBaseUrl != null && !targetBaseUrl.isBlank()
+            ? micro6ExecutorCatalogService.getCatalogForBaseUrl(targetBaseUrl, true)
+            : null;
     JsonNode targetTask = findTaskInCatalog(taskKey, targetCatalog);
     if (targetTask != null) {
       if (!targetTask.path("runnable").asBoolean(true)) {
@@ -2421,6 +2424,41 @@ public class BuilderGoalRunnerService {
             targetTask);
       }
       return CatalogValidationResult.validated("VALIDATED_CACHED_TARGET", targetTask);
+    }
+
+    JsonNode liveDefaultCatalog = micro6ExecutorCatalogService.getCatalog(true);
+    JsonNode liveDefaultTask = findTaskInCatalog(taskKey, liveDefaultCatalog);
+    if (liveDefaultTask != null) {
+      if (!liveDefaultTask.path("runnable").asBoolean(true)) {
+        return CatalogValidationResult.reject(
+            "REJECTED_CATALOG_DISABLED",
+            "Task is not runnable in Micro6 catalog: "
+                + taskKey
+                + " ("
+                + liveDefaultTask.path("disabled_reason").asText("unknown")
+                + ")",
+            liveDefaultTask);
+      }
+      return CatalogValidationResult.validated("VALIDATED_LIVE", liveDefaultTask);
+    }
+
+    JsonNode cachedTargetCatalog =
+        targetBaseUrl != null && !targetBaseUrl.isBlank()
+            ? micro6ExecutorCatalogService.peekCatalogForBaseUrl(targetBaseUrl)
+            : null;
+    JsonNode cachedTargetTask = findTaskInCatalog(taskKey, cachedTargetCatalog);
+    if (cachedTargetTask != null) {
+      if (!cachedTargetTask.path("runnable").asBoolean(true)) {
+        return CatalogValidationResult.reject(
+            "REJECTED_CACHED_DISABLED",
+            "Task is not runnable in cached Micro6 catalog: "
+                + taskKey
+                + " ("
+                + cachedTargetTask.path("disabled_reason").asText("unknown")
+                + ")",
+            cachedTargetTask);
+      }
+      return CatalogValidationResult.validated("VALIDATED_CACHED_TARGET", cachedTargetTask);
     }
 
     JsonNode cachedDefaultCatalog = micro6ExecutorCatalogService.peekCatalog();
@@ -2440,12 +2478,12 @@ public class BuilderGoalRunnerService {
     }
 
     boolean hadCachedCatalog =
-        hasCatalogPayload(targetCatalog) || hasCatalogPayload(cachedDefaultCatalog);
+        hasCatalogPayload(targetCatalog)
+            || hasCatalogPayload(liveDefaultCatalog)
+            || hasCatalogPayload(cachedTargetCatalog)
+            || hasCatalogPayload(cachedDefaultCatalog);
     if (hadCachedCatalog) {
-      return CatalogValidationResult.reject(
-          "REJECTED_CACHED_MISS",
-          "Task is not available in cached Micro6 catalog: " + taskKey,
-          null);
+      return CatalogValidationResult.skipped("SKIPPED_CATALOG_MISS");
     }
 
     return CatalogValidationResult.skipped("SKIPPED_NO_CACHE");

@@ -27,6 +27,7 @@ import com.chromascape.web.debug.patchloop.service.ScriptExecutionService;
 import com.chromascape.web.debug.patchloop.service.provider.AnalysisProvider;
 import com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService;
 import com.chromascape.web.logs.LogRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -123,7 +124,7 @@ class BuilderGoalRunnerServiceTest {
             null,
             java.time.Instant.now());
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.peekCatalogForBaseUrl(any())).thenReturn(null);
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
     Map<String, Object> response =
         service.startRun(
@@ -262,7 +263,7 @@ class BuilderGoalRunnerServiceTest {
     when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
             BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(List.of(staleIteration));
-    when(micro6ExecutorCatalogService.peekCatalogForBaseUrl(any())).thenReturn(null);
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
     Map<String, Object> response =
@@ -600,10 +601,29 @@ class BuilderGoalRunnerServiceTest {
 
     when(iterationRepository.findByIterationId("buildergoal_rerun0001")).thenReturn(Optional.of(iteration));
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    JsonNode staleCatalog =
+        objectMapper.readTree(
+            """
+            {
+              "catalog_source": "micro6_executor_cache",
+              "tasks": [
+                {
+                  "task_key": "some_other_task",
+                  "display_name": "Some Other Task",
+                  "runnable": true
+                }
+              ]
+            }
+            """);
+    when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(staleCatalog);
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(staleCatalog);
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(staleCatalog);
     Map<String, Object> response = service.rerun("buildergoal_rerun0001");
 
     assertThat(response.get("accepted")).isEqualTo(true);
     assertThat(response.get("published")).isNull();
+    assertThat(response.get("catalogValidation")).isEqualTo("SKIPPED_CATALOG_MISS");
+    assertThat(response.get("catalogValidationSkipped")).isEqualTo(true);
     @SuppressWarnings("unchecked")
     Map<String, Object> run = (Map<String, Object>) response.get("run");
     assertThat(run.get("taskKey")).isEqualTo("configurable_woodcutting");
