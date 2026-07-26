@@ -104,6 +104,8 @@ public class BuilderGoalRunnerService {
   private static final String PREPARATION_STATE_READY_TO_PUBLISH = "READY_TO_PUBLISH";
   private static final String DISPLAY_STATUS_WAITING_FOR_TASK_START = "WAITING_FOR_TASK_START";
   private static final String DISPLAY_STATUS_WAITING_FOR_DEBUG_BIND = "WAITING_FOR_DEBUG_BIND";
+  private static final String TASK_METADATA_PUBLISH_ONLY = "publish_only";
+  private static final String TASK_METADATA_LAUNCH_FALLBACK_ALLOWED = "launch_fallback_allowed";
 
   private final PatchLoopIterationRepository iterationRepository;
   private final PatchLoopPersistenceService persistenceService;
@@ -462,6 +464,157 @@ public class BuilderGoalRunnerService {
     return startRun(objectMapper.valueToTree(payload), accountId, null, null, null, launcherMachineUuid, world);
   }
 
+  /**
+   * Publishes a task to an already-running local Micro6 executor without (re)launching a client.
+   *
+   * <p>Unlike {@link #startRun}, this path does not call {@link #queuePendingLaunch} and therefore
+   * never starts a fresh Micro6 workspace. It creates a persisted run record, then asks the existing
+   * {@link ScriptExecutionService#getMicro6ExecutorHealth} to confirm the running executor is
+   * reachable, account-matched, and dispatch-ready before delegating to {@link #publishIteration}.
+   *
+   * <p>When the executor is not ready or the account does not match, the publish is deferred: the
+   * run stays in a non-terminal state with a target-preparation phase describing why, and the
+   * caller receives {@code published=false}. If {@code allowLaunchFallback} is true, a normal
+   * launch+publish is queued so the operator gets the full Run-Task behaviour as a fallback.
+   */
+  @Transactional
+  public Map<String, Object> publishOnly(
+      String accountId,
+      String launcherMachineUuid,
+      String taskKey,
+      Map<String, Object> settings,
+      Integer world,
+      String targetBaseUrl,
+      boolean allowLaunchFallback) {
+    if (accountId == null || accountId.isBlank()) {
+      throw new IllegalArgumentException("accountId is required");
+    }
+    if (taskKey == null || taskKey.isBlank()) {
+      throw new IllegalArgumentException("taskKey is required");
+    }
+    BuilderGoalAccountCatalogService.AccountDefinition selectedAccount =
+        resolveSelectedAccount(accountId);
+    if (selectedAccount == null) {
+      throw new IllegalArgumentException("Select a launcher account first");
+    }
+    String launchConflictReason =
+        findActiveLaunchConflictReason(
+            firstNonBlank(selectedAccount.accountId(), selectedAccount.accountHash()),
+            taskKey);
+    if (launchConflictReason != null) {
+      throw new IllegalStateException(launchConflictReason);
+    }
+    String selectedMachineUuid = normalizeOptionalString(launcherMachineUuid);
+    BuilderGoalLauncherControlService.LauncherMachine selectedMachine =
+        selectedMachineUuid != null ? resolveSelectedMachine(selectedMachineUuid) : null;
+    if (allowLaunchFallback && selectedMachine == null) {
+      throw new IllegalArgumentException(
+          "launcherMachineUuid is required when launch fallback is enabled");
+    }
+    CatalogValidationResult catalogValidation =
+        resolvePublishCatalogValidation(taskKey, targetBaseUrl);
+    if (catalogValidation.rejectPublish()) {
+      throw new IllegalArgumentException(catalogValidation.errorMessage());
+    }
+    JsonNode catalogTask = catalogValidation.catalogTask();
+    String resolvedDisplayName =
+        firstNonBlank(
+            catalogTask != null ? textValue(catalogTask.path("display_name")) : null,
+            catalogTask != null ? textValue(catalogTask.path("panel_display_name")) : null,
+            taskKey);
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("task_key", taskKey);
+    payload.put("title", resolvedDisplayName);
+    payload.put("settings", settings != null ? settings : Map.of());
+    payload.put("source", "catalog_task");
+    payload.put("account_id", accountId);
+    if (world != null) {
+      payload.put("world", world);
+    }
+    NormalizedPayload normalized = normalizePayload(objectMapper.valueToTree(payload));
+    Map<String, Object> initialTargetMetadata =
+        buildRequestedTargetMetadataFromAccount(selectedAccount, selectedMachine);
+    if (targetBaseUrl != null && !targetBaseUrl.isBlank()) {
+      initialTargetMetadata.put("advertised_base_url", targetBaseUrl);
+    }
+    PatchLoopIteration iteration =
+        createRunIteration(
+            normalized,
+            objectMapper.valueToTree(payload),
+            null,
+            null,
+            initialTargetMetadata,
+            catalogTask);
+    applyCatalogValidationMetadata(iteration, catalogValidation);
+
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    taskMetadata.put(TASK_METADATA_PUBLISH_ONLY, true);
+    taskMetadata.put(TASK_METADATA_LAUNCH_FALLBACK_ALLOWED, allowLaunchFallback);
+    taskMetadata.put("mule_account", buildAccountMetadata(selectedAccount, selectedMachine));
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    persistenceService.saveIteration(iteration);
+
+    updatePreparationState(
+        iteration,
+        taskMetadata,
+        PREPARATION_STATE_READY_TO_PUBLISH,
+        "Publish requested against a running Micro6 executor; verifying executor readiness");
+
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("run", toRunSummary(iteration));
+    response.put("accepted", true);
+    response.put("published", null);
+    response.put("entryId", null);
+    response.put("targetClientId", null);
+    response.put("targetAccountName", selectedAccount.displayName());
+    response.put("accountId", selectedAccount.accountId());
+    response.put("accountHash", selectedAccount.accountHash());
+    response.put("accountName", selectedAccount.displayName());
+    response.put("publishStatus", null);
+    response.put("publishError", null);
+    response.put("catalogValidation", catalogValidation.status());
+    response.put("catalogValidationSkipped", catalogValidation.skipped());
+
+    try {
+      ScriptExecutionService.Micro6PublishResult publishResult = publishIteration(iteration);
+      iteration = iterationRepository.findByIterationId(iteration.getIterationId()).orElse(iteration);
+      response.put("run", toRunSummary(iteration));
+      if (publishResult.published()) {
+        response.put("published", true);
+        response.put("entryId", publishResult.entryId());
+        response.put("publishStatus", publishResult.publishStatus());
+        response.put("publishError", null);
+      } else {
+        response.put("published", false);
+        response.put("entryId", null);
+        response.put("publishStatus", publishResult.publishStatus());
+        response.put(
+            "publishError",
+            firstNonBlank(publishResult.errorMessage(), "Failed to publish task to Micro6"));
+      }
+      response.put("launchFallback", false);
+    } catch (PublishDeferredException e) {
+      iteration = iterationRepository.findByIterationId(iteration.getIterationId()).orElse(iteration);
+      response.put("run", toRunSummary(iteration));
+      response.put("published", false);
+      response.put("entryId", null);
+      response.put("publishStatus", "DEFERRED");
+      response.put(
+          "publishError",
+          firstNonBlank(
+              e.getMessage(),
+              "Micro6 local executor is not publish-ready; launch or attach a client first"));
+      if (allowLaunchFallback) {
+        queuePendingLaunch(iteration.getIterationId());
+        response.put("launchFallback", true);
+      } else {
+        response.put("launchFallback", false);
+      }
+    }
+    response.put("targetPreparation", readTargetPreparationMetadata(readTaskMetadata(iteration)));
+    return response;
+  }
+
   private void queuePendingLaunch(String iterationId) {
     if (iterationId == null || iterationId.isBlank()) {
       return;
@@ -627,6 +780,9 @@ public class BuilderGoalRunnerService {
 
   private boolean shouldContinuePendingLaunch(PatchLoopIteration iteration) {
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    if (isPublishOnlyNoLaunch(taskMetadata)) {
+      return false;
+    }
     Map<String, Object> publishMetadata = readPublishMetadata(taskMetadata);
     Integer entryId = intValue(publishMetadata.get("entry_id"));
     if (entryId != null && entryId > 0) {
@@ -1299,9 +1455,24 @@ public class BuilderGoalRunnerService {
     response.put(
         "message",
         prePublish
-            ? "Task cancelled before publish."
-            : "Stop requested. Waiting for Micro6 to confirm cancellation.");
+            ? "Task removed before publish."
+            : "Removal requested. Waiting for Micro6 to confirm cancellation.");
     return response;
+  }
+
+  private boolean isPublishOnlyNoLaunch(Map<String, Object> taskMetadata) {
+    if (taskMetadata == null || taskMetadata.isEmpty()) {
+      return false;
+    }
+    if (!Boolean.TRUE.equals(taskMetadata.get(TASK_METADATA_PUBLISH_ONLY))) {
+      return false;
+    }
+    if (Boolean.TRUE.equals(taskMetadata.get(TASK_METADATA_LAUNCH_FALLBACK_ALLOWED))) {
+      return false;
+    }
+    Map<String, Object> publishMetadata = readPublishMetadata(taskMetadata);
+    Integer entryId = intValue(publishMetadata.get("entry_id"));
+    return entryId == null || entryId <= 0;
   }
 
   private String determineStopBlockedReason(PatchLoopIteration iteration, String publishStatus) {
@@ -1441,8 +1612,12 @@ public class BuilderGoalRunnerService {
     if (iteration == null || iteration.getStatus() == null || iteration.getStatus().isTerminal()) {
       return false;
     }
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    if (isPublishOnlyNoLaunch(taskMetadata)) {
+      return false;
+    }
     String displayStatus =
-        deriveDisplayStatus(iteration, stringValue(readPublishMetadata(readTaskMetadata(iteration)).get("status")));
+        deriveDisplayStatus(iteration, stringValue(readPublishMetadata(taskMetadata).get("status")));
     return !"FAILED".equalsIgnoreCase(displayStatus)
         && !"CANCELLED".equalsIgnoreCase(displayStatus)
         && !"COMPLETED".equalsIgnoreCase(displayStatus)

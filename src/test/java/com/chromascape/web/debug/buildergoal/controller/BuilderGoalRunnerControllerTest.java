@@ -1,7 +1,10 @@
 package com.chromascape.web.debug.buildergoal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlService;
@@ -207,5 +210,65 @@ class BuilderGoalRunnerControllerTest {
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(body).isNotNull();
     assertThat(body.get("recoveryPhase")).isEqualTo("AWAITING_OPERATOR_PROMPT");
+  }
+
+  @Test
+  void publishTask_delegatesToServiceAndReturnsOk() throws Exception {
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("accepted", true);
+    result.put("published", true);
+    result.put("entryId", 42);
+    when(builderGoalRunnerService.publishOnly(
+            eq("hash-1"),
+            eq("machine-1"),
+            eq("configurable_woodcutting"),
+            any(),
+            eq(360),
+            eq("http://127.0.0.1:8098"),
+            anyBoolean()))
+        .thenReturn(result);
+
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "taskKey": "configurable_woodcutting",
+              "world": 360,
+              "settings": {"treeType": "WILLOW"},
+              "targetBaseUrl": "http://127.0.0.1:8098",
+              "allowLaunchFallback": false
+            }
+            """);
+    ResponseEntity<Object> response = controller.publishTask(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.get("accepted")).isEqualTo(true);
+    assertThat(body.get("published")).isEqualTo(true);
+    assertThat(body.get("entryId")).isEqualTo(42);
+    verify(builderGoalRunnerService)
+        .publishOnly(
+            eq("hash-1"),
+            eq("machine-1"),
+            eq("configurable_woodcutting"),
+            any(),
+            eq(360),
+            eq("http://127.0.0.1:8098"),
+            anyBoolean());
+  }
+
+  @Test
+  void publishTask_returnsBadRequestWhenAccountAndTaskMissing() throws Exception {
+    com.fasterxml.jackson.databind.JsonNode payload = objectMapper.readTree("{}");
+    ResponseEntity<Object> response = controller.publishTask(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsKey("error");
   }
 }

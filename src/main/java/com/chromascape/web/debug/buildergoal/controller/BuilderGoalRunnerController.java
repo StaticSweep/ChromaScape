@@ -134,6 +134,44 @@ public class BuilderGoalRunnerController {
     }
   }
 
+  @PostMapping("/publish")
+  public ResponseEntity<Object> publishTask(@RequestBody JsonNode payload) {
+    try {
+      String accountId = textValue(payload.path("accountId"));
+      String launcherMachineUuid = textValue(payload.path("launcherMachineUuid"));
+      String taskKey = textValue(payload.path("taskKey"));
+      Integer world = intValue(payload.path("world"));
+      String targetBaseUrl = textValue(payload.path("targetBaseUrl"));
+      boolean allowLaunchFallback =
+          payload.path("allowLaunchFallback").asBoolean(false);
+      if (accountId == null || taskKey == null) {
+        return ResponseEntity.badRequest()
+            .body(Map.of("error", "accountId and taskKey are required"));
+      }
+      @SuppressWarnings("unchecked")
+      Map<String, Object> settings =
+          payload.path("settings").isObject()
+              ? objectMapper.convertValue(payload.path("settings"), Map.class)
+              : Map.of();
+      return ResponseEntity.ok(
+          builderGoalRunnerService.publishOnly(
+              accountId,
+              launcherMachineUuid,
+              taskKey,
+              settings,
+              world,
+              targetBaseUrl,
+              allowLaunchFallback));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", "Failed to publish builder goal task", "details", e.getMessage()));
+    }
+  }
+
   @GetMapping("/runs/{iterationId}/config")
   public ResponseEntity<Object> getRunConfig(@PathVariable String iterationId) {
     try {

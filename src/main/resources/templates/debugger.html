@@ -382,7 +382,7 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
-        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="23">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="24">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Builder Goal Runner</label>
             <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
@@ -447,6 +447,9 @@
           <div class="d-flex gap-2 mb-2">
             <button class="btn btn-sm btn-primary flex-fill" id="runBuilderGoalBtn" disabled>
               <i class="bi bi-play-fill me-1"></i>Run Task
+            </button>
+            <button class="btn btn-sm btn-outline-success flex-fill" id="publishBuilderGoalBtn" disabled title="Publish the selected task to an already-running Micro6 client without relaunching">
+              <i class="bi bi-cloud-arrow-up me-1"></i>Publish Task
             </button>
           </div>
           <div id="builderGoalClientStatus" class="small text-muted mb-3">
@@ -1094,7 +1097,7 @@
 
   <script src="/js/debugger.js?v=14"></script>
   <script src="/js/patchloop.js?v=2"></script>
-  <script src="/js/account-task-planner.js?v=24"></script>
+  <script src="/js/account-task-planner.js?v=25"></script>
 </body>
 
 </html>

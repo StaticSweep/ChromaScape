@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '23';
+  static BUILDER_GOAL_BUNDLE_VERSION = '24';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -88,6 +88,29 @@ class AccountTaskPlanner {
     }
   }
 
+  async readJsonResponse(response, fallbackValue) {
+    const text = await response.text();
+    const hasFallback = arguments.length > 1;
+    const trimmed = text.trim();
+    let payload = hasFallback ? fallbackValue : null;
+
+    if (trimmed) {
+      try {
+        payload = JSON.parse(trimmed);
+      } catch (error) {
+        throw new Error(`Invalid JSON response: ${error.message}`);
+      }
+    } else if (!response.ok || !hasFallback) {
+      throw new Error(response.ok ? 'Empty response body' : `HTTP ${response.status}`);
+    }
+
+    if (!response.ok) {
+      throw new Error(payload?.error || payload?.details || `HTTP ${response.status}`);
+    }
+
+    return payload;
+  }
+
   /**
    * Binds DOM element references.
    */
@@ -115,6 +138,7 @@ class AccountTaskPlanner {
     this.builderGoalPayloadInput = document.getElementById('builderGoalPayloadInput');
     this.importBuilderGoalBtn = document.getElementById('importBuilderGoalBtn');
     this.runBuilderGoalBtn = document.getElementById('runBuilderGoalBtn');
+    this.publishBuilderGoalBtn = document.getElementById('publishBuilderGoalBtn');
     this.runImportedBuilderGoalBtn = document.getElementById('runImportedBuilderGoalBtn');
     this.builderGoalClientStatus = document.getElementById('builderGoalClientStatus');
     this.builderGoalImportResult = document.getElementById('builderGoalImportResult');
@@ -321,6 +345,9 @@ class AccountTaskPlanner {
     }
     if (this.runBuilderGoalBtn) {
       this.runBuilderGoalBtn.addEventListener('click', () => this.runBuilderGoal());
+    }
+    if (this.publishBuilderGoalBtn) {
+      this.publishBuilderGoalBtn.addEventListener('click', () => this.publishBuilderGoal());
     }
     if (this.runImportedBuilderGoalBtn) {
       this.runImportedBuilderGoalBtn.addEventListener('click', () => this.runImportedBuilderGoal());
@@ -815,7 +842,7 @@ class AccountTaskPlanner {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      this.builderGoalMachines = await response.json();
+      this.builderGoalMachines = await this.readJsonResponse(response, []);
       this.renderBuilderGoalMachines();
     } catch (error) {
       console.error('Failed to load builder goal launcher machines:', error);
@@ -1298,7 +1325,7 @@ class AccountTaskPlanner {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      this.builderGoalRuns = await response.json();
+      this.builderGoalRuns = await this.readJsonResponse(response, []);
       this.renderBuilderGoalRuns();
       if (this.builderGoalLogsIterationId) {
         this.loadBuilderGoalRunLogs(this.builderGoalLogsIterationId, { silent: true });
@@ -1374,13 +1401,16 @@ class AccountTaskPlanner {
       selectedMachine.displayName || selectedMachine.machineUuid || 'the selected machine'
     );
     this.builderGoalClientStatus.innerHTML =
-      `${degradedCatalogWarning}<span class="text-info">ChromaScape will launch or attach to the local micro6 workspace for ${accountLabel} on ${machineLabel} in world ${world}, wait for that account's local executor to become dispatch-ready, and only then publish ${taskLabel} using the JSON settings from the editor.</span>`;
+      `${degradedCatalogWarning}<span class="text-info">Run Task will launch or attach to the local micro6 workspace for ${accountLabel} on ${machineLabel} in world ${world}, wait for that account's local executor to become dispatch-ready, and only then publish ${taskLabel} using the JSON settings from the editor. Use Publish Task to send ${taskLabel} to an already-running client without relaunching.</span>`;
   }
 
   updateBuilderGoalRunButtonState() {
     if (!this.runBuilderGoalBtn) return;
     if (this.builderGoalBundleMismatch) {
       this.runBuilderGoalBtn.disabled = true;
+      if (this.publishBuilderGoalBtn) {
+        this.publishBuilderGoalBtn.disabled = true;
+      }
       if (this.runImportedBuilderGoalBtn) {
         this.runImportedBuilderGoalBtn.disabled = true;
       }
@@ -1402,6 +1432,9 @@ class AccountTaskPlanner {
         world
     );
     this.runBuilderGoalBtn.disabled = !canPrimaryRun;
+    if (this.publishBuilderGoalBtn) {
+      this.publishBuilderGoalBtn.disabled = !canPrimaryRun;
+    }
     if (this.runImportedBuilderGoalBtn) {
       this.runImportedBuilderGoalBtn.disabled = !Boolean(
         selectedAccount &&
@@ -1429,7 +1462,7 @@ class AccountTaskPlanner {
       const canRerun = Boolean(run.canRerun);
       const canLoadConfig = Boolean(run.configAvailable);
       const canStop = Boolean(run.canStop);
-      const stopLabel = run.stopping ? 'Stopping...' : 'Stop Task';
+      const stopLabel = run.stopping ? 'Removing...' : 'Remove Task';
       const stopDisabled = !canStop || Boolean(run.stopping);
       const showingLogs = this.builderGoalLogsIterationId === run.iterationId;
       const actionStepLine = this.renderBuilderGoalActionStep(run);
@@ -1531,7 +1564,7 @@ class AccountTaskPlanner {
 
   renderBuilderGoalActionStep(run) {
     const runStatus = (run.status || '').toUpperCase();
-    if (status !== 'FAILED') {
+    if (runStatus !== 'FAILED') {
       return '';
     }
     if (run.recoveryPhase === 'AWAITING_OPERATOR_PROMPT') {
@@ -1866,6 +1899,163 @@ class AccountTaskPlanner {
     }
   }
 
+
+  /**
+   * Publishes the selected task to an already-running Micro6 executor without (re)launching a
+   * local client. Mirrors runBuilderGoal()'s validation, but calls the publish-only endpoint.
+   * If the executor is not ready, the run is deferred (published=false) and the operator is told
+   * to launch a client first; optionally a launch fallback can be requested.
+   */
+  async publishBuilderGoal() {
+    if (this.builderGoalBundleMismatch) {
+      this.renderBuilderGoalClientStatus(
+        'Hard refresh this page to load the latest Builder Goal Runner before publishing a task.',
+        'danger'
+      );
+      return;
+    }
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    if (!selectedAccount) {
+      alert('Select an account first.');
+      return;
+    }
+    if (!selectedAccount.runnable) {
+      alert(selectedAccount.disabledReason || 'This account cannot be published to yet.');
+      return;
+    }
+    if (!selectedMachine) {
+      alert('Select a launcher machine first.');
+      return;
+    }
+    if (!selectedMachine.builderGoalRunnable) {
+      alert(
+        selectedMachine.builderGoalDisabledReason ||
+          'This launcher machine is not ready for Builder Goal publishing yet.'
+      );
+      return;
+    }
+
+    const parsedConfig = this.parseBuilderGoalConfigInput();
+    if (parsedConfig.error) {
+      this.renderBuilderGoalClientStatus(parsedConfig.error, 'danger');
+      alert(parsedConfig.error);
+      return;
+    }
+
+    let selectedTask = this.getSelectedBuilderGoalTask();
+    if (parsedConfig.taskKey) {
+      selectedTask =
+        this.selectBuilderGoalTask(parsedConfig.taskKey) ||
+        this.ensureBuilderGoalTaskPlaceholder(parsedConfig.taskKey, {
+          displayName:
+            this.importedBuilderGoal?.result?.displayName ||
+            this.importedBuilderGoal?.result?.title ||
+            parsedConfig.taskKey,
+          source: 'imported_payload',
+          runnable: true
+        }) ||
+        selectedTask;
+    }
+
+    const world = this.getBuilderGoalWorldValue();
+    if (!selectedTask) {
+      const message = 'Select a Micro6 task first, or paste JSON that includes task_key.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+    if (!world) {
+      const message = 'Enter a valid world between 300 and 700.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+
+    if (this.publishBuilderGoalBtn) {
+      this.publishBuilderGoalBtn.disabled = true;
+      this.publishBuilderGoalBtn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Publishing...';
+    }
+    this.renderBuilderGoalClientStatus(
+      `Publishing ${selectedTask.display_name || selectedTask.task_key} to the already-running local micro6 executor for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}...`,
+      'info'
+    );
+    console.info('[AccountTaskPlanner] Publish Task clicked', {
+      accountId: selectedAccount.accountId || null,
+      launcherMachineUuid: selectedMachine.machineUuid || null,
+      taskKey: selectedTask.task_key || null,
+      world
+    });
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(
+      () => controller.abort(),
+      AccountTaskPlanner.BUILDER_GOAL_PUBLISH_TIMEOUT_MS
+    );
+
+    try {
+      const settings = parsedConfig.settings && typeof parsedConfig.settings === 'object'
+        ? parsedConfig.settings
+        : {};
+      const response = await fetch('/api/debug/builder-goals/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          accountId: selectedAccount.accountId,
+          launcherMachineUuid: selectedMachine.machineUuid,
+          world,
+          taskKey: selectedTask.task_key,
+          settings,
+          allowLaunchFallback: false
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      if (result?.run?.iterationId) {
+        await this.bindBuilderGoalCodexRun(result.run.iterationId, { silent: true });
+      }
+      if (result.published === false) {
+        await this.loadBuilderGoalRuns();
+        const reason = result.publishError || 'Micro6 executor is not publish-ready yet.';
+        this.renderBuilderGoalClientStatus(
+          `Publish deferred: ${reason} Launch or attach the local micro6 client first, then publish again.`,
+          'warning'
+        );
+      } else {
+        this.builderGoalConfigDirty = false;
+        this.builderGoalConfigLoadedKey = this.getBuilderGoalConfigContextKey(
+          selectedAccount.accountId,
+          selectedTask.task_key
+        );
+        this.renderBuilderGoalConfigMeta();
+        this.renderBuilderGoalClientStatus(
+          `Published ${selectedTask.display_name || selectedTask.task_key} to the running micro6 executor for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}.`,
+          'success'
+        );
+      }
+    } catch (error) {
+      console.error('Failed to publish builder goal task:', error);
+      const timedOut = error && error.name === 'AbortError';
+      const message = timedOut
+        ? 'Publish timed out before Micro6 acknowledged the task.'
+        : error.message;
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(
+        `Failed to publish task: ${message}`,
+        'danger'
+      );
+      alert('Failed to publish task: ' + message);
+    } finally {
+      clearTimeout(timeoutHandle);
+      if (this.publishBuilderGoalBtn) {
+        this.publishBuilderGoalBtn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Publish Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+    }
+  }
+
   async runImportedBuilderGoal() {
     if (this.builderGoalBundleMismatch) {
       this.renderBuilderGoalClientStatus(
@@ -2000,11 +2190,11 @@ class AccountTaskPlanner {
         const response = await fetch('/api/debug/builder-goals/codex/sessions', {
           method: 'POST'
         });
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(result.error || `HTTP ${response.status}`);
-        }
+        const result = await this.readJsonResponse(response);
         this.codexSessionId = result.sessionId || '';
+        if (!this.codexSessionId) {
+          throw new Error('Codex session response did not include a session id');
+        }
         if (this.codexSessionId) {
           localStorage.setItem('taskPlanner.builderGoalCodexSessionId', this.codexSessionId);
         }
@@ -2027,10 +2217,7 @@ class AccountTaskPlanner {
     }
     try {
       const response = await fetch(`/api/debug/builder-goals/codex/sessions/${encodeURIComponent(this.codexSessionId)}`);
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || `HTTP ${response.status}`);
-      }
+      const result = await this.readJsonResponse(response);
       this.codexSession = result;
       this.renderBuilderGoalCodexSession(result);
     } catch (error) {
@@ -2390,12 +2577,12 @@ class AccountTaskPlanner {
       : null;
     const alreadyStopping = Boolean(run && (run.stopping || run.cancelled));
     const confirmMessage = alreadyStopping
-      ? 'This task is already stopping. Request stop again?'
-      : 'Stop this Builder Goal task? The local Micro6 client will remain running.';
+      ? 'This task is already being removed. Request removal again?'
+      : 'Remove this Builder Goal task? The local Micro6 client will remain running.';
     if (!confirm(confirmMessage)) {
       return;
     }
-    this.renderBuilderGoalClientStatus('Requesting stop for the selected Builder Goal task...', 'info');
+    this.renderBuilderGoalClientStatus('Requesting removal for the selected Builder Goal task...', 'info');
     try {
       const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/stop`, {
         method: 'POST',
@@ -2412,14 +2599,14 @@ class AccountTaskPlanner {
       }
       const message = result.message
         || (run && run.publishEntryId
-          ? 'Stop requested. Waiting for Micro6 to confirm cancellation.'
-          : 'Task cancelled before publish.');
+          ? 'Removal requested. Waiting for Micro6 to confirm cancellation.'
+          : 'Task removed before publish.');
       this.renderBuilderGoalClientStatus(message, 'success');
     } catch (error) {
-      console.error('Failed to stop builder goal run:', error);
+      console.error('Failed to remove builder goal run:', error);
       await this.loadBuilderGoalRuns();
-      this.renderBuilderGoalClientStatus(`Failed to stop task: ${error.message}`, 'danger');
-      alert('Failed to stop task: ' + error.message);
+      this.renderBuilderGoalClientStatus(`Failed to remove task: ${error.message}`, 'danger');
+      alert('Failed to remove task: ' + error.message);
     }
   }
 
@@ -2633,10 +2820,10 @@ class AccountTaskPlanner {
     if (runStatus === 'COMPLETED') {
       return 'Published run completed';
     }
-    if (status === 'FAILED') {
+    if (runStatus === 'FAILED') {
       return 'Published run failed';
     }
-    if (status === 'PUBLISH_FAILED') {
+    if (runStatus === 'PUBLISH_FAILED') {
       return 'Publish failed';
     }
     return 'Waiting for Micro6 status';

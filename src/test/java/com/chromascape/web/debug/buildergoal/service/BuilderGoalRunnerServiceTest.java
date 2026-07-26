@@ -3,6 +3,8 @@ package com.chromascape.web.debug.buildergoal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.lenient;
@@ -868,6 +870,370 @@ class BuilderGoalRunnerServiceTest {
     assertThatThrownBy(() -> service.getRunSummaryByRecordingId("missing_recording"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Builder goal run not found for recordingId");
+  }
+
+
+  @Test
+  void publishOnly_publishesWhenMicro6HealthIsPublishReady() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
+    ScriptExecutionService.Micro6ExecutorHealthResult health =
+        new ScriptExecutionService.Micro6ExecutorHealthResult(
+            true,
+            true,
+            "READY_TO_PUBLISH",
+            "dispatch-ready",
+            "bigGreenMeat",
+            "hash-1",
+            "bigGreenMeat",
+            "hash-1",
+            false,
+            null,
+            "READY",
+            "LOGGED_IN",
+            null,
+            null,
+            null,
+            "http://127.0.0.1:8098",
+            null);
+    when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap()))
+        .thenReturn(
+            ScriptExecutionService.Micro6PublishResult.success(
+                42, true, "http://127.0.0.1:8098", "QUEUED"));
+
+    Map<String, Object> response =
+        service.publishOnly(
+            "hash-1",
+            "machine-1",
+            "configurable_woodcutting",
+            Map.of("treeType", "WILLOW"),
+            360,
+            null,
+            false);
+
+    assertThat(response.get("accepted")).isEqualTo(true);
+    assertThat(response.get("published")).isEqualTo(true);
+    assertThat(response.get("entryId")).isEqualTo(42);
+    assertThat(response.get("launchFallback")).isEqualTo(false);
+    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap());
+    verify(scriptExecutionService, never())
+        .stopMicro6PublishedRun(anyMap(), any(), anyString());
+  }
+
+  @Test
+  void publishOnly_defersWhenExecutorIsNotReachable() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
+    ScriptExecutionService.Micro6ExecutorHealthResult health =
+        new ScriptExecutionService.Micro6ExecutorHealthResult(
+            false,
+            false,
+            "WAITING_FOR_HEALTH",
+            "executor not reachable",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "http://127.0.0.1:8098",
+            null);
+    when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
+
+    Map<String, Object> response =
+        service.publishOnly(
+            "hash-1",
+            "machine-1",
+            "configurable_woodcutting",
+            Map.of("treeType", "WILLOW"),
+            360,
+            null,
+            false);
+
+    assertThat(response.get("accepted")).isEqualTo(true);
+    assertThat(response.get("published")).isEqualTo(false);
+    assertThat(response.get("publishStatus")).isEqualTo("DEFERRED");
+    assertThat(response.get("launchFallback")).isEqualTo(false);
+    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap());
+  }
+
+  @Test
+  void publishOnly_defersWhenExecutorAccountIsMismatched() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
+    ScriptExecutionService.Micro6ExecutorHealthResult health =
+        new ScriptExecutionService.Micro6ExecutorHealthResult(
+            true,
+            true,
+            "WAITING_FOR_ACCOUNT",
+            "executor is logged into a different account",
+            "someoneElse",
+            "other-hash",
+            "someoneElse",
+            "other-hash",
+            false,
+            null,
+            "READY",
+            "LOGGED_IN",
+            null,
+            null,
+            null,
+            "http://127.0.0.1:8098",
+            null);
+    when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
+
+    Map<String, Object> response =
+        service.publishOnly(
+            "hash-1",
+            "machine-1",
+            "configurable_woodcutting",
+            Map.of("treeType", "WILLOW"),
+            360,
+            null,
+            false);
+
+    assertThat(response.get("published")).isEqualTo(false);
+    assertThat(response.get("publishStatus")).isEqualTo("DEFERRED");
+    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap());
+  }
+
+  @Test
+  void syncPendingLaunches_skipsDeferredPublishOnlyRunWhenFallbackIsDisabled() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_publish_only_deferred");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "publish_only", true,
+                "launch_fallback_allowed", false,
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"),
+                "target_preparation",
+                    Map.of(
+                        "state", "WAITING_FOR_HEALTH",
+                        "message", "executor not reachable"),
+                "settings", Map.of("treeType", "WILLOW"))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(List.of(iteration));
+
+    service.syncPendingLaunches();
+
+    verify(targetPreparationService, never())
+        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class), any());
+  }
+
+  @Test
+  void publishOnly_allowsRetryWhenOlderDeferredPublishOnlyRunExists() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of());
+    PatchLoopIteration deferred = new PatchLoopIteration();
+    deferred.setIterationId("buildergoal_publish_only_deferred");
+    deferred.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    deferred.setScriptName("configurable_woodcutting");
+    deferred.setStatus(PatchLoopStatus.QUEUED);
+    deferred.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "publish_only", true,
+                "launch_fallback_allowed", false,
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"),
+                "target_preparation",
+                    Map.of(
+                        "state", "WAITING_FOR_HEALTH",
+                        "message", "executor not reachable"),
+                "settings", Map.of("treeType", "WILLOW"))));
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(List.of(deferred));
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
+    when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
+        .thenReturn(
+            new ScriptExecutionService.Micro6ExecutorHealthResult(
+                true,
+                true,
+                "READY_TO_PUBLISH",
+                "dispatch-ready",
+                "bigGreenMeat",
+                "hash-1",
+                "bigGreenMeat",
+                "hash-1",
+                false,
+                null,
+                "READY",
+                "LOGGED_IN",
+                null,
+                null,
+                null,
+                "http://127.0.0.1:8098",
+                null));
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap()))
+        .thenReturn(
+            ScriptExecutionService.Micro6PublishResult.success(
+                43, false, "http://127.0.0.1:8098", "QUEUED"));
+
+    Map<String, Object> response =
+        service.publishOnly(
+            "hash-1",
+            "machine-1",
+            "configurable_woodcutting",
+            Map.of("treeType", "WILLOW"),
+            360,
+            null,
+            false);
+
+    assertThat(response.get("published")).isEqualTo(true);
+    assertThat(response.get("entryId")).isEqualTo(43);
+    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap());
+  }
+
+  @Test
+  void publishOnly_requiresLauncherMachineWhenLaunchFallbackIsEnabled() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+
+    assertThatThrownBy(
+            () ->
+                service.publishOnly(
+                    "hash-1",
+                    null,
+                    "configurable_woodcutting",
+                    Map.of("treeType", "WILLOW"),
+                    360,
+                    null,
+                    true))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("launcherMachineUuid is required");
+  }
+
+  @Test
+  void stopRun_cancelsQueuedRunBeforePublish() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_prepublish_1");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"),
+                "settings", Map.of("treeType", "WILLOW"))));
+    when(iterationRepository.findByIterationId("buildergoal_prepublish_1"))
+        .thenReturn(Optional.of(iteration));
+
+    Map<String, Object> response = service.stopRun("buildergoal_prepublish_1", null);
+
+    assertThat(response.get("success")).isEqualTo(true);
+    verify(scriptExecutionService, never())
+        .stopMicro6PublishedRun(anyMap(), any(), anyString());
+    verify(persistenceService, times(1)).updateIterationStatus(iteration, PatchLoopStatus.CANCELLED);
+  }
+
+  @Test
+  void stopRun_sendsStopToMicro6AfterPublish() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_published_1");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.RUNNING_SCRIPT);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"),
+                "micro6_publish",
+                    Map.of("entry_id", 42, "status", "RUNNING"),
+                "settings", Map.of("treeType", "WILLOW"))));
+    when(iterationRepository.findByIterationId("buildergoal_published_1"))
+        .thenReturn(Optional.of(iteration));
+    when(scriptExecutionService.stopMicro6PublishedRun(anyMap(), eq(42), anyString()))
+        .thenReturn(true);
+
+    Map<String, Object> response = service.stopRun("buildergoal_published_1", null);
+
+    assertThat(response.get("success")).isEqualTo(true);
+    verify(scriptExecutionService, times(1))
+        .stopMicro6PublishedRun(anyMap(), eq(42), anyString());
+    verify(persistenceService, never()).updateIterationStatus(iteration, PatchLoopStatus.CANCELLED);
   }
 
   private AnalysisV1EvidenceBundle sampleEvidenceBundle() {
