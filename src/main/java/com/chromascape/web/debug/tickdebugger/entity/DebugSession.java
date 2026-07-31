@@ -10,7 +10,12 @@ import java.time.LocalDateTime;
  * optional video recording linkage.
  */
 @Entity
-@Table(name = "debug_sessions")
+@Table(
+    name = "debug_sessions",
+    indexes = {
+      @Index(name = "idx_debug_sessions_recording_id", columnList = "recording_id"),
+      @Index(name = "idx_debug_sessions_start_time", columnList = "start_time")
+    })
 public class DebugSession {
 
   @Id

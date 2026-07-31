@@ -1,6 +1,7 @@
 package com.chromascape.web.debug.tickdebugger.service;
 
 import com.chromascape.web.debug.tickdebugger.dto.DebugSessionSummary;
+import com.chromascape.web.debug.tickdebugger.dto.SessionCountProjection;
 import com.chromascape.web.debug.tickdebugger.dto.SessionCounts;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
@@ -637,10 +638,10 @@ public class DebugSessionService {
   }
 
   /**
-   * Convert multiple DebugSession entities to summary DTOs using a bulk count query.
+   * Convert multiple DebugSession entities to summary DTOs using grouped count queries.
    *
-   * <p>This method reduces N+1 query problems by fetching all counts in a single JOIN query. Prefer
-   * this over calling {@link #toSummary(DebugSession)} in a loop.
+   * <p>This method fetches snapshot, log, and failure marker counts in three separate grouped
+   * queries, avoiding the large row explosion of a multi-table LEFT JOIN aggregate.
    *
    * @param sessions the debug sessions to convert
    * @return list of session summaries with counts
@@ -650,24 +651,39 @@ public class DebugSessionService {
       return List.of();
     }
 
-    // Single query for all counts
     List<String> sessionIds = sessions.stream().map(DebugSession::getSessionId).toList();
-    List<SessionCounts> countsList = sessionRepository.findCountsBySessionIds(sessionIds);
-    Map<String, SessionCounts> countsMap =
-        countsList.stream()
-            .collect(
-                java.util.stream.Collectors.toMap(SessionCounts::getSessionId, counts -> counts));
 
-    // Map to summaries
+    Map<String, Long> tickCounts =
+        snapshotRepository.countBySessionIdIn(sessionIds).stream()
+            .collect(
+                java.util.stream.Collectors.toMap(
+                    SessionCountProjection::getSessionId,
+                    SessionCountProjection::getCount,
+                    (a, b) -> a));
+    Map<String, Long> eventCounts =
+        tickLogRepository.countBySessionIdIn(sessionIds).stream()
+            .collect(
+                java.util.stream.Collectors.toMap(
+                    SessionCountProjection::getSessionId,
+                    SessionCountProjection::getCount,
+                    (a, b) -> a));
+    Map<String, Long> failureMarkerCounts =
+        timelineMarkerRepository.countFailuresBySessionIdIn(sessionIds).stream()
+            .collect(
+                java.util.stream.Collectors.toMap(
+                    SessionCountProjection::getSessionId,
+                    SessionCountProjection::getCount,
+                    (a, b) -> a));
+
     return sessions.stream()
         .map(
             session -> {
-              SessionCounts counts =
-                  countsMap.getOrDefault(
-                      session.getSessionId(),
-                      new SessionCounts(session.getSessionId(), 0L, 0L, 0L));
+              String sessionId = session.getSessionId();
+              Long tickCount = tickCounts.getOrDefault(sessionId, 0L);
+              Long eventCount = eventCounts.getOrDefault(sessionId, 0L);
+              Long failureCount = failureMarkerCounts.getOrDefault(sessionId, 0L);
               return new DebugSessionSummary(
-                  session.getSessionId(),
+                  sessionId,
                   session.getAccountName(),
                   session.getScriptName(),
                   session.getStartTime(),
@@ -676,10 +692,10 @@ public class DebugSessionService {
                   session.getEndTick(),
                   session.getRecordingId(),
                   session.isActive(),
-                  counts.getTickCount(),
-                  counts.getEventCount(),
-                  counts.getFailureMarkerCount(),
-                  counts.getEventCount() > 0,
+                  tickCount,
+                  eventCount,
+                  failureCount,
+                  eventCount > 0,
                   session.getLifecycleStateOrDefault(),
                   session.getFailureCode(),
                   session.getFailureReason());

@@ -190,8 +190,9 @@ public class SimulatorReplaySourceService {
   /**
    * Canonicalize playerState field names from micro6 conventions to OpenRune conventions.
    *
-   * <p>Renames: worldX→x, worldY→z, currentHp→hp, currentPrayer→prayer. Other fields are passed
-   * through unchanged.
+   * <p>Handles both legacy flat fields (worldX→x, worldY→z, currentHp→hp, currentPrayer→prayer)
+   * and new canonical nested fields (position.x→x, position.y/z→z, hp.current→hp,
+   * prayer.current→prayer). Other fields are passed through unchanged.
    */
   private JsonNode canonicalizePlayerState(JsonNode playerState) {
     if (playerState == null || !playerState.isObject()) {
@@ -199,6 +200,8 @@ public class SimulatorReplaySourceService {
     }
     ObjectNode source = (ObjectNode) playerState;
     ObjectNode canonical = (ObjectNode) source.deepCopy();
+
+    // Legacy flat field mappings
     for (Map.Entry<String, String> entry : PLAYER_STATE_FIELD_MAP.entrySet()) {
       String oldKey = entry.getKey();
       String newKey = entry.getValue();
@@ -207,6 +210,36 @@ public class SimulatorReplaySourceService {
         canonical.remove(oldKey);
       }
     }
+
+    // New canonical nested position: position.x -> x, position.y or position.z -> z
+    if (source.has("position") && source.get("position").isObject()) {
+      JsonNode pos = source.get("position");
+      if (pos.has("x") && !canonical.has("x")) {
+        canonical.set("x", pos.get("x"));
+      }
+      if (pos.has("z") && !canonical.has("z")) {
+        canonical.set("z", pos.get("z"));
+      } else if (pos.has("y") && !canonical.has("z")) {
+        canonical.set("z", pos.get("y"));
+      }
+    }
+
+    // New canonical nested hp: hp.current -> hp (numeric) for OpenRune
+    if (source.has("hp") && source.get("hp").isObject()) {
+      JsonNode hp = source.get("hp");
+      if (hp.has("current") && !canonical.has("hp")) {
+        canonical.set("hp", hp.get("current"));
+      }
+    }
+
+    // New canonical nested prayer: prayer.current -> prayer (numeric) for OpenRune
+    if (source.has("prayer") && source.get("prayer").isObject()) {
+      JsonNode prayer = source.get("prayer");
+      if (prayer.has("current") && !canonical.has("prayer")) {
+        canonical.set("prayer", prayer.get("current"));
+      }
+    }
+
     return canonical;
   }
 

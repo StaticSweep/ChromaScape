@@ -160,7 +160,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       log.info("Sent SESSION_START response to Micro6: sessionId={}", response.getSessionId());
 
       // Broadcast session creation to all debugger clients
-      broadcastSessionStartToDebugger(response);
+      broadcastSessionStartToDebugger(response, request.getAccountName());
 
     } catch (Exception e) {
       log.error("Error handling SESSION_START: {}", e.getMessage(), e);
@@ -225,12 +225,13 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
    * <p>This allows the UI to detect when Micro6 creates a debug session and automatically sync to
    * it, fixing the session ID mismatch issue.
    */
-  private void broadcastSessionStartToDebugger(SessionStartResponse session) {
+  private void broadcastSessionStartToDebugger(SessionStartResponse session, String accountName) {
     try {
       Map<String, Object> message =
           Map.of(
               "type", "SESSION_CREATED",
               "sessionId", session.getSessionId(),
+              "accountName", accountName != null ? accountName : "",
               "startTick", session.getStartTick());
 
       String messageJson = objectMapper.writeValueAsString(message);

@@ -12,6 +12,7 @@ import com.chromascape.web.recording.exception.FrameCaptureException;
 import com.chromascape.web.recording.exception.RecordingAlreadyInProgressException;
 import com.chromascape.web.recording.exception.RecordingDisabledException;
 import com.chromascape.web.recording.exception.RecordingException;
+import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.recording.service.RecordingService;
 import com.chromascape.web.recording.service.RecordingService.RecordingMetadata;
 import com.chromascape.web.recording.service.RecordingSessionMetadataService;
@@ -59,6 +60,7 @@ public class RecordingController {
   private final WindowSelectionService windowSelectionService;
   private final RecordingConfig recordingConfig;
   private final RecordingSessionMetadataService metadataService;
+  private final DebugSessionService debugSessionService;
 
   @Autowired
   public RecordingController(
@@ -66,12 +68,14 @@ public class RecordingController {
       RecordingSessionRepository recordingSessionRepository,
       WindowSelectionService windowSelectionService,
       RecordingConfig recordingConfig,
-      RecordingSessionMetadataService metadataService) {
+      RecordingSessionMetadataService metadataService,
+      DebugSessionService debugSessionService) {
     this.recordingService = recordingService;
     this.recordingSessionRepository = recordingSessionRepository;
     this.windowSelectionService = windowSelectionService;
     this.recordingConfig = recordingConfig;
     this.metadataService = metadataService;
+    this.debugSessionService = debugSessionService;
   }
 
   /**
@@ -395,6 +399,46 @@ public class RecordingController {
                             session.getAccountName(),
                             session.getScriptName(),
                             metadataService.formatStartTime(session.getStartTime())));
+
+                    // Playability flags for the replay selector
+                    boolean hasVideoPath =
+                        session.getVideoPath() != null && !session.getVideoPath().isBlank();
+                    boolean hasConfiguredVideoFile = sessionVideoFileExists(session);
+                    boolean hasOrphanVideoFile = videoFileExists(session.getRecordingId());
+                    boolean finalized = session.getEndTime() != null;
+                    String status;
+                    boolean playable;
+                    if (!finalized) {
+                      status = "RECORDING";
+                      playable = false;
+                    } else if (!hasVideoPath && hasOrphanVideoFile) {
+                      status = "UNFINALIZED";
+                      playable = false;
+                    } else if (!hasVideoPath || !hasConfiguredVideoFile) {
+                      status = "MISSING_VIDEO";
+                      playable = false;
+                    } else {
+                      status = "FINALIZED";
+                      playable = true;
+                    }
+                    map.put("playable", playable);
+                    map.put("status", status);
+                    map.put("videoAvailable", playable);
+                    map.put(
+                        "videoSizeBytes",
+                        hasConfiguredVideoFile
+                            ? sessionVideoFileSize(session)
+                            : (hasOrphanVideoFile ? videoFileSize(session.getRecordingId()) : null));
+                    if (!playable) {
+                      if (!finalized) {
+                        map.put("videoError", "Recording is still in progress");
+                      } else if (!hasVideoPath && hasOrphanVideoFile) {
+                        map.put("videoError", "Recording was not finalized properly - video path not set");
+                      } else {
+                        map.put("videoError", "Video file not found on disk");
+                      }
+                    }
+
                     return map;
                   })
               .toList();
@@ -410,33 +454,32 @@ public class RecordingController {
   /**
    * Gets a specific recording by recording ID.
    *
+   * <p>If the recording has no video path but the .mp4 file exists on disk, the metadata will be
+   * backfilled automatically before the response is returned.
+   *
    * @param recordingId The recording ID
    * @return Response with recording details
    */
   @GetMapping("/{recordingId}")
   public ResponseEntity<Map<String, Object>> getRecording(@PathVariable String recordingId) {
     try {
+      // Attempt orphan repair if the video path is missing but the .mp4 exists, then re-read
+      final boolean repaired;
+      if (videoFileExists(recordingId)) {
+        repaired = debugSessionService.repairOrphanedRecordingSession(recordingId);
+      } else {
+        repaired = false;
+      }
+
       return recordingSessionRepository
           .findByRecordingId(recordingId)
           .map(
               session -> {
-                Map<String, Object> response = new HashMap<>();
-                response.put("id", session.getId());
-                response.put("recordingId", session.getRecordingId());
-                response.put("accountName", session.getAccountName());
-                response.put("scriptName", session.getScriptName());
-                response.put("startTime", session.getStartTime());
-                response.put("endTime", session.getEndTime());
-                response.put("triggerType", session.getTriggerType());
-                response.put("replayName", session.getReplayName());
-                response.put("replayTags", metadataService.parseTags(session.getReplayTagsJson()));
-                response.put(
-                    "displayName",
-                    metadataService.computeDisplayName(
-                        session.getReplayName(),
-                        session.getAccountName(),
-                        session.getScriptName(),
-                        metadataService.formatStartTime(session.getStartTime())));
+                Map<String, Object> response = buildRecordingResponse(session);
+
+                if (repaired) {
+                  response.put("repaired", true);
+                }
 
                 // Validate and add video URL
                 if (session.getVideoPath() != null) {
@@ -576,5 +619,114 @@ public class RecordingController {
       logger.error("Failed to download recording {}: {}", filename, e.getMessage(), e);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
     }
+  }
+
+  /** Returns the absolute path to the .mp4 file for a recording ID, if it exists. */
+  private Path videoFilePath(String recordingId) {
+    if (recordingId == null || recordingId.isBlank()) {
+      return null;
+    }
+    return Paths.get(recordingConfig.getOutputDirectory(), recordingId + ".mp4").toAbsolutePath();
+  }
+
+  /** Returns true if the .mp4 file exists on disk for the given recording ID. */
+  private boolean videoFileExists(String recordingId) {
+    Path path = videoFilePath(recordingId);
+    return path != null && Files.exists(path);
+  }
+
+  /** Returns the size in bytes of the .mp4 file for the given recording ID, or null if missing. */
+  private Long videoFileSize(String recordingId) {
+    Path path = videoFilePath(recordingId);
+    if (path == null || !Files.exists(path)) {
+      return null;
+    }
+    try {
+      return Files.size(path);
+    } catch (Exception e) {
+      logger.warn("Failed to read video file size for {}: {}", recordingId, e.getMessage());
+      return null;
+    }
+  }
+
+  private boolean sessionVideoFileExists(RecordingSession session) {
+    if (session.getVideoPath() == null || session.getVideoPath().isBlank()) {
+      return false;
+    }
+    return Files.exists(Paths.get(session.getVideoPath()));
+  }
+
+  private Long sessionVideoFileSize(RecordingSession session) {
+    if (session.getVideoPath() == null || session.getVideoPath().isBlank()) {
+      return null;
+    }
+    try {
+      Path path = Paths.get(session.getVideoPath());
+      return Files.exists(path) ? Files.size(path) : null;
+    } catch (Exception e) {
+      logger.warn("Failed to read configured video file size for {}: {}", session.getRecordingId(), e.getMessage());
+      return null;
+    }
+  }
+
+  /** Builds a common response map from a {@link RecordingSession}. */
+  private Map<String, Object> buildRecordingResponse(RecordingSession session) {
+    Map<String, Object> response = new HashMap<>();
+    response.put("id", session.getId());
+    response.put("recordingId", session.getRecordingId());
+    response.put("accountName", session.getAccountName());
+    response.put("scriptName", session.getScriptName());
+    response.put("startTime", session.getStartTime());
+    response.put("endTime", session.getEndTime());
+    response.put("triggerType", session.getTriggerType());
+    response.put("replayName", session.getReplayName());
+    response.put("replayTags", metadataService.parseTags(session.getReplayTagsJson()));
+    response.put(
+        "displayName",
+        metadataService.computeDisplayName(
+            session.getReplayName(),
+            session.getAccountName(),
+            session.getScriptName(),
+            metadataService.formatStartTime(session.getStartTime())));
+
+    // Playability flags
+    boolean hasVideoPath = session.getVideoPath() != null && !session.getVideoPath().isBlank();
+    boolean hasConfiguredVideoFile = sessionVideoFileExists(session);
+    boolean hasOrphanVideoFile = videoFileExists(session.getRecordingId());
+    boolean finalized = session.getEndTime() != null;
+    String status;
+    boolean playable;
+    if (!finalized) {
+      status = "RECORDING";
+      playable = false;
+    } else if (!hasVideoPath && hasOrphanVideoFile) {
+      status = "UNFINALIZED";
+      playable = false;
+    } else if (!hasVideoPath || !hasConfiguredVideoFile) {
+      status = "MISSING_VIDEO";
+      playable = false;
+    } else {
+      status = "FINALIZED";
+      playable = true;
+    }
+    response.put("playable", playable);
+    response.put("status", status);
+    response.put("videoAvailable", playable);
+    response.put(
+        "videoSizeBytes",
+        hasConfiguredVideoFile
+            ? sessionVideoFileSize(session)
+            : (hasOrphanVideoFile ? videoFileSize(session.getRecordingId()) : null));
+    if (!playable) {
+      if (!finalized) {
+        response.put("videoError", "Recording is still in progress");
+      } else if (!hasVideoPath && hasOrphanVideoFile) {
+        response.put("videoError", "Recording was not finalized properly - video path not set");
+      } else {
+        response.put("videoError", "Video file not found on disk");
+      }
+    }
+
+    return response;
   }
 }

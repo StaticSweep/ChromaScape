@@ -13,7 +13,12 @@ import org.hibernate.type.SqlTypes;
  * inventory, equipment, threats, projectiles, and cooldowns.
  */
 @Entity
-@Table(name = "tick_snapshots")
+@Table(
+    name = "tick_snapshots",
+    indexes = {
+      @Index(name = "idx_tick_snapshots_session", columnList = "session_id"),
+      @Index(name = "idx_tick_snapshots_session_tick", columnList = "session_id, tick")
+    })
 public class TickSnapshot {
 
   @Id
@@ -32,7 +37,11 @@ public class TickSnapshot {
   @Column(nullable = false)
   private LocalDateTime timestamp;
 
-  /** Player state as JSON (position, HP, prayer, animation, energy, etc.). */
+  /** Player state as JSON (position, HP, prayer, animation, energy, etc.).
+   * Contains canonical nested fields (position{x,y,z,plane}, hp{current,max,percent},
+   * prayer{current,max,percent}, energy, animation, interacting, skills)
+   * and legacy flat aliases (x, z, worldX, worldY, plane, currentHp, maxHp,
+   * currentPrayer, maxPrayer, runEnergy, animationId) for backward compatibility. */
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(nullable = false)
   private JsonNode playerState;
@@ -60,6 +69,11 @@ public class TickSnapshot {
   /** Quest state (name, stepText, changed) as JSON object. */
   @JdbcTypeCode(SqlTypes.JSON)
   private JsonNode quest;
+
+  /** Full Quest Helper structured payload as JSON object. Optional; absent for old clients. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "quest_helper")
+  private JsonNode questHelper;
 
   /** NPCs in render distance as JSON array. */
   @JdbcTypeCode(SqlTypes.JSON)
@@ -188,6 +202,14 @@ public class TickSnapshot {
 
   public void setQuest(JsonNode quest) {
     this.quest = quest;
+  }
+
+  public JsonNode getQuestHelper() {
+    return questHelper;
+  }
+
+  public void setQuestHelper(JsonNode questHelper) {
+    this.questHelper = questHelper;
   }
 
   public JsonNode getNpcs() {

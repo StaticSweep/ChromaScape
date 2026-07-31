@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.tickdebugger.entity;
 
+import com.chromascape.web.debug.tickdebugger.dto.SessionCountProjection;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -62,6 +63,17 @@ public interface TickLogRepository extends JpaRepository<TickLog, Long> {
 
   /** Count logs for a session. */
   long countBySessionId(String sessionId);
+
+  /**
+   * Count tick logs grouped by session ID for a list of sessions.
+   *
+   * @param sessionIds the sessions to count logs for
+   * @return list of session ID/count projections
+   */
+  @Query(
+      "SELECT l.sessionId AS sessionId, COUNT(l) AS count FROM TickLog l "
+          + "WHERE l.sessionId IN :sessionIds GROUP BY l.sessionId")
+  List<SessionCountProjection> countBySessionIdIn(@Param("sessionIds") List<String> sessionIds);
 
   /** Count logs by severity for a session. */
   long countBySessionIdAndSeverityIgnoreCase(String sessionId, String severity);

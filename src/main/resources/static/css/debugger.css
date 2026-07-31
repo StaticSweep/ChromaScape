@@ -1226,6 +1226,311 @@ body {
   vertical-align: middle;
 }
 
+/* ===== Quest Helper rich panel ===== */
+.quest-helper-card .tick-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.quest-helper-name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.quest-helper-source-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 4px;
+  background: rgba(97, 175, 239, 0.15);
+  border: 1px solid rgba(97, 175, 239, 0.4);
+  color: #61afef;
+}
+.quest-helper-source-badge.quest-helper-source-questhelper {
+  background: rgba(152, 195, 121, 0.15);
+  border-color: #98c379;
+  color: #98c379;
+}
+.quest-helper-source-badge.quest-helper-source-logging_fallback {
+  background: rgba(229, 192, 123, 0.15);
+  border-color: #e5c07b;
+  color: #e5c07b;
+}
+.quest-helper-source-badge.quest-helper-source-error,
+.quest-helper-source-badge.quest-helper-source-unavailable {
+  background: rgba(224, 108, 117, 0.15);
+  border-color: #e06c75;
+  color: #e06c75;
+}
+
+.quest-helper-current-step {
+  background: rgba(152, 195, 121, 0.1);
+  border-left: 3px solid #98c379;
+  border-radius: 4px;
+  padding: 5px 8px;
+}
+.quest-helper-step-label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.quest-helper-step-index {
+  font-size: 0.68rem;
+  color: #abb2bf;
+}
+.quest-helper-changed-flag {
+  font-size: 0.65rem;
+  color: #98c379;
+}
+.quest-helper-step-text {
+  font-size: 0.8rem;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.quest-helper-subheader {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #e06c75;
+  margin-bottom: 2px;
+}
+.quest-helper-subheader-minor {
+  color: #abb2bf;
+  margin-top: 4px;
+}
+.quest-helper-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.quest-helper-requirement-chip {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(171, 178, 191, 0.4);
+  background: rgba(171, 178, 191, 0.12);
+  color: #abb2bf;
+}
+.quest-helper-requirement-chip.missing {
+  background: rgba(224, 108, 117, 0.15);
+  border-color: #e06c75;
+  color: #e06c75;
+}
+.quest-helper-requirement-chip.met {
+  background: rgba(152, 195, 121, 0.12);
+  border-color: rgba(152, 195, 121, 0.4);
+  color: #98c379;
+}
+.quest-helper-blocker-line {
+  font-size: 0.72rem;
+  color: #e06c75;
+  padding: 1px 0;
+  word-break: break-word;
+}
+
+.quest-helper-dialogue {
+  border-left: 2px solid rgba(97, 175, 239, 0.4);
+  padding-left: 6px;
+}
+.quest-helper-dialogue .quest-helper-subheader { color: #61afef; }
+.quest-helper-dialogue-npc {
+  font-size: 0.72rem;
+  color: #61afef;
+  font-weight: 600;
+}
+.quest-helper-dialogue-text {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: #d7dae0;
+}
+.quest-helper-dialogue-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 2px;
+}
+.quest-helper-dialogue-option {
+  font-size: 0.72rem;
+  color: #abb2bf;
+}
+.quest-helper-dialogue-option.recommended {
+  color: #e5c07b;
+  font-weight: 600;
+}
+
+.quest-helper-steps-container {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.quest-helper-filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.7rem;
+}
+.quest-helper-search-input,
+.quest-helper-status-filter,
+.quest-helper-requirement-filter {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(171, 178, 191, 0.3);
+  color: #d7dae0;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 0.7rem;
+}
+.quest-helper-search-input { flex: 1 1 120px; min-width: 90px; }
+.quest-helper-missing-only,
+.quest-helper-raw-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  color: #abb2bf;
+  user-select: none;
+  cursor: pointer;
+}
+.quest-helper-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.quest-helper-step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.74rem;
+}
+.quest-helper-step-row.quest-helper-status-active {
+  background: rgba(152, 195, 121, 0.1);
+}
+.quest-helper-step-row.quest-helper-status-blocked,
+.quest-helper-step-row.quest-helper-status-locked {
+  opacity: 0.7;
+}
+.quest-helper-step-row .quest-helper-step-text { flex: 1; }
+
+.quest-helper-status-chip {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0 5px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  border: 1px solid rgba(171, 178, 191, 0.4);
+  color: #abb2bf;
+  background: rgba(171, 178, 191, 0.12);
+}
+.quest-helper-status-chip.quest-helper-status-active {
+  color: #98c379;
+  border-color: #98c379;
+  background: rgba(152, 195, 121, 0.15);
+}
+.quest-helper-status-chip.quest-helper-status-done {
+  color: #61afef;
+  border-color: rgba(97, 175, 239, 0.5);
+  background: rgba(97, 175, 239, 0.12);
+}
+.quest-helper-status-chip.quest-helper-status-blocked,
+.quest-helper-status-chip.quest-helper-status-locked {
+  color: #e06c75;
+  border-color: rgba(224, 108, 117, 0.5);
+  background: rgba(224, 108, 117, 0.12);
+}
+
+.quest-helper-raw-json {
+  margin-top: 4px;
+}
+.quest-helper-raw-json pre {
+  font-size: 0.65rem;
+  font-family: monospace;
+  color: #abb2bf;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(171, 178, 191, 0.2);
+  border-radius: 4px;
+  padding: 6px;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Quest Helper debug error bar */
+.quest-helper-debug-error {
+  padding: 4px 10px;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: #f5a97f;
+  background: rgba(245, 169, 127, 0.1);
+  border: 1px solid rgba(245, 169, 127, 0.25);
+  border-radius: 4px;
+}
+
+/* Quest Helper target list */
+.quest-helper-target-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: 28px;
+  margin-top: 2px;
+}
+.quest-helper-target {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  color: #61afef;
+  background: rgba(97, 175, 239, 0.1);
+  border: 1px solid rgba(97, 175, 239, 0.25);
+  border-radius: 3px;
+}
+
+/* Per-step requirements */
+.quest-helper-step-requirements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-left: 28px;
+  margin-top: 2px;
+}
+
+/* Per-step raw JSON toggle */
+.quest-helper-step-raw {
+  margin-left: 28px;
+  margin-top: 3px;
+  font-size: 0.7rem;
+}
+.quest-helper-step-raw summary {
+  cursor: pointer;
+  color: #abb2bf;
+}
+.quest-helper-step-raw pre {
+  font-size: 0.6rem;
+  font-family: monospace;
+  color: #abb2bf;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(171,178,191,0.15);
+  border-radius: 3px;
+  padding: 4px;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Quest varbits collapsible toggle row inside quest section */
 .quest-varbits-toggle {
   display: flex;
@@ -2454,4 +2759,85 @@ body.recovery-mode-active .logs-panel {
   font-size: 0.75rem;
   font-weight: 600;
   margin-left: 4px;
+}
+
+/* --- Player full object collapsible JSON --- */
+
+.player-json-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.player-json-toggle:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.player-json-toggle[aria-expanded="true"] {
+  background: #1e293b;
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.player-json-panel {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.player-json-tree {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #cbd5e1;
+}
+
+.player-json-children {
+  padding-left: 16px;
+}
+
+.player-json-entry {
+  display: inline;
+}
+
+.player-json-key {
+  color: #7dd3fc;
+}
+
+.player-json-value {
+  color: #cbd5e1;
+}
+
+.player-json-string {
+  color: #86efac;
+}
+
+.player-json-primitive {
+  color: #fbbf24;
+}
+
+.player-json-null {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.player-json-bracket {
+  color: #64748b;
 }

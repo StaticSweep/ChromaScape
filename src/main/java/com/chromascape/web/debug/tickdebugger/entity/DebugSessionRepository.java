@@ -39,6 +39,9 @@ public interface DebugSessionRepository extends JpaRepository<DebugSession, Long
   /** Find sessions linked to a specific recording ID. */
   Optional<DebugSession> findByRecordingId(String recordingId);
 
+  /** Find sessions that are linked to any recording ID, ordered by start time (newest first). */
+  List<DebugSession> findByRecordingIdIsNotNullOrderByStartTimeDesc();
+
   /** Find sessions that started within a time range. */
   List<DebugSession> findByStartTimeBetweenOrderByStartTimeDesc(
       LocalDateTime start, LocalDateTime end);

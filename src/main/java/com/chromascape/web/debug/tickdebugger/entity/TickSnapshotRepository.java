@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.tickdebugger.entity;
 
+import com.chromascape.web.debug.tickdebugger.dto.SessionCountProjection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -34,6 +35,17 @@ public interface TickSnapshotRepository extends JpaRepository<TickSnapshot, Long
 
   /** Count snapshots for a session. */
   long countBySessionId(String sessionId);
+
+  /**
+   * Count snapshots grouped by session ID for a list of sessions.
+   *
+   * @param sessionIds the sessions to count snapshots for
+   * @return list of session ID/count projections
+   */
+  @Query(
+      "SELECT t.sessionId AS sessionId, COUNT(t) AS count FROM TickSnapshot t "
+          + "WHERE t.sessionId IN :sessionIds GROUP BY t.sessionId")
+  List<SessionCountProjection> countBySessionIdIn(@Param("sessionIds") List<String> sessionIds);
 
   /** Paginated fetch of snapshots for a session from a given tick onward. */
   Page<TickSnapshot> findBySessionIdAndTickGreaterThanEqualOrderByTick(

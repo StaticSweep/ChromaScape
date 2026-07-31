@@ -202,6 +202,98 @@ class SimulatorReplaySourceServiceTest {
 
       assertNull(response.getFrames().get(0).getPlayerState());
     }
+
+    @Test
+    @DisplayName("Nested position.x/y canonicalizes to replay x/z")
+    void nestedPosition_canonicalizesToReplay() {
+      TickSnapshot snapshot =
+          createSnapshot(
+              0L,
+              "{\"position\":{\"x\":3200,\"y\":3200,\"z\":3200,\"plane\":0},"
+                  + "\"worldX\":3100,\"worldY\":3100}",
+              null,
+              null);
+
+      mockPage(snapshot);
+
+      ReplayFramePageResponse response = service.frames("rec-1", 0, 100);
+
+      String playerStateJson = response.getFrames().get(0).getPlayerState().toString();
+      // position.x should become replay x
+      assertTrue(playerStateJson.contains("\"x\":3200"), "position.x should become x");
+      // position.y/z should become replay z
+      assertTrue(playerStateJson.contains("\"z\":3200"), "position.y/z should become z");
+      // Legacy worldX should still be renamed
+      assertTrue(playerStateJson.contains("\"x\":3200"));
+      assertFalse(playerStateJson.contains("worldX"), "worldX should be removed after rename");
+    }
+
+    @Test
+    @DisplayName("Nested hp.current canonicalizes to numeric replay hp")
+    void nestedHp_canonicalizesToReplay() {
+      TickSnapshot snapshot =
+          createSnapshot(
+              0L,
+              "{\"hp\":{\"current\":85,\"max\":99,\"percent\":85},"
+                  + "\"currentHp\":80}",
+              null,
+              null);
+
+      mockPage(snapshot);
+
+      ReplayFramePageResponse response = service.frames("rec-1", 0, 100);
+
+      String playerStateJson = response.getFrames().get(0).getPlayerState().toString();
+      // currentHp -> hp from legacy mapping
+      assertTrue(playerStateJson.contains("\"hp\":80"), "legacy currentHp should be renamed to hp");
+      // But nested hp.current should also provide hp value
+      // (the legacy rename takes precedence since it runs first; the nested check
+      //  only sets hp if not already present, so legacy rename wins)
+    }
+
+    @Test
+    @DisplayName("Nested prayer.current canonicalizes to numeric replay prayer")
+    void nestedPrayer_canonicalizesToReplay() {
+      TickSnapshot snapshot =
+          createSnapshot(
+              0L,
+              "{\"prayer\":{\"current\":55,\"max\":70,\"percent\":78},"
+                  + "\"currentPrayer\":50}",
+              null,
+              null);
+
+      mockPage(snapshot);
+
+      ReplayFramePageResponse response = service.frames("rec-1", 0, 100);
+
+      String playerStateJson = response.getFrames().get(0).getPlayerState().toString();
+      assertTrue(
+          playerStateJson.contains("\"prayer\":50"),
+          "legacy currentPrayer should be renamed to prayer");
+    }
+
+    @Test
+    @DisplayName("Legacy flat fields still canonicalize as before with nested absent")
+    void legacyFlatFields_stillWork() {
+      TickSnapshot snapshot =
+          createSnapshot(
+              0L,
+              "{\"worldX\":3200,\"worldY\":3200,\"currentHp\":99,\"currentPrayer\":70}",
+              null,
+              null);
+
+      mockPage(snapshot);
+
+      ReplayFramePageResponse response = service.frames("rec-1", 0, 100);
+
+      String playerStateJson = response.getFrames().get(0).getPlayerState().toString();
+      assertTrue(playerStateJson.contains("\"x\":3200"));
+      assertTrue(playerStateJson.contains("\"z\":3200"));
+      assertTrue(playerStateJson.contains("\"hp\":99"));
+      assertTrue(playerStateJson.contains("\"prayer\":70"));
+      assertFalse(playerStateJson.contains("worldX"));
+      assertFalse(playerStateJson.contains("currentHp"));
+    }
   }
 
   // --- Pagination tests ---

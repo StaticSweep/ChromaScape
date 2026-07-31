@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.tickdebugger.entity;
 
+import com.chromascape.web.debug.tickdebugger.dto.SessionCountProjection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -51,4 +52,18 @@ public interface TimelineMarkerRepository extends JpaRepository<TimelineMarker, 
           + " AND (UPPER(m.markerType) IN ('ERROR', 'DAMAGE', 'DEATH')"
           + " OR UPPER(m.severity) = 'ERROR')")
   long countFailuresBySessionId(@Param("sessionId") String sessionId);
+
+  /**
+   * Count failure markers grouped by session ID for a list of sessions.
+   *
+   * @param sessionIds the sessions to count failure markers for
+   * @return list of session ID/count projections
+   */
+  @Query(
+      "SELECT m.sessionId AS sessionId, COUNT(m) AS count FROM TimelineMarker m "
+          + "WHERE m.sessionId IN :sessionIds "
+          + "AND (UPPER(m.markerType) IN ('ERROR', 'DAMAGE', 'DEATH') OR UPPER(m.severity) = 'ERROR') "
+          + "GROUP BY m.sessionId")
+  List<SessionCountProjection> countFailuresBySessionIdIn(
+      @Param("sessionIds") List<String> sessionIds);
 }

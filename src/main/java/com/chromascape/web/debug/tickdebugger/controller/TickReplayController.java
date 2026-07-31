@@ -679,19 +679,22 @@ public class TickReplayController {
    * <p>Returns {@link DebugSessionSummary} for every debug session with a recording ID, suitable
    * for populating the replay selector with event/failure counts.
    *
-   * <p>Uses bulk count query to reduce N+1 query problem (1 query instead of 3N queries).
+   * <p>Only sessions linked to a recording are queried, and counts are fetched via three grouped
+   * queries per table to avoid the row explosion of a multi-table join aggregate.
    *
    * @return list of session summaries with health metadata
-   */
+  */
   @GetMapping("/recording-health")
-  public ResponseEntity<List<DebugSessionSummary>> getRecordingHealth() {
+  public ResponseEntity<List<DebugSessionSummary>> getRecordingHealth(
+      @RequestParam(required = false, defaultValue = "200") Integer limit) {
     try {
+      int boundedLimit = Math.max(1, Math.min(limit != null ? limit : 200, 500));
+      // Only sessions linked to a recording; counts are fetched via grouped per-table queries
       List<DebugSession> sessions =
-          debugSessionService.getAllSessions().stream()
-              .filter(s -> s.getRecordingId() != null)
+          sessionRepository.findByRecordingIdIsNotNullOrderByStartTimeDesc().stream()
+              .limit(boundedLimit)
               .toList();
 
-      // Use bulk query - reduces 3N queries to 1 query
       List<DebugSessionSummary> summaries = debugSessionService.toSummaries(sessions);
 
       return ResponseEntity.ok(summaries);
@@ -830,6 +833,49 @@ public class TickReplayController {
   }
 
   /**
+   * Repair a single orphaned recording whose .mp4 exists on disk but DB metadata is missing.
+   *
+   * <p>Backfills {@code video_path} and {@code end_time} for the {@link RecordingSession} row when
+   * the recording file is present on disk.
+   *
+   * @param recordingId the recording ID to repair
+   * @return result map with repaired flag
+   */
+  @PostMapping("/recordings/{recordingId}/repair")
+  public ResponseEntity<Map<String, Object>> repairOrphanedRecording(@PathVariable String recordingId) {
+    try {
+      if (recordingId == null || recordingId.isBlank()) {
+        return ResponseEntity.badRequest()
+            .body(Map.of("success", false, "error", "recordingId is required"));
+      }
+      boolean repaired = debugSessionService.repairOrphanedRecordingSession(recordingId);
+      return ResponseEntity.ok(Map.of("success", true, "repaired", repaired));
+    } catch (Exception e) {
+      log.error("Failed to repair orphaned recording {}: {}", recordingId, e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("success", false, "error", e.getMessage()));
+    }
+  }
+
+  /**
+   * Scan recent recording sessions and repair any orphans where the .mp4 exists on disk but DB
+   * metadata is missing.
+   *
+   * @return result map with count of repaired sessions
+   */
+  @PostMapping("/recordings/repair-orphans")
+  public ResponseEntity<Map<String, Object>> repairOrphanedRecordings() {
+    try {
+      int repaired = debugSessionService.repairOrphanedRecordingSessions();
+      return ResponseEntity.ok(Map.of("success", true, "repaired", repaired));
+    } catch (Exception e) {
+      log.error("Failed to repair orphaned recordings: {}", e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("success", false, "error", e.getMessage()));
+    }
+  }
+
+  /**
    * Resolve a sessionId to its associated recordingId.
    *
    * <p>Used for deep-link navigation via {@code ?sessionId=} URL parameter.
@@ -913,6 +959,10 @@ public class TickReplayController {
         if (snapshot.getQuest() != null && !snapshot.getQuest().toString().isEmpty()) {
           sectionCounts.put("quest", 1);
           sectionData.put("quest", snapshot.getQuest());
+        }
+        if (snapshot.getQuestHelper() != null && !snapshot.getQuestHelper().isNull()) {
+          sectionCounts.put("questHelper", 1);
+          sectionData.put("questHelper", snapshot.getQuestHelper());
         }
 
         // Inventory section
@@ -1073,41 +1123,110 @@ public class TickReplayController {
     StringBuilder summary = new StringBuilder();
 
     // HP
-    JsonNode hp = playerState.get("hp");
-    if (hp != null) {
-      int current = hp.has("current") ? hp.get("current").asInt() : 0;
-      int max = hp.has("max") ? hp.get("max").asInt() : 0;
-      summary.append(String.format("HP %d/%d", current, max));
+    String hpDisplay = formatHp(playerState);
+    if (!hpDisplay.isEmpty()) {
+      summary.append(hpDisplay);
     }
 
     // Prayer
-    JsonNode prayer = playerState.get("prayer");
-    if (prayer != null) {
-      int current = prayer.has("current") ? prayer.get("current").asInt() : 0;
-      int max = prayer.has("max") ? prayer.get("max").asInt() : 0;
+    String prayerDisplay = formatPrayer(playerState);
+    if (!prayerDisplay.isEmpty()) {
       if (summary.length() > 0) summary.append(" · ");
-      summary.append(String.format("Pray %d/%d", current, max));
+      summary.append(prayerDisplay);
     }
 
     // Energy
-    JsonNode energy = playerState.get("energy");
+    JsonNode energy = nestedOrFallback(playerState, "energy", "runEnergy");
     if (energy != null) {
-      int energyValue = energy.asInt();
       if (summary.length() > 0) summary.append(" · ");
-      summary.append(String.format("Energy %d%%", energyValue));
+      summary.append(String.format("Energy %d%%", energy.asInt()));
+    }
+
+    // Animation
+    JsonNode animation = nestedOrFallback(playerState, "animation", "animationId");
+    if (animation != null) {
+      if (summary.length() > 0) summary.append(" · ");
+      summary.append(String.format("Anim %d", animation.asInt()));
     }
 
     // Position
-    JsonNode position = playerState.get("position");
-    if (position != null && position.has("x") && position.has("y")) {
-      int x = position.get("x").asInt();
-      int y = position.get("y").asInt();
+    JsonNode position = nestedOrFlatPosition(playerState);
+    if (position != null) {
+      int x = position.has("x") ? position.get("x").asInt() : 0;
+      int y = position.has("y") ? position.get("y").asInt() : 0;
       int plane = position.has("plane") ? position.get("plane").asInt() : 0;
       if (summary.length() > 0) summary.append(" · ");
       summary.append(String.format("Pos (%d,%d,%d)", x, y, plane));
     }
 
     return summary.length() > 0 ? summary.toString() : "No player data";
+  }
+
+  /**
+   * Resolve position from playerState using nested position, then flat fields.
+   */
+  private JsonNode nestedOrFlatPosition(JsonNode playerState) {
+    if (playerState.has("position") && playerState.get("position").isObject()) {
+      return playerState.get("position");
+    }
+    // Check for flat x/y or x/z
+    if (playerState.has("x") && (playerState.has("y") || playerState.has("z"))) {
+      return playerState; // Contains x/y or x/z directly
+    }
+    // Check for worldX/worldY
+    if (playerState.has("worldX") && playerState.has("worldY")) {
+      return playerState;
+    }
+    return null;
+  }
+
+  /**
+   * Format HP display from nested or flat fields.
+   */
+  private String formatHp(JsonNode playerState) {
+    JsonNode hp = playerState.get("hp");
+    if (hp != null && hp.isObject() && hp.has("current")) {
+      int cur = hp.get("current").asInt();
+      int max = hp.has("max") ? hp.get("max").asInt() : 0;
+      return String.format("HP %d/%d", cur, max);
+    }
+    if (playerState.has("currentHp")) {
+      int cur = playerState.get("currentHp").asInt();
+      int max = playerState.has("maxHp") ? playerState.get("maxHp").asInt() : 0;
+      return String.format("HP %d/%d", cur, max);
+    }
+    return "";
+  }
+
+  /**
+   * Format Prayer display from nested or flat fields.
+   */
+  private String formatPrayer(JsonNode playerState) {
+    JsonNode prayer = playerState.get("prayer");
+    if (prayer != null && prayer.isObject() && prayer.has("current")) {
+      int cur = prayer.get("current").asInt();
+      int max = prayer.has("max") ? prayer.get("max").asInt() : 0;
+      return String.format("Pray %d/%d", cur, max);
+    }
+    if (playerState.has("currentPrayer")) {
+      int cur = playerState.get("currentPrayer").asInt();
+      int max = playerState.has("maxPrayer") ? playerState.get("maxPrayer").asInt() : 0;
+      return String.format("Pray %d/%d", cur, max);
+    }
+    return "";
+  }
+
+  /**
+   * Get a value from playerState trying the first key, then the second.
+   */
+  private JsonNode nestedOrFallback(JsonNode playerState, String first, String second) {
+    if (playerState.has(first)) {
+      return playerState.get(first);
+    }
+    if (playerState.has(second)) {
+      return playerState.get(second);
+    }
+    return null;
   }
 
   /** Response DTO for tick range queries. */

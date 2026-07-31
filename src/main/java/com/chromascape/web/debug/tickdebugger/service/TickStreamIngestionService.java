@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -91,6 +92,8 @@ public class TickStreamIngestionService {
   @Transactional
   public void processTickBatch(TickBatchMessage batch) {
     try {
+      Map<String, Object> normalizedPs = normalizePlayerState(batch.getPlayerState());
+      batch.setPlayerState(normalizedPs);
       validateStrictV2(batch);
       String sessionId = batch.getSessionId();
 
@@ -168,6 +171,10 @@ public class TickStreamIngestionService {
       JsonNode cooldowns =
           batch.getCooldowns() != null ? objectMapper.valueToTree(batch.getCooldowns()) : null;
       JsonNode quest = batch.getQuest() != null ? objectMapper.valueToTree(batch.getQuest()) : null;
+      JsonNode questHelper =
+          batch.getQuestHelper() != null
+              ? objectMapper.valueToTree(batch.getQuestHelper())
+              : null;
 
       // NEW: Convert expanded world state to JSON
       JsonNode npcs = batch.getNpcs() != null ? objectMapper.valueToTree(batch.getNpcs()) : null;
@@ -203,6 +210,7 @@ public class TickStreamIngestionService {
       if (batch.getGroundObjects() == null) missingSections.add("groundObjects");
       if (batch.getGroundItems() == null) missingSections.add("groundItems");
       if (batch.getQuest() == null) missingSections.add("quest");
+      if (batch.getQuestHelper() == null) missingSections.add("questHelper");
 
       if (!missingSections.isEmpty()) {
         log.debug(
@@ -218,6 +226,7 @@ public class TickStreamIngestionService {
       snapshot.setProjectiles(projectiles);
       snapshot.setCooldowns(cooldowns);
       snapshot.setQuest(quest);
+      snapshot.setQuestHelper(questHelper);
       snapshot.setNpcs(npcs);
       snapshot.setGameObjects(gameObjects);
       snapshot.setGroundObjects(groundObjects);
@@ -244,8 +253,10 @@ public class TickStreamIngestionService {
       throw new IllegalArgumentException("Missing playerState");
     }
     Map<String, Object> ps = batch.getPlayerState();
-    if (!ps.containsKey("x") || !ps.containsKey("z")) {
-      throw new IllegalArgumentException("Missing required player position (x/z)");
+    boolean hasNestedPos = ps.get("position") instanceof Map;
+    boolean hasFlatPos = ps.containsKey("x") && ps.containsKey("z");
+    if (!hasNestedPos && !hasFlatPos) {
+      throw new IllegalArgumentException("Missing required player position (position.x/y or x/z)");
     }
     if (batch.getInventory() == null || batch.getEquipment() == null) {
       throw new IllegalArgumentException("Missing inventory/equipment");
@@ -410,6 +421,112 @@ public class TickStreamIngestionService {
       log.warn("Failed to forward tick batch to Go backend: {}", e.getMessage());
       // Data is already saved locally, so no action needed
     }
+  }
+
+  /**
+   * Normalize playerState to include both canonical nested fields and legacy flat aliases.
+   *
+   * <p>If the incoming payload has flat fields (x, z, currentHp, etc.) without nested containers,
+   * this method synthesizes the nested containers. If nested containers exist but flat fields are
+   * missing, it fills in the flat aliases. The result is a consistent map usable by both storage
+   * and replay.
+   */
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> normalizePlayerState(Map<String, Object> playerState) {
+    if (playerState == null) {
+      return null;
+    }
+
+    // Copy into a mutable LinkedHashMap to preserve readable field order
+    Map<String, Object> normalized = new LinkedHashMap<>(playerState);
+
+    // --- Position normalization ---
+    Map<String, Object> position = (Map<String, Object>) normalized.get("position");
+    boolean hasFlatPos = normalized.containsKey("x");
+    boolean hasNestedPos = position != null;
+
+    if (!hasNestedPos && hasFlatPos) {
+      // Synthesize nested position from flat coordinates
+      Map<String, Object> newPos = new LinkedHashMap<>();
+      Object x = normalized.get("x");
+      Object y = normalized.getOrDefault("y", normalized.getOrDefault("z",
+          normalized.get("worldY")));
+      Object zVal = normalized.getOrDefault("z", y);
+      Object plane = normalized.getOrDefault("plane", 0);
+      newPos.put("x", x);
+      newPos.put("y", y);
+      newPos.put("z", zVal);
+      newPos.put("plane", plane);
+      normalized.put("position", newPos);
+    } else if (hasNestedPos) {
+      // Ensure nested position has z field
+      if (!position.containsKey("z")) {
+        position.put("z", position.getOrDefault("y", 0));
+        normalized.put("position", position);
+      }
+      // Fill flat aliases from nested position if missing
+      if (!normalized.containsKey("x")) {
+        normalized.put("x", position.get("x"));
+      }
+      if (!normalized.containsKey("z")) {
+        Object zVal = position.getOrDefault("z", position.get("y"));
+        normalized.put("z", zVal);
+      }
+      if (!normalized.containsKey("worldX")) {
+        normalized.put("worldX", position.get("x"));
+      }
+      if (!normalized.containsKey("worldY")) {
+        Object yVal = position.getOrDefault("z", position.get("y"));
+        normalized.put("worldY", yVal);
+      }
+      if (!normalized.containsKey("plane")) {
+        normalized.put("plane", position.getOrDefault("plane", 0));
+      }
+    }
+
+    // --- HP normalization ---
+    if (!(normalized.get("hp") instanceof Map) && normalized.containsKey("currentHp")) {
+      Map<String, Object> hp = new LinkedHashMap<>();
+      int current = toInt(normalized.get("currentHp"));
+      int max = toInt(normalized.get("maxHp"));
+      hp.put("current", current);
+      hp.put("max", max);
+      hp.put("percent", max > 0 ? (current * 100 / max) : 0);
+      normalized.put("hp", hp);
+    }
+
+    // --- Prayer normalization ---
+    if (!(normalized.get("prayer") instanceof Map) && normalized.containsKey("currentPrayer")) {
+      Map<String, Object> prayer = new LinkedHashMap<>();
+      int current = toInt(normalized.get("currentPrayer"));
+      int max = toInt(normalized.get("maxPrayer"));
+      prayer.put("current", current);
+      prayer.put("max", max);
+      prayer.put("percent", max > 0 ? (current * 100 / max) : 0);
+      normalized.put("prayer", prayer);
+    }
+
+    // --- Energy normalization ---
+    if (!normalized.containsKey("energy") && normalized.containsKey("runEnergy")) {
+      normalized.put("energy", normalized.get("runEnergy"));
+    }
+    if (!normalized.containsKey("runEnergy") && normalized.containsKey("energy")) {
+      normalized.put("runEnergy", normalized.get("energy"));
+    }
+
+    // --- Animation normalization ---
+    if (!normalized.containsKey("animation") && normalized.containsKey("animationId")) {
+      normalized.put("animation", normalized.get("animationId"));
+    }
+    if (!normalized.containsKey("animationId") && normalized.containsKey("animation")) {
+      normalized.put("animationId", normalized.get("animation"));
+    }
+
+    return normalized;
+  }
+
+  private int toInt(Object value) {
+    return value instanceof Number ? ((Number) value).intValue() : 0;
   }
 
   /** Parse an ISO-8601 timestamp string to LocalDateTime. */

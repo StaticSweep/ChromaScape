@@ -127,14 +127,16 @@ micro6 and OpenRune use different field name conventions. ChromaScape canonicali
 
 ### Player State Field Mapping
 
-| micro6 field | OpenRune field |
-|-------------|---------------|
-| `worldX`    | `x`           |
-| `worldY`    | `z`           |
-| `currentHp` | `hp`          |
-| `currentPrayer` | `prayer`  |
+micro6 sends a rich canonical playerState object with both nested containers and legacy flat aliases:
 
-Unknown fields are passed through unchanged.
+| micro6 canonical field | micro6 legacy field | OpenRune field |
+|------------------------|--------------------|----------------|
+| `playerState.position.x` | `worldX`, `x` | `x` |
+| `playerState.position.y` | `worldY`, `z` | `z` |
+| `playerState.hp.current` | `currentHp` | `hp` |
+| `playerState.prayer.current` | `currentPrayer` | `prayer` |
+
+ChromaScape normalizes incoming payloads so that both old flat and new nested payloads produce consistent output. For OpenRune replay, nested containers are flattened to numeric values (e.g., `hp.current` → `hp`). Unknown fields are passed through unchanged.
 
 ### Item Slot Fidelity
 

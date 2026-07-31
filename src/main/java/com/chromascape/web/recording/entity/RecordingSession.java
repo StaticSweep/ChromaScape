@@ -9,7 +9,12 @@ import java.time.LocalDateTime;
  * <p>Tracks recording sessions with per-account information for replay debugging.
  */
 @Entity
-@Table(name = "recording_sessions")
+@Table(
+    name = "recording_sessions",
+    indexes = {
+      @Index(name = "idx_recording_sessions_start_time", columnList = "start_time"),
+      @Index(name = "idx_recording_sessions_recording_id", columnList = "recording_id")
+    })
 public class RecordingSession {
 
   /** Type of trigger that started the recording session. */
