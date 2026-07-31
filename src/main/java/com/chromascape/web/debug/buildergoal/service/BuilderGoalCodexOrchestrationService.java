@@ -108,7 +108,7 @@ public class BuilderGoalCodexOrchestrationService {
     CodexSession session = requireSession(sessionId);
     Map<String, Object> result =
         builderGoalRunnerService.startCatalogTaskRun(
-            accountId, launcherMachineUuid, taskKey, settings, displayName, world);
+            accountId, launcherMachineUuid, taskKey, settings, displayName, world, null);
     @SuppressWarnings("unchecked")
     Map<String, Object> run = (Map<String, Object>) result.get("run");
     if (run != null) {

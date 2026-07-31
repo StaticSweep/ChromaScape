@@ -7,12 +7,19 @@ import static org.mockito.Mockito.when;
 
 import com.chromascape.web.instance.WebSocketStateHandler;
 import com.chromascape.web.recording.service.TaskDetectionService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.http.HttpTimeoutException;
+import java.io.ByteArrayOutputStream;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Flow;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -169,6 +176,35 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("Micro6 publish keeps command provenance separate from click telemetry")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_separatesCommandProvenanceFromClickTelemetry() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    service.publishMicro6Task(
+        "micro6:configurable_woodcutting",
+        Map.of(
+            "task_key", "configurable_woodcutting",
+            "initiated_by", "user",
+            "input_origin", "manual",
+            "user_clicked", true,
+            "script_clicked", false));
+
+    ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+    verify(httpClient).send(requestCaptor.capture(), any(HttpResponse.BodyHandler.class));
+
+    JsonNode payload = new ObjectMapper().readTree(bodyOf(requestCaptor.getValue()));
+    assertThat(payload.path("initiated_by").asText()).isEqualTo("user");
+    assertThat(payload.path("input_origin").asText()).isEqualTo("manual");
+    assertThat(payload.has("user_clicked")).isFalse();
+    assertThat(payload.has("script_clicked")).isFalse();
+    assertThat(payload.path("task_metadata").path("user_clicked").asBoolean()).isTrue();
+    assertThat(payload.path("task_metadata").path("script_clicked").asBoolean()).isFalse();
+  }
+
+  @Test
   @DisplayName("Micro6 publish recovers from execute timeout by attaching to already queued run")
   @SuppressWarnings("unchecked")
   void publishMicro6Task_recoversTimedOutExecuteByAttachingToExistingRun() throws Exception {
@@ -274,5 +310,37 @@ class ScriptExecutionServiceTest {
     assertThat(result.publishReady()).isFalse();
     assertThat(result.readinessPhase()).isEqualTo("WAITING_FOR_DISPATCH");
     assertThat(result.readinessReason()).contains("still initializing");
+  }
+
+  private String bodyOf(HttpRequest request) throws Exception {
+    HttpRequest.BodyPublisher publisher = request.bodyPublisher().orElseThrow();
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    CountDownLatch completed = new CountDownLatch(1);
+    publisher.subscribe(
+        new Flow.Subscriber<ByteBuffer>() {
+          @Override
+          public void onSubscribe(Flow.Subscription subscription) {
+            subscription.request(Long.MAX_VALUE);
+          }
+
+          @Override
+          public void onNext(ByteBuffer item) {
+            byte[] bytes = new byte[item.remaining()];
+            item.get(bytes);
+            output.write(bytes, 0, bytes.length);
+          }
+
+          @Override
+          public void onError(Throwable throwable) {
+            completed.countDown();
+          }
+
+          @Override
+          public void onComplete() {
+            completed.countDown();
+          }
+        });
+    assertThat(completed.await(1, TimeUnit.SECONDS)).isTrue();
+    return output.toString(StandardCharsets.UTF_8);
   }
 }

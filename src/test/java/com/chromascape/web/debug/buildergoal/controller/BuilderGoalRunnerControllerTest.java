@@ -225,7 +225,8 @@ class BuilderGoalRunnerControllerTest {
             any(),
             eq(360),
             eq("http://127.0.0.1:8098"),
-            anyBoolean()))
+            anyBoolean(),
+            any()))
         .thenReturn(result);
 
     com.fasterxml.jackson.databind.JsonNode payload =
@@ -258,7 +259,8 @@ class BuilderGoalRunnerControllerTest {
             any(),
             eq(360),
             eq("http://127.0.0.1:8098"),
-            anyBoolean());
+            anyBoolean(),
+            any());
   }
 
   @Test

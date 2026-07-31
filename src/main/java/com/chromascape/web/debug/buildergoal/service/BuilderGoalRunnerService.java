@@ -107,6 +107,13 @@ public class BuilderGoalRunnerService {
   private static final String TASK_METADATA_PUBLISH_ONLY = "publish_only";
   private static final String TASK_METADATA_LAUNCH_FALLBACK_ALLOWED = "launch_fallback_allowed";
 
+  private static final Map<String, Object> PROVENANCE_AUTOMATION =
+      Map.of(
+          "initiated_by", "automation",
+          "input_origin", "automation",
+          "user_clicked", false,
+          "script_clicked", true);
+
   private final PatchLoopIterationRepository iterationRepository;
   private final PatchLoopPersistenceService persistenceService;
   private final PatchLoopEvidenceService evidenceService;
@@ -303,7 +310,8 @@ public class BuilderGoalRunnerService {
         normalized.taskKey(),
         normalized.settings(),
         normalized.displayName(),
-        normalized.world());
+        normalized.world(),
+        PROVENANCE_AUTOMATION);
   }
 
   @Transactional(readOnly = true)
@@ -356,7 +364,8 @@ public class BuilderGoalRunnerService {
       String launchProfileName,
       String launchExtraArgs,
       String launcherMachineUuid,
-      Integer world) {
+      Integer world,
+      Map<String, Object> provenance) {
     NormalizedPayload normalized = normalizePayload(payload);
     BuilderGoalAccountCatalogService.AccountDefinition selectedAccount =
         resolveSelectedAccount(accountId);
@@ -391,7 +400,8 @@ public class BuilderGoalRunnerService {
             null,
             null,
             initialTargetMetadata,
-            catalogValidation.catalogTask());
+            catalogValidation.catalogTask(),
+            provenance);
     applyCatalogValidationMetadata(iteration, catalogValidation);
 
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
@@ -438,7 +448,8 @@ public class BuilderGoalRunnerService {
       String taskKey,
       Map<String, Object> settings,
       String displayName,
-      Integer world) {
+      Integer world,
+      Map<String, Object> provenance) {
     if (accountId == null || accountId.isBlank()) {
       throw new IllegalArgumentException("accountId is required");
     }
@@ -461,7 +472,7 @@ public class BuilderGoalRunnerService {
     if (world != null) {
       payload.put("world", world);
     }
-    return startRun(objectMapper.valueToTree(payload), accountId, null, null, null, launcherMachineUuid, world);
+    return startRun(objectMapper.valueToTree(payload), accountId, null, null, null, launcherMachineUuid, world, provenance);
   }
 
   /**
@@ -485,7 +496,8 @@ public class BuilderGoalRunnerService {
       Map<String, Object> settings,
       Integer world,
       String targetBaseUrl,
-      boolean allowLaunchFallback) {
+      boolean allowLaunchFallback,
+      Map<String, Object> provenance) {
     if (accountId == null || accountId.isBlank()) {
       throw new IllegalArgumentException("accountId is required");
     }
@@ -511,8 +523,18 @@ public class BuilderGoalRunnerService {
       throw new IllegalArgumentException(
           "launcherMachineUuid is required when launch fallback is enabled");
     }
+    Optional<Micro6OnlineClientRegistryService.TargetClient> matchingClient =
+        targetBaseUrl == null || targetBaseUrl.isBlank()
+            ? findRunnableClientForAccount(selectedAccount)
+            : Optional.empty();
+    String effectiveTargetBaseUrl =
+        firstNonBlank(
+            targetBaseUrl,
+            matchingClient
+                .map(Micro6OnlineClientRegistryService.TargetClient::advertisedBaseUrl)
+                .orElse(null));
     CatalogValidationResult catalogValidation =
-        resolvePublishCatalogValidation(taskKey, targetBaseUrl);
+        resolvePublishCatalogValidation(taskKey, effectiveTargetBaseUrl);
     if (catalogValidation.rejectPublish()) {
       throw new IllegalArgumentException(catalogValidation.errorMessage());
     }
@@ -534,8 +556,11 @@ public class BuilderGoalRunnerService {
     NormalizedPayload normalized = normalizePayload(objectMapper.valueToTree(payload));
     Map<String, Object> initialTargetMetadata =
         buildRequestedTargetMetadataFromAccount(selectedAccount, selectedMachine);
-    if (targetBaseUrl != null && !targetBaseUrl.isBlank()) {
-      initialTargetMetadata.put("advertised_base_url", targetBaseUrl);
+    if (effectiveTargetBaseUrl != null && !effectiveTargetBaseUrl.isBlank()) {
+      initialTargetMetadata.put("advertised_base_url", effectiveTargetBaseUrl);
+    }
+    if (matchingClient.isPresent()) {
+      initialTargetMetadata.putAll(buildTargetMetadata(matchingClient.get()));
     }
     PatchLoopIteration iteration =
         createRunIteration(
@@ -544,7 +569,8 @@ public class BuilderGoalRunnerService {
             null,
             null,
             initialTargetMetadata,
-            catalogTask);
+            catalogTask,
+            provenance);
     applyCatalogValidationMetadata(iteration, catalogValidation);
 
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
@@ -1330,7 +1356,8 @@ public class BuilderGoalRunnerService {
               iteration.getIterationId(),
               patchResult.revisionId(),
               buildTargetMetadata(preparationResult.targetClient()),
-              null);
+              null,
+              PROVENANCE_AUTOMATION);
       Map<String, Object> relaunchedMetadata = readTaskMetadata(relaunched);
       mergeTargetPreparationMetadata(relaunchedMetadata, preparationResult.metadata());
       Map<String, Object> childWorkspace = readRecoveryWorkspace(relaunchedMetadata);
@@ -1681,7 +1708,8 @@ public class BuilderGoalRunnerService {
       String parentIterationId,
       String revisionId,
       Map<String, Object> targetMetadata,
-      JsonNode catalogTask) {
+      JsonNode catalogTask,
+      Map<String, Object> provenance) {
     PatchLoopIteration iteration = new PatchLoopIteration();
     iteration.setIterationId(ITERATION_ID_PREFIX + UUID.randomUUID().toString().substring(0, 8));
     iteration.setStatus(PatchLoopStatus.QUEUED);
@@ -1698,7 +1726,7 @@ public class BuilderGoalRunnerService {
     iteration.setTaskMetadataJson(
         objectMapper.valueToTree(
             buildTaskMetadata(
-                iteration.getIterationId(), normalized, targetMetadata, catalogTask)));
+                iteration.getIterationId(), normalized, targetMetadata, catalogTask, provenance)));
     iteration.setPromptType(PromptType.ISSUE.name());
     if (revisionId != null && !revisionId.isBlank()) {
       iteration.setMicro6RevisionId(revisionId);
@@ -2331,7 +2359,7 @@ public class BuilderGoalRunnerService {
           false,
           null,
           firstNonBlank(textValue(liveCatalog.path("catalog_source")), "micro6_executor"),
-          liveCatalog,
+          normalizeCatalogPayload(liveCatalog),
           catalogTasksAsMaps(liveCatalog));
     }
 
@@ -2342,7 +2370,7 @@ public class BuilderGoalRunnerService {
           false,
           null,
           firstNonBlank(textValue(cachedCatalog.path("catalog_source")), "micro6_executor_cache"),
-          cachedCatalog,
+          normalizeCatalogPayload(cachedCatalog),
           catalogTasksAsMaps(cachedCatalog));
     }
 
@@ -2377,9 +2405,47 @@ public class BuilderGoalRunnerService {
     catalog.path("tasks").forEach(
         node ->
             tasks.add(
-                objectMapper.convertValue(
-                    node, new TypeReference<LinkedHashMap<String, Object>>() {})));
+                normalizeCatalogTaskMap(
+                    objectMapper.convertValue(
+                        node, new TypeReference<LinkedHashMap<String, Object>>() {}))));
     return tasks;
+  }
+
+  private JsonNode normalizeCatalogPayload(JsonNode catalog) {
+    if (catalog == null || catalog.isNull() || !catalog.path("tasks").isArray()) {
+      return catalog;
+    }
+    Map<String, Object> normalized =
+        objectMapper.convertValue(catalog, new TypeReference<LinkedHashMap<String, Object>>() {});
+    normalized.put("tasks", catalogTasksAsMaps(catalog));
+    return objectMapper.valueToTree(normalized);
+  }
+
+  private Map<String, Object> normalizeCatalogTaskMap(Map<String, Object> task) {
+    Map<String, Object> normalized = new LinkedHashMap<>(task);
+    String taskKey =
+        firstNonBlank(stringValue(normalized.get("task_key")), stringValue(normalized.get("key")));
+    if (taskKey != null) {
+      normalized.put("task_key", taskKey);
+    }
+    String displayName =
+        firstNonBlank(
+            stringValue(normalized.get("display_name")),
+            stringValue(normalized.get("panel_display_name")),
+            stringValue(normalized.get("name")),
+            taskKey);
+    if (displayName != null) {
+      normalized.put("display_name", displayName);
+      normalized.putIfAbsent("panel_display_name", displayName);
+    }
+    if (!normalized.containsKey("runnable") && normalized.containsKey("enabled")) {
+      normalized.put("runnable", boolValue(normalized.get("enabled")));
+    }
+    if (!normalized.containsKey("disabled_reason")
+        && Boolean.FALSE.equals(normalized.get("runnable"))) {
+      normalized.put("disabled_reason", "Task is disabled in the Micro6 catalog");
+    }
+    return normalized;
   }
 
   private List<Map<String, Object>> collectSavedCatalogFallbackTasks() {
@@ -2432,7 +2498,7 @@ public class BuilderGoalRunnerService {
 
     String normalizedTarget = normalizeTaskKey(taskKey);
     for (JsonNode task : tasks) {
-      String candidate = task.path("task_key").asText(null);
+      String candidate = firstNonBlank(textValue(task.path("task_key")), textValue(task.path("key")));
       if (candidate == null || candidate.isBlank()) {
         continue;
       }
@@ -2474,7 +2540,8 @@ public class BuilderGoalRunnerService {
       String iterationId,
       NormalizedPayload normalized,
       Map<String, Object> targetMetadata,
-      JsonNode catalogTask) {
+      JsonNode catalogTask,
+      Map<String, Object> provenance) {
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("iteration_id", iterationId);
     metadata.put("task_key", normalized.taskKey());
@@ -2494,6 +2561,9 @@ public class BuilderGoalRunnerService {
     metadata.put("world", normalized.world());
     if (targetMetadata != null && !targetMetadata.isEmpty()) {
       metadata.put("micro6_target", targetMetadata);
+    }
+    if (provenance != null && !provenance.isEmpty()) {
+      metadata.putAll(provenance);
     }
     return metadata;
   }
@@ -3978,6 +4048,15 @@ public class BuilderGoalRunnerService {
     target.put("status", targetClient.status());
     target.put("current_task", targetClient.currentTask());
     return target;
+  }
+
+  private Optional<Micro6OnlineClientRegistryService.TargetClient> findRunnableClientForAccount(
+      BuilderGoalAccountCatalogService.AccountDefinition account) {
+    if (account == null) {
+      return Optional.empty();
+    }
+    return clientRegistryService.findRunnableClientForRecovery(
+        account.accountHash(), account.displayName(), null, Instant.now().minusSeconds(45));
   }
 
   private Map<String, Object> buildRequestedTargetMetadataFromAccount(

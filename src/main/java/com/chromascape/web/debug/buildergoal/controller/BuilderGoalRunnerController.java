@@ -108,6 +108,7 @@ public class BuilderGoalRunnerController {
       String launcherMachineUuid = textValue(payload.path("launcherMachineUuid"));
       String taskKey = textValue(payload.path("taskKey"));
       Integer world = intValue(payload.path("world"));
+      Map<String, Object> provenance = extractProvenance(payload);
       if (accountId != null && taskKey != null) {
         @SuppressWarnings("unchecked")
         Map<String, Object> settings =
@@ -117,13 +118,13 @@ public class BuilderGoalRunnerController {
         String displayName = textValue(payload.path("displayName"));
         return ResponseEntity.ok(
             builderGoalRunnerService.startCatalogTaskRun(
-                accountId, launcherMachineUuid, taskKey, settings, displayName, world));
+                accountId, launcherMachineUuid, taskKey, settings, displayName, world, provenance));
       }
 
       JsonNode builderPayload = payload.path("builderPayload").isObject() ? payload.path("builderPayload") : payload;
       return ResponseEntity.ok(
           builderGoalRunnerService.startRun(
-              builderPayload, accountId, null, null, null, launcherMachineUuid, world));
+              builderPayload, accountId, null, null, null, launcherMachineUuid, world, provenance));
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (IllegalStateException e) {
@@ -153,6 +154,7 @@ public class BuilderGoalRunnerController {
           payload.path("settings").isObject()
               ? objectMapper.convertValue(payload.path("settings"), Map.class)
               : Map.of();
+      Map<String, Object> provenance = extractProvenance(payload);
       return ResponseEntity.ok(
           builderGoalRunnerService.publishOnly(
               accountId,
@@ -161,7 +163,8 @@ public class BuilderGoalRunnerController {
               settings,
               world,
               targetBaseUrl,
-              allowLaunchFallback));
+              allowLaunchFallback,
+              provenance));
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (IllegalStateException e) {
@@ -440,5 +443,38 @@ public class BuilderGoalRunnerController {
     } catch (NumberFormatException ignored) {
       return null;
     }
+  }
+
+  private Map<String, Object> extractProvenance(JsonNode payload) {
+    JsonNode initiatedBy = firstPresent(payload, "initiatedBy", "initiated_by");
+    JsonNode inputOrigin = firstPresent(payload, "inputOrigin", "input_origin");
+    JsonNode userClicked = firstPresent(payload, "userClicked", "user_clicked");
+    JsonNode scriptClicked = firstPresent(payload, "scriptClicked", "script_clicked");
+    if (initiatedBy.isMissingNode() && inputOrigin.isMissingNode()
+        && userClicked.isMissingNode() && scriptClicked.isMissingNode()) {
+      return null;
+    }
+    Map<String, Object> provenance = new java.util.LinkedHashMap<>();
+    if (!initiatedBy.isMissingNode() && !initiatedBy.isNull()) {
+      provenance.put("initiated_by", initiatedBy.asText());
+    }
+    if (!inputOrigin.isMissingNode() && !inputOrigin.isNull()) {
+      provenance.put("input_origin", inputOrigin.asText());
+    }
+    if (!userClicked.isMissingNode() && !userClicked.isNull()) {
+      provenance.put("user_clicked", userClicked.asBoolean());
+    }
+    if (!scriptClicked.isMissingNode() && !scriptClicked.isNull()) {
+      provenance.put("script_clicked", scriptClicked.asBoolean());
+    }
+    return provenance.isEmpty() ? null : provenance;
+  }
+
+  private JsonNode firstPresent(JsonNode payload, String firstField, String secondField) {
+    JsonNode first = payload.path(firstField);
+    if (!first.isMissingNode()) {
+      return first;
+    }
+    return payload.path(secondField);
   }
 }

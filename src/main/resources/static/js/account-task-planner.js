@@ -1839,7 +1839,11 @@ class AccountTaskPlanner {
             selectedTask.display_name ||
             selectedTask.panel_display_name ||
             selectedTask.task_key,
-          source: 'catalog_task'
+          source: 'catalog_task',
+          initiatedBy: 'user',
+          inputOrigin: 'manual',
+          userClicked: true,
+          scriptClicked: false
         })
       });
       const result = await response.json();
@@ -2129,7 +2133,11 @@ class AccountTaskPlanner {
           accountId: selectedAccount.accountId,
           launcherMachineUuid: selectedMachine.machineUuid,
           world,
-          builderPayload: this.importedBuilderGoal.payload
+          builderPayload: this.importedBuilderGoal.payload,
+          initiatedBy: 'user',
+          inputOrigin: 'manual',
+          userClicked: true,
+          scriptClicked: false
         })
       });
       const result = await response.json();

@@ -7,6 +7,7 @@ let currentMode = 'live';
 let currentRecording = null;
 let sessionHealthMap = {};
 let sessionMetadataMap = {};
+let sessionPlayabilityMap = {};
 let currentRecordingSessionId = null;
 let currentRecordingFps = 30; // Default FPS, updated when loading recording
 let currentLogLevel = 'all';
@@ -51,6 +52,15 @@ const elements = {};
 const MAX_LOG_ENTRIES = 3000;
 const liveLogHistory = [];
 const replayLogHistory = [];
+
+// Quest Helper filter state (persisted across tick card rerenders)
+const questHelperFilterState = {
+  search: '',
+  status: 'all',
+  requirement: 'all',
+  missingOnly: false,
+  raw: false
+};
 
 /**
  * Manages tick state reconstruction from snapshots and diffs.
@@ -250,6 +260,11 @@ class TickStateManager {
       if (!state.quests) state.quests = {};
       Object.assign(state.quests, changes.quests);
     }
+
+    // Apply Quest Helper structured payload changes (replace wholesale)
+    if (changes.questHelper) {
+      state.questHelper = changes.questHelper;
+    }
   }
 
   /**
@@ -429,6 +444,11 @@ let userScrollResetTimeout = null;
 // Snapshot tick timeline (authoritative source for tick sync)
 const replaySnapshotTimeline = []; // Sorted array of ticks with snapshots
 let replaySessionStartTick = 0; // Starting tick for the current replay session
+
+// Windowed tick-card loading state
+const replayTickCardCache = new Map(); // tick -> tick card data
+const replayLoadedRanges = []; // Array of {start, end} windows already fetched
+const replayTickWindowInFlight = []; // Array of {start, end} windows currently being fetched
 
 // Global section toggles
 const globalSectionToggles = {
@@ -728,6 +748,48 @@ function clearLogPlaceholder(outputContainer) {
   }
 }
 
+function captureLogScrollAnchor(container) {
+  if (!container || currentMode !== 'live') return null;
+  const groups = Array.from(container.querySelectorAll('.tick-group'));
+  if (groups.length === 0) return null;
+
+  const containerRect = container.getBoundingClientRect();
+  const anchor = groups.find(group => group.getBoundingClientRect().bottom > containerRect.top)
+    || groups[0];
+  const anchorRect = anchor.getBoundingClientRect();
+
+  return {
+    element: anchor,
+    offsetTop: anchorRect.top - containerRect.top,
+    scrollTop: container.scrollTop
+  };
+}
+
+function restoreLogScrollAnchor(container, anchor) {
+  if (!container || !anchor || currentMode !== 'live') return;
+
+  const now = Date.now();
+  lastProgrammaticScrollTime = now;
+  programmaticScrollUntil = now + 300;
+
+  if (anchor.element && anchor.element.isConnected) {
+    const containerRect = container.getBoundingClientRect();
+    const anchorRect = anchor.element.getBoundingClientRect();
+    container.scrollTop += anchorRect.top - containerRect.top - anchor.offsetTop;
+    return;
+  }
+
+  container.scrollTop = anchor.scrollTop;
+}
+
+function withLiveLogScrollAnchor(callback) {
+  const container = elements.logsContainer;
+  const anchor = captureLogScrollAnchor(container);
+  const result = callback();
+  restoreLogScrollAnchor(container, anchor);
+  return result;
+}
+
 function isSystemSource(source) {
   if (!source) return false;
 
@@ -792,6 +854,8 @@ function matchesCurrentFilters(entry, searchText) {
       VARBIT: 'varbits',
       QUEST: 'quest',
       QUEST_STEP_CHANGED: 'quest',
+      QUEST_HELPER_STEP_CHANGED: 'quest',
+      QUEST_HELPER_BLOCKED: 'quest',
       ANIMATION: 'animation',
       WALKHERE: 'walkhere',
       MENU: 'menu',
@@ -1058,7 +1122,7 @@ function buildTickGroup(tick, entries) {
     content.appendChild(buildActionsSection(tick, entries));
   }
 
-  if (isSectionVisible(tick, 'quest') && snapshot?.quest) {
+  if (isSectionVisible(tick, 'quest') && (snapshot?.quest || snapshot?.questHelper)) {
     content.appendChild(buildQuestSection(tick, snapshot));
   }
 
@@ -1272,7 +1336,7 @@ function buildTickGroupWithFilter(tick, allEntries, visibleEntries) {
     content.appendChild(buildActionsSection(tick, visibleEntries));
   }
 
-  if (isSectionVisible(tick, 'quest') && snapshot?.quest) {
+  if (isSectionVisible(tick, 'quest') && (snapshot?.quest || snapshot?.questHelper)) {
     content.appendChild(buildQuestSection(tick, snapshot));
   }
 
@@ -1462,6 +1526,14 @@ function resolveQuestVarbits(quest) {
 }
 
 function buildQuestSection(tick, snapshot) {
+  const questHelper = snapshot?.questHelper || snapshot?.quest_helper;
+  if (questHelper && typeof questHelper === 'object' && !Array.isArray(questHelper)) {
+    return buildQuestHelperSection(tick, snapshot, questHelper);
+  }
+  return buildSimpleQuestSection(tick, snapshot);
+}
+
+function buildSimpleQuestSection(tick, snapshot) {
   const section = document.createElement('div');
   section.className = 'tick-section section-quest';
 
@@ -1586,6 +1658,500 @@ function buildQuestSection(tick, snapshot) {
   section.appendChild(header);
   section.appendChild(content);
   return section;
+}
+
+/**
+ * Build the rich Quest Helper section from the full questHelper payload.
+ * Renders current step, missing requirements/blockers, dialogue, filterable step list, and raw JSON.
+ */
+function buildQuestHelperSection(tick, snapshot, questHelper) {
+  const section = document.createElement('div');
+  section.className = 'tick-section section-quest quest-helper-card';
+
+  const tickLabel = tick === null ? 'Unknown' : `Tick ${tick}`;
+  const header = document.createElement('div');
+  header.className = 'tick-section-header';
+  header.innerHTML = '<i class="bi bi-book"></i> Quest ';
+  header.appendChild(document.createTextNode(`(${tickLabel})`));
+
+  const content = document.createElement('div');
+  content.className = 'tick-section-content';
+
+  const activeQuest = questHelper.activeQuest || {};
+  const currentStep = questHelper.currentStep || null;
+  const steps = Array.isArray(questHelper.steps) ? questHelper.steps : [];
+  const requirements = questHelper.requirements || null;
+  const dialogue = questHelper.dialogue || null;
+  const debug = questHelper.debug || {};
+  const collectionMode = questHelper.collectionMode || debug.collectionMode || null;
+
+  const nameRow = document.createElement('div');
+  nameRow.className = 'quest-helper-name-row';
+  const nameSpan = document.createElement('strong');
+  nameSpan.textContent = activeQuest.questName || snapshot?.quest?.name || 'Unknown Quest';
+  nameRow.appendChild(nameSpan);
+
+  const questState = activeQuest.questState || snapshot?.quest?.questHelperState || null;
+  if (questState) {
+    const badge = document.createElement('span');
+    badge.className = 'quest-state-badge ' + getQuestStateBadgeClass(questState);
+    badge.textContent = questState.replace(/_/g, ' ');
+    nameRow.appendChild(badge);
+  }
+  if (collectionMode) {
+    const modeBadge = document.createElement('span');
+    modeBadge.className = 'quest-helper-source-badge quest-helper-source-' + collectionMode;
+    modeBadge.textContent = 'Source: ' + collectionMode.replace(/_/g, ' ');
+    nameRow.appendChild(modeBadge);
+  }
+  content.appendChild(nameRow);
+
+  renderQuestHelperCurrentStep(content, currentStep);
+  renderQuestHelperRequirements(content, requirements);
+  if (dialogue && (dialogue.active || dialogue.text)) {
+    renderQuestHelperDialogue(content, dialogue);
+  }
+
+  if (steps.length > 0) {
+    const stepsContainer = document.createElement('div');
+    stepsContainer.className = 'quest-helper-steps-container';
+
+    const listHost = document.createElement('div');
+    listHost.className = 'quest-helper-step-list';
+    const rawHost = document.createElement('div');
+    rawHost.className = 'quest-helper-raw-json';
+
+    function rerender() {
+      listHost.innerHTML = '';
+      rawHost.innerHTML = '';
+      rawHost.style.display = questHelperFilterState.raw ? 'block' : 'none';
+      if (questHelperFilterState.raw) {
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify(questHelper, null, 2);
+        rawHost.appendChild(pre);
+      }
+      const filtered = filterQuestHelperSteps(steps, questHelperFilterState, questHelper);
+      if (filtered.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'section-empty';
+        empty.textContent = 'No steps match filters';
+        listHost.appendChild(empty);
+      } else {
+        filtered.forEach(step => listHost.appendChild(renderQuestHelperStepRow(step)));
+      }
+    }
+
+    stepsContainer.appendChild(buildQuestHelperFilters(questHelperFilterState, rerender));
+    stepsContainer.appendChild(listHost);
+    stepsContainer.appendChild(rawHost);
+    rerender();
+    content.appendChild(stepsContainer);
+  }
+
+  // Render debug error if present
+  if (collectionMode === 'error' || questHelper.debug?.lastCollectionError) {
+    const errLine = document.createElement('div');
+    errLine.className = 'quest-helper-debug-error';
+    errLine.textContent = 'Collection error: ' + (questHelper.debug?.lastCollectionError || collectionMode);
+    content.appendChild(errLine);
+  }
+
+  // Render top-level targets if present
+  const topTargets = Array.isArray(questHelper.targets) ? questHelper.targets : [];
+  if (topTargets.length > 0) {
+    renderQuestHelperTargets(content, topTargets);
+  }
+
+  section.appendChild(header);
+  section.appendChild(content);
+  return section;
+}
+
+function renderQuestHelperCurrentStep(content, currentStep) {
+  const wrap = document.createElement('div');
+  wrap.className = 'quest-helper-current-step';
+  if (!currentStep || typeof currentStep !== 'object') {
+    wrap.innerHTML = '<span class="section-empty">No active step</span>';
+    content.appendChild(wrap);
+    return;
+  }
+  const label = document.createElement('div');
+  label.className = 'quest-helper-step-label';
+  const status = currentStep.status || 'ACTIVE';
+  const statusBadge = document.createElement('span');
+  statusBadge.className = 'quest-helper-status-chip quest-helper-status-' + status.toLowerCase();
+  statusBadge.textContent = status;
+  label.appendChild(statusBadge);
+  if (currentStep.index != null) {
+    const idx = document.createElement('span');
+    idx.className = 'quest-helper-step-index';
+    idx.textContent = `Step ${currentStep.index}`;
+    label.appendChild(idx);
+  }
+  if (currentStep.changedThisTick === true) {
+    const changed = document.createElement('span');
+    changed.className = 'quest-helper-changed-flag';
+    changed.textContent = '(changed this tick)';
+    label.appendChild(changed);
+  }
+  wrap.appendChild(label);
+
+  const text = document.createElement('div');
+  text.className = 'quest-helper-step-text';
+  text.textContent = currentStep.text || '(no step text)';
+  wrap.appendChild(text);
+  content.appendChild(wrap);
+}
+
+function renderQuestHelperRequirements(content, requirements) {
+  if (!requirements || typeof requirements !== 'object') return;
+  const missing = Array.isArray(requirements.missing) ? requirements.missing : [];
+  const met = Array.isArray(requirements.met) ? requirements.met : [];
+  const blockedBy = Array.isArray(requirements.blockedBy) ? requirements.blockedBy : [];
+  if (missing.length === 0 && met.length === 0 && blockedBy.length === 0) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'quest-helper-requirements';
+  const title = document.createElement('div');
+  title.className = 'quest-helper-subheader';
+  title.textContent = missing.length > 0 ? 'Blockers' : 'Requirements';
+  wrap.appendChild(title);
+
+  if (missing.length > 0) {
+    const row = document.createElement('div');
+    row.className = 'quest-helper-chip-row';
+    missing.forEach(req => row.appendChild(buildQuestHelperRequirementChip(req, true)));
+    wrap.appendChild(row);
+  }
+	blockedBy.forEach(text => {
+		const div = document.createElement('div');
+		div.className = 'quest-helper-blocker-line';
+		div.textContent = '! ' + formatQuestHelperBlocker(text);
+		wrap.appendChild(div);
+	});
+  if (met.length > 0) {
+    const metTitle = document.createElement('div');
+    metTitle.className = 'quest-helper-subheader quest-helper-subheader-minor';
+    metTitle.textContent = `Met (${met.length})`;
+    wrap.appendChild(metTitle);
+    const row = document.createElement('div');
+    row.className = 'quest-helper-chip-row';
+    met.forEach(req => row.appendChild(buildQuestHelperRequirementChip(req, false)));
+    wrap.appendChild(row);
+  }
+  content.appendChild(wrap);
+}
+
+function formatQuestHelperBlocker(blocker) {
+	if (typeof blocker === 'string') return blocker;
+	if (!blocker || typeof blocker !== 'object') return String(blocker ?? '');
+	return blocker.text || blocker.name || JSON.stringify(blocker);
+}
+
+function buildQuestHelperRequirementChip(req, missing) {
+	const chip = document.createElement('span');
+	chip.className = 'quest-helper-requirement-chip ' + (missing ? 'missing' : 'met');
+	const type = req && req.type ? req.type : 'UNKNOWN';
+	const name = req && req.name ? req.name : 'requirement';
+	let text = name;
+	if (missing) {
+		const required = req && req.quantityRequired != null ? req.quantityRequired : (req && req.quantity != null ? req.quantity : null);
+		const owned = req && req.quantityOwned != null ? req.quantityOwned : null;
+		if (owned != null && required != null) {
+			text = `${name} ×${owned}/${required}`;
+		} else if (required != null) {
+			text = `${name} ×${required} required`;
+		}
+	}
+	chip.textContent = `${type}: ${text}`;
+	chip.title = req ? JSON.stringify(req) : '';
+	return chip;
+}
+
+function renderQuestHelperDialogue(content, dialogue) {
+  const wrap = document.createElement('div');
+  wrap.className = 'quest-helper-dialogue';
+  const title = document.createElement('div');
+  title.className = 'quest-helper-subheader';
+  title.textContent = 'Dialogue';
+  wrap.appendChild(title);
+  if (dialogue.npcName) {
+    const npc = document.createElement('div');
+    npc.className = 'quest-helper-dialogue-npc';
+    npc.textContent = dialogue.npcName;
+    wrap.appendChild(npc);
+  }
+  if (dialogue.text) {
+    const t = document.createElement('div');
+    t.className = 'quest-helper-dialogue-text';
+    t.textContent = '"' + dialogue.text + '"';
+    wrap.appendChild(t);
+  }
+  const opts = Array.isArray(dialogue.options) ? dialogue.options : [];
+  if (opts.length > 0) {
+    const list = document.createElement('div');
+    list.className = 'quest-helper-dialogue-options';
+    opts.forEach(opt => {
+      const o = document.createElement('div');
+      o.className = 'quest-helper-dialogue-option';
+      if (dialogue.recommendedOption && opt === dialogue.recommendedOption) {
+        o.classList.add('recommended');
+        o.textContent = '★ ' + opt;
+      } else {
+        o.textContent = opt;
+      }
+      list.appendChild(o);
+    });
+    wrap.appendChild(list);
+  }
+  content.appendChild(wrap);
+}
+
+function buildQuestHelperFilters(filterState, onChange) {
+  const bar = document.createElement('div');
+  bar.className = 'quest-helper-filter-row';
+
+  const search = document.createElement('input');
+  search.type = 'text';
+  search.placeholder = 'Search steps...';
+  search.className = 'quest-helper-search-input';
+  search.addEventListener('input', () => {
+    filterState.search = search.value.toLowerCase();
+    onChange();
+  });
+  bar.appendChild(search);
+
+  const status = document.createElement('select');
+  status.className = 'quest-helper-status-filter';
+  ['all', 'active', 'available', 'done', 'locked', 'blocked', 'unknown'].forEach(s => {
+    const o = document.createElement('option');
+    o.value = s;
+    o.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+    status.appendChild(o);
+  });
+  status.addEventListener('change', () => {
+    filterState.status = status.value;
+    onChange();
+  });
+  bar.appendChild(status);
+
+  const req = document.createElement('select');
+  req.className = 'quest-helper-requirement-filter';
+  ['all', 'missing', 'met', 'item', 'skill', 'quest', 'varbit'].forEach(s => {
+    const o = document.createElement('option');
+    o.value = s;
+    o.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+    req.appendChild(o);
+  });
+  req.addEventListener('change', () => {
+    filterState.requirement = req.value;
+    onChange();
+  });
+  bar.appendChild(req);
+
+  const missingLabel = document.createElement('label');
+  missingLabel.className = 'quest-helper-missing-only';
+  const missingCb = document.createElement('input');
+  missingCb.type = 'checkbox';
+  missingCb.addEventListener('change', () => {
+    filterState.missingOnly = missingCb.checked;
+    onChange();
+  });
+  missingLabel.appendChild(missingCb);
+  missingLabel.appendChild(document.createTextNode(' Missing only'));
+  bar.appendChild(missingLabel);
+
+  const rawLabel = document.createElement('label');
+  rawLabel.className = 'quest-helper-raw-toggle';
+  const rawCb = document.createElement('input');
+  rawCb.type = 'checkbox';
+  rawCb.addEventListener('change', () => {
+    filterState.raw = rawCb.checked;
+    onChange();
+  });
+  rawLabel.appendChild(rawCb);
+  rawLabel.appendChild(document.createTextNode(' Raw'));
+  bar.appendChild(rawLabel);
+
+  return bar;
+}
+
+function isQuestHelperRequirementMissing(req) {
+	if (!req) return false;
+	if (req.met === false) return true;
+	if (req.quantityOwned != null && req.quantityRequired != null) {
+		return req.quantityOwned < req.quantityRequired;
+	}
+	if (req.quantityOwned != null && req.quantity != null) {
+		return req.quantityOwned < req.quantity;
+	}
+	return false;
+}
+
+function filterQuestHelperSteps(steps, filterState, questHelper) {
+	const topMissing = Array.isArray(questHelper?.requirements?.missing) ? questHelper.requirements.missing : [];
+	const topBlocked = Array.isArray(questHelper?.requirements?.blockedBy) ? questHelper.requirements.blockedBy : [];
+	return steps.filter(step => {
+		if (!step) return false;
+		if (filterState.status !== 'all') {
+			const s = (step.status || 'UNKNOWN').toLowerCase();
+			if (s !== filterState.status) return false;
+		}
+		const reqs = Array.isArray(step.requirements) ? step.requirements : [];
+		if (filterState.missingOnly) {
+			const hasStepMissing = reqs.some(r => isQuestHelperRequirementMissing(r));
+			const currentIsActive = (step.status || '').toUpperCase() === 'ACTIVE';
+			const topHasMissing = topMissing.length > 0 || topBlocked.length > 0;
+			if (!hasStepMissing && !(currentIsActive && topHasMissing)) return false;
+		}
+		if (filterState.requirement !== 'all') {
+			const allReqs = [...reqs, ...topMissing.map(r => ({ ...r, _source: 'top' }))];
+			const match = allReqs.some(r => {
+				if (!r) return false;
+				if (filterState.requirement === 'missing') {
+					return isQuestHelperRequirementMissing(r);
+				}
+				if (filterState.requirement === 'met') {
+					if (r.quantityOwned != null && r.quantityRequired != null) return r.quantityOwned >= r.quantityRequired;
+					return r.met === true;
+				}
+				return (r.type || '').toLowerCase() === filterState.requirement;
+			});
+			if (!match) return false;
+		}
+		if (filterState.search) {
+      const targets = Array.isArray(step.targets) ? step.targets.map(t => t && (t.name || t.text)) : [];
+      const topTargets = Array.isArray(questHelper?.targets)
+        ? questHelper.targets.map(t => t && (t.name || t.text))
+        : [];
+      const haystack = [
+        step.text, step.stepId,
+        ...reqs.map(r => r && (r.name || r.text)),
+        ...targets,
+        step.dialogue && step.dialogue.text,
+        questHelper?.activeQuest?.questName,
+        questHelper?.dialogue?.text,
+        questHelper?.dialogue?.npcName,
+        ...topMissing.map(r => r && (r.name || r.text)),
+        ...topTargets
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(filterState.search)) return false;
+    }
+    return true;
+  });
+}
+
+function renderQuestHelperStepRow(step) {
+  const row = document.createElement('div');
+  const status = (step.status || 'UNKNOWN').toUpperCase();
+  row.className = 'quest-helper-step-row quest-helper-status-' + status.toLowerCase();
+  const statusSpan = document.createElement('span');
+  statusSpan.className = 'quest-helper-status-chip quest-helper-status-' + status.toLowerCase();
+  statusSpan.textContent = status;
+  row.appendChild(statusSpan);
+  if (step.index != null) {
+    const idx = document.createElement('span');
+    idx.className = 'quest-helper-step-index';
+    idx.textContent = String(step.index);
+    row.appendChild(idx);
+  }
+  const text = document.createElement('span');
+  text.className = 'quest-helper-step-text';
+  text.textContent = step.text || step.stepId || '(no step text)';
+  row.appendChild(text);
+
+  // Per-step requirements
+  const reqs = Array.isArray(step.requirements) ? step.requirements : [];
+  if (reqs.length > 0) {
+    const reqWrap = document.createElement('div');
+    reqWrap.className = 'quest-helper-step-requirements';
+    reqs.forEach(r => {
+      if (!r) return;
+      const chip = buildQuestHelperRequirementChip(
+        r,
+        (r.met === false || (r.quantityOwned != null && r.quantityRequired != null && r.quantityOwned < r.quantityRequired))
+      );
+      reqWrap.appendChild(chip);
+    });
+    row.appendChild(reqWrap);
+  }
+
+  // Per-step targets
+  const targets = Array.isArray(step.targets) ? step.targets : [];
+  if (targets.length > 0) {
+    const targetWrap = document.createElement('div');
+    targetWrap.className = 'quest-helper-target-list';
+    targets.forEach(t => {
+      const el = document.createElement('span');
+      el.className = 'quest-helper-target';
+      el.textContent = (t.name || t.text || t.type || '') + (t.location ? ' @ ' + t.location : '');
+      targetWrap.appendChild(el);
+    });
+    row.appendChild(targetWrap);
+  }
+
+  // Per-step raw JSON toggle
+  if (step.rawClassName || step.source) {
+    const details = document.createElement('details');
+    details.className = 'quest-helper-step-raw';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Raw step data';
+    details.appendChild(summary);
+    const pre = document.createElement('pre');
+    try { pre.textContent = JSON.stringify(step, null, 2); } catch (e) { pre.textContent = String(step); }
+    details.appendChild(pre);
+    row.appendChild(details);
+  }
+
+  return row;
+}
+
+/**
+ * Render top-level targets for the Quest Helper section.
+ */
+function renderQuestHelperTargets(content, targets) {
+	if (!Array.isArray(targets) || targets.length === 0) return;
+	const wrap = document.createElement('div');
+	wrap.className = 'quest-helper-target-list';
+	const title = document.createElement('div');
+	title.className = 'quest-helper-subheader';
+	title.textContent = 'Targets';
+	wrap.appendChild(title);
+	targets.forEach(t => {
+		if (!t) return;
+		const el = document.createElement('span');
+		el.className = 'quest-helper-target';
+		let textParts = [];
+		if (t.name) textParts.push(t.name);
+		if (t.text && t.text !== t.name) textParts.push(t.text);
+		if (t.type) textParts.push('[' + t.type + ']');
+		if (t.action) textParts.push(t.action);
+		if (t.worldPoint) {
+			const wp = t.worldPoint;
+			textParts.push('(' + (wp.x ?? '?') + ',' + (wp.y ?? '?') + ',' + (wp.plane ?? 0) + ')');
+		}
+		if (t.distance != null) textParts.push(t.distance + 't');
+		if (t.reachable === false) textParts.push('(unreachable)');
+		el.textContent = textParts.length > 0 ? textParts.join(' ') : (t.stepId || 'Target');
+		wrap.appendChild(el);
+	});
+	content.appendChild(wrap);
+}
+
+/**
+ * Format a Quest Helper structured event for the action log.
+ */
+function formatQuestHelperEvent(event) {
+  const q = event.questName ?? event.questKey ?? '?';
+  const oldStep = event.oldStepId ?? event.oldStepText ?? null;
+  const newStep = event.newStepId ?? event.newStepText ?? null;
+  if (event.type === 'QUEST_HELPER_STEP_CHANGED' && oldStep != null && newStep != null) {
+    return `Quest Helper step changed: ${q} ${oldStep} → ${newStep}`;
+  }
+  if (event.type === 'QUEST_HELPER_BLOCKED') {
+    return `Quest Helper blocked: ${q} — ${event.reason ?? event.detail ?? ''}`.trim();
+  }
+  return `Quest Helper ${event.type.replace(/^QUEST_HELPER_/, '').replace(/_/g, ' ')}: ${q}`;
 }
 
 /**
@@ -1934,6 +2500,178 @@ function buildProjectilesSection(tick, snapshot) {
 }
 
 /**
+ * Player state display helpers - resolve from nested canonical or flat legacy fields.
+ */
+
+function getPlayerPosition(player) {
+  if (player.position && typeof player.position === 'object' && player.position.x !== undefined) {
+    return player.position;
+  }
+  if (player.worldPosition && typeof player.worldPosition === 'object' && player.worldPosition.x !== undefined) {
+    return player.worldPosition;
+  }
+  if (player.worldPoint && typeof player.worldPoint === 'object' && player.worldPoint.x !== undefined) {
+    return player.worldPoint;
+  }
+  if (player.tile && typeof player.tile === 'object' && player.tile.x !== undefined) {
+    return player.tile;
+  }
+  // Flat fields
+  if (player.x !== undefined) {
+    var y = player.y !== undefined ? player.y : player.z;
+    return { x: player.x, y: y, z: player.z, plane: player.plane };
+  }
+  if (player.worldX !== undefined) {
+    var wy = player.worldY !== undefined ? player.worldY : player.z;
+    return { x: player.worldX, y: wy, z: player.z, plane: player.plane };
+  }
+  return {};
+}
+
+function getPlayerHp(player) {
+  if (player.hp && typeof player.hp === 'object' && player.hp.current !== undefined) {
+    return player.hp.current + '/' + (player.hp.max || '?');
+  }
+  if (player.currentHp !== undefined) {
+    return player.currentHp + '/' + (player.maxHp || '?');
+  }
+  return null;
+}
+
+function getPlayerPrayer(player) {
+  if (player.prayer && typeof player.prayer === 'object' && player.prayer.current !== undefined) {
+    var pc = player.prayer.current;
+    var pm = player.prayer.max || player.prayer.maxPoints || '?';
+    return pc + '/' + pm;
+  }
+  if (player.currentPrayer !== undefined) {
+    return player.currentPrayer + '/' + (player.maxPrayer || '?');
+  }
+  return null;
+}
+
+function getPlayerEnergy(player) {
+  if (player.energy !== undefined) return player.energy + '%';
+  if (player.runEnergy !== undefined) return player.runEnergy + '%';
+  return null;
+}
+
+function getPlayerAnimation(player) {
+  if (player.animation !== undefined) return String(player.animation);
+  if (player.animationId !== undefined) return String(player.animationId);
+  return null;
+}
+
+function buildCollapsibleJsonTree(value, options) {
+  options = options || {};
+  var maxDepth = options.maxDepth || 10;
+  var indent = options.indent || 2;
+  var depth = options.depth || 0;
+  var container = document.createElement('div');
+  container.className = 'player-json-tree';
+
+  if (depth >= maxDepth) {
+    var truncSpan = document.createElement('span');
+    truncSpan.className = 'player-json-value';
+    truncSpan.textContent = '...';
+    container.appendChild(truncSpan);
+    return container;
+  }
+
+  if (value === null || value === undefined) {
+    var nullSpan = document.createElement('span');
+    nullSpan.className = 'player-json-value player-json-null';
+    nullSpan.textContent = 'null';
+    container.appendChild(nullSpan);
+  } else if (typeof value === 'boolean' || typeof value === 'number') {
+    var valSpan = document.createElement('span');
+    valSpan.className = 'player-json-value player-json-primitive';
+    valSpan.textContent = String(value);
+    container.appendChild(valSpan);
+  } else if (typeof value === 'string') {
+    var strSpan = document.createElement('span');
+    strSpan.className = 'player-json-value player-json-string';
+    strSpan.textContent = '"' + escapeHtml(value) + '"';
+    container.appendChild(strSpan);
+  } else if (Array.isArray(value)) {
+    var openSpan = document.createElement('span');
+    openSpan.className = 'player-json-bracket';
+    openSpan.textContent = '[';
+    container.appendChild(openSpan);
+    if (value.length === 0) {
+      var closeSpan = document.createElement('span');
+      closeSpan.className = 'player-json-bracket';
+      closeSpan.textContent = ']';
+      container.appendChild(closeSpan);
+    } else {
+      var listDiv = document.createElement('div');
+      listDiv.className = 'player-json-children';
+      for (var i = 0; i < value.length; i++) {
+        var itemDiv = document.createElement('div');
+        itemDiv.className = 'player-json-entry';
+        var childContainer = buildCollapsibleJsonTree(value[i],
+          { maxDepth: maxDepth, indent: indent, depth: depth + 1 });
+        itemDiv.appendChild(childContainer);
+        if (i < value.length - 1) {
+          var comma = document.createElement('span');
+          comma.textContent = ',';
+          childContainer.appendChild(comma);
+        }
+        listDiv.appendChild(itemDiv);
+      }
+      container.appendChild(listDiv);
+      var closeDiv = document.createElement('div');
+      closeDiv.textContent = ']';
+      container.appendChild(closeDiv);
+    }
+  } else if (typeof value === 'object') {
+    var keys = Object.keys(value);
+    var openBrace = document.createElement('span');
+    openBrace.className = 'player-json-bracket';
+    openBrace.textContent = '{';
+    container.appendChild(openBrace);
+    if (keys.length === 0) {
+      var closeBrace = document.createElement('span');
+      closeBrace.className = 'player-json-bracket';
+      closeBrace.textContent = '}';
+      container.appendChild(closeBrace);
+    } else {
+      var objListDiv = document.createElement('div');
+      objListDiv.className = 'player-json-children';
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        var entryDiv = document.createElement('div');
+        entryDiv.className = 'player-json-entry';
+
+        var keySpan = document.createElement('span');
+        keySpan.className = 'player-json-key';
+        keySpan.textContent = '"' + escapeHtml(key) + '": ';
+
+        entryDiv.appendChild(keySpan);
+
+        var valContainer = buildCollapsibleJsonTree(value[key],
+          { maxDepth: maxDepth, indent: indent, depth: depth + 1 });
+        entryDiv.appendChild(valContainer);
+
+        if (i < keys.length - 1) {
+          var trailingComma = document.createElement('span');
+          trailingComma.textContent = ',';
+          entryDiv.appendChild(trailingComma);
+        }
+
+        objListDiv.appendChild(entryDiv);
+      }
+      container.appendChild(objListDiv);
+      var closingBrace = document.createElement('div');
+      closingBrace.textContent = '}';
+      container.appendChild(closingBrace);
+    }
+  }
+
+  return container;
+}
+
+/**
  * Build player state section.
  */
 function buildPlayerSection(tick, snapshot) {
@@ -1954,19 +2692,18 @@ function buildPlayerSection(tick, snapshot) {
     const grid = document.createElement('div');
     grid.className = 'player-state-grid';
 
-    const hp = player.hp || {};
-    const prayer = player.prayer || {};
-    const position = player.position || player.worldPosition || player.worldPoint
-      || (player.tile ? player.tile : null) || {};
-    const prayerCurrent = prayer.current ?? prayer.points;
-    const prayerMax     = prayer.max    ?? prayer.maxPoints;
+    const position = getPlayerPosition(player);
+    const hpDisplay = getPlayerHp(player);
+    const prayerDisplay = getPlayerPrayer(player);
+    const energyDisplay = getPlayerEnergy(player);
+    const animDisplay = getPlayerAnimation(player);
 
     const stats = [
-      { label: 'HP', value: hp.current !== undefined ? `${hp.current}/${hp.max}` : '--' },
-      { label: 'Prayer', value: prayerCurrent !== undefined ? `${prayerCurrent}/${prayerMax}` : '--' },
-      { label: 'Energy', value: player.energy !== undefined ? `${player.energy}%` : '--' },
-      { label: 'Animation', value: player.animation || '--' },
-      { label: 'Position', value: position.x !== undefined ? `(${position.x}, ${position.y})` : '--' },
+      { label: 'HP', value: hpDisplay || '--' },
+      { label: 'Prayer', value: prayerDisplay || '--' },
+      { label: 'Energy', value: energyDisplay || '--' },
+      { label: 'Animation', value: animDisplay || '--' },
+      { label: 'Position', value: position.x !== undefined ? `(${position.x}, ${position.y}, ${position.plane ?? 0})` : '--' },
       { label: 'Running', value: player.isRunning !== undefined ? (player.isRunning ? 'Yes' : 'No') : '--' }
     ];
 
@@ -1981,6 +2718,35 @@ function buildPlayerSection(tick, snapshot) {
     });
 
     content.appendChild(grid);
+
+    // Collapsible full player object
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'player-json-toggle';
+    toggleBtn.innerHTML = '<i class="bi bi-code-slash"></i> Full Player Object';
+    toggleBtn.setAttribute('aria-expanded', 'false');
+
+    const jsonPanel = document.createElement('div');
+    jsonPanel.className = 'player-json-panel';
+    jsonPanel.style.display = 'none';
+
+    const jsonTree = buildCollapsibleJsonTree(snapshot.playerState, { maxDepth: 5, indent: 2 });
+    jsonPanel.appendChild(jsonTree);
+
+    toggleBtn.addEventListener('click', () => {
+      const expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+      if (expanded) {
+        jsonPanel.style.display = 'none';
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        toggleBtn.querySelector('.bi').className = 'bi bi-code-slash';
+      } else {
+        jsonPanel.style.display = 'block';
+        toggleBtn.setAttribute('aria-expanded', 'true');
+        toggleBtn.querySelector('.bi').className = 'bi bi-code-slash';
+      }
+    });
+
+    content.appendChild(toggleBtn);
+    content.appendChild(jsonPanel);
   } else {
     // More informative empty state
     const emptyDiv = document.createElement('div');
@@ -3205,8 +3971,10 @@ function flushPendingLiveEntries() {
   liveRenderScheduled = false;
   const batch = pendingLiveEntries;
   pendingLiveEntries = [];
-  batch.forEach(entry => addLiveLogEntryToTickGroup(entry));
-  pruneTickGroups();
+  withLiveLogScrollAnchor(() => {
+    batch.forEach(entry => addLiveLogEntryToTickGroup(entry));
+    pruneTickGroups();
+  });
 }
 
 function pruneTickGroups() {
@@ -3266,6 +4034,9 @@ function normalizeTickLog(log) {
   const resolvedData    = log.data    || log.details    || null;
 
   let resolvedMessage = log.message ? String(log.message) : '';
+  if (resolvedData && isClickEventType(resolvedLogType) && hasClickProvenance(resolvedData)) {
+    resolvedMessage = formatEventFromTypeAndData(resolvedLogType, resolvedData);
+  }
   if (!resolvedMessage && resolvedLogType && resolvedData) {
     resolvedMessage = formatEventFromTypeAndData(resolvedLogType, resolvedData);
   }
@@ -3331,14 +4102,64 @@ function formatEventFromTypeAndData(type, data) {
       }
       return `Quest "${name}": ${step}${state ? ` [${state.replace(/_/g, ' ')}]` : ''}`;
     }
+    case 'QUEST_HELPER_STEP_CHANGED':
+    case 'QUEST_HELPER_BLOCKED':
+    case 'QUEST_HELPER_TARGET_CHANGED':
+    case 'QUEST_HELPER_REQUIREMENT_CHANGED':
+      return formatQuestHelperEvent({ ...d, type });
     case 'DIALOGUE':
       return `Dialogue: ${d.speaker ?? d.npcName ?? d.npc ?? ''}: "${d.text ?? ''}"`;
     case 'DIALOGUE_OPTION_SELECTED':
       return `Selected dialogue option: "${d.option ?? d.text ?? ''}"`;
+    case 'CLICK': {
+      const x = d.x ?? d.point?.x ?? null;
+      const y = d.y ?? d.point?.y ?? null;
+      const pos = x != null && y != null ? ` at ${x},${y}` : '';
+      const isUserClick = isManualClickData(d);
+      const isScriptClick = isScriptClickData(d);
+      if (isUserClick) return `Manual click${pos}`;
+      if (isScriptClick) return `Script click${pos}`;
+      return `Click${pos}`;
+    }
+    case 'WALKHERE': {
+      const wx = d.x ?? d.point?.x ?? null;
+      const wy = d.y ?? d.point?.y ?? null;
+      const wpos = wx != null && wy != null ? ` at ${wx},${wy}` : '';
+      const isUserWalk = isManualClickData(d);
+      const isScriptWalk = isScriptClickData(d);
+      if (isUserWalk) return `Manual walk${wpos}`;
+      if (isScriptWalk) return `Script walk${wpos}`;
+      return `Walk${wpos}`;
+    }
     default:
       if (Object.keys(d).length > 0) return `${type}: ${JSON.stringify(d)}`;
       return type;
   }
+}
+
+function isClickEventType(type) {
+  return type === 'CLICK' || type === 'WALKHERE';
+}
+
+function isManualClickData(data) {
+  if (!data) return false;
+  return data.user_clicked === true ||
+    data.click_source === 'user' ||
+    data.initiated_by === 'user' ||
+    data.input_origin === 'manual';
+}
+
+function isScriptClickData(data) {
+  if (!data) return false;
+  return data.script_clicked === true ||
+    data.click_source === 'script' ||
+    data.initiated_by === 'script' ||
+    data.input_origin === 'script' ||
+    data.input_origin === 'automation';
+}
+
+function hasClickProvenance(data) {
+  return isManualClickData(data) || isScriptClickData(data);
 }
 
 /**
@@ -3348,16 +4169,25 @@ function formatEventFromTypeAndData(type, data) {
  * @returns {Object} Normalized log entry
  */
 function normalizeActionLog(log) {
+  const data = log.data || null;
+  const logType = log.logType || null;
+  const provenanceMessage =
+    data && isClickEventType(logType) && hasClickProvenance(data)
+      ? formatEventFromTypeAndData(logType, data)
+      : null;
   return {
     kind: 'action',
     level: String(log.level || 'INFO').toUpperCase(),
-    message: log.message ? String(log.message) : '',
+    message: provenanceMessage || (log.message ? String(log.message) : ''),
     source: log.source ? String(log.source) : 'external',
     timestamp: log.timestamp || null,
-    logType: log.logType || null, // DIALOGUE, INVENTORY, VARBIT, ANIMATION
+    logType, // DIALOGUE, INVENTORY, VARBIT, ANIMATION
     // Fix: Use nullish coalescing to preserve tick 0
     tick: log.tick ?? currentTick ?? null,
-    data: log.data || null // Structured data
+    data, // Structured data
+    clickSource: data?.click_source || data?.input_origin || null,
+    userClicked: isManualClickData(data),
+    scriptClicked: isScriptClickData(data)
   };
 }
 
@@ -4160,7 +4990,15 @@ function initReplayModeListeners() {
         if (timeSinceLastSync >= syncInterval) {
           lastSyncTimeMs = currentTimeMs;
           syncLogsToVideo(currentTimeMs);
+          ensureReplayTickWindow(currentRecording, calculateTickFromVideoTime(currentTimeMs));
         }
+      }
+    });
+
+    elements.replayVideo.addEventListener('seeked', () => {
+      if (currentMode === 'replay' && currentRecording) {
+        const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
+        ensureReplayTickWindow(currentRecording, calculateTickFromVideoTime(currentTimeMs));
       }
     });
 
@@ -4178,6 +5016,7 @@ function initReplayModeListeners() {
       const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
       lastSyncTimeMs = currentTimeMs;
       syncLogsToVideo(currentTimeMs);
+      ensureReplayTickWindow(currentRecording, calculateTickFromVideoTime(currentTimeMs));
     });
   }
 
@@ -4280,33 +5119,23 @@ async function loadRecordingSessions() {
   const preservedValue = elements.sessionSelect.value;
 
   try {
-    const [recordingRes, debugRes] = await Promise.all([
-      fetch('/api/recordings/sessions'),
-      fetch('/api/debug/replay/recording-health')
-    ]);
-
+    // Load sessions first; health is fetched afterwards so it never blocks the dropdown.
+    const recordingRes = await fetch('/api/recordings/sessions');
     if (!recordingRes.ok) {
       throw new Error('Failed to load sessions');
     }
-
-    // Build health map keyed by recordingId
-    sessionHealthMap = {};
-    if (debugRes.ok) {
-      const debugSessions = await debugRes.json();
-      debugSessions.forEach(ds => {
-        if (ds.recordingId) sessionHealthMap[ds.recordingId] = ds;
-      });
-    }
-
     const sessions = await recordingRes.json();
+
     elements.sessionSelect.innerHTML = '<option value="">-- Select a recording session --</option>';
 
     // Build metadata map keyed by recordingId
     sessionMetadataMap = {};
+    sessionPlayabilityMap = {};
 
     sessions.forEach(session => {
       const option = document.createElement('option');
       option.value = session.recordingId;
+      option.dataset.recordingId = session.recordingId;
 
       // Store metadata for editor
       sessionMetadataMap[session.recordingId] = {
@@ -4315,28 +5144,28 @@ async function loadRecordingSessions() {
         replayTags: session.replayTags || []
       };
 
-      const h = sessionHealthMap[session.recordingId];
+      // Track playability for loadRecording checks
+      sessionPlayabilityMap[session.recordingId] = {
+        playable: session.playable,
+        status: session.status,
+        videoError: session.videoError
+      };
+
       const displayName = session.displayName || `${session.accountName || 'Unknown'}`;
 
-      // Add lifecycle state badge
-      let lifecycleBadge = '';
-      if (h && h.lifecycleState) {
-        const state = h.lifecycleState;
-        if (state === 'STARTING') {
-          lifecycleBadge = ' [Starting]';
-        } else if (state === 'RECORDING') {
-          lifecycleBadge = ' [Recording]';
-        } else if (state === 'FINALIZED') {
-          lifecycleBadge = ' [OK]';
-        } else if (state === 'FAILED') {
-          const reason = h.failureReason ? `: ${h.failureReason}` : '';
-          lifecycleBadge = ` [FAILED${reason}]`;
-        }
+      // Mark and disable unfinished recordings
+      const playable = session.playable === true;
+      const statusBadge = session.status && session.status !== 'FINALIZED'
+        ? ` [${session.status === 'RECORDING' ? 'Recording' : 'Not finalized'}]`
+        : ' [OK]';
+
+      option.textContent = `${displayName}${statusBadge}`;
+
+      if (!playable) {
+        option.disabled = true;
+        option.title = session.videoError || 'Recording is not finalized or video is unavailable';
       }
 
-      const eventPart = h ? ` · Events ${h.eventCount ?? 0}` : '';
-      const failPart = h && (h.failureMarkerCount ?? 0) > 0 ? ` · Fail ${h.failureMarkerCount}` : '';
-      option.textContent = `${displayName}${lifecycleBadge}${eventPart}${failPart}`;
       elements.sessionSelect.appendChild(option);
     });
 
@@ -4354,9 +5183,52 @@ async function loadRecordingSessions() {
         elements.editReplayMetadataBtn.style.display = '';
       }
     }
+
+    // Fetch health asynchronously without blocking the selector
+    loadRecordingSessionHealth(sessions);
   } catch (error) {
     console.error('Failed to load recording sessions:', error);
     elements.sessionSelect.innerHTML = '<option value="">Error loading sessions</option>';
+  }
+}
+
+/** Fetch recording health and apply badges to existing dropdown options. */
+async function loadRecordingSessionHealth(sessions) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const debugRes = await fetch('/api/debug/replay/recording-health?limit=500', {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!debugRes.ok) return;
+
+    const debugSessions = await debugRes.json();
+    sessionHealthMap = {};
+    debugSessions.forEach(ds => {
+      if (ds.recordingId) sessionHealthMap[ds.recordingId] = ds;
+    });
+
+    // Update option labels with health badges
+    Array.from(elements.sessionSelect.options).forEach(option => {
+      const recordingId = option.dataset.recordingId;
+      if (!recordingId) return;
+      const h = sessionHealthMap[recordingId];
+      if (!h) return;
+
+      const currentText = option.textContent;
+      const baseText = currentText.split(' · ')[0];
+
+      const eventPart = ` · Events ${h.eventCount ?? 0}`;
+      const failPart = (h.failureMarkerCount ?? 0) > 0 ? ` · Fail ${h.failureMarkerCount}` : '';
+      option.textContent = `${baseText}${eventPart}${failPart}`;
+    });
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      console.warn('Failed to load recording health (non-blocking):', error);
+    }
   }
 }
 
@@ -4478,6 +5350,9 @@ async function loadRecording(recordingId) {
   replaySnapshotTimeline.length = 0; // Clear snapshot timeline
   replaySessionStartTick = 0; // Reset session start tick
   currentReplayDebugSessionId = null;
+  replayLoadedRanges.length = 0;
+  replayTickWindowInFlight.length = 0;
+  replayTickCardCache.clear();
   if (typeof perTickSectionToggles !== 'undefined') {
     perTickSectionToggles.clear(); // Clear tick UI state
   }
@@ -4504,13 +5379,8 @@ async function loadRecording(recordingId) {
         console.error('Failed to load recording, status:', response.status);
         alert('Failed to load recording. Please try again.');
       }
-      // DON'T set currentRecording on failure
       return false;
     }
-
-    // Only set currentRecording after successful fetch
-    currentRecording = recordingId;
-    history.replaceState({}, '', `/debugger?recordingId=${recordingId}`);
 
     const recording = await response.json();
     currentRecordingSessionId = recording.id;
@@ -4518,19 +5388,30 @@ async function loadRecording(recordingId) {
 
     console.log('Loaded recording metadata:', recording);
 
-    // Check for video errors
-    if (recording.videoError) {
-      console.error('Video error for recording:', recording.videoError);
-      alert(`Cannot load video: ${recording.videoError}\n\nPlease check the server logs for details.`);
+    // Refuse to load unplayable recordings
+    if (recording.playable === false) {
+      console.error('Recording is not playable:', recording.videoError);
+      renderLogHistory(`Cannot load recording: ${recording.videoError || 'Recording not finalized'}`);
       return false;
     }
 
-    // Validate videoUrl exists
-    if (!recording.videoUrl) {
-      console.error('No video URL in response:', recording);
-      alert('Video is not available. The recording may not have completed properly.\n\nTry stopping and restarting the recording.');
+    // Check for video errors (non-blocking)
+    if (recording.videoError) {
+      console.error('Video error for recording:', recording.videoError);
+      renderLogHistory(`Cannot load video: ${recording.videoError}`);
       return false;
     }
+
+    // Validate videoUrl exists before committing currentRecording
+    if (!recording.videoUrl) {
+      console.error('No video URL in response:', recording);
+      renderLogHistory('Video is not available. The recording may not have completed properly.');
+      return false;
+    }
+
+    // Commit currentRecording only after confirming videoUrl
+    currentRecording = recordingId;
+    history.replaceState({}, '', `/debugger?recordingId=${recordingId}`);
 
     // Load video
     if (elements.replayVideo) {
@@ -4541,7 +5422,7 @@ async function loadRecording(recordingId) {
       // Add error handler for video element
       elements.replayVideo.onerror = (e) => {
         console.error('Video element failed to load:', e);
-        alert('Failed to load video file. The file may be corrupted or in an unsupported format.');
+        renderLogHistory('Failed to load video file. The file may be corrupted or in an unsupported format.');
       };
 
       // Add success handler
@@ -4559,7 +5440,7 @@ async function loadRecording(recordingId) {
     }
     updateSourceFilterSummary();
 
-    // Background: fetch debug session + tick cards without blocking video playback
+    // Background: fetch debug session + initial tick window without blocking video playback
     (async () => {
       try {
         const sessionResponse = await fetch(`/api/debug/replay/sessions/by-recording?recordingId=${recordingId}`);
@@ -4586,37 +5467,15 @@ async function loadRecording(recordingId) {
             console.warn('Failed to fetch session info:', e);
           }
 
-          // Load full tick history upfront (not windowed)
+          // Load a small initial window around the start tick
           if (sessionInfo && sessionInfo.minTick != null && sessionInfo.maxTick != null) {
             const minTick = sessionInfo.minTick;
             const maxTick = sessionInfo.maxTick;
-
-            console.log(`Loading full tick history: ticks ${minTick} to ${maxTick} (${maxTick - minTick + 1} ticks)`);
-
-            try {
-              const tickCardsResponse = await fetch(
-                `/api/debug/replay/tick-cards/${recordingId}?start=${minTick}&end=${maxTick}`
-              );
-
-              if (tickCardsResponse.ok) {
-                const tickCards = await tickCardsResponse.json();
-                console.log(`Loaded ${tickCards.length} tick cards`);
-
-                // Build full replay history from tick cards
-                buildReplayHistoryFromTickCards(tickCards);
-
-                // Render the full history
-                if (currentMode === 'replay') {
-                  renderLogHistory('Loading complete');
-                }
-              } else {
-                console.warn('Failed to load tick cards, status:', tickCardsResponse.status);
-              }
-            } catch (e) {
-              console.error('Error loading tick cards:', e);
-            }
+            const initialEnd = Math.min(minTick + 150, maxTick);
+            console.log(`Loading initial tick window: ticks ${minTick} to ${initialEnd}`);
+            await loadReplayTickWindow(recordingId, minTick, initialEnd);
           } else {
-            console.warn('No tick range available for full history loading');
+            console.warn('No tick range available for windowed loading');
           }
         } else {
           console.warn('No debug session found for recording (old recording or session deleted)');
@@ -4632,26 +5491,27 @@ async function loadRecording(recordingId) {
 
   } catch (error) {
     console.error('Failed to load recording:', error);
-    alert('An error occurred while loading the recording:\n' + error.message);
+    renderLogHistory('An error occurred while loading the recording: ' + error.message);
     return false;
   }
 }
 
 /**
- * Build full replay history from tick cards loaded upfront.
+ * Build replay history from tick cards loaded for a window.
+ * This function is additive; it adds new tick cards to the cache without clearing prior data.
  * @param {Array} tickCards - Array of TickCardData from backend
  */
 function buildReplayHistoryFromTickCards(tickCards) {
-  replayLogHistory.length = 0;
-  replayTickSnapshots.clear();
-  replaySnapshotTimeline.length = 0;
-
   if (window.DEBUG_TICK) {
-    console.log('[Replay] Building history from', tickCards.length, 'tick cards');
+    console.log('[Replay] Adding history from', tickCards.length, 'tick cards');
   }
 
   tickCards.forEach(card => {
     const tick = card.tick;
+
+    // Skip already cached ticks to avoid duplicates on overlapping windows
+    if (replayTickCardCache.has(tick)) return;
+    replayTickCardCache.set(tick, card);
 
     // Store snapshot timeline (all ticks, even if no data, to maintain continuity)
     if (!replaySnapshotTimeline.includes(tick)) {
@@ -4659,22 +5519,21 @@ function buildReplayHistoryFromTickCards(tickCards) {
     }
 
     // Normalize section data from TickCardData to snapshot shape
-    // This maps backend TickCardData.sectionData to frontend snapshot format
     const snapshot = {
       playerState: card.sectionData?.player || null,
       inventory: card.sectionData?.inventory || null,
-      equipment: null, // Not included in tick cards currently
-      threats: card.sectionData?.npcs || null, // Use npcs as threats for compatibility
+      equipment: null,
+      threats: card.sectionData?.npcs || null,
       projectiles: card.sectionData?.projectiles || null,
-      cooldowns: null, // Not included in tick cards currently
+      cooldowns: null,
       quest: card.sectionData?.quest || null,
+      questHelper: card.sectionData?.questHelper || null,
       npcs: card.sectionData?.npcs || null,
       gameObjects: card.sectionData?.objects || null,
       groundObjects: card.sectionData?.groundObjects || null,
       groundItems: card.sectionData?.groundItems || null
     };
 
-    // Store snapshot for all ticks (even empty ones) to show "No data" states
     replayTickSnapshots.set(tick, snapshot);
 
     if (window.DEBUG_TICK && tick % 10 === 0) {
@@ -4686,7 +5545,6 @@ function buildReplayHistoryFromTickCards(tickCards) {
     const actionLogs = card.sectionData?.actions;
     if (Array.isArray(actionLogs)) {
       actionLogs.forEach(logEntry => {
-        // Normalize TickLog format to frontend log format
         const normalizedLog = {
           kind: 'tick',
           tick: tick,
@@ -4744,7 +5602,85 @@ function buildReplayHistoryFromTickCards(tickCards) {
   // Sort snapshot timeline
   replaySnapshotTimeline.sort((a, b) => a - b);
 
-  console.log(`Built replay history: ${replayLogHistory.length} log entries, ${replayTickSnapshots.size} snapshots across ${replaySnapshotTimeline.length} ticks (${replaySnapshotTimeline[0]}-${replaySnapshotTimeline[replaySnapshotTimeline.length - 1]})`);
+  const minTick = replaySnapshotTimeline.length > 0 ? replaySnapshotTimeline[0] : null;
+  const maxTick = replaySnapshotTimeline.length > 0 ? replaySnapshotTimeline[replaySnapshotTimeline.length - 1] : null;
+  console.log(`Built replay history: ${replayLogHistory.length} log entries, ${replayTickSnapshots.size} snapshots across ${replaySnapshotTimeline.length} ticks${minTick != null ? ` (${minTick}-${maxTick})` : ''}`);
+}
+
+/** Load a window of tick cards for the current replay and add them to the cache. */
+async function loadReplayTickWindow(recordingId, startTick, endTick) {
+  if (!recordingId || startTick == null || endTick == null) return;
+  if (startTick > endTick) return;
+  if (isReplayRangeLoaded(startTick, endTick) || isReplayRangeInFlight(startTick, endTick)) return;
+
+  console.log(`Loading tick window for ${recordingId}: ticks ${startTick}-${endTick}`);
+  registerReplayInFlightRange(startTick, endTick);
+  try {
+    const response = await fetch(
+      `/api/debug/replay/tick-cards/${recordingId}?start=${startTick}&end=${endTick}`
+    );
+    if (!response.ok) {
+      console.warn('Failed to load tick cards, status:', response.status);
+      return;
+    }
+    const tickCards = await response.json();
+    buildReplayHistoryFromTickCards(tickCards);
+    registerReplayLoadedRange(startTick, endTick);
+    if (currentMode === 'replay' && currentRecording === recordingId) {
+      renderLogHistory();
+    }
+    console.log(`Loaded ${tickCards.length} tick cards for ticks ${startTick}-${endTick}`);
+  } catch (e) {
+    console.error('Error loading tick cards:', e);
+  } finally {
+    unregisterReplayInFlightRange(startTick, endTick);
+  }
+}
+
+/** Ensure the ticks around the current video position are loaded. */
+async function ensureReplayTickWindow(recordingId, currentTick) {
+  if (!recordingId || currentTick == null || isNaN(currentTick)) return;
+  const start = Math.max(0, currentTick - 50);
+  const end = currentTick + 150;
+  if (isReplayRangeLoaded(start, end)) return;
+  await loadReplayTickWindow(recordingId, start, end);
+}
+
+/** Check if a range is fully covered by already-loaded ranges. */
+function isReplayRangeLoaded(start, end) {
+  return replayLoadedRanges.some(r => r.start <= start && r.end >= end);
+}
+
+/** Check if a range overlaps an in-flight request. */
+function isReplayRangeInFlight(start, end) {
+  return replayTickWindowInFlight.some(r => r.start <= end && r.end >= start);
+}
+
+function registerReplayInFlightRange(start, end) {
+  replayTickWindowInFlight.push({ start, end });
+}
+
+function unregisterReplayInFlightRange(start, end) {
+  const index = replayTickWindowInFlight.findIndex(r => r.start === start && r.end === end);
+  if (index >= 0) {
+    replayTickWindowInFlight.splice(index, 1);
+  }
+}
+
+/** Register a fetched range and merge with existing loaded ranges. */
+function registerReplayLoadedRange(start, end) {
+  replayLoadedRanges.push({ start, end });
+  replayLoadedRanges.sort((a, b) => a.start - b.start);
+  const merged = [];
+  for (const range of replayLoadedRanges) {
+    if (merged.length === 0 || range.start > merged[merged.length - 1].end + 1) {
+      merged.push(range);
+    } else {
+      merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, range.end);
+    }
+  }
+  replayLoadedRanges.length = 0;
+  replayLoadedRanges.push(...merged);
 }
 
 /**
@@ -4807,6 +5743,7 @@ async function maybeFetchReplaySnapshot(tick) {
           projectiles: raw.projectiles ?? null,
           cooldowns: raw.cooldowns ?? null,
           quest: raw.quest ?? null,
+          questHelper: raw.questHelper ?? null,
           npcs: raw.npcs ?? null,
           gameObjects: raw.gameObjects ?? null,
           groundObjects: raw.groundObjects ?? null,
@@ -5227,6 +6164,8 @@ function filterLogs() {
 // ==================== WINDOW SELECTION ====================
 
 let currentWindowId = '';
+let currentWindowAccountName = '';
+let pendingWindowSessionRebind = false;
 
 async function fetchAndRenderWindows() {
   try {
@@ -5280,15 +6219,14 @@ async function loadCurrentWindowSelection() {
   try {
     const response = await fetch('/api/windows/current');
     if (response.status === 204 || response.status === 404) {
-      updateSelectedWindowLabel('', 'Auto-detect');
+      updateSelectedWindowSelection('', 'Auto-detect', '', false);
       return;
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const window = await response.json();
     const displayName = window.accountName || window.title;
-    updateSelectedWindowLabel(window.id, displayName);
-    currentWindowId = window.id;
+    updateSelectedWindowSelection(window.id, displayName, window.accountName || '', false);
   } catch (err) {
     console.error('Error loading current window selection:', err);
   }
@@ -5302,6 +6240,72 @@ function updateSelectedWindowLabel(id, displayName) {
   currentWindowId = id;
 }
 
+function normalizeWindowAccountName(value) {
+  return value ? String(value).trim().toLowerCase() : '';
+}
+
+function resetLiveDebugSessionForWindowChange(displayName) {
+  currentDebugSessionId = null;
+  currentDebugSession = null;
+  isDebugSessionActive = false;
+  pendingWindowSessionRebind = true;
+
+  if (liveTickStateManager) {
+    liveTickStateManager.reset();
+  }
+  currentTick = null;
+  updateTickDisplay(null);
+  clearLiveLogHistory();
+  clearOverlayCanvas();
+
+  if (elements.debugSessionStatus) {
+    elements.debugSessionStatus.classList.add('d-none');
+  }
+  if (elements.startDebugSessionBtn) {
+    elements.startDebugSessionBtn.disabled = false;
+    elements.startDebugSessionBtn.classList.remove('btn-outline-secondary');
+    elements.startDebugSessionBtn.classList.add('btn-outline-success');
+  }
+
+  console.log('[Debugger] Window changed; waiting for tick session from', displayName || 'Auto-detect');
+}
+
+function updateSelectedWindowSelection(id, displayName, accountName, resetDebugSession) {
+  const previousWindowId = currentWindowId || '';
+  const previousAccountName = currentWindowAccountName || '';
+
+  updateSelectedWindowLabel(id, displayName);
+  currentWindowAccountName = accountName || (id ? displayName : '');
+
+  const changed =
+    previousWindowId !== (id || '') ||
+    normalizeWindowAccountName(previousAccountName) !== normalizeWindowAccountName(currentWindowAccountName);
+
+  if (resetDebugSession && changed && currentMode === 'live') {
+    resetLiveDebugSessionForWindowChange(displayName);
+  }
+}
+
+function sessionCreatedMatchesSelectedWindow(data) {
+  if (!currentWindowId || !currentWindowAccountName) {
+    return true;
+  }
+
+  const selectedAccount = normalizeWindowAccountName(currentWindowAccountName);
+  const sessionAccount = normalizeWindowAccountName(data.accountName);
+  return !sessionAccount || selectedAccount === sessionAccount;
+}
+
+function shouldRenderLiveTickBatch(data) {
+  if (!data || !data.sessionId) {
+    return !pendingWindowSessionRebind;
+  }
+  if (pendingWindowSessionRebind) {
+    return false;
+  }
+  return !currentDebugSessionId || data.sessionId === currentDebugSessionId;
+}
+
 async function selectWindowInternal(windowId, displayName) {
   try {
     const response = await fetch('/api/windows/select', {
@@ -5312,7 +6316,7 @@ async function selectWindowInternal(windowId, displayName) {
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    updateSelectedWindowLabel(windowId, displayName || 'Auto-detect');
+    updateSelectedWindowSelection(windowId, displayName || 'Auto-detect', displayName || '', true);
   } catch (err) {
     console.error('Error selecting window:', err);
     alert('Failed to select window. Please try again.');
@@ -5356,10 +6360,22 @@ function connectTickStreamWebSocket() {
 
       // Handle SESSION_CREATED broadcast from Micro6
       if (data.type === 'SESSION_CREATED') {
+        if (!sessionCreatedMatchesSelectedWindow(data)) {
+          console.log(
+            '[Debugger] Ignoring SESSION_CREATED for non-selected account:',
+            data.accountName || '(unknown)',
+            'selected:',
+            currentWindowAccountName || '(none)'
+          );
+          return;
+        }
+
         // Update UI to use Micro6's sessionId
-        if (debugFeedEnabled && (!currentDebugSessionId || !isRecording)) {
+        if (debugFeedEnabled && (!currentDebugSessionId || !isRecording || pendingWindowSessionRebind)) {
           currentDebugSessionId = data.sessionId;
+          currentDebugSession = data.sessionId;
           isDebugSessionActive = true;
+          pendingWindowSessionRebind = false;
           if (elements.debugSessionStatus) {
             elements.debugSessionStatus.classList.remove('d-none');
           }
@@ -5380,8 +6396,21 @@ function connectTickStreamWebSocket() {
         if (window.DEBUG_TICK) console.log('[Tick Debug] Ignoring tick data - debug feed off');
         return;
       }
+      if (!shouldRenderLiveTickBatch(data)) {
+        if (window.DEBUG_TICK) {
+          console.log(
+            '[Tick Debug] Ignoring tick data for inactive session:',
+            data.sessionId,
+            'active:',
+            currentDebugSessionId,
+            'pendingRebind:',
+            pendingWindowSessionRebind
+          );
+        }
+        return;
+      }
       if (window.DEBUG_TICK) console.log('[Tick Debug] Received tick data:', data);
-      updatePanelsForTick(data);
+      withLiveLogScrollAnchor(() => updatePanelsForTick(data));
     } catch (e) {
       console.error('Failed to parse tick stream message', e);
     }
@@ -5454,6 +6483,12 @@ function formatTickEvent(event) {
     case 'QUEST_STEP_CHANGED':
       return `Quest "${event.questName}" step changed: ${event.oldStep} → ${event.newStep}`;
 
+    case 'QUEST_HELPER_STEP_CHANGED':
+    case 'QUEST_HELPER_BLOCKED':
+    case 'QUEST_HELPER_TARGET_CHANGED':
+    case 'QUEST_HELPER_REQUIREMENT_CHANGED':
+      return formatQuestHelperEvent(event);
+
     case 'VARBIT_CHANGED':
       return `Varbit ${event.varbitId} changed: ${event.oldValue} → ${event.newValue}`;
 
@@ -5501,6 +6536,7 @@ function updatePanelsForTick(data) {
       projectiles: state.projectiles,
       cooldowns: state.cooldowns,
       quest: state.quest || state.quests,
+      questHelper: state.questHelper || state.quest_helper,
       npcs: state.npcs,
       gameObjects: state.objects || state.gameObjects,
       groundObjects: state.groundObjects,
@@ -5564,6 +6600,7 @@ function updatePanelsForTick(data) {
       projectiles: data.projectiles || data.snapshot?.projectiles,
       cooldowns: data.cooldowns || data.snapshot?.cooldowns,
       quest: data.quest || data.snapshot?.quest,
+      questHelper: data.questHelper || data.snapshot?.questHelper,
       npcs: data.npcs || data.snapshot?.npcs,
       gameObjects: data.gameObjects || data.snapshot?.gameObjects,
       groundObjects: data.groundObjects || data.snapshot?.groundObjects,
@@ -5671,20 +6708,19 @@ function renderTickBotState(snapshot) {
   if (!container || !snapshot.playerState) return;
 
   const player = snapshot.playerState;
-  const position = player.position || player.worldPosition || player.worldPoint
-    || (player.tile ? player.tile : null) || {};
-  const hp = player.hp || {};
-  const prayer = player.prayer || {};
-  const prayerCurrent = prayer.current ?? prayer.points;
-  const prayerMax     = prayer.max    ?? prayer.maxPoints;
+  const position = getPlayerPosition(player);
+  const hpDisplay = getPlayerHp(player);
+  const prayerDisplay = getPlayerPrayer(player);
+  const energyDisplay = getPlayerEnergy(player);
+  const animDisplay = getPlayerAnimation(player);
 
   const items = [
     { label: 'Position', value: position.x !== undefined && position.y !== undefined
         ? `(${position.x}, ${position.y}, ${position.plane ?? 0})` : '--' },
-    { label: 'HP', value: hp.current !== undefined ? `${hp.current} / ${hp.max}` : '--' },
-    { label: 'Prayer', value: prayerCurrent !== undefined ? `${prayerCurrent} / ${prayerMax}` : '--' },
-    { label: 'Animation', value: player.animation || '--' },
-    { label: 'Energy', value: player.energy !== undefined ? `${player.energy}%` : '--' },
+    { label: 'HP', value: hpDisplay || '--' },
+    { label: 'Prayer', value: prayerDisplay || '--' },
+    { label: 'Animation', value: animDisplay || '--' },
+    { label: 'Energy', value: energyDisplay || '--' },
     { label: 'Threats', value: snapshot.threats ? snapshot.threats.length : 0 },
     { label: 'Projectiles', value: snapshot.projectiles ? snapshot.projectiles.length : 0 }
   ];
@@ -6190,6 +7226,9 @@ async function startRecording() {
 
     const data = await response.json();
     currentSessionId = data.sessionId;
+    currentDebugSessionId = data.sessionId;
+    currentDebugSession = data.sessionId;
+    pendingWindowSessionRebind = false;
 
     // Validate recording actually started before updating UI
     if (data.recordingId) {
@@ -6420,6 +7459,9 @@ async function checkRecordingStatus() {
           if (sessionResponse.ok) {
             const sessionData = await sessionResponse.json();
             currentSessionId = sessionData.sessionId;
+            currentDebugSessionId = sessionData.sessionId;
+            currentDebugSession = sessionData.sessionId;
+            pendingWindowSessionRebind = false;
             console.log('📹 Found associated debug session:', currentSessionId);
           }
         } catch (e) {
@@ -6605,6 +7647,8 @@ async function startDebugSession() {
 
     const data = await response.json();
     currentDebugSessionId = data.sessionId;
+    currentDebugSession = data.sessionId;
+    pendingWindowSessionRebind = false;
     isDebugSessionActive = true;
 
     // Ensure debug feed is enabled when starting a session

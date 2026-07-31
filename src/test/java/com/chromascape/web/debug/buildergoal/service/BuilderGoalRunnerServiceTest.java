@@ -102,6 +102,53 @@ class BuilderGoalRunnerServiceTest {
   }
 
   @Test
+  void importPayload_acceptsMicro6CatalogKeyAlias() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false))
+        .thenReturn(
+            objectMapper.readTree(
+                """
+                {
+                  "tasks": [
+                    {
+                      "key": "fish_training",
+                      "name": "Fish Training",
+                      "enabled": true,
+                      "category": "fishing",
+                      "args_schema": {
+                        "fields": [
+                          { "key": "targetFish" },
+                          { "key": "bankingMode" }
+                        ]
+                      }
+                    }
+                  ]
+                }
+                """));
+
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "builder_execution": {
+                    "task_key": "fish_training",
+                    "task_metadata": {
+                      "targetFish": "Best Available",
+                      "bankingMode": "DROP",
+                      "unknownSetting": true
+                    }
+                  }
+                }
+                """));
+
+    assertThat(response.get("taskKey")).isEqualTo("fish_training");
+    assertThat(response.get("runnableNow")).isEqualTo(true);
+    assertThat(response.get("displayName")).isEqualTo("Fish Training");
+    assertThat(response.get("matchedSettings")).isEqualTo(List.of("bankingMode", "targetFish"));
+    assertThat(response.get("ignoredSettings")).isEqualTo(List.of("unknownSetting"));
+  }
+
+  @Test
   void startRun_skipsLiveTargetCatalogFetchAndPublishesWithNoCache() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
@@ -144,6 +191,7 @@ class BuilderGoalRunnerServiceTest {
             null,
             null,
             "machine-1",
+            null,
             null);
 
     assertThat(response.get("accepted")).isEqualTo(true);
@@ -215,6 +263,7 @@ class BuilderGoalRunnerServiceTest {
                     null,
                     null,
                     "machine-1",
+                    null,
                     null))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("A Builder Goal run is already active for this account and task");
@@ -284,6 +333,7 @@ class BuilderGoalRunnerServiceTest {
             null,
             null,
             "machine-1",
+            null,
             null);
 
     assertThat(response.get("accepted")).isEqualTo(true);
@@ -922,7 +972,8 @@ class BuilderGoalRunnerServiceTest {
             Map.of("treeType", "WILLOW"),
             360,
             null,
-            false);
+            false,
+            null);
 
     assertThat(response.get("accepted")).isEqualTo(true);
     assertThat(response.get("published")).isEqualTo(true);
@@ -978,7 +1029,8 @@ class BuilderGoalRunnerServiceTest {
             Map.of("treeType", "WILLOW"),
             360,
             null,
-            false);
+            false,
+            null);
 
     assertThat(response.get("accepted")).isEqualTo(true);
     assertThat(response.get("published")).isEqualTo(false);
@@ -1032,7 +1084,8 @@ class BuilderGoalRunnerServiceTest {
             Map.of("treeType", "WILLOW"),
             360,
             null,
-            false);
+            false,
+            null);
 
     assertThat(response.get("published")).isEqualTo(false);
     assertThat(response.get("publishStatus")).isEqualTo("DEFERRED");
@@ -1069,6 +1122,94 @@ class BuilderGoalRunnerServiceTest {
 
     verify(targetPreparationService, never())
         .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class), any());
+  }
+
+  @Test
+  void publishOnly_usesMatchingHeartbeatClientAsTarget() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "3720a9a3b5c9f57b",
+            "3720a9a3b5c9f57b",
+            "udasuAvuco",
+            "udasu@example.test",
+            "launcher",
+            true,
+            "ready",
+            Map.of());
+    Micro6OnlineClientRegistryService.TargetClient targetClient =
+        new Micro6OnlineClientRegistryService.TargetClient(
+            "client-udasu",
+            "udasuAvuco",
+            "3720a9a3b5c9f57b",
+            "http://127.0.0.1:18098",
+            "0.0.0.0:18098",
+            "micro6",
+            "accountbuilder",
+            "IDLE",
+            null,
+            java.time.Instant.now());
+    ArgumentCaptor<Map<String, Object>> metadataCaptor = ArgumentCaptor.forClass(Map.class);
+
+    when(accountCatalogService.findAccount("3720a9a3b5c9f57b")).thenReturn(Optional.of(account));
+    when(clientRegistryService.findRunnableClientForRecovery(
+            eq("3720a9a3b5c9f57b"), eq("udasuAvuco"), isNull(), any()))
+        .thenReturn(Optional.of(targetClient));
+    when(micro6ExecutorCatalogService.getCatalogForBaseUrl("http://127.0.0.1:18098", true))
+        .thenReturn(
+            objectMapper.valueToTree(
+                Map.of(
+                    "tasks",
+                    List.of(
+                        Map.of(
+                            "key", "fish_training",
+                            "name", "Fish Training",
+                            "enabled", true)))));
+    when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
+    when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
+        .thenReturn(
+            new ScriptExecutionService.Micro6ExecutorHealthResult(
+                true,
+                true,
+                "READY_TO_PUBLISH",
+                null,
+                "udasuAvuco",
+                "3720a9a3b5c9f57b",
+                "udasuAvuco",
+                "3720a9a3b5c9f57b",
+                false,
+                null,
+                "accountbuilder_ready",
+                "logged_in",
+                null,
+                null,
+                null,
+                "http://127.0.0.1:18098",
+                null));
+    when(scriptExecutionService.publishMicro6Task(eq("fish_training"), metadataCaptor.capture()))
+        .thenReturn(
+            ScriptExecutionService.Micro6PublishResult.success(
+                77, false, "http://127.0.0.1:18098", "QUEUED"));
+
+    Map<String, Object> response =
+        service.publishOnly(
+            "3720a9a3b5c9f57b",
+            "machine-1",
+            "fish_training",
+            Map.of("targetFish", "Best Available"),
+            360,
+            null,
+            false,
+            null);
+
+    assertThat(response.get("published")).isEqualTo(true);
+    assertThat(response.get("entryId")).isEqualTo(77);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> target =
+        (Map<String, Object>) metadataCaptor.getValue().get("micro6_target");
+    assertThat(target.get("client_id")).isEqualTo("client-udasu");
+    assertThat(target.get("account_hash")).isEqualTo("3720a9a3b5c9f57b");
+    assertThat(target.get("account_name")).isEqualTo("udasuAvuco");
+    assertThat(target.get("advertised_base_url")).isEqualTo("http://127.0.0.1:18098");
   }
 
   @Test
@@ -1143,7 +1284,8 @@ class BuilderGoalRunnerServiceTest {
             Map.of("treeType", "WILLOW"),
             360,
             null,
-            false);
+            false,
+            null);
 
     assertThat(response.get("published")).isEqualTo(true);
     assertThat(response.get("entryId")).isEqualTo(43);
@@ -1173,7 +1315,8 @@ class BuilderGoalRunnerServiceTest {
                     Map.of("treeType", "WILLOW"),
                     360,
                     null,
-                    true))
+                    true,
+                    null))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("launcherMachineUuid is required");
   }

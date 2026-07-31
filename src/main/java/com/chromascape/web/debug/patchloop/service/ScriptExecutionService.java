@@ -452,13 +452,22 @@ public class ScriptExecutionService {
       mergedTaskMetadata.putAll(taskMetadata);
     }
 
-    String requestBody =
-        objectMapper.writeValueAsString(
-            Map.of(
-                "task_key", taskKey,
-                "entry_id", entryId,
-                "timeout_ms", timeoutMs,
-                "task_metadata", mergedTaskMetadata));
+    Map<String, Object> executePayload = new LinkedHashMap<>();
+    executePayload.put("task_key", taskKey);
+    executePayload.put("entry_id", entryId);
+    executePayload.put("timeout_ms", timeoutMs);
+    executePayload.put("task_metadata", mergedTaskMetadata);
+
+    Object initiatedBy = mergedTaskMetadata.get("initiated_by");
+    Object inputOrigin = mergedTaskMetadata.get("input_origin");
+    if (initiatedBy != null) {
+      executePayload.put("initiated_by", initiatedBy);
+    }
+    if (inputOrigin != null) {
+      executePayload.put("input_origin", inputOrigin);
+    }
+
+    String requestBody = objectMapper.writeValueAsString(executePayload);
 
     HttpRequest executeRequest =
         HttpRequest.newBuilder()
@@ -1096,14 +1105,30 @@ public class ScriptExecutionService {
             null);
       }
       JsonNode payload = objectMapper.readTree(response.body());
-      String resolvedAccountHash = textNode(payload, "account_hash");
-      String resolvedAccountName = textNode(payload, "account_name");
-      String requestedAccountName = textNode(payload, "requested_account_name");
-      String requestedAccountHash = textNode(payload, "requested_account_hash");
+      Map<String, Object> targetMetadata = readMicro6TargetMetadata(taskMetadata);
+      String resolvedAccountHash =
+          firstNonBlank(
+              textNode(payload, "account_hash"), stringValue(targetMetadata.get("account_hash")));
+      String resolvedAccountName =
+          firstNonBlank(
+              textNode(payload, "account_name"), stringValue(targetMetadata.get("account_name")));
+      String requestedAccountName =
+          firstNonBlank(
+              textNode(payload, "requested_account_name"),
+              stringValue(targetMetadata.get("requested_account_name")),
+              stringValue(targetMetadata.get("account_name")));
+      String requestedAccountHash =
+          firstNonBlank(
+              textNode(payload, "requested_account_hash"),
+              stringValue(targetMetadata.get("requested_account_hash")),
+              stringValue(targetMetadata.get("account_hash")));
       boolean dispatchHold = payload.path("dispatch_hold").asBoolean(false);
       String dispatchHoldReason = textNode(payload, "dispatch_hold_reason");
-      String startupState = textNode(payload, "startup_state");
-      String loginState = textNode(payload, "login_state");
+      String startupState =
+          firstNonBlank(
+              textNode(payload, "startup_state"), inferStartupStateFromTarget(targetMetadata, payload));
+      String loginState =
+          firstNonBlank(textNode(payload, "login_state"), inferLoginStateFromTarget(targetMetadata, payload));
       Integer loginAttempt = payload.path("login_attempt").isNumber() ? payload.path("login_attempt").asInt() : null;
       Integer loginAttemptMax =
           payload.path("login_attempt_max").isNumber() ? payload.path("login_attempt_max").asInt() : null;
@@ -1204,6 +1229,39 @@ public class ScriptExecutionService {
     }
     String text = node.asText(null);
     return text == null || text.isBlank() ? null : text.trim();
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> readMicro6TargetMetadata(Map<String, Object> taskMetadata) {
+    if (taskMetadata == null) {
+      return Map.of();
+    }
+    Object target = taskMetadata.get("micro6_target");
+    if (target instanceof Map<?, ?> targetMap) {
+      return new LinkedHashMap<>((Map<String, Object>) targetMap);
+    }
+    return Map.of();
+  }
+
+  private String inferStartupStateFromTarget(Map<String, Object> targetMetadata, JsonNode payload) {
+    if (targetMetadata == null || targetMetadata.isEmpty()) {
+      return null;
+    }
+    if (!payload.path("ok").asBoolean(false)) {
+      return null;
+    }
+    String status = stringValue(targetMetadata.get("status"));
+    if (status == null || "STALE".equalsIgnoreCase(status)) {
+      return null;
+    }
+    if (stringValue(targetMetadata.get("advertised_base_url")) == null) {
+      return null;
+    }
+    return "accountbuilder_ready";
+  }
+
+  private String inferLoginStateFromTarget(Map<String, Object> targetMetadata, JsonNode payload) {
+    return inferStartupStateFromTarget(targetMetadata, payload) == null ? null : "logged_in";
   }
 
   private boolean isMicro6ExecutorPublishReady(
@@ -1320,6 +1378,14 @@ public class ScriptExecutionService {
       }
     }
     return null;
+  }
+
+  private String stringValue(Object value) {
+    if (value == null) {
+      return null;
+    }
+    String text = value.toString();
+    return text == null || text.isBlank() ? null : text.trim();
   }
 
   private String getActiveBackendOrDefault() {
