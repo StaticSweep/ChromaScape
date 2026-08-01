@@ -2503,27 +2503,62 @@ function buildProjectilesSection(tick, snapshot) {
  * Player state display helpers - resolve from nested canonical or flat legacy fields.
  */
 
+function normalizeCoordinateValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!/^-?\d+$/.test(trimmed)) return null;
+    return Number.parseInt(trimmed, 10);
+  }
+  return null;
+}
+
+function normalizePositionObject(pos) {
+  if (!pos || typeof pos !== 'object') {
+    return {};
+  }
+
+  const x = normalizeCoordinateValue(pos.x);
+  const y = normalizeCoordinateValue(pos.y ?? pos.z);
+  if (x === null || y === null) {
+    return {};
+  }
+
+  const z = normalizeCoordinateValue(pos.z ?? y) ?? y;
+  const plane = normalizeCoordinateValue(pos.plane) ?? 0;
+  return { x, y, z, plane };
+}
+
 function getPlayerPosition(player) {
-  if (player.position && typeof player.position === 'object' && player.position.x !== undefined) {
-    return player.position;
+  if (!player || typeof player !== 'object') {
+    return {};
   }
-  if (player.worldPosition && typeof player.worldPosition === 'object' && player.worldPosition.x !== undefined) {
-    return player.worldPosition;
+
+  // Nested canonical and legacy position objects.
+  for (const key of ['position', 'worldPosition', 'worldPoint', 'tile']) {
+    if (player[key] && typeof player[key] === 'object' && player[key].x !== undefined) {
+      return normalizePositionObject(player[key]);
+    }
   }
-  if (player.worldPoint && typeof player.worldPoint === 'object' && player.worldPoint.x !== undefined) {
-    return player.worldPoint;
-  }
-  if (player.tile && typeof player.tile === 'object' && player.tile.x !== undefined) {
-    return player.tile;
-  }
-  // Flat fields
+
+  // Flat fields.
   if (player.x !== undefined) {
-    var y = player.y !== undefined ? player.y : player.z;
-    return { x: player.x, y: y, z: player.z, plane: player.plane };
+    const x = normalizeCoordinateValue(player.x);
+    const y = normalizeCoordinateValue(player.y ?? player.z ?? player.worldY);
+    if (x === null || y === null) return {};
+    const z = normalizeCoordinateValue(player.z ?? y) ?? y;
+    const plane = normalizeCoordinateValue(player.plane) ?? 0;
+    return { x, y, z, plane };
   }
   if (player.worldX !== undefined) {
-    var wy = player.worldY !== undefined ? player.worldY : player.z;
-    return { x: player.worldX, y: wy, z: player.z, plane: player.plane };
+    const x = normalizeCoordinateValue(player.worldX);
+    const y = normalizeCoordinateValue(player.worldY ?? player.y ?? player.z);
+    if (x === null || y === null) return {};
+    const z = normalizeCoordinateValue(player.z ?? y) ?? y;
+    const plane = normalizeCoordinateValue(player.plane) ?? 0;
+    return { x, y, z, plane };
   }
   return {};
 }

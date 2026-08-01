@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
@@ -66,7 +67,8 @@ class SimulatorReplaySourceServiceTest {
       session.setStartTick(0L);
       session.setEndTick(100L);
 
-      when(debugSessionRepository.findByRecordingId("rec-1")).thenReturn(Optional.of(session));
+      lenient().when(debugSessionRepository.findByRecordingId("rec-1"))
+          .thenReturn(Optional.of(session));
     }
 
     @Test
@@ -229,6 +231,26 @@ class SimulatorReplaySourceServiceTest {
     }
 
     @Test
+    @DisplayName("Nested position.x/z with no position.y canonicalizes to replay x/z")
+    void nestedPositionXZ_canonicalizesToReplay() {
+      TickSnapshot snapshot =
+          createSnapshot(
+              0L,
+              "{\"position\":{\"x\":3200,\"z\":3200,\"plane\":0}}",
+              null,
+              null);
+
+      mockPage(snapshot);
+
+      ReplayFramePageResponse response = service.frames("rec-1", 0, 100);
+
+      String playerStateJson = response.getFrames().get(0).getPlayerState().toString();
+      assertTrue(playerStateJson.contains("\"x\":3200"), "position.x should become x");
+      assertTrue(playerStateJson.contains("\"z\":3200"), "position.z should become z");
+      assertFalse(playerStateJson.contains("\"y\":3200"), "y should not leak into replay output");
+    }
+
+    @Test
     @DisplayName("Nested hp.current canonicalizes to numeric replay hp")
     void nestedHp_canonicalizesToReplay() {
       TickSnapshot snapshot =
@@ -311,7 +333,8 @@ class SimulatorReplaySourceServiceTest {
       session.setRecordingId("rec-1");
       session.setAccountName("TestPlayer");
 
-      when(debugSessionRepository.findByRecordingId("rec-1")).thenReturn(Optional.of(session));
+      lenient().when(debugSessionRepository.findByRecordingId("rec-1"))
+          .thenReturn(Optional.of(session));
     }
 
     @Test

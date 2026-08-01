@@ -253,9 +253,7 @@ public class TickStreamIngestionService {
       throw new IllegalArgumentException("Missing playerState");
     }
     Map<String, Object> ps = batch.getPlayerState();
-    boolean hasNestedPos = ps.get("position") instanceof Map;
-    boolean hasFlatPos = ps.containsKey("x") && ps.containsKey("z");
-    if (!hasNestedPos && !hasFlatPos) {
+    if (!hasValidPlayerPosition(ps)) {
       throw new IllegalArgumentException("Missing required player position (position.x/y or x/z)");
     }
     if (batch.getInventory() == null || batch.getEquipment() == null) {
@@ -270,6 +268,84 @@ public class TickStreamIngestionService {
         || batch.getQuest() == null
         || batch.getCooldowns() == null) {
       throw new IllegalArgumentException("Missing required strict replay sections");
+    }
+  }
+
+  private boolean hasValidPlayerPosition(Map<String, Object> playerState) {
+    return hasValidNestedPosition(playerState) || hasValidFlatPosition(playerState);
+  }
+
+  @SuppressWarnings("unchecked")
+  private boolean hasValidNestedPosition(Map<String, Object> playerState) {
+    Object posObj = playerState.get("position");
+    if (!(posObj instanceof Map)) {
+      return false;
+    }
+    Map<String, Object> pos = (Map<String, Object>) posObj;
+    return hasCoordinateValue(pos, "x")
+        && (hasCoordinateValue(pos, "y") || hasCoordinateValue(pos, "z"))
+        && !hasInvalidPlane(pos);
+  }
+
+  private boolean hasValidFlatPosition(Map<String, Object> playerState) {
+    boolean hasX =
+        hasCoordinateValue(playerState, "x") || hasCoordinateValue(playerState, "worldX");
+    boolean hasY =
+        hasCoordinateValue(playerState, "y")
+            || hasCoordinateValue(playerState, "z")
+            || hasCoordinateValue(playerState, "worldY");
+    return hasX && hasY && !hasInvalidPlane(playerState);
+  }
+
+  private boolean hasValue(Map<String, Object> map, String key) {
+    return map != null && map.containsKey(key) && map.get(key) != null;
+  }
+
+  private boolean hasCoordinateValue(Map<String, Object> map, String key) {
+    return map != null && map.containsKey(key) && normalizeCoordinate(map.get(key)) != null;
+  }
+
+  private Object firstCoordinateValue(Map<String, Object> map, String... keys) {
+    if (map == null) {
+      return null;
+    }
+    for (String key : keys) {
+      Object coordinate = normalizeCoordinate(map.get(key));
+      if (coordinate != null) {
+        return coordinate;
+      }
+    }
+    return null;
+  }
+
+  private Integer normalizeCoordinate(Object value) {
+    if (value instanceof Number number) {
+      return number.intValue();
+    }
+    if (value instanceof String text) {
+      String trimmed = text.trim();
+      if (trimmed.isEmpty()) {
+        return null;
+      }
+      try {
+        return Integer.parseInt(trimmed);
+      } catch (NumberFormatException e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  private boolean hasInvalidPlane(Map<String, Object> map) {
+    return map != null
+        && map.containsKey("plane")
+        && map.get("plane") != null
+        && normalizeCoordinate(map.get("plane")) == null;
+  }
+
+  private void putIfPresent(Map<String, Object> target, String key, Object value) {
+    if (target != null && value != null) {
+      target.put(key, value);
     }
   }
 
@@ -441,47 +517,44 @@ public class TickStreamIngestionService {
     Map<String, Object> normalized = new LinkedHashMap<>(playerState);
 
     // --- Position normalization ---
-    Map<String, Object> position = (Map<String, Object>) normalized.get("position");
-    boolean hasFlatPos = normalized.containsKey("x");
-    boolean hasNestedPos = position != null;
+    Object positionObj = normalized.get("position");
+    Map<String, Object> position =
+        positionObj instanceof Map
+            ? new LinkedHashMap<>((Map<String, Object>) positionObj)
+            : null;
+    if (position != null) {
+      normalized.put("position", position);
+    }
 
-    if (!hasNestedPos && hasFlatPos) {
+    boolean hasValidNestedPos = hasValidNestedPosition(normalized);
+    boolean hasValidFlatPos = hasValidFlatPosition(normalized);
+
+    if (!hasValidNestedPos && hasValidFlatPos) {
       // Synthesize nested position from flat coordinates
       Map<String, Object> newPos = new LinkedHashMap<>();
-      Object x = normalized.get("x");
-      Object y = normalized.getOrDefault("y", normalized.getOrDefault("z",
-          normalized.get("worldY")));
-      Object zVal = normalized.getOrDefault("z", y);
-      Object plane = normalized.getOrDefault("plane", 0);
-      newPos.put("x", x);
-      newPos.put("y", y);
-      newPos.put("z", zVal);
-      newPos.put("plane", plane);
+      Object x = firstCoordinateValue(normalized, "x", "worldX");
+      Object y = firstCoordinateValue(normalized, "y", "z", "worldY");
+      Object z = firstCoordinateValue(normalized, "z", "y", "worldY");
+      Object plane = firstCoordinateValue(normalized, "plane");
+      putIfPresent(newPos, "x", x);
+      putIfPresent(newPos, "y", y);
+      putIfPresent(newPos, "z", z);
+      newPos.put("plane", plane != null ? plane : 0);
       normalized.put("position", newPos);
-    } else if (hasNestedPos) {
-      // Ensure nested position has z field
-      if (!position.containsKey("z")) {
-        position.put("z", position.getOrDefault("y", 0));
-        normalized.put("position", position);
+      position = newPos;
+      addFlatPositionAliases(normalized, position);
+    } else if (hasValidNestedPos) {
+      putIfPresent(position, "x", firstCoordinateValue(position, "x"));
+      // Derive missing y from z, or missing z from y; don't zero-fill.
+      putIfPresent(position, "y", firstCoordinateValue(position, "y", "z"));
+      putIfPresent(position, "z", firstCoordinateValue(position, "z", "y"));
+      Object plane = firstCoordinateValue(position, "plane");
+      if (plane == null) {
+        plane = firstCoordinateValue(normalized, "plane");
       }
-      // Fill flat aliases from nested position if missing
-      if (!normalized.containsKey("x")) {
-        normalized.put("x", position.get("x"));
-      }
-      if (!normalized.containsKey("z")) {
-        Object zVal = position.getOrDefault("z", position.get("y"));
-        normalized.put("z", zVal);
-      }
-      if (!normalized.containsKey("worldX")) {
-        normalized.put("worldX", position.get("x"));
-      }
-      if (!normalized.containsKey("worldY")) {
-        Object yVal = position.getOrDefault("z", position.get("y"));
-        normalized.put("worldY", yVal);
-      }
-      if (!normalized.containsKey("plane")) {
-        normalized.put("plane", position.getOrDefault("plane", 0));
-      }
+      position.put("plane", plane != null ? plane : 0);
+      normalized.put("position", position);
+      addFlatPositionAliases(normalized, position);
     }
 
     // --- HP normalization ---
@@ -523,6 +596,20 @@ public class TickStreamIngestionService {
     }
 
     return normalized;
+  }
+
+  /** Add the legacy flat aliases that can be derived from a valid nested position. */
+  private void addFlatPositionAliases(
+      Map<String, Object> normalized, Map<String, Object> position) {
+    Object x = firstCoordinateValue(position, "x");
+    Object y = firstCoordinateValue(position, "y", "z");
+    Object z = firstCoordinateValue(position, "z", "y");
+
+    putIfPresent(normalized, "x", x);
+    putIfPresent(normalized, "z", z);
+    putIfPresent(normalized, "worldX", x);
+    putIfPresent(normalized, "worldY", y);
+    putIfPresent(normalized, "plane", firstCoordinateValue(position, "plane"));
   }
 
   private int toInt(Object value) {

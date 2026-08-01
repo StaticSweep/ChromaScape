@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.chromascape.web.debug.tickdebugger.dto.DebugSessionSummary;
+import com.chromascape.web.debug.tickdebugger.dto.TickCardData;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
@@ -19,8 +20,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -138,15 +139,124 @@ class TickReplayControllerTest {
     ResponseEntity<?> response = controller.getTickCards("recording-3", 0L, 100L);
     assertEquals(HttpStatus.OK, response.getStatusCode());
 
-    Map<?, ?> body = (Map<?, ?>) response.getBody();
-    assertNotNull(body);
-    List<?> cards = (List<?>) body.get("cards");
+    List<TickCardData> cards = (List<TickCardData>) response.getBody();
     assertNotNull(cards);
     assertEquals(1, cards.size());
 
-    Map<?, ?> card = (Map<?, ?>) cards.get(0);
-    Map<?, ?> sectionData = (Map<?, ?>) card.get("sectionData");
-    assertNotNull(sectionData);
-    assertNotNull(sectionData.get("questHelper"), "questHelper should be present in sectionData");
+    assertNotNull(
+        cards.get(0).getSectionData().get("questHelper"),
+        "questHelper should be present in sectionData");
+  }
+
+  @Test
+  @DisplayName("Tick card summary displays correct position for flat x/z payload")
+  void flatXZPayload_displaysCorrectPositionInSummary() throws Exception {
+    DebugSession session = createSession("debug-4");
+    session.setRecordingId("recording-4");
+
+    ObjectMapper mapper = new ObjectMapper();
+
+    TickSnapshot snapshot = new TickSnapshot(
+        "debug-4", 100L, LocalDateTime.of(2025, 6, 15, 12, 0),
+        mapper.readTree("{\"x\":3200,\"z\":3200,\"plane\":0}"));
+    snapshot.setInventory(mapper.readTree("[]"));
+    snapshot.setEquipment(mapper.readTree("[]"));
+    snapshot.setThreats(mapper.readTree("[]"));
+    snapshot.setProjectiles(mapper.readTree("[]"));
+    snapshot.setCooldowns(mapper.readTree("{}"));
+    snapshot.setNpcs(mapper.readTree("[]"));
+    snapshot.setGameObjects(mapper.readTree("[]"));
+    snapshot.setGroundObjects(mapper.readTree("[]"));
+    snapshot.setGroundItems(mapper.readTree("[]"));
+    snapshot.setPlayers(mapper.readTree("[]"));
+    snapshot.setWidgets(mapper.readTree("[]"));
+
+    when(sessionRepository.findByRecordingId("recording-4"))
+        .thenReturn(java.util.Optional.of(session));
+    when(snapshotRepository.findBySessionIdAndTickBetweenOrderByTick("debug-4", 0L, 100L))
+        .thenReturn(List.of(snapshot));
+
+    ResponseEntity<?> response = controller.getTickCards("recording-4", 0L, 100L);
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+
+    List<TickCardData> cards = (List<TickCardData>) response.getBody();
+    assertNotNull(cards);
+    assertEquals(1, cards.size());
+    assertTrue(cards.get(0).getPlayerSummary().contains("Pos (3200,3200,0)"));
+  }
+
+  @Test
+  @DisplayName("Tick card summary displays correct position for flat worldX/worldY payload")
+  void worldXWorldYPayload_displaysCorrectPositionInSummary() throws Exception {
+    DebugSession session = createSession("debug-5");
+    session.setRecordingId("recording-5");
+
+    ObjectMapper mapper = new ObjectMapper();
+
+    TickSnapshot snapshot = new TickSnapshot(
+        "debug-5", 100L, LocalDateTime.of(2025, 6, 15, 12, 0),
+        mapper.readTree("{\"worldX\":3200,\"worldY\":3200,\"plane\":0}"));
+    snapshot.setInventory(mapper.readTree("[]"));
+    snapshot.setEquipment(mapper.readTree("[]"));
+    snapshot.setThreats(mapper.readTree("[]"));
+    snapshot.setProjectiles(mapper.readTree("[]"));
+    snapshot.setCooldowns(mapper.readTree("{}"));
+    snapshot.setNpcs(mapper.readTree("[]"));
+    snapshot.setGameObjects(mapper.readTree("[]"));
+    snapshot.setGroundObjects(mapper.readTree("[]"));
+    snapshot.setGroundItems(mapper.readTree("[]"));
+    snapshot.setPlayers(mapper.readTree("[]"));
+    snapshot.setWidgets(mapper.readTree("[]"));
+
+    when(sessionRepository.findByRecordingId("recording-5"))
+        .thenReturn(java.util.Optional.of(session));
+    when(snapshotRepository.findBySessionIdAndTickBetweenOrderByTick("debug-5", 0L, 100L))
+        .thenReturn(List.of(snapshot));
+
+    ResponseEntity<?> response = controller.getTickCards("recording-5", 0L, 100L);
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+
+    List<TickCardData> cards = (List<TickCardData>) response.getBody();
+    assertNotNull(cards);
+    assertEquals(1, cards.size());
+    assertTrue(cards.get(0).getPlayerSummary().contains("Pos (3200,3200,0)"));
+  }
+
+  @Test
+  @DisplayName("Tick card summary does not display fake zero position for non-numeric coordinates")
+  void nonNumericCoordinate_doesNotDisplayFakeZeroPosition() throws Exception {
+    DebugSession session = createSession("debug-6");
+    session.setRecordingId("recording-6");
+
+    ObjectMapper mapper = new ObjectMapper();
+
+    TickSnapshot snapshot = new TickSnapshot(
+        "debug-6", 100L, LocalDateTime.of(2025, 6, 15, 12, 0),
+        mapper.readTree("{\"worldX\":\"bad\",\"worldY\":3200,\"plane\":0}"));
+    snapshot.setInventory(mapper.readTree("[]"));
+    snapshot.setEquipment(mapper.readTree("[]"));
+    snapshot.setThreats(mapper.readTree("[]"));
+    snapshot.setProjectiles(mapper.readTree("[]"));
+    snapshot.setCooldowns(mapper.readTree("{}"));
+    snapshot.setNpcs(mapper.readTree("[]"));
+    snapshot.setGameObjects(mapper.readTree("[]"));
+    snapshot.setGroundObjects(mapper.readTree("[]"));
+    snapshot.setGroundItems(mapper.readTree("[]"));
+    snapshot.setPlayers(mapper.readTree("[]"));
+    snapshot.setWidgets(mapper.readTree("[]"));
+
+    when(sessionRepository.findByRecordingId("recording-6"))
+        .thenReturn(java.util.Optional.of(session));
+    when(snapshotRepository.findBySessionIdAndTickBetweenOrderByTick("debug-6", 0L, 100L))
+        .thenReturn(List.of(snapshot));
+
+    ResponseEntity<?> response = controller.getTickCards("recording-6", 0L, 100L);
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+
+    List<TickCardData> cards = (List<TickCardData>) response.getBody();
+    assertNotNull(cards);
+    assertEquals(1, cards.size());
+    assertFalse(cards.get(0).getPlayerSummary().contains("Pos (0,3200,0)"));
+    assertFalse(cards.get(0).getPlayerSummary().contains("Pos ("));
   }
 }

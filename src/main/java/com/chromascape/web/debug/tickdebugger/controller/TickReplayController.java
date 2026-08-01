@@ -1152,9 +1152,10 @@ public class TickReplayController {
     // Position
     JsonNode position = nestedOrFlatPosition(playerState);
     if (position != null) {
-      int x = position.has("x") ? position.get("x").asInt() : 0;
-      int y = position.has("y") ? position.get("y").asInt() : 0;
-      int plane = position.has("plane") ? position.get("plane").asInt() : 0;
+      Integer x = getPositionX(position);
+      Integer y = getPositionY(position);
+      Integer parsedPlane = intValue(position.get("plane"));
+      int plane = parsedPlane != null ? parsedPlane : 0;
       if (summary.length() > 0) summary.append(" · ");
       summary.append(String.format("Pos (%d,%d,%d)", x, y, plane));
     }
@@ -1166,16 +1167,68 @@ public class TickReplayController {
    * Resolve position from playerState using nested position, then flat fields.
    */
   private JsonNode nestedOrFlatPosition(JsonNode playerState) {
-    if (playerState.has("position") && playerState.get("position").isObject()) {
-      return playerState.get("position");
+    JsonNode nestedPosition = playerState.get("position");
+    if (nestedPosition != null
+        && nestedPosition.isObject()
+        && firstInt(nestedPosition, "x") != null
+        && firstInt(nestedPosition, "y", "z") != null) {
+      return nestedPosition;
     }
-    // Check for flat x/y or x/z
-    if (playerState.has("x") && (playerState.has("y") || playerState.has("z"))) {
+    // Check for flat x/y, x/z, or x/worldY.
+    if (firstInt(playerState, "x") != null
+        && firstInt(playerState, "y", "z", "worldY") != null) {
       return playerState; // Contains x/y or x/z directly
     }
-    // Check for worldX/worldY
-    if (playerState.has("worldX") && playerState.has("worldY")) {
+    // Check for worldX/worldY, worldX/y, or worldX/z.
+    if (firstInt(playerState, "worldX") != null
+        && firstInt(playerState, "worldY", "y", "z") != null) {
       return playerState;
+    }
+    return null;
+  }
+
+  /** Get position X, preferring the canonical x field and then the legacy worldX alias. */
+  private Integer getPositionX(JsonNode position) {
+    return firstInt(position, "x", "worldX");
+  }
+
+  /**
+   * Get position Y value with fallback to z, then worldY.
+   */
+  private Integer getPositionY(JsonNode position) {
+    return firstInt(position, "y", "z", "worldY");
+  }
+
+  private Integer firstInt(JsonNode node, String... keys) {
+    if (node == null) {
+      return null;
+    }
+    for (String key : keys) {
+      Integer value = intValue(node.get(key));
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  private Integer intValue(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return null;
+    }
+    if (node.isNumber()) {
+      return node.asInt();
+    }
+    if (node.isTextual()) {
+      String text = node.asText().trim();
+      if (text.isEmpty()) {
+        return null;
+      }
+      try {
+        return Integer.parseInt(text);
+      } catch (NumberFormatException e) {
+        return null;
+      }
     }
     return null;
   }

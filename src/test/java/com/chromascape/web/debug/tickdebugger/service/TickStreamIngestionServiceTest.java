@@ -3,6 +3,7 @@ package com.chromascape.web.debug.tickdebugger.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -272,24 +273,434 @@ class TickStreamIngestionServiceTest {
   }
 
   @Test
-  @DisplayName("Missing both nested and flat position fails validation")
-  void missingPosition_failsValidation() {
-    String sessionId = "s6";
+  @DisplayName("Strict v2 rejects nested position without x")
+  void strictV2_rejectsNestedPositionWithoutX() {
+    String sessionId = "s7";
+
+    TickBatchMessage batch = new TickBatchMessage();
+    batch.setSchemaVersion(2);
+    batch.setSessionId(sessionId);
+    batch.setTick(700);
+    batch.setTimestamp("2025-06-21T10:00:00Z");
+
+    Map<String, Object> playerState = new LinkedHashMap<>();
+    Map<String, Object> position = new LinkedHashMap<>();
+    position.put("y", 3200);
+    position.put("plane", 0);
+    playerState.put("position", position);
+    batch.setPlayerState(playerState);
+
+    batch.setInventory(List.of());
+    batch.setEquipment(List.of());
+    batch.setThreats(List.of());
+    batch.setProjectiles(List.of());
+    batch.setCooldowns(new HashMap<>());
+    batch.setLogs(new ArrayList<>());
+    batch.setOverlays(new ArrayList<>());
+    batch.setNpcs(List.of());
+    batch.setGameObjects(List.of());
+    batch.setGroundObjects(List.of());
+    batch.setGroundItems(List.of());
+    batch.setPlayers(List.of());
+    batch.setWidgets(List.of());
+
+    Map<String, Object> quest = new HashMap<>();
+    quest.put("active", false);
+    batch.setQuest(quest);
+
+    service.processTickBatch(batch);
+
+    verify(snapshotRepository, never()).save(any(TickSnapshot.class));
+  }
+
+  @Test
+  @DisplayName("Strict v2 rejects nested position without y or z")
+  void strictV2_rejectsNestedPositionWithoutYOrZ() {
+    String sessionId = "s8";
+
+    TickBatchMessage batch = new TickBatchMessage();
+    batch.setSchemaVersion(2);
+    batch.setSessionId(sessionId);
+    batch.setTick(800);
+    batch.setTimestamp("2025-06-21T10:00:00Z");
+
+    Map<String, Object> playerState = new LinkedHashMap<>();
+    Map<String, Object> position = new LinkedHashMap<>();
+    position.put("x", 3200);
+    position.put("plane", 0);
+    playerState.put("position", position);
+    batch.setPlayerState(playerState);
+
+    batch.setInventory(List.of());
+    batch.setEquipment(List.of());
+    batch.setThreats(List.of());
+    batch.setProjectiles(List.of());
+    batch.setCooldowns(new HashMap<>());
+    batch.setLogs(new ArrayList<>());
+    batch.setOverlays(new ArrayList<>());
+    batch.setNpcs(List.of());
+    batch.setGameObjects(List.of());
+    batch.setGroundObjects(List.of());
+    batch.setGroundItems(List.of());
+    batch.setPlayers(List.of());
+    batch.setWidgets(List.of());
+
+    Map<String, Object> quest = new HashMap<>();
+    quest.put("active", false);
+    batch.setQuest(quest);
+
+    service.processTickBatch(batch);
+
+    verify(snapshotRepository, never()).save(any(TickSnapshot.class));
+  }
+
+  @Test
+  @DisplayName("Strict v2 accepts nested position with x and z")
+  void strictV2_acceptsNestedPositionWithXAndZ() {
+    String sessionId = "s9";
     when(sessionService.getSession(sessionId))
         .thenReturn(Optional.of(
             new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
-    TickBatchMessage batch = strictV2Batch(sessionId, 600);
-    // Remove position fields
-    Map<String, Object> playerState = new HashMap<>();
-    // No x, z, or position
+    TickBatchMessage batch = new TickBatchMessage();
+    batch.setSchemaVersion(2);
+    batch.setSessionId(sessionId);
+    batch.setTick(900);
+    batch.setTimestamp("2025-06-21T10:00:00Z");
+
+    Map<String, Object> playerState = new LinkedHashMap<>();
+    Map<String, Object> position = new LinkedHashMap<>();
+    position.put("x", 3200);
+    position.put("z", 3200);
+    position.put("plane", 0);
+    playerState.put("position", position);
     batch.setPlayerState(playerState);
 
-    try {
-      service.processTickBatch(batch);
-      assertThat(false).withFailMessage("Should have thrown IllegalArgumentException").isTrue();
-    } catch (IllegalArgumentException e) {
-      assertThat(e.getMessage()).contains("Missing required player position");
-    }
+    batch.setInventory(List.of());
+    batch.setEquipment(List.of());
+    batch.setThreats(List.of());
+    batch.setProjectiles(List.of());
+    batch.setCooldowns(new HashMap<>());
+    batch.setLogs(new ArrayList<>());
+    batch.setOverlays(new ArrayList<>());
+    batch.setNpcs(List.of());
+    batch.setGameObjects(List.of());
+    batch.setGroundObjects(List.of());
+    batch.setGroundItems(List.of());
+    batch.setPlayers(List.of());
+    batch.setWidgets(List.of());
+
+    Map<String, Object> quest = new HashMap<>();
+    quest.put("active", false);
+    batch.setQuest(quest);
+
+    service.processTickBatch(batch);
+
+    ArgumentCaptor<TickSnapshot> captor = ArgumentCaptor.forClass(TickSnapshot.class);
+    verify(snapshotRepository).save(captor.capture());
+    TickSnapshot saved = captor.getValue();
+
+    // Normalized position.y should be derived from z
+    assertThat(saved.getPlayerState().path("position").path("y").asInt()).isEqualTo(3200);
+    assertThat(saved.getPlayerState().path("position").path("z").asInt()).isEqualTo(3200);
+    // Flat aliases should be present
+    assertThat(saved.getPlayerState().path("x").asInt()).isEqualTo(3200);
+    assertThat(saved.getPlayerState().path("z").asInt()).isEqualTo(3200);
+  }
+
+  @Test
+  @DisplayName("Strict v2 accepts flat x/worldY/plane")
+  void strictV2_acceptsFlatXWorldY() {
+    String sessionId = "s10";
+    when(sessionService.getSession(sessionId))
+        .thenReturn(Optional.of(
+            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+
+    TickBatchMessage batch = new TickBatchMessage();
+    batch.setSchemaVersion(2);
+    batch.setSessionId(sessionId);
+    batch.setTick(1000);
+    batch.setTimestamp("2025-06-21T10:00:00Z");
+
+    Map<String, Object> playerState = new LinkedHashMap<>();
+    playerState.put("x", 3200);
+    playerState.put("worldY", 3200);
+    playerState.put("plane", 0);
+    batch.setPlayerState(playerState);
+
+    batch.setInventory(List.of());
+    batch.setEquipment(List.of());
+    batch.setThreats(List.of());
+    batch.setProjectiles(List.of());
+    batch.setCooldowns(new HashMap<>());
+    batch.setLogs(new ArrayList<>());
+    batch.setOverlays(new ArrayList<>());
+    batch.setNpcs(List.of());
+    batch.setGameObjects(List.of());
+    batch.setGroundObjects(List.of());
+    batch.setGroundItems(List.of());
+    batch.setPlayers(List.of());
+    batch.setWidgets(List.of());
+
+    Map<String, Object> quest = new HashMap<>();
+    quest.put("active", false);
+    batch.setQuest(quest);
+
+    service.processTickBatch(batch);
+
+    ArgumentCaptor<TickSnapshot> captor = ArgumentCaptor.forClass(TickSnapshot.class);
+    verify(snapshotRepository).save(captor.capture());
+    TickSnapshot saved = captor.getValue();
+
+    assertThat(saved.getPlayerState().path("position").path("x").asInt()).isEqualTo(3200);
+    assertThat(saved.getPlayerState().path("position").path("y").asInt()).isEqualTo(3200);
+    assertThat(saved.getPlayerState().path("position").path("z").asInt()).isEqualTo(3200);
+  }
+
+  @Test
+  @DisplayName("Strict v2 accepts flat worldX/worldY/plane")
+  void strictV2_acceptsWorldXWorldY() {
+    String sessionId = "s12";
+    when(sessionService.getSession(sessionId))
+        .thenReturn(Optional.of(
+            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+
+    TickBatchMessage batch = strictV2Batch(sessionId, 1200);
+    Map<String, Object> playerState = new LinkedHashMap<>();
+    playerState.put("worldX", 3200);
+    playerState.put("worldY", 3200);
+    playerState.put("plane", 0);
+    batch.setPlayerState(playerState);
+
+    service.processTickBatch(batch);
+
+    ArgumentCaptor<TickSnapshot> captor = ArgumentCaptor.forClass(TickSnapshot.class);
+    verify(snapshotRepository).save(captor.capture());
+    JsonNode savedPlayerState = captor.getValue().getPlayerState();
+
+    assertThat(savedPlayerState.path("position").path("x").asInt()).isEqualTo(3200);
+    assertThat(savedPlayerState.path("position").path("y").asInt()).isEqualTo(3200);
+    assertThat(savedPlayerState.path("position").path("z").asInt()).isEqualTo(3200);
+    assertThat(savedPlayerState.path("x").asInt()).isEqualTo(3200);
+    assertThat(savedPlayerState.path("z").asInt()).isEqualTo(3200);
+  }
+
+  @Test
+  @DisplayName("Strict v2 rejects nested position with null x")
+  void strictV2_rejectsNestedPositionWithNullX() {
+    String sessionId = "s13";
+
+    TickBatchMessage batch = strictV2Batch(sessionId, 1300);
+    Map<String, Object> position = new LinkedHashMap<>();
+    position.put("x", null);
+    position.put("y", 3200);
+    position.put("plane", 0);
+    batch.setPlayerState(new LinkedHashMap<>(Map.of("position", position)));
+
+    service.processTickBatch(batch);
+
+    verify(snapshotRepository, never()).save(any(TickSnapshot.class));
+  }
+
+  @Test
+  @DisplayName("Strict v2 rejects flat position with null x")
+  void strictV2_rejectsFlatPositionWithNullX() {
+    String sessionId = "s14";
+
+    TickBatchMessage batch = strictV2Batch(sessionId, 1400);
+    batch.getPlayerState().put("x", null);
+
+    service.processTickBatch(batch);
+
+    verify(snapshotRepository, never()).save(any(TickSnapshot.class));
+  }
+
+  @Test
+  @DisplayName("Strict v2 rejects a non-map position without escaping normalization")
+  void strictV2_rejectsNonMapPosition() {
+    String sessionId = "s15";
+
+    TickBatchMessage batch = strictV2Batch(sessionId, 1500);
+    Map<String, Object> playerState = new LinkedHashMap<>();
+    playerState.put("position", "bad");
+    batch.setPlayerState(playerState);
+
+    service.processTickBatch(batch);
+
+    verify(snapshotRepository, never()).save(any(TickSnapshot.class));
+  }
+
+  @Test
+  @DisplayName("Invalid nested position does not create null flat aliases")
+  void normalizationDoesNotCreateNullFlatAliasesFromInvalidNestedPosition() {
+    String sessionId = "s16";
+
+    TickBatchMessage batch = strictV2Batch(sessionId, 1600);
+    batch.setPlayerState(new LinkedHashMap<>(Map.of("position", Map.of("y", 3200))));
+
+    service.processTickBatch(batch);
+
+    verify(snapshotRepository, never()).save(any(TickSnapshot.class));
+    assertThat(batch.getPlayerState()).doesNotContainKey("x");
+  }
+
+  @Test
+  @DisplayName("Old flat x/z/plane synthesizes position.y")
+  void oldFlatXZ_synthesizesPositionY() {
+    String sessionId = "s11";
+    when(sessionService.getSession(sessionId))
+        .thenReturn(Optional.of(
+            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+
+    TickBatchMessage batch = new TickBatchMessage();
+    batch.setSchemaVersion(2);
+    batch.setSessionId(sessionId);
+    batch.setTick(1100);
+    batch.setTimestamp("2025-06-21T10:00:00Z");
+
+    Map<String, Object> playerState = new LinkedHashMap<>();
+    playerState.put("x", 3200);
+    playerState.put("z", 3200);
+    playerState.put("plane", 0);
+    batch.setPlayerState(playerState);
+
+    batch.setInventory(List.of());
+    batch.setEquipment(List.of());
+    batch.setThreats(List.of());
+    batch.setProjectiles(List.of());
+    batch.setCooldowns(new HashMap<>());
+    batch.setLogs(new ArrayList<>());
+    batch.setOverlays(new ArrayList<>());
+    batch.setNpcs(List.of());
+    batch.setGameObjects(List.of());
+    batch.setGroundObjects(List.of());
+    batch.setGroundItems(List.of());
+    batch.setPlayers(List.of());
+    batch.setWidgets(List.of());
+
+    Map<String, Object> quest = new HashMap<>();
+    quest.put("active", false);
+    batch.setQuest(quest);
+
+    service.processTickBatch(batch);
+
+    ArgumentCaptor<TickSnapshot> captor = ArgumentCaptor.forClass(TickSnapshot.class);
+    verify(snapshotRepository).save(captor.capture());
+    TickSnapshot saved = captor.getValue();
+
+    assertThat(saved.getPlayerState().has("position")).isTrue();
+    assertThat(saved.getPlayerState().path("position").path("x").asInt()).isEqualTo(3200);
+    assertThat(saved.getPlayerState().path("position").path("y").asInt()).isEqualTo(3200);
+    assertThat(saved.getPlayerState().path("position").path("z").asInt()).isEqualTo(3200);
+  }
+
+  @Test
+  @DisplayName("Strict v2 rejects flat position with non-numeric x")
+  void strictV2_rejectsFlatPositionWithNonNumericX() {
+    TickBatchMessage batch = strictV2Batch("s17", 1700);
+    batch.getPlayerState().put("x", "bad");
+    batch.getPlayerState().put("z", 3200);
+
+    service.processTickBatch(batch);
+
+    verify(snapshotRepository, never()).save(any(TickSnapshot.class));
+  }
+
+  @Test
+  @DisplayName("Strict v2 rejects nested position with boolean x")
+  void strictV2_rejectsNestedPositionWithBooleanX() {
+    TickBatchMessage batch = strictV2Batch("s18", 1800);
+    Map<String, Object> position = new LinkedHashMap<>();
+    position.put("x", true);
+    position.put("y", 3200);
+    batch.setPlayerState(new LinkedHashMap<>(Map.of("position", position)));
+
+    service.processTickBatch(batch);
+
+    verify(snapshotRepository, never()).save(any(TickSnapshot.class));
+  }
+
+  @Test
+  @DisplayName("Strict v2 rejects flat position with object worldX")
+  void strictV2_rejectsFlatPositionWithObjectWorldX() {
+    TickBatchMessage batch = strictV2Batch("s19", 1900);
+    Map<String, Object> playerState = new LinkedHashMap<>();
+    playerState.put("worldX", Map.of("bad", true));
+    playerState.put("worldY", 3200);
+    batch.setPlayerState(playerState);
+
+    service.processTickBatch(batch);
+
+    verify(snapshotRepository, never()).save(any(TickSnapshot.class));
+  }
+
+  @Test
+  @DisplayName("Strict v2 rejects invalid plane")
+  void strictV2_rejectsInvalidPlane() {
+    TickBatchMessage batch = strictV2Batch("s20", 2000);
+    batch.getPlayerState().put("plane", "bad");
+
+    service.processTickBatch(batch);
+
+    verify(snapshotRepository, never()).save(any(TickSnapshot.class));
+  }
+
+  @Test
+  @DisplayName("Strict v2 accepts and normalizes numeric string coordinates")
+  void strictV2_acceptsNumericStringCoordinates() {
+    String sessionId = "s21";
+    when(sessionService.getSession(sessionId))
+        .thenReturn(Optional.of(
+            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+
+    TickBatchMessage batch = strictV2Batch(sessionId, 2100);
+    Map<String, Object> playerState = new LinkedHashMap<>();
+    playerState.put("x", "3200");
+    playerState.put("z", "3200");
+    playerState.put("plane", "0");
+    batch.setPlayerState(playerState);
+
+    service.processTickBatch(batch);
+
+    ArgumentCaptor<TickSnapshot> captor = ArgumentCaptor.forClass(TickSnapshot.class);
+    verify(snapshotRepository).save(captor.capture());
+    JsonNode savedPlayerState = captor.getValue().getPlayerState();
+
+    assertThat(savedPlayerState.path("position").path("x").isNumber()).isTrue();
+    assertThat(savedPlayerState.path("position").path("x").asInt()).isEqualTo(3200);
+    assertThat(savedPlayerState.path("position").path("y").asInt()).isEqualTo(3200);
+    assertThat(savedPlayerState.path("position").path("z").asInt()).isEqualTo(3200);
+    assertThat(savedPlayerState.path("position").path("plane").asInt()).isEqualTo(0);
+    assertThat(savedPlayerState.path("x").isNumber()).isTrue();
+    assertThat(savedPlayerState.path("z").isNumber()).isTrue();
+    assertThat(savedPlayerState.path("plane").isNumber()).isTrue();
+  }
+
+  @Test
+  @DisplayName("Strict v2 normalizes numeric string world coordinates")
+  void strictV2_normalizesNumericStringWorldCoordinates() {
+    String sessionId = "s22";
+    when(sessionService.getSession(sessionId))
+        .thenReturn(Optional.of(
+            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+
+    TickBatchMessage batch = strictV2Batch(sessionId, 2200);
+    Map<String, Object> playerState = new LinkedHashMap<>();
+    playerState.put("worldX", "3200");
+    playerState.put("worldY", "3200");
+    batch.setPlayerState(playerState);
+
+    service.processTickBatch(batch);
+
+    ArgumentCaptor<TickSnapshot> captor = ArgumentCaptor.forClass(TickSnapshot.class);
+    verify(snapshotRepository).save(captor.capture());
+    JsonNode savedPlayerState = captor.getValue().getPlayerState();
+
+    assertThat(savedPlayerState.path("position").path("x").asInt()).isEqualTo(3200);
+    assertThat(savedPlayerState.path("position").path("y").asInt()).isEqualTo(3200);
+    assertThat(savedPlayerState.path("x").isNumber()).isTrue();
+    assertThat(savedPlayerState.path("z").isNumber()).isTrue();
+    assertThat(savedPlayerState.path("worldX").isNumber()).isTrue();
+    assertThat(savedPlayerState.path("worldY").isNumber()).isTrue();
   }
 }
