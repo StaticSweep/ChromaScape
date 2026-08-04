@@ -4,6 +4,9 @@
 # Log files
 *.log
 
+# Runtime log artifact accidentally named with a Windows-style variable
+/%log%
+
 # BlueJ files
 *.ctxt
 

@@ -2,3 +2,5 @@
 *.sh text eol=lf
 *.bat text eol=crlf
 *.jar binary
+docs/MCP_QUICK_START.md text eol=lf
+src/main/resources/templates/debugger.html text eol=lf
