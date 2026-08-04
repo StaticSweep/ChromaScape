@@ -63,8 +63,7 @@ public class Micro6TargetRelaunchService {
 
   public Micro6TargetRelaunchService(
       ObjectMapper objectMapper,
-      @Value("${builder-goal.recovery.micro6-project-dir:F:/Dev/IdeaProjects/micro6}")
-          String micro6ProjectDir,
+      @Value("${builder-goal.recovery.micro6-project-dir}") String micro6ProjectDir,
       @Value("${builder-goal.recovery.gradle-run-task::runelite-client:run}")
           String gradleRunTask,
       @Value("${builder-goal.recovery.launch-command-template:}") String launchCommandTemplate,
@@ -174,10 +173,7 @@ public class Micro6TargetRelaunchService {
     }
 
     Path projectDir = Paths.get(micro6ProjectDir).toAbsolutePath().normalize();
-    if (!projectDir.toFile().isDirectory()) {
-      throw new IllegalStateException(
-          "Configured Micro6 project directory does not exist: " + projectDir);
-    }
+    validateMicro6ProjectDir(projectDir);
 
     String resolvedBaseUrl = firstNonBlank(normalizeBaseUrl(targetBaseUrl), defaultExecutorBaseUrl);
     Integer targetPort = parsePort(resolvedBaseUrl);
@@ -1132,6 +1128,24 @@ public class Micro6TargetRelaunchService {
   private String resolveLocalExecutorBaseUrl(Integer port) {
     int resolvedPort = port != null && port > 0 ? port : 8098;
     return "http://127.0.0.1:" + resolvedPort;
+  }
+
+  /**
+   * Validates the resolved Micro6 project directory before any launch work is
+   * attempted. The directory must exist, be a directory, and contain the
+   * Gradle wrapper used to launch the client.
+   */
+  private void validateMicro6ProjectDir(Path projectDir) {
+    if (!projectDir.toFile().isDirectory()) {
+      throw new IllegalStateException(
+          "Configured Micro6 project directory does not exist or is not a directory: "
+              + projectDir);
+    }
+    Path gradleWrapper = projectDir.resolve("gradlew.bat");
+    if (!gradleWrapper.toFile().isFile()) {
+      throw new IllegalStateException(
+          "Configured Micro6 project directory does not contain gradlew.bat: " + projectDir);
+    }
   }
 
   private Long resolveListeningPid(Integer port) {

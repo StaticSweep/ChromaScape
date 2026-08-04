@@ -72,7 +72,8 @@ class BuilderGoalRunnerControllerTest {
   void listMachines_returnsBadGatewayWithStructuredErrorWhenLauncherFails() {
     when(launcherControlService.listMachineSummaries())
         .thenThrow(new IllegalStateException("HTTP 401: unauthorized"));
-    when(launcherControlService.getAuthToken()).thenReturn("secret-token");
+    when(launcherControlService.describeSanitizedFailure(any()))
+        .thenReturn("HTTP 401: unauthorized");
 
     ResponseEntity<Object> response = controller.listMachines();
 
@@ -88,7 +89,8 @@ class BuilderGoalRunnerControllerTest {
   void listMachines_badGatewayDetailsNeverDiscloseConfiguredToken() {
     when(launcherControlService.listMachineSummaries())
         .thenThrow(new IllegalStateException("HTTP 401: echo secret-token"));
-    when(launcherControlService.getAuthToken()).thenReturn("secret-token");
+    when(launcherControlService.describeSanitizedFailure(any()))
+        .thenReturn("HTTP 401: echo ***");
 
     ResponseEntity<Object> response = controller.listMachines();
 
@@ -103,7 +105,8 @@ class BuilderGoalRunnerControllerTest {
   void listMachines_badGatewayDetailsAreNonNullForParsingFailures() {
     when(launcherControlService.listMachineSummaries())
         .thenThrow(new IllegalStateException("Failed to load launcher machines: JsonParseException: Unexpected token"));
-    when(launcherControlService.getAuthToken()).thenReturn("secret-token");
+    when(launcherControlService.describeSanitizedFailure(any()))
+        .thenReturn("JsonParseException: Unexpected token");
 
     ResponseEntity<Object> response = controller.listMachines();
 

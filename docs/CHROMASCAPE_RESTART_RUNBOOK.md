@@ -13,6 +13,51 @@ scripts\restart-chromascape.bat
 
 Run restart commands from Windows, not WSL.
 
+## Local Machine Configuration (.env.local)
+
+Machine-specific settings live in `C:\Dev\IdeaProjects\ChromaScape\.env.local`. This file is
+git-ignored; `.env.example` documents the supported values.
+
+Setup:
+
+1. Copy `.env.example` to `.env.local`:
+
+   ```cmd
+   copy .env.example .env.local
+   ```
+
+2. Set the local Micro6 project path (and optionally the local machine UUID):
+
+   ```dotenv
+   BUILDER_GOAL_MICRO6_PROJECT_DIR=C:\Dev\IdeaProjects\micro6
+   BUILDER_GOAL_LAUNCHER_LOCAL_MACHINE_UUID=1d391d65-6c97-5b77-b676-964f157e8c73
+   ```
+
+   - `BUILDER_GOAL_MICRO6_PROJECT_DIR`: absolute path to the Micro6 workspace used for local
+     Builder Goal launches. If unset, Spring falls back to `../micro6` relative to the ChromaScape
+     project directory.
+   - `BUILDER_GOAL_LAUNCHER_LOCAL_MACHINE_UUID`: launcher machine UUID treated as the local
+     ChromaScape host. If unset, the launcher hostname is used instead.
+
+3. Restart ChromaScape from Windows (see below). The restart script loads `.env.local` before
+   starting `bootRun`. Existing process environment variables are never overwritten.
+
+`.env.local` loader behavior:
+
+- Ignores empty lines and lines starting with `#`.
+- Splits each assignment on the first `=`.
+- Trims the key and optional matching quotes around the value.
+- Rejects malformed or empty variable names with a line-numbered error.
+- Does not overwrite a non-empty process environment variable.
+- Never prints variable values; only imported variable names are logged.
+
+Configuration precedence (highest first):
+
+1. Explicit restart-script parameters, where supported.
+2. Existing process/Windows environment variables.
+3. `.env.local`.
+4. Spring defaults from `application.yml`.
+
 ## Preferred Restart Path
 
 The preferred command is:
@@ -91,6 +136,35 @@ Expected healthy state:
 - port `8090` is listening
 - `/debugger` loads
 - the restart wrapper prints `Restart complete`
+
+## Builder Goal Runner Verification
+
+After restart, confirm the Builder Goal local launch configuration loaded the machine-local
+Micro6 path:
+
+```powershell
+Get-Content C:\Dev\IdeaProjects\ChromaScape\chroma_bootrun.log -Tail 2000 |
+  Select-String 'Builder Goal local launch config loaded'
+```
+
+Expected:
+
+```text
+Builder Goal local launch config loaded: projectDir=C:\Dev\IdeaProjects\micro6, ...
+```
+
+Then open `http://localhost:8090/debugger` and confirm:
+
+1. Launch Host selects `CZC8518C27` as the local host.
+2. The executor becomes dispatch-ready.
+3. Fishing Training can be published.
+
+Machines endpoint (HTTP 200 with the local machine marked `localMachine: true`):
+
+```powershell
+Invoke-RestMethod http://localhost:8090/api/debug/builder-goals/machines |
+  ConvertTo-Json -Depth 8
+```
 
 ## Common Failures
 

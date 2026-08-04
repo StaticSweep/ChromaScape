@@ -16,7 +16,7 @@ class Micro6TargetRelaunchServiceTest {
     Micro6TargetRelaunchService service =
         new Micro6TargetRelaunchService(
             new ObjectMapper(),
-            "F:/Dev/IdeaProjects/micro6",
+            "C:/Dev/IdeaProjects/micro6",
             "",
             "",
             "",
@@ -44,11 +44,11 @@ class Micro6TargetRelaunchServiceTest {
   }
 
   @Test
-  void buildRunArgsAlwaysRequestsCleanAutoLoginForSelectedProfile() throws Exception {
+  void buildClientArgsAlwaysRequestsCleanAutoLoginForSelectedProfile() throws Exception {
     Micro6TargetRelaunchService service =
         new Micro6TargetRelaunchService(
             new ObjectMapper(),
-            "F:/Dev/IdeaProjects/micro6",
+            "C:/Dev/IdeaProjects/micro6",
             "",
             "",
             "--extra-flag",
@@ -63,12 +63,13 @@ class Micro6TargetRelaunchServiceTest {
 
     Method method =
         Micro6TargetRelaunchService.class.getDeclaredMethod(
-            "buildRunArgs", String.class, String.class, String.class, Integer.class);
+            "buildClientArgs", String.class, String.class, String.class, Integer.class);
     method.setAccessible(true);
-    String runArgs =
-        (String) method.invoke(service, "bigGreenMeat", "user@example.com", "secret", 360);
+    @SuppressWarnings("unchecked")
+    List<String> clientArgs =
+        (List<String>) method.invoke(service, "bigGreenMeat", "user@example.com", "secret", 360);
 
-    assertThat(runArgs)
+    assertThat(clientArgs)
         .contains("--clean-jagex-launcher")
         .contains("--auto-enable-accountbuilder")
         .contains("--profile=bigGreenMeat")
@@ -82,7 +83,7 @@ class Micro6TargetRelaunchServiceTest {
     Micro6TargetRelaunchService service =
         new Micro6TargetRelaunchService(
             new ObjectMapper(),
-            "F:/Dev/IdeaProjects/micro6",
+            "C:/Dev/IdeaProjects/micro6",
             "",
             "",
             "",

@@ -69,7 +69,7 @@ class Micro6TargetPreparationServiceTest {
                 targetClient,
                 List.of("cmd.exe", "/c", "gradlew.bat", ":runelite-client:run"),
                 12345L,
-                Path.of("F:/Dev/IdeaProjects/micro6/micro6-recovery-launch.log"),
+                Path.of("C:/Dev/IdeaProjects/micro6/micro6-recovery-launch.log"),
                 "--clean-jagex-launcher --profile=bigGreenMeat --profile-email=IlaWalter280@***:*** --world=380",
                 ":runelite-client:run",
                 380,

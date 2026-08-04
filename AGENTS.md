@@ -7,6 +7,17 @@
   - `cd /d C:\Dev\IdeaProjects\ChromaScape`
   - `scripts\restart-chromascape.bat`
 - Run ChromaScape restart commands from Windows, not WSL.
+- Machine-specific configuration lives in `.env.local` (git-ignored; `.env.example` documents the
+  supported values). The restart script loads `.env.local` before starting `bootRun`:
+  1. Copy `.env.example` to `.env.local`.
+  2. Set the local Micro6 path and optional local machine UUID:
+     - `BUILDER_GOAL_MICRO6_PROJECT_DIR=C:\Dev\IdeaProjects\micro6`
+     - `BUILDER_GOAL_LAUNCHER_LOCAL_MACHINE_UUID=1d391d65-6c97-5b77-b676-964f157e8c73`
+  3. Restart from Windows: `cd /d C:\Dev\IdeaProjects\ChromaScape && scripts\restart-chromascape.bat`.
+  4. Inspect startup failures at `C:\Dev\IdeaProjects\ChromaScape\chroma_bootrun.log`.
+  5. Verify `http://localhost:8090/debugger`.
+  6. Confirm Launch Host selects `CZC8518C27`, the executor becomes dispatch-ready, and Fishing
+     Training can be published.
 
 ## Skills
 A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used. Each entry includes a name, description, and file path so you can open the source for full instructions when using a specific skill.

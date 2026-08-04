@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '30';
+  static BUILDER_GOAL_BUNDLE_VERSION = '31';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -415,25 +415,13 @@ class AccountTaskPlanner {
       });
     }
     if (this.builderGoalWorldInput) {
-      this.builderGoalWorldInput.addEventListener('input', () => {
-        this.renderBuilderGoalConfigMeta();
-        this.renderBuilderGoalClientStatus();
-      });
+      this.builderGoalWorldInput.addEventListener('input', () => this.handleBuilderGoalWorldInput());
     }
     if (this.builderGoalConfigInput) {
-      this.builderGoalConfigInput.addEventListener('input', () => {
-        this.builderGoalConfigDirty = true;
-        this.renderBuilderGoalConfigMeta();
-      });
+      this.builderGoalConfigInput.addEventListener('input', () => this.handleBuilderGoalConfigInput());
     }
     if (this.refreshBuilderGoalRunsBtn) {
-      this.refreshBuilderGoalRunsBtn.addEventListener('click', () => {
-        this.loadBuilderGoalAccounts();
-        this.loadBuilderGoalMachines();
-        this.loadBuilderGoalRuns();
-        this.loadScriptCatalog();
-        this.renderBuilderGoalClientStatus();
-      });
+      this.refreshBuilderGoalRunsBtn.addEventListener('click', () => this.refreshBuilderGoalRuns());
     }
     if (this.refreshBuilderGoalCodexSessionBtn) {
       this.refreshBuilderGoalCodexSessionBtn.addEventListener('click', () => this.loadBuilderGoalCodexSession());
@@ -1346,6 +1334,30 @@ class AccountTaskPlanner {
         ? numericWorld
         : 360
     );
+  }
+
+  handleBuilderGoalWorldInput() {
+    this.renderBuilderGoalConfigMeta();
+    this.renderBuilderGoalClientStatus();
+    this.updateBuilderGoalRunButtonState();
+  }
+
+  handleBuilderGoalConfigInput() {
+    this.builderGoalConfigDirty = true;
+    this.renderBuilderGoalConfigMeta();
+    this.renderBuilderGoalClientStatus();
+    this.updateBuilderGoalRunButtonState();
+  }
+
+  async refreshBuilderGoalRuns() {
+    await Promise.all([
+      this.loadBuilderGoalAccounts(),
+      this.loadBuilderGoalMachines(),
+      this.loadBuilderGoalRuns(),
+      this.loadScriptCatalog()
+    ]);
+    this.renderBuilderGoalClientStatus();
+    this.updateBuilderGoalRunButtonState();
   }
 
   async loadBuilderGoalRuns(options = {}) {

@@ -673,3 +673,58 @@ test('renderBuilderGoalClientStatus: invalid JSON wins over missing credentials 
   assert.ok(message.includes('Invalid JSON'), `unexpected: ${message}`);
   assert.ok(!message.includes('No dispatch-ready Micro6 executor'), `unexpected: ${message}`);
 });
+
+test('handleBuilderGoalWorldInput refreshes metadata, status, and button state', () => {
+  const calls = [];
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.renderBuilderGoalConfigMeta = () => calls.push('meta');
+  planner.renderBuilderGoalClientStatus = () => calls.push('status');
+  planner.updateBuilderGoalRunButtonState = () => calls.push('buttons');
+
+  planner.handleBuilderGoalWorldInput();
+
+  assert.deepEqual(calls, ['meta', 'status', 'buttons']);
+});
+
+test('handleBuilderGoalConfigInput marks dirty and refreshes metadata, status, and button state', () => {
+  const calls = [];
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.renderBuilderGoalConfigMeta = () => calls.push('meta');
+  planner.renderBuilderGoalClientStatus = () => calls.push('status');
+  planner.updateBuilderGoalRunButtonState = () => calls.push('buttons');
+
+  planner.handleBuilderGoalConfigInput();
+
+  assert.equal(planner.builderGoalConfigDirty, true);
+  assert.deepEqual(calls, ['meta', 'status', 'buttons']);
+});
+
+test('refreshBuilderGoalRuns awaits all loaders before rendering and recalculating buttons', async () => {
+  const order = [];
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.loadBuilderGoalAccounts = async () => order.push('accounts');
+  planner.loadBuilderGoalMachines = async () => order.push('machines');
+  planner.loadBuilderGoalRuns = async () => order.push('runs');
+  planner.loadScriptCatalog = async () => order.push('catalog');
+  planner.renderBuilderGoalClientStatus = () => order.push('status');
+  planner.updateBuilderGoalRunButtonState = () => order.push('buttons');
+
+  await planner.refreshBuilderGoalRuns();
+
+  assert.deepEqual(order, ['accounts', 'machines', 'runs', 'catalog', 'status', 'buttons']);
+});
+
+test('refreshBuilderGoalRuns rejects when a loader fails', async () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.loadBuilderGoalAccounts = async () => {};
+  planner.loadBuilderGoalMachines = async () => {
+    throw new Error('machine fetch failed');
+  };
+  planner.loadBuilderGoalRuns = async () => {};
+  planner.loadScriptCatalog = async () => {};
+
+  await assert.rejects(
+    () => planner.refreshBuilderGoalRuns(),
+    /machine fetch failed/
+  );
+});

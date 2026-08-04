@@ -222,7 +222,8 @@ public class BuilderGoalLauncherControlService {
           textValue(root.path("resolved_from")),
           textValue(root.path("resolved_path_source")));
     } catch (Exception e) {
-      throw new IllegalStateException("Failed to submit launcher start command: " + e.getMessage(), e);
+      throw new IllegalStateException(
+          "Failed to submit launcher start command: " + sanitizedCause(e), e);
     }
   }
 
@@ -275,7 +276,10 @@ public class BuilderGoalLauncherControlService {
           TERMINAL_STATUSES.contains(status.toLowerCase(Locale.ENGLISH)));
     } catch (Exception e) {
       throw new IllegalStateException(
-          "Failed to read launcher command status for " + normalizedCommandId + ": " + e.getMessage(),
+          "Failed to read launcher command status for "
+              + normalizedCommandId
+              + ": "
+              + sanitizedCause(e),
           e);
     }
   }
@@ -284,8 +288,24 @@ public class BuilderGoalLauncherControlService {
     return defaultMachineUuid;
   }
 
-  public String getAuthToken() {
-    return authToken;
+  /**
+   * Builds a non-null, bounded, credential-free description of a launcher failure for callers
+   * that render error details to a browser. The configured token, authorization headers, and
+   * unbounded upstream bodies never leak through this method.
+   */
+  public String describeSanitizedFailure(Throwable failure) {
+    if (failure == null) {
+      return "Unexpected launcher machine discovery failure";
+    }
+    String message = failure.getMessage();
+    String detail = message == null || message.isBlank() ? failure.getClass().getSimpleName() : message;
+    if (detail.length() > 500) {
+      detail = detail.substring(0, 500) + "…(truncated)";
+    }
+    if (authToken != null && !authToken.isBlank() && detail.contains(authToken)) {
+      detail = detail.replace(authToken, "***");
+    }
+    return detail;
   }
 
   public String getBaseUrl() {

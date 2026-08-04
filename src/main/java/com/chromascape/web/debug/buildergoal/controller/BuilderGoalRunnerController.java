@@ -451,16 +451,7 @@ public class BuilderGoalRunnerController {
    * token) are masked.
    */
   private String sanitizeMachineError(Exception e) {
-    if (e == null) {
-      return "Unknown launcher machine discovery failure";
-    }
-    String message = e.getMessage();
-    String detail = message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
-    String token = launcherControlService.getAuthToken();
-    if (token != null && !token.isBlank() && detail.contains(token)) {
-      detail = detail.replace(token, "***");
-    }
-    return detail;
+    return launcherControlService.describeSanitizedFailure(e);
   }
 
   private String textValue(JsonNode node) {

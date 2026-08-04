@@ -22,6 +22,74 @@ function Write-Step {
   Write-Host "[$ts] $Message"
 }
 
+<#
+.SYNOPSIS
+Loads key=value pairs from an optional .env.local file into the current
+process environment without overwriting existing non-empty variables.
+
+.DESCRIPTION
+- Ignores empty lines and lines starting with '#'
+- Splits each assignment on the first '='
+- Trims the key; trims optional matching single/double quotes around the value
+- Rejects malformed or empty variable names with a line-numbered error
+- Never overwrites a non-empty process environment variable
+- Never prints variable values; logs only imported variable names
+#>
+function Import-LocalEnvFile {
+  param(
+    [Parameter(Mandatory = $true)][string]$ProjectDir
+  )
+
+  $envPath = Join-Path $ProjectDir ".env.local"
+  if (-not (Test-Path $envPath)) {
+    Write-Step "No .env.local found at $envPath; skipping local environment import."
+    return
+  }
+
+  $imported = New-Object System.Collections.Generic.List[string]
+  $lines = @(Get-Content $envPath)
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    $lineNumber = $i + 1
+    $line = [string]$lines[$i]
+    if ([string]::IsNullOrWhiteSpace($line)) {
+      continue
+    }
+    $trimmed = $line.Trim()
+    if ($trimmed.StartsWith("#")) {
+      continue
+    }
+    $equalsIndex = $trimmed.IndexOf("=")
+    if ($equalsIndex -lt 0) {
+      throw "Malformed line $lineNumber in ${envPath}: expected KEY=VALUE assignment."
+    }
+    $key = $trimmed.Substring(0, $equalsIndex).Trim()
+    if ([string]::IsNullOrWhiteSpace($key) -or $key -match "\s") {
+      throw "Malformed line $lineNumber in ${envPath}: invalid variable name '$key'."
+    }
+    $rawValue = $trimmed.Substring($equalsIndex + 1).Trim()
+    if ($rawValue.Length -ge 2) {
+      $first = $rawValue[0]
+      $last = $rawValue[$rawValue.Length - 1]
+      if (($first -eq '"' -and $last -eq '"') -or ($first -eq "'" -and $last -eq "'")) {
+        $rawValue = $rawValue.Substring(1, $rawValue.Length - 2)
+      }
+    }
+    $existing = Get-Item -Path "Env:$key" -ErrorAction SilentlyContinue
+    if ($null -ne $existing -and -not [string]::IsNullOrEmpty($existing.Value)) {
+      Write-Step "Skipping $key (already set in process environment)."
+      continue
+    }
+    Set-Item -Path "Env:$key" -Value $rawValue
+    $imported.Add($key)
+  }
+
+  if ($imported.Count -gt 0) {
+    Write-Step "Imported local environment variables: $($imported -join ', ')"
+  } else {
+    Write-Step "No new local environment variables imported from .env.local."
+  }
+}
+
 function Test-HttpStatusCode {
   param(
     [Parameter(Mandatory = $true)][string]$Url,
@@ -169,6 +237,11 @@ if (-not (Test-Path $gradleBat)) {
 }
 
 $logPath = Join-Path $ProjectDir "chroma_bootrun.log"
+
+# Local machine configuration (.env.local) loads before datasource parameters
+# and before bootRun. Explicit restart-script parameters and existing process
+# environment variables take precedence over .env.local values.
+Import-LocalEnvFile -ProjectDir $ProjectDir
 
 if ($DatasourceUrl) {
   $env:SPRING_DATASOURCE_URL = $DatasourceUrl

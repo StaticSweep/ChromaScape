@@ -73,5 +73,11 @@ output/*
 /src/main/java/com/chromascape/scripts/*/
 /scripts/*/
 
+# Local environment configuration (machine-specific, never commit)
+/.env
+/.env.local
+/.env.*.local
+!/.env.example
+
 # recordings
 recordings/
