@@ -382,7 +382,7 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
-        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="24">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="27">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Builder Goal Runner</label>
             <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
@@ -445,10 +445,13 @@
             </div>
           </div>
           <div class="d-flex gap-2 mb-2">
-            <button class="btn btn-sm btn-primary flex-fill" id="runBuilderGoalBtn" disabled>
+            <button class="btn btn-sm btn-primary flex-fill" id="runBuilderGoalBtn" disabled title="Launch the local Micro6 workspace for the account and publish the selected task">
               <i class="bi bi-play-fill me-1"></i>Run Task
             </button>
-            <button class="btn btn-sm btn-outline-success flex-fill" id="publishBuilderGoalBtn" disabled title="Publish the selected task to an already-running Micro6 client without relaunching">
+            <button class="btn btn-sm btn-outline-primary flex-fill" id="launchBuilderGoalAccountBtn" disabled title="Launch the local Micro6 workspace for the selected account without publishing a task">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Launch Account
+            </button>
+            <button class="btn btn-sm btn-outline-success flex-fill" id="publishBuilderGoalBtn" disabled title="Publish the selected task to an already-running Micro6 executor for this account without relaunching the client">
               <i class="bi bi-cloud-arrow-up me-1"></i>Publish Task
             </button>
           </div>
@@ -1097,7 +1100,7 @@
 
   <script src="/js/debugger.js?v=14"></script>
   <script src="/js/patchloop.js?v=2"></script>
-  <script src="/js/account-task-planner.js?v=25"></script>
+  <script src="/js/account-task-planner.js?v=27"></script>
 </body>
 
 </html>

@@ -6,7 +6,18 @@
 # Verifies that ChromaScape is registered as an MCP server with
 # Claude CLI and/or Codex CLI.
 #
+# For Codex, registration metadata is displayed for operator visibility, but
+# the actual pass/fail decision is delegated to verify-codex-mcp-servers.js,
+# which also performs a real MCP handshake. A plain `codex mcp get` result is
+# never treated as success on its own.
+#
 # Usage: ./test-mcp-registration.sh
+#
+# Exit codes:
+#   0 = Codex verified via handshake and/or Claude registered
+#   1 = neither CLI registered, or Codex verification failed (other state)
+#   2 = Codex startup_timeout_sec mismatch (verifier)
+#   6 = Codex CLI invocation or parsing error (verifier)
 #
 # ==============================================================================
 
@@ -17,13 +28,18 @@ echo ""
 
 # Track status
 CLAUDE_FOUND=0
-CODEX_FOUND=0
-TIMEOUT_MISMATCH=0
+CODEX_OK=0
+VERIFIER_EXIT=0
 EXPECTED_STARTUP_TIMEOUT="${EXPECTED_STARTUP_TIMEOUT_SEC:-120}"
 if ! echo "$EXPECTED_STARTUP_TIMEOUT" | grep -Eq '^[0-9]+([.][0-9]+)?$'; then
     echo "ERROR: EXPECTED_STARTUP_TIMEOUT_SEC must be numeric (got: $EXPECTED_STARTUP_TIMEOUT)"
     exit 1
 fi
+
+# Derive paths from this script's location (no hard-coded mounts or drives)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WRAPPER="$SCRIPT_DIR/mcp-bridge/wrapper/server.js"
+VERIFIER="$SCRIPT_DIR/mcp-bridge/verify-codex-mcp-servers.js"
 
 # Check Claude CLI
 echo "Checking Claude CLI registration..."
@@ -61,36 +77,36 @@ if ! command -v codex &> /dev/null; then
     echo "[--] Codex CLI not installed"
 else
     echo "     Codex CLI detected"
-    if codex mcp get chromascape &> /dev/null; then
-        # Parse and verify configuration
-        CONFIG_OUTPUT=$(codex mcp get chromascape 2>/dev/null)
-        if echo "$CONFIG_OUTPUT" | grep -q "transport: stdio" \
-            && echo "$CONFIG_OUTPUT" | grep -q "enabled: true" \
-            && echo "$CONFIG_OUTPUT" | grep -Eq "startup_timeout_sec:[[:space:]]*[0-9]+([.][0-9]+)?"; then
-            # Validate timeout value matches expected (POSIX-safe extraction + strict numeric compare)
-            ACTUAL_TIMEOUT=$(echo "$CONFIG_OUTPUT" | sed -nE 's/.*startup_timeout_sec:[[:space:]]*([0-9]+([.][0-9]+)?).*/\1/p' | head -1)
-            if [ -n "$ACTUAL_TIMEOUT" ]; then
-                if ! awk -v a="$ACTUAL_TIMEOUT" -v b="$EXPECTED_STARTUP_TIMEOUT" 'BEGIN { exit !(a + 0 == b + 0) }'; then
-                    echo "[!!]  startup_timeout_sec mismatch: expected=${EXPECTED_STARTUP_TIMEOUT}, actual=${ACTUAL_TIMEOUT}"
-                    TIMEOUT_MISMATCH=1
-                else
-                    echo "[OK]  ChromaScape registered with Codex CLI (verified, timeout=${ACTUAL_TIMEOUT}s)"
-                fi
-            fi
-            CODEX_FOUND=1
-        else
-            echo "[!!]  ChromaScape found but configuration invalid"
-            echo "      Expected: transport: stdio, enabled: true, startup_timeout_sec: <number>"
-            echo "      Got: $CONFIG_OUTPUT"
-        fi
+
+    echo "     Registration details:"
+    codex mcp get chromascape 2>/dev/null || true
+    echo ""
+
+    echo "     Running verification (configuration + live MCP handshake)..."
+    if [ ! -f "$WRAPPER" ]; then
+        echo "[!!]  Wrapper not found at: $WRAPPER"
+        VERIFIER_EXIT=1
+    elif [ ! -f "$VERIFIER" ]; then
+        echo "[!!]  Verifier not found at: $VERIFIER"
+        VERIFIER_EXIT=1
     else
-        echo "[--] ChromaScape NOT registered with Codex CLI"
+        if node "$VERIFIER" \
+            --servers chromascape \
+            --expectedChromascapeWrapper "$WRAPPER" \
+            --expectedChromascapeTimeout "$EXPECTED_STARTUP_TIMEOUT" \
+            --handshakeTimeoutSec "$EXPECTED_STARTUP_TIMEOUT"; then
+            VERIFIER_EXIT=0
+        else
+            VERIFIER_EXIT=$?
+        fi
     fi
 
-    if [ $CODEX_FOUND -eq 1 ]; then
-        echo ""
-        echo "     Registration details:"
-        codex mcp get chromascape 2>/dev/null || true
+    if [ $VERIFIER_EXIT -eq 0 ]; then
+        echo "[OK]  ChromaScape registered with Codex CLI (verified, timeout=${EXPECTED_STARTUP_TIMEOUT}s)"
+        CODEX_OK=1
+    else
+        echo "[!!]  ChromaScape Codex registration verification failed (exit $VERIFIER_EXIT)"
+        echo "      Verify the wrapper path, the registration, and that the MCP handshake succeeds."
     fi
 fi
 
@@ -112,12 +128,8 @@ fi
 
 echo ""
 
-if [ $CODEX_FOUND -eq 1 ]; then
+if [ $CODEX_OK -eq 1 ]; then
     echo "[OK] Codex CLI: ChromaScape registered"
-    if [ $TIMEOUT_MISMATCH -eq 1 ]; then
-        echo "[!!]          startup_timeout_sec does not match expected=${EXPECTED_STARTUP_TIMEOUT}"
-        echo "               Re-register with: MCP_STARTUP_TIMEOUT_SEC=${EXPECTED_STARTUP_TIMEOUT} ./register-mcp-clients.sh"
-    fi
 elif ! command -v codex &> /dev/null; then
     echo "[--] Codex CLI: Not installed"
 else
@@ -135,7 +147,7 @@ if [ $CLAUDE_FOUND -eq 0 ] && command -v claude &> /dev/null; then
     echo ""
 fi
 
-if [ $CODEX_FOUND -eq 0 ] && command -v codex &> /dev/null; then
+if [ $CODEX_OK -eq 0 ] && command -v codex &> /dev/null; then
     echo ""
     echo "To register with Codex CLI:"
     echo "  cd scripts/mcp-bridge"
@@ -143,11 +155,15 @@ if [ $CODEX_FOUND -eq 0 ] && command -v codex &> /dev/null; then
     echo ""
 fi
 
-# Exit with appropriate code
-if [ $CLAUDE_FOUND -eq 1 ] || [ $CODEX_FOUND -eq 1 ]; then
-    if [ $TIMEOUT_MISMATCH -eq 1 ]; then
-        exit 2
+# Exit with appropriate code: propagate verifier failure first
+if [ $CODEX_OK -eq 0 ] && command -v codex &> /dev/null; then
+    if [ $VERIFIER_EXIT -eq 0 ]; then
+        VERIFIER_EXIT=1
     fi
+    exit $VERIFIER_EXIT
+fi
+
+if [ $CLAUDE_FOUND -eq 1 ] || [ $CODEX_OK -eq 1 ]; then
     exit 0
 fi
 exit 1

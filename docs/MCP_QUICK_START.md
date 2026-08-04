@@ -5,9 +5,14 @@
 ### One Command to Rule Them All
 
 ```bash
-cd /mnt/f/Dev/IdeaProjects/ChromaScape
+cd /mnt/c/dev/ideaprojects/chromascape
 gradlew.bat bootRun
 ```
+
+> The path above is for the machine on which this repo currently lives. MCP
+> registrations and repository scripts derive paths from the repository
+> location automatically; never copy a stale mount or drive path from one
+> machine into another.
 
 That's it! The MCP bridge auto-configures and starts automatically.
 
@@ -197,9 +202,105 @@ Checking Codex CLI registration...
 Verification exit codes:
 | Code | Meaning |
 |------|---------|
-| 0 | At least one CLI registered, no timeout mismatch |
-| 1 | Neither CLI registered |
-| 2 | Registered but `startup_timeout_sec` value doesn't match `EXPECTED_STARTUP_TIMEOUT_SEC` |
+| 0 | Codex verified via live handshake and/or Claude registered |
+| 1 | Neither CLI registered, or Codex verification failed (other state) |
+| 2 | Codex `startup_timeout_sec` mismatch (verifier) |
+| 6 | Codex CLI invocation or parsing error (verifier) |
+
+For Codex, `test-mcp-registration.sh` / `.bat` display the registration details
+for operator visibility, then delegate the actual pass/fail decision to
+`verify-codex-mcp-servers.js`, which performs a real MCP handshake. A bare
+`codex mcp get` success is never treated as success on its own.
+
+### Registration Health and Absolute Paths
+
+MCP registrations point at **absolute paths** to `wrapper/server.js`. Because
+the path is baked into the CLI configuration, the registration can become stale:
+
+- Moving, remounting, or recloning the repository changes the absolute path.
+- A registration that still "looks" configured (metadata checks pass) can point
+  at a wrapper that no longer exists.
+- Metadata verification (`codex mcp get` showing `enabled: true` and the right
+  timeout) does **not** prove the wrapper process can initialize.
+
+The Codex verifier therefore does two things:
+
+1. **File checks** — the wrapper argument must be an absolute path to an
+   existing, readable, regular file whose canonical path matches the expected
+   wrapper.
+2. **Live handshake** — it runs `probe-codex-mcp-startup.js` against the
+   wrapper extracted from the registration and requires a real MCP
+   `initialize` + `tools/list` exchange with a non-empty tool list containing
+   `analyze`.
+
+#### One-time repair
+
+If `codex mcp get chromascape` shows a stale or missing path, repair the
+registration from WSL (Unix) rather than editing `~/.codex/config.toml` by
+hand:
+
+```bash
+cd /mnt/c/dev/ideaprojects/chromascape/scripts/mcp-bridge
+
+codex mcp remove chromascape
+
+codex mcp add chromascape \
+  --env WRAPPER_PROVIDER=codex \
+  --env WRAPPER_CODEX_COMMAND=codex \
+  --env CHROMASCAPE_BASE_URL=http://localhost:8090 \
+  -- node /mnt/c/dev/ideaprojects/chromascape/scripts/mcp-bridge/wrapper/server.js
+
+node set-codex-startup-timeout.js --server chromascape --timeout 120
+```
+
+Then confirm the configuration:
+
+```bash
+codex mcp get chromascape
+```
+
+Expected:
+
+```
+chromascape
+  enabled: true
+  transport: stdio
+  command: node
+  args: /mnt/c/dev/ideaprojects/chromascape/scripts/mcp-bridge/wrapper/server.js
+  startup_timeout_sec: 120
+```
+
+#### Handshake probe
+
+```bash
+cd /mnt/c/dev/ideaprojects/chromascape/scripts/mcp-bridge
+
+node probe-codex-mcp-startup.js \
+  --wrapper /mnt/c/dev/ideaprojects/chromascape/scripts/mcp-bridge/wrapper/server.js \
+  --provider codex \
+  --timeoutSec 120
+```
+
+Expected: exit code `0`, `"ok": true`, and `toolNames` includes `analyze` and
+the Builder Goal MCP tools.
+
+#### After registration changes
+
+- **Reopen Codex** so it reloads the MCP registration; otherwise Codex keeps
+  using the previous (possibly stale) path.
+- ChromaScape does **not** need to be restarted for registration-only changes.
+- The `analyze` smoke test (`npm run probe:mcp:analyze`) is a **separate**
+  provider-execution test and is not part of startup verification.
+
+#### WSL vs Windows paths
+
+- The Unix registration/verification scripts run from WSL and must be given a
+  **WSL path** (for example `/mnt/c/...`).
+- The Windows `.bat` scripts run from Windows and must be given a **Windows
+  path** (for example `C:\...`).
+- Repository scripts (`register-mcp-clients.sh`, `.bat`) and the verifier
+  derive paths from their own location automatically and are preferred over
+  hand-written paths.
 
 ### How It Works
 
@@ -290,6 +391,10 @@ gradlew.bat bootRun
 cd scripts/mcp-bridge
 MCP_STARTUP_TIMEOUT_SEC=120 ./register-mcp-clients.sh
 ```
+
+For a stale or missing wrapper path, follow the exact one-time repair commands
+under [Registration Health and Absolute Paths](#registration-health-and-absolute-paths)
+instead — do not edit `~/.codex/config.toml` by hand.
 
 Then verify (exit code 2 means timeout mismatch, 0 means OK):
 ```bash
@@ -404,7 +509,9 @@ All error outputs include an `exitReason` field for CI diagnosis.
 
 #### Codex MCP Server Verification
 
-The server verification probe checks **registration/configuration only** for required MCP servers in Codex CLI:
+The server verification probe checks each requested Codex MCP server's
+**configuration** and, for ChromaScape, also performs a **live MCP handshake**
+against the wrapper extracted from the registration:
 
 ```bash
 # Check both chromascape and shortcut (default)
@@ -414,24 +521,56 @@ npm run probe:mcp:servers
 # Check only chromascape (backward-compatible)
 npm run probe:mcp:servers:chromascape
 
-# Custom expected timeout
-node verify-codex-mcp-servers.js --servers chromascape,shortcut --expectedChromascapeTimeout 120
+# Full verification with an explicit wrapper and handshake timeout
+node verify-codex-mcp-servers.js \
+  --servers chromascape \
+  --expectedChromascapeWrapper /mnt/c/dev/ideaprojects/chromascape/scripts/mcp-bridge/wrapper/server.js \
+  --expectedChromascapeTimeout 120 \
+  --handshakeTimeoutSec 120
 ```
 
-For each server, the probe validates:
-- `enabled: true`
-- Transport is configured (e.g., `stdio`)
-- For `chromascape`: `startup_timeout_sec` matches the expected value with strict numeric equality (`120 == 120.0`, but `120 != 120.9`)
+CLI options:
+| Option | Meaning | Default |
+|--------|---------|---------|
+| `--servers` | Comma-separated server names to verify | `chromascape,shortcut` |
+| `--expectedChromascapeWrapper` | Absolute path of the expected wrapper | `wrapper/server.js` next to the verifier |
+| `--expectedChromascapeTimeout` | Expected `startup_timeout_sec` | `120` |
+| `--handshakeTimeoutSec` | Timeout for the live MCP handshake | the expected startup timeout |
 
-**Output:** Machine-readable JSON summary:
+For ChromaScape, the verifier requires all of the following:
+
+- registration exists and `enabled: true`
+- `transport: stdio` and `command: node`
+- a wrapper argument that resolves to an absolute path to an existing,
+  readable, regular file
+- the wrapper's canonical path equals `--expectedChromascapeWrapper`
+- `startup_timeout_sec` equals `--expectedChromascapeTimeout`
+- a real `initialize` + `tools/list` handshake succeeds, returns a non-empty
+  tool list, and includes `analyze`
+
+**Output:** Machine-readable JSON with a `runtimeProbe` block for ChromaScape:
 ```json
 {
   "ok": true,
-  "servers": ["chromascape", "shortcut"],
+  "servers": ["chromascape"],
+  "expectedChromascapeWrapper": "/mnt/c/dev/ideaprojects/chromascape/scripts/mcp-bridge/wrapper/server.js",
   "expectedChromascapeTimeout": 120,
+  "handshakeTimeoutSec": 120,
   "serverResults": {
-    "chromascape": { "status": "ok", "enabled": true, "transport": "stdio", "startupTimeoutSec": 120 },
-    "shortcut": { "status": "ok", "enabled": true, "transport": "stdio", "startupTimeoutSec": null }
+    "chromascape": {
+      "status": "ok",
+      "enabled": true,
+      "transport": "stdio",
+      "command": "node",
+      "wrapperPath": "/mnt/c/dev/ideaprojects/chromascape/scripts/mcp-bridge/wrapper/server.js",
+      "startupTimeoutSec": 120,
+      "runtimeProbe": {
+        "ok": true,
+        "connectMs": 7000,
+        "listToolsMs": 7010,
+        "toolNames": ["analyze", "builder_goal_create_session", "..."]
+      }
+    }
   }
 }
 ```
@@ -439,10 +578,12 @@ For each server, the probe validates:
 **Exit codes:**
 | Code | Meaning |
 |------|---------|
-| 0 | All servers configured and valid |
-| 1 | One or more servers missing or unconfigured |
-| 2 | Chromascape startup_timeout_sec mismatch |
+| 0 | All requested registrations and runtime checks pass |
+| 1 | Missing/invalid registration, bad wrapper path, or handshake failure |
+| 2 | ChromaScape startup_timeout_sec mismatch |
 | 6 | Codex CLI invocation or parsing error |
+
+When multiple failures exist, precedence is `6` > `2` > `1` > `0`.
 
 #### Shortcut Runtime Smoke Probe
 
@@ -474,7 +615,11 @@ Classify by the `stage` field in the error output:
 
 | Stage | Meaning | Next Step |
 |-------|---------|-----------|
-| `startup` | MCP transport/wrapper failed | Check wrapper path, node version |
+| `spawn` | Could not spawn the wrapper process | Check wrapper path, node version, permissions |
+| `initialize_connection_closed` | Wrapper exited before completing initialize | Check wrapper path, node version, wrapper stderr |
+| `initialize_timeout` | Wrapper started but never answered initialize | Check wrapper logs; increase `--timeoutSec` |
+| `list_tools_timeout` | Initialize succeeded but `tools/list` never answered | Check wrapper logs; increase `--timeoutSec` |
+| `invalid_tool_list` | `tools/list` returned an empty list | Check the wrapper tool definitions |
 | `analyze` | Provider latency or SDK timeout | Retry with higher `--analyzeTimeoutSec 240` |
 | `provider_error` | Wrapper/provider parsing/auth failure | Check `snippet` field for error details |
 | `runtime` | Unexpected exception | Check `error` field for stack trace |

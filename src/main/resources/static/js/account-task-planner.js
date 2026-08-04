@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '24';
+  static BUILDER_GOAL_BUNDLE_VERSION = '27';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -138,6 +138,7 @@ class AccountTaskPlanner {
     this.builderGoalPayloadInput = document.getElementById('builderGoalPayloadInput');
     this.importBuilderGoalBtn = document.getElementById('importBuilderGoalBtn');
     this.runBuilderGoalBtn = document.getElementById('runBuilderGoalBtn');
+    this.launchBuilderGoalAccountBtn = document.getElementById('launchBuilderGoalAccountBtn');
     this.publishBuilderGoalBtn = document.getElementById('publishBuilderGoalBtn');
     this.runImportedBuilderGoalBtn = document.getElementById('runImportedBuilderGoalBtn');
     this.builderGoalClientStatus = document.getElementById('builderGoalClientStatus');
@@ -292,6 +293,9 @@ class AccountTaskPlanner {
     if (this.runBuilderGoalBtn) {
       this.runBuilderGoalBtn.disabled = true;
     }
+    if (this.launchBuilderGoalAccountBtn) {
+      this.launchBuilderGoalAccountBtn.disabled = true;
+    }
     if (this.runImportedBuilderGoalBtn) {
       this.runImportedBuilderGoalBtn.disabled = true;
     }
@@ -345,6 +349,9 @@ class AccountTaskPlanner {
     }
     if (this.runBuilderGoalBtn) {
       this.runBuilderGoalBtn.addEventListener('click', () => this.runBuilderGoal());
+    }
+    if (this.launchBuilderGoalAccountBtn) {
+      this.launchBuilderGoalAccountBtn.addEventListener('click', () => this.launchBuilderGoalAccount());
     }
     if (this.publishBuilderGoalBtn) {
       this.publishBuilderGoalBtn.addEventListener('click', () => this.publishBuilderGoal());
@@ -949,13 +956,19 @@ class AccountTaskPlanner {
     if (account.source) {
       parts.push(this.formatBuilderGoalAccountSourceLabel(account.source));
     }
-    if (account.online) {
-      parts.push('launcher online');
+    if (account.executorOnline !== undefined) {
+      parts.push(account.executorOnline ? 'executor online' : 'executor offline');
+    } else if (account.online) {
+      parts.push('executor online');
     } else {
-      parts.push('launcher offline');
+      parts.push('executor offline');
     }
-    if (!account.runnable && account.disabledReason) {
-      parts.push(account.disabledReason);
+    if (!account.launchReady) {
+      if (!account.runnable && account.disabledReason) {
+        parts.push(account.disabledReason);
+      } else {
+        parts.push(account.launchDisabledReason || 'setup needed');
+      }
     }
     this.builderGoalAccountSummary.innerHTML =
       `<span class="text-muted">${this.escapeHtml(parts.join(' • '))}</span>`;
@@ -998,8 +1011,12 @@ class AccountTaskPlanner {
     if (account.source) {
       tags.push(this.formatBuilderGoalAccountSourceLabel(account.source));
     }
-    tags.push(account.online ? 'launcher online' : 'launcher offline');
-    if (!account.runnable) {
+    if (account.executorOnline !== undefined) {
+      tags.push(account.executorOnline ? 'executor online' : 'executor offline');
+    } else {
+      tags.push(account.online ? 'executor online' : 'executor offline');
+    }
+    if (!account.launchReady) {
       tags.push('setup needed');
     }
     return tags.length ? `${label} • ${tags.join(' • ')}` : label;
@@ -1362,21 +1379,52 @@ class AccountTaskPlanner {
       return;
     }
 
+    const executorOnline =
+      selectedAccount.executorOnline !== undefined
+        ? selectedAccount.executorOnline === true
+        : selectedAccount.online === true;
+
     if (!selectedAccount.runnable) {
       this.builderGoalClientStatus.innerHTML =
-        `<span class="text-warning">${this.escapeHtml(selectedAccount.disabledReason || 'This account is visible but not launch-ready yet.')}</span>`;
+        `<span class="text-warning">${this.escapeHtml(selectedAccount.disabledReason || 'This account is visible but not runnable yet.')}</span>`;
+      return;
+    }
+
+    if (!selectedAccount.launchReady) {
+      const missingCredentialsHint =
+        'Add the account email and password in launcher control to enable Run Task and Launch Account.';
+      const reason = selectedAccount.launchDisabledReason
+        ? `${selectedAccount.launchDisabledReason}. ${missingCredentialsHint}`
+        : missingCredentialsHint;
+      if (executorOnline) {
+        this.builderGoalClientStatus.innerHTML =
+          `<span class="text-warning">${this.escapeHtml(reason)} Publish Task is available now: the matching Micro6 executor is online, so you can publish to the already-running client without launcher-control credentials.</span>`;
+      } else {
+        this.builderGoalClientStatus.innerHTML =
+          `<span class="text-warning">${this.escapeHtml(reason)} No dispatch-ready Micro6 executor is online for this account, so Publish Task is unavailable until an executor heartbeats or you launch one.</span>`;
+      }
       return;
     }
 
     if (!selectedMachine) {
-      this.builderGoalClientStatus.innerHTML =
-        '<span class="text-warning">No local launch host is available for Builder Goal Runner yet.</span>';
+      if (executorOnline) {
+        this.builderGoalClientStatus.innerHTML =
+          '<span class="text-warning">No local launch host is available for Builder Goal Runner yet. Run Task and Launch Account are unavailable, but Publish Task can still send tasks to the already-running Micro6 executor.</span>';
+      } else {
+        this.builderGoalClientStatus.innerHTML =
+          '<span class="text-warning">No local launch host is available for Builder Goal Runner yet.</span>';
+      }
       return;
     }
 
     if (!selectedMachine.builderGoalRunnable) {
-      this.builderGoalClientStatus.innerHTML =
-        `<span class="text-warning">${this.escapeHtml(selectedMachine.builderGoalDisabledReason || 'The selected launcher machine is not ready for local Builder Goal launches.')}</span>`;
+      if (executorOnline) {
+        this.builderGoalClientStatus.innerHTML =
+          `<span class="text-warning">${this.escapeHtml(selectedMachine.builderGoalDisabledReason || 'The selected launcher machine is not ready for local Builder Goal launches.')} Run Task and Launch Account are unavailable, but Publish Task can still send tasks to the already-running Micro6 executor.</span>`;
+      } else {
+        this.builderGoalClientStatus.innerHTML =
+          `<span class="text-warning">${this.escapeHtml(selectedMachine.builderGoalDisabledReason || 'The selected launcher machine is not ready for local Builder Goal launches.')}</span>`;
+      }
       return;
     }
 
@@ -1408,6 +1456,9 @@ class AccountTaskPlanner {
     if (!this.runBuilderGoalBtn) return;
     if (this.builderGoalBundleMismatch) {
       this.runBuilderGoalBtn.disabled = true;
+      if (this.launchBuilderGoalAccountBtn) {
+        this.launchBuilderGoalAccountBtn.disabled = true;
+      }
       if (this.publishBuilderGoalBtn) {
         this.publishBuilderGoalBtn.disabled = true;
       }
@@ -1423,28 +1474,61 @@ class AccountTaskPlanner {
     const importedTaskKey =
       !parsedConfig.error && parsedConfig.taskKey ? parsedConfig.taskKey : null;
     const world = this.getBuilderGoalWorldValue();
-    const canPrimaryRun = Boolean(
-      selectedAccount &&
-        selectedAccount.runnable &&
-        selectedMachine &&
-        selectedMachine.builderGoalRunnable &&
-        (selectedTask || importedTaskKey) &&
-        world
-    );
+    const availability = AccountTaskPlanner.computeBuilderGoalActionAvailability({
+      account: selectedAccount,
+      machine: selectedMachine,
+      hasTask: Boolean(selectedTask || importedTaskKey),
+      hasWorld: Boolean(world),
+      importedRunnable: Boolean(this.importedBuilderGoal?.result?.runnableNow)
+    });
+    const canLaunchAccount = availability.canLaunchAccount;
+    const canPrimaryRun = availability.canRunTask;
+    const canPublish = availability.canPublishTask;
     this.runBuilderGoalBtn.disabled = !canPrimaryRun;
+    if (this.launchBuilderGoalAccountBtn) {
+      this.launchBuilderGoalAccountBtn.disabled = !canLaunchAccount;
+    }
     if (this.publishBuilderGoalBtn) {
-      this.publishBuilderGoalBtn.disabled = !canPrimaryRun;
+      this.publishBuilderGoalBtn.disabled = !canPublish;
     }
     if (this.runImportedBuilderGoalBtn) {
-      this.runImportedBuilderGoalBtn.disabled = !Boolean(
-        selectedAccount &&
-          selectedAccount.runnable &&
-          selectedMachine &&
-          selectedMachine.builderGoalRunnable &&
-          world &&
-          this.importedBuilderGoal?.result?.runnableNow
-      );
+      this.runImportedBuilderGoalBtn.disabled = !availability.canRunImported;
     }
+  }
+
+  /**
+   * Pure helper computing Builder Goal action availability from the planner's live state.
+   *
+   * <p>Action rules intentionally live here so Launch / Run / Publish / Imported cannot drift
+   * independently. Publish never depends on launcher credentials or launcher-machine readiness.
+   *
+   * @returns {{executorOnline: boolean, machineRunnable: boolean, canLaunchAccount: boolean,
+   *   canRunTask: boolean, canPublishTask: boolean, canRunImported: boolean}}
+   */
+  static computeBuilderGoalActionAvailability({ account, machine, hasTask, hasWorld, importedRunnable }) {
+    const executorOnline =
+      account?.executorOnline !== undefined
+        ? account.executorOnline === true
+        : account?.online === true;
+    const runnable = Boolean(account && account.runnable);
+    const launchReady = runnable && Boolean(account.launchReady);
+    const machineRunnable = Boolean(
+      machine && machine.builderGoalRunnable
+    );
+    const canLaunchAccount = launchReady && machineRunnable && Boolean(hasWorld);
+    const canRunTask = canLaunchAccount && Boolean(hasTask);
+    const canPublishTask =
+      runnable && executorOnline && Boolean(hasTask) && Boolean(hasWorld);
+    const canRunImported =
+      canLaunchAccount && Boolean(hasWorld) && Boolean(importedRunnable);
+    return {
+      executorOnline,
+      machineRunnable,
+      canLaunchAccount,
+      canRunTask,
+      canPublishTask,
+      canRunImported
+    };
   }
 
   renderBuilderGoalRuns() {
@@ -1733,6 +1817,113 @@ class AccountTaskPlanner {
     `;
   }
 
+  async launchBuilderGoalAccount() {
+    if (this.builderGoalBundleMismatch) {
+      this.renderBuilderGoalClientStatus(
+        'Hard refresh this page to load the latest Builder Goal Runner before launching an account.',
+        'danger'
+      );
+      return;
+    }
+    const selectedAccount = this.getSelectedBuilderGoalAccount();
+    const selectedMachine = this.getSelectedBuilderGoalMachine();
+    const world = this.getBuilderGoalWorldValue();
+    if (!selectedAccount) {
+      alert('Select an account first.');
+      return;
+    }
+    if (!selectedAccount.runnable) {
+      alert(selectedAccount.disabledReason || 'This account cannot be launched yet.');
+      return;
+    }
+    if (!selectedAccount.launchReady) {
+      alert(
+        (selectedAccount.launchDisabledReason || 'This account is not launch-ready yet.') +
+          ' Add the account email and password in launcher control.'
+      );
+      return;
+    }
+    if (!selectedMachine) {
+      alert('Select a launcher machine first.');
+      return;
+    }
+    if (!selectedMachine.builderGoalRunnable) {
+      alert(
+        selectedMachine.builderGoalDisabledReason ||
+          'This launcher machine cannot run local Builder Goal launches yet.'
+      );
+      return;
+    }
+    if (!world) {
+      const message = 'Enter a valid world between 300 and 700.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
+      return;
+    }
+
+    if (this.launchBuilderGoalAccountBtn) {
+      this.launchBuilderGoalAccountBtn.disabled = true;
+      this.launchBuilderGoalAccountBtn.innerHTML =
+        '<i class="bi bi-hourglass me-1"></i>Launching...';
+    }
+    this.renderBuilderGoalClientStatus(
+      `Launching ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} on ${selectedMachine.displayName || selectedMachine.machineUuid} in world ${world}...`,
+      'info'
+    );
+    console.info('[AccountTaskPlanner] Launch Account clicked', {
+      accountId: selectedAccount.accountId || null,
+      launcherMachineUuid: selectedMachine.machineUuid || null,
+      world
+    });
+
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(
+      () => controller.abort(),
+      AccountTaskPlanner.BUILDER_GOAL_PUBLISH_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetch('/api/debug/builder-goals/launch-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          accountId: selectedAccount.accountId,
+          launcherMachineUuid: selectedMachine.machineUuid,
+          world
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await Promise.all([
+        this.loadBuilderGoalAccounts(),
+        this.loadBuilderGoalMachines(),
+        this.loadBuilderGoalRuns()
+      ]);
+      this.renderBuilderGoalClientStatus(
+        `Launch completed for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}.`,
+        'success'
+      );
+    } catch (error) {
+      console.error('Failed to launch builder goal account:', error);
+      const timedOut = error && error.name === 'AbortError';
+      const message = timedOut
+        ? 'Account launch timed out before launcher control confirmed success.'
+        : error.message;
+      this.renderBuilderGoalClientStatus(`Failed to launch account: ${message}`, 'danger');
+      alert('Failed to launch account: ' + message);
+    } finally {
+      clearTimeout(timeoutHandle);
+      if (this.launchBuilderGoalAccountBtn) {
+        this.launchBuilderGoalAccountBtn.innerHTML =
+          '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
+      }
+      this.updateBuilderGoalRunButtonState();
+    }
+  }
+
   async runBuilderGoal() {
     if (this.builderGoalBundleMismatch) {
       this.renderBuilderGoalClientStatus(
@@ -1749,6 +1940,13 @@ class AccountTaskPlanner {
     }
     if (!selectedAccount.runnable) {
       alert(selectedAccount.disabledReason || 'This account cannot be launched yet.');
+      return;
+    }
+    if (!selectedAccount.launchReady) {
+      alert(
+        (selectedAccount.launchDisabledReason || 'This account is not launch-ready yet.') +
+          ' Add the account email and password in launcher control.'
+      );
       return;
     }
     if (!selectedMachine) {
@@ -1919,7 +2117,6 @@ class AccountTaskPlanner {
       return;
     }
     const selectedAccount = this.getSelectedBuilderGoalAccount();
-    const selectedMachine = this.getSelectedBuilderGoalMachine();
     if (!selectedAccount) {
       alert('Select an account first.');
       return;
@@ -1928,15 +2125,15 @@ class AccountTaskPlanner {
       alert(selectedAccount.disabledReason || 'This account cannot be published to yet.');
       return;
     }
-    if (!selectedMachine) {
-      alert('Select a launcher machine first.');
-      return;
-    }
-    if (!selectedMachine.builderGoalRunnable) {
-      alert(
-        selectedMachine.builderGoalDisabledReason ||
-          'This launcher machine is not ready for Builder Goal publishing yet.'
-      );
+    const executorOnline =
+      selectedAccount.executorOnline !== undefined
+        ? selectedAccount.executorOnline === true
+        : selectedAccount.online === true;
+    if (!executorOnline) {
+      const message =
+        'No dispatch-ready Micro6 executor is online for this account. Use Launch Account or Run Task first.';
+      this.renderBuilderGoalClientStatus(message, 'danger');
+      alert(message);
       return;
     }
 
@@ -1986,7 +2183,7 @@ class AccountTaskPlanner {
     );
     console.info('[AccountTaskPlanner] Publish Task clicked', {
       accountId: selectedAccount.accountId || null,
-      launcherMachineUuid: selectedMachine.machineUuid || null,
+      launcherMachineUuid: this.getSelectedBuilderGoalMachine()?.machineUuid || null,
       taskKey: selectedTask.task_key || null,
       world
     });
@@ -2006,7 +2203,6 @@ class AccountTaskPlanner {
         signal: controller.signal,
         body: JSON.stringify({
           accountId: selectedAccount.accountId,
-          launcherMachineUuid: selectedMachine.machineUuid,
           world,
           taskKey: selectedTask.task_key,
           settings,
@@ -2077,6 +2273,13 @@ class AccountTaskPlanner {
     }
     if (!selectedAccount.runnable) {
       alert(selectedAccount.disabledReason || 'This account cannot be launched yet.');
+      return;
+    }
+    if (!selectedAccount.launchReady) {
+      alert(
+        (selectedAccount.launchDisabledReason || 'This account is not launch-ready yet.') +
+          ' Add the account email and password in launcher control.'
+      );
       return;
     }
     if (!selectedMachine) {
@@ -5577,7 +5780,13 @@ class AccountTaskPlanner {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  window.accountTaskPlanner = new AccountTaskPlanner();
-  window.accountTaskPlanner.init();
-});
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = AccountTaskPlanner;
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    window.accountTaskPlanner = new AccountTaskPlanner();
+    window.accountTaskPlanner.init();
+  });
+}

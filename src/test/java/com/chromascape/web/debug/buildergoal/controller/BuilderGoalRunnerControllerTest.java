@@ -273,4 +273,202 @@ class BuilderGoalRunnerControllerTest {
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(body).containsKey("error");
   }
+
+  @Test
+  void launchAccount_delegatesToServiceAndReturnsOk() throws Exception {
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("accepted", true);
+    result.put("accountId", "hash-1");
+    result.put("launcherMachineUuid", "machine-1");
+    result.put("world", 360);
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360))
+        .thenReturn(result);
+
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "world": 360
+            }
+            """);
+    ResponseEntity<Object> response = controller.launchAccount(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.get("accepted")).isEqualTo(true);
+    assertThat(body.get("world")).isEqualTo(360);
+    verify(builderGoalRunnerService).launchAccount("hash-1", "machine-1", 360);
+  }
+
+  @Test
+  void launchAccount_returnsBadRequestWhenAccountMissing() throws Exception {
+    when(builderGoalRunnerService.launchAccount(null, "machine-1", null))
+        .thenThrow(new IllegalArgumentException("accountId is required"));
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "launcherMachineUuid": "machine-1"
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.launchAccount(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "accountId is required");
+  }
+
+  @Test
+  void launchAccount_returnsConflictWhenLaunchCredentialsAreMissing() throws Exception {
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360))
+        .thenThrow(
+            new IllegalStateException(
+                "Selected launcher account is missing an email for local Micro6 relaunch"));
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "world": 360
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.launchAccount(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body)
+        .containsEntry("error", "Selected launcher account is missing an email for local Micro6 relaunch");
+  }
+
+  @Test
+  void launchAccount_returnsBadRequestWhenWorldMissing() throws Exception {
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", null))
+        .thenThrow(new IllegalArgumentException("world must be between 300 and 700"));
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1"
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.launchAccount(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "world must be between 300 and 700");
+  }
+
+  @Test
+  void launchAccount_returnsBadRequestWhenWorldBelowRange() throws Exception {
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 299))
+        .thenThrow(new IllegalArgumentException("world must be between 300 and 700"));
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "world": 299
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.launchAccount(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "world must be between 300 and 700");
+  }
+
+  @Test
+  void launchAccount_returnsBadRequestWhenWorldAboveRange() throws Exception {
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 701))
+        .thenThrow(new IllegalArgumentException("world must be between 300 and 700"));
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "world": 701
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.launchAccount(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "world must be between 300 and 700");
+  }
+
+  @Test
+  void runPayload_returnsConflictWhenLaunchCredentialsAreMissing() throws Exception {
+    when(builderGoalRunnerService.startCatalogTaskRun(
+            eq("hash-1"), eq("machine-1"), eq("configurable_woodcutting"), any(), any(), eq(360), any()))
+        .thenThrow(
+            new IllegalStateException(
+                "Selected launcher account is missing a password for local Micro6 relaunch"));
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "taskKey": "configurable_woodcutting",
+              "world": 360
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.runPayload(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body)
+        .containsEntry("error", "Selected launcher account is missing a password for local Micro6 relaunch");
+  }
+
+  @Test
+  void publishTask_returnsConflictWhenDisabledAccountRejectsPublish() throws Exception {
+    when(builderGoalRunnerService.publishOnly(
+            eq("hash-1"),
+            eq("machine-1"),
+            eq("configurable_woodcutting"),
+            any(),
+            eq(360),
+            any(),
+            anyBoolean(),
+            any()))
+        .thenThrow(new IllegalStateException("Selected launcher account is disabled"));
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "taskKey": "configurable_woodcutting",
+              "world": 360
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.publishTask(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "Selected launcher account is disabled");
+  }
 }

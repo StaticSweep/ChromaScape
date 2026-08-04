@@ -101,6 +101,24 @@ public class BuilderGoalRunnerController {
     }
   }
 
+  @PostMapping("/launch-account")
+  public ResponseEntity<Object> launchAccount(@RequestBody JsonNode payload) {
+    try {
+      String accountId = textValue(payload.path("accountId"));
+      String launcherMachineUuid = textValue(payload.path("launcherMachineUuid"));
+      Integer world = intValue(payload.path("world"));
+      return ResponseEntity.ok(
+          builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", "Failed to launch builder goal account", "details", e.getMessage()));
+    }
+  }
+
   @PostMapping("/run")
   public ResponseEntity<Object> runPayload(@RequestBody JsonNode payload) {
     try {

@@ -88,10 +88,11 @@ public class BuilderGoalAccountCatalogService {
 
   private Map<String, Object> toSummary(AccountDefinition account) {
     Micro6OnlineClientRegistryService.TargetClient matchedClient = findMatchingClient(account);
-    boolean online = matchedClient != null;
-    boolean enabled = account.enabled();
-    boolean banned = isBanned(account.status());
-    boolean runnable = enabled && !banned;
+    boolean executorOnline = matchedClient != null;
+    boolean runnable = account.isRunnable();
+    boolean hasEmail = account.hasEmail();
+    boolean hasPassword = account.hasPassword();
+    boolean launchReady = account.isLaunchReady();
 
     Map<String, Object> summary = new LinkedHashMap<>();
     summary.put("accountId", account.accountId());
@@ -100,11 +101,16 @@ public class BuilderGoalAccountCatalogService {
     summary.put("displayName", account.displayName());
     summary.put("email", account.email());
     summary.put("source", account.source());
-    summary.put("online", online);
-    summary.put("enabled", enabled);
+    summary.put("online", executorOnline);
+    summary.put("executorOnline", executorOnline);
+    summary.put("enabled", account.enabled());
     summary.put("status", account.status());
     summary.put("runnable", runnable);
-    summary.put("disabledReason", determineDisabledReason(account));
+    summary.put("hasEmail", hasEmail);
+    summary.put("hasPassword", hasPassword);
+    summary.put("launchReady", launchReady);
+    summary.put("disabledReason", account.determineDisabledReason());
+    summary.put("launchDisabledReason", account.determineLaunchDisabledReason());
     summary.put("launcherBaseUrl", launcherControlService.getBaseUrl());
     return summary;
   }
@@ -116,17 +122,7 @@ public class BuilderGoalAccountCatalogService {
         .orElse(null);
   }
 
-  private String determineDisabledReason(AccountDefinition account) {
-    if (!account.enabled()) {
-      return "Account is disabled in launcher control";
-    }
-    if (isBanned(account.status())) {
-      return "Account is banned in launcher control";
-    }
-    return null;
-  }
-
-  private boolean isBanned(String status) {
+  private static boolean isBanned(String status) {
     String normalized = normalize(status);
     return "banned".equals(normalized)
         || "temp_banned".equals(normalized)
@@ -135,7 +131,7 @@ public class BuilderGoalAccountCatalogService {
         || "temp_ban".equals(normalized);
   }
 
-  private String normalize(String value) {
+  private static String normalize(String value) {
     if (value == null || value.isBlank()) {
       return null;
     }
@@ -166,6 +162,48 @@ public class BuilderGoalAccountCatalogService {
       Objects.requireNonNull(displayName, "displayName");
       Objects.requireNonNull(source, "source");
       metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+    }
+
+    public boolean isRunnable() {
+      return enabled() && !isBanned(status());
+    }
+
+    public String determineDisabledReason() {
+      if (!enabled()) {
+        return "Account is disabled in launcher control";
+      }
+      if (isBanned(status())) {
+        return "Account is banned in launcher control";
+      }
+      return null;
+    }
+
+    public boolean hasEmail() {
+      return email() != null && !email().isBlank();
+    }
+
+    public boolean hasPassword() {
+      return password() != null && !password().isBlank();
+    }
+
+    public boolean isLaunchReady() {
+      return isRunnable() && hasEmail() && hasPassword();
+    }
+
+    public String determineLaunchDisabledReason() {
+      if (!enabled()) {
+        return "Account is disabled in launcher control";
+      }
+      if (isBanned(status())) {
+        return "Account is banned in launcher control";
+      }
+      if (!hasEmail()) {
+        return "Add an email to this account in launcher control";
+      }
+      if (!hasPassword()) {
+        return "Add a password to this account in launcher control";
+      }
+      return null;
     }
 
     public String password() {

@@ -189,6 +189,49 @@ public class BuilderGoalRunnerService {
     return accountCatalogService.listAccounts();
   }
 
+  public Map<String, Object> launchAccount(
+      String accountId, String launcherMachineUuid, Integer world) {
+    if (accountId == null || accountId.isBlank()) {
+      throw new IllegalArgumentException("accountId is required");
+    }
+    if (launcherMachineUuid == null || launcherMachineUuid.isBlank()) {
+      throw new IllegalArgumentException("launcherMachineUuid is required");
+    }
+
+    BuilderGoalAccountCatalogService.AccountDefinition selectedAccount =
+        resolveSelectedAccount(accountId);
+    requireLaunchReadyAccount(selectedAccount);
+    requireValidWorld(world);
+
+    try {
+      Micro6TargetPreparationService.PreparationResult preparationResult =
+          targetPreparationService.ensureReady(
+              new Micro6TargetPreparationService.PreparationRequest(
+                  firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId()),
+                  selectedAccount.accountHash(),
+                  selectedAccount.displayName(),
+                  selectedAccount.email(),
+                  selectedAccount.password(),
+                  world,
+                  launcherMachineUuid,
+                  null));
+
+      Map<String, Object> response = new LinkedHashMap<>();
+      response.put("accepted", true);
+      response.put("accountId", selectedAccount.accountId());
+      response.put("accountHash", selectedAccount.accountHash());
+      response.put("accountName", selectedAccount.displayName());
+      response.put("launcherMachineUuid", launcherMachineUuid);
+      response.put("world", world);
+      response.put("targetClient", buildTargetMetadata(preparationResult.targetClient()));
+      response.put("targetPreparation", preparationResult.metadata());
+      return response;
+    } catch (Micro6TargetPreparationService.PreparationException e) {
+      throw new IllegalStateException(
+          firstNonBlank(e.getMessage(), "Failed to launch local Micro6 workspace"), e);
+    }
+  }
+
   @Transactional(readOnly = true)
   public Map<String, Object> listCatalog(boolean refresh) {
     BuilderGoalCatalogSnapshot snapshot = getBuilderGoalCatalogSnapshot(refresh);
@@ -385,6 +428,7 @@ public class BuilderGoalRunnerService {
     }
     BuilderGoalLauncherControlService.LauncherMachine selectedMachine =
         resolveSelectedMachine(selectedMachineUuid);
+    requireLaunchReadyAccount(selectedAccount);
     CatalogValidationResult catalogValidation =
         resolvePublishCatalogValidation(normalized.taskKey(), null);
     if (catalogValidation.rejectPublish()) {
@@ -509,6 +553,7 @@ public class BuilderGoalRunnerService {
     if (selectedAccount == null) {
       throw new IllegalArgumentException("Select a launcher account first");
     }
+    requireRunnableAccount(selectedAccount);
     String launchConflictReason =
         findActiveLaunchConflictReason(
             firstNonBlank(selectedAccount.accountId(), selectedAccount.accountHash()),
@@ -522,6 +567,9 @@ public class BuilderGoalRunnerService {
     if (allowLaunchFallback && selectedMachine == null) {
       throw new IllegalArgumentException(
           "launcherMachineUuid is required when launch fallback is enabled");
+    }
+    if (allowLaunchFallback) {
+      requireLaunchReadyAccount(selectedAccount);
     }
     Optional<Micro6OnlineClientRegistryService.TargetClient> matchingClient =
         targetBaseUrl == null || targetBaseUrl.isBlank()
@@ -3288,6 +3336,14 @@ public class BuilderGoalRunnerService {
     response.put("launcherOnline", Boolean.TRUE.equals(accountMetadata.get("online")));
     response.put("accountRunnable", Boolean.TRUE.equals(accountMetadata.get("runnable")));
     response.put("accountDisabledReason", stringValueAllowBlank(accountMetadata.get("disabled_reason")));
+    response.put(
+        "accountExecutorOnline", Boolean.TRUE.equals(accountMetadata.get("executorOnline")));
+    response.put("accountHasEmail", Boolean.TRUE.equals(accountMetadata.get("hasEmail")));
+    response.put("accountHasPassword", Boolean.TRUE.equals(accountMetadata.get("hasPassword")));
+    response.put("accountLaunchReady", Boolean.TRUE.equals(accountMetadata.get("launchReady")));
+    response.put(
+        "accountLaunchDisabledReason",
+        stringValueAllowBlank(accountMetadata.get("launchDisabledReason")));
     response.put("configAvailable", configAvailable);
     response.put("canRerun", canRerun);
     response.put("rerunBlockedReason", rerunBlockedReason);
@@ -3999,6 +4055,44 @@ public class BuilderGoalRunnerService {
         || "temp_ban".equals(lowered);
   }
 
+  /**
+   * Validates generic account eligibility for publishing to an existing executor. Missing
+   * credentials do not block publishing because a publish-only path never relaunches Micro6.
+   */
+  private void requireValidWorld(Integer world) {
+    if (world == null || world < 300 || world > 700) {
+      throw new IllegalArgumentException("world must be between 300 and 700");
+    }
+  }
+
+  private void requireRunnableAccount(
+      BuilderGoalAccountCatalogService.AccountDefinition selectedAccount) {
+    if (selectedAccount == null) {
+      throw new IllegalArgumentException("Select a launcher account first");
+    }
+    if (!selectedAccount.enabled()) {
+      throw new IllegalStateException("Selected launcher account is disabled");
+    }
+    if (isBannedStatus(selectedAccount.status())) {
+      throw new IllegalStateException("Selected launcher account is banned");
+    }
+  }
+
+  /**
+   * Validates launch readiness for paths that relaunch a local Micro6 workspace. Rejects the
+   * request before any iteration is persisted so configuration errors never create recovery runs.
+   */
+  private void requireLaunchReadyAccount(
+      BuilderGoalAccountCatalogService.AccountDefinition selectedAccount) {
+    requireRunnableAccount(selectedAccount);
+    if (!selectedAccount.hasEmail()) {
+      throw new IllegalStateException("Selected launcher account is missing an email for local Micro6 relaunch");
+    }
+    if (!selectedAccount.hasPassword()) {
+      throw new IllegalStateException("Selected launcher account is missing a password for local Micro6 relaunch");
+    }
+  }
+
   @SuppressWarnings("unchecked")
   private Map<String, Object> readTargetMetadata(Map<String, Object> taskMetadata) {
     if (taskMetadata == null) {
@@ -4088,22 +4182,28 @@ public class BuilderGoalRunnerService {
   private Map<String, Object> buildAccountMetadata(
       BuilderGoalAccountCatalogService.AccountDefinition account,
       BuilderGoalLauncherControlService.LauncherMachine machine) {
+    boolean executorOnline = findRunnableClientForAccount(account).isPresent();
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("account_id", account.accountId());
     metadata.put("account_hash", account.accountHash());
     metadata.put("account_name", account.displayName());
     metadata.put("display_name", account.displayName());
     metadata.put("email", account.email());
-    metadata.put("has_password", account.password() != null);
+    metadata.put("has_password", account.hasPassword());
+    metadata.put("hasEmail", account.hasEmail());
+    metadata.put("hasPassword", account.hasPassword());
+    metadata.put("runnable", account.isRunnable());
+    metadata.put("disabled_reason", account.determineDisabledReason());
+    metadata.put("launchReady", account.isLaunchReady());
+    metadata.put("launchDisabledReason", account.determineLaunchDisabledReason());
+    metadata.put("executorOnline", executorOnline);
+    metadata.put("online", executorOnline);
     metadata.put("source", account.source());
     metadata.put("enabled", account.enabled());
     metadata.put("status", account.status());
     metadata.put("launcher_machine_uuid", machine != null ? machine.machineUuid() : null);
     metadata.put("launcher_machine_name", machine != null ? machine.displayName() : null);
     metadata.put("launcher_base_url", account.metadata().get("launcherBaseUrl"));
-    metadata.put("online", account.metadata().get("online"));
-    metadata.put("runnable", account.metadata().get("runnable"));
-    metadata.put("disabled_reason", account.metadata().get("disabledReason"));
     return metadata;
   }
 

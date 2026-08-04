@@ -7,7 +7,18 @@ REM
 REM Verifies that ChromaScape is registered as an MCP server with
 REM Claude CLI and/or Codex CLI.
 REM
+REM For Codex, registration metadata is displayed for operator visibility, but
+REM the actual pass/fail decision is delegated to verify-codex-mcp-servers.js,
+REM which also performs a real MCP handshake. A plain `codex mcp get` result is
+REM never treated as success on its own.
+REM
 REM Usage: test-mcp-registration.bat
+REM
+REM Exit codes:
+REM   0 = Codex verified via handshake and/or Claude registered
+REM   1 = neither CLI registered, or Codex verification failed (other state)
+REM   2 = Codex startup_timeout_sec mismatch (verifier)
+REM   6 = Codex CLI invocation or parsing error (verifier)
 REM
 REM ==============================================================================
 
@@ -18,9 +29,14 @@ echo.
 
 REM Track status
 set CLAUDE_FOUND=0
-set CODEX_FOUND=0
-set TIMEOUT_MISMATCH=0
+set CODEX_OK=0
+set VERIFIER_EXIT=0
 if "%EXPECTED_STARTUP_TIMEOUT_SEC%"=="" set "EXPECTED_STARTUP_TIMEOUT_SEC=120"
+
+REM Derive paths from this script's location (no hard-coded drives)
+set "SCRIPT_DIR=%~dp0"
+set "WRAPPER=%SCRIPT_DIR%mcp-bridge\wrapper\server.js"
+set "VERIFIER=%SCRIPT_DIR%mcp-bridge\verify-codex-mcp-servers.js"
 
 REM Check Claude CLI
 echo Checking Claude CLI registration...
@@ -68,45 +84,32 @@ if %errorlevel% neq 0 (
 )
 
 echo      Codex CLI detected
-codex mcp get chromascape >nul 2>nul
-if %errorlevel% equ 0 (
-    REM Verify configuration shape
-    set TRANSPORT_CHECK=
-    set ENABLED_CHECK=
-    set TIMEOUT_CHECK=
-    set ACTUAL_TIMEOUT=
-    for /f "tokens=*" %%a in ('codex mcp get chromascape 2^>nul ^| findstr /i "transport: stdio"') do set "TRANSPORT_CHECK=%%a"
-    for /f "tokens=*" %%b in ('codex mcp get chromascape 2^>nul ^| findstr /i "enabled: true"') do set "ENABLED_CHECK=%%b"
-    for /f "tokens=*" %%c in ('codex mcp get chromascape 2^>nul ^| findstr /i "startup_timeout_sec:"') do set "TIMEOUT_CHECK=%%c"
-    for /f "tokens=3" %%d in ('codex mcp get chromascape 2^>nul ^| findstr /i "startup_timeout_sec:"') do set "ACTUAL_TIMEOUT=%%d"
-    if defined TRANSPORT_CHECK if defined ENABLED_CHECK if defined TIMEOUT_CHECK (
-        if defined ACTUAL_TIMEOUT (
-            REM Strict numeric comparison via PowerShell (120 == 120.0, 120 != 120.9)
-            set "TIMEOUT_MATCH="
-            for /f %%r in ('powershell -NoProfile -Command "try { $a=[double]('!ACTUAL_TIMEOUT!'); $b=[double]('!EXPECTED_STARTUP_TIMEOUT_SEC!'); if ([math]::Abs($a - $b) -le 1e-9) { '1' } else { '0' } } catch { 'ERR' }"') do set "TIMEOUT_MATCH=%%r"
-            if not "!TIMEOUT_MATCH!"=="1" (
-                echo [!!]  startup_timeout_sec mismatch: expected=!EXPECTED_STARTUP_TIMEOUT_SEC!, actual=!ACTUAL_TIMEOUT!
-                set TIMEOUT_MISMATCH=1
-            ) else (
-                echo [OK]  ChromaScape registered with Codex CLI ^(verified, timeout=!ACTUAL_TIMEOUT!s^)
-            )
-        ) else (
-            echo [OK]  ChromaScape registered with Codex CLI ^(verified^)
-        )
-        set CODEX_FOUND=1
-    ) else (
-        echo [!!]  ChromaScape found but configuration invalid
-        echo       Expected: transport: stdio, enabled: true, startup_timeout_sec: ^<number^>
-    )
-) else (
-    echo [--] ChromaScape NOT registered with Codex CLI
+echo      Registration details:
+codex mcp get chromascape 2>nul
+echo.
+
+echo      Running verification (configuration + live MCP handshake)...
+if not exist "%WRAPPER%" (
+    echo [!!]  Wrapper not found at: %WRAPPER%
+    set VERIFIER_EXIT=1
+    goto :codex_done
+)
+if not exist "%VERIFIER%" (
+    echo [!!]  Verifier not found at: %VERIFIER%
+    set VERIFIER_EXIT=1
+    goto :codex_done
 )
 
-:get_codex_details
-if %CODEX_FOUND% equ 1 (
-    echo.
-    echo      Registration details:
-    codex mcp get chromascape 2>nul
+node "%VERIFIER%" --servers chromascape --expectedChromascapeWrapper "%WRAPPER%" --expectedChromascapeTimeout "%EXPECTED_STARTUP_TIMEOUT_SEC%" --handshakeTimeoutSec "%EXPECTED_STARTUP_TIMEOUT_SEC%"
+set VERIFIER_EXIT=%errorlevel%
+
+:codex_done
+if %VERIFIER_EXIT% equ 0 (
+    echo [OK]  ChromaScape registered with Codex CLI ^(verified, timeout=%EXPECTED_STARTUP_TIMEOUT_SEC%s^)
+    set CODEX_OK=1
+) else (
+    echo [!!]  ChromaScape Codex registration verification failed ^(exit %VERIFIER_EXIT%^)
+    echo       Verify the wrapper path, the registration, and that the MCP handshake succeeds.
 )
 
 echo.
@@ -130,12 +133,8 @@ if %CLAUDE_FOUND% equ 1 (
 
 echo.
 
-if %CODEX_FOUND% equ 1 (
+if %CODEX_OK% equ 1 (
     echo [OK] Codex CLI: ChromaScape registered
-    if %TIMEOUT_MISMATCH% equ 1 (
-        echo [!!]          startup_timeout_sec does not match expected=%EXPECTED_STARTUP_TIMEOUT_SEC%
-        echo               Re-register with: set MCP_STARTUP_TIMEOUT_SEC=%EXPECTED_STARTUP_TIMEOUT_SEC%
-    )
 ) else (
     where codex >nul 2>nul
     if %errorlevel% neq 0 (
@@ -159,7 +158,7 @@ if %CLAUDE_FOUND% equ 0 (
     )
 )
 
-if %CODEX_FOUND% equ 0 (
+if %CODEX_OK% equ 0 (
     where codex >nul 2>nul
     if %errorlevel% equ 0 (
         echo.
@@ -170,13 +169,19 @@ if %CODEX_FOUND% equ 0 (
     )
 )
 
-REM Exit with appropriate code
+REM Exit with appropriate code: propagate verifier failure first
+if %CODEX_OK% equ 0 (
+    where codex >nul 2>nul
+    if %errorlevel% equ 0 (
+        if %VERIFIER_EXIT% equ 0 set VERIFIER_EXIT=1
+        exit /b %VERIFIER_EXIT%
+    )
+)
+
 if %CLAUDE_FOUND% equ 1 (
-    if %TIMEOUT_MISMATCH% equ 1 exit /b 2
     exit /b 0
 )
-if %CODEX_FOUND% equ 1 (
-    if %TIMEOUT_MISMATCH% equ 1 exit /b 2
+if %CODEX_OK% equ 1 (
     exit /b 0
 )
 exit /b 1
