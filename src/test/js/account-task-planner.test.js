@@ -283,3 +283,158 @@ test('publishBuilderGoal does not reject solely because the selected machine is 
     }
   }
 });
+
+/**
+ * Builds a status-rendering stub around renderBuilderGoalClientStatus().
+ * Only the state and methods the status renderer touches are stubbed.
+ */
+function createStatusPlanner(overrides = {}) {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalClientStatus = { innerHTML: '' };
+  planner.builderGoalBundleMismatch = false;
+  planner.builderGoalCatalogDegraded = false;
+  planner.builderGoalCatalogReason = '';
+  planner.importedBuilderGoal = null;
+  planner.getSelectedBuilderGoalAccount = () => null;
+  planner.getSelectedBuilderGoalMachine = () => null;
+  planner.getSelectedBuilderGoalTask = () => null;
+  planner.getBuilderGoalWorldValue = () => 360;
+  planner.parseBuilderGoalConfigInput = () => ({ settings: {}, taskKey: null, requirements: {} });
+  Object.assign(planner, overrides);
+  return planner;
+}
+
+function statusMessage(planner) {
+  const html = planner.builderGoalClientStatus.innerHTML || '';
+  return html.replace(/<[^>]*>/g, ' ');
+}
+
+test('renderBuilderGoalClientStatus: executor online, no task => publish disabled and asks for a task', () => {
+  const planner = createStatusPlanner({
+    getSelectedBuilderGoalAccount: () => ({
+      accountId: 'hash-1',
+      runnable: true,
+      launchReady: true,
+      executorOnline: true,
+      online: true
+    }),
+    getSelectedBuilderGoalMachine: () => runnableMachine,
+    getSelectedBuilderGoalTask: () => null
+  });
+
+  const availability = AccountTaskPlanner.computeBuilderGoalActionAvailability({
+    account: planner.getSelectedBuilderGoalAccount(),
+    machine: planner.getSelectedBuilderGoalMachine(),
+    hasTask: false,
+    hasWorld: true,
+    importedRunnable: false
+  });
+  assert.equal(availability.canPublishTask, false);
+
+  planner.renderBuilderGoalClientStatus();
+  const message = statusMessage(planner);
+  assert.ok(!message.includes('Publish Task is available now'), `unexpected: ${message}`);
+  assert.ok(message.includes('Select a task'), `unexpected: ${message}`);
+});
+
+test('renderBuilderGoalClientStatus: executor online, valid task, invalid world => publish disabled and asks for a valid world', () => {
+  const planner = createStatusPlanner({
+    getSelectedBuilderGoalAccount: () => credentialedAccount,
+    getSelectedBuilderGoalMachine: () => runnableMachine,
+    getSelectedBuilderGoalTask: () => ({
+      task_key: 'configurable_woodcutting',
+      display_name: 'Configurable Woodcutting'
+    }),
+    getBuilderGoalWorldValue: () => null
+  });
+
+  const availability = AccountTaskPlanner.computeBuilderGoalActionAvailability({
+    account: planner.getSelectedBuilderGoalAccount(),
+    machine: planner.getSelectedBuilderGoalMachine(),
+    hasTask: true,
+    hasWorld: false,
+    importedRunnable: false
+  });
+  assert.equal(availability.canPublishTask, false);
+
+  planner.renderBuilderGoalClientStatus();
+  const message = statusMessage(planner);
+  assert.ok(message.includes('valid world between 300 and 700'), `unexpected: ${message}`);
+});
+
+test('renderBuilderGoalClientStatus: executor online, valid task and world => publish available message', () => {
+  const planner = createStatusPlanner({
+    getSelectedBuilderGoalAccount: () => credentialedAccount,
+    getSelectedBuilderGoalMachine: () => runnableMachine,
+    getSelectedBuilderGoalTask: () => ({
+      task_key: 'configurable_woodcutting',
+      display_name: 'Configurable Woodcutting'
+    })
+  });
+
+  const availability = AccountTaskPlanner.computeBuilderGoalActionAvailability({
+    account: planner.getSelectedBuilderGoalAccount(),
+    machine: planner.getSelectedBuilderGoalMachine(),
+    hasTask: true,
+    hasWorld: true,
+    importedRunnable: false
+  });
+  assert.equal(availability.canPublishTask, true);
+
+  planner.renderBuilderGoalClientStatus();
+  const message = statusMessage(planner);
+  assert.ok(message.includes('Publish Task is available'), `unexpected: ${message}`);
+});
+
+test('renderBuilderGoalClientStatus: missing credentials, executor online, valid task/world => Run and Launch unavailable, Publish available', () => {
+  const planner = createStatusPlanner({
+    getSelectedBuilderGoalAccount: () => credentiallessAccount,
+    getSelectedBuilderGoalMachine: () => runnableMachine,
+    getSelectedBuilderGoalTask: () => ({
+      task_key: 'configurable_woodcutting',
+      display_name: 'Configurable Woodcutting'
+    })
+  });
+
+  const availability = AccountTaskPlanner.computeBuilderGoalActionAvailability({
+    account: planner.getSelectedBuilderGoalAccount(),
+    machine: planner.getSelectedBuilderGoalMachine(),
+    hasTask: true,
+    hasWorld: true,
+    importedRunnable: false
+  });
+  assert.equal(availability.canRunTask, false);
+  assert.equal(availability.canLaunchAccount, false);
+  assert.equal(availability.canPublishTask, true);
+
+  planner.renderBuilderGoalClientStatus();
+  const message = statusMessage(planner);
+  assert.ok(message.includes('Publish Task is available'), `unexpected: ${message}`);
+  assert.ok(!message.includes('Publish Task is available now'), `unexpected: ${message}`);
+});
+
+test('renderBuilderGoalClientStatus: offline launcher machine, executor online, valid task/world => Publish remains available', () => {
+  const planner = createStatusPlanner({
+    getSelectedBuilderGoalAccount: () => credentialedAccount,
+    getSelectedBuilderGoalMachine: () => offlineMachine,
+    getSelectedBuilderGoalTask: () => ({
+      task_key: 'configurable_woodcutting',
+      display_name: 'Configurable Woodcutting'
+    })
+  });
+
+  const availability = AccountTaskPlanner.computeBuilderGoalActionAvailability({
+    account: planner.getSelectedBuilderGoalAccount(),
+    machine: planner.getSelectedBuilderGoalMachine(),
+    hasTask: true,
+    hasWorld: true,
+    importedRunnable: false
+  });
+  assert.equal(availability.canRunTask, false);
+  assert.equal(availability.canLaunchAccount, false);
+  assert.equal(availability.canPublishTask, true);
+
+  planner.renderBuilderGoalClientStatus();
+  const message = statusMessage(planner);
+  assert.ok(message.includes('Publish Task is available'), `unexpected: ${message}`);
+});

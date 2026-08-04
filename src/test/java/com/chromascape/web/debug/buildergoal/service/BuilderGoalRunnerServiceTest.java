@@ -34,6 +34,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1781,38 +1782,39 @@ class BuilderGoalRunnerServiceTest {
     iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
     iteration.setScriptName("configurable_woodcutting");
     iteration.setStatus(PatchLoopStatus.QUEUED);
-    iteration.setTaskMetadataJson(
-        objectMapper.valueToTree(
-            Map.of(
-                "display_name", "35 Woodcutting",
-                "mule_account",
-                    Map.of(
-                        "account_id", "hash-1",
-                        "account_hash", "hash-1",
-                        "account_name", "bigGreenMeat",
-                        "online", true,
-                        "executorOnline", true,
-                        "runnable", true,
-                        "disabled_reason", null,
-                        "hasEmail", true,
-                        "hasPassword", true,
-                        "launchReady", true,
-                        "launchDisabledReason", null),
-                "settings", Map.of("treeType", "WILLOW"))));
+    Map<String, Object> accountMetadata = new LinkedHashMap<>();
+    accountMetadata.put("account_id", "hash-1");
+    accountMetadata.put("account_hash", "hash-1");
+    accountMetadata.put("account_name", "bigGreenMeat");
+    accountMetadata.put("online", true);
+    accountMetadata.put("executorOnline", true);
+    accountMetadata.put("runnable", true);
+    accountMetadata.put("disabled_reason", null);
+    accountMetadata.put("hasEmail", true);
+    accountMetadata.put("hasPassword", true);
+    accountMetadata.put("launchReady", true);
+    accountMetadata.put("launchDisabledReason", null);
+
+    Map<String, Object> taskMetadata = new LinkedHashMap<>();
+    taskMetadata.put("display_name", "35 Woodcutting");
+    taskMetadata.put("mule_account", accountMetadata);
+    taskMetadata.put("settings", Map.of("treeType", "WILLOW"));
+
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
     when(iterationRepository.findByIterationId("buildergoal_summary0001"))
         .thenReturn(Optional.of(iteration));
 
     Map<String, Object> run = service.getRunSummary("buildergoal_summary0001");
 
-    assertThat(run.get("accountOnline")).isEqualTo(true);
-    assertThat(run.get("launcherOnline")).isEqualTo(true);
-    assertThat(run.get("accountRunnable")).isEqualTo(true);
-    assertThat(run.get("accountDisabledReason")).isNull();
-    assertThat(run.get("accountExecutorOnline")).isEqualTo(true);
-    assertThat(run.get("accountHasEmail")).isEqualTo(true);
-    assertThat(run.get("accountHasPassword")).isEqualTo(true);
-    assertThat(run.get("accountLaunchReady")).isEqualTo(true);
-    assertThat(run.get("accountLaunchDisabledReason")).isNull();
+    assertThat(run).containsEntry("accountOnline", true);
+    assertThat(run).containsEntry("launcherOnline", true);
+    assertThat(run).containsEntry("accountRunnable", true);
+    assertThat(run).containsEntry("accountDisabledReason", null);
+    assertThat(run).containsEntry("accountExecutorOnline", true);
+    assertThat(run).containsEntry("accountHasEmail", true);
+    assertThat(run).containsEntry("accountHasPassword", true);
+    assertThat(run).containsEntry("accountLaunchReady", true);
+    assertThat(run).containsEntry("accountLaunchDisabledReason", null);
     assertThat(run.get("accountExecutorOnline")).isEqualTo(run.get("accountOnline"));
   }
 
