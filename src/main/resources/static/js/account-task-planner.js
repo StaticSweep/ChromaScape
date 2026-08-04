@@ -1398,6 +1398,7 @@ class AccountTaskPlanner {
     const effectiveTask = selectedTask || (importedTaskKey ? { task_key: importedTaskKey } : null);
     const hasTask = Boolean(effectiveTask);
     const hasWorld = Boolean(world);
+    const configValid = !parsedConfig.error;
 
     // Mirror the button-state contract exactly: status wording must never claim Publish is
     // available when the same inputs leave the Publish Task button disabled.
@@ -1406,8 +1407,19 @@ class AccountTaskPlanner {
       machine: selectedMachine,
       hasTask,
       hasWorld,
+      configValid,
       importedRunnable: Boolean(this.importedBuilderGoal?.result?.runnableNow)
     });
+
+    // Degraded-catalog warning rendered for every readiness branch below, so operators
+    // still see why ChromaScape is falling back to saved/imported task keys.
+    const degradedCatalogWarning =
+      this.builderGoalCatalogDegraded && this.builderGoalCatalogReason
+        ? `<div class="text-warning mb-1">${this.escapeHtml(this.builderGoalCatalogReason)}</div>`
+        : '';
+    const render = html => {
+      this.builderGoalClientStatus.innerHTML = `${degradedCatalogWarning}${html}`;
+    };
 
     if (!selectedAccount.launchReady) {
       const missingCredentialsHint =
@@ -1416,34 +1428,42 @@ class AccountTaskPlanner {
         ? `${selectedAccount.launchDisabledReason}. ${missingCredentialsHint}`
         : missingCredentialsHint;
       if (availability.canPublishTask) {
-        this.builderGoalClientStatus.innerHTML =
-          `<span class="text-warning">${this.escapeHtml(reason)} Publish Task is available for the already-running Micro6 executor, which does not require launcher-control credentials.</span>`;
+        render(
+          `<span class="text-warning">${this.escapeHtml(reason)} Publish Task is available for the already-running Micro6 executor, which does not require launcher-control credentials.</span>`
+        );
       } else if (executorOnline && !hasTask) {
-        this.builderGoalClientStatus.innerHTML =
-          `<span class="text-warning">${this.escapeHtml(reason)} A matching Micro6 executor is online. Select a task before publishing.</span>`;
+        render(
+          `<span class="text-warning">${this.escapeHtml(reason)} A matching Micro6 executor is online. Select a task before publishing.</span>`
+        );
       } else if (executorOnline && !hasWorld) {
-        this.builderGoalClientStatus.innerHTML =
-          `<span class="text-warning">${this.escapeHtml(reason)} A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.</span>`;
+        render(
+          `<span class="text-warning">${this.escapeHtml(reason)} A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.</span>`
+        );
       } else {
-        this.builderGoalClientStatus.innerHTML =
-          `<span class="text-warning">${this.escapeHtml(reason)} No dispatch-ready Micro6 executor is online for this account, so Publish Task is unavailable until an executor heartbeats or you launch one.</span>`;
+        render(
+          `<span class="text-warning">${this.escapeHtml(reason)} No dispatch-ready Micro6 executor is online for this account, so Publish Task is unavailable until an executor heartbeats or you launch one.</span>`
+        );
       }
       return;
     }
 
     if (!selectedMachine) {
       if (availability.canPublishTask) {
-        this.builderGoalClientStatus.innerHTML =
-          '<span class="text-warning">No local launch host is available for Builder Goal Runner yet. Run Task and Launch Account are unavailable, but Publish Task is available for the already-running Micro6 executor.</span>';
+        render(
+          '<span class="text-warning">No local launch host is available for Builder Goal Runner yet. Run Task and Launch Account are unavailable, but Publish Task is available for the already-running Micro6 executor.</span>'
+        );
       } else if (executorOnline && !hasTask) {
-        this.builderGoalClientStatus.innerHTML =
-          '<span class="text-warning">A matching Micro6 executor is online. Select a task before publishing.</span>';
+        render(
+          '<span class="text-warning">A matching Micro6 executor is online. Select a task before publishing.</span>'
+        );
       } else if (executorOnline && !hasWorld) {
-        this.builderGoalClientStatus.innerHTML =
-          '<span class="text-warning">A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.</span>';
+        render(
+          '<span class="text-warning">A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.</span>'
+        );
       } else {
-        this.builderGoalClientStatus.innerHTML =
-          '<span class="text-warning">No local launch host is available for Builder Goal Runner yet.</span>';
+        render(
+          '<span class="text-warning">No local launch host is available for Builder Goal Runner yet.</span>'
+        );
       }
       return;
     }
@@ -1452,17 +1472,19 @@ class AccountTaskPlanner {
       const machineReason =
         selectedMachine.builderGoalDisabledReason || 'The selected launcher machine is not ready for local Builder Goal launches.';
       if (availability.canPublishTask) {
-        this.builderGoalClientStatus.innerHTML =
-          `<span class="text-warning">${this.escapeHtml(machineReason)} Run Task and Launch Account are unavailable, but Publish Task is available for the already-running Micro6 executor.</span>`;
+        render(
+          `<span class="text-warning">${this.escapeHtml(machineReason)} Run Task and Launch Account are unavailable, but Publish Task is available for the already-running Micro6 executor.</span>`
+        );
       } else if (executorOnline && !hasTask) {
-        this.builderGoalClientStatus.innerHTML =
-          `<span class="text-warning">${this.escapeHtml(machineReason)} A matching Micro6 executor is online. Select a task before publishing.</span>`;
+        render(
+          `<span class="text-warning">${this.escapeHtml(machineReason)} A matching Micro6 executor is online. Select a task before publishing.</span>`
+        );
       } else if (executorOnline && !hasWorld) {
-        this.builderGoalClientStatus.innerHTML =
-          `<span class="text-warning">${this.escapeHtml(machineReason)} A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.</span>`;
+        render(
+          `<span class="text-warning">${this.escapeHtml(machineReason)} A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.</span>`
+        );
       } else {
-        this.builderGoalClientStatus.innerHTML =
-          `<span class="text-warning">${this.escapeHtml(machineReason)}</span>`;
+        render(`<span class="text-warning">${this.escapeHtml(machineReason)}</span>`);
       }
       return;
     }
@@ -1471,8 +1493,7 @@ class AccountTaskPlanner {
       const message = executorOnline
         ? 'A matching Micro6 executor is online. Select a task before publishing.'
         : 'Select a Micro6 task to run.';
-      this.builderGoalClientStatus.innerHTML =
-        `<span class="text-warning">${this.escapeHtml(message)}</span>`;
+      render(`<span class="text-warning">${this.escapeHtml(message)}</span>`);
       return;
     }
 
@@ -1480,25 +1501,34 @@ class AccountTaskPlanner {
       const message = executorOnline
         ? 'A matching Micro6 executor is online. Enter a valid world between 300 and 700 before publishing.'
         : 'Enter a valid world between 300 and 700 before running the task.';
-      this.builderGoalClientStatus.innerHTML =
-        `<span class="text-warning">${this.escapeHtml(message)}</span>`;
+      render(`<span class="text-warning">${this.escapeHtml(message)}</span>`);
       return;
     }
 
     if (!executorOnline) {
-      this.builderGoalClientStatus.innerHTML =
-        '<span class="text-warning">No dispatch-ready Micro6 executor is online for this account. Use Launch Account or Run Task first, then Publish Task becomes available.</span>';
+      render(
+        '<span class="text-warning">No dispatch-ready Micro6 executor is online for this account. Use Launch Account or Run Task first, then Publish Task becomes available.</span>'
+      );
+      return;
+    }
+
+    if (!configValid) {
+      render(
+        `<span class="text-warning">${this.escapeHtml(parsedConfig.error)} Select a Micro6 task with valid settings before publishing.</span>`
+      );
       return;
     }
 
     if (availability.canPublishTask) {
-      this.builderGoalClientStatus.innerHTML =
-        '<span class="text-success">Publish Task is available for the already-running Micro6 executor.</span>';
+      render(
+        '<span class="text-success">Publish Task is available for the already-running Micro6 executor.</span>'
+      );
       return;
     }
 
-    this.builderGoalClientStatus.innerHTML =
-      '<span class="text-warning">Select a task, set the JSON settings, and enter a valid world between 300 and 700 before publishing.</span>';
+    render(
+      '<span class="text-warning">Select a task, set the JSON settings, and enter a valid world between 300 and 700 before publishing.</span>'
+    );
   }
 
   updateBuilderGoalRunButtonState() {
@@ -1528,6 +1558,7 @@ class AccountTaskPlanner {
       machine: selectedMachine,
       hasTask: Boolean(selectedTask || importedTaskKey),
       hasWorld: Boolean(world),
+      configValid: !parsedConfig.error,
       importedRunnable: Boolean(this.importedBuilderGoal?.result?.runnableNow)
     });
     const canLaunchAccount = availability.canLaunchAccount;
@@ -1554,7 +1585,7 @@ class AccountTaskPlanner {
    * @returns {{executorOnline: boolean, machineRunnable: boolean, canLaunchAccount: boolean,
    *   canRunTask: boolean, canPublishTask: boolean, canRunImported: boolean}}
    */
-  static computeBuilderGoalActionAvailability({ account, machine, hasTask, hasWorld, importedRunnable }) {
+  static computeBuilderGoalActionAvailability({ account, machine, hasTask, hasWorld, configValid = true, importedRunnable }) {
     const executorOnline =
       account?.executorOnline !== undefined
         ? account.executorOnline === true
@@ -1565,11 +1596,11 @@ class AccountTaskPlanner {
       machine && machine.builderGoalRunnable
     );
     const canLaunchAccount = launchReady && machineRunnable && Boolean(hasWorld);
-    const canRunTask = canLaunchAccount && Boolean(hasTask);
+    const canRunTask = canLaunchAccount && Boolean(hasTask) && Boolean(configValid);
     const canPublishTask =
-      runnable && executorOnline && Boolean(hasTask) && Boolean(hasWorld);
+      runnable && executorOnline && Boolean(hasTask) && Boolean(hasWorld) && Boolean(configValid);
     const canRunImported =
-      canLaunchAccount && Boolean(hasWorld) && Boolean(importedRunnable);
+      canLaunchAccount && Boolean(hasWorld) && Boolean(importedRunnable) && Boolean(configValid);
     return {
       executorOnline,
       machineRunnable,

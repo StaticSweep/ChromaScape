@@ -438,3 +438,63 @@ test('renderBuilderGoalClientStatus: offline launcher machine, executor online, 
   const message = statusMessage(planner);
   assert.ok(message.includes('Publish Task is available'), `unexpected: ${message}`);
 });
+
+test('computeBuilderGoalActionAvailability: invalid config blocks Run, Publish, and Imported', () => {
+  const result = availability({
+    account: credentialedAccount,
+    machine: runnableMachine,
+    hasTask: true,
+    hasWorld: true,
+    configValid: false,
+    importedRunnable: true
+  });
+  assert.equal(result.canLaunchAccount, true);
+  assert.equal(result.canRunTask, false);
+  assert.equal(result.canPublishTask, false);
+  assert.equal(result.canRunImported, false);
+});
+
+test('renderBuilderGoalClientStatus: invalid JSON settings, executor online, valid task/world => publish unavailable and invalid JSON surfaced', () => {
+  const planner = createStatusPlanner({
+    getSelectedBuilderGoalAccount: () => credentialedAccount,
+    getSelectedBuilderGoalMachine: () => runnableMachine,
+    getSelectedBuilderGoalTask: () => ({
+      task_key: 'configurable_woodcutting',
+      display_name: 'Configurable Woodcutting'
+    }),
+    parseBuilderGoalConfigInput: () => ({ error: 'Invalid JSON: Unexpected token' })
+  });
+
+  const availability = AccountTaskPlanner.computeBuilderGoalActionAvailability({
+    account: planner.getSelectedBuilderGoalAccount(),
+    machine: planner.getSelectedBuilderGoalMachine(),
+    hasTask: true,
+    hasWorld: true,
+    configValid: false,
+    importedRunnable: false
+  });
+  assert.equal(availability.canPublishTask, false);
+
+  planner.renderBuilderGoalClientStatus();
+  const message = statusMessage(planner);
+  assert.ok(message.includes('Invalid JSON'), `unexpected: ${message}`);
+  assert.ok(!message.includes('Publish Task is available'), `unexpected: ${message}`);
+});
+
+test('renderBuilderGoalClientStatus: degraded catalog warning prefixes every readiness message', () => {
+  const planner = createStatusPlanner({
+    getSelectedBuilderGoalAccount: () => credentialedAccount,
+    getSelectedBuilderGoalMachine: () => runnableMachine,
+    getSelectedBuilderGoalTask: () => ({
+      task_key: 'configurable_woodcutting',
+      display_name: 'Configurable Woodcutting'
+    }),
+    builderGoalCatalogDegraded: true,
+    builderGoalCatalogReason: 'Catalog fetch failed; using saved task keys.'
+  });
+
+  planner.renderBuilderGoalClientStatus();
+  const message = statusMessage(planner);
+  assert.ok(message.includes('Catalog fetch failed'), `unexpected: ${message}`);
+  assert.ok(message.includes('Publish Task is available'), `unexpected: ${message}`);
+});
