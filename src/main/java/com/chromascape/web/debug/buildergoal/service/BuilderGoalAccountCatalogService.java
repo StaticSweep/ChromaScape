@@ -1,6 +1,7 @@
 package com.chromascape.web.debug.buildergoal.service;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -161,7 +162,7 @@ public class BuilderGoalAccountCatalogService {
       Objects.requireNonNull(accountId, "accountId");
       Objects.requireNonNull(displayName, "displayName");
       Objects.requireNonNull(source, "source");
-      metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+      metadata = metadata != null ? Collections.unmodifiableMap(new LinkedHashMap<>(metadata)) : Map.of();
     }
 
     public boolean isRunnable() {

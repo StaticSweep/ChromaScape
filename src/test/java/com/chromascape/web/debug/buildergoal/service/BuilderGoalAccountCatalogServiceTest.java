@@ -1,6 +1,7 @@
 package com.chromascape.web.debug.buildergoal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -319,6 +320,31 @@ class BuilderGoalAccountCatalogServiceTest {
     assertThat(summary.get("launchDisabledReason")).isNull();
     String rendered = summary.toString();
     assertThat(rendered).doesNotContain("hunter2-secret");
+  }
+
+  @Test
+  void accountDefinition_acceptsNullValuedMetadataFields() {
+    Map<String, Object> metadata = new java.util.LinkedHashMap<>();
+    metadata.put("runtime", null);
+    metadata.put("hostname", "CZC8518C27");
+    AccountDefinition account = account("hash-1", "user@example.test", true, "ready", metadata);
+
+    assertThat(account.metadata()).containsKey("runtime");
+    assertThat(account.metadata().get("runtime")).isNull();
+    assertThat(account.metadata().get("hostname")).isEqualTo("CZC8518C27");
+  }
+
+  @Test
+  void accountDefinition_metadataSnapshotIsImmutable() {
+    Map<String, Object> metadata = new java.util.LinkedHashMap<>();
+    metadata.put("runtime", null);
+    AccountDefinition account = account("hash-1", "user@example.test", true, "ready", metadata);
+
+    assertThatThrownBy(() -> account.metadata().put("runtime", "mutated"))
+        .isInstanceOf(UnsupportedOperationException.class);
+    // The caller-owned map remains untouched by the snapshot.
+    metadata.put("runtime", "mutated");
+    assertThat(account.metadata().get("runtime")).isNull();
   }
 
   @Test

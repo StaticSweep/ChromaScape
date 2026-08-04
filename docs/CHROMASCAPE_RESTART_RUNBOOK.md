@@ -7,7 +7,7 @@ Use this document as the canonical reference for restarting ChromaScape.
 Default restart path:
 
 ```cmd
-cd /d F:\Dev\IdeaProjects\ChromaScape
+cd /d C:\Dev\IdeaProjects\ChromaScape
 scripts\restart-chromascape.bat
 ```
 
@@ -18,7 +18,7 @@ Run restart commands from Windows, not WSL.
 The preferred command is:
 
 ```cmd
-cd /d F:\Dev\IdeaProjects\ChromaScape
+cd /d C:\Dev\IdeaProjects\ChromaScape
 scripts\restart-chromascape.bat
 ```
 
@@ -30,7 +30,7 @@ This wrapper calls `scripts/restart-chromascape.ps1` and performs the full recov
 - starts `gradlew.bat --no-daemon bootRun`
 - waits for ChromaScape to bind `8090`
 - probes `http://localhost:8090/debugger`
-- logs startup output to `F:\Dev\IdeaProjects\ChromaScape\chroma_bootrun.log`
+- logs startup output to `C:\Dev\IdeaProjects\ChromaScape\chroma_bootrun.log`
 
 Use this path whenever ChromaScape is stuck, half-running, or needs a clean restart.
 
@@ -41,25 +41,25 @@ If the restart wrapper is unavailable, use one of these:
 1. Direct Gradle start:
 
 ```cmd
-cd /d F:\Dev\IdeaProjects\ChromaScape
+cd /d C:\Dev\IdeaProjects\ChromaScape
 gradlew.bat bootRun
 ```
 
 2. Startup helper:
 
 ```cmd
-cd /d F:\Dev\IdeaProjects\ChromaScape
+cd /d C:\Dev\IdeaProjects\ChromaScape
 START_CHROMASCAPE.bat
 ```
 
 3. Log-to-file helper:
 
 ```cmd
-cd /d F:\Dev\IdeaProjects\ChromaScape
+cd /d C:\Dev\IdeaProjects\ChromaScape
 run_chromascape.bat
 ```
 
-That helper writes to `F:\Dev\IdeaProjects\ChromaScape\chromascape_output.log`.
+That helper writes to `C:\Dev\IdeaProjects\ChromaScape\chromascape_output.log`.
 
 Use raw `gradlew.bat bootRun` for first start or when debugging startup interactively.
 
@@ -124,7 +124,7 @@ Meaning:
 
 Action:
 
-- inspect `F:\Dev\IdeaProjects\ChromaScape\chroma_bootrun.log`
+- inspect `C:\Dev\IdeaProjects\ChromaScape\chroma_bootrun.log`
 
 ### Java / Gradle version mismatch
 

@@ -4,7 +4,7 @@
 
 - When asked how to restart ChromaScape, use `docs/CHROMASCAPE_RESTART_RUNBOOK.md` as the source of truth.
 - Preferred restart command:
-  - `cd /d F:\Dev\IdeaProjects\ChromaScape`
+  - `cd /d C:\Dev\IdeaProjects\ChromaScape`
   - `scripts\restart-chromascape.bat`
 - Run ChromaScape restart commands from Windows, not WSL.
 

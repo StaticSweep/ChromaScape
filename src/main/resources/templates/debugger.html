@@ -382,7 +382,7 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
-        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="29">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="30">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Builder Goal Runner</label>
             <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
@@ -402,8 +402,8 @@
             </div>
           </div>
           <div class="mb-2">
-            <label class="form-label small mb-1">Launch Host</label>
-            <select id="builderGoalMachineSelect" class="form-select form-select-sm d-none" aria-hidden="true" tabindex="-1">
+            <label class="form-label small mb-1" for="builderGoalMachineSelect">Launch Host</label>
+            <select id="builderGoalMachineSelect" class="form-select form-select-sm">
               <option value="">Loading launcher machines...</option>
             </select>
             <div id="builderGoalMachineSummary" class="small text-muted mt-1">
@@ -1100,7 +1100,7 @@
 
   <script src="/js/debugger.js?v=14"></script>
   <script src="/js/patchloop.js?v=2"></script>
-  <script src="/js/account-task-planner.js?v=29"></script>
+  <script src="/js/account-task-planner.js?v=30"></script>
 </body>
 
 </html>

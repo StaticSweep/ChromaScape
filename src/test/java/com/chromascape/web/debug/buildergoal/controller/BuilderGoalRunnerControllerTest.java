@@ -49,6 +49,76 @@ class BuilderGoalRunnerControllerTest {
   }
 
   @Test
+  void listMachines_returnsHttp200WithMachineSummaries() {
+    Map<String, Object> machine = new LinkedHashMap<>();
+    machine.put("machineUuid", "1d391d65-6c97-5b77-b676-964f157e8c73");
+    machine.put("displayName", "CZC8518C27 (Beheerder)");
+    machine.put("online", true);
+    machine.put("localMachine", true);
+    machine.put("builderGoalRunnable", true);
+    when(launcherControlService.listMachineSummaries()).thenReturn(List.of(machine));
+
+    ResponseEntity<Object> response = controller.listMachines();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> body = (List<Map<String, Object>>) response.getBody();
+    assertThat(body).hasSize(1);
+    assertThat(body.get(0).get("machineUuid"))
+        .isEqualTo("1d391d65-6c97-5b77-b676-964f157e8c73");
+  }
+
+  @Test
+  void listMachines_returnsBadGatewayWithStructuredErrorWhenLauncherFails() {
+    when(launcherControlService.listMachineSummaries())
+        .thenThrow(new IllegalStateException("HTTP 401: unauthorized"));
+    when(launcherControlService.getAuthToken()).thenReturn("secret-token");
+
+    ResponseEntity<Object> response = controller.listMachines();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.get("error")).isEqualTo("Failed to load launcher machines");
+    assertThat(String.valueOf(body.get("details"))).contains("HTTP 401");
+  }
+
+  @Test
+  void listMachines_badGatewayDetailsNeverDiscloseConfiguredToken() {
+    when(launcherControlService.listMachineSummaries())
+        .thenThrow(new IllegalStateException("HTTP 401: echo secret-token"));
+    when(launcherControlService.getAuthToken()).thenReturn("secret-token");
+
+    ResponseEntity<Object> response = controller.listMachines();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.toString()).doesNotContain("secret-token");
+  }
+
+  @Test
+  void listMachines_badGatewayDetailsAreNonNullForParsingFailures() {
+    when(launcherControlService.listMachineSummaries())
+        .thenThrow(new IllegalStateException("Failed to load launcher machines: JsonParseException: Unexpected token"));
+    when(launcherControlService.getAuthToken()).thenReturn("secret-token");
+
+    ResponseEntity<Object> response = controller.listMachines();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.get("error")).isEqualTo("Failed to load launcher machines");
+    assertThat(String.valueOf(body.get("details")))
+        .contains("JsonParseException")
+        .isNotNull()
+        .isNotBlank();
+  }
+
+  @Test
   void openRecoveryWorkspace_delegatesToServiceAndReturnsOk() {
     Map<String, Object> workspace = new LinkedHashMap<>();
     workspace.put("iterationId", "buildergoal_rec0001");

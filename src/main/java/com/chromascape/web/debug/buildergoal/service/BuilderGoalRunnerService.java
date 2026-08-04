@@ -202,6 +202,7 @@ public class BuilderGoalRunnerService {
         resolveSelectedAccount(accountId);
     requireLaunchReadyAccount(selectedAccount);
     requireValidWorld(world);
+    requireLaunchableMachine(launcherMachineUuid);
 
     try {
       Micro6TargetPreparationService.PreparationResult preparationResult =
@@ -429,6 +430,7 @@ public class BuilderGoalRunnerService {
     BuilderGoalLauncherControlService.LauncherMachine selectedMachine =
         resolveSelectedMachine(selectedMachineUuid);
     requireLaunchReadyAccount(selectedAccount);
+    requireLaunchableMachine(selectedMachine, selectedMachineUuid);
     CatalogValidationResult catalogValidation =
         resolvePublishCatalogValidation(normalized.taskKey(), null);
     if (catalogValidation.rejectPublish()) {
@@ -570,6 +572,7 @@ public class BuilderGoalRunnerService {
     }
     if (allowLaunchFallback) {
       requireLaunchReadyAccount(selectedAccount);
+      requireLaunchableMachine(selectedMachine, selectedMachineUuid);
     }
     Optional<Micro6OnlineClientRegistryService.TargetClient> matchingClient =
         targetBaseUrl == null || targetBaseUrl.isBlank()
@@ -4090,6 +4093,30 @@ public class BuilderGoalRunnerService {
     }
     if (!selectedAccount.hasPassword()) {
       throw new IllegalStateException("Selected launcher account is missing a password for local Micro6 relaunch");
+    }
+  }
+
+  /**
+   * Resolves the selected launcher machine from the current launcher-control response and
+   * rejects it unless it is eligible for local Builder Goal launches. Invoked before any run
+   * record or pending launch is persisted or queued.
+   */
+  private void requireLaunchableMachine(String launcherMachineUuid) {
+    BuilderGoalLauncherControlService.LauncherMachine machine =
+        resolveSelectedMachine(launcherMachineUuid);
+    requireLaunchableMachine(machine, launcherMachineUuid);
+  }
+
+  private void requireLaunchableMachine(
+      BuilderGoalLauncherControlService.LauncherMachine machine, String launcherMachineUuid) {
+    if (machine == null) {
+      throw new IllegalArgumentException("Selected launcher machine was not found");
+    }
+    if (!launcherControlService.isBuilderGoalRunnableMachine(machine)) {
+      throw new IllegalStateException(
+          firstNonBlank(
+              launcherControlService.getBuilderGoalMachineDisabledReason(machine),
+              "Selected launcher machine is not available for Builder Goal local launches"));
     }
   }
 

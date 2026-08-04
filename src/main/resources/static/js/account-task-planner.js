@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '29';
+  static BUILDER_GOAL_BUNDLE_VERSION = '30';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -22,6 +22,7 @@ class AccountTaskPlanner {
     this.importedBuilderGoal = null;
     this.builderGoalAccounts = [];
     this.builderGoalMachines = [];
+    this.builderGoalMachinesLoadError = '';
     this.builderGoalRuns = [];
     this.selectedBuilderGoalAccountId =
       localStorage.getItem('taskPlanner.selectedBuilderGoalAccountId') || '';
@@ -427,7 +428,11 @@ class AccountTaskPlanner {
     }
     if (this.refreshBuilderGoalRunsBtn) {
       this.refreshBuilderGoalRunsBtn.addEventListener('click', () => {
+        this.loadBuilderGoalAccounts();
+        this.loadBuilderGoalMachines();
         this.loadBuilderGoalRuns();
+        this.loadScriptCatalog();
+        this.renderBuilderGoalClientStatus();
       });
     }
     if (this.refreshBuilderGoalCodexSessionBtn) {
@@ -847,14 +852,19 @@ class AccountTaskPlanner {
     try {
       const response = await fetch('/api/debug/builder-goals/machines');
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(
+          payload?.details || payload?.error || `HTTP ${response.status}`
+        );
       }
       this.builderGoalMachines = await this.readJsonResponse(response, []);
+      this.builderGoalMachinesLoadError = '';
       this.renderBuilderGoalMachines();
     } catch (error) {
       console.error('Failed to load builder goal launcher machines:', error);
       this.builderGoalMachines = [];
-      this.renderBuilderGoalMachines(error.message);
+      this.builderGoalMachinesLoadError = error?.message || 'Failed to load launcher machines';
+      this.renderBuilderGoalMachines(this.builderGoalMachinesLoadError);
     }
   }
 
@@ -869,17 +879,10 @@ class AccountTaskPlanner {
     if (!this.builderGoalMachineSelect || this.builderGoalBundleMismatch) return;
 
     const machines = Array.isArray(this.builderGoalMachines) ? this.builderGoalMachines : [];
-    const previous = this.selectedBuilderGoalMachineUuid;
-    const stillVisible = machines.some(machine => machine.machineUuid === previous);
-    this.selectedBuilderGoalMachineUuid = stillVisible ? previous : '';
-    if (!this.selectedBuilderGoalMachineUuid) {
-      const defaultMachine = machines.find(machine => machine.defaultSelected);
-      if (defaultMachine?.machineUuid) {
-        this.selectedBuilderGoalMachineUuid = defaultMachine.machineUuid;
-      } else if (machines.length === 1) {
-        this.selectedBuilderGoalMachineUuid = machines[0].machineUuid || '';
-      }
-    }
+    this.selectedBuilderGoalMachineUuid = AccountTaskPlanner.selectBuilderGoalMachineUuid(
+      machines,
+      this.selectedBuilderGoalMachineUuid
+    );
     if (this.selectedBuilderGoalMachineUuid) {
       localStorage.setItem(
         'taskPlanner.selectedBuilderGoalMachineUuid',
@@ -891,9 +894,12 @@ class AccountTaskPlanner {
 
     if (loadError) {
       this.builderGoalMachineSelect.innerHTML =
-        '<option value="">Failed to load machines</option>';
+        '<option value="">Failed to load launcher machines</option>';
       this.builderGoalMachineSelect.disabled = true;
-      this.renderBuilderGoalMachineSummary(`Failed to load launcher machines: ${loadError}`, 'danger');
+      this.renderBuilderGoalMachineSummary(
+        `Failed to load launcher machines: ${loadError}`,
+        'danger'
+      );
       this.renderBuilderGoalClientStatus();
       this.updateBuilderGoalRunButtonState();
       return;
@@ -904,7 +910,7 @@ class AccountTaskPlanner {
         '<option value="">No launcher machines available</option>';
       this.builderGoalMachineSelect.disabled = true;
       this.renderBuilderGoalMachineSummary(
-        'No local launch host is currently available. Builder Goal Runner cannot launch until launcher-control reports at least one local machine.',
+        'No launcher machines are currently reported by launcher-control. Builder Goal Runner cannot launch until launcher-control reports at least one machine.',
         'warning'
       );
       this.renderBuilderGoalClientStatus();
@@ -912,11 +918,18 @@ class AccountTaskPlanner {
       return;
     }
 
+    // All returned machines stay visible for diagnostics; only Builder Goal runnable local
+    // machines are selectable. Remote/disabled/offline options are disabled.
     this.builderGoalMachineSelect.disabled = false;
-    const options = ['<option value="">Select a launcher machine</option>'];
+    const options = ['<option value="">Select a local launch host</option>'];
     machines.forEach(machine => {
+      const disabledAttr = machine.builderGoalRunnable ? '' : ' disabled';
+      const selectedAttr =
+        machine.machineUuid && machine.machineUuid === this.selectedBuilderGoalMachineUuid
+          ? ' selected'
+          : '';
       options.push(
-        `<option value="${this.escapeAttr(machine.machineUuid || '')}">${this.escapeHtml(this.formatBuilderGoalMachineLabel(machine))}</option>`
+        `<option value="${this.escapeAttr(machine.machineUuid || '')}"${disabledAttr}${selectedAttr}>${this.escapeHtml(this.formatBuilderGoalMachineLabel(machine))}</option>`
       );
     });
     this.builderGoalMachineSelect.innerHTML = options.join('');
@@ -1034,7 +1047,9 @@ class AccountTaskPlanner {
   formatBuilderGoalMachineLabel(machine) {
     const label = machine.displayName || machine.machineUuid || 'Unknown machine';
     const tags = [];
-    if (machine.status) {
+    if (machine.online !== undefined) {
+      tags.push(machine.online ? 'online' : 'offline');
+    } else if (machine.status) {
       tags.push(String(machine.status).toUpperCase());
     }
     tags.push(machine.localMachine ? 'local dev host' : 'remote host');
@@ -1379,6 +1394,13 @@ class AccountTaskPlanner {
       this.builderGoalClientStatus.innerHTML = `${degradedCatalogWarning}${html}`;
     };
 
+    if (this.builderGoalMachinesLoadError) {
+      render(
+        `<span class="text-danger">${this.escapeHtml(this.builderGoalMachinesLoadError)}</span>`
+      );
+      return;
+    }
+
     const selectedAccount = this.getSelectedBuilderGoalAccount();
     const selectedMachine = this.getSelectedBuilderGoalMachine();
     const selectedTask = this.getSelectedBuilderGoalTask();
@@ -1613,6 +1635,44 @@ class AccountTaskPlanner {
       canPublishTask,
       canRunImported
     };
+  }
+
+  /**
+   * Pure helper resolving the Builder Goal launch-host selection from the current machine list.
+   *
+   * <p>Selection precedence:
+   * <ol>
+   *   <li>the previously persisted UUID, only when that machine is still present and
+   *       {@code builderGoalRunnable === true};</li>
+   *   <li>the first machine with {@code defaultSelected === true} that is Builder Goal
+   *       runnable;</li>
+   *   <li>the only machine with {@code builderGoalRunnable === true};</li>
+   *   <li>otherwise an empty selection for the operator to choose among enabled local options.
+   * </ol>
+   *
+   * <p>Remote, offline, disabled, or stale-persisted machines are never auto-selected.
+   *
+   * @returns {string} the resolved machine UUID, or '' when nothing is eligible.
+   */
+  static selectBuilderGoalMachineUuid(machines, previousMachineUuid) {
+    const list = Array.isArray(machines) ? machines : [];
+    const runnable = machine => Boolean(machine && machine.builderGoalRunnable === true);
+    const previous = (previousMachineUuid || '').trim();
+    if (previous) {
+      const preserved = list.find(machine => machine?.machineUuid === previous);
+      if (runnable(preserved)) {
+        return previous;
+      }
+    }
+    const defaultMachine = list.find(machine => runnable(machine) && machine.defaultSelected === true);
+    if (defaultMachine?.machineUuid) {
+      return defaultMachine.machineUuid;
+    }
+    const runnableMachines = list.filter(runnable);
+    if (runnableMachines.length === 1) {
+      return runnableMachines[0].machineUuid || '';
+    }
+    return '';
   }
 
   renderBuilderGoalRuns() {

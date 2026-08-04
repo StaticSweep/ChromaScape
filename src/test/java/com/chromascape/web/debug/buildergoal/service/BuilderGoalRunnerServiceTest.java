@@ -2037,6 +2037,374 @@ class BuilderGoalRunnerServiceTest {
         .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
   }
 
+  @Test
+  void startRun_rejectsOfflineMachineBeforePersistence() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+    BuilderGoalLauncherControlService.LauncherMachine offline =
+        new BuilderGoalLauncherControlService.LauncherMachine(
+            "machine-offline", "Machine Offline", "OFFLINE", true, false, Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(launcherControlService.findMachineByUuid("machine-offline"))
+        .thenReturn(Optional.of(offline));
+    when(launcherControlService.isBuilderGoalRunnableMachine(offline)).thenReturn(false);
+    when(launcherControlService.getBuilderGoalMachineDisabledReason(offline))
+        .thenReturn("Launcher machine is offline");
+
+    assertThatThrownBy(
+            () ->
+                service.startRun(
+                    objectMapper.readTree(
+                        """
+                        {
+                          "task_key": "configurable_woodcutting",
+                          "settings": {
+                            "treeType": "WILLOW"
+                          }
+                        }
+                        """),
+                    "hash-1",
+                    null,
+                    null,
+                    null,
+                    "machine-offline",
+                    null,
+                    null))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Launcher machine is offline");
+
+    verify(iterationRepository, never()).save(any(PatchLoopIteration.class));
+    verify(persistenceService, never()).saveIteration(any(PatchLoopIteration.class));
+  }
+
+  @Test
+  void startRun_rejectsRemoteMachineBeforePersistence() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+    BuilderGoalLauncherControlService.LauncherMachine remote =
+        new BuilderGoalLauncherControlService.LauncherMachine(
+            "machine-remote", "jew (jomar)", "ONLINE", true, true, Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(launcherControlService.findMachineByUuid("machine-remote"))
+        .thenReturn(Optional.of(remote));
+    when(launcherControlService.isBuilderGoalRunnableMachine(remote)).thenReturn(false);
+    when(launcherControlService.getBuilderGoalMachineDisabledReason(remote))
+        .thenReturn("Builder Goal local dev launches only run on the local ChromaScape host");
+
+    assertThatThrownBy(
+            () ->
+                service.startRun(
+                    objectMapper.readTree(
+                        """
+                        {
+                          "task_key": "configurable_woodcutting",
+                          "settings": {
+                            "treeType": "WILLOW"
+                          }
+                        }
+                        """),
+                    "hash-1",
+                    null,
+                    null,
+                    null,
+                    "machine-remote",
+                    null,
+                    null))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Builder Goal local dev launches only run on the local ChromaScape host");
+
+    verify(iterationRepository, never()).save(any(PatchLoopIteration.class));
+    verify(persistenceService, never()).saveIteration(any(PatchLoopIteration.class));
+  }
+
+  @Test
+  void startRun_rejectsDisabledMachineBeforePersistence() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+    BuilderGoalLauncherControlService.LauncherMachine disabled =
+        new BuilderGoalLauncherControlService.LauncherMachine(
+            "machine-disabled", "Machine Disabled", "ONLINE", false, true, Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(launcherControlService.findMachineByUuid("machine-disabled"))
+        .thenReturn(Optional.of(disabled));
+    when(launcherControlService.isBuilderGoalRunnableMachine(disabled)).thenReturn(false);
+    when(launcherControlService.getBuilderGoalMachineDisabledReason(disabled))
+        .thenReturn("Launcher machine is disabled");
+
+    assertThatThrownBy(
+            () ->
+                service.startRun(
+                    objectMapper.readTree(
+                        """
+                        {
+                          "task_key": "configurable_woodcutting",
+                          "settings": {
+                            "treeType": "WILLOW"
+                          }
+                        }
+                        """),
+                    "hash-1",
+                    null,
+                    null,
+                    null,
+                    "machine-disabled",
+                    null,
+                    null))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Launcher machine is disabled");
+
+    verify(iterationRepository, never()).save(any(PatchLoopIteration.class));
+    verify(persistenceService, never()).saveIteration(any(PatchLoopIteration.class));
+  }
+
+  @Test
+  void launchAccount_rejectsUnknownMachineUuid() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(launcherControlService.findMachineByUuid("unknown-machine"))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.launchAccount("hash-1", "unknown-machine", 360))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Selected launcher machine was not found");
+
+    verify(targetPreparationService, never())
+        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+  }
+
+  @Test
+  void launchAccount_rejectsOfflineMachineBeforePreparation() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+    BuilderGoalLauncherControlService.LauncherMachine offline =
+        new BuilderGoalLauncherControlService.LauncherMachine(
+            "machine-offline", "Machine Offline", "OFFLINE", true, false, Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(launcherControlService.findMachineByUuid("machine-offline"))
+        .thenReturn(Optional.of(offline));
+    when(launcherControlService.isBuilderGoalRunnableMachine(offline)).thenReturn(false);
+    when(launcherControlService.getBuilderGoalMachineDisabledReason(offline))
+        .thenReturn("Launcher machine is offline");
+
+    assertThatThrownBy(() -> service.launchAccount("hash-1", "machine-offline", 360))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Launcher machine is offline");
+
+    verify(targetPreparationService, never())
+        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+  }
+
+  @Test
+  void launchAccount_rejectsRemoteMachineBeforePreparation() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+    BuilderGoalLauncherControlService.LauncherMachine remote =
+        new BuilderGoalLauncherControlService.LauncherMachine(
+            "machine-remote", "jew (jomar)", "ONLINE", true, true, Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(launcherControlService.findMachineByUuid("machine-remote"))
+        .thenReturn(Optional.of(remote));
+    when(launcherControlService.isBuilderGoalRunnableMachine(remote)).thenReturn(false);
+    when(launcherControlService.getBuilderGoalMachineDisabledReason(remote))
+        .thenReturn("Builder Goal local dev launches only run on the local ChromaScape host");
+
+    assertThatThrownBy(() -> service.launchAccount("hash-1", "machine-remote", 360))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Builder Goal local dev launches only run on the local ChromaScape host");
+
+    verify(targetPreparationService, never())
+        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+  }
+
+  @Test
+  void launchAccount_acceptsValidLocalMachineAndPrepares() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+    Micro6OnlineClientRegistryService.TargetClient targetClient =
+        new Micro6OnlineClientRegistryService.TargetClient(
+            "client-1",
+            "bigGreenMeat",
+            "hash-1",
+            "http://127.0.0.1:8098",
+            "0.0.0.0:8098",
+            "micro6",
+            "accountbuilder_builderpro",
+            "IDLE",
+            null,
+            Instant.now());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class)))
+        .thenReturn(
+            new Micro6TargetPreparationService.PreparationResult(
+                targetClient,
+                Map.of("state", Micro6TargetPreparationService.PHASE_READY_TO_PUBLISH),
+                null,
+                null));
+
+    Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
+
+    assertThat(result.get("accepted")).isEqualTo(true);
+    assertThat(result.get("launcherMachineUuid")).isEqualTo("machine-1");
+    verify(targetPreparationService)
+        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+  }
+
+  @Test
+  void publishOnly_requiresRunnableLocalMachineWhenLaunchFallbackIsEnabled() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+    BuilderGoalLauncherControlService.LauncherMachine remote =
+        new BuilderGoalLauncherControlService.LauncherMachine(
+            "machine-remote", "jew (jomar)", "ONLINE", true, true, Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(launcherControlService.findMachineByUuid("machine-remote"))
+        .thenReturn(Optional.of(remote));
+    when(launcherControlService.isBuilderGoalRunnableMachine(remote)).thenReturn(false);
+    when(launcherControlService.getBuilderGoalMachineDisabledReason(remote))
+        .thenReturn("Builder Goal local dev launches only run on the local ChromaScape host");
+
+    assertThatThrownBy(
+            () ->
+                service.publishOnly(
+                    "hash-1",
+                    "machine-remote",
+                    "configurable_woodcutting",
+                    Map.of("treeType", "WILLOW"),
+                    360,
+                    null,
+                    true,
+                    null))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Builder Goal local dev launches only run on the local ChromaScape host");
+
+    verify(iterationRepository, never()).save(any(PatchLoopIteration.class));
+    verify(persistenceService, never()).saveIteration(any(PatchLoopIteration.class));
+    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap());
+  }
+
+  @Test
+  void publishOnly_withoutFallbackStillWorksWithoutMachine() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            null,
+            "launcher",
+            true,
+            "ready",
+            Map.of());
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
+    when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
+        .thenReturn(
+            new ScriptExecutionService.Micro6ExecutorHealthResult(
+                true,
+                true,
+                "READY_TO_PUBLISH",
+                "dispatch-ready",
+                "bigGreenMeat",
+                "hash-1",
+                "bigGreenMeat",
+                "hash-1",
+                false,
+                null,
+                "READY",
+                "LOGGED_IN",
+                null,
+                null,
+                null,
+                "http://127.0.0.1:8098",
+                null));
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap()))
+        .thenReturn(
+            ScriptExecutionService.Micro6PublishResult.success(
+                42, true, "http://127.0.0.1:8098", "QUEUED"));
+
+    Map<String, Object> response =
+        service.publishOnly(
+            "hash-1",
+            null,
+            "configurable_woodcutting",
+            Map.of("treeType", "WILLOW"),
+            360,
+            null,
+            false,
+            null);
+
+    assertThat(response.get("published")).isEqualTo(true);
+    assertThat(response.get("entryId")).isEqualTo(42);
+    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap());
+  }
+
   private AnalysisV1EvidenceBundle sampleEvidenceBundle() {
     AnalysisV1EvidenceBundle bundle = new AnalysisV1EvidenceBundle();
     bundle.setTimeWindow(

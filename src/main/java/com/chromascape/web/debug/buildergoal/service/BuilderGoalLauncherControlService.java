@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.buildergoal.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.InetAddress;
@@ -10,6 +11,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -102,7 +104,10 @@ public class BuilderGoalLauncherControlService {
       }
       return accounts;
     } catch (Exception e) {
-      throw new IllegalStateException("Failed to load launcher accounts: " + e.getMessage(), e);
+      throw new IllegalStateException(
+          "Failed to load launcher accounts: "
+              + sanitizeUpstreamError(sanitizedCause(e)),
+          e);
     }
   }
 
@@ -188,7 +193,8 @@ public class BuilderGoalLauncherControlService {
       }
       return machines;
     } catch (Exception e) {
-      throw new IllegalStateException("Failed to load launcher machines: " + e.getMessage(), e);
+      throw new IllegalStateException(
+          "Failed to load launcher machines: " + sanitizeUpstreamError(sanitizedCause(e)), e);
     }
   }
 
@@ -258,7 +264,8 @@ public class BuilderGoalLauncherControlService {
       JsonNode metadataNode = root.path("metadata");
       Map<String, Object> metadata =
           metadataNode != null && metadataNode.isObject()
-              ? objectMapper.convertValue(metadataNode, Map.class)
+              ? objectMapper.convertValue(
+                  metadataNode, new TypeReference<LinkedHashMap<String, Object>>() {})
               : Map.of();
       return new CommandStatus(
           normalizedCommandId,
@@ -275,6 +282,10 @@ public class BuilderGoalLauncherControlService {
 
   public String getDefaultMachineUuid() {
     return defaultMachineUuid;
+  }
+
+  public String getAuthToken() {
+    return authToken;
   }
 
   public String getBaseUrl() {
@@ -479,7 +490,8 @@ public class BuilderGoalLauncherControlService {
     applyAuth(builder);
     HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     if (response.statusCode() >= 400) {
-      throw new IllegalStateException("HTTP " + response.statusCode() + ": " + response.body());
+      throw new IllegalStateException(
+          "HTTP " + response.statusCode() + ": " + sanitizeUpstreamError(response.body()));
     }
     return objectMapper.readTree(response.body());
   }
@@ -495,9 +507,41 @@ public class BuilderGoalLauncherControlService {
     applyAuth(builder);
     HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     if (response.statusCode() >= 400) {
-      throw new IllegalStateException("HTTP " + response.statusCode() + ": " + response.body());
+      throw new IllegalStateException(
+          "HTTP " + response.statusCode() + ": " + sanitizeUpstreamError(response.body()));
     }
     return objectMapper.readTree(response.body());
+  }
+
+  /**
+   * Builds a non-null, actionable cause string from a parsing/transport failure: the exception
+   * type plus its message, falling back to the class name so callers never see a bare {@code null}.
+   */
+  private static String sanitizedCause(Exception e) {
+    if (e == null) {
+      return "unknown cause";
+    }
+    String message = e.getMessage();
+    if (message == null || message.isBlank()) {
+      return e.getClass().getSimpleName();
+    }
+    return e.getClass().getSimpleName() + ": " + message.trim();
+  }
+
+  /**
+   * Sanitizes an upstream error body before it surfaces in exception messages or logs. The
+   * configured launcher bearer token and the request body are never disclosed; only a bounded
+   * prefix of the response text is retained so actionable status details survive.
+   */
+  private String sanitizeUpstreamError(String responseBody) {
+    String text = responseBody == null ? "" : responseBody.trim();
+    if (text.length() > 500) {
+      text = text.substring(0, 500) + "…(truncated)";
+    }
+    if (authToken != null && !authToken.isBlank() && text.contains(authToken)) {
+      text = text.replace(authToken, "***");
+    }
+    return text;
   }
 
   private void applyAuth(HttpRequest.Builder builder) {
@@ -564,6 +608,18 @@ public class BuilderGoalLauncherControlService {
     return null;
   }
 
+  /**
+   * Copies launcher metadata into an immutable, insertion-ordered snapshot that tolerates null
+   * values. {@link Map#copyOf} rejects null entries, but launcher-control legitimately reports
+   * null-valued fields such as {@code runtime}.
+   */
+  private static Map<String, Object> immutableMetadata(Map<String, Object> metadata) {
+    if (metadata == null || metadata.isEmpty()) {
+      return Map.of();
+    }
+    return Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
+  }
+
   public record LauncherAccount(
       String accountId,
       String accountHash,
@@ -573,7 +629,7 @@ public class BuilderGoalLauncherControlService {
       boolean enabled,
       Map<String, Object> metadata) {
     public LauncherAccount {
-      metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+      metadata = immutableMetadata(metadata);
     }
   }
 
@@ -585,7 +641,7 @@ public class BuilderGoalLauncherControlService {
       boolean online,
       Map<String, Object> metadata) {
     public LauncherMachine {
-      metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+      metadata = immutableMetadata(metadata);
     }
   }
 
@@ -603,7 +659,7 @@ public class BuilderGoalLauncherControlService {
       Map<String, Object> metadata,
       boolean terminal) {
     public CommandStatus {
-      metadata = metadata != null ? Map.copyOf(metadata) : Map.of();
+      metadata = immutableMetadata(metadata);
     }
   }
 }

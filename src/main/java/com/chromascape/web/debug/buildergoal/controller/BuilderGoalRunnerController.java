@@ -72,8 +72,16 @@ public class BuilderGoalRunnerController {
   }
 
   @GetMapping("/machines")
-  public ResponseEntity<List<Map<String, Object>>> listMachines() {
-    return ResponseEntity.ok(launcherControlService.listMachineSummaries());
+  public ResponseEntity<Object> listMachines() {
+    try {
+      return ResponseEntity.ok(launcherControlService.listMachineSummaries());
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+          .body(
+              Map.of(
+                  "error", "Failed to load launcher machines",
+                  "details", sanitizeMachineError(e)));
+    }
   }
 
   @GetMapping("/config/last")
@@ -435,6 +443,24 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(Map.of("error", "Failed to stop builder goal run", "details", e.getMessage()));
     }
+  }
+
+  /**
+   * Sanitizes a launcher machine-discovery failure into an actionable detail string. The
+   * exception type and a non-null message are preserved while credentials (such as a bearer
+   * token) are masked.
+   */
+  private String sanitizeMachineError(Exception e) {
+    if (e == null) {
+      return "Unknown launcher machine discovery failure";
+    }
+    String message = e.getMessage();
+    String detail = message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
+    String token = launcherControlService.getAuthToken();
+    if (token != null && !token.isBlank() && detail.contains(token)) {
+      detail = detail.replace(token, "***");
+    }
+    return detail;
   }
 
   private String textValue(JsonNode node) {

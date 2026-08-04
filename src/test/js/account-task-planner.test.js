@@ -81,6 +81,139 @@ const offlineMachine = {
   builderGoalRunnable: false
 };
 
+const localMachine = uuid => ({
+  machineUuid: uuid,
+  displayName: `Local ${uuid}`,
+  online: true,
+  enabled: true,
+  localMachine: true,
+  builderGoalRunnable: true,
+  defaultSelected: false
+});
+
+const remoteMachine = uuid => ({
+  machineUuid: uuid,
+  displayName: `Remote ${uuid}`,
+  online: true,
+  enabled: true,
+  localMachine: false,
+  builderGoalRunnable: false,
+  defaultSelected: false,
+  builderGoalDisabledReason: 'Builder Goal local dev launches only run on the local ChromaScape host'
+});
+
+const offlineLocalMachine = uuid => ({
+  machineUuid: uuid,
+  displayName: `Offline ${uuid}`,
+  online: false,
+  enabled: true,
+  localMachine: true,
+  builderGoalRunnable: false,
+  defaultSelected: false,
+  builderGoalDisabledReason: 'Launcher machine is offline'
+});
+
+function select(machines, previous) {
+  return AccountTaskPlanner.selectBuilderGoalMachineUuid(machines, previous);
+}
+
+test('selectBuilderGoalMachineUuid: valid persisted local selection wins', () => {
+  const machines = [localMachine('local-1'), remoteMachine('remote-1')];
+  assert.equal(select(machines, 'local-1'), 'local-1');
+});
+
+test('selectBuilderGoalMachineUuid: stale persisted UUID is discarded', () => {
+  const machines = [localMachine('local-1')];
+  assert.equal(select(machines, 'gone-machine'), 'local-1');
+});
+
+test('selectBuilderGoalMachineUuid: persisted remote UUID is discarded', () => {
+  const machines = [localMachine('local-1'), remoteMachine('remote-1')];
+  assert.equal(select(machines, 'remote-1'), 'local-1');
+});
+
+test('selectBuilderGoalMachineUuid: runnable configured default wins', () => {
+  const machines = [
+    localMachine('local-1'),
+    { ...localMachine('local-2'), defaultSelected: true }
+  ];
+  assert.equal(select(machines, ''), 'local-2');
+});
+
+test('selectBuilderGoalMachineUuid: non-runnable configured default is ignored', () => {
+  const machines = [
+    { ...remoteMachine('remote-1'), defaultSelected: true },
+    localMachine('local-1')
+  ];
+  assert.equal(select(machines, ''), 'local-1');
+});
+
+test('selectBuilderGoalMachineUuid: exactly one runnable local machine is auto-selected with multiple machines', () => {
+  const machines = [localMachine('local-1'), remoteMachine('remote-1')];
+  assert.equal(select(machines, ''), 'local-1');
+});
+
+test('selectBuilderGoalMachineUuid: no runnable machines returns an empty string', () => {
+  const machines = [remoteMachine('remote-1'), offlineLocalMachine('offline-1')];
+  assert.equal(select(machines, 'remote-1'), '');
+});
+
+test('selectBuilderGoalMachineUuid: multiple runnable machines without a valid default returns an empty string', () => {
+  const machines = [localMachine('local-1'), localMachine('local-2')];
+  assert.equal(select(machines, ''), '');
+  assert.equal(select(machines, 'stale-machine'), '');
+});
+
+test('selectBuilderGoalMachineUuid: handles empty and null input lists', () => {
+  assert.equal(select([], 'machine-1'), '');
+  assert.equal(select(null, 'machine-1'), '');
+  assert.equal(select(undefined, undefined), '');
+});
+
+test('selectBuilderGoalMachineUuid: persisted local machine that became non-runnable is not preserved', () => {
+  const machines = [offlineLocalMachine('local-1'), localMachine('local-2')];
+  assert.equal(select(machines, 'local-1'), 'local-2');
+});
+
+test('availability enables Launch and Run with the selected local machine', () => {
+  const result = availability({
+    account: credentialedAccount,
+    machine: localMachine('local-1')
+  });
+  assert.equal(result.canLaunchAccount, true);
+  assert.equal(result.canRunTask, true);
+});
+
+test('availability: remote/offline selection cannot enable Launch or Run', () => {
+  const remoteResult = availability({
+    account: credentialedAccount,
+    machine: remoteMachine('remote-1')
+  });
+  assert.equal(remoteResult.canLaunchAccount, false);
+  assert.equal(remoteResult.canRunTask, false);
+
+  const offlineResult = availability({
+    account: credentialedAccount,
+    machine: offlineLocalMachine('offline-1')
+  });
+  assert.equal(offlineResult.canLaunchAccount, false);
+  assert.equal(offlineResult.canRunTask, false);
+});
+
+test('availability: Publish remains independent of machine availability', () => {
+  const remoteResult = availability({
+    account: credentialedAccount,
+    machine: remoteMachine('remote-1')
+  });
+  assert.equal(remoteResult.canPublishTask, true);
+
+  const nullResult = availability({
+    account: credentialedAccount,
+    machine: null
+  });
+  assert.equal(nullResult.canPublishTask, true);
+});
+
 test('computeBuilderGoalActionAvailability: Runnable, credentialed, Online executor, Runnable machine => all actions available', () => {
   const result = availability({
     account: credentialedAccount,

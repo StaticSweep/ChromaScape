@@ -88,6 +88,7 @@ builder-goal:
     base-url: ${BUILDER_GOAL_LAUNCHER_BASE_URL:http://192.168.1.6:8084}
     api-token: ${BUILDER_GOAL_LAUNCHER_API_TOKEN:devtoken123}
     default-machine-uuid: ${BUILDER_GOAL_LAUNCHER_MACHINE_UUID:}
+    local-machine-uuid: ${BUILDER_GOAL_LAUNCHER_LOCAL_MACHINE_UUID:}
     accounts-path: ${BUILDER_GOAL_LAUNCHER_ACCOUNTS_PATH:/api/v1/accounts}
     start-command-path: ${BUILDER_GOAL_LAUNCHER_START_PATH:/api/v1/launcher/commands/start}
     command-status-path: ${BUILDER_GOAL_LAUNCHER_STATUS_PATH:/api/v1/launcher/commands}

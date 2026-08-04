@@ -1,5 +1,5 @@
 param(
-  [string]$ProjectDir = "F:\Dev\IdeaProjects\ChromaScape",
+  [string]$ProjectDir = "C:\Dev\IdeaProjects\ChromaScape",
   [int]$Port = 8090,
   [string]$LanHost = "192.168.1.6",
   [int]$StartupTimeoutSec = 900,
