@@ -498,3 +498,45 @@ test('renderBuilderGoalClientStatus: degraded catalog warning prefixes every rea
   assert.ok(message.includes('Catalog fetch failed'), `unexpected: ${message}`);
   assert.ok(message.includes('Publish Task is available'), `unexpected: ${message}`);
 });
+
+test('renderBuilderGoalClientStatus: degraded catalog warning is shown without an account', () => {
+  const planner = createStatusPlanner({
+    builderGoalCatalogDegraded: true,
+    builderGoalCatalogReason: 'Catalog fetch failed; using saved task keys.'
+  });
+
+  planner.renderBuilderGoalClientStatus();
+  const message = statusMessage(planner);
+  assert.ok(message.includes('Catalog fetch failed'), `unexpected: ${message}`);
+  assert.ok(message.includes('Select an account'), `unexpected: ${message}`);
+});
+
+test('renderBuilderGoalClientStatus: degraded catalog warning is shown for a non-runnable account', () => {
+  const planner = createStatusPlanner({
+    getSelectedBuilderGoalAccount: () => disabledAccount,
+    builderGoalCatalogDegraded: true,
+    builderGoalCatalogReason: 'Catalog fetch failed; using saved task keys.'
+  });
+
+  planner.renderBuilderGoalClientStatus();
+  const message = statusMessage(planner);
+  assert.ok(message.includes('Catalog fetch failed'), `unexpected: ${message}`);
+  assert.ok(message.includes('Account is disabled in launcher control'), `unexpected: ${message}`);
+});
+
+test('renderBuilderGoalClientStatus: invalid JSON wins over missing credentials and executor fallback messaging', () => {
+  const planner = createStatusPlanner({
+    getSelectedBuilderGoalAccount: () => credentiallessAccount,
+    getSelectedBuilderGoalMachine: () => runnableMachine,
+    getSelectedBuilderGoalTask: () => ({
+      task_key: 'configurable_woodcutting',
+      display_name: 'Configurable Woodcutting'
+    }),
+    parseBuilderGoalConfigInput: () => ({ error: 'Invalid JSON: Unexpected token' })
+  });
+
+  planner.renderBuilderGoalClientStatus();
+  const message = statusMessage(planner);
+  assert.ok(message.includes('Invalid JSON'), `unexpected: ${message}`);
+  assert.ok(!message.includes('No dispatch-ready Micro6 executor'), `unexpected: ${message}`);
+});

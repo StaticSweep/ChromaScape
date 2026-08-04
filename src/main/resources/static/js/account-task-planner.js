@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '28';
+  static BUILDER_GOAL_BUNDLE_VERSION = '29';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -1369,13 +1369,24 @@ class AccountTaskPlanner {
       return;
     }
 
+    // Keep catalog degradation visible even when an account has not been selected yet or
+    // another readiness condition returns early below.
+    const degradedCatalogWarning =
+      this.builderGoalCatalogDegraded && this.builderGoalCatalogReason
+        ? `<div class="text-warning mb-1">${this.escapeHtml(this.builderGoalCatalogReason)}</div>`
+        : '';
+    const render = html => {
+      this.builderGoalClientStatus.innerHTML = `${degradedCatalogWarning}${html}`;
+    };
+
     const selectedAccount = this.getSelectedBuilderGoalAccount();
     const selectedMachine = this.getSelectedBuilderGoalMachine();
     const selectedTask = this.getSelectedBuilderGoalTask();
     const world = this.getBuilderGoalWorldValue();
     if (!selectedAccount) {
-      this.builderGoalClientStatus.innerHTML =
-        '<span class="text-muted">Select an account, choose a task, set the task settings and world, and then run the task.</span>';
+      render(
+        '<span class="text-muted">Select an account, choose a task, set the task settings and world, and then run the task.</span>'
+      );
       return;
     }
 
@@ -1385,8 +1396,11 @@ class AccountTaskPlanner {
         : selectedAccount.online === true;
 
     if (!selectedAccount.runnable) {
-      this.builderGoalClientStatus.innerHTML =
-        `<span class="text-warning">${this.escapeHtml(selectedAccount.disabledReason || 'This account is visible but not runnable yet.')}</span>`;
+      render(
+        `<span class="text-warning">${this.escapeHtml(
+          selectedAccount.disabledReason || 'This account is visible but not runnable yet.'
+        )}</span>`
+      );
       return;
     }
 
@@ -1411,15 +1425,12 @@ class AccountTaskPlanner {
       importedRunnable: Boolean(this.importedBuilderGoal?.result?.runnableNow)
     });
 
-    // Degraded-catalog warning rendered for every readiness branch below, so operators
-    // still see why ChromaScape is falling back to saved/imported task keys.
-    const degradedCatalogWarning =
-      this.builderGoalCatalogDegraded && this.builderGoalCatalogReason
-        ? `<div class="text-warning mb-1">${this.escapeHtml(this.builderGoalCatalogReason)}</div>`
-        : '';
-    const render = html => {
-      this.builderGoalClientStatus.innerHTML = `${degradedCatalogWarning}${html}`;
-    };
+    if (!configValid) {
+      render(
+        `<span class="text-warning">${this.escapeHtml(parsedConfig.error || 'Task settings JSON is invalid.')} Select a task with valid settings before running or publishing.</span>`
+      );
+      return;
+    }
 
     if (!selectedAccount.launchReady) {
       const missingCredentialsHint =
@@ -1508,13 +1519,6 @@ class AccountTaskPlanner {
     if (!executorOnline) {
       render(
         '<span class="text-warning">No dispatch-ready Micro6 executor is online for this account. Use Launch Account or Run Task first, then Publish Task becomes available.</span>'
-      );
-      return;
-    }
-
-    if (!configValid) {
-      render(
-        `<span class="text-warning">${this.escapeHtml(parsedConfig.error)} Select a Micro6 task with valid settings before publishing.</span>`
       );
       return;
     }
