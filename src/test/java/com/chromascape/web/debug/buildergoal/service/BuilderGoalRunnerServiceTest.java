@@ -3,26 +3,26 @@ package com.chromascape.web.debug.buildergoal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.atLeastOnce;
 
 import com.chromascape.web.debug.patchloop.dto.AnalysisStatus;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV1EvidenceBundle;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV2Request;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV2Response;
-import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopFailureCode;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIteration;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIterationRepository;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
 import com.chromascape.web.debug.patchloop.service.PatchLoopEvidenceService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopPersistenceService;
 import com.chromascape.web.debug.patchloop.service.PatchLoopSessionResolverService;
@@ -32,12 +32,14 @@ import com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServi
 import com.chromascape.web.logs.LogRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,13 +65,20 @@ class BuilderGoalRunnerServiceTest {
   @Mock private Micro6TaskSourcePatchService micro6TaskSourcePatchService;
   @Mock private Micro6TargetRelaunchService micro6TargetRelaunchService;
   @Mock private Micro6TargetPreparationService targetPreparationService;
+  @Mock private BuilderGoalRunStateMutationService mutationService;
 
   private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+  private final Map<String, PatchLoopIteration> savedIterations = new ConcurrentHashMap<>();
+  private BuilderGoalRunStateMutationService mutationDelegate;
   private BuilderGoalRunnerService service;
 
   @BeforeEach
   void setUp() {
     Executor directExecutor = Runnable::run;
+    savedIterations.clear();
+    mutationDelegate =
+        new BuilderGoalRunStateMutationService(
+            iterationRepository, persistenceService, objectMapper);
     service =
         new BuilderGoalRunnerService(
             iterationRepository,
@@ -86,6 +95,7 @@ class BuilderGoalRunnerServiceTest {
             micro6TaskSourcePatchService,
             micro6TargetRelaunchService,
             targetPreparationService,
+            mutationService,
             objectMapper,
             directExecutor,
             300000L,
@@ -97,9 +107,125 @@ class BuilderGoalRunnerServiceTest {
             "machine-1", "Machine 1", "ONLINE", true, true, Map.of());
     lenient()
         .when(iterationRepository.save(any(PatchLoopIteration.class)))
-        .thenAnswer(invocation -> invocation.getArgument(0, PatchLoopIteration.class));
+        .thenAnswer(
+            invocation -> {
+              PatchLoopIteration iteration = invocation.getArgument(0, PatchLoopIteration.class);
+              if (iteration.getIterationId() != null) {
+                savedIterations.put(iteration.getIterationId(), iteration);
+              }
+              return iteration;
+            });
+    // The runner now delegates lifecycle mutations to the transactional mutation service. Keep
+    // this unit test's existing mock seam, but route the default mutation calls through a real
+    // delegate so status/reconciliation tests exercise the same locked state machine as runtime.
+    lenient()
+        .doAnswer(
+            invocation -> {
+              String iterationId = invocation.getArgument(0, String.class);
+              Optional<PatchLoopIteration> found =
+                  iterationRepository.findByIterationId(iterationId);
+              return found.isPresent()
+                  ? found
+                  : Optional.ofNullable(savedIterations.get(iterationId));
+            })
+        .when(iterationRepository)
+        .findByIterationIdForUpdate(anyString());
+    lenient().doReturn(Optional.empty()).when(iterationRepository).findByIterationId(anyString());
+    lenient()
+        .when(mutationService.reservePublish(anyString(), anyInt(), any(LocalDateTime.class)))
+        .thenAnswer(
+            invocation -> {
+              return mutationDelegate.reservePublish(
+                  invocation.getArgument(0, String.class),
+                  invocation.getArgument(1, Integer.class),
+                  invocation.getArgument(2, LocalDateTime.class));
+            });
+    lenient()
+        .when(
+            mutationService.applyPublishOutcome(
+                anyString(),
+                anyInt(),
+                any(ScriptExecutionService.Micro6PublishResult.class),
+                any()))
+        .thenAnswer(
+            invocation -> {
+              return mutationDelegate.applyPublishOutcome(
+                  invocation.getArgument(0, String.class),
+                  invocation.getArgument(1, Integer.class),
+                  invocation.getArgument(2, ScriptExecutionService.Micro6PublishResult.class),
+                  invocation.getArgument(
+                      3, ScriptExecutionService.Micro6ExecutorHealthResult.class));
+            });
+    lenient()
+        .when(
+            mutationService.applyExecutorStatus(
+                anyString(),
+                anyInt(),
+                any(ScriptExecutionService.Micro6RunStatusResult.class),
+                any(LocalDateTime.class)))
+        .thenAnswer(
+            invocation ->
+                mutationDelegate.applyExecutorStatus(
+                    invocation.getArgument(0, String.class),
+                    invocation.getArgument(1, Integer.class),
+                    invocation.getArgument(2, ScriptExecutionService.Micro6RunStatusResult.class),
+                    invocation.getArgument(3, LocalDateTime.class)));
+    lenient()
+        .when(mutationService.beginLateReconcile(anyString()))
+        .thenAnswer(
+            invocation ->
+                mutationDelegate.beginLateReconcile(invocation.getArgument(0, String.class)));
+    lenient()
+        .when(mutationService.failStaleLaunchIfActive(anyString()))
+        .thenAnswer(
+            invocation ->
+                mutationDelegate.failStaleLaunchIfActive(invocation.getArgument(0, String.class)));
+    lenient()
+        .when(
+            mutationService.applyLateReconcile(
+                anyString(),
+                anyInt(),
+                any(),
+                any(),
+                any(ScriptExecutionService.Micro6RunStatusResult.class)))
+        .thenAnswer(
+            invocation ->
+                mutationDelegate.applyLateReconcile(
+                    invocation.getArgument(0, String.class),
+                    invocation.getArgument(1, Integer.class),
+                    invocation.getArgument(2, String.class),
+                    invocation.getArgument(3, String.class),
+                    invocation.getArgument(4, ScriptExecutionService.Micro6RunStatusResult.class)));
+    lenient()
+        .when(mutationService.requestStop(anyString(), anyString()))
+        .thenAnswer(
+            invocation -> {
+              String iterationId = invocation.getArgument(0, String.class);
+              PatchLoopIteration found =
+                  iterationRepository.findByIterationId(iterationId).orElse(null);
+              Map<String, Object> metadata = new LinkedHashMap<>();
+              Integer entryId = null;
+              if (found != null && found.getTaskMetadataJson() != null) {
+                metadata = objectMapper.convertValue(found.getTaskMetadataJson(), Map.class);
+                Object rawPublish = metadata.get("micro6_publish");
+                if (rawPublish instanceof Map<?, ?> publish) {
+                  Object rawEntry = publish.get("entry_id");
+                  if (rawEntry instanceof Number number) {
+                    entryId = number.intValue();
+                  }
+                }
+              }
+              boolean prePublish = entryId == null || entryId <= 0;
+              if (prePublish && found != null) {
+                persistenceService.updateIterationStatus(found, PatchLoopStatus.CANCELLED);
+              }
+              return new BuilderGoalRunStateMutationService.StopRequestResult(
+                  iterationId, entryId, prePublish, metadata, prePublish ? null : "STOPPING");
+            });
     lenient().when(launcherControlService.listMachines()).thenReturn(List.of(machine));
-    lenient().when(launcherControlService.findMachineByUuid("machine-1")).thenReturn(Optional.of(machine));
+    lenient()
+        .when(launcherControlService.findMachineByUuid("machine-1"))
+        .thenReturn(Optional.of(machine));
     lenient().when(launcherControlService.isBuilderGoalRunnableMachine(machine)).thenReturn(true);
   }
 
@@ -401,9 +527,9 @@ class BuilderGoalRunnerServiceTest {
     iteration.setTaskMetadataJson(
         objectMapper.valueToTree(
             Map.of(
-                "display_name", "35 Woodcutting",
-                "micro6_publish", Map.of("status", "FAILED"))));
-    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+                "display_name", "35 Woodcutting", "micro6_publish", Map.of("status", "FAILED"))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(java.util.List.of(iteration));
 
     Map<String, Object> run = service.listRuns(10).get(0);
@@ -414,7 +540,8 @@ class BuilderGoalRunnerServiceTest {
     assertThat(run.get("patchDraftAvailable")).isEqualTo(false);
     assertThat(run.get("analyzeBlockedReason")).isNull();
     assertThat(run.get("approvalAvailable")).isEqualTo(false);
-    assertThat(run.get("approvalBlockedReason")).isEqualTo("Generate a patch plan before relaunching");
+    assertThat(run.get("approvalBlockedReason"))
+        .isEqualTo("Generate a patch plan before relaunching");
     assertThat(run.get("fixBlockedReason")).isEqualTo("Generate a patch plan before relaunching");
   }
 
@@ -453,7 +580,8 @@ class BuilderGoalRunnerServiceTest {
                 "display_name", "35 Woodcutting",
                 "micro6_publish", Map.of("status", "FAILED"),
                 "recovery", Map.of("phase", "PATCH_PLAN_READY", "message", "Patch plan ready"))));
-    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(java.util.List.of(iteration));
 
     Map<String, Object> run = service.listRuns(10).get(0);
@@ -473,8 +601,10 @@ class BuilderGoalRunnerServiceTest {
     iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
     iteration.setScriptName("configurable_woodcutting");
     iteration.setStatus(PatchLoopStatus.FAILED);
-    iteration.setTaskMetadataJson(objectMapper.valueToTree(Map.of("micro6_publish", Map.of("status", "FAILED"))));
-    when(iterationRepository.findByIterationId("buildergoal_fix0001")).thenReturn(Optional.of(iteration));
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(Map.of("micro6_publish", Map.of("status", "FAILED"))));
+    when(iterationRepository.findByIterationId("buildergoal_fix0001"))
+        .thenReturn(Optional.of(iteration));
 
     assertThatThrownBy(() -> service.fixAndRelaunch("buildergoal_fix0001"))
         .isInstanceOf(IllegalStateException.class)
@@ -497,13 +627,17 @@ class BuilderGoalRunnerServiceTest {
                 "display_name", "35 Woodcutting",
                 "task_key", "configurable_woodcutting",
                 "micro6_publish", Map.of("status", "FAILED"))));
-    when(iterationRepository.findByIterationId("buildergoal_draft0001")).thenReturn(Optional.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_draft0001"))
+        .thenReturn(Optional.of(iteration));
     when(evidenceService.collectEvidence(eq(iteration), any())).thenReturn(sampleEvidenceBundle());
 
     Map<String, Object> draft = service.buildAnalysisDraft("buildergoal_draft0001");
 
     assertThat(draft.get("canAnalyze")).isEqualTo(true);
-    assertThat(draft.get("prompt")).isEqualTo("Create a Micro6 patch plan for the failed builder goal task '35 Woodcutting'. Use my selected evidence and observations only.");
+    assertThat(draft.get("prompt"))
+        .isEqualTo(
+            "Create a Micro6 patch plan for the failed builder goal task '35 Woodcutting'. Use my"
+                + " selected evidence and observations only.");
     assertThat(draft.get("selectedEvidenceCount")).isEqualTo(3);
     assertThat(draft.get("totalEvidenceCount")).isEqualTo(3);
     assertThat((java.util.List<?>) draft.get("evidenceGroups")).hasSize(3);
@@ -520,14 +654,17 @@ class BuilderGoalRunnerServiceTest {
     newest.setTaskMetadataJson(
         objectMapper.valueToTree(
             Map.of(
-                "display_name", "35 Woodcutting",
-                "settings", Map.of("treeType", "WILLOW", "targetLevel", 35),
+                "display_name",
+                "35 Woodcutting",
+                "settings",
+                Map.of("treeType", "WILLOW", "targetLevel", 35),
                 "mule_account",
                     Map.of(
                         "account_id", "hash-1",
                         "account_name", "bigGreenMeat",
                         "launcher_machine_uuid", "machine-1"),
-                "source", "catalog_task")));
+                "source",
+                "catalog_task")));
 
     PatchLoopIteration older = new PatchLoopIteration();
     older.setIterationId("buildergoal_cfg0001");
@@ -538,16 +675,20 @@ class BuilderGoalRunnerServiceTest {
     older.setTaskMetadataJson(
         objectMapper.valueToTree(
             Map.of(
-                "display_name", "35 Woodcutting",
-                "settings", Map.of("treeType", "OAK"),
+                "display_name",
+                "35 Woodcutting",
+                "settings",
+                Map.of("treeType", "OAK"),
                 "mule_account",
                     Map.of(
                         "account_id", "hash-1",
                         "account_name", "bigGreenMeat",
                         "launcher_machine_uuid", "machine-1"),
-                "source", "catalog_task")));
+                "source",
+                "catalog_task")));
 
-    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(List.of(newest, older));
 
     Map<String, Object> config = service.getLatestConfig("hash-1", "configurable_woodcutting");
@@ -579,31 +720,87 @@ class BuilderGoalRunnerServiceTest {
                         "advertised_base_url", "http://100.120.100.78:8098"),
                 "micro6_publish",
                     Map.of(
-                        "entry_id", 1001,
-                        "status", "RUNNING",
-                        "published_at", LocalDateTime.now().minusMinutes(2).toString(),
-                        "consecutive_poll_failures", 2,
-                        "last_poll_at", LocalDateTime.now().minusSeconds(30).toString()))));
-    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+                        "entry_id",
+                        1001,
+                        "status",
+                        "RUNNING",
+                        "published_at",
+                        LocalDateTime.now().minusMinutes(2).toString(),
+                        "consecutive_poll_failures",
+                        2,
+                        "last_poll_at",
+                        LocalDateTime.now().minusSeconds(30).toString()))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(java.util.List.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_lost0001"))
+        .thenReturn(Optional.of(iteration));
     when(scriptExecutionService.getMicro6RunStatus(any(), eq(1001)))
         .thenReturn(
             new ScriptExecutionService.Micro6RunStatusResult(
-                false,
+                false, null, "Connection refused", null, "http://100.120.100.78:8098", 1001));
+
+    service.syncPublishedRuns();
+
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.FAILED);
+    assertThat(iteration.getFailureCode()).isEqualTo(PatchLoopFailureCode.TARGET_UNREACHABLE);
+    assertThat(iteration.getFailureReason()).contains("Connection refused");
+    assertThat(iteration.getFailureContext()).contains("publishEntryId=1001");
+  }
+
+  @Test
+  void syncPublishedRuns_recoversLateAcceptedPublishFromPublishFailed() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_publishfailed0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("fish_training");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setRunSuccess(false);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "micro6_target",
+                    Map.of(
+                        "account_name", "udasuAvuco",
+                        "advertised_base_url", "http://192.168.1.6:8098"),
+                "micro6_publish",
+                    Map.of(
+                        "entry_id",
+                        1001,
+                        "status",
+                        "PUBLISH_FAILED",
+                        "published_at",
+                        LocalDateTime.now().minusMinutes(1).toString()))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration), java.util.List.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_publishfailed0001"))
+        .thenReturn(Optional.of(iteration));
+    when(scriptExecutionService.getMicro6RunStatus(any(), eq(1001)))
+        .thenReturn(
+            new ScriptExecutionService.Micro6RunStatusResult(
+                true,
+                "QUEUED",
                 null,
-                "Connection refused",
-                null,
-                "http://100.120.100.78:8098",
+                objectMapper.valueToTree(
+                    Map.of(
+                        "status", "QUEUED",
+                        "task_started", false,
+                        "iteration_id", "buildergoal_publishfailed0001",
+                        "task_key", "fish_training")),
+                "http://192.168.1.6:8098",
                 1001));
 
     service.syncPublishedRuns();
 
-    verify(persistenceService)
-        .markIterationFailed(
-            eq(iteration),
-            eq(PatchLoopFailureCode.TARGET_UNREACHABLE),
-            contains("Connection refused"),
-            contains("publishEntryId=1001"));
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.QUEUED);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> publish =
+        (Map<String, Object>)
+            objectMapper
+                .convertValue(iteration.getTaskMetadataJson(), Map.class)
+                .get("micro6_publish");
+    assertThat(publish.get("status")).isEqualTo("QUEUED");
   }
 
   @Test
@@ -633,9 +830,11 @@ class BuilderGoalRunnerServiceTest {
 
     @SuppressWarnings("unchecked")
     java.util.List<Map<String, Object>> groups =
-        (java.util.List<Map<String, Object>>) service.buildAnalysisDraft("buildergoal_analyze0001").get("evidenceGroups");
+        (java.util.List<Map<String, Object>>)
+            service.buildAnalysisDraft("buildergoal_analyze0001").get("evidenceGroups");
     @SuppressWarnings("unchecked")
-    java.util.List<Map<String, Object>> logItems = (java.util.List<Map<String, Object>>) groups.get(0).get("items");
+    java.util.List<Map<String, Object>> logItems =
+        (java.util.List<Map<String, Object>>) groups.get(0).get("items");
     String selectedId = logItems.get(0).get("id").toString();
 
     service.analyzeFailure(
@@ -646,7 +845,8 @@ class BuilderGoalRunnerServiceTest {
                 "context", "Ignore unrelated bank noise",
                 "selectedEvidenceIds", java.util.List.of(selectedId))));
 
-    ArgumentCaptor<AnalysisV2Request> requestCaptor = ArgumentCaptor.forClass(AnalysisV2Request.class);
+    ArgumentCaptor<AnalysisV2Request> requestCaptor =
+        ArgumentCaptor.forClass(AnalysisV2Request.class);
     verify(analysisProvider).analyzeEvidence(requestCaptor.capture());
     AnalysisV2Request request = requestCaptor.getValue();
     assertThat(request.getPrompt()).isEqualTo("Focus on willow detection only");
@@ -669,15 +869,18 @@ class BuilderGoalRunnerServiceTest {
     iteration.setTaskMetadataJson(
         objectMapper.valueToTree(
             Map.of(
-                "display_name", "35 Woodcutting",
-                "settings", Map.of("treeType", "WILLOW", "targetLevel", 35),
+                "display_name",
+                "35 Woodcutting",
+                "settings",
+                Map.of("treeType", "WILLOW", "targetLevel", 35),
                 "mule_account",
                     Map.of(
                         "account_id", "hash-1",
                         "account_hash", "hash-1",
                         "account_name", "bigGreenMeat",
                         "launcher_machine_uuid", "machine-1"),
-                "source", "catalog_task")));
+                "source",
+                "catalog_task")));
 
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
@@ -702,7 +905,8 @@ class BuilderGoalRunnerServiceTest {
             null,
             Instant.now());
 
-    when(iterationRepository.findByIterationId("buildergoal_rerun0001")).thenReturn(Optional.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_rerun0001"))
+        .thenReturn(Optional.of(iteration));
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     JsonNode staleCatalog =
         objectMapper.readTree(
@@ -752,7 +956,8 @@ class BuilderGoalRunnerServiceTest {
                 "display_name", "35 Woodcutting",
                 "task_key", "configurable_woodcutting",
                 "micro6_publish", Map.of("status", "FAILED"))));
-    when(iterationRepository.findByIterationId("buildergoal_rec0001")).thenReturn(Optional.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_rec0001"))
+        .thenReturn(Optional.of(iteration));
     when(evidenceService.collectEvidence(eq(iteration), any())).thenReturn(sampleEvidenceBundle());
 
     Map<String, Object> workspace = service.openRecoveryWorkspace("buildergoal_rec0001");
@@ -773,9 +978,11 @@ class BuilderGoalRunnerServiceTest {
     ArgumentCaptor<PatchLoopIteration> captor = ArgumentCaptor.forClass(PatchLoopIteration.class);
     verify(persistenceService, atLeastOnce()).saveIteration(captor.capture());
     @SuppressWarnings("unchecked")
-    Map<String, Object> savedMetadata = objectMapper.convertValue(captor.getValue().getTaskMetadataJson(), Map.class);
+    Map<String, Object> savedMetadata =
+        objectMapper.convertValue(captor.getValue().getTaskMetadataJson(), Map.class);
     @SuppressWarnings("unchecked")
-    Map<String, Object> recoveryWorkspace = (Map<String, Object>) savedMetadata.get("recovery_workspace");
+    Map<String, Object> recoveryWorkspace =
+        (Map<String, Object>) savedMetadata.get("recovery_workspace");
     assertThat(recoveryWorkspace).isNotNull();
     assertThat(recoveryWorkspace.get("last_loaded_at")).isNotNull();
   }
@@ -793,7 +1000,8 @@ class BuilderGoalRunnerServiceTest {
                 "display_name", "35 Woodcutting",
                 "task_key", "configurable_woodcutting",
                 "micro6_publish", Map.of("status", "FAILED"))));
-    when(iterationRepository.findByIterationId("buildergoal_ann0001")).thenReturn(Optional.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_ann0001"))
+        .thenReturn(Optional.of(iteration));
 
     Map<String, Object> result =
         service.saveRecoveryAnnotations(
@@ -803,25 +1011,35 @@ class BuilderGoalRunnerServiceTest {
                     "annotations",
                         java.util.List.of(
                             Map.of(
-                                "label", "stuck at bank",
-                                "note", "bot loops here",
-                                "important", true,
-                                "startSeconds", 13,
-                                "endSeconds", 20)),
-                    "activeRangeStartSeconds", 13,
-                    "activeRangeEndSeconds", 20,
-                    "selectedEvidenceIds", java.util.List.of("log_1"))));
+                            "label",
+                            "stuck at bank",
+                            "note",
+                            "bot loops here",
+                            "important",
+                            true,
+                            "startSeconds",
+                            13,
+                            "endSeconds",
+                            20)),
+                    "activeRangeStartSeconds",
+                    13,
+                    "activeRangeEndSeconds",
+                    20,
+                    "selectedEvidenceIds",
+                    java.util.List.of("log_1"))));
 
     assertThat(result.get("saved")).isEqualTo(true);
     @SuppressWarnings("unchecked")
-    java.util.List<Map<String, Object>> annotations = (java.util.List<Map<String, Object>>) result.get("annotations");
+    java.util.List<Map<String, Object>> annotations =
+        (java.util.List<Map<String, Object>>) result.get("annotations");
     assertThat(annotations).hasSize(1);
     assertThat(annotations.get(0).get("label")).isEqualTo("stuck at bank");
     assertThat(annotations.get(0).get("important")).isEqualTo(true);
     ArgumentCaptor<PatchLoopIteration> captor = ArgumentCaptor.forClass(PatchLoopIteration.class);
     verify(persistenceService, atLeastOnce()).saveIteration(captor.capture());
     @SuppressWarnings("unchecked")
-    Map<String, Object> savedMetadata = objectMapper.convertValue(captor.getValue().getTaskMetadataJson(), Map.class);
+    Map<String, Object> savedMetadata =
+        objectMapper.convertValue(captor.getValue().getTaskMetadataJson(), Map.class);
     @SuppressWarnings("unchecked")
     Map<String, Object> workspace = (Map<String, Object>) savedMetadata.get("recovery_workspace");
     assertThat(workspace.get("active_start_seconds")).isEqualTo(13);
@@ -844,7 +1062,8 @@ class BuilderGoalRunnerServiceTest {
                 "recovery", Map.of("phase", "WAITING_FOR_DEBUG_BIND", "message", "waiting"),
                 "recovery_workspace", Map.of("preferred_session_id", "debug_reserved_7"),
                 "micro6_publish", Map.of("status", "FAILED"))));
-    when(iterationRepository.findByIterationId("buildergoal_state0001")).thenReturn(Optional.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_state0001"))
+        .thenReturn(Optional.of(iteration));
     when(iterationRepository.findByParentIterationIdOrderByCreatedAtDesc("buildergoal_state0001"))
         .thenReturn(java.util.List.of());
 
@@ -867,9 +1086,12 @@ class BuilderGoalRunnerServiceTest {
     iteration.setTaskMetadataJson(
         objectMapper.valueToTree(
             Map.of(
-                "display_name", "35 Woodcutting",
-                "task_key", "configurable_woodcutting",
-                "micro6_publish", Map.of("status", "FAILED"),
+                "display_name",
+                "35 Woodcutting",
+                "task_key",
+                "configurable_woodcutting",
+                "micro6_publish",
+                Map.of("status", "FAILED"),
                 "recovery_workspace",
                     Map.of(
                         "active_start_seconds", 13,
@@ -884,7 +1106,8 @@ class BuilderGoalRunnerServiceTest {
     assertThat(workspace.get("activeRangeStartSeconds")).isEqualTo(13);
     assertThat(workspace.get("activeRangeEndSeconds")).isEqualTo(20);
     @SuppressWarnings("unchecked")
-    java.util.List<String> selectedIds = (java.util.List<String>) workspace.get("selectedEvidenceIds");
+    java.util.List<String> selectedIds =
+        (java.util.List<String>) workspace.get("selectedEvidenceIds");
     assertThat(selectedIds).contains("log_restore_1");
     @SuppressWarnings("unchecked")
     Map<String, Object> patchLoopSeed = (Map<String, Object>) workspace.get("patchLoopSeed");
@@ -949,8 +1172,7 @@ class BuilderGoalRunnerServiceTest {
                 "display_name", "35 Woodcutting",
                 "task_key", "configurable_woodcutting",
                 "micro6_publish", Map.of("status", "FAILED"))));
-    when(
-            iterationRepository.findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
+    when(iterationRepository.findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
                 BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL, "recording_123"))
         .thenReturn(Optional.of(iteration));
 
@@ -963,8 +1185,7 @@ class BuilderGoalRunnerServiceTest {
 
   @Test
   void getRunSummaryByRecordingId_rejectsMissingRecording() {
-    when(
-            iterationRepository.findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
+    when(iterationRepository.findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
                 BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL, "missing_recording"))
         .thenReturn(Optional.empty());
 
@@ -972,7 +1193,6 @@ class BuilderGoalRunnerServiceTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Builder goal run not found for recordingId");
   }
-
 
   @Test
   void publishOnly_publishesWhenMicro6HealthIsPublishReady() {
@@ -1010,7 +1230,7 @@ class BuilderGoalRunnerServiceTest {
             "http://127.0.0.1:8098",
             null);
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
-    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap()))
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
                 42, true, "http://127.0.0.1:8098", "QUEUED"));
@@ -1030,9 +1250,8 @@ class BuilderGoalRunnerServiceTest {
     assertThat(response.get("published")).isEqualTo(true);
     assertThat(response.get("entryId")).isEqualTo(42);
     assertThat(response.get("launchFallback")).isEqualTo(false);
-    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap());
-    verify(scriptExecutionService, never())
-        .stopMicro6PublishedRun(anyMap(), any(), anyString());
+    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap(), any());
+    verify(scriptExecutionService, never()).stopMicro6PublishedRun(anyMap(), any(), anyString());
   }
 
   @Test
@@ -1087,7 +1306,7 @@ class BuilderGoalRunnerServiceTest {
     assertThat(response.get("published")).isEqualTo(false);
     assertThat(response.get("publishStatus")).isEqualTo("DEFERRED");
     assertThat(response.get("launchFallback")).isEqualTo(false);
-    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap());
+    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap(), any());
   }
 
   @Test
@@ -1140,7 +1359,7 @@ class BuilderGoalRunnerServiceTest {
 
     assertThat(response.get("published")).isEqualTo(false);
     assertThat(response.get("publishStatus")).isEqualTo("DEFERRED");
-    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap());
+    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap(), any());
   }
 
   @Test
@@ -1171,6 +1390,38 @@ class BuilderGoalRunnerServiceTest {
 
     service.syncPendingLaunches();
 
+    verify(targetPreparationService, never())
+        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class), any());
+  }
+
+  @Test
+  void syncPendingLaunches_doesNotQueueProcessExitedRunAfterLockedReconciliation() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_process_exited");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "mule_account",
+                Map.of(
+                    "account_id", "hash-1",
+                    "account_name", "bigGreenMeat",
+                    "launcher_machine_uuid", "machine-1"),
+                "target_preparation",
+                Map.of(
+                    "state", Micro6TargetRelaunchService.PHASE_PROCESS_EXITED,
+                    "message", "Micro6 process exited before readiness"))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(List.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_process_exited"))
+        .thenReturn(Optional.of(iteration));
+
+    service.syncPendingLaunches();
+
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.FAILED);
     verify(targetPreparationService, never())
         .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class), any());
   }
@@ -1236,7 +1487,7 @@ class BuilderGoalRunnerServiceTest {
                 null,
                 "http://127.0.0.1:18098",
                 null));
-    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap()))
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
                 77, false, "http://127.0.0.1:18098", "QUEUED"));
@@ -1254,7 +1505,8 @@ class BuilderGoalRunnerServiceTest {
 
     assertThat(response.get("published")).isEqualTo(true);
     assertThat(response.get("entryId")).isEqualTo(77);
-    verify(scriptExecutionService).publishMicro6Task(eq("micro6:fish_training"), metadataCaptor.capture());
+    verify(scriptExecutionService)
+        .publishMicro6Task(eq("micro6:fish_training"), metadataCaptor.capture(), any());
     @SuppressWarnings("unchecked")
     Map<String, Object> target =
         (Map<String, Object>) metadataCaptor.getValue().get("micro6_target");
@@ -1323,7 +1575,7 @@ class BuilderGoalRunnerServiceTest {
                 null,
                 "http://127.0.0.1:8098",
                 null));
-    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap()))
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
                 43, false, "http://127.0.0.1:8098", "QUEUED"));
@@ -1341,7 +1593,7 @@ class BuilderGoalRunnerServiceTest {
 
     assertThat(response.get("published")).isEqualTo(true);
     assertThat(response.get("entryId")).isEqualTo(43);
-    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap());
+    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap(), any());
   }
 
   @Test
@@ -1377,14 +1629,7 @@ class BuilderGoalRunnerServiceTest {
   void startRun_rejectsBeforePersistenceWhenLaunchCredentialsAreMissing() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
-            "hash-1",
-            "hash-1",
-            "bigGreenMeat",
-            null,
-            "launcher",
-            true,
-            "ready",
-            Map.of());
+            "hash-1", "hash-1", "bigGreenMeat", null, "launcher", true, "ready", Map.of());
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(
@@ -1481,14 +1726,7 @@ class BuilderGoalRunnerServiceTest {
   void publishOnly_publishesWithoutLaunchCredentialsToExistingExecutor() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
-            "hash-1",
-            "hash-1",
-            "bigGreenMeat",
-            null,
-            "launcher",
-            true,
-            "ready",
-            Map.of());
+            "hash-1", "hash-1", "bigGreenMeat", null, "launcher", true, "ready", Map.of());
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -1513,7 +1751,7 @@ class BuilderGoalRunnerServiceTest {
             "http://127.0.0.1:8098",
             null);
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
-    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap()))
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
                 42, true, "http://127.0.0.1:8098", "QUEUED"));
@@ -1533,7 +1771,7 @@ class BuilderGoalRunnerServiceTest {
     assertThat(response.get("published")).isEqualTo(true);
     assertThat(response.get("entryId")).isEqualTo(42);
     assertThat(response.get("launchFallback")).isEqualTo(false);
-    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap());
+    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap(), any());
     verify(targetPreparationService, never())
         .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
   }
@@ -1567,7 +1805,7 @@ class BuilderGoalRunnerServiceTest {
         .hasMessageContaining("disabled");
 
     verify(iterationRepository, never()).save(any(PatchLoopIteration.class));
-    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap());
+    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap(), any());
   }
 
   @Test
@@ -1625,9 +1863,9 @@ class BuilderGoalRunnerServiceTest {
     Map<String, Object> response = service.stopRun("buildergoal_prepublish_1", null);
 
     assertThat(response.get("success")).isEqualTo(true);
-    verify(scriptExecutionService, never())
-        .stopMicro6PublishedRun(anyMap(), any(), anyString());
-    verify(persistenceService, times(1)).updateIterationStatus(iteration, PatchLoopStatus.CANCELLED);
+    verify(scriptExecutionService, never()).stopMicro6PublishedRun(anyMap(), any(), anyString());
+    verify(persistenceService, times(1))
+        .updateIterationStatus(iteration, PatchLoopStatus.CANCELLED);
   }
 
   @Test
@@ -1645,8 +1883,7 @@ class BuilderGoalRunnerServiceTest {
                         "account_id", "hash-1",
                         "account_name", "bigGreenMeat",
                         "launcher_machine_uuid", "machine-1"),
-                "micro6_publish",
-                    Map.of("entry_id", 42, "status", "RUNNING"),
+                "micro6_publish", Map.of("entry_id", 42, "status", "RUNNING"),
                 "settings", Map.of("treeType", "WILLOW"))));
     when(iterationRepository.findByIterationId("buildergoal_published_1"))
         .thenReturn(Optional.of(iteration));
@@ -1656,9 +1893,59 @@ class BuilderGoalRunnerServiceTest {
     Map<String, Object> response = service.stopRun("buildergoal_published_1", null);
 
     assertThat(response.get("success")).isEqualTo(true);
-    verify(scriptExecutionService, times(1))
-        .stopMicro6PublishedRun(anyMap(), eq(42), anyString());
+    verify(scriptExecutionService, times(1)).stopMicro6PublishedRun(anyMap(), eq(42), anyString());
     verify(persistenceService, never()).updateIterationStatus(iteration, PatchLoopStatus.CANCELLED);
+  }
+
+  @Test
+  void pendingLaunchDoesNotConvertCancellationRaceIntoFailure() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "user@example.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_cancel_race");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "world", 360,
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_hash", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"),
+                "settings", Map.of("treeType", "WILLOW"))));
+    when(iterationRepository.findByIterationId("buildergoal_cancel_race"))
+        .thenReturn(Optional.of(iteration));
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class), any()))
+        .thenAnswer(
+            invocation -> {
+              // Simulate stopRun committing while the relaunch worker is in its readiness poll.
+              iteration.setStatus(PatchLoopStatus.CANCELLED);
+              throw new Micro6TargetPreparationService.PreparationException(
+                  Micro6TargetPreparationService.PHASE_WAITING_FOR_EXECUTOR,
+                  "Micro6 process exited after cancellation");
+            });
+
+    Method continuePendingLaunch =
+        BuilderGoalRunnerService.class.getDeclaredMethod("continuePendingLaunch", String.class);
+    continuePendingLaunch.setAccessible(true);
+    continuePendingLaunch.invoke(service, "buildergoal_cancel_race");
+
+    verify(persistenceService, never())
+        .markIterationFailed(any(), anyString(), anyString(), anyString());
   }
 
   @Test
@@ -1924,14 +2211,7 @@ class BuilderGoalRunnerServiceTest {
   void publishOnly_succeedsWithoutLauncherMachineWhenExecutorIsAvailable() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
-            "hash-1",
-            "hash-1",
-            "bigGreenMeat",
-            null,
-            "launcher",
-            true,
-            "ready",
-            Map.of());
+            "hash-1", "hash-1", "bigGreenMeat", null, "launcher", true, "ready", Map.of());
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -1956,7 +2236,7 @@ class BuilderGoalRunnerServiceTest {
                 null,
                 "http://127.0.0.1:8098",
                 null));
-    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap()))
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
                 42, true, "http://127.0.0.1:8098", "QUEUED"));
@@ -1976,21 +2256,14 @@ class BuilderGoalRunnerServiceTest {
     assertThat(response.get("published")).isEqualTo(true);
     assertThat(response.get("entryId")).isEqualTo(42);
     assertThat(response.get("launchFallback")).isEqualTo(false);
-    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap());
+    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap(), any());
   }
 
   @Test
   void publishOnly_acceptsCredentiallessAccountWhenFallbackIsFalse() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
-            "hash-1",
-            "hash-1",
-            "bigGreenMeat",
-            null,
-            "launcher",
-            true,
-            "ready",
-            Map.of());
+            "hash-1", "hash-1", "bigGreenMeat", null, "launcher", true, "ready", Map.of());
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -2015,7 +2288,7 @@ class BuilderGoalRunnerServiceTest {
                 null,
                 "http://127.0.0.1:8098",
                 null));
-    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap()))
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
                 42, true, "http://127.0.0.1:8098", "QUEUED"));
@@ -2194,8 +2467,7 @@ class BuilderGoalRunnerServiceTest {
             "ready",
             Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
-    when(launcherControlService.findMachineByUuid("unknown-machine"))
-        .thenReturn(Optional.empty());
+    when(launcherControlService.findMachineByUuid("unknown-machine")).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.launchAccount("hash-1", "unknown-machine", 360))
         .isInstanceOf(IllegalArgumentException.class)
@@ -2345,21 +2617,14 @@ class BuilderGoalRunnerServiceTest {
 
     verify(iterationRepository, never()).save(any(PatchLoopIteration.class));
     verify(persistenceService, never()).saveIteration(any(PatchLoopIteration.class));
-    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap());
+    verify(scriptExecutionService, never()).publishMicro6Task(anyString(), anyMap(), any());
   }
 
   @Test
   void publishOnly_withoutFallbackStillWorksWithoutMachine() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
-            "hash-1",
-            "hash-1",
-            "bigGreenMeat",
-            null,
-            "launcher",
-            true,
-            "ready",
-            Map.of());
+            "hash-1", "hash-1", "bigGreenMeat", null, "launcher", true, "ready", Map.of());
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -2384,7 +2649,7 @@ class BuilderGoalRunnerServiceTest {
                 null,
                 "http://127.0.0.1:8098",
                 null));
-    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap()))
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
                 42, true, "http://127.0.0.1:8098", "QUEUED"));
@@ -2402,7 +2667,335 @@ class BuilderGoalRunnerServiceTest {
 
     assertThat(response.get("published")).isEqualTo(true);
     assertThat(response.get("entryId")).isEqualTo(42);
-    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap());
+    verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap(), any());
+  }
+
+  // --- Stop/precedence and reconciliation tests ---
+
+  @Test
+  void syncPublishedRuns_handlesAssignedStatus() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_assigned0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("fish_training");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "micro6_publish",
+                Map.of(
+                    "entry_id",
+                    1001,
+                    "status",
+                    "ASSIGNED",
+                    "published_at",
+                    LocalDateTime.now().minusMinutes(1).toString()))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_assigned0001"))
+        .thenReturn(Optional.of(iteration));
+    when(scriptExecutionService.getMicro6RunStatus(any(), eq(1001)))
+        .thenReturn(
+            new ScriptExecutionService.Micro6RunStatusResult(
+                true,
+                "ASSIGNED",
+                null,
+                objectMapper.valueToTree(Map.of("status", "ASSIGNED")),
+                "http://127.0.0.1:8098",
+                1001));
+
+    service.syncPublishedRuns();
+
+    assertThat(iteration.getRunEndTime()).isNull();
+    assertThat(iteration.getRunSuccess()).isNull();
+    verify(persistenceService, never()).markIterationFailed(any(), any(), any(), any());
+  }
+
+  @Test
+  void syncPublishedRuns_handlesCancelledExecutorStatus() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_cancelled_exec0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("fish_training");
+    iteration.setStatus(PatchLoopStatus.RUNNING_SCRIPT);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "micro6_publish",
+                Map.of(
+                    "entry_id",
+                    1001,
+                    "status",
+                    "RUNNING",
+                    "published_at",
+                    LocalDateTime.now().minusMinutes(2).toString()))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_cancelled_exec0001"))
+        .thenReturn(Optional.of(iteration));
+    when(scriptExecutionService.getMicro6RunStatus(any(), eq(1001)))
+        .thenReturn(
+            new ScriptExecutionService.Micro6RunStatusResult(
+                true,
+                "CANCELLED",
+                null,
+                objectMapper.valueToTree(Map.of("status", "CANCELLED")),
+                "http://127.0.0.1:8098",
+                1001));
+
+    service.syncPublishedRuns();
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> publish =
+        (Map<String, Object>)
+            objectMapper
+                .convertValue(iteration.getTaskMetadataJson(), Map.class)
+                .get("micro6_publish");
+    assertThat(publish.get("status")).isEqualTo("CANCELLED");
+  }
+
+  @Test
+  void syncPublishedRuns_reconcilePersistsAttemptTimestampBeforePolling() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_fair0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("fish_training");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setRunSuccess(false);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "micro6_publish",
+                Map.of(
+                    "entry_id",
+                    1001,
+                    "status",
+                    "PUBLISH_FAILED",
+                    "published_at",
+                    LocalDateTime.now().minusMinutes(1).toString()))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration), java.util.List.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_fair0001"))
+        .thenReturn(Optional.of(iteration));
+    when(scriptExecutionService.getMicro6RunStatus(any(), eq(1001)))
+        .thenReturn(
+            new ScriptExecutionService.Micro6RunStatusResult(
+                true,
+                "QUEUED",
+                null,
+                objectMapper.valueToTree(
+                    Map.of(
+                        "status", "QUEUED",
+                        "iteration_id", "buildergoal_fair0001",
+                        "task_key", "fish_training")),
+                "http://127.0.0.1:8098",
+                1001));
+
+    service.syncPublishedRuns();
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> publish =
+        (Map<String, Object>)
+            objectMapper
+                .convertValue(iteration.getTaskMetadataJson(), Map.class)
+                .get("micro6_publish");
+    assertThat(publish.get("last_reconcile_attempt_at")).isNotNull();
+    assertThat(publish.get("status")).isEqualTo("QUEUED");
+  }
+
+  @Test
+  void syncPublishedRuns_doesNotRecoverUnreachableExecutorButRotatesAttemptTimestamp() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_unreachable0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("fish_training");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setRunSuccess(false);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "micro6_publish",
+                Map.of(
+                    "entry_id",
+                    1001,
+                    "status",
+                    "PUBLISH_FAILED",
+                    "published_at",
+                    LocalDateTime.now().minusMinutes(1).toString()))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration), java.util.List.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_unreachable0001"))
+        .thenReturn(Optional.of(iteration));
+    when(scriptExecutionService.getMicro6RunStatus(any(), eq(1001)))
+        .thenReturn(
+            new ScriptExecutionService.Micro6RunStatusResult(
+                false, null, "Connection refused", null, "http://127.0.0.1:8098", 1001));
+
+    service.syncPublishedRuns();
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> publish =
+        (Map<String, Object>)
+            objectMapper
+                .convertValue(iteration.getTaskMetadataJson(), Map.class)
+                .get("micro6_publish");
+    assertThat(publish.get("last_reconcile_attempt_at")).isNotNull();
+    // Status stays PUBLISH_FAILED since executor was not found.
+    assertThat(publish.get("status")).isEqualTo("PUBLISH_FAILED");
+  }
+
+  @Test
+  void syncPublishedRuns_handlesReceivedStatusInPreStartBranch() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_received0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("fish_training");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "micro6_publish",
+                Map.of(
+                    "entry_id",
+                    1001,
+                    "status",
+                    "RECEIVED",
+                    "published_at",
+                    LocalDateTime.now().minusMinutes(1).toString()))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration));
+    when(iterationRepository.findByIterationId("buildergoal_received0001"))
+        .thenReturn(Optional.of(iteration));
+    when(scriptExecutionService.getMicro6RunStatus(any(), eq(1001)))
+        .thenReturn(
+            new ScriptExecutionService.Micro6RunStatusResult(
+                true,
+                "RECEIVED",
+                null,
+                objectMapper.valueToTree(Map.of("status", "RECEIVED")),
+                "http://127.0.0.1:8098",
+                1001));
+
+    service.syncPublishedRuns();
+
+    // RECEIVED is handled in the pre-start branch — no failure applied.
+    verify(persistenceService, never()).markIterationFailed(any(), any(), any(), any());
+  }
+
+  @Test
+  void stopRun_rejectsAlreadyTerminal() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_termstop");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("fish_training");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of("micro6_publish", Map.of("entry_id", 1001, "status", "FAILED"))));
+    when(iterationRepository.findByIterationId("buildergoal_termstop"))
+        .thenReturn(Optional.of(iteration));
+
+    assertThatThrownBy(
+            () ->
+                service.stopRun(
+                    "buildergoal_termstop",
+                    objectMapper.createObjectNode().put("reason", "Operator stop")))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("terminal");
+  }
+
+  // --- Status mapping tests ---
+
+  @Test
+  void statusMapping_includesAssigned() {
+    // Verify using reflection that ASSIGNED maps to a non-terminal display status.
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_assign_map");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("fish_training");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "micro6_publish",
+                    Map.of(
+                        "entry_id",
+                        1001,
+                        "status",
+                        "ASSIGNED",
+                        "published_at",
+                        LocalDateTime.now().toString()),
+                "target_preparation", Map.of("state", "READY_TO_PUBLISH"))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration));
+
+    java.util.List<Map<String, Object>> runs = service.listRuns(10);
+
+    String displayStatus = (String) runs.get(0).get("displayStatus");
+    assertThat(displayStatus).isIn("ASSIGNED", "AWAITING_EXECUTOR_CONFIRMATION");
+  }
+
+  @Test
+  void statusMapping_handlesPublishingState() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_publishing_map");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("fish_training");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "micro6_publish",
+                    Map.of(
+                        "entry_id",
+                        1001,
+                        "status",
+                        "PUBLISHING",
+                        "published_at",
+                        LocalDateTime.now().toString()),
+                "target_preparation", Map.of("state", "READY_TO_PUBLISH"))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration));
+
+    java.util.List<Map<String, Object>> runs = service.listRuns(10);
+
+    String displayStatus = (String) runs.get(0).get("displayStatus");
+    assertThat(displayStatus).isEqualTo("PUBLISHING");
+  }
+
+  @Test
+  void statusMapping_reconcilingShowsAwaitingExecutorConfirmation() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_reconciling_map");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("fish_training");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "micro6_publish",
+                Map.of(
+                    "entry_id",
+                    1001,
+                    "status",
+                    "RECONCILING",
+                    "published_at",
+                    LocalDateTime.now().toString()))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration));
+
+    java.util.List<Map<String, Object>> runs = service.listRuns(10);
+
+    String displayStatus = (String) runs.get(0).get("displayStatus");
+    assertThat(displayStatus).isEqualTo("AWAITING_EXECUTOR_CONFIRMATION");
   }
 
   private AnalysisV1EvidenceBundle sampleEvidenceBundle() {

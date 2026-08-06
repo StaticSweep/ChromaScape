@@ -48,7 +48,8 @@ class ScriptExecutionServiceTest {
             new ObjectMapper(),
             "micro6_local_executor",
             "http://127.0.0.1:8098",
-            httpClient);
+            httpClient,
+            0L); // Zero timeout-recovery probe window keeps ambiguous-timeout tests fast.
   }
 
   @Test
@@ -202,6 +203,40 @@ class ScriptExecutionServiceTest {
     assertThat(payload.has("script_clicked")).isFalse();
     assertThat(payload.path("task_metadata").path("user_clicked").asBoolean()).isTrue();
     assertThat(payload.path("task_metadata").path("script_clicked").asBoolean()).isFalse();
+  }
+
+  @Test
+  @DisplayName("Micro6 publish returns RECONCILING when execute times out twice and no acceptance is confirmed")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_returnsReconcilingAfterAmbiguousTimeout() throws Exception {
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenThrow(new HttpTimeoutException("request timed out"));
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:configurable_woodcutting",
+            Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("RECONCILING");
+    assertThat(result.entryId()).isNotNull();
+    assertThat(result.errorMessage()).contains("awaiting executor confirmation");
+  }
+
+  @Test
+  @DisplayName("runScriptAndWait returns RECONCILING (not FAILED) on ambiguous execute timeout")
+  @SuppressWarnings("unchecked")
+  void runScriptAndWait_micro6AmbiguousTimeoutReconciles() throws Exception {
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenThrow(new HttpTimeoutException("request timed out"));
+
+    ScriptExecutionService.ScriptExecutionResult result =
+        service.runScriptAndWait("micro6:configurable_woodcutting", 1000);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.terminalStatus()).isEqualTo("RECONCILING");
+    assertThat(result.timedOut()).isFalse();
+    assertThat(result.errorMessage()).contains("awaiting executor confirmation");
   }
 
   @Test

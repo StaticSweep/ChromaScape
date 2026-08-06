@@ -96,8 +96,42 @@ Open http://localhost:8090/debugger:
 
 ## Troubleshooting
 
-### Provider Unavailable
+### MCP tools return `fetch failed` (localhost resolution)
 
+**Symptom:** ChromaScape MCP tools exist, but `builder_goal_get_recording_context(recording_75fcaa33)` (or any other tool) returns `fetch failed`, even though the browser can reach ChromaScape.
+
+**Cause:** The MCP wrapper runs inside the MCP process (Claude CLI / Codex CLI), and it calls
+`CHROMASCAPE_BASE_URL` from **that process** — not from your browser. If the wrapper is registered
+with `CHROMASCAPE_BASE_URL=http://localhost:8090`, `localhost` must resolve inside the MCP runtime.
+On many setups (WSL, containers, separate hosts) `localhost` from the MCP process does not reach the
+Windows ChromaScape service, while a LAN address like `http://192.168.1.6:8090` does.
+
+**Fix:** Re-register the connector from Windows with the reachable base URL:
+
+```cmd
+cd /d C:\Dev\IdeaProjects\ChromaScape
+set CHROMASCAPE_BASE_URL=http://192.168.1.6:8090
+scripts\mcp-bridge\register-mcp-clients.bat
+```
+
+The base URL stays configurable — the LAN address is **not** hardcoded into source; it is only set
+in your shell for this registration.
+
+**Verification:** `register-mcp-clients.bat` now runs a probe that invokes the
+`chromascape_connectivity_check` MCP tool **inside the wrapper process** and fails
+registration verification if the tool reports `reachable: false`. This confirms the MCP
+runtime can actually reach ChromaScape — a direct `curl` from the shell does **not** prove
+MCP connectivity. On failure, the verifier reports the exact connectivity error (e.g.,
+`fetch failed`, base URL mismatch).
+
+You can also verify manually by calling the MCP health endpoint from the machine that
+hosts the MCP process:
+
+```bash
+curl http://192.168.1.6:8090/api/debug/builder-goals/mcp-health
+```
+
+### Provider Unavailable
 **Symptom:** Provider badge shows "Unavailable" (red)
 
 **Checks:**

@@ -54,6 +54,9 @@ public class ScriptExecutionService {
   private final AtomicReference<Integer> activeMicro6EntryId = new AtomicReference<>();
   private final AtomicReference<String> activeExecutionBackend = new AtomicReference<>();
 
+  /** Timeout-recovery probe window after an ambiguous execute timeout. Injectable for tests. */
+  private final long micro6TimeoutRecoveryProbeMs;
+
   /** Tracks active runs keyed by executionId for execution-scoped control. */
   private final ConcurrentHashMap<String, ActiveRun> activeRuns = new ConcurrentHashMap<>();
 
@@ -98,6 +101,24 @@ public class ScriptExecutionService {
       String executionBackend,
       String micro6ExecutorBaseUrl,
       HttpClient httpClient) {
+    this(
+        stateHandler,
+        taskDetectionService,
+        objectMapper,
+        executionBackend,
+        micro6ExecutorBaseUrl,
+        httpClient,
+        15_000L);
+  }
+
+  ScriptExecutionService(
+      WebSocketStateHandler stateHandler,
+      TaskDetectionService taskDetectionService,
+      ObjectMapper objectMapper,
+      String executionBackend,
+      String micro6ExecutorBaseUrl,
+      HttpClient httpClient,
+      long micro6TimeoutRecoveryProbeMs) {
     this.instanceManager = ScriptInstanceManager.getInstance();
     this.stateHandler = stateHandler;
     this.taskDetectionService = taskDetectionService;
@@ -105,6 +126,7 @@ public class ScriptExecutionService {
     this.executionBackend = executionBackend;
     this.micro6ExecutorBaseUrl = micro6ExecutorBaseUrl;
     this.httpClient = httpClient;
+    this.micro6TimeoutRecoveryProbeMs = Math.max(0L, micro6TimeoutRecoveryProbeMs);
   }
 
   /** Result of a script execution. */
@@ -130,6 +152,18 @@ public class ScriptExecutionService {
       return new ScriptExecutionResult(
           false, backend, "TIMEOUT", true, "Script execution timed out", 0);
     }
+
+    /**
+     * Ambiguous publish outcome: the execute request timed out and the executor has not confirmed
+     * acceptance. The run must be reconciled via status polling, not treated as failed.
+     */
+    public static ScriptExecutionResult reconciling(String backend, Integer entryId, String errorMessage) {
+      String message =
+          errorMessage != null && !errorMessage.isBlank()
+              ? errorMessage
+              : "Awaiting executor confirmation for entry " + entryId;
+      return new ScriptExecutionResult(false, backend, "RECONCILING", false, message, 0);
+    }
   }
 
   public record Micro6PublishResult(
@@ -154,6 +188,22 @@ public class ScriptExecutionService {
           attachedToExisting,
           micro6BaseUrl,
           null);
+    }
+
+    /**
+     * Ambiguous outcome: the execute request timed out and the executor has not (yet) confirmed
+     * whether it accepted the entry. The caller must reconcile via status polling rather than
+     * treating this as a terminal publish failure.
+     */
+    public static Micro6PublishResult reconciling(Integer entryId, String micro6BaseUrl, String errorMessage) {
+      return new Micro6PublishResult(
+          false,
+          BACKEND_MICRO6_LOCAL_EXECUTOR,
+          "RECONCILING",
+          entryId,
+          false,
+          micro6BaseUrl,
+          errorMessage);
     }
 
     public static Micro6PublishResult failure(String errorMessage, String micro6BaseUrl) {
@@ -339,6 +389,18 @@ public class ScriptExecutionService {
       Micro6PublishResult publishResult =
           publishMicro6TaskInternal(scriptName, taskMetadata, entryId, targetBaseUrl, timeoutMs);
       if (!publishResult.published()) {
+        if ("RECONCILING".equalsIgnoreCase(publishResult.publishStatus())) {
+          // Ambiguous execute outcome: do not mark the run failed. Reconcile in the background
+          // and keep the run active; the caller polls status via getMicro6RunStatus.
+          logger.info(
+              "Micro6 publish for task {} is RECONCILING (entry {}); continuing in background",
+              scriptName,
+              publishResult.entryId());
+          return ScriptExecutionResult.reconciling(
+              BACKEND_MICRO6_LOCAL_EXECUTOR,
+              publishResult.entryId(),
+              publishResult.errorMessage());
+        }
         return ScriptExecutionResult.failure(
             BACKEND_MICRO6_LOCAL_EXECUTOR, "FAILED", publishResult.errorMessage());
       }
@@ -504,7 +566,19 @@ public class ScriptExecutionService {
         if (retryRecoveredPublish != null) {
           return retryRecoveredPublish;
         }
-        throw retryTimeoutException;
+        // The outcome is genuinely ambiguous: the executor may still be doing expensive dispatch
+        // work and will accept the entry late. Never surface this as a terminal publish failure;
+        // the caller transitions to RECONCILING and polls status in the background.
+        logger.warn(
+            "Micro6 publish remains ambiguous for task {} on {} after retry; entering RECONCILING for entry {}",
+            scriptName,
+            targetBaseUrl,
+            entryId);
+        return Micro6PublishResult.reconciling(
+            entryId,
+            targetBaseUrl,
+            "Micro6 execute request timed out twice; awaiting executor confirmation for entry "
+                + entryId);
       }
     }
 
@@ -535,7 +609,7 @@ public class ScriptExecutionService {
       int entryId,
       String targetBaseUrl,
       HttpTimeoutException timeoutException) {
-    long deadline = System.currentTimeMillis() + 15_000L;
+    long deadline = System.currentTimeMillis() + micro6TimeoutRecoveryProbeMs;
     while (System.currentTimeMillis() < deadline) {
       try {
         Micro6RunStatusResult statusResult =
@@ -1014,14 +1088,30 @@ public class ScriptExecutionService {
     }
   }
 
+  /**
+   * Reserves a Micro6 publish entry id BEFORE the /execute request is sent, so the runner can
+   * persist it and reconcile against the executor even when the execute response is ambiguous.
+   */
+  public int reserveMicro6EntryId() {
+    return micro6EntryIdSeq.incrementAndGet();
+  }
+
   public Micro6PublishResult publishMicro6Task(String scriptName, Map<String, Object> taskMetadata) {
+    return publishMicro6Task(scriptName, taskMetadata, null);
+  }
+
+  public Micro6PublishResult publishMicro6Task(
+      String scriptName, Map<String, Object> taskMetadata, Integer reservedEntryId) {
     String normalizedScript = normalizeScriptName(scriptName);
     String selectedBackend = resolveBackend(scriptName);
     if (!BACKEND_MICRO6_LOCAL_EXECUTOR.equalsIgnoreCase(selectedBackend)) {
       return Micro6PublishResult.failure(
           "Publish is only supported for the Micro6 executor backend", micro6ExecutorBaseUrl);
     }
-    final int entryId = micro6EntryIdSeq.incrementAndGet();
+    final int entryId =
+        reservedEntryId != null && reservedEntryId > 0
+            ? reservedEntryId
+            : micro6EntryIdSeq.incrementAndGet();
     final String targetBaseUrl = resolveMicro6BaseUrl(taskMetadata);
     try {
       return publishMicro6TaskInternal(normalizedScript, taskMetadata, entryId, targetBaseUrl, 0);

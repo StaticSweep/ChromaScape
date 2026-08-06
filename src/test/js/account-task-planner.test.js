@@ -714,7 +714,87 @@ test('refreshBuilderGoalRuns awaits all loaders before rendering and recalculati
   assert.deepEqual(order, ['accounts', 'machines', 'runs', 'catalog', 'status', 'buttons']);
 });
 
-test('refreshBuilderGoalRuns rejects when a loader fails', async () => {
+test('refreshBuilderGoalRuns starts all four loaders before final rendering', async () => {
+  let started = 0;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  const loader = async () => {
+    started += 1;
+    await gate;
+  };
+  planner.loadBuilderGoalAccounts = loader;
+  planner.loadBuilderGoalMachines = loader;
+  planner.loadBuilderGoalRuns = loader;
+  planner.loadScriptCatalog = loader;
+  let rendered = false;
+  planner.renderBuilderGoalClientStatus = () => { rendered = true; };
+  planner.updateBuilderGoalRunButtonState = () => {};
+
+  const refresh = planner.refreshBuilderGoalRuns();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(started, 4, 'all four loaders must start before any render');
+  assert.equal(rendered, false, 'final rendering must wait for the loaders to settle');
+  release();
+  await refresh;
+  assert.equal(rendered, true, 'final rendering must happen after all loaders settle');
+});
+
+test('refreshBuilderGoalRuns final rendering waits for delayed loaders', async () => {
+  const order = [];
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.loadBuilderGoalAccounts = async () => order.push('accounts');
+  planner.loadBuilderGoalMachines = async () => order.push('machines');
+  let releaseRuns;
+  const runsGate = new Promise(resolve => { releaseRuns = resolve; });
+  planner.loadBuilderGoalRuns = async () => {
+    await runsGate;
+    order.push('runs');
+  };
+  planner.loadScriptCatalog = async () => order.push('catalog');
+  planner.renderBuilderGoalClientStatus = () => order.push('status');
+  planner.updateBuilderGoalRunButtonState = () => order.push('buttons');
+
+  const refresh = planner.refreshBuilderGoalRuns();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(order, ['accounts', 'machines', 'catalog']);
+  releaseRuns();
+  await refresh;
+  assert.deepEqual(order, ['accounts', 'machines', 'catalog', 'runs', 'status', 'buttons']);
+});
+
+test('refreshBuilderGoalRuns one rejected loader does not prevent other loaders from settling', async () => {
+  const order = [];
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.loadBuilderGoalAccounts = async () => order.push('accounts');
+  planner.loadBuilderGoalMachines = async () => {
+    order.push('machines');
+    throw new Error('machine fetch failed');
+  };
+  planner.loadBuilderGoalRuns = async () => order.push('runs');
+  planner.loadScriptCatalog = async () => order.push('catalog');
+  planner.renderBuilderGoalClientStatus = () => order.push('status');
+  planner.updateBuilderGoalRunButtonState = () => order.push('buttons');
+  const logged = [];
+  const originalError = console.error;
+  console.error = (...args) => logged.push(args);
+
+  try {
+    await planner.refreshBuilderGoalRuns();
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.deepEqual(order, ['accounts', 'machines', 'runs', 'catalog', 'status', 'buttons']);
+  assert.ok(
+    logged.some(args => args.some(part => String(part).includes('Builder Goal refresh loader failed'))),
+    'rejected loader must be logged without escaping'
+  );
+});
+
+test('refreshBuilderGoalRuns one rejected loader still produces final status and button rendering', async () => {
   const planner = Object.create(AccountTaskPlanner.prototype);
   planner.loadBuilderGoalAccounts = async () => {};
   planner.loadBuilderGoalMachines = async () => {
@@ -722,9 +802,223 @@ test('refreshBuilderGoalRuns rejects when a loader fails', async () => {
   };
   planner.loadBuilderGoalRuns = async () => {};
   planner.loadScriptCatalog = async () => {};
+  let statusRendered = false;
+  let buttonsRendered = false;
+  planner.renderBuilderGoalClientStatus = () => { statusRendered = true; };
+  planner.updateBuilderGoalRunButtonState = () => { buttonsRendered = true; };
+  const originalError = console.error;
+  console.error = () => {};
 
-  await assert.rejects(
-    () => planner.refreshBuilderGoalRuns(),
-    /machine fetch failed/
+  try {
+    await planner.refreshBuilderGoalRuns();
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(statusRendered, true, 'client status must render after a rejected loader');
+  assert.equal(buttonsRendered, true, 'button state must update after a rejected loader');
+});
+
+test('refreshBuilderGoalRuns multiple rejected loaders still resolve the refresh method', async () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.loadBuilderGoalAccounts = async () => {
+    throw new Error('accounts failed');
+  };
+  planner.loadBuilderGoalMachines = async () => {
+    throw new Error('machines failed');
+  };
+  planner.loadBuilderGoalRuns = async () => {
+    throw new Error('runs failed');
+  };
+  planner.loadScriptCatalog = async () => {
+    throw new Error('catalog failed');
+  };
+  let statusRendered = false;
+  planner.renderBuilderGoalClientStatus = () => { statusRendered = true; };
+  planner.updateBuilderGoalRunButtonState = () => {};
+  const originalError = console.error;
+  console.error = () => {};
+
+  try {
+    await planner.refreshBuilderGoalRuns();
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(statusRendered, true);
+});
+
+test('refreshBuilderGoalRuns no unhandled rejection escapes the refresh method', async () => {
+  const unhandled = [];
+  const onUnhandled = reason => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.loadBuilderGoalAccounts = async () => {
+    throw new Error('accounts failed');
+  };
+  planner.loadBuilderGoalMachines = async () => {};
+  planner.loadBuilderGoalRuns = async () => {};
+  planner.loadScriptCatalog = async () => {};
+  planner.renderBuilderGoalClientStatus = () => {};
+  planner.updateBuilderGoalRunButtonState = () => {};
+  const originalError = console.error;
+  console.error = () => {};
+
+  try {
+    await planner.refreshBuilderGoalRuns();
+  } finally {
+    console.error = originalError;
+    process.removeListener('unhandledRejection', onUnhandled);
+  }
+
+  assert.deepEqual(unhandled, [], 'no rejection may escape refreshBuilderGoalRuns');
+});
+
+test('builder goal bundle version markers agree on 33', () => {
+  const source = require('node:fs').readFileSync(
+    path.resolve(__dirname, '../../main/resources/static/js/account-task-planner.js'),
+    'utf8'
   );
+  const template = require('node:fs').readFileSync(
+    path.resolve(__dirname, '../../main/resources/templates/debugger.html'),
+    'utf8'
+  );
+  const jsVersion = AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION;
+  assert.equal(jsVersion, '33');
+  assert.ok(
+    source.includes(`BUILDER_GOAL_BUNDLE_VERSION = '${jsVersion}'`),
+    'JS source must declare the same bundle version'
+  );
+  assert.ok(
+    template.includes(`data-planner-bundle-version="${jsVersion}"`),
+    'debugger.html must carry the same data-planner-bundle-version'
+  );
+  assert.ok(
+    template.includes(`/js/account-task-planner.js?v=${jsVersion}`),
+    'debugger.html must reference the same script version'
+  );
+});
+
+// --- Status label tests ---
+
+function run(status) {
+  return { status };
+}
+
+test('formatBuilderGoalStatus returns correct labels for all statuses', () => {
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('AWAITING_EXECUTOR_CONFIRMATION')),
+    'Executor request sent; awaiting confirmation.'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('RECONCILING')),
+    'Executor request sent; awaiting confirmation.'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('ASSIGNED')),
+    'Executor assigned the task; waiting for confirmed script start.'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('QUEUED')),
+    'Task accepted and queued by the executor.'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('STOPPING')),
+    'Stop requested; awaiting executor confirmation.'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('PUBLISH_FAILED')),
+    'Task publish failed.'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('FAILED')),
+    'Task execution failed.'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('CANCELLED')),
+    'Task cancelled.'
+  );
+});
+
+test('formatBuilderGoalStatus returns null for unknown status', () => {
+  assert.equal(AccountTaskPlanner.formatBuilderGoalStatus(run('UNKNOWN_STATUS')), null);
+  assert.equal(AccountTaskPlanner.formatBuilderGoalStatus(run('RUNNING')), null);
+  assert.equal(AccountTaskPlanner.formatBuilderGoalStatus(run('COMPLETED')), null);
+});
+
+test('formatBuilderGoalStatus returns null for null/missing run', () => {
+  assert.equal(AccountTaskPlanner.formatBuilderGoalStatus(null), null);
+  assert.equal(AccountTaskPlanner.formatBuilderGoalStatus({}), null);
+  assert.equal(AccountTaskPlanner.formatBuilderGoalStatus({ status: null }), null);
+});
+
+test('formatBuilderGoalStatus handles case-insensitive status input', () => {
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('reconciling')),
+    'Executor request sent; awaiting confirmation.'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('queued')),
+    'Task accepted and queued by the executor.'
+  );
+});
+
+// --- Active publish state tests ---
+
+test('isActivePublishState returns true for all active pre-start statuses', () => {
+  const activeStatuses = [
+    'PUBLISHING',
+    'AWAITING_EXECUTOR_CONFIRMATION',
+    'RECONCILING',
+    'RECEIVED',
+    'PENDING',
+    'ACCEPTED',
+    'QUEUED',
+    'ASSIGNED',
+    'RUNNING',
+    'WAITING_FOR_DEBUG_BIND',
+    'STOPPING',
+  ];
+  for (const status of activeStatuses) {
+    assert.equal(
+      AccountTaskPlanner.isActivePublishState(run(status)),
+      true,
+      `expected ${status} to be active`
+    );
+  }
+});
+
+test('isActivePublishState returns false for terminal/completed statuses', () => {
+  assert.equal(AccountTaskPlanner.isActivePublishState(run('COMPLETED')), false);
+  assert.equal(AccountTaskPlanner.isActivePublishState(run('FAILED')), false);
+  assert.equal(AccountTaskPlanner.isActivePublishState(run('CANCELLED')), false);
+  assert.equal(AccountTaskPlanner.isActivePublishState(run('PUBLISH_FAILED')), false);
+});
+
+test('isActivePublishState returns false for null/missing run', () => {
+  assert.equal(AccountTaskPlanner.isActivePublishState(null), false);
+  assert.equal(AccountTaskPlanner.isActivePublishState({}), false);
+});
+
+// --- Bundle marker tests ---
+
+test('BUILDER_GOAL_BUNDLE_VERSION is 33', () => {
+  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '33');
+});
+
+test('ACTIVE_PRE_START_STATUSES includes RECONCILING and AWAITING_EXECUTOR_CONFIRMATION', () => {
+  assert.equal(AccountTaskPlanner.ACTIVE_PRE_START_STATUSES.has('RECONCILING'), true);
+  assert.equal(AccountTaskPlanner.ACTIVE_PRE_START_STATUSES.has('AWAITING_EXECUTOR_CONFIRMATION'), true);
+});
+
+test('BUILDER_GOAL_STATUS_LABELS contains all required labels', () => {
+  const labels = AccountTaskPlanner.BUILDER_GOAL_STATUS_LABELS;
+  assert.equal(labels.AWAITING_EXECUTOR_CONFIRMATION, 'Executor request sent; awaiting confirmation.');
+  assert.equal(labels.RECONCILING, 'Executor request sent; awaiting confirmation.');
+  assert.equal(labels.ASSIGNED, 'Executor assigned the task; waiting for confirmed script start.');
+  assert.equal(labels.QUEUED, 'Task accepted and queued by the executor.');
+  assert.equal(labels.STOPPING, 'Stop requested; awaiting executor confirmation.');
+  assert.equal(labels.PUBLISH_FAILED, 'Task publish failed.');
+  assert.equal(labels.FAILED, 'Task execution failed.');
+  assert.equal(labels.CANCELLED, 'Task cancelled.');
 });

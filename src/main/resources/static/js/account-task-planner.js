@@ -5,10 +5,58 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '31';
+  static BUILDER_GOAL_BUNDLE_VERSION = '33';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
+
+  static BUILDER_GOAL_STATUS_LABELS = {
+    AWAITING_EXECUTOR_CONFIRMATION: 'Executor request sent; awaiting confirmation.',
+    RECONCILING: 'Executor request sent; awaiting confirmation.',
+    ASSIGNED: 'Executor assigned the task; waiting for confirmed script start.',
+    QUEUED: 'Task accepted and queued by the executor.',
+    STOPPING: 'Stop requested; awaiting executor confirmation.',
+    PUBLISH_FAILED: 'Task publish failed.',
+    FAILED: 'Task execution failed.',
+    CANCELLED: 'Task cancelled.',
+  };
+
+  static ACTIVE_PRE_START_STATUSES = new Set([
+    'PUBLISHING',
+    'AWAITING_EXECUTOR_CONFIRMATION',
+    'RECONCILING',
+    'RECEIVED',
+    'PENDING',
+    'ACCEPTED',
+    'QUEUED',
+    'ASSIGNED',
+    'RUNNING',
+    'WAITING_FOR_DEBUG_BIND',
+    'STOPPING',
+  ]);
+
+  /**
+   * Formats a Builder Goal run status into a user-facing label. Returns null
+   * when no special label is defined for the status (caller should display the raw status).
+   */
+  static formatBuilderGoalStatus(run) {
+    if (!run || !run.status) {
+      return null;
+    }
+    const status = run.status.toUpperCase();
+    if (status === 'RECONCILING') {
+      return AccountTaskPlanner.BUILDER_GOAL_STATUS_LABELS.RECONCILING;
+    }
+    return AccountTaskPlanner.BUILDER_GOAL_STATUS_LABELS[status] || null;
+  }
+
+  /** Returns true when the run is in an active pre-start or running state. */
+  static isActivePublishState(run) {
+    if (!run || !run.status) {
+      return false;
+    }
+    return AccountTaskPlanner.ACTIVE_PRE_START_STATUSES.has(run.status.toUpperCase());
+  }
 
   constructor() {
     this.plans = [];
@@ -421,7 +469,11 @@ class AccountTaskPlanner {
       this.builderGoalConfigInput.addEventListener('input', () => this.handleBuilderGoalConfigInput());
     }
     if (this.refreshBuilderGoalRunsBtn) {
-      this.refreshBuilderGoalRunsBtn.addEventListener('click', () => this.refreshBuilderGoalRuns());
+      this.refreshBuilderGoalRunsBtn.addEventListener('click', () => {
+        this.refreshBuilderGoalRuns().catch(error => {
+          console.error('[AccountTaskPlanner] Manual Builder Goal refresh failed:', error);
+        });
+      });
     }
     if (this.refreshBuilderGoalCodexSessionBtn) {
       this.refreshBuilderGoalCodexSessionBtn.addEventListener('click', () => this.loadBuilderGoalCodexSession());
@@ -1350,12 +1402,23 @@ class AccountTaskPlanner {
   }
 
   async refreshBuilderGoalRuns() {
-    await Promise.all([
+    const loaders = [
       this.loadBuilderGoalAccounts(),
       this.loadBuilderGoalMachines(),
       this.loadBuilderGoalRuns(),
       this.loadScriptCatalog()
-    ]);
+    ];
+    const settled = await Promise.allSettled(loaders);
+    for (const outcome of settled) {
+      if (outcome.status === 'rejected') {
+        // Each loader already surfaced its own section-specific error display. Log
+        // unexpected rejections without letting them escape as unhandled rejections.
+        console.error(
+          '[AccountTaskPlanner] Builder Goal refresh loader failed',
+          outcome.reason
+        );
+      }
+    }
     this.renderBuilderGoalClientStatus();
     this.updateBuilderGoalRunButtonState();
   }
@@ -1752,7 +1815,7 @@ class AccountTaskPlanner {
         <div class="plan-card">
           <div class="plan-card-header">
             <span class="plan-card-title">${this.escapeHtml(run.displayName || run.taskKey || 'Builder Goal')}</span>
-            <span class="plan-card-status ${status}">${this.escapeHtml(run.status || 'QUEUED')}</span>
+            <span class="plan-card-status ${status}">${this.escapeHtml(AccountTaskPlanner.formatBuilderGoalStatus(run) || run.status || 'QUEUED')}</span>
           </div>
           <div class="small text-muted">${this.escapeHtml(run.taskKey || '')}</div>
           ${targetLine}

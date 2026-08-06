@@ -37,6 +37,22 @@ public class BuilderGoalRunnerController {
     this.objectMapper = objectMapper;
   }
 
+  /**
+   * Lightweight connectivity probe for MCP wrapper clients.
+   *
+   * <p>Returns a simple UP/DOWN status without calling the launcher, Micro6, database-heavy
+   * catalog generation, or recording lookup. MCP wrappers use this as a connectivity check
+   * during registration and at startup.
+   */
+  @GetMapping("/mcp-health")
+  public ResponseEntity<Map<String, Object>> mcpHealth() {
+    Map<String, Object> health = new java.util.LinkedHashMap<>();
+    health.put("status", "UP");
+    health.put("service", "chromascape-builder-goal");
+    health.put("timestamp", java.time.Instant.now().toString());
+    return ResponseEntity.ok(health);
+  }
+
   @PostMapping("/import")
   public ResponseEntity<Object> importPayload(@RequestBody JsonNode payload) {
     try {
@@ -45,7 +61,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to import builder goal payload", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to import builder goal payload", "details", sanitizeFailure(e)));
     }
   }
 
@@ -93,7 +109,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to load latest builder goal config", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to load latest builder goal config", "details", sanitizeFailure(e)));
     }
   }
 
@@ -105,7 +121,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to record Micro6 client heartbeat", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to record Micro6 client heartbeat", "details", sanitizeFailure(e)));
     }
   }
 
@@ -123,7 +139,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to launch builder goal account", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to launch builder goal account", "details", sanitizeFailure(e)));
     }
   }
 
@@ -157,7 +173,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to start builder goal run", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to start builder goal run", "details", sanitizeFailure(e)));
     }
   }
 
@@ -197,7 +213,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to publish builder goal task", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to publish builder goal task", "details", sanitizeFailure(e)));
     }
   }
 
@@ -211,7 +227,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to load builder goal run config", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to load builder goal run config", "details", sanitizeFailure(e)));
     }
   }
 
@@ -225,7 +241,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to load builder goal run logs", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to load builder goal run logs", "details", sanitizeFailure(e)));
     }
   }
 
@@ -237,7 +253,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to resolve builder goal run", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to resolve builder goal run", "details", sanitizeFailure(e)));
     }
   }
 
@@ -251,7 +267,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to load builder goal run logs", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to load builder goal run logs", "details", sanitizeFailure(e)));
     }
   }
 
@@ -265,7 +281,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to rerun builder goal", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to rerun builder goal", "details", sanitizeFailure(e)));
     }
   }
 
@@ -279,7 +295,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to build analysis draft", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to build analysis draft", "details", sanitizeFailure(e)));
     }
   }
 
@@ -294,7 +310,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to analyze builder goal run", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to analyze builder goal run", "details", sanitizeFailure(e)));
     }
   }
 
@@ -309,7 +325,7 @@ public class BuilderGoalRunnerController {
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
-              Map.of("error", "Failed to approve builder goal recovery", "details", e.getMessage()));
+              Map.of("error", "Failed to approve builder goal recovery", "details", sanitizeFailure(e)));
     }
   }
 
@@ -324,7 +340,7 @@ public class BuilderGoalRunnerController {
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
-              Map.of("error", "Failed to approve builder goal recovery", "details", e.getMessage()));
+              Map.of("error", "Failed to approve builder goal recovery", "details", sanitizeFailure(e)));
     }
   }
 
@@ -340,7 +356,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
               Map.of(
-                  "error", "Failed to open recovery workspace", "details", e.getMessage()));
+                  "error", "Failed to open recovery workspace", "details", sanitizeFailure(e)));
     }
   }
 
@@ -356,7 +372,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
               Map.of(
-                  "error", "Failed to open recovery workspace", "details", e.getMessage()));
+                  "error", "Failed to open recovery workspace", "details", sanitizeFailure(e)));
     }
   }
 
@@ -377,7 +393,7 @@ public class BuilderGoalRunnerController {
                   "error",
                   "Failed to save recovery annotations",
                   "details",
-                  e.getMessage()));
+                  sanitizeFailure(e)));
     }
   }
 
@@ -398,7 +414,7 @@ public class BuilderGoalRunnerController {
                   "error",
                   "Failed to resolve recovery evidence",
                   "details",
-                  e.getMessage()));
+                  sanitizeFailure(e)));
     }
   }
 
@@ -412,7 +428,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
               Map.of(
-                  "error", "Failed to load recovery state", "details", e.getMessage()));
+                  "error", "Failed to load recovery state", "details", sanitizeFailure(e)));
     }
   }
 
@@ -426,7 +442,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
               Map.of(
-                  "error", "Failed to load recovery state", "details", e.getMessage()));
+                  "error", "Failed to load recovery state", "details", sanitizeFailure(e)));
     }
   }
 
@@ -441,7 +457,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to stop builder goal run", "details", e.getMessage()));
+          .body(Map.of("error", "Failed to stop builder goal run", "details", sanitizeFailure(e)));
     }
   }
 
@@ -451,7 +467,24 @@ public class BuilderGoalRunnerController {
    * token) are masked.
    */
   private String sanitizeMachineError(Exception e) {
-    return launcherControlService.describeSanitizedFailure(e);
+    return sanitizeFailure(e);
+  }
+
+  /**
+   * Converts unexpected service failures into bounded, credential-free details for the browser.
+   * The launcher service owns the sanitizer because it knows the configured launcher token and
+   * upstream bearer-header formats. A fallback is retained for lightweight unit-test mocks or a
+   * misbehaving sanitizer implementation so HTTP error construction never throws a second error.
+   */
+  private String sanitizeFailure(Throwable failure) {
+    String detail = launcherControlService.describeSanitizedFailure(failure);
+    if (detail == null || detail.isBlank()) {
+      if (failure == null) {
+        return "Unexpected failure";
+      }
+      return failure.getClass().getSimpleName();
+    }
+    return detail;
   }
 
   private String textValue(JsonNode node) {

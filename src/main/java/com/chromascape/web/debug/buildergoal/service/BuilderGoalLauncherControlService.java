@@ -105,9 +105,7 @@ public class BuilderGoalLauncherControlService {
       return accounts;
     } catch (Exception e) {
       throw new IllegalStateException(
-          "Failed to load launcher accounts: "
-              + sanitizeUpstreamError(sanitizedCause(e)),
-          e);
+          "Failed to load launcher accounts: " + sanitizedCause(e), e);
     }
   }
 
@@ -239,8 +237,10 @@ public class BuilderGoalLauncherControlService {
       if (latest.terminal()) {
         if (!"succeeded".equalsIgnoreCase(latest.status())) {
           throw new IllegalStateException(
-              firstNonBlank(
-                  latest.lastError(),
+              sanitizeForDisplay(
+                  firstNonBlank(
+                      latest.lastError(),
+                      "Launcher command ended with status " + latest.status()),
                   "Launcher command ended with status " + latest.status()));
         }
         return latest;
@@ -271,7 +271,7 @@ public class BuilderGoalLauncherControlService {
       return new CommandStatus(
           normalizedCommandId,
           status,
-          textValue(root.path("last_error")),
+          sanitizeOptionalForDisplay(textValue(root.path("last_error"))),
           metadata,
           TERMINAL_STATUSES.contains(status.toLowerCase(Locale.ENGLISH)));
     } catch (Exception e) {
@@ -297,15 +297,7 @@ public class BuilderGoalLauncherControlService {
     if (failure == null) {
       return "Unexpected launcher machine discovery failure";
     }
-    String message = failure.getMessage();
-    String detail = message == null || message.isBlank() ? failure.getClass().getSimpleName() : message;
-    if (detail.length() > 500) {
-      detail = detail.substring(0, 500) + "…(truncated)";
-    }
-    if (authToken != null && !authToken.isBlank() && detail.contains(authToken)) {
-      detail = detail.replace(authToken, "***");
-    }
-    return detail;
+    return sanitizeForDisplay(failure.getMessage(), failure.getClass().getSimpleName());
   }
 
   public String getBaseUrl() {
@@ -537,7 +529,7 @@ public class BuilderGoalLauncherControlService {
    * Builds a non-null, actionable cause string from a parsing/transport failure: the exception
    * type plus its message, falling back to the class name so callers never see a bare {@code null}.
    */
-  private static String sanitizedCause(Exception e) {
+  private String sanitizedCause(Exception e) {
     if (e == null) {
       return "unknown cause";
     }
@@ -545,7 +537,7 @@ public class BuilderGoalLauncherControlService {
     if (message == null || message.isBlank()) {
       return e.getClass().getSimpleName();
     }
-    return e.getClass().getSimpleName() + ": " + message.trim();
+    return sanitizeForDisplay(e.getClass().getSimpleName() + ": " + message, e.getClass().getSimpleName());
   }
 
   /**
@@ -554,14 +546,69 @@ public class BuilderGoalLauncherControlService {
    * prefix of the response text is retained so actionable status details survive.
    */
   private String sanitizeUpstreamError(String responseBody) {
-    String text = responseBody == null ? "" : responseBody.trim();
-    if (text.length() > 500) {
-      text = text.substring(0, 500) + "…(truncated)";
+    return sanitizeForDisplay(responseBody, "upstream error");
+  }
+
+  private String sanitizeOptionalForDisplay(String text) {
+    if (text == null || text.isBlank()) {
+      return null;
     }
-    if (authToken != null && !authToken.isBlank() && text.contains(authToken)) {
-      text = text.replace(authToken, "***");
+    return sanitizeForDisplay(text, "unknown cause");
+  }
+
+  /**
+   * Central launcher-error sanitizer used for every launcher-controlled error string:
+   * exception messages, HTTP error bodies, parsed {@code last_error} values, and controller
+   * details. Processing order:
+   *
+   * <ol>
+   *   <li>Null or blank input falls back to the supplied fallback text (or the exception class
+   *       name where the fallback is the caller's context).</li>
+   *   <li>Every exact occurrence of the configured launcher token is removed.</li>
+   *   <li>{@code Authorization: Bearer …} and standalone {@code Bearer …} credential forms are
+   *       redacted.</li>
+   *   <li>Surrounding whitespace is trimmed.</li>
+   *   <li>The already-redacted text is truncated to 500 characters.</li>
+   *   <li>{@code …(truncated)} is appended when truncation occurred.</li>
+   * </ol>
+   *
+   * <p>The result is always non-null and nonblank, so it is safe for exception messages, HTTP
+   * response bodies, and browser-rendered details.
+   */
+  private String sanitizeForDisplay(String text, String fallback) {
+    String raw = text == null ? "" : text.trim();
+    String resolvedFallback =
+        fallback != null && !fallback.isBlank() ? fallback.trim() : "unknown cause";
+    if (raw.isBlank()) {
+      return resolvedFallback;
     }
-    return text;
+    String redacted = raw;
+    if (authToken != null && !authToken.isBlank() && redacted.contains(authToken)) {
+      redacted = redacted.replace(authToken, "");
+    }
+    redacted = redactBearerCredentials(redacted);
+    redacted = redacted.trim();
+    if (redacted.isBlank()) {
+      return resolvedFallback;
+    }
+    if (redacted.length() > 500) {
+      redacted = redacted.substring(0, 500) + "…(truncated)";
+    }
+    return redacted;
+  }
+
+  /**
+   * Redacts {@code Authorization: Bearer …} headers and standalone {@code Bearer …} credential
+   * forms without touching the configured token check, so even credentials that differ from the
+   * configured token never leak through launcher-controlled error strings.
+   */
+  private String redactBearerCredentials(String text) {
+    if (text == null || text.isBlank()) {
+      return text;
+    }
+    String redacted = text.replaceAll("(?i)(Authorization:\\s*Bearer\\s+)[^\\s,;\"'\\]]+", "$1***");
+    redacted = redacted.replaceAll("(?i)((?:\\s|^)Bearer\\s+)[^\\s,;\"'\\]]+", "$1***");
+    return redacted;
   }
 
   private void applyAuth(HttpRequest.Builder builder) {

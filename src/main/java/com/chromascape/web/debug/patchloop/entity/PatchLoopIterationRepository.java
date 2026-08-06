@@ -1,9 +1,12 @@
 package com.chromascape.web.debug.patchloop.entity;
 
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -71,4 +74,12 @@ public interface PatchLoopIterationRepository extends JpaRepository<PatchLoopIte
 
   Optional<PatchLoopIteration> findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
       String sourceType, String runRecordingId);
+
+  /**
+   * Finds an iteration by ID with a pessimistic write lock, guaranteeing no concurrent mutation of
+   * the row during the transaction. Used by {@code BuilderGoalRunStateMutationService}.
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT i FROM PatchLoopIteration i WHERE i.iterationId = :iterationId")
+  Optional<PatchLoopIteration> findByIterationIdForUpdate(@Param("iterationId") String iterationId);
 }

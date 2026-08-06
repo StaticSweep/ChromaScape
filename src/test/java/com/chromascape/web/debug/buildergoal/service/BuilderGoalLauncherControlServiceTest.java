@@ -207,6 +207,7 @@ class BuilderGoalLauncherControlServiceTest {
 
     assertThat(status.status()).isEqualTo("succeeded");
     assertThat(status.terminal()).isTrue();
+    assertThat(status.lastError()).isNull();
     assertThat(status.metadata()).containsKey("runtime");
     assertThat(status.metadata().get("runtime")).isNull();
     assertThat(status.metadata().get("pid")).isEqualTo(1234);
@@ -255,16 +256,15 @@ class BuilderGoalLauncherControlServiceTest {
   }
 
   @Test
-  void startAccount_transportFailureWithNullMessageReportsExceptionType() {
-    serve("/api/v1/launcher/commands/start", 500, "boom");
+  void startAccount_blankResponseBodyReportsExceptionType() {
+    serve("/api/v1/launcher/commands/start", 500, "");
 
     assertThatThrownBy(() -> service.startAccount("acc-hash", LOCAL_MACHINE_UUID))
         .isInstanceOf(IllegalStateException.class)
-        .satisfies(
-            throwable ->
-                assertThat(throwable.getMessage())
-                    .contains("Failed to submit launcher start command")
-                    .isNotBlank());
+        .hasMessageContaining("Failed to submit launcher start command")
+        .hasMessageContaining("HTTP 500")
+        .hasMessageContaining("IllegalStateException")
+        .satisfies(throwable -> assertThat(throwable.getMessage()).isNotBlank());
   }
 
   @Test
@@ -281,26 +281,165 @@ class BuilderGoalLauncherControlServiceTest {
   }
 
   @Test
+  void listMachineSummaries_http500BodyNeverDisclosesConfiguredToken() {
+    serve(
+        "/api/v1/launcher/machines",
+        500,
+        "upstream exploded with token secret-token inside the body");
+
+    assertThatThrownBy(service::listMachineSummaries)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Failed to load launcher machines")
+        .hasMessageContaining("HTTP 500")
+        .hasMessageContaining("upstream exploded")
+        .satisfies(
+            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+  }
+
+  @Test
+  void listMachineSummaries_http200MalformedJsonNeverDisclosesConfiguredToken() {
+    serve("/api/v1/launcher/machines", 200, "{malformed secret-token json");
+
+    assertThatThrownBy(service::listMachineSummaries)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Failed to load launcher machines")
+        .hasMessageContaining("JsonParseException")
+        .satisfies(
+            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+  }
+
+  @Test
+  void startAccount_malformedResponseNeverDisclosesConfiguredToken() {
+    serve("/api/v1/launcher/commands/start", 200, "{malformed secret-token response");
+
+    assertThatThrownBy(() -> service.startAccount("acc-hash", LOCAL_MACHINE_UUID))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Failed to submit launcher start command")
+        .hasMessageContaining("JsonParseException")
+        .satisfies(
+            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+  }
+
+  @Test
+  void getCommandStatus_malformedResponseNeverDisclosesConfiguredToken() {
+    serve("/api/v1/launcher/commands/cmd-1", 200, "{malformed secret-token status");
+
+    assertThatThrownBy(() -> service.getCommandStatus("cmd-1"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Failed to read launcher command status for cmd-1")
+        .hasMessageContaining("JsonParseException")
+        .satisfies(
+            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+  }
+
+  @Test
+  void awaitCommandSuccess_terminalResponseLastErrorIsSanitizedAtIngestion() {
+    serve(
+        "/api/v1/launcher/commands/cmd-1",
+        200,
+        """
+        {
+          "command_id": "cmd-1",
+          "status": "failed",
+          "last_error": "account hash secret-token rejected"
+        }
+        """);
+
+    assertThatThrownBy(() -> service.awaitCommandSuccess("cmd-1"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("account hash")
+        .hasMessageContaining("rejected")
+        .satisfies(
+            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+  }
+
+  @Test
+  void getCommandStatus_lastErrorIsSanitizedAtIngestion() {
+    serve(
+        "/api/v1/launcher/commands/cmd-1",
+        200,
+        """
+        {
+          "command_id": "cmd-1",
+          "status": "failed",
+          "last_error": "  Authorization: Bearer secret-token failed  "
+        }
+        """);
+
+    BuilderGoalLauncherControlService.CommandStatus status = service.getCommandStatus("cmd-1");
+
+    assertThat(status.lastError())
+        .isNotNull()
+        .isNotBlank()
+        .doesNotContain("secret-token");
+  }
+
+  @Test
   void describeSanitizedFailure_neverDisclosesConfiguredToken() {
     String description =
         service.describeSanitizedFailure(
             new IllegalStateException("HTTP 401: echo secret-token and secret-token again"));
 
-    assertThat(description).doesNotContain("secret-token").contains("***");
+    assertThat(description).doesNotContain("secret-token");
   }
 
   @Test
-  void describeSanitizedFailure_returnsExceptionTypeForBlankMessage() {
+  void describeSanitizedFailure_blankExceptionMessageFallsBackToExceptionType() {
     String description = service.describeSanitizedFailure(new IllegalStateException(""));
 
     assertThat(description).isEqualTo("IllegalStateException");
   }
 
   @Test
-  void describeSanitizedFailure_returnsExceptionTypeForNullMessage() {
+  void describeSanitizedFailure_nullExceptionMessageFallsBackToExceptionType() {
     String description = service.describeSanitizedFailure(new IllegalStateException((String) null));
 
     assertThat(description).isEqualTo("IllegalStateException");
+  }
+
+  @Test
+  void describeSanitizedFailure_removesEveryOccurrenceOfConfiguredToken() {
+    String description =
+        service.describeSanitizedFailure(
+            new IllegalStateException(
+                "prefix secret-token middle secret-token suffix secret-token"));
+
+    assertThat(description)
+        .doesNotContain("secret-token")
+        .isEqualTo("prefix  middle  suffix");
+  }
+
+  @Test
+  void describeSanitizedFailure_truncatesAcrossTokenBoundaryAfterRedaction() {
+    String body = "x".repeat(480) + " " + "secret-token" + " " + "y".repeat(120);
+    String description = service.describeSanitizedFailure(new IllegalStateException(body));
+
+    assertThat(description).doesNotContain("secret-token");
+    assertThat(description).hasSize(500 + "…(truncated)".length()).contains("…(truncated)");
+    assertThat(description).startsWith("x".repeat(480));
+    assertThat(description).endsWith("…(truncated)");
+  }
+
+  @Test
+  void describeSanitizedFailure_redactsAuthorizationBearerCredentialForms() {
+    String description =
+        service.describeSanitizedFailure(
+            new IllegalStateException(
+                "unauthorized Authorization: Bearer some-other-credential and Bearer another-one"));
+
+    assertThat(description)
+        .contains("***")
+        .doesNotContain("some-other-credential")
+        .doesNotContain("another-one");
+  }
+
+  @Test
+  void describeSanitizedFailure_redactsBearerCredentialWithoutConfiguredToken() {
+    String description =
+        service.describeSanitizedFailure(
+            new IllegalStateException("plain text Bearer credential-without-token trailing"));
+
+    assertThat(description).contains("***").doesNotContain("credential-without-token");
   }
 
   @Test

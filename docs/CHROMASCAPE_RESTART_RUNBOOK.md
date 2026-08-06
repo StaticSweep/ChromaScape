@@ -34,8 +34,9 @@ Setup:
    ```
 
    - `BUILDER_GOAL_MICRO6_PROJECT_DIR`: absolute path to the Micro6 workspace used for local
-     Builder Goal launches. If unset, Spring falls back to `../micro6` relative to the ChromaScape
-     project directory.
+     Builder Goal launches. If unset, Spring falls back to `../micro6` resolved relative to the
+     process working directory; the restart script starts Gradle with the ChromaScape project as
+     that directory, so `../micro6` resolves to the sibling of the ChromaScape project.
    - `BUILDER_GOAL_LAUNCHER_LOCAL_MACHINE_UUID`: launcher machine UUID treated as the local
      ChromaScape host. If unset, the launcher hostname is used instead.
 
@@ -44,12 +45,25 @@ Setup:
 
 `.env.local` loader behavior:
 
+- Reads the file with `Get-Content -LiteralPath`.
 - Ignores empty lines and lines starting with `#`.
+- Accepts keys matching `^[A-Za-z_][A-Za-z0-9_]*$`.
 - Splits each assignment on the first `=`.
-- Trims the key and optional matching quotes around the value.
-- Rejects malformed or empty variable names with a line-numbered error.
-- Does not overwrite a non-empty process environment variable.
-- Never prints variable values; only imported variable names are logged.
+- Strips one layer of optional matching single/double quotes around the value; `=` and Windows
+  backslashes inside values are preserved.
+- Rejects malformed variable names, missing `=`, and unmatched opening or closing quotes with a
+  line-numbered error.
+- Does not overwrite a non-empty process environment variable; an empty existing process variable
+  is populated from `.env.local`.
+- Never prints variable values or the contents of `.env.local`; only imported variable names are
+  logged.
+
+The parser is implemented in `scripts/local-env.ps1`. Run its isolated verification without
+starting or stopping ChromaScape:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\test-local-env.ps1
+```
 
 Configuration precedence (highest first):
 

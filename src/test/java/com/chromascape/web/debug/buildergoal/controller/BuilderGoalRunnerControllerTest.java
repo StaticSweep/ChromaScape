@@ -102,6 +102,29 @@ class BuilderGoalRunnerControllerTest {
   }
 
   @Test
+  void listMachines_badGatewayResponseContainsNeitherTokenNorAuthorizationHeader() {
+    when(launcherControlService.listMachineSummaries())
+        .thenThrow(
+            new IllegalStateException(
+                "HTTP 401: Authorization: Bearer secret-token expired"));
+    when(launcherControlService.describeSanitizedFailure(any()))
+        .thenReturn("HTTP 401: Authorization: Bearer *** expired");
+
+    ResponseEntity<Object> response = controller.listMachines();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.get("error")).isEqualTo("Failed to load launcher machines");
+    assertThat(String.valueOf(body.get("details")))
+        .isNotNull()
+        .isNotBlank()
+        .doesNotContain("secret-token");
+    assertThat(body.toString()).doesNotContain("secret-token");
+  }
+
+  @Test
   void listMachines_badGatewayDetailsAreNonNullForParsingFailures() {
     when(launcherControlService.listMachineSummaries())
         .thenThrow(new IllegalStateException("Failed to load launcher machines: JsonParseException: Unexpected token"));
@@ -119,6 +142,27 @@ class BuilderGoalRunnerControllerTest {
         .contains("JsonParseException")
         .isNotNull()
         .isNotBlank();
+  }
+
+  @Test
+  void genericControllerFailureUsesSanitizedDetails() {
+    when(builderGoalRunnerService.importPayload(any()))
+        .thenThrow(
+            new RuntimeException(
+                "upstream response Authorization: Bearer secret-token should not leak"));
+    when(launcherControlService.describeSanitizedFailure(any()))
+        .thenReturn("RuntimeException: upstream response Authorization: Bearer *** should not leak");
+
+    ResponseEntity<Object> response = controller.importPayload(objectMapper.createObjectNode());
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).isNotNull();
+    assertThat(body.get("error")).isEqualTo("Failed to import builder goal payload");
+    assertThat(String.valueOf(body.get("details")))
+        .contains("Bearer ***")
+        .doesNotContain("secret-token");
   }
 
   @Test
@@ -514,6 +558,7 @@ class BuilderGoalRunnerControllerTest {
         .containsEntry("error", "Selected launcher account is missing a password for local Micro6 relaunch");
   }
 
+
   @Test
   void publishTask_returnsConflictWhenDisabledAccountRejectsPublish() throws Exception {
     when(builderGoalRunnerService.publishOnly(
@@ -543,5 +588,18 @@ class BuilderGoalRunnerControllerTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(body).containsEntry("error", "Selected launcher account is disabled");
+  }
+
+  @Test
+  void mcpHealth_returnsUpWithServiceAndTimestamp() {
+    ResponseEntity<?> response = controller.mcpHealth();
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody()).isInstanceOf(Map.class);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("status", "UP");
+    assertThat(body).containsEntry("service", "chromascape-builder-goal");
+    assertThat(body).containsKey("timestamp");
+    assertThat((String) body.get("timestamp")).isNotBlank();
   }
 }

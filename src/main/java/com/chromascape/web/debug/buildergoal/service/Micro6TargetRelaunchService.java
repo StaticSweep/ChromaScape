@@ -38,6 +38,13 @@ public class Micro6TargetRelaunchService {
   private static final String FAILURE_KIND_BUILD_OUTPUT_LOCK = "BUILD_OUTPUT_LOCK";
   private static final String FAILURE_KIND_PROCESS_EXITED = "PROCESS_EXITED";
   private static final String FAILURE_KIND_GRADLE_TASK_FAILED = "GRADLE_TASK_FAILED";
+
+  private enum LaunchMode {
+    STRUCTURED_WINDOWS,
+    CUSTOM_COMMAND_TEMPLATE,
+    WINDOWS_GRADLE,
+    NON_WINDOWS_GRADLE
+  }
   public static final String PHASE_LAUNCHING_PROCESS = "LAUNCHING_PROCESS";
   public static final String PHASE_WAITING_FOR_PORT = "WAITING_FOR_PORT";
   public static final String PHASE_WAITING_FOR_HEALTH = "WAITING_FOR_HEALTH";
@@ -172,6 +179,8 @@ public class Micro6TargetRelaunchService {
           "Selected launcher account is missing a password for local Micro6 relaunch");
     }
 
+    // Validation happens before any temporary payload creation, process creation, or run
+    // preparation state changes that imply launch has begun.
     Path projectDir = Paths.get(micro6ProjectDir).toAbsolutePath().normalize();
     validateMicro6ProjectDir(projectDir);
 
@@ -612,23 +621,7 @@ public class Micro6TargetRelaunchService {
     try {
       List<String> command;
       if (isWindows()) {
-        String projectPath = projectDir.toAbsolutePath().toString().replace("\\", "\\\\").replace("'", "''");
-        String script =
-            "$projectPath = '" + projectPath + "'; "
-                + "$ids = New-Object System.Collections.Generic.List[int]; "
-                + (targetPort != null && targetPort > 0
-                    ? "$portPids = @(Get-NetTCPConnection -LocalPort " + targetPort
-                        + " -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess); "
-                        + "foreach ($pid in $portPids) { if ($pid) { [void]$ids.Add([int]$pid) } } "
-                    : "")
-                + "$procs = Get-CimInstance Win32_Process | Where-Object { "
-                + "($_.Name -match '^(java|javaw|gradle)\\.exe$') -and "
-                + "((($_.CommandLine -ne $null) -and ($_.CommandLine -like ('*' + $projectPath + '*'))) -or "
-                + "(($_.ExecutablePath -ne $null) -and ($_.ExecutablePath -like ('*' + $projectPath + '*')))) }; "
-                + "foreach ($proc in $procs) { if ($proc.ProcessId) { [void]$ids.Add([int]$proc.ProcessId) } } "
-                + "$ids = $ids | Sort-Object -Unique; "
-                + "foreach ($id in $ids) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }; "
-                + "Start-Sleep -Milliseconds " + PRELAUNCH_CLEANUP_WAIT_MS + ";";
+        String script = buildWindowsCleanupScript(targetPort, projectDir);
         command =
             List.of(
                 "powershell.exe",
@@ -657,6 +650,40 @@ public class Micro6TargetRelaunchService {
     }
   }
 
+  /** Builds the PowerShell cleanup script used before each local Micro6 launch. */
+  private String buildWindowsCleanupScript(Integer targetPort, Path projectDir) {
+    // Keep Windows separators intact inside the single-quoted PowerShell literal. Doubling
+    // backslashes here changes the literal path (PowerShell does not use backslash escaping)
+    // and prevents matching existing JVMs whose command lines contain C:\\ paths.
+    String projectPath = projectDir.toAbsolutePath().toString().replace("'", "''");
+    String projectPathForwardSlashes = projectPath.replace('\\', '/');
+    return "$projectPath = '"
+        + projectPath
+        + "'; "
+        + "$projectPathForwardSlashes = '"
+        + projectPathForwardSlashes
+        + "'; "
+        + "$ids = New-Object System.Collections.Generic.List[int]; "
+        + (targetPort != null && targetPort > 0
+            ? "$portPids = @(Get-NetTCPConnection -LocalPort "
+                + targetPort
+                + " -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess); "
+                + "foreach ($portPid in $portPids) { if ($portPid) { [void]$ids.Add([int]$portPid) } } "
+            : "")
+        + "$procs = Get-CimInstance Win32_Process | Where-Object { "
+        + "($_.Name -match '^(java|javaw|gradle)\\.exe$') -and "
+        + "((($_.CommandLine -ne $null) -and ($_.CommandLine -like ('*' + $projectPath + '*'))) -or "
+        + "(($_.CommandLine -ne $null) -and ($_.CommandLine -like ('*' + $projectPathForwardSlashes + '*'))) -or "
+        + "(($_.ExecutablePath -ne $null) -and ($_.ExecutablePath -like ('*' + $projectPath + '*'))) -or "
+        + "(($_.ExecutablePath -ne $null) -and ($_.ExecutablePath -like ('*' + $projectPathForwardSlashes + '*')))) }; "
+        + "foreach ($targetProcess in $procs) { if ($targetProcess.ProcessId) { [void]$ids.Add([int]$targetProcess.ProcessId) } } "
+        + "$ids = $ids | Sort-Object -Unique; "
+        + "foreach ($targetProcessId in $ids) { Stop-Process -Id $targetProcessId -Force -ErrorAction SilentlyContinue }; "
+        + "Start-Sleep -Milliseconds "
+        + PRELAUNCH_CLEANUP_WAIT_MS
+        + ";";
+  }
+
   private List<String> buildLaunchCommand(
       List<String> clientArgs,
       Path projectDir,
@@ -668,40 +695,43 @@ public class Micro6TargetRelaunchService {
       String localExecutorBaseUrl)
       throws IOException {
     String runArgs = formatLaunchArgs(clientArgs);
-    if (useStructuredWindowsLaunch()) {
-      return buildStructuredWindowsLaunchCommand(clientArgs, projectDir);
+    LaunchMode launchMode = resolveLaunchMode();
+    switch (launchMode) {
+      case STRUCTURED_WINDOWS:
+        return buildStructuredWindowsLaunchCommand(clientArgs, projectDir);
+      case CUSTOM_COMMAND_TEMPLATE:
+        String expanded =
+            expandLaunchCommandTemplate(
+                launchCommandTemplate,
+                runArgs,
+                projectDir,
+                accountName,
+                accountEmail,
+                accountPassword,
+                world,
+                targetPort,
+                localExecutorBaseUrl);
+        if (isWindows()) {
+          return List.of("cmd.exe", "/c", expanded);
+        }
+        return List.of("bash", "-lc", expanded);
+      case WINDOWS_GRADLE:
+        String escapedRunArgs = runArgs.replace("\"", "\\\"");
+        String commandLine =
+            "call gradlew.bat \""
+                + gradleRunTask
+                + "\" \"--args="
+                + escapedRunArgs
+                + "\"";
+        return List.of("cmd.exe", "/c", commandLine);
+      case NON_WINDOWS_GRADLE:
+        return List.of(
+            "bash",
+            "-lc",
+            "./gradlew " + gradleRunTask + " '--args=" + escapeSingleQuotes(runArgs) + "'");
+      default:
+        throw new IllegalStateException("Unsupported Micro6 launch mode: " + launchMode);
     }
-    if (launchCommandTemplate != null) {
-      String expanded =
-          expandLaunchCommandTemplate(
-              launchCommandTemplate,
-              runArgs,
-              projectDir,
-              accountName,
-              accountEmail,
-              accountPassword,
-              world,
-              targetPort,
-              localExecutorBaseUrl);
-      if (isWindows()) {
-        return List.of("cmd.exe", "/c", expanded);
-      }
-      return List.of("bash", "-lc", expanded);
-    }
-    if (isWindows()) {
-      String escapedRunArgs = runArgs.replace("\"", "\\\"");
-      String commandLine =
-          "call gradlew.bat \""
-              + gradleRunTask
-              + "\" \"--args="
-              + escapedRunArgs
-              + "\"";
-      return List.of("cmd.exe", "/c", commandLine);
-    }
-    return List.of(
-        "bash",
-        "-lc",
-        "./gradlew " + gradleRunTask + " '--args=" + escapeSingleQuotes(runArgs) + "'");
   }
 
   private List<String> buildStructuredWindowsLaunchCommand(List<String> clientArgs, Path projectDir)
@@ -1131,21 +1161,75 @@ public class Micro6TargetRelaunchService {
   }
 
   /**
-   * Validates the resolved Micro6 project directory before any launch work is
-   * attempted. The directory must exist, be a directory, and contain the
-   * Gradle wrapper used to launch the client.
+   * Validates the resolved Micro6 project directory before any launch work is attempted. The
+   * directory must exist and be a directory; the launch entry point is validated according to
+   * the command that will actually run.
    */
   private void validateMicro6ProjectDir(Path projectDir) {
     if (!projectDir.toFile().isDirectory()) {
       throw new IllegalStateException(
           "Configured Micro6 project directory does not exist or is not a directory: "
-              + projectDir);
+              + projectDir
+              + " (launch mode: "
+              + resolveLaunchMode()
+              + ")");
     }
-    Path gradleWrapper = projectDir.resolve("gradlew.bat");
-    if (!gradleWrapper.toFile().isFile()) {
+    LaunchMode launchMode = resolveLaunchMode();
+    String requiredEntryPoint = resolveRequiredLaunchEntryPoint(launchMode);
+    if (requiredEntryPoint == null) {
+      return;
+    }
+    Path entryPoint = projectDir.resolve(requiredEntryPoint);
+    if (!Files.isRegularFile(entryPoint)) {
       throw new IllegalStateException(
-          "Configured Micro6 project directory does not contain gradlew.bat: " + projectDir);
+          "Configured Micro6 project directory "
+              + projectDir
+              + " (launch mode: "
+              + launchMode
+              + ") is missing a regular required entry point: "
+              + entryPoint);
     }
+    if ("gradlew".equals(requiredEntryPoint)
+        && !isWindows()
+        && !entryPoint.toFile().canExecute()) {
+      throw new IllegalStateException(
+          "Configured Micro6 project directory "
+              + projectDir
+              + " (launch mode: "
+              + launchMode
+              + ") contains gradlew but it is not executable: "
+              + entryPoint);
+    }
+  }
+
+  /**
+   * Resolves the launch mode used for both validation and command construction so the two cannot
+   * disagree.
+   *
+   * @return the launch mode used for validation and process construction
+   */
+  private LaunchMode resolveLaunchMode() {
+    if (useStructuredWindowsLaunch()) {
+      return LaunchMode.STRUCTURED_WINDOWS;
+    }
+    if (launchCommandTemplate != null) {
+      return LaunchMode.CUSTOM_COMMAND_TEMPLATE;
+    }
+    return isWindows() ? LaunchMode.WINDOWS_GRADLE : LaunchMode.NON_WINDOWS_GRADLE;
+  }
+
+  /**
+   * Returns the repository entry-point file (relative to the project directory) required by the
+   * resolved launch mode, or {@code null} when no repository entry-point requirement applies.
+   */
+  private String resolveRequiredLaunchEntryPoint(LaunchMode launchMode) {
+    if (launchMode == LaunchMode.STRUCTURED_WINDOWS) {
+      return "launch-buildergoal-client.ps1";
+    }
+    if (launchMode == LaunchMode.CUSTOM_COMMAND_TEMPLATE) {
+      return null;
+    }
+    return launchMode == LaunchMode.WINDOWS_GRADLE ? "gradlew.bat" : "gradlew";
   }
 
   private Long resolveListeningPid(Integer port) {
@@ -1366,11 +1450,11 @@ public class Micro6TargetRelaunchService {
     }
   }
 
-  private boolean isWindows() {
+  protected boolean isWindows() {
     return System.getProperty("os.name", "").toLowerCase(Locale.ENGLISH).contains("win");
   }
 
-  private boolean useStructuredWindowsLaunch() {
+  protected boolean useStructuredWindowsLaunch() {
     return isWindows();
   }
 
