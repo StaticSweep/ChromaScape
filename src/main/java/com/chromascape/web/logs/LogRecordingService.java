@@ -48,18 +48,43 @@ public class LogRecordingService {
       String logType,
       Integer tick,
       String structuredData) {
+    recordLog(level, message, source, timestamp, logType, tick, structuredData, null, null, null);
+  }
+
+  /**
+   * Record a log entry asynchronously with optional correlation fields.
+   *
+   * @param debugSessionId optional debug session correlation
+   * @param recordingId optional recording correlation
+   */
+  @Async
+  @Transactional
+  public void recordLog(
+      String level,
+      String message,
+      String source,
+      LocalDateTime timestamp,
+      String logType,
+      Integer tick,
+      String structuredData,
+      String scriptName,
+      String debugSessionId,
+      String recordingId) {
     try {
       LocalDateTime resolvedTimestamp = timestamp != null ? timestamp : LocalDateTime.now();
+      String resolvedScriptName = scriptName != null ? scriptName : activeScript;
       LogEntity logEntity =
           new LogEntity(
               resolvedTimestamp,
               level,
               message,
               source,
-              activeScript,
+              resolvedScriptName,
               logType,
               tick,
-              structuredData);
+              structuredData,
+              debugSessionId,
+              recordingId);
       logRepository.save(logEntity);
       logger.debug("Recorded log to database: {}", message);
     } catch (Exception e) {

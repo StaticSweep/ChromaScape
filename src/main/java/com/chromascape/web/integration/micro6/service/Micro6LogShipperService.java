@@ -1,5 +1,7 @@
 package com.chromascape.web.integration.micro6.service;
 
+import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
+import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.integration.micro6.Micro6IntegrationController.Micro6LogBatch;
 import com.chromascape.web.integration.micro6.Micro6IntegrationController.Micro6LogEntry;
 import com.chromascape.web.integration.micro6.config.Micro6Config;
@@ -46,6 +48,7 @@ public class Micro6LogShipperService {
 
   private final Micro6Config config;
   private final ObjectMapper objectMapper;
+  private final DebugSessionService debugSessionService;
   private final ScheduledExecutorService scheduler =
       Executors.newSingleThreadScheduledExecutor(
           r -> {
@@ -64,9 +67,11 @@ public class Micro6LogShipperService {
   private final HttpClient httpClient =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
-  public Micro6LogShipperService(Micro6Config config, ObjectMapper objectMapper) {
+  public Micro6LogShipperService(
+      Micro6Config config, ObjectMapper objectMapper, DebugSessionService debugSessionService) {
     this.config = config;
     this.objectMapper = objectMapper;
+    this.debugSessionService = debugSessionService;
   }
 
   /** Start the log shipper service if enabled and configured. */
@@ -106,7 +111,14 @@ public class Micro6LogShipperService {
     }
 
     try {
-      // 1. Read new lines from file
+      // Resolve correlation only when this log file has exactly one possible active owner. With
+      // multiple sessions/windows, selecting the first row is nondeterministic and can attach
+      // client logs to the wrong recording.
+      DebugSession activeSession = resolveUnambiguousActiveSession();
+      String activeSessionId = activeSession != null ? activeSession.getSessionId() : null;
+      String activeRecordingId = activeSession != null ? activeSession.getRecordingId() : null;
+
+      // 2. Read new lines from file
       List<String> newLines = tailer.readNewLines();
       if (newLines.isEmpty()) {
         // Flush buffer periodically even if no new lines
@@ -116,17 +128,17 @@ public class Micro6LogShipperService {
         return;
       }
 
-      // 2. Parse and deduplicate
+      // 3. Parse and deduplicate
       for (String line : newLines) {
         if (deduplicator.isDuplicate(line)) {
           continue;
         }
 
         LogLineParser.ParsedLogLine parsed = parser.parse(line);
-        logBuffer.add(createLogEntry(parsed));
+        logBuffer.add(createLogEntry(parsed, activeSessionId, activeRecordingId));
       }
 
-      // 3. Flush buffer if size exceeded
+      // 4. Flush buffer if size exceeded
       if (logBuffer.size() >= config.getLogShipper().getMaxBatchSize()) {
         flushBuffer();
       }
@@ -140,13 +152,39 @@ public class Micro6LogShipperService {
     }
   }
 
-  private Micro6LogEntry createLogEntry(LogLineParser.ParsedLogLine parsed) {
+  Micro6LogEntry createLogEntry(
+      LogLineParser.ParsedLogLine parsed, String activeSessionId, String activeRecordingId) {
     Micro6LogEntry entry = new Micro6LogEntry();
     entry.setTimestamp(parsed.timestamp().toString());
     entry.setLevel(parsed.level());
     entry.setMessage(parsed.message());
     entry.setSource(config.getLogShipper().getSourceName());
+
+    // Correlate log entries with the active debug session so they remain visible
+    // under session-scoped queries.
+    if (activeSessionId != null) {
+      entry.setDebugSessionId(activeSessionId);
+    }
+    if (activeRecordingId != null) {
+      entry.setRecordingId(activeRecordingId);
+    }
+
     return entry;
+  }
+
+  DebugSession resolveUnambiguousActiveSession() {
+    List<DebugSession> activeSessions = resolveActiveSessions();
+    return activeSessions.size() == 1 ? activeSessions.get(0) : null;
+  }
+
+  private List<DebugSession> resolveActiveSessions() {
+    try {
+      List<DebugSession> activeSessions = debugSessionService.getActiveSessions();
+      return activeSessions != null ? activeSessions : List.of();
+    } catch (Exception e) {
+      log.debug("Could not resolve active debug session for log correlation: {}", e.getMessage());
+      return List.of();
+    }
   }
 
   /** Flush buffered logs to the ingestion endpoint. */
@@ -158,9 +196,7 @@ public class Micro6LogShipperService {
     List<Micro6LogEntry> batch = new ArrayList<>(logBuffer);
     logBuffer.clear();
 
-    Micro6LogBatch batchRequest = new Micro6LogBatch();
-    batchRequest.setSource(config.getLogShipper().getSourceName());
-    batchRequest.setLogs(batch);
+    Micro6LogBatch batchRequest = buildBatchRequest(batch);
 
     try {
       String json = objectMapper.writeValueAsString(batchRequest);
@@ -190,6 +226,14 @@ public class Micro6LogShipperService {
     }
   }
 
+  /** Build a batch without applying correlation captured after the entries were queued. */
+  Micro6LogBatch buildBatchRequest(List<Micro6LogEntry> batch) {
+    Micro6LogBatch batchRequest = new Micro6LogBatch();
+    batchRequest.setSource(config.getLogShipper().getSourceName());
+    batchRequest.setLogs(batch);
+    return batchRequest;
+  }
+
   private void handleFailure() {
     consecutiveFailures++;
     if (consecutiveFailures >= 10) {
@@ -204,7 +248,7 @@ public class Micro6LogShipperService {
     log.info("Stopping Micro6 log shipper");
     running.set(false);
 
-    // Final flush
+    // Final flush — no active session correlation at shutdown.
     if (!logBuffer.isEmpty()) {
       flushBuffer();
     }

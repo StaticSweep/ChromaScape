@@ -1,5 +1,9 @@
 package com.chromascape.web.logs;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,28 +48,87 @@ public class ExternalLogController {
   @PostMapping("/external")
   public ResponseEntity<Void> receiveExternalLog(@RequestBody LogEntry entry) {
     try {
+      String level = entry.getLevel() != null ? entry.getLevel() : "INFO";
+      String message = entry.getMessage() != null ? entry.getMessage() : "";
+      String source = entry.getSource() != null ? entry.getSource() : "external";
+      String scriptName = entry.getScriptName();
+      String logType = entry.getLogType();
+      Integer tick = entry.getTick();
+      String debugSessionId = entry.getDebugSessionId();
+      String recordingId = entry.getRecordingId();
+      LocalDateTime timestamp = parseTimestamp(entry.getTimestamp());
+
       // Convert to JSON format matching existing WebSocket messages
-      String json =
-          String.format(
-              "{\"level\": \"%s\", \"message\": \"%s\", \"source\": \"external\"}",
-              entry.getLevel(), escapeJson(entry.getMessage()));
+      StringBuilder json = new StringBuilder();
+      json.append("{\"level\": \"")
+          .append(escapeJson(level))
+          .append("\", \"message\": \"")
+          .append(escapeJson(message))
+          .append("\", \"source\": \"")
+          .append(escapeJson(source))
+          .append("\", \"timestamp\": \"")
+          .append(timestamp)
+          .append("\"");
+      if (logType != null) {
+        json.append(", \"logType\": \"").append(escapeJson(logType)).append("\"");
+      }
+      if (tick != null) {
+        json.append(", \"tick\": ").append(tick);
+      }
+      if (debugSessionId != null && !debugSessionId.isBlank()) {
+        json.append(", \"debugSessionId\": \"").append(escapeJson(debugSessionId)).append("\"");
+      }
+      if (recordingId != null && !recordingId.isBlank()) {
+        json.append(", \"recordingId\": \"").append(escapeJson(recordingId)).append("\"");
+      }
+      json.append("}");
+      String jsonString = json.toString();
 
       logger.info(
-          "Received external log - Level: {}, Message: {}, JSON: {}",
-          entry.getLevel(),
-          entry.getMessage(),
-          json);
+          "Received external log - Level: {}, Message: {}, JSON: {}", level, message, jsonString);
 
-      webSocketHandler.broadcast(json);
+      webSocketHandler.broadcast(jsonString);
 
-      // Also store to database
-      logRecordingService.recordLog(entry.getLevel(), entry.getMessage(), "external");
+      // Also store to database with optional correlation fields
+      logRecordingService.recordLog(
+          level,
+          message,
+          source,
+          timestamp,
+          logType,
+          tick,
+          null,
+          scriptName,
+          debugSessionId,
+          recordingId);
 
       logger.info("Broadcast complete - log sent to WebSocket clients");
     } catch (Exception e) {
       logger.error("Failed to process external log: {}", e.getMessage(), e);
     }
     return ResponseEntity.ok().build();
+  }
+
+  /**
+   * Parse an optional timestamp from a string, accepting LocalDateTime or Instant formats.
+   *
+   * @param timestampStr the timestamp string, may be null
+   * @return parsed LocalDateTime, or current time when null/unparseable
+   */
+  private LocalDateTime parseTimestamp(String timestampStr) {
+    if (timestampStr == null || timestampStr.isBlank()) {
+      return LocalDateTime.now();
+    }
+    try {
+      return LocalDateTime.parse(timestampStr);
+    } catch (DateTimeParseException e1) {
+      try {
+        return LocalDateTime.ofInstant(Instant.parse(timestampStr), ZoneId.systemDefault());
+      } catch (DateTimeParseException e2) {
+        logger.warn("Failed to parse external log timestamp: {}, using current time", timestampStr);
+        return LocalDateTime.now();
+      }
+    }
   }
 
   /**
@@ -89,6 +152,14 @@ public class ExternalLogController {
   public static class LogEntry {
     private String level;
     private String message;
+    // Optional correlation and metadata fields (backward compatible with {level, message})
+    private String debugSessionId;
+    private String recordingId;
+    private String source;
+    private String scriptName;
+    private String logType;
+    private Integer tick;
+    private String timestamp;
 
     public String getLevel() {
       return level;
@@ -104,6 +175,62 @@ public class ExternalLogController {
 
     public void setMessage(String message) {
       this.message = message;
+    }
+
+    public String getDebugSessionId() {
+      return debugSessionId;
+    }
+
+    public void setDebugSessionId(String debugSessionId) {
+      this.debugSessionId = debugSessionId;
+    }
+
+    public String getRecordingId() {
+      return recordingId;
+    }
+
+    public void setRecordingId(String recordingId) {
+      this.recordingId = recordingId;
+    }
+
+    public String getSource() {
+      return source;
+    }
+
+    public void setSource(String source) {
+      this.source = source;
+    }
+
+    public String getScriptName() {
+      return scriptName;
+    }
+
+    public void setScriptName(String scriptName) {
+      this.scriptName = scriptName;
+    }
+
+    public String getLogType() {
+      return logType;
+    }
+
+    public void setLogType(String logType) {
+      this.logType = logType;
+    }
+
+    public Integer getTick() {
+      return tick;
+    }
+
+    public void setTick(Integer tick) {
+      this.tick = tick;
+    }
+
+    public String getTimestamp() {
+      return timestamp;
+    }
+
+    public void setTimestamp(String timestamp) {
+      this.timestamp = timestamp;
     }
   }
 }

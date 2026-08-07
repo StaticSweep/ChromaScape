@@ -53,6 +53,12 @@ const MAX_LOG_ENTRIES = 3000;
 const liveLogHistory = [];
 const replayLogHistory = [];
 
+// Replay recording-load lifecycle: generation guards against stale metadata/session
+// responses repopulating state after the user switches recordings or leaves Replay mode.
+let replayLoadGeneration = 0;
+let replayLoadAbortController = null;
+let replayTickWindowRequestSequence = 0;
+
 // Quest Helper filter state (persisted across tick card rerenders)
 const questHelperFilterState = {
   search: '',
@@ -406,6 +412,17 @@ let currentSyncAbortController = null;
 const SYNC_INTERVAL_PAUSED_MS = 200;
 const SYNC_INTERVAL_PLAYING_MS = 400;
 
+/**
+ * Whether a recording-load response (captured generation + recordingId) is still current.
+ * Before a recording is committed currentRecording is intentionally null, so callers
+ * validate the generation directly in that window.
+ */
+function isCurrentReplayLoad(generation, recordingId) {
+  return currentMode === 'replay'
+    && replayLoadGeneration === generation
+    && currentRecording === recordingId;
+}
+
 // Source filter state
 const hiddenSources = new Set();
 const discoveredSources = new Map(); // source -> count
@@ -431,7 +448,12 @@ const replayTickSnapshots = new Map(); // tick -> snapshot data
 // Replay snapshot state
 let currentReplayDebugSessionId = null;
 const replaySnapshotOrder = [];  // LRU tracking for snapshot cache
-const replaySnapshotFetchInFlight = new Set();
+const replaySnapshotFetchInFlight = new Map();
+
+function abortReplaySnapshotRequests() {
+  replaySnapshotFetchInFlight.forEach(request => request.controller.abort());
+  replaySnapshotFetchInFlight.clear();
+}
 const MAX_REPLAY_SNAPSHOTS = 600;
 let autoFollowReplay = false; // Default: Auto-follow OFF
 const AUTO_FOLLOW_KEY = 'debugger_auto_follow_replay';
@@ -548,6 +570,18 @@ function cacheElements() {
 
 function switchMode(mode) {
   if (currentMode === mode) return; // Don't clear logs if already in this mode
+
+  // Invalidate any in-flight recording load / timeline sync before switching.
+  replayLoadGeneration++;
+  if (replayLoadAbortController) {
+    replayLoadAbortController.abort();
+    replayLoadAbortController = null;
+  }
+  if (currentSyncAbortController) {
+    currentSyncAbortController.abort();
+    currentSyncAbortController = null;
+  }
+
   currentMode = mode;
   elements.liveBtn.classList.toggle('active', mode === 'live');
   elements.replayBtn.classList.toggle('active', mode === 'replay');
@@ -574,11 +608,12 @@ function switchMode(mode) {
     setScrubberEnabled(true);
     currentReplayDebugSessionId = null;
     replaySnapshotOrder.length = 0;
-    replaySnapshotFetchInFlight.clear();
+    abortReplaySnapshotRequests();
     // Clear replay snapshots when entering replay mode
     replayTickSnapshots.clear();
     replaySnapshotTimeline.length = 0;
     replaySessionStartTick = 0;
+    currentRecording = null;
     // Clear replay log history to prevent old replay logs from leaking
     replayLogHistory.length = 0;
     // Reset source filter state for clean replay slate
@@ -604,7 +639,7 @@ function switchMode(mode) {
     currentRecordingFps = 30; // Reset to default when leaving replay
     currentReplayDebugSessionId = null;
     replaySnapshotOrder.length = 0;
-    replaySnapshotFetchInFlight.clear();
+    abortReplaySnapshotRequests();
     clearOverlayCanvas();
     setScrubberEnabled(false);
     // Hide replay metadata UI when leaving replay mode
@@ -3865,23 +3900,33 @@ function debounce(func, wait) {
   };
 }
 
-function renderLogHistory(emptyMessage) {
+function renderLogHistory(emptyMessage, options = {}) {
   const outputContainer = elements.logsContainer;
   if (!outputContainer) return;
 
   const history = getActiveLogHistory();
   const searchText = getLogSearchText();
 
-  outputContainer.innerHTML = '';
-
   // Handle completely empty logs
   if (history.length === 0) {
+    // If the container already has rendered content (e.g., a quiet-window
+    // tick group from renderReplayLogs), don't wipe it. A tick-card
+    // response should update snapshot content but not replace the
+    // authoritative quiet-window UI.
+    const existingGroup = outputContainer.querySelector('.tick-group');
+    if (existingGroup && !options.forceEmpty) {
+      return;
+    }
     const defaultMsg = currentMode === 'replay'
-      ? 'Select a recording to view logs'
+      ? (currentRecording
+          ? 'No logs for this time period'
+          : 'Select a recording to view logs')
       : 'Waiting for logs...';
     ensureLogPlaceholder(emptyMessage || defaultMsg);
     return;
   }
+
+  outputContainer.innerHTML = '';
 
   // Build tick groups from ALL entries (not filtered)
   const tickGroups = new Map();
@@ -4044,23 +4089,25 @@ function safeParseStructuredData(structuredData) {
   }
 }
 
-function normalizeStandardLog(log) {
+function normalizeStandardLog(log, options = {}) {
+  const allowTickFallback = options.allowTickFallback !== false;
   return {
     kind: 'standard',
     level: String(log.level || 'INFO').toUpperCase(),
     message: log.message ? String(log.message) : '',
     source: log.source ? String(log.source) : 'unknown',
     timestamp: log.timestamp || null,
-    // Fix: Use nullish coalescing to preserve tick 0
-    tick: log.tick ?? currentTick ?? null
+    // Preserve null ticks for unified replay data; live callers may fall back to currentTick.
+    tick: log.tick != null ? log.tick : (allowTickFallback ? (currentTick ?? null) : null)
   };
 }
 
-function normalizeTickLog(log) {
-  // FIX: Use hasOwnProperty check to preserve tick=0
-  const tickValue = log.hasOwnProperty('tick') && log.tick !== null && log.tick !== undefined
+function normalizeTickLog(log, options = {}) {
+  const allowTickFallback = options.allowTickFallback !== false;
+  // Preserve null ticks for unified replay data; live callers may fall back to currentTick.
+  const tickValue = (log.hasOwnProperty('tick') && log.tick !== null && log.tick !== undefined)
     ? log.tick
-    : (currentTick ?? null);
+    : (allowTickFallback ? (currentTick ?? null) : null);
   // Normalize '--' or non-numeric to null for proper sorting
   const normalizedTick = (tickValue === null || tickValue === '--' || isNaN(parseInt(tickValue))) ? null : tickValue;
 
@@ -4203,7 +4250,8 @@ function hasClickProvenance(data) {
  * @param {Object} log - Raw action log
  * @returns {Object} Normalized log entry
  */
-function normalizeActionLog(log) {
+function normalizeActionLog(log, options = {}) {
+  const allowTickFallback = options.allowTickFallback !== false;
   const data = log.data || null;
   const logType = log.logType || null;
   const provenanceMessage =
@@ -4217,8 +4265,8 @@ function normalizeActionLog(log) {
     source: log.source ? String(log.source) : 'external',
     timestamp: log.timestamp || null,
     logType, // DIALOGUE, INVENTORY, VARBIT, ANIMATION
-    // Fix: Use nullish coalescing to preserve tick 0
-    tick: log.tick ?? currentTick ?? null,
+    // Preserve null ticks for unified replay data; live callers may fall back to currentTick.
+    tick: log.tick != null ? log.tick : (allowTickFallback ? (currentTick ?? null) : null),
     data, // Structured data
     clickSource: data?.click_source || data?.input_origin || null,
     userClicked: isManualClickData(data),
@@ -4977,18 +5025,27 @@ function initReplayModeListeners() {
         if (elements.editReplayMetadataBtn) elements.editReplayMetadataBtn.style.display = '';
       } else {
         // User selected blank option - clear everything
+        replayLoadGeneration++;
+        if (replayLoadAbortController) {
+          replayLoadAbortController.abort();
+          replayLoadAbortController = null;
+        }
+        if (currentSyncAbortController) {
+          currentSyncAbortController.abort();
+          currentSyncAbortController = null;
+        }
         currentRecording = null;
         lastHighlightedTick = null;
         replayLogHistory.length = 0;
         replayTickSnapshots.clear();
         replaySnapshotOrder.length = 0;
-        replaySnapshotFetchInFlight.clear();
+        abortReplaySnapshotRequests();
         currentReplayDebugSessionId = null;
         if (typeof perTickSectionToggles !== 'undefined') {
           perTickSectionToggles.clear();
         }
         if (currentMode === 'replay') {
-          renderLogHistory('Select a recording to view logs');
+          renderLogHistory('Select a recording to view logs', { forceEmpty: true });
         }
         const preview = document.getElementById('sessionHealthPreview');
         if (preview) preview.style.display = 'none';
@@ -5017,15 +5074,16 @@ function initReplayModeListeners() {
       if (currentMode === 'replay' && currentRecording) {
         updateScrubberFromVideo();
 
-        // Throttle sync requests (AbortController handles cancellation)
+        // Throttle sync requests (AbortController handles cancellation).
+        // A backward seek makes currentTimeMs - lastSyncTimeMs negative, which must
+        // bypass normal forward-time throttling and sync immediately.
         const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
         const timeSinceLastSync = currentTimeMs - lastSyncTimeMs;
 
         const syncInterval = elements.replayVideo.paused ? SYNC_INTERVAL_PAUSED_MS : SYNC_INTERVAL_PLAYING_MS;
-        if (timeSinceLastSync >= syncInterval) {
+        if (timeSinceLastSync < 0 || timeSinceLastSync >= syncInterval) {
           lastSyncTimeMs = currentTimeMs;
           syncLogsToVideo(currentTimeMs);
-          ensureReplayTickWindow(currentRecording, calculateTickFromVideoTime(currentTimeMs));
         }
       }
     });
@@ -5033,25 +5091,42 @@ function initReplayModeListeners() {
     elements.replayVideo.addEventListener('seeked', () => {
       if (currentMode === 'replay' && currentRecording) {
         const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
-        ensureReplayTickWindow(currentRecording, calculateTickFromVideoTime(currentTimeMs));
+        lastSyncTimeMs = currentTimeMs;
+        syncLogsToVideo(currentTimeMs);
       }
     });
 
+    // The global handler below only updates scrubber dimensions; the per-recording
+    // one-shot handler in loadRecording() performs the initial time-zero log sync.
     elements.replayVideo.addEventListener('loadedmetadata', () => {
       updateScrubberFromVideo();
     });
   }
 
   if (elements.scrubberRange) {
+    // Track whether the browser emitted seeked for the last scrubber assignment.
+    let scrubberSeekHandled = true;
+
     elements.scrubberRange.addEventListener('input', () => {
       if (currentMode !== 'replay') return;
+      scrubberSeekHandled = false;
       elements.replayVideo.currentTime = Number(elements.scrubberRange.value);
       updateScrubberFromVideo();
-      // Force immediate sync on manual scrub
-      const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
-      lastSyncTimeMs = currentTimeMs;
-      syncLogsToVideo(currentTimeMs);
-      ensureReplayTickWindow(currentRecording, calculateTickFromVideoTime(currentTimeMs));
+
+      // When the browser does not emit seeked for this assignment (e.g. the value did
+      // not change), fall back to a direct sync. The fallback is cancelled by seeked.
+      window.setTimeout(() => {
+        if (!scrubberSeekHandled && currentMode === 'replay' && currentRecording) {
+          scrubberSeekHandled = true;
+          const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
+          lastSyncTimeMs = currentTimeMs;
+          syncLogsToVideo(currentTimeMs);
+        }
+      }, 80);
+    });
+
+    elements.replayVideo.addEventListener('seeked', () => {
+      scrubberSeekHandled = true;
     });
   }
 
@@ -5256,7 +5331,7 @@ async function loadRecordingSessionHealth(sessions) {
       const currentText = option.textContent;
       const baseText = currentText.split(' · ')[0];
 
-      const eventPart = ` · Events ${h.eventCount ?? 0}`;
+      const eventPart = ` · Tick Events ${h.eventCount ?? 0}`;
       const failPart = (h.failureMarkerCount ?? 0) > 0 ? ` · Fail ${h.failureMarkerCount}` : '';
       option.textContent = `${baseText}${eventPart}${failPart}`;
     });
@@ -5375,13 +5450,26 @@ async function saveReplayMetadata() {
 }
 
 async function loadRecording(recordingId) {
+  // Start a new recording-load generation: any in-flight metadata/session response from an
+  // earlier load must not repopulate replay state.
+  const loadGeneration = ++replayLoadGeneration;
+  if (replayLoadAbortController) {
+    replayLoadAbortController.abort();
+  }
+  if (currentSyncAbortController) {
+    currentSyncAbortController.abort();
+    currentSyncAbortController = null;
+  }
+  const loadController = new AbortController();
+  replayLoadAbortController = loadController;
+
   // Clear ALL replay state immediately to prevent stale data
   currentRecording = null; // Clear first to stop ongoing syncs
   lastHighlightedTick = null;
   replayLogHistory.length = 0;
   replayTickSnapshots.clear(); // Clear tick snapshot map
   replaySnapshotOrder.length = 0;
-  replaySnapshotFetchInFlight.clear();
+  abortReplaySnapshotRequests();
   replaySnapshotTimeline.length = 0; // Clear snapshot timeline
   replaySessionStartTick = 0; // Reset session start tick
   currentReplayDebugSessionId = null;
@@ -5399,136 +5487,199 @@ async function loadRecording(recordingId) {
   lastSyncTimeMs = 0; // Reset throttle
 
   if (currentMode === 'replay') {
-    renderLogHistory('Loading recording...');
+    renderLogHistory('Loading recording logs…', { forceEmpty: true });
   }
 
+  // After every await, a stale load must return without mutating state.
+  const stale = () =>
+    loadController.signal.aborted || loadGeneration !== replayLoadGeneration;
+
+  let response;
   try {
-    const response = await fetch(`/api/recordings/${recordingId}`);
-
-    // Handle HTTP errors
-    if (!response.ok) {
-      if (response.status === 404) {
-        console.error('Recording not found:', recordingId);
-        alert('Recording session not found. It may have been deleted.');
-      } else {
-        console.error('Failed to load recording, status:', response.status);
-        alert('Failed to load recording. Please try again.');
-      }
-      return false;
-    }
-
-    const recording = await response.json();
-    currentRecordingSessionId = recording.id;
-    currentRecordingFps = recording.fps || 30;
-
-    console.log('Loaded recording metadata:', recording);
-
-    // Refuse to load unplayable recordings
-    if (recording.playable === false) {
-      console.error('Recording is not playable:', recording.videoError);
-      renderLogHistory(`Cannot load recording: ${recording.videoError || 'Recording not finalized'}`);
-      return false;
-    }
-
-    // Check for video errors (non-blocking)
-    if (recording.videoError) {
-      console.error('Video error for recording:', recording.videoError);
-      renderLogHistory(`Cannot load video: ${recording.videoError}`);
-      return false;
-    }
-
-    // Validate videoUrl exists before committing currentRecording
-    if (!recording.videoUrl) {
-      console.error('No video URL in response:', recording);
-      renderLogHistory('Video is not available. The recording may not have completed properly.');
-      return false;
-    }
-
-    // Commit currentRecording only after confirming videoUrl
-    currentRecording = recordingId;
-    history.replaceState({}, '', `/debugger?recordingId=${recordingId}`);
-
-    // Load video
-    if (elements.replayVideo) {
-      console.log('Loading video from:', recording.videoUrl);
-      elements.replayVideo.src = recording.videoUrl;
-      elements.replayVideo.load();
-
-      // Add error handler for video element
-      elements.replayVideo.onerror = (e) => {
-        console.error('Video element failed to load:', e);
-        renderLogHistory('Failed to load video file. The file may be corrupted or in an unsupported format.');
-      };
-
-      // Add success handler
-      elements.replayVideo.onloadeddata = () => {
-        console.log('Video loaded successfully, duration:', elements.replayVideo.duration);
-      };
-    }
-
-    // Clear source/pattern state for new recording
-    discoveredSources.clear();
-    sourceLogTypes.clear();
-    const sourceFilters = document.getElementById('sourceFilters');
-    if (sourceFilters) {
-      sourceFilters.innerHTML = '';
-    }
-    updateSourceFilterSummary();
-
-    // Background: fetch debug session + initial tick window without blocking video playback
-    (async () => {
-      try {
-        const sessionResponse = await fetch(`/api/debug/replay/sessions/by-recording?recordingId=${recordingId}`);
-        if (sessionResponse.ok) {
-          const session = await sessionResponse.json();
-          currentReplayDebugSessionId = session.sessionId;
-          console.log('Loaded debug session for replay:', currentReplayDebugSessionId);
-
-          // Fetch session info to get tick bounds
-          let sessionInfo = null;
-          try {
-            const infoResponse = await fetch(`/api/debug/replay/session-info/${currentReplayDebugSessionId}`);
-            if (infoResponse.ok) {
-              sessionInfo = await infoResponse.json();
-              replaySessionStartTick = sessionInfo.startTick || 0;
-              console.log('Replay session info:', {
-                startTick: sessionInfo.startTick,
-                endTick: sessionInfo.endTick,
-                minTick: sessionInfo.minTick,
-                maxTick: sessionInfo.maxTick
-              });
-            }
-          } catch (e) {
-            console.warn('Failed to fetch session info:', e);
-          }
-
-          // Load a small initial window around the start tick
-          if (sessionInfo && sessionInfo.minTick != null && sessionInfo.maxTick != null) {
-            const minTick = sessionInfo.minTick;
-            const maxTick = sessionInfo.maxTick;
-            const initialEnd = Math.min(minTick + 150, maxTick);
-            console.log(`Loading initial tick window: ticks ${minTick} to ${initialEnd}`);
-            await loadReplayTickWindow(recordingId, minTick, initialEnd);
-          } else {
-            console.warn('No tick range available for windowed loading');
-          }
-        } else {
-          console.warn('No debug session found for recording (old recording or session deleted)');
-          currentReplayDebugSessionId = null;
-        }
-      } catch (e) {
-        console.warn('Failed to fetch debug session:', e);
-        currentReplayDebugSessionId = null;
-      }
-    })();
-
-    return true;
-
+    response = await fetch(`/api/recordings/${encodeURIComponent(recordingId)}`, {
+      signal: loadController.signal
+    });
   } catch (error) {
+    if (error.name === 'AbortError') return false;
     console.error('Failed to load recording:', error);
-    renderLogHistory('An error occurred while loading the recording: ' + error.message);
+    if (!stale()) {
+      renderLogHistory('An error occurred while loading the recording: ' + error.message, { forceEmpty: true });
+    }
     return false;
   }
+  if (stale()) return false;
+
+  // Handle HTTP errors
+  if (!response.ok) {
+    if (response.status === 404) {
+      console.error('Recording not found:', recordingId);
+      if (!stale()) {
+        alert('Recording session not found. It may have been deleted.');
+        renderLogHistory('Recording session not found. It may have been deleted.', { forceEmpty: true });
+      }
+    } else {
+      console.error('Failed to load recording, status:', response.status);
+      if (!stale()) {
+        alert('Failed to load recording. Please try again.');
+        renderLogHistory(`Failed to load recording (${response.status}).`, { forceEmpty: true });
+      }
+    }
+    return false;
+  }
+
+  let recording;
+  try {
+    recording = await response.json();
+  } catch (e) {
+    console.error('Failed to parse recording metadata:', e);
+    if (!stale()) {
+      renderLogHistory('Could not read recording metadata.', { forceEmpty: true });
+    }
+    return false;
+  }
+  if (stale()) return false;
+
+  currentRecordingSessionId = recording.id;
+  currentRecordingFps = recording.fps || 30;
+
+  console.log('Loaded recording metadata:', recording);
+
+  // Refuse to load unplayable recordings
+  if (recording.playable === false) {
+    console.error('Recording is not playable:', recording.videoError);
+    if (!stale()) {
+      renderLogHistory(`Cannot load recording: ${recording.videoError || 'Recording not finalized'}`, { forceEmpty: true });
+    }
+    return false;
+  }
+
+  // Check for video errors (non-blocking)
+  if (recording.videoError) {
+    console.error('Video error for recording:', recording.videoError);
+    if (!stale()) renderLogHistory(`Cannot load video: ${recording.videoError}`, { forceEmpty: true });
+    return false;
+  }
+
+  // Validate videoUrl exists before committing currentRecording
+  if (!recording.videoUrl) {
+    console.error('No video URL in response:', recording);
+    if (!stale()) {
+      renderLogHistory('Video is not available. The recording may not have completed properly.', { forceEmpty: true });
+    }
+    return false;
+  }
+
+  // Commit currentRecording only after metadata fetch succeeded, the recording is playable,
+  // the video URL exists, and this load is still the current generation.
+  if (stale()) return false;
+  currentRecording = recordingId;
+  history.replaceState({}, '', `/debugger?recordingId=${encodeURIComponent(recordingId)}`);
+
+  // Load video
+  if (elements.replayVideo) {
+    console.log('Loading video from:', recording.videoUrl);
+
+    // Attach a one-shot metadata handler before load() so the initial time-zero
+    // log sync fires as soon as video metadata is available. The global
+    // loadedmetadata handler still updates scrubber dimensions only.
+    elements.replayVideo.addEventListener('loadedmetadata', () => {
+      updateScrubberFromVideo();
+      if (isCurrentReplayLoad(loadGeneration, recordingId)) {
+        const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
+        lastSyncTimeMs = currentTimeMs;
+        syncLogsToVideo(currentTimeMs);
+      }
+    }, { once: true });
+
+    elements.replayVideo.src = recording.videoUrl;
+    elements.replayVideo.load();
+
+    // Add error handler for video element
+    elements.replayVideo.onerror = (e) => {
+      console.error('Video element failed to load:', e);
+      if (isCurrentReplayLoad(loadGeneration, recordingId)) {
+        renderLogHistory('Failed to load video file. The file may be corrupted or in an unsupported format.', { forceEmpty: true });
+      }
+    };
+
+    // Add success handler
+    elements.replayVideo.onloadeddata = () => {
+      console.log('Video loaded successfully, duration:', elements.replayVideo.duration);
+    };
+  }
+
+  // Clear source/pattern state for new recording
+  discoveredSources.clear();
+  sourceLogTypes.clear();
+  const sourceFilters = document.getElementById('sourceFilters');
+  if (sourceFilters) {
+    sourceFilters.innerHTML = '';
+  }
+  updateSourceFilterSummary();
+
+  // Background: fetch debug session + initial tick window without blocking video playback
+  (async () => {
+    try {
+      const sessionResponse = await fetch(
+        `/api/debug/replay/sessions/by-recording?recordingId=${encodeURIComponent(recordingId)}`,
+        { signal: loadController.signal }
+      );
+      if (stale()) return;
+      if (sessionResponse.ok) {
+        const session = await sessionResponse.json();
+        if (!isCurrentReplayLoad(loadGeneration, recordingId)) return;
+        currentReplayDebugSessionId = session.sessionId;
+        console.log('Loaded debug session for replay:', currentReplayDebugSessionId);
+
+        // Fetch session info to get tick bounds
+        let sessionInfo = null;
+        try {
+          const infoResponse = await fetch(
+            `/api/debug/replay/session-info/${encodeURIComponent(currentReplayDebugSessionId)}`,
+            { signal: loadController.signal }
+          );
+          if (stale() || !isCurrentReplayLoad(loadGeneration, recordingId)) return;
+          if (infoResponse.ok) {
+            sessionInfo = await infoResponse.json();
+            if (!isCurrentReplayLoad(loadGeneration, recordingId)) return;
+            replaySessionStartTick = sessionInfo.startTick || 0;
+            console.log('Replay session info:', {
+              startTick: sessionInfo.startTick,
+              endTick: sessionInfo.endTick,
+              minTick: sessionInfo.minTick,
+              maxTick: sessionInfo.maxTick
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to fetch session info:', e);
+        }
+
+        // Load a small initial window around the start tick
+        if (sessionInfo && sessionInfo.minTick != null && sessionInfo.maxTick != null) {
+          const minTick = sessionInfo.minTick;
+          const maxTick = sessionInfo.maxTick;
+          const initialEnd = Math.min(minTick + 150, maxTick);
+          console.log(`Loading initial tick window: ticks ${minTick} to ${initialEnd}`);
+          await loadReplayTickWindow(recordingId, minTick, initialEnd);
+        } else {
+          console.warn('No tick range available for windowed loading');
+        }
+      } else {
+        console.warn('No debug session found for recording (old recording or session deleted)');
+        if (isCurrentReplayLoad(loadGeneration, recordingId)) {
+          currentReplayDebugSessionId = null;
+        }
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      console.warn('Failed to fetch debug session:', e);
+      if (isCurrentReplayLoad(loadGeneration, recordingId)) {
+        currentReplayDebugSessionId = null;
+      }
+    }
+  })();
+
+  return true;
 }
 
 /**
@@ -5575,63 +5726,9 @@ function buildReplayHistoryFromTickCards(tickCards) {
       const hasData = Object.values(snapshot).some(v => v !== null);
       console.log(`[Replay] Tick ${tick}: ${hasData ? 'has data' : 'empty'}`);
     }
-
-    // Extract logs from actions section (TickLog entities)
-    const actionLogs = card.sectionData?.actions;
-    if (Array.isArray(actionLogs)) {
-      actionLogs.forEach(logEntry => {
-        const normalizedLog = {
-          kind: 'tick',
-          tick: tick,
-          level: logEntry.severity || logEntry.level || 'INFO',
-          subsystem: logEntry.subsystem || 'System',
-          source: logEntry.subsystem || 'System',
-          message: logEntry.message || '',
-          timestamp: logEntry.timestamp || null,
-          logType: logEntry.eventType || null,
-          data: logEntry.details || null
-        };
-        replayLogHistory.push(normalizedLog);
-      });
-    }
-
-    // Extract dialogue logs (filtered from actions)
-    const dialogueLogs = card.sectionData?.dialogue;
-    if (Array.isArray(dialogueLogs)) {
-      dialogueLogs.forEach(logEntry => {
-        const normalizedLog = {
-          kind: 'tick',
-          tick: tick,
-          level: logEntry.severity || 'INFO',
-          subsystem: 'Dialogue',
-          source: 'Dialogue',
-          message: logEntry.message || '',
-          timestamp: logEntry.timestamp || null,
-          logType: 'DIALOGUE',
-          data: logEntry.details || null
-        };
-        replayLogHistory.push(normalizedLog);
-      });
-    }
-
-    // Extract varbit logs (filtered from actions)
-    const varbitLogs = card.sectionData?.varbits;
-    if (Array.isArray(varbitLogs)) {
-      varbitLogs.forEach(logEntry => {
-        const normalizedLog = {
-          kind: 'tick',
-          tick: tick,
-          level: logEntry.severity || 'INFO',
-          subsystem: 'Varbit',
-          source: 'Varbit',
-          message: logEntry.message || '',
-          timestamp: logEntry.timestamp || null,
-          logType: 'VARBIT_CHANGE',
-          data: logEntry.details || null
-        };
-        replayLogHistory.push(normalizedLog);
-      });
-    }
+    // Note: tick-card rows intentionally do NOT enter replayLogHistory. Unified replay
+    // responses are the only owner of replay log history; tick cards contribute
+    // snapshots and section data only.
   });
 
   // Sort snapshot timeline
@@ -5639,7 +5736,7 @@ function buildReplayHistoryFromTickCards(tickCards) {
 
   const minTick = replaySnapshotTimeline.length > 0 ? replaySnapshotTimeline[0] : null;
   const maxTick = replaySnapshotTimeline.length > 0 ? replaySnapshotTimeline[replaySnapshotTimeline.length - 1] : null;
-  console.log(`Built replay history: ${replayLogHistory.length} log entries, ${replayTickSnapshots.size} snapshots across ${replaySnapshotTimeline.length} ticks${minTick != null ? ` (${minTick}-${maxTick})` : ''}`);
+  console.log(`Built replay history: ${replayTickSnapshots.size} snapshots across ${replaySnapshotTimeline.length} ticks${minTick != null ? ` (${minTick}-${maxTick})` : ''}`);
 }
 
 /** Load a window of tick cards for the current replay and add them to the cache. */
@@ -5648,27 +5745,55 @@ async function loadReplayTickWindow(recordingId, startTick, endTick) {
   if (startTick > endTick) return;
   if (isReplayRangeLoaded(startTick, endTick) || isReplayRangeInFlight(startTick, endTick)) return;
 
+  // Capture generation and abort signal to guard against stale responses
+  // polluting a newly selected recording.
+  const generation = replayLoadGeneration;
+  const signal = replayLoadAbortController ? replayLoadAbortController.signal : null;
+
   console.log(`Loading tick window for ${recordingId}: ticks ${startTick}-${endTick}`);
-  registerReplayInFlightRange(startTick, endTick);
+  const requestToken = registerReplayInFlightRange(
+    recordingId,
+    startTick,
+    endTick,
+    generation
+  );
   try {
+    const fetchOptions = {};
+    if (signal) fetchOptions.signal = signal;
     const response = await fetch(
-      `/api/debug/replay/tick-cards/${recordingId}?start=${startTick}&end=${endTick}`
+      `/api/debug/replay/tick-cards/${recordingId}?start=${startTick}&end=${endTick}`,
+      fetchOptions
     );
+
+    // Validate generation and recording before mutating any state.
+    if (!isCurrentReplayLoad(generation, recordingId)) {
+      console.log(`Discarding stale tick-card response for recording ${recordingId} (gen ${generation})`);
+      return;
+    }
+
     if (!response.ok) {
       console.warn('Failed to load tick cards, status:', response.status);
       return;
     }
     const tickCards = await response.json();
+
+    // Re-validate before mutating state (fetch could have taken time).
+    if (!isCurrentReplayLoad(generation, recordingId)) return;
+
     buildReplayHistoryFromTickCards(tickCards);
     registerReplayLoadedRange(startTick, endTick);
     if (currentMode === 'replay' && currentRecording === recordingId) {
-      renderLogHistory();
+      tickCards.forEach(card => rerenderTickGroup(card.tick));
     }
     console.log(`Loaded ${tickCards.length} tick cards for ticks ${startTick}-${endTick}`);
   } catch (e) {
-    console.error('Error loading tick cards:', e);
+    if (e.name === 'AbortError') {
+      console.log(`Tick-card request for ${recordingId} was aborted`);
+    } else {
+      console.error('Error loading tick cards:', e);
+    }
   } finally {
-    unregisterReplayInFlightRange(startTick, endTick);
+    unregisterReplayInFlightRange(requestToken);
   }
 }
 
@@ -5691,12 +5816,20 @@ function isReplayRangeInFlight(start, end) {
   return replayTickWindowInFlight.some(r => r.start <= end && r.end >= start);
 }
 
-function registerReplayInFlightRange(start, end) {
-  replayTickWindowInFlight.push({ start, end });
+function registerReplayInFlightRange(recordingId, start, end, generation) {
+  const requestToken = {
+    id: ++replayTickWindowRequestSequence,
+    recordingId,
+    generation,
+    start,
+    end
+  };
+  replayTickWindowInFlight.push(requestToken);
+  return requestToken;
 }
 
-function unregisterReplayInFlightRange(start, end) {
-  const index = replayTickWindowInFlight.findIndex(r => r.start === start && r.end === end);
+function unregisterReplayInFlightRange(requestToken) {
+  const index = replayTickWindowInFlight.indexOf(requestToken);
   if (index >= 0) {
     replayTickWindowInFlight.splice(index, 1);
   }
@@ -5759,16 +5892,31 @@ function calculateTickFromVideoTime(videoMs) {
  * Uses LRU eviction to limit memory usage.
  */
 async function maybeFetchReplaySnapshot(tick) {
-  if (!currentReplayDebugSessionId || tick === null || tick === undefined) return;
+  const recordingId = currentRecording;
+  const generation = replayLoadGeneration;
+  const sessionId = currentReplayDebugSessionId;
+  if (!recordingId || !sessionId || tick === null || tick === undefined) return;
   if (replayTickSnapshots.has(tick)) return; // Already cached
   if (replaySnapshotFetchInFlight.has(tick)) return; // Avoid overlapping requests
 
-  replaySnapshotFetchInFlight.add(tick);
+  const requestToken = {
+    recordingId,
+    generation,
+    sessionId,
+    tick,
+    controller: new AbortController()
+  };
+  replaySnapshotFetchInFlight.set(tick, requestToken);
   try {
-    const response = await fetch(`/api/debug/replay/tick/${currentReplayDebugSessionId}/${tick}`);
+    const response = await fetch(`/api/debug/replay/tick/${sessionId}/${tick}`, {
+      signal: requestToken.controller.signal
+    });
     if (response.ok) {
       const data = await response.json();
-      if (data.snapshot) {
+      if (replaySnapshotFetchInFlight.get(tick) === requestToken
+        && isCurrentReplayLoad(generation, recordingId)
+        && currentReplayDebugSessionId === sessionId
+        && data.snapshot) {
         const raw = data.snapshot;
         const normalized = {
           playerState: raw.playerState,
@@ -5809,141 +5957,240 @@ async function maybeFetchReplaySnapshot(tick) {
       }
     }
   } catch (error) {
+    if (error.name === 'AbortError') return;
     console.warn('Failed to fetch replay snapshot:', error);
   } finally {
-    replaySnapshotFetchInFlight.delete(tick);
+    if (replaySnapshotFetchInFlight.get(tick) === requestToken) {
+      replaySnapshotFetchInFlight.delete(tick);
+    }
   }
 }
 
 async function syncLogsToVideo(videoMs) {
   if (!currentRecording) return;
+  if (currentMode !== 'replay') return;
+
+  const requestedRecordingId = currentRecording;
+  const requestedGeneration = replayLoadGeneration;
+  const requestedVideoMs = Math.floor(videoMs);
+
+  // Abort the preceding replay-log request before starting a new one
+  if (currentSyncAbortController) {
+    currentSyncAbortController.abort();
+  }
+  const abortController = new AbortController();
+  const requestToken = {
+    controller: abortController,
+    generation: requestedGeneration,
+    recordingId: requestedRecordingId,
+    videoMs: requestedVideoMs
+  };
+  currentSyncAbortController = abortController;
 
   try {
-    // Calculate current tick from video time (using snapshot timeline if available)
-    let currentTick = calculateTickFromVideoTime(videoMs);
+    if (window.DEBUG_TICK) {
+      console.log(`[Replay] Unified sync for ${requestedRecordingId} at ${requestedVideoMs}ms`);
+    }
 
-    // Fallback: fetch from unified endpoint for session-relative calculation
-    if (currentTick === null && currentReplayDebugSessionId) {
-      // Abort previous in-flight request (abort-and-replace pattern)
-      if (currentSyncAbortController) {
-        currentSyncAbortController.abort();
-      }
-      currentSyncAbortController = new AbortController();
+    const response = await fetch(
+      `/api/debug/replay/unified?recordingId=${encodeURIComponent(requestedRecordingId)}` +
+      `&videoTimeMs=${requestedVideoMs}&windowSeconds=3`,
+      { signal: abortController.signal }
+    );
 
-      const response = await fetch(
-        `/api/debug/replay/unified?recordingId=${currentRecording}&videoTimeMs=${Math.floor(videoMs)}&windowSeconds=1`,
-        { signal: currentSyncAbortController.signal }
-      );
+    // Keep ownership through response parsing and rendering. A newer seek can arrive after
+    // headers but before JSON parsing, so releasing the slot here would allow stale results.
+    if (!isCurrentReplaySync(requestToken)) return;
 
-      if (response.ok) {
-        const result = await response.json();
-        currentTick = result.currentTick;
-      }
-      currentSyncAbortController = null;
+    if (!response.ok) {
+      // Non-destructive error state; video playback stays usable
+      console.error('Failed to fetch unified replay logs, status:', response.status);
+      renderReplayLogError();
+      return;
+    }
+
+    const result = await response.json();
+
+    // Stale-response protection: mode, generation, recording, and response ownership must
+    // all still match the request that was made.
+    if (!isCurrentReplaySync(requestToken)
+      || result.recordingId !== requestedRecordingId) {
+      return;
     }
 
     if (window.DEBUG_TICK) {
-      console.log('[Replay] Sync tick:', currentTick, 'at video time:', videoMs);
+      console.log(`[Replay] Unified response for ${requestedRecordingId}: ` +
+        `currentTick=${result.currentTick}, logs=${result.logs ? result.logs.length : 0}`);
     }
 
+    const currentTick = result.currentTick != null ? result.currentTick : null;
     if (currentTick != null) {
       updateTickDisplay(currentTick);
       highlightCurrentTickGroup(currentTick);
       maybeAutoFollowTick(currentTick);
     }
 
+    // Render logs from the unified response (may be an empty array)
+    renderReplayLogs(result.logs || [], currentTick, result.hasAnyLogs !== false);
+
+    // Load nearby tick snapshots for the authoritative server tick
+    if (currentTick != null) {
+      ensureReplayTickWindow(requestedRecordingId, currentTick);
+    }
+
   } catch (error) {
-    if (error.name !== 'AbortError') {
-      console.error('Failed to sync logs:', error);
+    if (error.name === 'AbortError') {
+      return; // Expected control flow: superseded by a newer request
+    }
+    if (!isCurrentReplaySync(requestToken)) return;
+    console.error('Failed to sync replay logs:', error);
+    renderReplayLogError();
+  } finally {
+    if (currentSyncAbortController === abortController) {
+      currentSyncAbortController = null;
     }
   }
 }
 
-function renderReplayLogs(logs, currentReplayTick = null) {
-  replayLogHistory.length = 0;
-  if (!logs || logs.length === 0) {
-    // If we have a current tick, render just that tick group with snapshot
-    if (currentReplayTick != null && currentMode === 'replay') {
-      const outputContainer = elements.logsContainer;
-      if (outputContainer) {
-        outputContainer.innerHTML = '';
-        // Create tick group for snapshot
-        const tickGroup = buildTickGroup(currentReplayTick, []);
-        outputContainer.appendChild(tickGroup);
-        // Fetch snapshot data
-        maybeFetchReplaySnapshot(currentReplayTick);
-        highlightCurrentTickGroup(currentReplayTick);
-      }
-      return;
-    }
-    // No tick and no logs - show placeholder
-    if (currentMode === 'replay') {
-      renderLogHistory('No logs for this time period');
-    }
-    return;
+function renderReplayLogError() {
+  if (currentMode !== 'replay' || !currentRecording) return;
+  // Retain the last successfully rendered window when it exists; otherwise show a placeholder.
+  if (replayLogHistory.length === 0) {
+    ensureLogPlaceholder('Could not load recording logs');
+  } else {
+    showNotification('Could not load recording logs', 'error');
+  }
+}
+
+function getReplayLogIdentity(entry) {
+  if (entry.id != null && entry.id !== undefined && entry.id !== '') {
+    return `${entry.origin || 'log'}:${entry.id}`;
+  }
+  return [
+    entry.origin || 'log',
+    entry.timestamp || '',
+    entry.tick != null ? entry.tick : '',
+    entry.source || entry.subsystem || '',
+    entry.logType || entry.eventType || '',
+    entry.message || ''
+  ].join('|');
+}
+
+function isCurrentReplaySync(requestToken) {
+  return currentMode === 'replay'
+    && currentSyncAbortController === requestToken.controller
+    && replayLoadGeneration === requestToken.generation
+    && currentRecording === requestToken.recordingId;
+}
+
+function normalizeReplayUnifiedLog(log) {
+  const origin = log.origin || 'standard';
+  const base = {
+    origin: origin,
+    id: log.id != null ? log.id : null,
+    tick: log.tick != null ? log.tick : null,
+    level: log.level || 'INFO',
+    source: log.source ? String(log.source) : 'unknown',
+    timestamp: log.timestamp || null,
+    logType: log.logType || null
+  };
+
+  if (origin === 'tick') {
+    return {
+      ...base,
+      kind: 'tick',
+      subsystem: log.source || 'tick',
+      message: log.message ? String(log.message) : '',
+      data: safeParseStructuredData(log.structuredData)
+    };
   }
 
-  // DEBUG: Log sample entries to understand payload shape
-  if (window.DEBUG_TICK) {
-    console.log('[Tick Debug] renderReplayLogs received', logs.length, 'entries');
-    logs.slice(0, 5).forEach((log, i) => {
-      console.log(`[Tick Debug] Entry ${i}:`, {
-        origin: log.origin,
-        source: log.source,
-        tick: log.tick,
-        logType: log.logType,
-        structuredData: log.structuredData,
-        message: log.message?.slice(0, 50)
-      });
+  if (origin === 'external' || log.structuredData || log.logType) {
+    return {
+      ...base,
+      kind: 'action',
+      message: log.message || log.logType || log.type || '',
+      data: safeParseStructuredData(log.structuredData)
+    };
+  }
+
+  return {
+    ...base,
+    kind: 'standard',
+    message: log.message ? String(log.message) : '',
+    data: safeParseStructuredData(log.structuredData)
+  };
+}
+
+function renderReplayLogs(logs, currentReplayTick = null, hasAnyLogs = true) {
+  if (currentMode !== 'replay') return;
+
+  replayLogHistory.length = 0;
+  const seen = new Set();
+  const uniqueLogs = [];
+
+  if (Array.isArray(logs)) {
+    logs.forEach(log => {
+      const key = getReplayLogIdentity(log);
+      if (seen.has(key)) return;
+      seen.add(key);
+      uniqueLogs.push(log);
     });
   }
 
-  logs.forEach(log => {
-    const origin = log.origin || ''; // Backend-provided discriminator
-
-    if (origin === 'tick') {
-      // Tick log from tick_logs table - use normalizeTickLog
-      // Preserve rich fields: logType, data
-      const tickLogEntry = {
-        kind: 'tick',
-        tick: log.tick, // Must preserve even if 0
-        level: log.level || 'INFO',
-        subsystem: log.source, // Map backend 'source' to frontend 'subsystem'
-        source: log.source,
-        message: log.message,
-        timestamp: log.timestamp,
-        logType: log.logType || null,
-        // Parse structuredData ONLY if it looks like JSON
-        data: safeParseStructuredData(log.structuredData)
-      };
-      replayLogHistory.push(normalizeTickLog(tickLogEntry));
-    } else if (log.logType || log.structuredData || (log.type && log.hasOwnProperty('tick') && log.data)) {
-      // ActionLogger format logs (external/micro6 sources with structured data)
-      let data = log.data;
-      if (!data && log.structuredData) {
-        data = safeParseStructuredData(log.structuredData);
+  if (uniqueLogs.length === 0) {
+    // Quiet timeline window: still render the current tick group with its snapshot,
+    // then append the explicit quiet-window message.
+    if (currentReplayTick != null) {
+      const outputContainer = elements.logsContainer;
+      if (outputContainer) {
+        outputContainer.innerHTML = '';
+        const tickGroup = buildTickGroup(currentReplayTick, []);
+        outputContainer.appendChild(tickGroup);
+        maybeFetchReplaySnapshot(currentReplayTick);
+        highlightCurrentTickGroup(currentReplayTick);
+        const quiet = document.createElement('div');
+        quiet.className = 'text-muted fst-italic p-3';
+        quiet.textContent = hasAnyLogs === false
+          ? 'No logs were captured for this recording'
+          : 'No logs for this time period';
+        outputContainer.appendChild(quiet);
       }
-      const actionLog = {
-        level: log.level || 'INFO',
-        message: log.message || log.logType || log.type,
-        source: log.source || 'external',
-        timestamp: log.timestamp,
-        logType: log.logType || log.type,
-        tick: log.hasOwnProperty('tick') ? log.tick : null,
-        data: data
-      };
-      replayLogHistory.push(normalizeActionLog(actionLog));
-    } else {
-      // Standard logs
-      const stdLog = {
-        ...log,
-        tick: log.hasOwnProperty('tick') ? log.tick : null
-      };
-      replayLogHistory.push(normalizeStandardLog(stdLog));
+      return;
     }
+    // Selected recording, successful response, no logs and no tick near current time
+    renderLogHistory(
+      hasAnyLogs === false
+        ? 'No logs were captured for this recording'
+        : 'No logs for this time period',
+      { forceEmpty: true }
+    );
+    return;
+  }
+
+  uniqueLogs.forEach(log => {
+    const origin = log.origin || 'standard';
+    const entry = normalizeReplayUnifiedLog(log);
+    let normalized;
+    if (entry.kind === 'tick') {
+      // Unified replay data carries the persisted tick; never fabricate one.
+      normalized = normalizeTickLog(entry, { allowTickFallback: false });
+    } else if (entry.kind === 'action') {
+      normalized = normalizeActionLog(entry, { allowTickFallback: false });
+    } else {
+      normalized = normalizeStandardLog(entry, { allowTickFallback: false });
+    }
+    normalized.origin = origin;
+    normalized.id = entry.id;
+    replayLogHistory.push(normalized);
   });
 
-  // Discover sources incrementally (don't clear existing discoveries to preserve filters)
+  // Rebuild source discovery from the current replay window. Counts are recomputed per
+  // response (windowed history), so overlapping requests never accumulate. Stale chips for
+  // sources no longer in the window are removed by the rebuild below.
+  discoveredSources.clear();
+  sourceLogTypes.clear();
+  discoveredPatterns.clear();
   replayLogHistory.forEach(entry => {
     let actualSource = entry.source;
     const sourceIsSystem = isSystemSource(entry.source);
@@ -5962,27 +6209,34 @@ function renderReplayLogs(logs, currentReplayTick = null) {
     }
     discoverPatterns(entry.message);
   });
-  clampLogHistory(replayLogHistory);
-  updateSourceFilterSummary();
-  if (currentMode === 'replay') {
-    const container = elements.logsContainer;
-    const shouldAutoScroll = autoFollowReplay && !userScrolledRecently;
-    const preserveScroll = container && !shouldAutoScroll;
-    const previousScrollTop = preserveScroll ? container.scrollTop : 0;
-    renderLogHistory();
-    lastHighlightedTick = null; // DOM was rebuilt; force re-highlight on next sync
-    if (preserveScroll) {
-      container.scrollTop = previousScrollTop;
-    }
-    // Highlight current tick group after rendering
-    highlightCurrentTickGroup(currentReplayTick);
-    if (shouldAutoScroll && currentMode === 'replay') {
-      lastProgrammaticScrollTime = Date.now(); // Mark as programmatic scroll
-      container.scrollTop = container.scrollHeight;
-    }
-
-    renderRecoveryWorkspacePanes();
+  // Rebuild the chip DOM without touching hidden-source preferences.
+  const sourceFiltersEl = document.getElementById('sourceFilters');
+  if (sourceFiltersEl) {
+    sourceFiltersEl.innerHTML = '';
+    discoveredSources.forEach((count, source) => {
+      if (!sourceLogTypes.has(source)) return;
+      updateSourceChip(source);
+    });
   }
+  updateSourceFilterSummary();
+
+  const container = elements.logsContainer;
+  const shouldAutoScroll = autoFollowReplay && !userScrolledRecently;
+  const preserveScroll = container && !shouldAutoScroll;
+  const previousScrollTop = preserveScroll ? container.scrollTop : 0;
+  renderLogHistory();
+  lastHighlightedTick = null; // DOM was rebuilt; force re-highlight on next sync
+  if (preserveScroll) {
+    container.scrollTop = previousScrollTop;
+  }
+  // Highlight current tick group after rendering
+  highlightCurrentTickGroup(currentReplayTick);
+  if (shouldAutoScroll && currentMode === 'replay') {
+    lastProgrammaticScrollTime = Date.now(); // Mark as programmatic scroll
+    container.scrollTop = container.scrollHeight;
+  }
+
+  renderRecoveryWorkspacePanes();
 }
 
 function renderRecoveryWorkspacePanes() {
@@ -6608,10 +6862,9 @@ function updatePanelsForTick(data) {
 
         if (currentMode === 'live') {
           addLiveLogEntry(logEntry);
-        } else {
-          // For replay, add to replay log history
-          replayLogHistory.push(logEntry);
         }
+        // Replay mode: tick-stream rows belong to the live tick feed, not the unified
+        // replay window; they are intentionally not appended to replayLogHistory.
       });
 
       // Re-render logs to show new events
@@ -6780,36 +7033,8 @@ function renderTickBotState(snapshot) {
  */
 function renderTickLogs(logs) {
   if (currentMode === 'replay') {
-    replayLogHistory.length = 0;
-    discoveredSources.clear();
-    sourceLogTypes.clear();
-    const sourceFiltersEl = document.getElementById('sourceFilters');
-    if (sourceFiltersEl) sourceFiltersEl.innerHTML = '';
-
-    logs.forEach(log => {
-      const entry = normalizeTickLog(log);
-      replayLogHistory.push(entry);
-      if (entry.source) {
-        discoverSource(entry.source, 'tick');
-      }
-      discoverPatterns(entry.message);
-    });
-
-    clampLogHistory(replayLogHistory);
-    updateSourceFilterSummary();
-    const container = elements.logsContainer;
-    const shouldAutoScroll = autoFollowReplay && !userScrolledRecently;
-    const preserveScroll = container && !shouldAutoScroll;
-    const previousScrollTop = preserveScroll ? container.scrollTop : 0;
-    renderLogHistory();
-    if (preserveScroll) {
-      container.scrollTop = previousScrollTop;
-    } else if (shouldAutoScroll) {
-      lastProgrammaticScrollTime = Date.now(); // Mark as programmatic scroll
-      container.scrollTop = container.scrollHeight;
-    }
-    highlightCurrentTickGroup(currentTick);
-    renderRecoveryWorkspacePanes();
+    // The tick stream is a live feed; unified replay responses are the only owner of
+    // replayLogHistory, so replay-mode tick-stream rows are not rendered here.
     return;
   }
 

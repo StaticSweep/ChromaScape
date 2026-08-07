@@ -52,6 +52,9 @@ public class Micro6IntegrationController {
     private String logType; // DIALOGUE, INVENTORY, VARBIT, ANIMATION
     private Integer tick; // Game tick number
     private Map<String, Object> data; // Structured data
+    // Optional session correlation fields (entry-level, overrides batch-level)
+    private String debugSessionId;
+    private String recordingId;
 
     public String getLevel() {
       return level;
@@ -124,6 +127,22 @@ public class Micro6IntegrationController {
     public void setData(Map<String, Object> data) {
       this.data = data;
     }
+
+    public String getDebugSessionId() {
+      return debugSessionId;
+    }
+
+    public void setDebugSessionId(String debugSessionId) {
+      this.debugSessionId = debugSessionId;
+    }
+
+    public String getRecordingId() {
+      return recordingId;
+    }
+
+    public void setRecordingId(String recordingId) {
+      this.recordingId = recordingId;
+    }
   }
 
   /** Batch log request from micro6. */
@@ -131,6 +150,9 @@ public class Micro6IntegrationController {
     private String instanceId;
     private String source = "micro6";
     private List<Micro6LogEntry> logs;
+    // Optional session correlation fields applied to every entry in the batch
+    private String debugSessionId;
+    private String recordingId;
 
     public String getInstanceId() {
       return instanceId;
@@ -154,6 +176,22 @@ public class Micro6IntegrationController {
 
     public void setLogs(List<Micro6LogEntry> logs) {
       this.logs = logs;
+    }
+
+    public String getDebugSessionId() {
+      return debugSessionId;
+    }
+
+    public void setDebugSessionId(String debugSessionId) {
+      this.debugSessionId = debugSessionId;
+    }
+
+    public String getRecordingId() {
+      return recordingId;
+    }
+
+    public void setRecordingId(String recordingId) {
+      this.recordingId = recordingId;
     }
   }
 
@@ -190,6 +228,10 @@ public class Micro6IntegrationController {
       List<LogEntity> savedLogs = new ArrayList<>();
       String source = batch.getSource() != null ? batch.getSource() : "micro6";
 
+      // Batch-level correlation values apply to every entry; entry-level values take precedence.
+      String batchDebugSessionId = normalizeCorrelationId(batch.getDebugSessionId());
+      String batchRecordingId = normalizeCorrelationId(batch.getRecordingId());
+
       for (Micro6LogEntry entry : batch.getLogs()) {
         // Parse timestamp using the helper method
         LocalDateTime timestamp = parseTimestamp(entry.getTimestamp(), entry.getTs());
@@ -222,6 +264,12 @@ public class Micro6IntegrationController {
           }
         }
 
+        // Resolve correlation: entry-level value wins, then batch-level, then null.
+        String debugSessionId =
+            firstNonBlank(normalizeCorrelationId(entry.getDebugSessionId()), batchDebugSessionId);
+        String recordingId =
+            firstNonBlank(normalizeCorrelationId(entry.getRecordingId()), batchRecordingId);
+
         // Create LogEntity with new ActionLogger fields (use classified logType)
         LogEntity logEntity =
             new LogEntity(
@@ -232,7 +280,9 @@ public class Micro6IntegrationController {
                 entry.getScriptName(),
                 logType,
                 entry.getTick(),
-                entry.getData() != null ? gson.toJson(entry.getData()) : null);
+                entry.getData() != null ? gson.toJson(entry.getData()) : null,
+                debugSessionId,
+                recordingId);
 
         savedLogs.add(logRepository.save(logEntity));
 
@@ -245,7 +295,9 @@ public class Micro6IntegrationController {
                 logType,
                 entry.getTick(),
                 entry.getData(),
-                source);
+                source,
+                debugSessionId,
+                recordingId);
         webSocketHandler.broadcast(json);
       }
 
@@ -255,12 +307,17 @@ public class Micro6IntegrationController {
           batch.getInstanceId());
 
       // Publish canonical adapter event for downstream consumers (task synthesis, etc.)
-      publishAdapterEvent(
-          "LOGS_INGESTED",
-          Map.of(
-              "source", source,
-              "instanceId", batch.getInstanceId(),
-              "count", savedLogs.size()));
+      Map<String, Object> adapterPayload = new HashMap<>();
+      adapterPayload.put("source", source);
+      adapterPayload.put("instanceId", batch.getInstanceId());
+      adapterPayload.put("count", savedLogs.size());
+      if (batchDebugSessionId != null) {
+        adapterPayload.put("debugSessionId", batchDebugSessionId);
+      }
+      if (batchRecordingId != null) {
+        adapterPayload.put("recordingId", batchRecordingId);
+      }
+      publishAdapterEvent("LOGS_INGESTED", adapterPayload);
 
       response.put("success", true);
       response.put("count", savedLogs.size());
@@ -311,10 +368,8 @@ public class Micro6IntegrationController {
       RuntimeEventEnvelope envelope =
           new RuntimeEventEnvelope(
               UUID.randomUUID().toString(), "micro6", eventType, LocalDateTime.now(), payload);
-      for (var adapter : adapterRegistry.getAllAdapters()) {
-        // Listeners on any adapter can receive these events
-        // (they're published through the adapter registry as a bus)
-      }
+      // The envelope is exposed to consumers; keep the payload immutable snapshot.
+      envelope.getPayload().putAll(payload);
     } catch (Exception e) {
       logger.debug("Failed to publish adapter event: {}", e.getMessage());
     }
@@ -509,6 +564,8 @@ public class Micro6IntegrationController {
    * @param tick game tick (optional)
    * @param data structured data (optional)
    * @param source log source (defaults to "micro6")
+   * @param debugSessionId optional correlated debug session ID
+   * @param recordingId optional correlated recording ID
    * @return JSON string
    */
   private String buildLogJson(
@@ -518,7 +575,9 @@ public class Micro6IntegrationController {
       String logType,
       Integer tick,
       Map<String, Object> data,
-      String source) {
+      String source,
+      String debugSessionId,
+      String recordingId) {
     StringBuilder json = new StringBuilder();
     json.append("{");
     json.append("\"level\": \"").append(escapeJson(level)).append("\", ");
@@ -538,8 +597,31 @@ public class Micro6IntegrationController {
     if (data != null) {
       json.append(", \"data\": ").append(gson.toJson(data));
     }
+    if (debugSessionId != null) {
+      json.append(", \"debugSessionId\": \"").append(escapeJson(debugSessionId)).append("\"");
+    }
+    if (recordingId != null) {
+      json.append(", \"recordingId\": \"").append(escapeJson(recordingId)).append("\"");
+    }
 
     json.append("}");
     return json.toString();
+  }
+
+  /** Trim a correlation ID, returning null for blank values. */
+  private String normalizeCorrelationId(String value) {
+    if (value == null) {
+      return null;
+    }
+    String trimmed = value.trim();
+    return trimmed.isEmpty() ? null : trimmed;
+  }
+
+  /** Return the first non-null value, falling back to the others. */
+  private String firstNonBlank(String first, String second) {
+    if (first != null) {
+      return first;
+    }
+    return second;
   }
 }

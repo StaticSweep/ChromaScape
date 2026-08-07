@@ -268,10 +268,14 @@ public class TickReplayController {
    * <p>This endpoint merges logs from both the standard logs table and tick-specific tick_logs
    * table, providing a unified view for video replay with proper tick grouping.
    *
+   * <p>Logs are scoped to the recording's linked debug session when correlated rows exist ({@code
+   * scopeMode=session}). Historical recordings without correlated logs fall back to an unscoped
+   * timestamp window ({@code scopeMode=timestamp_fallback}).
+   *
    * @param recordingId The recording ID to sync against
    * @param videoTimeMs The video position in milliseconds
    * @param windowSeconds Optional time window in seconds (default: 10)
-   * @return Map containing video timestamp and merged logs with tick information
+   * @return Map containing video timestamp, merged logs, tick information, and recording log health
    */
   @GetMapping("/unified")
   public ResponseEntity<Map<String, Object>> getUnifiedLogs(
@@ -280,6 +284,16 @@ public class TickReplayController {
       @RequestParam(defaultValue = "10") Integer windowSeconds) {
 
     try {
+      if (recordingId == null || recordingId.isBlank()) {
+        return ResponseEntity.badRequest().body(Map.of("error", "recordingId is required"));
+      }
+      if (videoTimeMs == null || videoTimeMs < 0) {
+        return ResponseEntity.badRequest().body(Map.of("error", "videoTimeMs must be >= 0"));
+      }
+      if (windowSeconds == null || windowSeconds < 0 || windowSeconds > 30) {
+        return ResponseEntity.badRequest().body(Map.of("error", "windowSeconds must be 0-30"));
+      }
+
       // Get recording session to find start time
       RecordingSession recordingSession =
           recordingSessionRepository.findByRecordingId(recordingId).orElse(null);
@@ -300,25 +314,57 @@ public class TickReplayController {
       LocalDateTime videoTimestamp =
           recordingSession.getStartTime().plus(videoTimeMs, ChronoUnit.MILLIS);
 
-      // Define the time window for logs
+      // Define the time window for logs, clamped to the recording's start/end so
+      // post-recording logs never appear at the end of playback.
       LocalDateTime windowStart = videoTimestamp.minusSeconds(windowSeconds);
       LocalDateTime windowEnd = videoTimestamp.plusSeconds(windowSeconds);
       LocalDateTime recordingStart = recordingSession.getStartTime();
       if (windowStart.isBefore(recordingStart)) {
         windowStart = recordingStart;
       }
-
-      // Fetch logs from standard logs table
-      List<LogEntity> standardLogs =
-          standardLogRepository.findByTimestampBetween(windowStart, windowEnd);
+      LocalDateTime recordingEnd = recordingSession.getEndTime();
+      if (recordingEnd != null && windowEnd.isAfter(recordingEnd)) {
+        windowEnd = recordingEnd;
+      }
 
       // Try to find associated debug session for tick logs and current tick calculation
-      List<TickLog> tickLogs = new ArrayList<>();
-      Long currentTick = null;
       DebugSession debugSession = sessionRepository.findByRecordingId(recordingId).orElse(null);
 
+      // Resolve the linked debug session from recordingId
+      String linkedSessionId = debugSession != null ? debugSession.getSessionId() : null;
+
+      // Correlated standard logs exist -> session-scoped query, else recording-scoped, else
+      // timestamp fallback.
+      boolean sessionScoped =
+          linkedSessionId != null && standardLogRepository.existsByDebugSessionId(linkedSessionId);
+      boolean recordingScoped =
+          !sessionScoped && standardLogRepository.existsByRecordingId(recordingId);
+
+      String scopeMode;
+      List<LogEntity> standardLogs = new ArrayList<>();
+      if (sessionScoped) {
+        scopeMode = "session";
+        standardLogs.addAll(
+            standardLogRepository.findByDebugSessionIdAndTimestampBetweenOrderByTimestampAsc(
+                linkedSessionId, windowStart, windowEnd));
+      } else if (recordingScoped) {
+        scopeMode = "recording";
+        standardLogs.addAll(
+            standardLogRepository.findByRecordingIdAndTimestampBetweenOrderByTimestampAsc(
+                recordingId, windowStart, windowEnd));
+      } else {
+        // Historical recordings: unscoped timestamp fallback (best-effort, no row mutation).
+        scopeMode = "timestamp_fallback";
+        standardLogs.addAll(
+            standardLogRepository.findByTimestampBetweenOrderByTimestampAsc(
+                windowStart, windowEnd));
+      }
+
+      // Fetch tick logs within the time window (always scoped to the linked session)
+      List<TickLog> tickLogs = new ArrayList<>();
+      Long currentTick = null;
+
       if (debugSession != null) {
-        // Fetch tick logs within the time window
         tickLogs.addAll(
             logRepository.findBySessionIdAndTimestampBetweenOrderByTickAsc(
                 debugSession.getSessionId(), windowStart, windowEnd));
@@ -331,6 +377,24 @@ public class TickReplayController {
           log.debug("Could not get tick from sync service: {}", e.getMessage());
         }
       }
+
+      // Distinguish a quiet playback window from a recording that never captured logs. This is
+      // intentionally resolved across the complete recording/session scope, not just the current
+      // request window.
+      boolean hasStandardLogs;
+      if (sessionScoped || recordingScoped) {
+        hasStandardLogs = true;
+      } else if (recordingEnd != null) {
+        hasStandardLogs =
+            standardLogRepository.existsByTimestampBetween(recordingStart, recordingEnd);
+      } else {
+        hasStandardLogs = standardLogRepository.existsByTimestampGreaterThanEqual(recordingStart);
+      }
+      boolean hasAnyLogs =
+          !standardLogs.isEmpty()
+              || !tickLogs.isEmpty()
+              || hasStandardLogs
+              || (linkedSessionId != null && logRepository.countBySessionId(linkedSessionId) > 0);
 
       // Fallback: extract from tick logs if primary method failed
       if (currentTick == null && !tickLogs.isEmpty()) {
@@ -404,11 +468,38 @@ public class TickReplayController {
         unifiedLogs.add(entry);
       }
 
-      // Sort by timestamp
-      unifiedLogs.sort((a, b) -> a.getTimestamp().compareTo(b.getTimestamp()));
+      // Sort deterministically by timestamp, then origin (to separate equal IDs from the
+      // logs and tick_logs tables), then ID.
+      unifiedLogs.sort(
+          (a, b) -> {
+            int byTimestamp = compareNullableTimestamps(a.getTimestamp(), b.getTimestamp());
+            if (byTimestamp != 0) {
+              return byTimestamp;
+            }
+            String aOrigin = a.getOrigin() != null ? a.getOrigin() : "";
+            String bOrigin = b.getOrigin() != null ? b.getOrigin() : "";
+            int byOrigin = aOrigin.compareTo(bOrigin);
+            if (byOrigin != 0) {
+              return byOrigin;
+            }
+            Long aId = a.getId();
+            Long bId = b.getId();
+            if (aId == null && bId == null) {
+              return 0;
+            }
+            if (aId == null) {
+              return -1;
+            }
+            if (bId == null) {
+              return 1;
+            }
+            return Long.compare(aId, bId);
+          });
 
       // Build response
       Map<String, Object> response = new HashMap<>();
+      response.put("recordingId", recordingId);
+      response.put("scopeMode", scopeMode);
       response.put("videoTimeMs", videoTimeMs);
       response.put("videoTimestamp", videoTimestamp);
       response.put(
@@ -418,11 +509,13 @@ public class TickReplayController {
       response.put("windowEnd", windowEnd);
       response.put("logs", unifiedLogs);
       response.put("currentTick", currentTick);
+      response.put("hasAnyLogs", hasAnyLogs);
 
       log.debug(
-          "Unified timeline sync for {} at {}ms: returned {} standard logs + {} tick logs = {} total",
+          "Unified timeline sync for {} at {}ms ({}): returned {} standard logs + {} tick logs = {} total",
           recordingId,
           videoTimeMs,
+          scopeMode,
           standardLogs.size(),
           tickLogs.size(),
           unifiedLogs.size());
@@ -435,6 +528,20 @@ public class TickReplayController {
       error.put("error", e.getMessage());
       return ResponseEntity.internalServerError().body(error);
     }
+  }
+
+  /** Compare two timestamps defensively, treating nulls as greater than any value. */
+  private int compareNullableTimestamps(LocalDateTime a, LocalDateTime b) {
+    if (a == null && b == null) {
+      return 0;
+    }
+    if (a == null) {
+      return 1;
+    }
+    if (b == null) {
+      return -1;
+    }
+    return a.compareTo(b);
   }
 
   /**
@@ -539,7 +646,9 @@ public class TickReplayController {
               ? sessionRepository.findByRecordingId(recordingId).orElse(stoppedSession)
               : stoppedSession;
       long tickCount =
-          linkedSession != null ? snapshotRepository.countBySessionId(linkedSession.getSessionId()) : 0L;
+          linkedSession != null
+              ? snapshotRepository.countBySessionId(linkedSession.getSessionId())
+              : 0L;
       long positionFrameCount =
           linkedSession != null
               ? snapshotRepository.countWithPositionTelemetry(linkedSession.getSessionId())
@@ -683,7 +792,7 @@ public class TickReplayController {
    * queries per table to avoid the row explosion of a multi-table join aggregate.
    *
    * @return list of session summaries with health metadata
-  */
+   */
   @GetMapping("/recording-health")
   public ResponseEntity<List<DebugSessionSummary>> getRecordingHealth(
       @RequestParam(required = false, defaultValue = "200") Integer limit) {
@@ -731,13 +840,22 @@ public class TickReplayController {
       response.put("tickSnapshotCount", tickSnapshotCount);
       response.put("tickLogCount", tickLogCount);
       response.put("hasTickLogs", tickLogCount != null && tickLogCount > 0);
-      snapshotRepository.findMinTickBySessionId(session.getSessionId()).ifPresent(t -> response.put("minTick", t));
-      snapshotRepository.findMaxTickBySessionId(session.getSessionId()).ifPresent(t -> response.put("maxTick", t));
+      snapshotRepository
+          .findMinTickBySessionId(session.getSessionId())
+          .ifPresent(t -> response.put("minTick", t));
+      snapshotRepository
+          .findMaxTickBySessionId(session.getSessionId())
+          .ifPresent(t -> response.put("maxTick", t));
 
       return ResponseEntity.ok(response);
     } catch (Exception e) {
-      log.error("Failed to compute replay log parity for recording {}: {}", recordingId, e.getMessage(), e);
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+      log.error(
+          "Failed to compute replay log parity for recording {}: {}",
+          recordingId,
+          e.getMessage(),
+          e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", e.getMessage()));
     }
   }
 
@@ -757,7 +875,8 @@ public class TickReplayController {
       long startTick = Math.max(0L, tick - Math.max(0, windowTicks));
       long endTick = tick + Math.max(0, windowTicks);
       List<TickLog> tickLogs =
-          logRepository.findBySessionIdAndTickBetweenOrderByTickAsc(session.getSessionId(), startTick, endTick);
+          logRepository.findBySessionIdAndTickBetweenOrderByTickAsc(
+              session.getSessionId(), startTick, endTick);
 
       List<UnifiedLogEntry> logs = new ArrayList<>();
       for (TickLog tl : tickLogs) {
@@ -776,12 +895,14 @@ public class TickReplayController {
 
       if (logs.isEmpty()) {
         long ms = tick * 600L;
-        RecordingSession recordingSession = recordingSessionRepository.findByRecordingId(recordingId).orElse(null);
+        RecordingSession recordingSession =
+            recordingSessionRepository.findByRecordingId(recordingId).orElse(null);
         if (recordingSession != null && recordingSession.getStartTime() != null) {
           LocalDateTime target = recordingSession.getStartTime().plus(ms, ChronoUnit.MILLIS);
           LocalDateTime windowStart = target.minusSeconds(2);
           LocalDateTime windowEnd = target.plusSeconds(2);
-          for (LogEntity log : standardLogRepository.findByTimestampBetween(windowStart, windowEnd)) {
+          for (LogEntity log :
+              standardLogRepository.findByTimestampBetween(windowStart, windowEnd)) {
             UnifiedLogEntry entry = new UnifiedLogEntry();
             entry.setId(log.getId());
             entry.setTimestamp(log.getTimestamp());
@@ -805,8 +926,10 @@ public class TickReplayController {
       response.put("logs", logs);
       return ResponseEntity.ok(response);
     } catch (Exception e) {
-      log.error("Failed to load replay tick logs for recording {}: {}", recordingId, e.getMessage(), e);
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+      log.error(
+          "Failed to load replay tick logs for recording {}: {}", recordingId, e.getMessage(), e);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", e.getMessage()));
     }
   }
 
@@ -842,7 +965,8 @@ public class TickReplayController {
    * @return result map with repaired flag
    */
   @PostMapping("/recordings/{recordingId}/repair")
-  public ResponseEntity<Map<String, Object>> repairOrphanedRecording(@PathVariable String recordingId) {
+  public ResponseEntity<Map<String, Object>> repairOrphanedRecording(
+      @PathVariable String recordingId) {
     try {
       if (recordingId == null || recordingId.isBlank()) {
         return ResponseEntity.badRequest()
@@ -1163,9 +1287,7 @@ public class TickReplayController {
     return summary.length() > 0 ? summary.toString() : "No player data";
   }
 
-  /**
-   * Resolve position from playerState using nested position, then flat fields.
-   */
+  /** Resolve position from playerState using nested position, then flat fields. */
   private JsonNode nestedOrFlatPosition(JsonNode playerState) {
     JsonNode nestedPosition = playerState.get("position");
     if (nestedPosition != null
@@ -1175,8 +1297,7 @@ public class TickReplayController {
       return nestedPosition;
     }
     // Check for flat x/y, x/z, or x/worldY.
-    if (firstInt(playerState, "x") != null
-        && firstInt(playerState, "y", "z", "worldY") != null) {
+    if (firstInt(playerState, "x") != null && firstInt(playerState, "y", "z", "worldY") != null) {
       return playerState; // Contains x/y or x/z directly
     }
     // Check for worldX/worldY, worldX/y, or worldX/z.
@@ -1192,9 +1313,7 @@ public class TickReplayController {
     return firstInt(position, "x", "worldX");
   }
 
-  /**
-   * Get position Y value with fallback to z, then worldY.
-   */
+  /** Get position Y value with fallback to z, then worldY. */
   private Integer getPositionY(JsonNode position) {
     return firstInt(position, "y", "z", "worldY");
   }
@@ -1233,9 +1352,7 @@ public class TickReplayController {
     return null;
   }
 
-  /**
-   * Format HP display from nested or flat fields.
-   */
+  /** Format HP display from nested or flat fields. */
   private String formatHp(JsonNode playerState) {
     JsonNode hp = playerState.get("hp");
     if (hp != null && hp.isObject() && hp.has("current")) {
@@ -1251,9 +1368,7 @@ public class TickReplayController {
     return "";
   }
 
-  /**
-   * Format Prayer display from nested or flat fields.
-   */
+  /** Format Prayer display from nested or flat fields. */
   private String formatPrayer(JsonNode playerState) {
     JsonNode prayer = playerState.get("prayer");
     if (prayer != null && prayer.isObject() && prayer.has("current")) {
@@ -1269,9 +1384,7 @@ public class TickReplayController {
     return "";
   }
 
-  /**
-   * Get a value from playerState trying the first key, then the second.
-   */
+  /** Get a value from playerState trying the first key, then the second. */
   private JsonNode nestedOrFallback(JsonNode playerState, String first, String second) {
     if (playerState.has(first)) {
       return playerState.get(first);

@@ -5,7 +5,14 @@ import java.time.LocalDateTime;
 
 /** JPA entity for storing log entries in the database. */
 @Entity
-@Table(name = "logs")
+@Table(
+    name = "logs",
+    indexes = {
+      @Index(
+          name = "idx_logs_debug_session_id_timestamp",
+          columnList = "debug_session_id, timestamp"),
+      @Index(name = "idx_logs_recording_id_timestamp", columnList = "recording_id, timestamp")
+    })
 public class LogEntity {
 
   @Id
@@ -37,6 +44,12 @@ public class LogEntity {
   @Column(name = "structured_data", columnDefinition = "TEXT")
   private String structuredData; // JSON string of structured data
 
+  @Column(name = "debug_session_id", length = 100)
+  private String debugSessionId;
+
+  @Column(name = "recording_id", length = 100)
+  private String recordingId;
+
   /** Default constructor required by JPA. */
   public LogEntity() {}
 
@@ -64,6 +77,23 @@ public class LogEntity {
     this.logType = logType;
     this.tick = tick;
     this.structuredData = structuredData;
+  }
+
+  /** Constructor for creating log entries with ActionLogger and session correlation data. */
+  public LogEntity(
+      LocalDateTime timestamp,
+      String level,
+      String message,
+      String source,
+      String scriptName,
+      String logType,
+      Integer tick,
+      String structuredData,
+      String debugSessionId,
+      String recordingId) {
+    this(timestamp, level, message, source, scriptName, logType, tick, structuredData);
+    this.debugSessionId = debugSessionId;
+    this.recordingId = recordingId;
   }
 
   // Getters and Setters
@@ -138,5 +168,21 @@ public class LogEntity {
 
   public void setStructuredData(String structuredData) {
     this.structuredData = structuredData;
+  }
+
+  public String getDebugSessionId() {
+    return debugSessionId;
+  }
+
+  public void setDebugSessionId(String debugSessionId) {
+    this.debugSessionId = debugSessionId;
+  }
+
+  public String getRecordingId() {
+    return recordingId;
+  }
+
+  public void setRecordingId(String recordingId) {
+    this.recordingId = recordingId;
   }
 }

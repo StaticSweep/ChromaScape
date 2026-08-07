@@ -75,4 +75,24 @@ public interface LogRepository extends JpaRepository<LogEntity, Long> {
 
   /** Find all logs in a timestamp window ordered chronologically. */
   List<LogEntity> findByTimestampBetweenOrderByTimestampAsc(LocalDateTime start, LocalDateTime end);
+
+  /** Check whether any logs are correlated to the given debug session. */
+  boolean existsByDebugSessionId(String debugSessionId);
+
+  /** Check whether any logs are correlated to the given recording. */
+  boolean existsByRecordingId(String recordingId);
+
+  /** Check whether any unscoped logs exist in a timestamp range. */
+  boolean existsByTimestampBetween(LocalDateTime start, LocalDateTime end);
+
+  /** Check whether any logs exist at or after a timestamp. */
+  boolean existsByTimestampGreaterThanEqual(LocalDateTime start);
+
+  /** Find logs correlated to a debug session within a timestamp window, ordered chronologically. */
+  List<LogEntity> findByDebugSessionIdAndTimestampBetweenOrderByTimestampAsc(
+      String debugSessionId, LocalDateTime start, LocalDateTime end);
+
+  /** Find logs correlated to a recording within a timestamp window, ordered chronologically. */
+  List<LogEntity> findByRecordingIdAndTimestampBetweenOrderByTimestampAsc(
+      String recordingId, LocalDateTime start, LocalDateTime end);
 }
