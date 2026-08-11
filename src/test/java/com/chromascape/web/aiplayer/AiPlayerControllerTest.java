@@ -1,8 +1,10 @@
 package com.chromascape.web.aiplayer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.web.aiplayer.prototype.AiPlayerPrototypeController;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +29,8 @@ class AiPlayerControllerTest {
 
   @BeforeEach
   void setUp() {
-    controller = new AiPlayerController(datasetBuilder, shadowPolicy, evaluationService, datasetScheduler);
+    controller =
+        new AiPlayerController(datasetBuilder, shadowPolicy, evaluationService, datasetScheduler);
   }
 
   @Test
@@ -53,10 +56,42 @@ class AiPlayerControllerTest {
   }
 
   @Test
+  @DisplayName("status exposes the fishing prototype block and artifact directory")
+  void status_exposesPrototypeStatus() {
+    AiPlayerPrototypeController prototypeController = mock(AiPlayerPrototypeController.class);
+    when(prototypeController.prototypeStatus())
+        .thenReturn(
+            Map.of(
+                "fishingPrototypeEnabled", true,
+                "fishingPrototypeAvailable", true,
+                "artifactDir", ".chromascape/datasets"));
+    controller =
+        new AiPlayerController(
+            datasetBuilder, shadowPolicy, evaluationService, datasetScheduler, prototypeController);
+
+    when(datasetBuilder.isAiPlayerEnabled()).thenReturn(true);
+    when(datasetBuilder.getOutputDir()).thenReturn("/tmp/datasets");
+    when(datasetBuilder.getDatasetSummary(null)).thenReturn("summary");
+
+    ResponseEntity<Object> response = controller.getStatus();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsKey("prototype");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> prototype = (Map<String, Object>) body.get("prototype");
+    assertThat(prototype)
+        .containsEntry("fishingPrototypeEnabled", true)
+        .containsEntry("artifactDir", ".chromascape/datasets");
+  }
+
+  @Test
   @DisplayName("buildPatchOutcomeDataset returns manifest metadata")
   void buildPatchOutcomeDataset_returnsManifestMetadata() {
     when(datasetBuilder.isAiPlayerEnabled()).thenReturn(true);
-    when(datasetBuilder.buildPatchOutcomeDatasetResult(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+    when(datasetBuilder.buildPatchOutcomeDatasetResult(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
         .thenReturn(
             new DatasetBuildResult(
                 "ds-1",
@@ -89,7 +124,8 @@ class AiPlayerControllerTest {
         .thenReturn(Map.of("eligibleItems", 4, "successRate", 0.75d));
 
     ResponseEntity<Object> response =
-        controller.evaluatePatchOutcomes("2026-06-01T00:00:00", "2026-06-02T00:00:00", "QuestScript");
+        controller.evaluatePatchOutcomes(
+            "2026-06-01T00:00:00", "2026-06-02T00:00:00", "QuestScript");
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     @SuppressWarnings("unchecked")

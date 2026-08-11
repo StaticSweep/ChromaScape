@@ -1,10 +1,12 @@
 package com.chromascape.web.aiplayer;
 
+import com.chromascape.web.aiplayer.prototype.AiPlayerPrototypeController;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,30 +31,46 @@ public class AiPlayerController {
   private final ShadowPolicyService shadowPolicy;
   private final PatchOutcomeEvaluationService evaluationService;
   private final AiPlayerDatasetScheduler datasetScheduler;
+  private final AiPlayerPrototypeController prototypeController;
 
   public AiPlayerController(
       ImitationDatasetBuilderService datasetBuilder,
       ShadowPolicyService shadowPolicy,
       PatchOutcomeEvaluationService evaluationService,
       AiPlayerDatasetScheduler datasetScheduler) {
+    this(datasetBuilder, shadowPolicy, evaluationService, datasetScheduler, null);
+  }
+
+  @Autowired
+  public AiPlayerController(
+      ImitationDatasetBuilderService datasetBuilder,
+      ShadowPolicyService shadowPolicy,
+      PatchOutcomeEvaluationService evaluationService,
+      AiPlayerDatasetScheduler datasetScheduler,
+      AiPlayerPrototypeController prototypeController) {
     this.datasetBuilder = datasetBuilder;
     this.shadowPolicy = shadowPolicy;
     this.evaluationService = evaluationService;
     this.datasetScheduler = datasetScheduler;
+    this.prototypeController = prototypeController;
   }
 
   /** Gets the AI player feature status. */
   @GetMapping("/status")
   public ResponseEntity<Object> getStatus() {
     Map<String, Object> status =
-        Map.of(
-            "enabled", datasetBuilder.isAiPlayerEnabled(),
-            "shadowMode", shadowPolicy.isShadowMode(),
-            "controlEnabled", shadowPolicy.isControlEnabled(),
-            "controlAllowed", shadowPolicy.isControlAllowed(),
-            "scheduledPatchOutcomeExports", datasetScheduler.isScheduledExportEnabled(),
-            "datasetOutputDir", datasetBuilder.getOutputDir(),
-            "summary", datasetBuilder.getDatasetSummary(null));
+        new java.util.LinkedHashMap<>(
+            Map.of(
+                "enabled", datasetBuilder.isAiPlayerEnabled(),
+                "shadowMode", shadowPolicy.isShadowMode(),
+                "controlEnabled", shadowPolicy.isControlEnabled(),
+                "controlAllowed", shadowPolicy.isControlAllowed(),
+                "scheduledPatchOutcomeExports", datasetScheduler.isScheduledExportEnabled(),
+                "datasetOutputDir", datasetBuilder.getOutputDir(),
+                "summary", datasetBuilder.getDatasetSummary(null)));
+    if (prototypeController != null) {
+      status.put("prototype", prototypeController.prototypeStatus());
+    }
     return ResponseEntity.ok(status);
   }
 
@@ -77,7 +95,8 @@ public class AiPlayerController {
             : LocalDateTime.now();
 
     try {
-      DatasetBuildResult result = datasetBuilder.buildDatasetResult(accountName, startTime, endTime);
+      DatasetBuildResult result =
+          datasetBuilder.buildDatasetResult(accountName, startTime, endTime);
       return ResponseEntity.ok(
           Map.of(
               "datasetId", result.getDatasetId(),
