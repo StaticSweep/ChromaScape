@@ -147,19 +147,43 @@ public class AiPlayerPrototypeController {
     }
   }
 
-  /** Returns effective feature flags and live shadow decision status. */
+  /** Returns effective feature flags and live shadow decision status for an exact session/run. */
   @GetMapping("/shadow/status")
-  public ResponseEntity<Object> shadowStatus(@RequestParam(required = false) String sessionId) {
-    return ResponseEntity.ok(shadowDecisionService.status(sessionId));
+  public ResponseEntity<Object> shadowStatus(
+      @RequestParam(required = false) String sessionId,
+      @RequestParam(required = false) String shadowRunId) {
+    return ResponseEntity.ok(shadowDecisionService.status(sessionId, shadowRunId));
   }
 
-  /** Returns persisted shadow decision history for a session, newest first. */
+  /**
+   * Returns persisted shadow decision history for one run (or the legacy schema-v1 file), newest
+   * first.
+   *
+   * <p>Legacy and schema-v2 history are never merged: {@code legacy=true} reads the old {@code
+   * {sessionId}.jsonl} file, otherwise {@code shadowRunId} is required and the per-run file is
+   * read.
+   */
   @GetMapping("/shadow/history")
   public ResponseEntity<Object> shadowHistory(
-      @RequestParam String sessionId, @RequestParam(defaultValue = "50") int limit) {
+      @RequestParam String sessionId,
+      @RequestParam(required = false) String shadowRunId,
+      @RequestParam(defaultValue = "false") boolean legacy,
+      @RequestParam(defaultValue = "50") int limit) {
     try {
       ensureEnabled();
-      return ResponseEntity.ok(shadowDecisionService.history(sessionId, limit));
+      return ResponseEntity.ok(
+          shadowDecisionService.history(sessionId, shadowRunId, legacy, limit));
+    } catch (PrototypeApiException e) {
+      return handlePrototypeException(e);
+    }
+  }
+
+  /** Discovers the persisted shadow runs for a session, newest run first. */
+  @GetMapping("/shadow/runs")
+  public ResponseEntity<Object> shadowRuns(@RequestParam String sessionId) {
+    try {
+      ensureEnabled();
+      return ResponseEntity.ok(shadowDecisionService.runs(sessionId));
     } catch (PrototypeApiException e) {
       return handlePrototypeException(e);
     }

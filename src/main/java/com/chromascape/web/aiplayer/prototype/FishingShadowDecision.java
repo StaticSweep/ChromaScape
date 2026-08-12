@@ -9,6 +9,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * <p>A recommendation is data, not an execution command. {@code status} is {@code PREDICTED} for a
  * recommendation or {@code ABSTAINED} for an explicit abstention. For abstentions, {@code action}
  * and {@code targetNpc} are null and {@code abstentionReason} is populated.
+ *
+ * <p>{@code shadowRunId} identifies the shadow run that produced this decision. Reusing a textual
+ * debug session id across Micro6 restarts yields a different {@code shadowRunId}; schema-v1 records
+ * (a null {@code shadowRunId}) are treated as legacy history and never as the current live run.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record FishingShadowDecision(
@@ -17,6 +21,7 @@ public record FishingShadowDecision(
     @JsonProperty("status") String status,
     @JsonProperty("modelId") String modelId,
     @JsonProperty("sessionId") String sessionId,
+    @JsonProperty("shadowRunId") String shadowRunId,
     @JsonProperty("tick") long tick,
     @JsonProperty("observedAt") String observedAt,
     @JsonProperty("action") SemanticAction action,
