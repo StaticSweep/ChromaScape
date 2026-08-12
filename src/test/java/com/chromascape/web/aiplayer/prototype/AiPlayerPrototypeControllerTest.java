@@ -284,24 +284,87 @@ class AiPlayerPrototypeControllerTest {
   @Test
   @DisplayName("shadow status returns the status block")
   void shadowStatusReturnsStatus() {
-    when(shadowDecisionService.status(null))
+    when(shadowDecisionService.status(null, null))
         .thenReturn(
             Map.of(
                 "enabled", true, "shadowMode", true, "controlEnabled", false, "operational", true));
 
-    ResponseEntity<Object> response = controller.shadowStatus(null);
+    ResponseEntity<Object> response = controller.shadowStatus(null, null);
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(body(response)).containsEntry("operational", true);
   }
 
   @Test
+  @DisplayName("shadow status passes through the extended persistence fields")
+  void shadowStatusPassesThroughPersistenceFields() {
+    when(shadowDecisionService.status("debug_1", "run_1"))
+        .thenReturn(
+            Map.ofEntries(
+                Map.entry("enabled", true),
+                Map.entry("shadowMode", true),
+                Map.entry("controlEnabled", false),
+                Map.entry("operational", true),
+                Map.entry("persistenceLifecycle", "RUNNING"),
+                Map.entry("persistenceQueueSize", 0),
+                Map.entry("persistenceEnqueued", 12L),
+                Map.entry("persistenceQueued", 0L),
+                Map.entry("persistenceInFlight", 0L),
+                Map.entry("persistenceCompleted", 12L),
+                Map.entry("persistenceWritten", 11L),
+                Map.entry("persistenceFailed", 1L),
+                Map.entry("persistenceAbandoned", 0L),
+                Map.entry("persistenceDropped", 0L),
+                Map.entry("persistenceError", "SHADOW_PERSISTENCE_WRITE_FAILED")));
+
+    ResponseEntity<Object> response = controller.shadowStatus("debug_1", "run_1");
+    Map<String, Object> body = body(response);
+    assertThat(body).containsEntry("persistenceLifecycle", "RUNNING");
+    assertThat(body).containsEntry("persistenceEnqueued", 12L);
+    assertThat(body).containsEntry("persistenceQueued", 0L);
+    assertThat(body).containsEntry("persistenceInFlight", 0L);
+    assertThat(body).containsEntry("persistenceCompleted", 12L);
+    assertThat(body).containsEntry("persistenceWritten", 11L);
+    assertThat(body).containsEntry("persistenceFailed", 1L);
+    assertThat(body).containsEntry("persistenceAbandoned", 0L);
+    assertThat(body).containsEntry("persistenceDropped", 0L);
+    assertThat(body).containsEntry("persistenceError", "SHADOW_PERSISTENCE_WRITE_FAILED");
+  }
+
+  @Test
   @DisplayName("shadow history returns the persisted decisions")
   void shadowHistoryReturnsDecisions() {
-    when(shadowDecisionService.history("debug_1", 50)).thenReturn(List.of());
+    when(shadowDecisionService.history("debug_1", "run_1", false, 50)).thenReturn(List.of());
 
-    ResponseEntity<Object> response = controller.shadowHistory("debug_1", 50);
+    ResponseEntity<Object> response = controller.shadowHistory("debug_1", "run_1", false, 50);
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat((List<?>) response.getBody()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("shadow runs returns the run discovery payload")
+  void shadowRunsReturnsRuns() {
+    when(shadowDecisionService.runs("debug_1"))
+        .thenReturn(
+            Map.of(
+                "sessionId",
+                "debug_1",
+                "runs",
+                List.of(
+                    Map.of(
+                        "shadowRunId",
+                        "run_2",
+                        "active",
+                        true,
+                        "legacy",
+                        false,
+                        "decisionCount",
+                        1))));
+
+    ResponseEntity<Object> response = controller.shadowRuns("debug_1");
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    Map<String, Object> body = body(response);
+    assertThat(body).containsEntry("sessionId", "debug_1");
+    assertThat((List<?>) body.get("runs")).hasSize(1);
   }
 
   @Test
@@ -313,9 +376,13 @@ class AiPlayerPrototypeControllerTest {
     assertThat(models.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(body(models)).containsEntry("code", "AI_PLAYER_DISABLED");
 
-    ResponseEntity<Object> history = controller.shadowHistory("debug_1", 50);
+    ResponseEntity<Object> history = controller.shadowHistory("debug_1", "run_1", false, 50);
     assertThat(history.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(body(history)).containsEntry("code", "AI_PLAYER_DISABLED");
+
+    ResponseEntity<Object> runs = controller.shadowRuns("debug_1");
+    assertThat(runs.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(body(runs)).containsEntry("code", "AI_PLAYER_DISABLED");
   }
 
   @SuppressWarnings("unchecked")

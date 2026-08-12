@@ -31,11 +31,12 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** Tests the live shadow decision service: gates, baselines, persistence, and status. */
+/** Tests the live shadow decision service: gates, baselines, persistence, status, and cleanup. */
 class FishingShadowDecisionServiceTest {
 
   private static final SemanticAction NET_FISHING_SPOT =
       SemanticAction.interactNpc("net", "fishing spot");
+  private static final String RUN = "run_1";
 
   @TempDir Path tempDir;
 
@@ -69,6 +70,26 @@ class FishingShadowDecisionServiceTest {
     writer.stop();
   }
 
+  /**
+   * Evaluates through {@link FishingShadowDecisionService#evaluateAndPublish} and returns the
+   * published decision (or null when suppressed). The run is opened first, mirroring SESSION_START.
+   */
+  private FishingShadowDecision evaluate(FishingShadowDecisionService svc, TickBatchMessage batch) {
+    return evaluate(svc, batch, RUN);
+  }
+
+  private FishingShadowDecision evaluate(
+      FishingShadowDecisionService svc, TickBatchMessage batch, String runId) {
+    svc.openSession(batch.getSessionId(), runId);
+    AtomicReference<FishingShadowDecision> ref = new AtomicReference<>();
+    svc.evaluateAndPublish(batch, runId, ref::set);
+    return ref.get();
+  }
+
+  private FishingShadowDecision evaluate(TickBatchMessage batch) {
+    return evaluate(service, batch);
+  }
+
   private void setFlags(boolean enabled, boolean shadowMode, boolean controlEnabled) {
     setFlags(service, enabled, shadowMode, controlEnabled);
   }
@@ -90,6 +111,24 @@ class FishingShadowDecisionServiceTest {
     ReflectionTestUtils.setField(target, "outputDir", tempDir.toString());
     setFlags(target, true, true, false);
     return target;
+  }
+
+  @SuppressWarnings("unchecked")
+  private long stateGeneration(String sessionId) {
+    Map<FishingShadowDecisionService.ShadowRunKey, Object> sessions =
+        (Map<FishingShadowDecisionService.ShadowRunKey, Object>)
+            ReflectionTestUtils.getField(service, "sessions");
+    Object state = sessions.get(new FishingShadowDecisionService.ShadowRunKey(sessionId, RUN));
+    assertThat(state).isNotNull();
+    return (long) ReflectionTestUtils.getField(state, "generation");
+  }
+
+  @SuppressWarnings("unchecked")
+  private Object currentState(String sessionId) {
+    Map<FishingShadowDecisionService.ShadowRunKey, Object> sessions =
+        (Map<FishingShadowDecisionService.ShadowRunKey, Object>)
+            ReflectionTestUtils.getField(service, "sessions");
+    return sessions.get(new FishingShadowDecisionService.ShadowRunKey(sessionId, RUN));
   }
 
   private FishingModel modelWithCatchProgressStates() {
@@ -177,16 +216,16 @@ class FishingShadowDecisionServiceTest {
   void shadowOnlyGate() {
     setFlags(false, true, false);
     assertThat(
-            service.evaluate(
+            evaluate(
                 batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0))))
         .isNull();
-    assertThat(service.status(null)).containsEntry("operational", false);
+    assertThat(service.status(null, null)).containsEntry("operational", false);
 
     setFlags(true, false, false);
-    assertThat(service.status(null)).containsEntry("operational", false);
+    assertThat(service.status(null, null)).containsEntry("operational", false);
 
     setFlags(true, true, false);
-    assertThat(service.status(null)).containsEntry("operational", true);
+    assertThat(service.status(null, null)).containsEntry("operational", true);
   }
 
   @Test
@@ -195,10 +234,9 @@ class FishingShadowDecisionServiceTest {
     setFlags(true, true, true);
 
     FishingShadowDecision decision =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(decision).isNull();
-    Map<String, Object> status = service.status("debug_1");
+    Map<String, Object> status = service.status("debug_1", RUN);
     assertThat(status).containsEntry("operational", false);
     assertThat(status).containsEntry("inactiveReason", "INACTIVE_CONTROL_ENABLED");
   }
@@ -207,8 +245,7 @@ class FishingShadowDecisionServiceTest {
   @DisplayName("idle state with a visible matching spot produces INTERACT_NPC")
   void idleStateProducesInteractNpc() {
     FishingShadowDecision decision =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
 
     assertThat(decision).isNotNull();
     assertThat(decision.status()).isEqualTo("PREDICTED");
@@ -227,8 +264,7 @@ class FishingShadowDecisionServiceTest {
   @DisplayName("movement produces ABSTAIN_MOVING")
   void movementAbstains() {
     FishingShadowDecision decision =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, true, false, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, true, false, -1, 1, fishingSpot(101, 100, 0)));
 
     assertThat(decision).isNotNull();
     assertThat(decision.status()).isEqualTo("ABSTAINED");
@@ -240,13 +276,11 @@ class FishingShadowDecisionServiceTest {
   @DisplayName("animation or non-idle state produces ABSTAIN_BUSY")
   void busyStateAbstains() {
     FishingShadowDecision animated =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, 715, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, 715, 1, fishingSpot(101, 100, 0)));
     assertThat(animated.abstentionReason()).isEqualTo("ABSTAIN_BUSY");
 
     FishingShadowDecision nonIdle =
-        service.evaluate(
-            batch("debug_1", 2, 100, 100, 0, false, false, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 2, 100, 100, 0, false, false, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(nonIdle.abstentionReason()).isEqualTo("ABSTAIN_BUSY");
   }
 
@@ -254,17 +288,15 @@ class FishingShadowDecisionServiceTest {
   @DisplayName("missing spot, plane mismatch, and excessive distance preserve their reasons")
   void policyGatesPreserveReasons() {
     FishingShadowDecision missingSpot =
-        service.evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, List.of()));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, List.of()));
     assertThat(missingSpot.abstentionReason()).isEqualTo("ABSTAIN_TARGET_MISSING");
 
     FishingShadowDecision planeMismatch =
-        service.evaluate(
-            batch("debug_1", 2, 100, 100, 1, false, true, -1, 1, fishingSpot(101, 100, 1)));
+        evaluate(batch("debug_1", 2, 100, 100, 1, false, true, -1, 1, fishingSpot(101, 100, 1)));
     assertThat(planeMismatch.abstentionReason()).isEqualTo("ABSTAIN_PLANE_MISMATCH");
 
     FishingShadowDecision tooFar =
-        service.evaluate(
-            batch("debug_1", 3, 120, 100, 0, false, true, -1, 1, fishingSpot(121, 100, 0)));
+        evaluate(batch("debug_1", 3, 120, 100, 0, false, true, -1, 1, fishingSpot(121, 100, 0)));
     assertThat(tooFar.abstentionReason()).isEqualTo("ABSTAIN_TOO_FAR");
   }
 
@@ -274,8 +306,7 @@ class FishingShadowDecisionServiceTest {
     when(activeModelService.getActiveModel()).thenReturn(null);
 
     FishingShadowDecision decision =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(decision).isNotNull();
     assertThat(decision.abstentionReason()).isEqualTo("ABSTAIN_NO_ACTIVE_MODEL");
   }
@@ -287,7 +318,7 @@ class FishingShadowDecisionServiceTest {
         batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0));
     batch.setPlayerState(null);
 
-    FishingShadowDecision decision = service.evaluate(batch);
+    FishingShadowDecision decision = evaluate(batch);
     assertThat(decision).isNotNull();
     assertThat(decision.abstentionReason()).isEqualTo("ABSTAIN_INVALID_STATE");
   }
@@ -295,26 +326,24 @@ class FishingShadowDecisionServiceTest {
   @Test
   @DisplayName("duplicate and out-of-order ticks do not corrupt latest state or history")
   void duplicateAndOutOfOrderTicksIgnored() throws Exception {
-    service.evaluate(
-        batch("debug_1", 100, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    evaluate(batch("debug_1", 100, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(
-            service.evaluate(
+            evaluate(
                 batch("debug_1", 100, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0))))
         .isNull();
     assertThat(
-            service.evaluate(
+            evaluate(
                 batch("debug_1", 99, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0))))
         .isNull();
-    service.evaluate(
-        batch("debug_1", 101, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    evaluate(batch("debug_1", 101, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     writer.flush();
 
-    Map<String, Object> status = service.status("debug_1");
+    Map<String, Object> status = service.status("debug_1", RUN);
     assertThat(status).containsEntry("latestTick", 101L);
     assertThat(status).containsEntry("processed", 2);
     assertThat(status).containsEntry("predicted", 2);
 
-    List<FishingShadowDecision> history = service.history("debug_1", 50);
+    List<FishingShadowDecision> history = service.history("debug_1", RUN, false, 50);
     assertThat(history).hasSize(2);
     assertThat(history.get(0).tick()).isEqualTo(101);
     assertThat(history.get(1).tick()).isEqualTo(100);
@@ -323,10 +352,9 @@ class FishingShadowDecisionServiceTest {
   @Test
   @DisplayName("a duplicate first tick cannot change the inventory baseline")
   void duplicateFirstTickCannotChangeBaseline() {
-    service.evaluate(
-        batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(
-            service.evaluate(
+            evaluate(
                 batch("debug_1", 1, 100, 100, 0, false, true, -1, 50, fishingSpot(101, 100, 0))))
         .isNull();
 
@@ -334,12 +362,11 @@ class FishingShadowDecisionServiceTest {
     // the catch-progress-4 demonstration (tick 8204). A baseline wrongly moved to 50 would match
     // the catch-progress-0 demonstration (tick 8200).
     FishingShadowDecision decision =
-        service.evaluate(
-            batch("debug_1", 2, 100, 100, 0, false, true, -1, 50, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 2, 100, 100, 0, false, true, -1, 50, fishingSpot(101, 100, 0)));
     assertThat(decision).isNotNull();
     assertThat(decision.matchedExampleTick()).isEqualTo(8204L);
 
-    Map<String, Object> status = service.status("debug_1");
+    Map<String, Object> status = service.status("debug_1", RUN);
     assertThat(status).containsEntry("processed", 2);
   }
 
@@ -347,21 +374,20 @@ class FishingShadowDecisionServiceTest {
   @DisplayName("an out-of-order tick cannot change counters or the latest decision")
   void outOfOrderTickCannotChangeCountersOrLatest() throws Exception {
     FishingShadowDecision first =
-        service.evaluate(
-            batch("debug_1", 100, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 100, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(
-            service.evaluate(
+            evaluate(
                 batch("debug_1", 99, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0))))
         .isNull();
     writer.flush();
 
-    Map<String, Object> status = service.status("debug_1");
+    Map<String, Object> status = service.status("debug_1", RUN);
     assertThat(status).containsEntry("latestTick", 100L);
     assertThat(status).containsEntry("processed", 1);
     assertThat(status).containsEntry("predicted", 1);
     assertThat(status).containsEntry("latestDecision", first);
 
-    List<FishingShadowDecision> history = service.history("debug_1", 50);
+    List<FishingShadowDecision> history = service.history("debug_1", RUN, false, 50);
     assertThat(history).hasSize(1);
     assertThat(history.get(0).tick()).isEqualTo(100);
   }
@@ -388,7 +414,7 @@ class FishingShadowDecisionServiceTest {
     batch.setInventory(List.of(Map.of("quantity", 1)));
     batch.setNpcs(fishingSpot(101, 100, 0));
 
-    FishingShadowDecision decision = service.evaluate(batch);
+    FishingShadowDecision decision = evaluate(batch);
     assertThat(decision).isNotNull();
     assertThat(decision.status()).isEqualTo("PREDICTED");
   }
@@ -400,8 +426,7 @@ class FishingShadowDecisionServiceTest {
         .thenReturn(modelWithAction(SemanticAction.interactNpc("bomb", "fishing spot")));
 
     FishingShadowDecision decision =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(decision).isNotNull();
     assertThat(decision.status()).isEqualTo("ABSTAINED");
     assertThat(decision.abstentionReason()).isEqualTo("ABSTAIN_UNSUPPORTED_ACTION");
@@ -414,8 +439,7 @@ class FishingShadowDecisionServiceTest {
         .thenReturn(modelWithAction(SemanticAction.interactNpc("net", "bank booth")));
 
     FishingShadowDecision decision =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(decision).isNotNull();
     assertThat(decision.abstentionReason()).isEqualTo("ABSTAIN_UNSUPPORTED_ACTION");
   }
@@ -429,7 +453,7 @@ class FishingShadowDecisionServiceTest {
         List.of(Map.of("name", "Fishing spot", "x", 101, "y", 100, "plane", 1));
 
     FishingShadowDecision decision =
-        service.evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, npcs));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, npcs));
     assertThat(decision).isNotNull();
     assertThat(decision.status()).isEqualTo("ABSTAINED");
     assertThat(decision.abstentionReason()).isEqualTo("ABSTAIN_UNSUPPORTED_ACTION");
@@ -443,14 +467,12 @@ class FishingShadowDecisionServiceTest {
     when(activeModelService.getActiveModelId()).thenReturn("fishing_changed_concurrently");
 
     FishingShadowDecision predicted =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(predicted).isNotNull();
     assertThat(predicted.modelId()).isEqualTo("fishing_ab12cd34");
 
     FishingShadowDecision abstained =
-        service.evaluate(
-            batch("debug_1", 2, 100, 100, 1, false, true, -1, 1, fishingSpot(101, 100, 1)));
+        evaluate(batch("debug_1", 2, 100, 100, 1, false, true, -1, 1, fishingSpot(101, 100, 1)));
     assertThat(abstained).isNotNull();
     assertThat(abstained.modelId()).isEqualTo("fishing_ab12cd34");
   }
@@ -460,23 +482,20 @@ class FishingShadowDecisionServiceTest {
   void abstentionsReportMeaningfulLatency() {
     when(activeModelService.getActiveModel()).thenReturn(null);
     FishingShadowDecision noModel =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(noModel).isNotNull();
     assertThat(noModel.abstentionReason()).isEqualTo("ABSTAIN_NO_ACTIVE_MODEL");
     assertThat(noModel.latencyMicros()).isGreaterThanOrEqualTo(0);
 
     when(activeModelService.getActiveModel()).thenReturn(model);
     FishingShadowDecision moving =
-        service.evaluate(
-            batch("debug_1", 2, 100, 100, 0, true, false, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 2, 100, 100, 0, true, false, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(moving).isNotNull();
     assertThat(moving.abstentionReason()).isEqualTo("ABSTAIN_MOVING");
     assertThat(moving.latencyMicros()).isGreaterThanOrEqualTo(0);
 
     FishingShadowDecision busy =
-        service.evaluate(
-            batch("debug_1", 3, 100, 100, 0, false, true, 715, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 3, 100, 100, 0, false, true, 715, 1, fishingSpot(101, 100, 0)));
     assertThat(busy).isNotNull();
     assertThat(busy.abstentionReason()).isEqualTo("ABSTAIN_BUSY");
     assertThat(busy.latencyMicros()).isGreaterThanOrEqualTo(0);
@@ -501,9 +520,9 @@ class FishingShadowDecisionServiceTest {
                   Thread.currentThread().interrupt();
                 }
                 for (int i = 1; i <= perThread; i++) {
-                  service.evaluate(
+                  evaluate(
                       batch(session, i, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
-                  service.status(session);
+                  service.status(session, RUN);
                 }
                 return null;
               }));
@@ -514,7 +533,7 @@ class FishingShadowDecisionServiceTest {
     }
     executor.shutdown();
 
-    Map<String, Object> status = service.status("debug_0");
+    Map<String, Object> status = service.status("debug_0", RUN);
     assertThat(status).containsEntry("processed", perThread);
     assertThat(status).containsEntry("predicted", perThread);
     assertThat(status).containsEntry("abstained", 0);
@@ -524,8 +543,7 @@ class FishingShadowDecisionServiceTest {
   @DisplayName("an invalid live session ID creates no file and returns no decision")
   void invalidSessionIdCreatesNoFileAndNoDecision() throws Exception {
     FishingShadowDecision decision =
-        service.evaluate(
-            batch("../evil", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("../evil", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(decision).isNull();
     writer.flush();
 
@@ -533,7 +551,7 @@ class FishingShadowDecisionServiceTest {
     assertThat(Files.exists(file)).isFalse();
     assertThat(Files.exists(tempDir.resolve("evil.jsonl"))).isFalse();
 
-    Map<String, Object> status = service.status("../evil");
+    Map<String, Object> status = service.status("../evil", RUN);
     assertThat(status).containsEntry("processed", 0);
     assertThat(status).containsEntry("sessionId", null);
   }
@@ -541,11 +559,10 @@ class FishingShadowDecisionServiceTest {
   @Test
   @DisplayName("session cleanup removes baselines and counters")
   void sessionCleanupRemovesState() {
-    service.evaluate(
-        batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
-    service.cleanupSession("debug_1");
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    service.cleanupSession("debug_1", RUN);
 
-    Map<String, Object> status = service.status("debug_1");
+    Map<String, Object> status = service.status("debug_1", RUN);
     assertThat(status).containsEntry("latestTick", -1L);
     assertThat(status).containsEntry("processed", 0);
     assertThat(status).containsEntry("predicted", 0);
@@ -555,20 +572,21 @@ class FishingShadowDecisionServiceTest {
   @Test
   @DisplayName("history is valid JSONL and path traversal is rejected")
   void historyIsJsonlAndTraversalRejected() throws Exception {
-    service.evaluate(
-        batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     writer.flush();
 
-    Path file = tempDir.resolve("fishing").resolve("shadow").resolve("debug_1.jsonl");
+    Path file =
+        tempDir.resolve("fishing").resolve("shadow").resolve("debug_1").resolve(RUN + ".jsonl");
     assertThat(Files.exists(file)).isTrue();
     List<String> lines = Files.readAllLines(file);
     assertThat(lines).hasSize(1);
     FishingShadowDecision parsed =
         objectMapper.readValue(lines.get(0), FishingShadowDecision.class);
     assertThat(parsed.sessionId()).isEqualTo("debug_1");
+    assertThat(parsed.shadowRunId()).isEqualTo(RUN);
     assertThat(parsed.tick()).isEqualTo(1);
 
-    assertThatThrownBy(() -> service.history("../evil", 50))
+    assertThatThrownBy(() -> service.history("../evil", RUN, false, 50))
         .isInstanceOf(PrototypeApiException.class)
         .satisfies(
             e -> {
@@ -577,27 +595,26 @@ class FishingShadowDecisionServiceTest {
               assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
             });
 
-    assertThat(service.history("debug_missing", 50)).isEmpty();
+    assertThat(service.history("debug_missing", RUN, false, 50)).isEmpty();
   }
 
   @Test
   @DisplayName("history is returned newest-first and respects the limit")
   void historyIsNewestFirstAndLimited() throws Exception {
     for (long tick = 1; tick <= 60; tick++) {
-      service.evaluate(
-          batch("debug_1", tick, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+      evaluate(batch("debug_1", tick, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     }
     writer.flush();
 
-    List<FishingShadowDecision> defaultHistory = service.history("debug_1", 0);
+    List<FishingShadowDecision> defaultHistory = service.history("debug_1", RUN, false, 0);
     assertThat(defaultHistory).hasSize(50);
     assertThat(defaultHistory.get(0).tick()).isEqualTo(60);
     assertThat(defaultHistory.get(49).tick()).isEqualTo(11);
 
-    List<FishingShadowDecision> capped = service.history("debug_1", 1000);
+    List<FishingShadowDecision> capped = service.history("debug_1", RUN, false, 1000);
     assertThat(capped).hasSize(60);
 
-    List<FishingShadowDecision> limited = service.history("debug_1", 5);
+    List<FishingShadowDecision> limited = service.history("debug_1", RUN, false, 5);
     assertThat(limited).hasSize(5);
     assertThat(limited.get(0).tick()).isEqualTo(60);
   }
@@ -609,13 +626,12 @@ class FishingShadowDecisionServiceTest {
     Files.writeString(blocker, "blocker");
 
     FishingShadowDecision decision =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(decision).isNotNull();
     assertThat(decision.status()).isEqualTo("PREDICTED");
 
     writer.flush();
-    Map<String, Object> status = service.status("debug_1");
+    Map<String, Object> status = service.status("debug_1", RUN);
     assertThat(status).containsEntry("processed", 1);
     assertThat(status).containsKey("persistenceError");
     assertThat(status.get("persistenceError")).isNotNull();
@@ -629,8 +645,7 @@ class FishingShadowDecisionServiceTest {
 
     // First tick arrives while no model is active: baseline 1 must be captured anyway.
     FishingShadowDecision abstained =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     assertThat(abstained).isNotNull();
     assertThat(abstained.abstentionReason()).isEqualTo("ABSTAIN_NO_ACTIVE_MODEL");
 
@@ -638,8 +653,7 @@ class FishingShadowDecisionServiceTest {
     // delta of 49 matches the catch-progress-4 demonstration (tick 8204), never catch-progress-0.
     when(activeModelService.getActiveModel()).thenReturn(model);
     FishingShadowDecision predicted =
-        service.evaluate(
-            batch("debug_1", 2, 100, 100, 0, false, true, -1, 50, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", 2, 100, 100, 0, false, true, -1, 50, fishingSpot(101, 100, 0)));
     assertThat(predicted).isNotNull();
     assertThat(predicted.matchedExampleTick()).isEqualTo(8204L);
   }
@@ -647,16 +661,18 @@ class FishingShadowDecisionServiceTest {
   @Test
   @DisplayName("history tolerates an incomplete trailing line from an interrupted append")
   void historyToleratesIncompleteTrailingLine() throws Exception {
-    Files.createDirectories(tempDir.resolve("fishing").resolve("shadow"));
-    Path file = tempDir.resolve("fishing").resolve("shadow").resolve("debug_1.jsonl");
+    Path file =
+        tempDir.resolve("fishing").resolve("shadow").resolve("debug_1").resolve(RUN + ".jsonl");
+    Files.createDirectories(file.getParent());
     String line =
         objectMapper.writeValueAsString(
             new FishingShadowDecision(
-                1,
+                2,
                 "AI_PLAYER_SHADOW_DECISION",
                 "PREDICTED",
                 "fishing_ab12cd34",
                 "debug_1",
+                RUN,
                 1,
                 "2026-08-11T05:30:00Z",
                 NET_FISHING_SPOT,
@@ -667,7 +683,7 @@ class FishingShadowDecisionServiceTest {
                 450));
     Files.writeString(file, line + System.lineSeparator() + line.substring(0, line.length() - 6));
 
-    List<FishingShadowDecision> history = service.history("debug_1", 50);
+    List<FishingShadowDecision> history = service.history("debug_1", RUN, false, 50);
     assertThat(history).hasSize(1);
     assertThat(history.get(0).tick()).isEqualTo(1);
   }
@@ -675,16 +691,18 @@ class FishingShadowDecisionServiceTest {
   @Test
   @DisplayName("history treats a malformed completed line as corruption")
   void historyRejectsMalformedMiddleLine() throws Exception {
-    Files.createDirectories(tempDir.resolve("fishing").resolve("shadow"));
-    Path file = tempDir.resolve("fishing").resolve("shadow").resolve("debug_1.jsonl");
+    Path file =
+        tempDir.resolve("fishing").resolve("shadow").resolve("debug_1").resolve(RUN + ".jsonl");
+    Files.createDirectories(file.getParent());
     String line =
         objectMapper.writeValueAsString(
             new FishingShadowDecision(
-                1,
+                2,
                 "AI_PLAYER_SHADOW_DECISION",
                 "PREDICTED",
                 "fishing_ab12cd34",
                 "debug_1",
+                RUN,
                 1,
                 "2026-08-11T05:30:00Z",
                 NET_FISHING_SPOT,
@@ -696,7 +714,7 @@ class FishingShadowDecisionServiceTest {
     Files.writeString(
         file, line + System.lineSeparator() + "not-json{" + System.lineSeparator() + line);
 
-    assertThatThrownBy(() -> service.history("debug_1", 50))
+    assertThatThrownBy(() -> service.history("debug_1", RUN, false, 50))
         .isInstanceOf(PrototypeApiException.class)
         .satisfies(
             e ->
@@ -722,7 +740,7 @@ class FishingShadowDecisionServiceTest {
                 }
                 for (int i = 0; i < 100; i++) {
                   try {
-                    service.history("debug_1", 50);
+                    service.history("debug_1", RUN, false, 50);
                   } catch (PrototypeApiException e) {
                     failed.set(true);
                   }
@@ -732,8 +750,7 @@ class FishingShadowDecisionServiceTest {
     }
     start.countDown();
     for (long tick = 1; tick <= 300; tick++) {
-      service.evaluate(
-          batch("debug_1", tick, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+      evaluate(batch("debug_1", tick, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     }
     for (Future<?> future : futures) {
       future.get(30, TimeUnit.SECONDS);
@@ -742,7 +759,7 @@ class FishingShadowDecisionServiceTest {
     writer.flush();
 
     assertThat(failed).isFalse();
-    assertThat(service.history("debug_1", 50)).isNotEmpty();
+    assertThat(service.history("debug_1", RUN, false, 50)).isNotEmpty();
   }
 
   @Test
@@ -765,7 +782,7 @@ class FishingShadowDecisionServiceTest {
                 for (int round = 0; round < 3; round++) {
                   for (int i = 0; i < 200; i++) {
                     try {
-                      service.history("debug_1", 50);
+                      service.history("debug_1", RUN, false, 50);
                     } catch (PrototypeApiException e) {
                       failed.set(true);
                     }
@@ -780,8 +797,7 @@ class FishingShadowDecisionServiceTest {
     long tick = 1;
     for (int round = 0; round < 3; round++) {
       for (int i = 0; i < 200; i++, tick++) {
-        service.evaluate(
-            batch("debug_1", tick, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+        evaluate(batch("debug_1", tick, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
       }
       writer.flush();
     }
@@ -792,7 +808,7 @@ class FishingShadowDecisionServiceTest {
     writer.flush();
 
     assertThat(failed).isFalse();
-    assertThat(service.history("debug_1", 50)).isNotEmpty();
+    assertThat(service.history("debug_1", RUN, false, 50)).isNotEmpty();
   }
 
   @Test
@@ -803,7 +819,7 @@ class FishingShadowDecisionServiceTest {
             new FishingActiveModelService.ActiveModelInfo(
                 null, null, null, "MODEL_NOT_REPLAY_VALIDATED", "MODEL_NOT_REPLAY_VALIDATED"));
 
-    Map<String, Object> status = service.status("debug_1");
+    Map<String, Object> status = service.status("debug_1", RUN);
     assertThat(status).containsEntry("readyForInference", false);
     assertThat(status).containsEntry("inactiveReason", "MODEL_NOT_REPLAY_VALIDATED");
     assertThat(status).containsEntry("activationState", "MODEL_NOT_REPLAY_VALIDATED");
@@ -840,7 +856,7 @@ class FishingShadowDecisionServiceTest {
                   Thread.currentThread().interrupt();
                 }
                 for (int i = 0; i < 200; i++) {
-                  Map<String, Object> status = service.status("debug_1");
+                  Map<String, Object> status = service.status("debug_1", RUN);
                   String id = (String) status.get("activeModelId");
                   Object summary = status.get("activeModel");
                   if (id == null) {
@@ -879,62 +895,82 @@ class FishingShadowDecisionServiceTest {
   }
 
   @Test
-  @DisplayName("status exposes persistence queue, written, and dropped counters")
+  @DisplayName("status exposes the extended persistence counters")
   void statusExposesPersistenceCounters() throws Exception {
-    service.evaluate(
-        batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
     writer.flush();
 
-    Map<String, Object> status = service.status("debug_1");
+    Map<String, Object> status = service.status("debug_1", RUN);
     assertThat(status).containsEntry("persistenceWritten", 1L);
+    assertThat(status).containsEntry("persistenceCompleted", 1L);
+    assertThat(status).containsEntry("persistenceFailed", 0L);
+    assertThat(status).containsEntry("persistenceDropped", 0L);
+    assertThat(status).containsEntry("persistenceQueued", 0L);
+    assertThat(status).containsEntry("persistenceInFlight", 0L);
+    assertThat(status).containsEntry("persistenceEnqueued", 1L);
+    assertThat(status).containsEntry("persistenceLifecycle", "RUNNING");
     assertThat(status).containsKey("persistenceQueueSize");
-    assertThat(status).containsKey("persistenceDropped");
-    assertThat(status).containsKey("persistenceEnqueued");
-    assertThat(status).containsKey("persistenceLifecycle");
+    assertThat(status).containsKey("persistenceError");
   }
 
   @Test
-  @DisplayName("cleanup while an evaluation is paused before finalization waits and then closes")
-  void cleanupWhileEvaluationPausedBeforeFinalization() throws Exception {
-    CountDownLatch enqueueStarted = new CountDownLatch(1);
-    CountDownLatch releaseEnqueue = new CountDownLatch(1);
-    FishingShadowDecisionWriter blockingWriter =
-        new FishingShadowDecisionWriter(objectMapper) {
-          @Override
-          public boolean enqueue(FishingShadowDecision decision) {
-            enqueueStarted.countDown();
-            try {
-              releaseEnqueue.await();
-            } catch (InterruptedException e) {
-              Thread.currentThread().interrupt();
-            }
-            return super.enqueue(decision);
-          }
-        };
-    ReflectionTestUtils.setField(blockingWriter, "outputDir", tempDir.toString());
-    blockingWriter.start();
+  @DisplayName("status without a session id reports no inferred session state")
+  void statusWithoutSessionReportsNoInferredSession() throws Exception {
+    evaluate(batch("debug_1", 5, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    writer.flush();
 
-    FishingShadowDecisionService svc = serviceWithWriter(blockingWriter);
-    AtomicReference<FishingShadowDecision> result = new AtomicReference<>();
+    Map<String, Object> status = service.status(null, null);
+    assertThat(status).containsEntry("sessionId", null);
+    assertThat(status).containsEntry("latestTick", -1L);
+    assertThat(status).containsEntry("latestDecision", null);
+    assertThat(status).containsEntry("processed", 0);
+    assertThat(status).containsEntry("predicted", 0);
+    assertThat(status).containsEntry("abstained", 0);
+  }
+
+  @Test
+  @DisplayName("status for an explicit session returns only that exact active session")
+  void statusForExplicitSession() throws Exception {
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    evaluate(batch("debug_2", 9, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    writer.flush();
+
+    Map<String, Object> status = service.status("debug_1", RUN);
+    assertThat(status).containsEntry("sessionId", "debug_1");
+    assertThat(status).containsEntry("latestTick", 1L);
+    assertThat(status).containsEntry("processed", 1);
+
+    Map<String, Object> missing = service.status("debug_never", RUN);
+    assertThat(missing).containsEntry("sessionId", null);
+    assertThat(missing).containsEntry("latestTick", -1L);
+    assertThat(missing).containsEntry("processed", 0);
+  }
+
+  @Test
+  @DisplayName("publication holding the session lock makes cleanup wait")
+  void publicationHoldingSessionLockMakesCleanupWait() throws Exception {
+    CountDownLatch publicationStarted = new CountDownLatch(1);
+    CountDownLatch releasePublication = new CountDownLatch(1);
+    AtomicReference<FishingShadowDecision> published = new AtomicReference<>();
     AtomicReference<Throwable> failure = new AtomicReference<>();
     CountDownLatch evaluationDone = new CountDownLatch(1);
     Thread evaluator =
         new Thread(
             () -> {
               try {
-                result.set(
-                    svc.evaluate(
-                        batch(
-                            "debug_1",
-                            1,
-                            100,
-                            100,
-                            0,
-                            false,
-                            true,
-                            -1,
-                            1,
-                            fishingSpot(101, 100, 0))));
+                service.openSession("debug_1", RUN);
+                service.evaluateAndPublish(
+                    batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)),
+                    RUN,
+                    decision -> {
+                      published.set(decision);
+                      publicationStarted.countDown();
+                      try {
+                        releasePublication.await();
+                      } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                      }
+                    });
               } catch (Throwable t) {
                 failure.set(t);
               } finally {
@@ -942,101 +978,146 @@ class FishingShadowDecisionServiceTest {
               }
             });
     evaluator.start();
-    assertThat(enqueueStarted.await(5, TimeUnit.SECONDS)).isTrue();
+    assertThat(publicationStarted.await(5, TimeUnit.SECONDS)).isTrue();
 
-    // Cleanup starts while the evaluation is paused at the persistence boundary (the last step of
-    // finalization). It must block until the evaluation releases the session lock.
+    // Cleanup starts while the publisher is still running under the session lock; it must block
+    // until the publication completes.
     AtomicBoolean cleanupDone = new AtomicBoolean(false);
     Thread cleaner =
         new Thread(
             () -> {
-              svc.cleanupSession("debug_1");
+              service.cleanupSession("debug_1", RUN);
               cleanupDone.set(true);
             });
     cleaner.start();
     Thread.sleep(150);
     assertThat(cleanupDone.get()).isFalse();
 
-    releaseEnqueue.countDown();
+    releasePublication.countDown();
     assertThat(evaluationDone.await(5, TimeUnit.SECONDS)).isTrue();
     cleaner.join(5000);
 
     assertThat(failure.get()).isNull();
-    assertThat(result.get()).isNotNull();
-    assertThat(result.get().status()).isEqualTo("PREDICTED");
+    assertThat(published.get()).isNotNull();
+    assertThat(published.get().status()).isEqualTo("PREDICTED");
     assertThat(cleanupDone.get()).isTrue();
-    // The evaluation finished before closure, then cleanup removed the session state.
-    Map<String, Object> status = svc.status("debug_1");
+    // The publication won, then cleanup closed the session and removed its state.
+    Map<String, Object> status = service.status("debug_1", RUN);
     assertThat(status).containsEntry("processed", 0);
     assertThat(status).containsEntry("sessionId", null);
-    blockingWriter.stop();
   }
 
   @Test
-  @DisplayName("an evaluation that began before closure cannot finalize after the state is closed")
-  void closedStateRejectsLateFinalization() throws Exception {
-    FishingShadowDecision first =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
-    assertThat(first).isNotNull();
-    assertThat(first.status()).isEqualTo("PREDICTED");
+  @DisplayName("cleanup completing first suppresses publication, counters, and enqueue")
+  void cleanupWinningSuppressesPublicationCountersAndEnqueue() {
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    long enqueuedBefore = writer.getEnqueuedCount();
 
-    // Simulate closure of the exact state object an in-flight evaluation already resolved: cleanup
-    // sets closed=true under the state lock (the map removal is the final step of cleanup).
-    Map<String, Object> sessions =
-        (Map<String, Object>) ReflectionTestUtils.getField(service, "sessions");
-    Object state = sessions.get("debug_1");
+    // Simulate a cleanup that completed between an evaluation resolving this state and that
+    // evaluation finalizing: mark the exact resolved state closed, exactly as cleanup does under
+    // the state lock.
+    Object state = currentState("debug_1");
     synchronized (state) {
       ReflectionTestUtils.setField(state, "closed", true);
     }
 
-    // An evaluation that began before closure but finalizes after it must be refused: no decision,
-    // no counters, no persistence enqueue.
-    FishingShadowDecision late =
-        service.evaluate(
-            batch("debug_1", 2, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
-    assertThat(late).isNull();
+    AtomicBoolean published = new AtomicBoolean(false);
+    service.evaluateAndPublish(
+        batch("debug_1", 2, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)),
+        RUN,
+        decision -> published.set(true));
 
-    writer.flush();
-    Map<String, Object> status = service.status("debug_1");
-    assertThat(status).containsEntry("processed", 1);
-    assertThat(status).containsEntry("latestTick", 1L);
-    assertThat(service.history("debug_1", 50)).hasSize(1);
+    assertThat(published.get()).isFalse();
+    // The closed run no longer reports session fields; its counters are suppressed.
+    Map<String, Object> status = service.status("debug_1", RUN);
+    assertThat(status).containsEntry("processed", 0);
+    assertThat(status).containsEntry("latestTick", -1L);
+    assertThat(writer.getEnqueuedCount()).isEqualTo(enqueuedBefore);
   }
 
   @Test
-  @DisplayName("a later genuine session with the same ID creates a fresh state generation")
-  void freshStateCreatedForLaterSession() throws Exception {
-    service.evaluate(
-        batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
-    service.cleanupSession("debug_1");
+  @DisplayName("reusing a session id obtains a different generation")
+  void reusedSessionIdObtainsDifferentGeneration() {
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    long first = stateGeneration("debug_1");
+    service.cleanupSession("debug_1", RUN);
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    long second = stateGeneration("debug_1");
 
-    Map<String, Object> status = service.status("debug_1");
-    assertThat(status).containsEntry("processed", 0);
-    assertThat(status).containsEntry("latestTick", -1L);
+    assertThat(first).isNotEqualTo(second);
+    assertThat(second).isGreaterThan(first);
+  }
 
-    FishingShadowDecision later =
-        service.evaluate(
-            batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
-    assertThat(later).isNotNull();
-    assertThat(later.status()).isEqualTo("PREDICTED");
-    assertThat(service.status("debug_1")).containsEntry("processed", 1);
-    assertThat(service.status("debug_1")).containsEntry("latestTick", 1L);
+  @Test
+  @DisplayName("an evaluation resolved against a closed generation cannot publish into the reuse")
+  void closedGenerationCannotPublishIntoReusedSession() {
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    Object oldState = currentState("debug_1");
+    service.cleanupSession("debug_1", RUN);
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+
+    // A stale evaluation that resolved the closed first-generation state must not publish even if
+    // it is the state the session map would hand to a resolver.
+    AtomicBoolean published = new AtomicBoolean(false);
+    synchronized (oldState) {
+      Map<FishingShadowDecisionService.ShadowRunKey, Object> sessions =
+          (Map<FishingShadowDecisionService.ShadowRunKey, Object>)
+              ReflectionTestUtils.getField(service, "sessions");
+      sessions.put(new FishingShadowDecisionService.ShadowRunKey("debug_1", RUN), oldState);
+      service.evaluateAndPublish(
+          batch("debug_1", 2, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)),
+          RUN,
+          decision -> published.set(true));
+    }
+    assertThat(published.get()).isFalse();
   }
 
   @Test
   @DisplayName("cleanup remains idempotent when explicit stop and disconnect both invoke it")
   void cleanupIdempotentAcrossStopAndDisconnect() throws Exception {
-    service.evaluate(
-        batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
 
-    service.cleanupSession("debug_1");
-    service.cleanupSession("debug_1");
-    service.cleanupSession(null);
+    service.cleanupSession("debug_1", RUN);
+    service.cleanupSession("debug_1", RUN);
+    service.cleanupSession(null, null);
 
-    Map<String, Object> status = service.status("debug_1");
+    Map<String, Object> status = service.status("debug_1", RUN);
     assertThat(status).containsEntry("processed", 0);
     assertThat(status).containsEntry("latestTick", -1L);
     assertThat(status).containsEntry("sessionId", null);
+  }
+
+  @Test
+  @DisplayName("the baseline is reset for the new generation of a reused session id")
+  void baselineResetForNewGeneration() {
+    // First generation captures baseline 1.
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    service.cleanupSession("debug_1", RUN);
+
+    // Second generation captures baseline 50 on its own first tick; a delta of 0 matches
+    // catch-progress-0 (tick 8200), never the first generation's baseline.
+    FishingShadowDecision decision =
+        evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 50, fishingSpot(101, 100, 0)));
+    assertThat(decision).isNotNull();
+    assertThat(decision.matchedExampleTick()).isEqualTo(8200L);
+    assertThat(service.status("debug_1", RUN)).containsEntry("processed", 1);
+  }
+
+  @Test
+  @DisplayName("duplicate and stale ticks remain ignored after cleanup")
+  void duplicateAndStaleTicksRemainIgnored() throws Exception {
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    service.cleanupSession("debug_1", RUN);
+
+    // A duplicate tick on a fresh generation is ignored once that generation processed it.
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    assertThat(
+            evaluate(
+                batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0))))
+        .isNull();
+    writer.flush();
+    // The persisted file accumulates per textual session id: one line per generation.
+    assertThat(service.history("debug_1", RUN, false, 50)).hasSize(2);
+    assertThat(service.status("debug_1", RUN)).containsEntry("processed", 1);
   }
 }
