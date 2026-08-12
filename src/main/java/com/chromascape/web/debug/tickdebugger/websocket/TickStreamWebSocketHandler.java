@@ -126,18 +126,21 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     boolean successResponseSent = false;
     try {
       SessionStartRequest request = objectMapper.treeToValue(root, SessionStartRequest.class);
+      String clientRequestId = request.getClientRequestId();
       log.info(
-          "Starting debug session via WebSocket: account={}, script={}, recording={}",
+          "Starting debug session via WebSocket: account={}, script={}, recording={}, clientRequestId={}",
           request.getAccountName(),
           request.getScriptName(),
-          request.getRecordingEnabled());
+          request.getRecordingEnabled(),
+          clientRequestId != null ? clientRequestId : "none");
 
       boolean recordingEnabled = Boolean.TRUE.equals(request.getRecordingEnabled());
       log.info(
-          "SESSION_START: account={}, script={}, recordingEnabled={} -> recording will {}",
+          "SESSION_START: account={}, script={}, recordingEnabled={}, clientRequestId={} -> recording will {}",
           request.getAccountName(),
           request.getScriptName(),
           recordingEnabled,
+          clientRequestId != null ? clientRequestId : "none",
           recordingEnabled ? "START (MICRO6_AUTO)" : "NOT start");
 
       SessionStartResponse response =
@@ -148,13 +151,18 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
               request.getTriggerSource(),
               request.getPreferredSessionId());
 
+      // Echo the transport correlation id unchanged so the client can match this response to its
+      // pending SESSION_START request.
+      response.setClientRequestId(clientRequestId);
+
       log.info(
-          "SESSION_START result: sessionId={}, recordingId={}, failureReason={}",
+          "SESSION_START result: sessionId={}, recordingId={}, failureReason={}, clientRequestId={}",
           response.getSessionId(),
           response.getRecordingId() != null ? response.getRecordingId() : "none",
           response.getRecordingFailureReason() != null
               ? response.getRecordingFailureReason()
-              : "none");
+              : "none",
+          response.getClientRequestId() != null ? response.getClientRequestId() : "none");
 
       // Track binding for disconnect finalization
       sessionBindings.put(wsSession.getId(), response.getSessionId());
@@ -174,7 +182,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     } catch (Exception e) {
       log.error("Error handling SESSION_START: {}", e.getMessage(), e);
       if (!successResponseSent) {
-        sendErrorResponse(wsSession, "SESSION_START failed", e.getMessage());
+        String clientRequestId =
+            root.has("clientRequestId") && !root.get("clientRequestId").isNull()
+                ? root.get("clientRequestId").asText()
+                : null;
+        sendErrorResponse(wsSession, "SESSION_START failed", e.getMessage(), clientRequestId);
       }
     }
   }
@@ -261,12 +273,16 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   }
 
   /** Send error response to Micro6 client. */
-  private void sendErrorResponse(WebSocketSession session, String error, String detail) {
+  private void sendErrorResponse(
+      WebSocketSession session, String error, String detail, String clientRequestId) {
     try {
       java.util.LinkedHashMap<String, Object> errorResponse = new java.util.LinkedHashMap<>();
       errorResponse.put("type", "ERROR");
       errorResponse.put("error", error);
       errorResponse.put("detail", detail);
+      if (clientRequestId != null && !clientRequestId.isBlank()) {
+        errorResponse.put("clientRequestId", clientRequestId);
+      }
       session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorResponse)));
     } catch (Exception e) {
       log.error("Failed to send error response: {}", e.getMessage());

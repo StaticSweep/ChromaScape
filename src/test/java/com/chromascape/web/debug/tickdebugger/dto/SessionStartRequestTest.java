@@ -58,4 +58,24 @@ class SessionStartRequestTest {
 
     assertThat(request.getPreferredSessionId()).isNull();
   }
+
+  @Test
+  void legacySessionIdName_isAcceptedAsAliasForPreferredSessionId() throws Exception {
+    String json =
+        "{\"accountName\":\"a\",\"scriptName\":\"s\",\"recordingEnabled\":true,"
+            + "\"sessionId\":\"debug_legacy_alias\"}";
+    SessionStartRequest request = objectMapper.readValue(json, SessionStartRequest.class);
+
+    assertThat(request.getPreferredSessionId()).isEqualTo("debug_legacy_alias");
+  }
+
+  @Test
+  void preferredSessionIdWinsWhenBothJsonNamesPresent() throws Exception {
+    String json =
+        "{\"accountName\":\"a\",\"scriptName\":\"s\",\"recordingEnabled\":true,"
+            + "\"preferredSessionId\":\"debug_canonical\",\"sessionId\":\"debug_legacy\"}";
+    SessionStartRequest request = objectMapper.readValue(json, SessionStartRequest.class);
+
+    assertThat(request.getPreferredSessionId()).isEqualTo("debug_canonical");
+  }
 }

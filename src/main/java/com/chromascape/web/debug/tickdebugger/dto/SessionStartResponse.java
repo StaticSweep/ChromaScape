@@ -1,5 +1,6 @@
 package com.chromascape.web.debug.tickdebugger.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
@@ -9,8 +10,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *
  * <ul>
  *   <li>Recording was not requested by the client
- *   <li>Recording was requested but failed to start (check session lifecycle via {@code
- *       /api/debug/replay/session-info/{sessionId}} for FAILED state)
+ *   <li>Recording was requested but failed to start, and the session degraded to tick-only mode
+ *       (see {@code recordingFailureReason}; the session stays in RECORDING with failureCode {@code
+ *       REC_START_FAILED})
  * </ul>
  */
 public class SessionStartResponse {
@@ -29,6 +31,10 @@ public class SessionStartResponse {
 
   @JsonProperty("recordingFailureReason")
   private String recordingFailureReason;
+
+  @JsonProperty("clientRequestId")
+  @JsonInclude(JsonInclude.Include.NON_NULL)
+  private String clientRequestId;
 
   public SessionStartResponse() {}
 
@@ -56,6 +62,14 @@ public class SessionStartResponse {
 
   public void setSessionId(String sessionId) {
     this.sessionId = sessionId;
+  }
+
+  public String getClientRequestId() {
+    return clientRequestId;
+  }
+
+  public void setClientRequestId(String clientRequestId) {
+    this.clientRequestId = clientRequestId;
   }
 
   public Boolean getRecordingEnabled() {

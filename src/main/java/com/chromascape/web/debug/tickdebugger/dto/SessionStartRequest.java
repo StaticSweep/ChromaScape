@@ -6,6 +6,15 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /** Request DTO for starting a debug session. */
 public class SessionStartRequest {
 
+  /**
+   * Transport-level correlation id chosen by the Micro6 client for this specific SESSION_START
+   * request. ChromaScape echoes it unchanged in success, degraded-success, and {@code SESSION_START
+   * failed} responses. It is correlation only and is never persisted as the authoritative debug
+   * session id. Older clients omit it; such requests continue to work.
+   */
+  @JsonProperty("clientRequestId")
+  private String clientRequestId;
+
   @JsonProperty("accountName")
   private String accountName;
 
@@ -18,6 +27,11 @@ public class SessionStartRequest {
   @JsonProperty("triggerSource")
   private RecordingTriggerSource triggerSource;
 
+  /**
+   * Canonical field for the reserved debug session id to bind this client restart to. The legacy
+   * {@code sessionId} JSON name is accepted as an alias for backward compatibility with older
+   * Micro6 clients; the canonical {@code preferredSessionId} always wins when both are present.
+   */
   @JsonProperty("preferredSessionId")
   private String preferredSessionId;
 
@@ -45,6 +59,29 @@ public class SessionStartRequest {
     this.recordingEnabled = recordingEnabled;
     this.triggerSource = triggerSource;
     this.preferredSessionId = preferredSessionId;
+  }
+
+  public SessionStartRequest(
+      String accountName,
+      String scriptName,
+      Boolean recordingEnabled,
+      RecordingTriggerSource triggerSource,
+      String preferredSessionId,
+      String clientRequestId) {
+    this.accountName = accountName;
+    this.scriptName = scriptName;
+    this.recordingEnabled = recordingEnabled;
+    this.triggerSource = triggerSource;
+    this.preferredSessionId = preferredSessionId;
+    this.clientRequestId = clientRequestId;
+  }
+
+  public String getClientRequestId() {
+    return clientRequestId;
+  }
+
+  public void setClientRequestId(String clientRequestId) {
+    this.clientRequestId = clientRequestId;
   }
 
   public String getAccountName() {
@@ -91,5 +128,17 @@ public class SessionStartRequest {
 
   public void setPreferredSessionId(String preferredSessionId) {
     this.preferredSessionId = preferredSessionId;
+  }
+
+  /**
+   * Legacy {@code sessionId} JSON binding for older Micro6 clients. Accepted only when the
+   * canonical {@code preferredSessionId} was not provided, so the canonical field always wins
+   * regardless of JSON field order.
+   */
+  @JsonProperty("sessionId")
+  public void setLegacySessionId(String sessionId) {
+    if (preferredSessionId == null) {
+      preferredSessionId = sessionId;
+    }
   }
 }
