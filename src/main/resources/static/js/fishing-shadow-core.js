@@ -1,5 +1,5 @@
 /**
- * Pure session/history merge helpers for the fishing shadow agent.
+ * Pure session/run merge helpers for the fishing shadow agent.
  *
  * These functions are deliberately free of DOM/network dependencies so they can be unit tested with
  * Node.js. They operate on a plain state object shaped like the `fishingShadow` panel state:
@@ -9,23 +9,50 @@
  *   latestTick: number,
  *   latestDecision: object|null,
  *   decisions: array,
- *   decisionMap: Map, // key = (sessionId||'') + ':' + tick
+ *   decisionMap: Map, // key = (shadowRunId||'') + ':' + tick
  *   sessionId: string|null,
+ *   shadowRunId: string|null,
  *   processed: number,
  *   predicted: number,
  *   abstained: number,
- *   persistenceError: string|null
+ *   persistenceError: string|null,
+ *   persistenceLifecycle: string|null,
+ *   persistenceQueueSize: number,
+ *   persistenceEnqueued: number,
+ *   persistenceQueued: number,
+ *   persistenceInFlight: number,
+ *   persistenceCompleted: number,
+ *   persistenceWritten: number,
+ *   persistenceFailed: number,
+ *   persistenceAbandoned: number,
+ *   persistenceDropped: number
  * }
  * </pre>
  *
- * Merge functions return a NEW state object and never mutate their inputs. {@code
- * mergeLiveDecisionIntoState} returns {@code {state, accepted}} so the caller can advance a live
- * revision counter only for accepted live decisions.
+ * Decisions are deduplicated by the exact shadow run, never by session id and tick alone, so two
+ * runs sharing a textual session id can never suppress each other's ticks. Merge functions return a
+ * NEW state object and never mutate their inputs. {@code mergeLiveDecisionIntoState} returns {@code
+ * {state, accepted}} so the caller can advance a live revision counter only for accepted live
+ * decisions.
  */
 (function (global) {
   'use strict';
 
   const LIVE_MESSAGE_TYPE = 'AI_PLAYER_SHADOW_DECISION';
+
+  /** Persistence field names that reflect global (writer-wide) status, not session data. */
+  const PERSISTENCE_FIELDS = [
+    'persistenceLifecycle',
+    'persistenceQueueSize',
+    'persistenceEnqueued',
+    'persistenceQueued',
+    'persistenceInFlight',
+    'persistenceCompleted',
+    'persistenceWritten',
+    'persistenceFailed',
+    'persistenceAbandoned',
+    'persistenceDropped'
+  ];
 
   /** Returns a fresh, empty shadow panel state. */
   function createEmptyShadowState() {
@@ -35,16 +62,27 @@
       decisions: [],
       decisionMap: new Map(),
       sessionId: null,
+      shadowRunId: null,
       processed: 0,
       predicted: 0,
       abstained: 0,
-      persistenceError: null
+      persistenceError: null,
+      persistenceLifecycle: null,
+      persistenceQueueSize: 0,
+      persistenceEnqueued: 0,
+      persistenceQueued: 0,
+      persistenceInFlight: 0,
+      persistenceCompleted: 0,
+      persistenceWritten: 0,
+      persistenceFailed: 0,
+      persistenceAbandoned: 0,
+      persistenceDropped: 0
     };
   }
 
-  /** Deduplication key for one (sessionId, tick) pair. */
-  function decisionKey(sessionId, tick) {
-    return (sessionId || '') + ':' + tick;
+  /** Deduplication key for one (shadowRunId, tick) pair. */
+  function decisionKey(shadowRunId, tick) {
+    return (shadowRunId || '') + ':' + tick;
   }
 
   /** Sorts the decision map newest-first and keeps the latest 20 for the rolling table. */
@@ -58,17 +96,18 @@
    * Merges an array of persisted history decisions (newest-first as returned by the server) into
    * the state.
    *
-   * Every decision whose sessionId differs from the requested session is rejected, so an old
-   * session's response can never pollute a newer session's map or raise its tick baseline. As a
-   * second line of defense, decisions are also rejected when they do not match the session the
-   * state is already tracking. History never changes live counters.
+   * A decision is accepted only when it carries the exact requested session id and shadow run id and
+   * the state is already tracking (or adopts) that exact session/run, so a different run's response
+   * can never pollute the tracked run's map or raise its tick baseline. Legacy history (no run id)
+   * is never accepted into a run-keyed state. History never changes live counters.
    *
    * @param {Object} state the current shadow state
    * @param {Array} history decisions from the server
    * @param {string} targetSessionId the exact session the history was requested for
+   * @param {string|null} targetShadowRunId the exact run requested, or null for legacy history
    * @returns {Object} a new state with the accepted history merged in
    */
-  function mergeHistoryIntoState(state, history, targetSessionId) {
+  function mergeHistoryIntoState(state, history, targetSessionId, targetShadowRunId) {
     const next = {
       ...state,
       decisionMap: new Map(state.decisionMap),
@@ -80,10 +119,11 @@
       if (!decision || decision.tick == null) continue;
       const tick = Number(decision.tick);
       if (!Number.isFinite(tick)) continue;
-      const ds = decision.sessionId || targetSessionId;
-      if (targetSessionId && ds !== targetSessionId) continue;
-      if (next.sessionId && ds !== next.sessionId) continue;
-      const key = decisionKey(ds, tick);
+      if (decision.sessionId !== targetSessionId) continue;
+      if (targetShadowRunId && decision.shadowRunId !== targetShadowRunId) continue;
+      if (next.sessionId && next.sessionId !== targetSessionId) continue;
+      if (next.shadowRunId && next.shadowRunId !== targetShadowRunId) continue;
+      const key = decisionKey(targetShadowRunId, tick);
       if (!next.decisionMap.has(key)) {
         next.decisionMap.set(key, decision);
       }
@@ -97,6 +137,7 @@
       next.latestDecision = newest;
     }
     next.sessionId = next.sessionId || targetSessionId || null;
+    next.shadowRunId = next.shadowRunId || targetShadowRunId || null;
     next.decisions = rollingDecisions(next.decisionMap);
     return next;
   }
@@ -110,11 +151,13 @@
    *   <li>the message is missing;
    *   <li>{@code data.type} is not {@code AI_PLAYER_SHADOW_DECISION};
    *   <li>{@code sessionId} is missing or blank;
+   *   <li>{@code shadowRunId} is missing or blank;
    *   <li>the session does not match the active session filter;
    *   <li>the session does not match the tracked session;
+   *   <li>the shadow run does not match the tracked shadow run;
    *   <li>the tick is not a valid non-negative number;
    *   <li>the tick is not strictly newer than the latest displayed tick;
-   *   <li>the (sessionId, tick) pair was already seen;
+   *   <li>the (shadowRunId, tick) pair was already seen;
    *   <li>the status is neither {@code PREDICTED} nor {@code ABSTAINED}.
    * </ul>
    *
@@ -133,12 +176,15 @@
     if (data.type !== LIVE_MESSAGE_TYPE) return rejected;
     const sessionId = data.sessionId;
     if (sessionId == null || String(sessionId).trim() === '') return rejected;
+    const runId = data.shadowRunId;
+    if (runId == null || String(runId).trim() === '') return rejected;
     if (sessionFilter && sessionId !== sessionFilter) return rejected;
     if (state.sessionId && sessionId !== state.sessionId) return rejected;
+    if (state.shadowRunId && runId !== state.shadowRunId) return rejected;
     const tick = Number(data.tick);
     if (!Number.isFinite(tick) || tick < 0) return rejected;
     if (state.latestTick >= 0 && tick <= state.latestTick) return rejected;
-    const key = decisionKey(sessionId, tick);
+    const key = decisionKey(runId, tick);
     if (state.decisionMap.has(key)) return rejected;
     const status = data.status;
     if (status !== 'PREDICTED' && status !== 'ABSTAINED') return rejected;
@@ -146,6 +192,7 @@
     const next = {
       ...state,
       sessionId,
+      shadowRunId: runId,
       decisionMap: new Map(state.decisionMap),
       decisions: state.decisions.slice(),
       processed: state.processed + 1,
@@ -162,36 +209,79 @@
   /**
    * Applies a shadow status payload to the state.
    *
-   * Model readiness and persistence fields ({@code activeModelId}, {@code persistenceError}) are
-   * global/current status and are always applied. Session counters and the latest decision are
-   * applied only when the caller opts in (its live revision matched when the request was issued)
-   * and only when the reported session matches the tracked session, so a delayed same-session
-   * response can never roll live counters backward.
+   * Global/current fields (active model, readiness, activation state/error, and every persistence
+   * lifecycle/counter field) are always applied, because they describe the agent and its writer,
+   * not any single session or run. Session-scoped fields (counters and the latest decision) are
+   * applied only when every condition holds: the caller opted in with an unchanged live revision,
+   * a target session AND shadow run were named, the backend reported that exact target session and
+   * run, and the state is already tracking that exact session and run. This guarantees a generic
+   * status response can never hydrate or bind session data, and a delayed same-run response can
+   * never roll live counters backward. {@code state.sessionId} and {@code state.shadowRunId} are
+   * never bound from a status response.
    *
    * @param {Object} state the current shadow state
    * @param {Object} status the status payload from the server
    * @param {string|null} targetSessionId the session the status was requested for
+   * @param {string|null} targetShadowRunId the run the status was requested for
    * @param {boolean} applySessionCounters whether to apply session-scoped counters/latest
    * @returns {Object} a new state with the status merged in
    */
-  function mergeStatusIntoState(state, status, targetSessionId, applySessionCounters) {
+  function mergeStatusIntoState(
+    state,
+    status,
+    targetSessionId,
+    targetShadowRunId,
+    applySessionCounters
+  ) {
     const next = {
       ...state,
       status: status || null,
       decisionMap: state.decisionMap,
       decisions: state.decisions.slice()
     };
-    if (status && status.activeModelId) {
-      next.activeModelId = status.activeModelId;
+    if (status) {
+      next.activeModelId = status.activeModelId || null;
+      if (typeof status.readyForInference !== 'undefined') {
+        next.readyForInference = status.readyForInference;
+      }
+      if (typeof status.activationState !== 'undefined') {
+        next.activationState = status.activationState;
+      }
+      if (typeof status.activationLoadError !== 'undefined') {
+        next.activationLoadError = status.activationLoadError;
+      }
+      if (typeof status.inactiveReason !== 'undefined') {
+        next.inactiveReason = status.inactiveReason;
+      }
+      if (typeof status.enabled !== 'undefined') next.enabled = status.enabled;
+      if (typeof status.shadowMode !== 'undefined') next.shadowMode = status.shadowMode;
+      if (typeof status.controlEnabled !== 'undefined') next.controlEnabled = status.controlEnabled;
+      if (typeof status.operational !== 'undefined') next.operational = status.operational;
+      next.persistenceError = status.persistenceError || null;
+      for (const key of PERSISTENCE_FIELDS) {
+        if (typeof status[key] !== 'undefined') {
+          next[key] = status[key];
+        }
+      }
     } else {
       next.activeModelId = null;
+      next.persistenceError = null;
     }
-    next.persistenceError = (status && status.persistenceError) || null;
-    if (!applySessionCounters) return next;
 
-    const statusSession = (status && status.sessionId) || null;
-    const sessionMatches = !next.sessionId || (statusSession && statusSession === next.sessionId);
-    if (!sessionMatches) return next;
+    // Session-scoped fields apply only when the target session and run are both named, the backend
+    // and the state both name that exact session and run, and the caller opted in (live revision
+    // unchanged).
+    const sessionScoped =
+      !!targetSessionId &&
+      !!targetShadowRunId &&
+      applySessionCounters &&
+      !!status &&
+      status.sessionId === targetSessionId &&
+      status.shadowRunId === targetShadowRunId &&
+      next.sessionId === targetSessionId &&
+      next.shadowRunId === targetShadowRunId;
+
+    if (!sessionScoped) return next;
 
     if (Number.isFinite(Number(status.processed))) next.processed = Number(status.processed);
     if (Number.isFinite(Number(status.predicted))) next.predicted = Number(status.predicted);
@@ -201,7 +291,7 @@
       if (Number.isFinite(tick) && tick > next.latestTick) {
         next.latestTick = tick;
         next.latestDecision = status.latestDecision;
-        const key = decisionKey(statusSession || targetSessionId || '', tick);
+        const key = decisionKey(targetShadowRunId, tick);
         if (!next.decisionMap.has(key)) {
           next.decisionMap = new Map(next.decisionMap);
           next.decisionMap.set(key, status.latestDecision);
@@ -213,16 +303,18 @@
   }
 
   /**
-   * Returns a fresh state bound to a new tracked session. The single reset path used on every
-   * session-change event so a previous session's ticks, decisions, counters, and errors can never
-   * bleed into the new one.
+   * Returns a fresh state bound to a new tracked session and shadow run. The single reset path used
+   * on every session/run-change event so a previous run's ticks, decisions, counters, and errors
+   * can never bleed into the new one.
    *
    * @param {string|null} sessionId the new session to track
-   * @returns {Object} a fresh empty state bound to the session
+   * @param {string|null} shadowRunId the new run to track
+   * @returns {Object} a fresh empty state bound to the session and run
    */
-  function switchShadowSessionState(sessionId) {
+  function switchShadowSessionState(sessionId, shadowRunId) {
     const fresh = createEmptyShadowState();
     fresh.sessionId = sessionId || null;
+    fresh.shadowRunId = shadowRunId || null;
     return fresh;
   }
 

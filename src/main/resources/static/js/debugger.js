@@ -6681,9 +6681,9 @@ function connectTickStreamWebSocket() {
           if (elements.debugSessionStatus) {
             elements.debugSessionStatus.classList.remove('d-none');
           }
-          console.log('✅ Micro6 session detected:', data.sessionId);
-          // A new session must never inherit the previous session's shadow tick baseline.
-          fishingShadowSwitchSession(data.sessionId);
+          console.log('✅ Micro6 session detected:', data.sessionId, 'run:', data.shadowRunId || 'unknown');
+          // A new session/run must never inherit the previous session's shadow tick baseline.
+          fishingShadowSwitchSession(data.sessionId, data.shadowRunId || null);
         } else {
           console.log('ℹ️ SESSION_CREATED received but debug feed is disabled');
         }
@@ -9087,13 +9087,17 @@ let fishingShadow = {
   decisions: [],
   decisionMap: new Map(), // key -> decision (dedupe across REST history + live WebSocket)
   sessionId: null,
+  shadowRunId: null,
+  runs: [],
+  selectedRunId: null,
+  showingLegacy: false,
   processed: 0,
   predicted: 0,
   abstained: 0,
   persistenceError: null
 };
 let fishingShadowFeedbackTimer = null;
-// Monotonic generation for the tracked shadow session. Status/history responses captured for an
+// Monotonic generation for the tracked shadow session/run. Status/history responses captured for an
 // older generation are discarded so a stale response can never pollute a newer session's state.
 let fishingShadowSessionGeneration = 0;
 // Monotonic revision of the live WebSocket decision stream. A status response captured before the
@@ -9136,17 +9140,36 @@ function initFishingShadowAgent() {
       fishingShadowDeactivate();
       return;
     }
+    const legacyBtn = event.target.closest('#shadowLoadLegacyBtn');
+    if (legacyBtn) {
+      const session = fishingShadow.sessionId || currentDebugSessionId;
+      if (session) fishingShadowLoadLegacy(session);
+      return;
+    }
   });
 
   container.addEventListener('change', (event) => {
     if (event.target.id === 'shadowModelSelect') {
       fishingShadow.selectedModelId = event.target.value || null;
+      return;
+    }
+    if (event.target.id === 'shadowRunSelect') {
+      const runId = event.target.value || null;
+      const session = fishingShadow.sessionId || currentDebugSessionId;
+      if (runId && session) {
+        fishingShadowSwitchSession(session, runId);
+      }
     }
   });
 
   fishingShadowLoadModels();
-  fishingShadowLoadStatus();
-  fishingShadowLoadHistory();
+  // On reload, restore the live session/run when known; otherwise leave the panel unbound until a
+  // SESSION_CREATED broadcast or explicit selection arrives.
+  if (typeof currentDebugSessionId !== 'undefined' && currentDebugSessionId) {
+    fishingShadowSwitchSession(currentDebugSessionId, null);
+  } else {
+    fishingShadowLoadStatus();
+  }
 }
 
 function escapeHtml(value) {
@@ -9178,65 +9201,87 @@ async function fishingShadowLoadModels() {
   }
 }
 
-async function fishingShadowLoadStatus(targetSessionId) {
+async function fishingShadowLoadStatus(targetSessionId, targetShadowRunId) {
   const container = elements.fishingShadowContent;
   if (!container) return;
   const generation = fishingShadowSessionGeneration;
   const liveRevision = fishingShadowLiveRevision;
   const session = targetSessionId || fishingShadow.sessionId;
+  const run = targetShadowRunId || fishingShadow.shadowRunId;
   if (fishingShadowStatusAbortController) fishingShadowStatusAbortController.abort();
   const controller = new AbortController();
   fishingShadowStatusAbortController = controller;
   try {
     const params = new URLSearchParams();
     if (session) params.set('sessionId', session);
+    if (run) params.set('shadowRunId', run);
     const qs = params.toString() ? '?' + params.toString() : '';
     const response = await fetch('/api/ai-player/prototype/fishing/shadow/status' + qs, {
       signal: controller.signal
     });
     if (!response.ok) return;
     const status = await response.json();
-    // Discard responses captured for a previous session generation.
+    // Discard responses captured for a previous session/run generation.
     if (generation !== fishingShadowSessionGeneration) return;
-    // Discard responses whose requested session is no longer the tracked session.
+    // Discard responses whose requested session/run is no longer the tracked session/run.
     if (session && fishingShadow.sessionId && session !== fishingShadow.sessionId) return;
+    if (run && fishingShadow.shadowRunId && run !== fishingShadow.shadowRunId) return;
 
     // Model readiness and persistence fields are global/current status and always apply. Session
     // counters and the latest decision apply only when no accepted live decision landed while the
-    // request was in flight (the live revision matched), so a delayed same-session response can
-    // never roll live counters backward. If the revision changed, retain local counters and live
+    // request was in flight (the live revision matched), so a delayed same-run response can never
+    // roll live counters backward. If the revision changed, retain local counters and live
     // decisions.
     const applySessionCounters = liveRevision === fishingShadowLiveRevision;
     const core = typeof FishingShadowCore !== 'undefined' ? FishingShadowCore : null;
     if (core) {
-      Object.assign(fishingShadow, core.mergeStatusIntoState(fishingShadow, status, session, applySessionCounters));
+      Object.assign(
+        fishingShadow,
+        core.mergeStatusIntoState(fishingShadow, status, session, run, applySessionCounters)
+      );
     } else {
       fishingShadow.status = status;
-      if (status.activeModelId) {
-        fishingShadow.activeModelId = status.activeModelId;
-      } else {
-        // When status returns activeModelId null, clear the cached active ID.
-        fishingShadow.activeModelId = null;
-      }
+      // Global/current status fields always apply: active model, readiness, activation, and the
+      // writer-wide persistence metrics.
+      fishingShadow.activeModelId = (status && status.activeModelId) || null;
+      if (status && typeof status.readyForInference !== 'undefined') fishingShadow.readyForInference = status.readyForInference;
+      if (status && typeof status.activationState !== 'undefined') fishingShadow.activationState = status.activationState;
+      if (status && typeof status.activationLoadError !== 'undefined') fishingShadow.activationLoadError = status.activationLoadError;
+      if (status && typeof status.inactiveReason !== 'undefined') fishingShadow.inactiveReason = status.inactiveReason;
+      if (status && typeof status.enabled !== 'undefined') fishingShadow.enabled = status.enabled;
+      if (status && typeof status.shadowMode !== 'undefined') fishingShadow.shadowMode = status.shadowMode;
+      if (status && typeof status.controlEnabled !== 'undefined') fishingShadow.controlEnabled = status.controlEnabled;
+      if (status && typeof status.operational !== 'undefined') fishingShadow.operational = status.operational;
       // Clear a previously displayed persistence error once the backend reports recovery.
-      fishingShadow.persistenceError = status.persistenceError || null;
-      if (applySessionCounters) {
-        const statusSession = status.sessionId || null;
-        const sessionMatches = !fishingShadow.sessionId || (statusSession && statusSession === fishingShadow.sessionId);
-        if (sessionMatches) {
-          if (Number.isFinite(Number(status.processed))) fishingShadow.processed = Number(status.processed);
-          if (Number.isFinite(Number(status.predicted))) fishingShadow.predicted = Number(status.predicted);
-          if (Number.isFinite(Number(status.abstained))) fishingShadow.abstained = Number(status.abstained);
-          if (status.latestDecision && status.latestDecision.tick != null) {
-            const tick = Number(status.latestDecision.tick);
-            if (Number.isFinite(tick) && tick > fishingShadow.latestTick) {
-              fishingShadow.latestTick = tick;
-              fishingShadow.latestDecision = status.latestDecision;
-              const key = (statusSession || '') + ':' + tick;
-              if (!fishingShadow.decisionMap.has(key)) {
-                fishingShadow.decisionMap.set(key, status.latestDecision);
-                rebuildFishingShadowRolling();
-              }
+      fishingShadow.persistenceError = (status && status.persistenceError) || null;
+      ['persistenceLifecycle', 'persistenceQueueSize', 'persistenceEnqueued', 'persistenceQueued',
+        'persistenceInFlight', 'persistenceCompleted', 'persistenceWritten', 'persistenceFailed',
+        'persistenceAbandoned', 'persistenceDropped'].forEach((key) => {
+        if (status && typeof status[key] !== 'undefined') fishingShadow[key] = status[key];
+      });
+      // Session counters and the latest decision apply only when the caller opted in, a target
+      // session and run were named, and the backend and the tracked state both name that exact
+      // target session and run.
+      const sessionScoped = applySessionCounters
+        && session
+        && run
+        && status && status.sessionId === session
+        && status.shadowRunId === run
+        && fishingShadow.sessionId === session
+        && fishingShadow.shadowRunId === run;
+      if (sessionScoped) {
+        if (Number.isFinite(Number(status.processed))) fishingShadow.processed = Number(status.processed);
+        if (Number.isFinite(Number(status.predicted))) fishingShadow.predicted = Number(status.predicted);
+        if (Number.isFinite(Number(status.abstained))) fishingShadow.abstained = Number(status.abstained);
+        if (status.latestDecision && status.latestDecision.tick != null) {
+          const tick = Number(status.latestDecision.tick);
+          if (Number.isFinite(tick) && tick > fishingShadow.latestTick) {
+            fishingShadow.latestTick = tick;
+            fishingShadow.latestDecision = status.latestDecision;
+            const key = run + ':' + tick;
+            if (!fishingShadow.decisionMap.has(key)) {
+              fishingShadow.decisionMap.set(key, status.latestDecision);
+              rebuildFishingShadowRolling();
             }
           }
         }
@@ -9321,24 +9366,28 @@ function handleShadowDecision(data) {
 
   // Fallback merge (kept for resilience if fishing-shadow-core.js is missing).
   const sessionId = data.sessionId;
+  const runId = data.shadowRunId;
   if (sessionId == null || sessionId === '') return;
+  if (runId == null || runId === '') return;
   // Require the correct session: if the UI is bound to a live session, the decision must match it.
   if (currentDebugSessionId && sessionId && sessionId !== currentDebugSessionId) return;
   if (fishingShadow.sessionId && sessionId && sessionId !== fishingShadow.sessionId) return;
+  if (fishingShadow.shadowRunId && runId && runId !== fishingShadow.shadowRunId) return;
 
   // tick 0 is a valid tick; only invalid or non-newer ticks are rejected.
   const tick = Number(data.tick);
   if (!Number.isFinite(tick) || tick < 0) return;
   if (fishingShadow.latestTick >= 0 && tick <= fishingShadow.latestTick) return;
 
-  // Deduplicate by (sessionId, tick) so REST history and live messages never double-count.
-  const key = (sessionId || '') + ':' + tick;
+  // Deduplicate by (shadowRunId, tick) so REST history and live messages never double-count.
+  const key = runId + ':' + tick;
   if (fishingShadow.decisionMap.has(key)) return;
 
   const status = data.status;
   if (status !== 'PREDICTED' && status !== 'ABSTAINED') return;
 
   if (sessionId) fishingShadow.sessionId = sessionId;
+  fishingShadow.shadowRunId = runId;
   fishingShadow.decisionMap.set(key, data);
   fishingShadow.latestTick = tick;
   fishingShadow.latestDecision = data;
@@ -9364,22 +9413,32 @@ function rebuildFishingShadowRolling() {
 }
 
 /**
- * Load persisted shadow history for a session and merge it (newest-first from the server,
- * normalized oldest-to-newest locally, deduplicated by sessionId+tick) with live decisions.
+ * Load persisted shadow history for one run (or legacy history) and merge it (newest-first from
+ * the server, normalized oldest-to-newest locally, deduplicated by shadowRunId+tick) with live
+ * decisions.
  *
- * A response captured before the tracked session changed is discarded, and every history decision
- * whose sessionId differs from the requested session is rejected, so an old session's high tick can
- * never suppress the new session's live decisions.
+ * A response captured before the tracked session/run changed is discarded, and every history
+ * decision whose sessionId or shadowRunId differs from the requested session/run is rejected, so an
+ * old run's high tick can never suppress the new run's live decisions. Legacy history (no run id)
+ * is loaded only by explicit user selection and is never merged into a run-keyed state.
  */
-async function fishingShadowLoadHistory(sessionId) {
+async function fishingShadowLoadHistory(sessionId, shadowRunId, legacy) {
   const target = sessionId || fishingShadow.sessionId || currentDebugSessionId;
   if (!target) return;
+  const run = shadowRunId !== undefined ? shadowRunId : fishingShadow.shadowRunId;
   const generation = fishingShadowSessionGeneration;
   if (fishingShadowHistoryAbortController) fishingShadowHistoryAbortController.abort();
   const controller = new AbortController();
   fishingShadowHistoryAbortController = controller;
   try {
     const params = new URLSearchParams({ sessionId: target, limit: '200' });
+    if (legacy) {
+      params.set('legacy', 'true');
+    } else if (run) {
+      params.set('shadowRunId', run);
+    } else {
+      return;
+    }
     const response = await fetch(
       '/api/ai-player/prototype/fishing/shadow/history?' + params.toString(),
       { signal: controller.signal }
@@ -9391,22 +9450,23 @@ async function fishingShadowLoadHistory(sessionId) {
     if (generation !== fishingShadowSessionGeneration) return;
 
     if (typeof FishingShadowCore !== 'undefined') {
-      Object.assign(fishingShadow, FishingShadowCore.mergeHistoryIntoState(fishingShadow, history, target));
+      Object.assign(fishingShadow, FishingShadowCore.mergeHistoryIntoState(fishingShadow, history, target, legacy ? null : run));
     } else {
       let newestTick = fishingShadow.latestTick;
       for (const decision of history) {
         if (!decision || decision.tick == null) continue;
         const tick = Number(decision.tick);
         if (!Number.isFinite(tick)) continue;
-        const ds = decision.sessionId || target;
-        if (ds !== target) continue;
-        const key = ds + ':' + tick;
+        if (decision.sessionId !== target) continue;
+        if (!legacy && decision.shadowRunId !== run) continue;
+        const key = (legacy ? '' : run) + ':' + tick;
         if (!fishingShadow.decisionMap.has(key)) {
           fishingShadow.decisionMap.set(key, decision);
         }
         if (tick > newestTick) newestTick = tick;
       }
       fishingShadow.sessionId = fishingShadow.sessionId || target;
+      if (!legacy) fishingShadow.shadowRunId = fishingShadow.shadowRunId || run || null;
       if (newestTick > fishingShadow.latestTick) {
         fishingShadow.latestTick = newestTick;
         const newest = Array.from(fishingShadow.decisionMap.values())
@@ -9427,32 +9487,38 @@ async function fishingShadowLoadHistory(sessionId) {
 }
 
 /**
- * Switch the shadow panel to a new tracked session. This is the single reset path used by every
- * session-change event (WebSocket SESSION_CREATED, manual recording start, manual debug-session
- * start, explicit live-session selection, and account/window rebind) so a previous session's state
- * can never bleed into the new one.
+ * Switch the shadow panel to a new tracked session and shadow run. This is the single reset path
+ * used by every session/run-change event (WebSocket SESSION_CREATED, manual recording start, manual
+ * debug-session start, explicit live-session selection, and account/window rebind) so a previous
+ * run's state can never bleed into the new one.
  *
  * Resets ticks, decisions, map, counters, errors, and latest decision; increments the session
- * generation; renders immediately; and loads status and history for the exact session.
+ * generation; renders immediately; and loads status and history for the exact session/run. When
+ * only a session is known, run discovery selects the active run or leaves the run selector open
+ * (legacy history is never chosen silently).
  */
-function fishingShadowSwitchSession(sessionId) {
+function fishingShadowSwitchSession(sessionId, shadowRunId) {
   fishingShadowSessionGeneration++;
   fishingShadowLiveRevision = 0;
   fishingShadowAbortPendingRequests();
+  fishingShadow.selectedRunId = null;
+  fishingShadow.showingLegacy = false;
   const fresh = (typeof FishingShadowCore !== 'undefined')
-    ? FishingShadowCore.switchShadowSessionState(sessionId)
+    ? FishingShadowCore.switchShadowSessionState(sessionId, shadowRunId)
     : {
         latestTick: -1,
         latestDecision: null,
         decisions: [],
         decisionMap: new Map(),
         sessionId: sessionId || null,
+        shadowRunId: shadowRunId || null,
         processed: 0,
         predicted: 0,
         abstained: 0,
         persistenceError: null
       };
   fishingShadow.sessionId = sessionId || null;
+  fishingShadow.shadowRunId = shadowRunId || null;
   fishingShadow.latestTick = fresh.latestTick;
   fishingShadow.latestDecision = fresh.latestDecision;
   fishingShadow.decisions = fresh.decisions;
@@ -9463,8 +9529,80 @@ function fishingShadowSwitchSession(sessionId) {
   fishingShadow.persistenceError = fresh.persistenceError;
   fishingShadow.status = null;
   renderFishingShadow();
-  fishingShadowLoadStatus(sessionId);
-  fishingShadowLoadHistory(sessionId);
+  if (sessionId && shadowRunId) {
+    fishingShadowLoadStatus(sessionId, shadowRunId);
+    fishingShadowLoadHistory(sessionId, shadowRunId, false);
+  } else if (sessionId) {
+    fishingShadowLoadRuns(sessionId);
+  }
+}
+
+/**
+ * Discovers the shadow runs for a session and selects the active run when present. When no active
+ * run exists, the run selector is rendered so the user can pick a run or explicitly load legacy
+ * history — legacy history is never chosen silently.
+ */
+async function fishingShadowLoadRuns(sessionId) {
+  const container = elements.fishingShadowContent;
+  if (!container) return;
+  const generation = fishingShadowSessionGeneration;
+  try {
+    const params = new URLSearchParams({ sessionId });
+    const response = await fetch(
+      '/api/ai-player/prototype/fishing/shadow/runs?' + params.toString()
+    );
+    if (!response.ok) return;
+    const data = await response.json();
+    if (generation !== fishingShadowSessionGeneration) return;
+    if (!data || !Array.isArray(data.runs)) return;
+    fishingShadow.runs = data.runs;
+    const active = data.runs.find(r => r.active && !r.legacy && r.shadowRunId);
+    if (active) {
+      fishingShadowSwitchSession(sessionId, active.shadowRunId);
+      return;
+    }
+    renderFishingShadow();
+  } catch (error) {
+    if (error && error.name === 'AbortError') return;
+    console.error('Failed to load fishing shadow runs', error);
+  }
+}
+
+/** Loads legacy (schema-v1) history for a session by explicit user selection. */
+function fishingShadowLoadLegacy(sessionId) {
+  fishingShadowSessionGeneration++;
+  fishingShadowLiveRevision = 0;
+  fishingShadowAbortPendingRequests();
+  const fresh = (typeof FishingShadowCore !== 'undefined')
+    ? FishingShadowCore.switchShadowSessionState(sessionId, null)
+    : {
+        latestTick: -1,
+        latestDecision: null,
+        decisions: [],
+        decisionMap: new Map(),
+        sessionId: sessionId || null,
+        shadowRunId: null,
+        processed: 0,
+        predicted: 0,
+        abstained: 0,
+        persistenceError: null
+      };
+  fishingShadow.sessionId = sessionId || null;
+  fishingShadow.shadowRunId = null;
+  fishingShadow.selectedRunId = null;
+  fishingShadow.showingLegacy = true;
+  fishingShadow.latestTick = fresh.latestTick;
+  fishingShadow.latestDecision = fresh.latestDecision;
+  fishingShadow.decisions = fresh.decisions;
+  fishingShadow.decisionMap = fresh.decisionMap;
+  fishingShadow.processed = fresh.processed;
+  fishingShadow.predicted = fresh.predicted;
+  fishingShadow.abstained = fresh.abstained;
+  fishingShadow.persistenceError = fresh.persistenceError;
+  fishingShadow.status = null;
+  renderFishingShadow();
+  fishingShadowLoadStatus(sessionId, null);
+  fishingShadowLoadHistory(sessionId, null, true);
 }
 
 function renderFishingShadowFeedback(message, type) {
@@ -9521,6 +9659,25 @@ function renderFishingShadow() {
     return `<option value="${escapeHtml(model.modelId)}"${selected}${disabled}>${escapeHtml(model.modelId)}${model.replayValidated ? ' (validated)' : ' (not validated)'}</option>`;
   }).join('');
 
+  // Run selector: lets the user switch between discovered runs of the current session and load
+  // legacy (schema-v1) history only by explicit selection.
+  const runs = fishingShadow.runs || [];
+  const nonLegacyRuns = runs.filter(r => !r.legacy && r.shadowRunId);
+  const hasLegacy = runs.some(r => r.legacy);
+  const runSelectorHtml = (nonLegacyRuns.length > 0 || hasLegacy) ? `
+    <div class="shadow-model-controls">
+      ${nonLegacyRuns.length > 0 ? `
+      <select id="shadowRunSelect" title="Shadow run">
+        <option value="">Select a run&hellip;</option>
+        ${nonLegacyRuns.map(r => {
+          const label = `${r.shadowRunId} · ticks ${r.firstTick ?? '--'}-${r.lastTick ?? '--'}${r.active ? ' (active)' : ''} · ${r.decisionCount} decisions`;
+          const sel = fishingShadow.shadowRunId === r.shadowRunId ? ' selected' : '';
+          return `<option value="${escapeHtml(r.shadowRunId)}"${sel}>${escapeHtml(label)}</option>`;
+        }).join('')}
+      </select>` : ''}
+      ${hasLegacy && !fishingShadow.showingLegacy ? `<button type="button" class="btn btn-sm btn-outline-secondary" id="shadowLoadLegacyBtn">Load legacy history</button>` : ''}
+    </div>` : '';
+
   const counters = `
     <span class="shadow-counter">Processed: ${escapeHtml(fishingShadow.processed ?? 0)}</span>
     <span class="shadow-counter">Predicted: ${escapeHtml(fishingShadow.predicted ?? 0)}</span>
@@ -9560,6 +9717,7 @@ function renderFishingShadow() {
     ${inactiveReason ? `<div class="shadow-feedback error">${escapeHtml(inactiveReason)}</div>` : ''}
     ${activationLoadError ? `<div class="shadow-feedback error">Activation: ${escapeHtml(activationLoadError)}</div>` : ''}
     ${fishingShadow.persistenceError ? `<div class="shadow-feedback error">Persistence: ${escapeHtml(fishingShadow.persistenceError)}</div>` : ''}
+    ${runSelectorHtml}
     <div class="shadow-model-controls">
       <select id="shadowModelSelect" title="Active fishing model">
         <option value="">No model selected</option>
@@ -9575,6 +9733,7 @@ function renderFishingShadow() {
     <div class="shadow-detail-row">
       <span class="shadow-badge ${statusBadgeClass}">${escapeHtml(statusLabel)}</span>
       <span class="shadow-counter">Session: ${escapeHtml(fishingShadow.sessionId || status.sessionId || currentDebugSessionId || '--')}</span>
+      <span class="shadow-counter">Run: ${escapeHtml(fishingShadow.shadowRunId || status.shadowRunId || (fishingShadow.showingLegacy ? 'legacy' : '--'))}</span>
       <span class="shadow-counter">Tick: ${escapeHtml(decision ? decision.tick : (status.latestTick ?? '--'))}</span>
     </div>
     <div class="shadow-detail-row">
@@ -9602,6 +9761,18 @@ function renderFishingShadow() {
       <span class="shadow-detail-value">${decision && decision.latencyMicros != null ? escapeHtml(decision.latencyMicros) + ' &micro;s' : '--'}</span>
     </div>
     <div class="shadow-counters">${counters}</div>
+    ${fishingShadow.persistenceLifecycle ? `
+    <div class="shadow-detail-row">
+      <span class="shadow-detail-label">Persistence</span>
+      <span class="shadow-detail-value">${escapeHtml(fishingShadow.persistenceLifecycle)}
+        &middot; queued ${escapeHtml(fishingShadow.persistenceQueued ?? 0)}
+        &middot; in-flight ${escapeHtml(fishingShadow.persistenceInFlight ?? 0)}
+        &middot; completed ${escapeHtml(fishingShadow.persistenceCompleted ?? 0)}
+        &middot; written ${escapeHtml(fishingShadow.persistenceWritten ?? 0)}
+        &middot; failed ${escapeHtml(fishingShadow.persistenceFailed ?? 0)}
+        &middot; abandoned ${escapeHtml(fishingShadow.persistenceAbandoned ?? 0)}
+        &middot; dropped ${escapeHtml(fishingShadow.persistenceDropped ?? 0)}</span>
+    </div>` : ''}
     <div>
       <div class="shadow-detail-label">Latest 20 decisions</div>
       <table class="shadow-actions-table">
