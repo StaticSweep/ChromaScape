@@ -69,9 +69,7 @@ public class FishingPreflightService {
         issues);
   }
 
-  /**
-   * Resolves a recording to its debug session, throwing a structured 404 when not found.
-   */
+  /** Resolves a recording to its debug session, throwing a structured 404 when not found. */
   public DebugSession resolveRecording(String recordingId) {
     if (recordingId == null || recordingId.isBlank()) {
       throw new PrototypeApiException(
@@ -109,7 +107,8 @@ public class FishingPreflightService {
     if (ctx.playerActions().isEmpty()) {
       issues.add(
           new PreflightIssue(
-              PreflightReport.IssueCode.NO_PLAYER_ACTIONS, "Recording has no captured player actions"));
+              PreflightReport.IssueCode.NO_PLAYER_ACTIONS,
+              "Recording has no captured player actions"));
     }
     if (ctx.supportedActions().isEmpty()) {
       issues.add(

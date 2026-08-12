@@ -17,11 +17,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Loads and derives the deterministic analysis of a ChromaScape recording for the fishing prototype.
+ * Loads and derives the deterministic analysis of a ChromaScape recording for the fishing
+ * prototype.
  *
- * <p>This is the single source of alignment logic shared by preflight, dataset building, and replay.
- * Alignment always prefers the exact {@code details.sourceTick}; missing snapshots fall back to
- * {@code sourceTick - 1}; future snapshots are never used.
+ * <p>This is the single source of alignment logic shared by preflight, dataset building, and
+ * replay. Alignment always prefers the exact {@code details.sourceTick}; missing snapshots fall
+ * back to {@code sourceTick - 1}; future snapshots are never used.
  */
 @Service
 public class FishingRecordingLoader {
@@ -129,7 +130,8 @@ public class FishingRecordingLoader {
         Comparator.comparingLong((AlignedAction a) -> a.action().sourceTick())
             .thenComparingInt(a -> a.action().sequence()));
 
-    int initialTotal = snapshots.isEmpty() ? 0 : inventoryTotals.getOrDefault(snapshots.get(0).getTick(), 0);
+    int initialTotal =
+        snapshots.isEmpty() ? 0 : inventoryTotals.getOrDefault(snapshots.get(0).getTick(), 0);
     int finalTotal =
         snapshots.isEmpty()
             ? 0
@@ -146,11 +148,9 @@ public class FishingRecordingLoader {
     }
 
     long firstXp = fishingXp(snapshots.isEmpty() ? null : snapshots.get(0));
-    long lastXp =
-        fishingXp(snapshots.isEmpty() ? null : snapshots.get(snapshots.size() - 1));
+    long lastXp = fishingXp(snapshots.isEmpty() ? null : snapshots.get(snapshots.size() - 1));
 
-    boolean playerStatePresent =
-        snapshots.stream().anyMatch(s -> hasPosition(s.getPlayerState()));
+    boolean playerStatePresent = snapshots.stream().anyMatch(s -> hasPosition(s.getPlayerState()));
     boolean inventoryPresent = snapshots.stream().anyMatch(s -> s.getInventory() != null);
     boolean npcTelemetryPresent = hasFishingSpotTelemetry(snapshots);
     boolean overflowDetected = hasActionQueueOverflow(sessionId);
@@ -180,9 +180,8 @@ public class FishingRecordingLoader {
 
   private List<PlayerAction> loadPlayerActions(String sessionId) {
     List<TickLog> logs =
-        tickLogRepository
-            .findBySessionIdAndSubsystemIgnoreCaseAndEventTypeIgnoreCaseOrderByTickAsc(
-                sessionId, "PLAYER_ACTION", "MENU_CLICK");
+        tickLogRepository.findBySessionIdAndSubsystemIgnoreCaseAndEventTypeIgnoreCaseOrderByTickAsc(
+            sessionId, "PLAYER_ACTION", "MENU_CLICK");
     List<PlayerAction> actions = new ArrayList<>();
     for (TickLog logEntry : logs) {
       Map<String, Object> details = toMap(logEntry.getDetails());
@@ -278,10 +277,14 @@ public class FishingRecordingLoader {
     if (playerState.hasNonNull("position") && playerState.get("position").isObject()) {
       JsonNode position = playerState.get("position");
       return (position.hasNonNull("x") || position.hasNonNull("worldX"))
-          && (position.hasNonNull("y") || position.hasNonNull("z") || position.hasNonNull("worldY"));
+          && (position.hasNonNull("y")
+              || position.hasNonNull("z")
+              || position.hasNonNull("worldY"));
     }
     return (playerState.hasNonNull("x") || playerState.hasNonNull("worldX"))
-        && (playerState.hasNonNull("y") || playerState.hasNonNull("z") || playerState.hasNonNull("worldY"));
+        && (playerState.hasNonNull("y")
+            || playerState.hasNonNull("z")
+            || playerState.hasNonNull("worldY"));
   }
 
   @SuppressWarnings("unchecked")

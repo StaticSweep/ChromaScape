@@ -2,8 +2,8 @@ package com.chromascape.web.aiplayer.prototype;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.chromascape.web.aiplayer.prototype.FishingActionNormalizer.ActionClassification;
 import com.chromascape.web.aiplayer.prototype.FishingActionNormalizer.ActionClass;
+import com.chromascape.web.aiplayer.prototype.FishingActionNormalizer.ActionClassification;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +15,8 @@ class FishingActionNormalizerTest {
   void normalizesTargetMarkupAndWhitespace() {
     assertThat(FishingActionNormalizer.canonicalize("<col=ffff00>Fishing\u00a0 spot"))
         .isEqualTo("fishing spot");
-    assertThat(FishingActionNormalizer.canonicalize("  Fishing   Spot  ")).isEqualTo("fishing spot");
+    assertThat(FishingActionNormalizer.canonicalize("  Fishing   Spot  "))
+        .isEqualTo("fishing spot");
     assertThat(FishingActionNormalizer.canonicalize("<col=00ff00>Net")).isEqualTo("net");
     assertThat(FishingActionNormalizer.canonicalize("")).isNull();
     assertThat(FishingActionNormalizer.canonicalize(null)).isNull();
@@ -49,12 +50,14 @@ class FishingActionNormalizerTest {
   @DisplayName("all five NPC option families are accepted")
   void allNpcOptionFamiliesAccepted() {
     String[] families = {
-      "NPC_FIRST_OPTION", "NPC_SECOND_OPTION", "NPC_THIRD_OPTION", "NPC_FOURTH_OPTION",
+      "NPC_FIRST_OPTION",
+      "NPC_SECOND_OPTION",
+      "NPC_THIRD_OPTION",
+      "NPC_FOURTH_OPTION",
       "NPC_FIFTH_OPTION"
     };
     for (String family : families) {
-      PlayerAction action =
-          new PlayerAction(100, 0, "Net", "Fishing spot", family, 17, 17, 0, 100);
+      PlayerAction action = new PlayerAction(100, 0, "Net", "Fishing spot", family, 17, 17, 0, 100);
       assertThat(FishingActionNormalizer.classify(action).actionClass())
           .as(family)
           .isEqualTo(ActionClass.SUPPORTED_FISHING);
@@ -64,8 +67,7 @@ class FishingActionNormalizerTest {
   @Test
   @DisplayName("CANCEL actions are ignored")
   void cancelIgnored() {
-    PlayerAction cancelAction =
-        new PlayerAction(100, 0, "Cancel", "", "CANCEL", 0, 0, 0, 100);
+    PlayerAction cancelAction = new PlayerAction(100, 0, "Cancel", "", "CANCEL", 0, 0, 0, 100);
     assertThat(FishingActionNormalizer.classify(cancelAction).actionClass())
         .isEqualTo(ActionClass.IGNORED);
 
@@ -84,16 +86,20 @@ class FishingActionNormalizerTest {
         new PlayerAction(100, 0, "Drop", "Shrimps", "ITEM_FIFTH_OPTION", 1, 1, 0, 100);
     PlayerAction bank =
         new PlayerAction(100, 0, "Bank", "Bank booth", "GAME_OBJECT_FIRST_OPTION", 1, 1, 0, 100);
-    PlayerAction useItem =
-        new PlayerAction(100, 0, "Use", "Net", "ITEM_USE", 1, 1, 0, 100);
+    PlayerAction useItem = new PlayerAction(100, 0, "Use", "Net", "ITEM_USE", 1, 1, 0, 100);
     PlayerAction unrelatedNpc =
         new PlayerAction(100, 0, "Attack", "Goblin", "NPC_FIRST_OPTION", 17, 17, 0, 100);
 
-    assertThat(FishingActionNormalizer.classify(walk).actionClass()).isEqualTo(ActionClass.UNSUPPORTED);
-    assertThat(FishingActionNormalizer.classify(drop).actionClass()).isEqualTo(ActionClass.UNSUPPORTED);
-    assertThat(FishingActionNormalizer.classify(bank).actionClass()).isEqualTo(ActionClass.UNSUPPORTED);
-    assertThat(FishingActionNormalizer.classify(useItem).actionClass()).isEqualTo(ActionClass.UNSUPPORTED);
-    assertThat(FishingActionNormalizer.classify(unrelatedNpc).actionClass()).isEqualTo(ActionClass.UNSUPPORTED);
+    assertThat(FishingActionNormalizer.classify(walk).actionClass())
+        .isEqualTo(ActionClass.UNSUPPORTED);
+    assertThat(FishingActionNormalizer.classify(drop).actionClass())
+        .isEqualTo(ActionClass.UNSUPPORTED);
+    assertThat(FishingActionNormalizer.classify(bank).actionClass())
+        .isEqualTo(ActionClass.UNSUPPORTED);
+    assertThat(FishingActionNormalizer.classify(useItem).actionClass())
+        .isEqualTo(ActionClass.UNSUPPORTED);
+    assertThat(FishingActionNormalizer.classify(unrelatedNpc).actionClass())
+        .isEqualTo(ActionClass.UNSUPPORTED);
   }
 
   @Test

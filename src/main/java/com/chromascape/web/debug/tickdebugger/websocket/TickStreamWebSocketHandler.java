@@ -1,5 +1,7 @@
 package com.chromascape.web.debug.tickdebugger.websocket;
 
+import com.chromascape.web.aiplayer.prototype.FishingShadowDecision;
+import com.chromascape.web.aiplayer.prototype.FishingShadowDecisionService;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartRequest;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStopRequest;
@@ -41,14 +43,15 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   private final DebugSessionService sessionService;
   private final TickStreamIngestionService ingestionService;
   private final DebuggerTickWebSocketHandler debuggerWebSocketHandler;
+  private final FishingShadowDecisionService shadowDecisionService;
   private final Set<WebSocketSession> micro6Clients = ConcurrentHashMap.newKeySet();
 
   /**
    * Maps WebSocket session IDs to bound debug session IDs.
    *
    * <p>Populated on successful SESSION_START, cleared on explicit SESSION_STOP or disconnect
-   * finalization. Used by disconnect/transport-error handlers to implicitly finalize sessions
-   * when Micro6 drops the connection without sending SESSION_STOP.
+   * finalization. Used by disconnect/transport-error handlers to implicitly finalize sessions when
+   * Micro6 drops the connection without sending SESSION_STOP.
    */
   private final Map<String, String> sessionBindings = new ConcurrentHashMap<>();
 
@@ -56,11 +59,13 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       ObjectMapper objectMapper,
       DebugSessionService sessionService,
       TickStreamIngestionService ingestionService,
-      DebuggerTickWebSocketHandler debuggerWebSocketHandler) {
+      DebuggerTickWebSocketHandler debuggerWebSocketHandler,
+      FishingShadowDecisionService shadowDecisionService) {
     this.objectMapper = objectMapper;
     this.sessionService = sessionService;
     this.ingestionService = ingestionService;
     this.debuggerWebSocketHandler = debuggerWebSocketHandler;
+    this.shadowDecisionService = shadowDecisionService;
   }
 
   @Override
@@ -116,6 +121,9 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
   /** Handle SESSION_START message from Micro6. */
   private void handleSessionStart(WebSocketSession wsSession, JsonNode root) {
+    // Single-response guard: once the success response is written, any later exception in this
+    // handler must not emit a second (ERROR) response to the same SESSION_START.
+    boolean successResponseSent = false;
     try {
       SessionStartRequest request = objectMapper.treeToValue(root, SessionStartRequest.class);
       log.info(
@@ -156,6 +164,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       // Send response back to Micro6 with the sessionId
       String responseJson = objectMapper.writeValueAsString(response);
       wsSession.sendMessage(new TextMessage(responseJson));
+      successResponseSent = true;
 
       log.info("Sent SESSION_START response to Micro6: sessionId={}", response.getSessionId());
 
@@ -164,7 +173,9 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
     } catch (Exception e) {
       log.error("Error handling SESSION_START: {}", e.getMessage(), e);
-      sendErrorResponse(wsSession, "SESSION_START failed", e.getMessage());
+      if (!successResponseSent) {
+        sendErrorResponse(wsSession, "SESSION_START failed", e.getMessage());
+      }
     }
   }
 
@@ -185,10 +196,37 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           batch.getLogs() != null ? batch.getLogs().size() : 0,
           batch.getOverlays() != null ? batch.getOverlays().size() : 0);
 
-      ingestionService.processTickBatch(batch);
+      // Shadow evaluation runs synchronously in received WebSocket order; the resulting decision is
+      // broadcast before the existing asynchronous tick-ingestion path continues. A shadow
+      // evaluation/broadcast failure must never prevent tick ingestion, so they live in separate
+      // error boundaries: try shadow evaluation/broadcast, finally process tick ingestion.
+      try {
+        FishingShadowDecision decision = shadowDecisionService.evaluate(batch);
+        if (decision != null) {
+          broadcastShadowDecision(decision);
+        }
+      } finally {
+        ingestionService.processTickBatch(batch);
+      }
 
     } catch (Exception e) {
       log.error("Error handling TICK_BATCH: {}", e.getMessage(), e);
+    }
+  }
+
+  /** Broadcast one shadow decision to all debugger UI clients. */
+  private void broadcastShadowDecision(FishingShadowDecision decision) {
+    try {
+      String messageJson = objectMapper.writeValueAsString(decision);
+      debuggerWebSocketHandler.broadcast(new TextMessage(messageJson));
+      log.debug(
+          "Broadcast shadow decision to {} debugger client(s): sessionId={}, tick={}, status={}",
+          debuggerWebSocketHandler.getClientCount(),
+          decision.sessionId(),
+          decision.tick(),
+          decision.status());
+    } catch (Exception e) {
+      log.error("Failed to broadcast shadow decision: {}", e.getMessage(), e);
     }
   }
 
@@ -201,9 +239,22 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           request.getSessionId(),
           request.getEndTick());
 
-      sessionService.stopSession(request.getSessionId(), request.getEndTick(), true);
-      // Clear binding — explicit SESSION_STOP handled finalization
-      clearSessionBinding(request.getSessionId());
+      // Recording finalization and shadow cleanup are separate error boundaries: a recording
+      // finalization failure must not leak shadow baselines or counters.
+      boolean finalizationSucceeded = false;
+      try {
+        sessionService.stopSession(request.getSessionId(), request.getEndTick(), true);
+        finalizationSucceeded = true;
+      } catch (Exception e) {
+        log.error("Error stopping debug session {}: {}", request.getSessionId(), e.getMessage(), e);
+      } finally {
+        shadowDecisionService.cleanupSession(request.getSessionId());
+      }
+      // Clear the binding only after explicit finalization succeeded. When it failed, the binding
+      // is retained so a later disconnect can run finalizeSessionOnDisconnect as a retry.
+      if (finalizationSucceeded) {
+        clearSessionBinding(request.getSessionId());
+      }
     } catch (Exception e) {
       log.error("Error handling SESSION_STOP: {}", e.getMessage(), e);
     }
@@ -212,7 +263,10 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   /** Send error response to Micro6 client. */
   private void sendErrorResponse(WebSocketSession session, String error, String detail) {
     try {
-      Map<String, Object> errorResponse = Map.of("type", "ERROR", "error", error, "detail", detail);
+      java.util.LinkedHashMap<String, Object> errorResponse = new java.util.LinkedHashMap<>();
+      errorResponse.put("type", "ERROR");
+      errorResponse.put("error", error);
+      errorResponse.put("detail", detail);
       session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorResponse)));
     } catch (Exception e) {
       log.error("Failed to send error response: {}", e.getMessage());
@@ -229,10 +283,14 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     try {
       Map<String, Object> message =
           Map.of(
-              "type", "SESSION_CREATED",
-              "sessionId", session.getSessionId(),
-              "accountName", accountName != null ? accountName : "",
-              "startTick", session.getStartTick());
+              "type",
+              "SESSION_CREATED",
+              "sessionId",
+              session.getSessionId(),
+              "accountName",
+              accountName != null ? accountName : "",
+              "startTick",
+              session.getStartTick());
 
       String messageJson = objectMapper.writeValueAsString(message);
       debuggerWebSocketHandler.broadcast(new TextMessage(messageJson));
@@ -271,6 +329,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         wsSession.getId(),
         debugSessionId);
 
+    // Recording finalization and shadow cleanup are separate error boundaries: even when implicit
+    // finalization throws, the shadow session state must be cleaned up.
     try {
       sessionService.finalizeSessionOnDisconnect(debugSessionId, cause);
     } catch (Exception e) {
@@ -280,6 +340,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           cause,
           e.getMessage(),
           e);
+    } finally {
+      shadowDecisionService.cleanupSession(debugSessionId);
     }
   }
 

@@ -33,8 +33,7 @@ class FishingDemonstrationPolicyTest {
         new TrainingExample(state(100, 100, 0, false, true, -1, 1), NET_FISHING_SPOT, 1000);
     FishingState query = state(100, 100, 0, false, true, -1, 1);
 
-    Prediction prediction =
-        FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
+    Prediction prediction = FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
     assertThat(prediction.isAbstain()).isFalse();
     assertThat(prediction.action()).isEqualTo(NET_FISHING_SPOT);
   }
@@ -46,8 +45,7 @@ class FishingDemonstrationPolicyTest {
         new TrainingExample(state(100, 100, 0, false, true, -1, 1), NET_FISHING_SPOT, 1000);
     FishingState query = state(102, 99, 0, false, true, -1, 1);
 
-    Prediction prediction =
-        FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
+    Prediction prediction = FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
     assertThat(prediction.action()).isEqualTo(NET_FISHING_SPOT);
   }
 
@@ -63,8 +61,7 @@ class FishingDemonstrationPolicyTest {
     NearbyNpc movedSpot = new NearbyNpc("fishing spot", 105, 108, 0, 13);
     FishingState query = new FishingState(player, inventory, List.of(movedSpot));
 
-    Prediction prediction =
-        FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
+    Prediction prediction = FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
     assertThat(prediction.isAbstain()).isFalse();
     assertThat(prediction.action()).isEqualTo(NET_FISHING_SPOT);
   }
@@ -78,8 +75,7 @@ class FishingDemonstrationPolicyTest {
     InventoryFeature inventory = new InventoryFeature(2, 2, 1);
     FishingState query = new FishingState(player, inventory, List.of());
 
-    Prediction prediction =
-        FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
+    Prediction prediction = FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
     assertThat(prediction.isAbstain()).isTrue();
     assertThat(prediction.abstentionReason()).isEqualTo("ABSTAIN_TARGET_MISSING");
   }
@@ -91,8 +87,7 @@ class FishingDemonstrationPolicyTest {
         new TrainingExample(state(100, 100, 0, false, true, -1, 1), NET_FISHING_SPOT, 1000);
     FishingState query = state(100, 100, 1, false, true, -1, 1);
 
-    Prediction prediction =
-        FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
+    Prediction prediction = FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
     assertThat(prediction.isAbstain()).isTrue();
     assertThat(prediction.abstentionReason()).isEqualTo("ABSTAIN_PLANE_MISMATCH");
   }
@@ -104,8 +99,7 @@ class FishingDemonstrationPolicyTest {
         new TrainingExample(state(100, 100, 0, false, true, -1, 1), NET_FISHING_SPOT, 1000);
     FishingState query = state(113, 100, 0, false, true, -1, 1);
 
-    Prediction prediction =
-        FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
+    Prediction prediction = FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
     assertThat(prediction.isAbstain()).isTrue();
     assertThat(prediction.abstentionReason()).isEqualTo("ABSTAIN_TOO_FAR");
   }
@@ -125,8 +119,7 @@ class FishingDemonstrationPolicyTest {
     assertThat(prediction.action()).isEqualTo(NET_FISHING_SPOT);
     // Both examples have identical actions, so the outcome is the same; verify determinism by
     // running in reverse order and getting the same result.
-    Prediction reverse =
-        FishingDemonstrationPolicy.predict(query, List.of(early, late), MAX_DIST);
+    Prediction reverse = FishingDemonstrationPolicy.predict(query, List.of(early, late), MAX_DIST);
     assertThat(prediction.action()).isEqualTo(reverse.action());
   }
 
@@ -137,10 +130,23 @@ class FishingDemonstrationPolicyTest {
         new TrainingExample(state(100, 100, 0, false, true, -1, 1), NET_FISHING_SPOT, 1000);
     FishingState query = state(100, 100, 0, false, true, -1, 1);
 
-    Prediction prediction =
-        FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
+    Prediction prediction = FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
     if (!prediction.isAbstain()) {
       assertThat(prediction.action().type()).isEqualTo(SemanticAction.TYPE_INTERACT_NPC);
     }
+  }
+
+  @Test
+  @DisplayName("the prediction reports policy distance and the matched source tick")
+  void predictionIncludesDistanceAndMatchedSourceTick() {
+    TrainingExample example =
+        new TrainingExample(state(100, 100, 0, false, true, -1, 1), NET_FISHING_SPOT, 8201);
+    FishingState query = state(102, 99, 0, false, true, -1, 1);
+
+    Prediction prediction = FishingDemonstrationPolicy.predict(query, List.of(example), MAX_DIST);
+    assertThat(prediction.isAbstain()).isFalse();
+    assertThat(prediction.policyDistance()).isNotNull();
+    assertThat(prediction.policyDistance()).isGreaterThan(0);
+    assertThat(prediction.matchedExampleTick()).isEqualTo(8201L);
   }
 }

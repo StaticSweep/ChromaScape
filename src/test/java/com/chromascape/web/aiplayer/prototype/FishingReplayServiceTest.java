@@ -110,7 +110,8 @@ class FishingReplayServiceTest {
     playerState.put("skills", skills);
 
     TickSnapshot snap =
-        new TickSnapshot("debug_test", tick, LocalDateTime.now(), objectMapper.valueToTree(playerState));
+        new TickSnapshot(
+            "debug_test", tick, LocalDateTime.now(), objectMapper.valueToTree(playerState));
     List<Map<String, Object>> inventory = new ArrayList<>();
     if (total > 0) {
       inventory.add(Map.of("slot", 0, "itemId", 1, "quantity", total));
@@ -179,7 +180,14 @@ class FishingReplayServiceTest {
   @DisplayName("a complete held-out replay passes and persists its report")
   void completeReplayPasses() throws Exception {
     when(modelStore.loadModel("fishing_m"))
-        .thenReturn(model(List.of(NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT)));
+        .thenReturn(
+            model(
+                List.of(
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT)));
     when(preflightService.preflight("recording_test"))
         .thenReturn(
             PreflightReport.ready("recording_test", "debug_test", true, 6, 5, 5, 5, 0, 0, 5, true));
@@ -261,7 +269,14 @@ class FishingReplayServiceTest {
   @DisplayName("abstention stops the run at the offending tick")
   void abstentionStopsRun() {
     when(modelStore.loadModel("fishing_m"))
-        .thenReturn(model(List.of(NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT)));
+        .thenReturn(
+            model(
+                List.of(
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT)));
     when(preflightService.preflight("recording_test"))
         .thenReturn(
             PreflightReport.ready("recording_test", "debug_test", true, 6, 5, 5, 5, 0, 0, 5, true));
@@ -279,14 +294,34 @@ class FishingReplayServiceTest {
   @DisplayName("fewer than five catches fails")
   void fewerThanFiveCatchesFails() {
     when(modelStore.loadModel("fishing_m"))
-        .thenReturn(model(List.of(NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT)));
+        .thenReturn(
+            model(
+                List.of(
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT)));
     PreflightReport.PreflightIssue issue =
         new PreflightReport.PreflightIssue(
-            PreflightReport.IssueCode.CATCH_COUNT_MISMATCH, "Recording must show exactly 5 additions");
+            PreflightReport.IssueCode.CATCH_COUNT_MISMATCH,
+            "Recording must show exactly 5 additions");
     when(preflightService.preflight("recording_test"))
         .thenReturn(
             new PreflightReport(
-                "NOT_READY", "recording_test", "debug_test", true, 6, 5, 5, 5, 0, 0, 3, true, List.of(issue)));
+                "NOT_READY",
+                "recording_test",
+                "debug_test",
+                true,
+                6,
+                5,
+                5,
+                5,
+                0,
+                0,
+                3,
+                true,
+                List.of(issue)));
 
     RunReport report = replayService.run("fishing_m", "recording_test");
 
@@ -303,9 +338,13 @@ class FishingReplayServiceTest {
         .thenReturn(
             model(
                 List.of(
-                    NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
                     NET_FISHING_SPOT)));
-    DebugSession trainingSession = new DebugSession("debug_train", "acct", "script", LocalDateTime.now(), 0L);
+    DebugSession trainingSession =
+        new DebugSession("debug_train", "acct", "script", LocalDateTime.now(), 0L);
     trainingSession.setRecordingId("recording_train");
     trainingSession.setEndTick(2000L);
     when(preflightService.resolveRecording("recording_train")).thenReturn(trainingSession);
@@ -327,9 +366,13 @@ class FishingReplayServiceTest {
         .thenReturn(
             model(
                 List.of(
-                    NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT, NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
+                    NET_FISHING_SPOT,
                     NET_FISHING_SPOT)));
-    DebugSession active = new DebugSession("debug_active", "acct", "script", LocalDateTime.now(), 0L);
+    DebugSession active =
+        new DebugSession("debug_active", "acct", "script", LocalDateTime.now(), 0L);
     active.setRecordingId("recording_active");
     when(preflightService.resolveRecording("recording_active")).thenReturn(active);
 

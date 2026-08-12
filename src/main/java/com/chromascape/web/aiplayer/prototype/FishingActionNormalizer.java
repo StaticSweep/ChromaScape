@@ -7,8 +7,8 @@ import java.util.Set;
  * Canonical normalization and classification of captured player actions.
  *
  * <p>Normalization strips RuneLite markup, replaces non-breaking spaces, trims, collapses repeated
- * whitespace, and lowercases with {@link Locale#ROOT}. Server-side code owns this normalization; the
- * client preserves raw option and target text.
+ * whitespace, and lowercases with {@link Locale#ROOT}. Server-side code owns this normalization;
+ * the client preserves raw option and target text.
  */
 public final class FishingActionNormalizer {
 
@@ -56,9 +56,7 @@ public final class FishingActionNormalizer {
 
   private FishingActionNormalizer() {}
 
-  /**
-   * Canonicalizes a fishing option, returning null when it is not a supported fishing option.
-   */
+  /** Canonicalizes a fishing option, returning null when it is not a supported fishing option. */
   public static String normalizeOption(String rawOption) {
     String normalized = canonicalize(rawOption);
     if (normalized == null || !SUPPORTED_OPTIONS.contains(normalized)) {
@@ -67,9 +65,7 @@ public final class FishingActionNormalizer {
     return normalized;
   }
 
-  /**
-   * Canonicalizes a target/name string (markup stripped, whitespace collapsed, lowercased).
-   */
+  /** Canonicalizes a target/name string (markup stripped, whitespace collapsed, lowercased). */
   public static String canonicalize(String raw) {
     if (raw == null) {
       return null;

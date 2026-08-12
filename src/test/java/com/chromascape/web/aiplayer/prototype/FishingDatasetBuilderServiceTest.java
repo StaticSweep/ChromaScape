@@ -75,7 +75,8 @@ class FishingDatasetBuilderServiceTest {
     playerState.put("skills", skills);
 
     TickSnapshot snap =
-        new TickSnapshot("debug_1", tick, LocalDateTime.now(), objectMapper.valueToTree(playerState));
+        new TickSnapshot(
+            "debug_1", tick, LocalDateTime.now(), objectMapper.valueToTree(playerState));
     List<Map<String, Object>> inventory = new ArrayList<>();
     if (total > 0) {
       inventory.add(Map.of("slot", 0, "itemId", 1, "quantity", total));
@@ -104,26 +105,8 @@ class FishingDatasetBuilderServiceTest {
       aligned.add(new AlignedAction(action, snap, tick, false));
     }
     return new RecordingContext(
-        session,
-        snapshots,
-        actions,
-        actions,
-        List.of(),
-        aligned,
-        totals,
-        1,
-        2,
-        1,
-        1,
-        0,
-        0,
-        true,
-        true,
-        true,
-        true,
-        false,
-        0,
-        0);
+        session, snapshots, actions, actions, List.of(), aligned, totals, 1, 2, 1, 1, 0, 0, true,
+        true, true, true, false, 0, 0);
   }
 
   @Test
@@ -177,7 +160,19 @@ class FishingDatasetBuilderServiceTest {
     when(preflightService.preflight("recording_1"))
         .thenReturn(
             new PreflightReport(
-                "NOT_READY", "recording_1", "debug_1", true, 2, 2, 2, 2, 0, 0, 3, true, List.of(issue)));
+                "NOT_READY",
+                "recording_1",
+                "debug_1",
+                true,
+                2,
+                2,
+                2,
+                2,
+                0,
+                0,
+                3,
+                true,
+                List.of(issue)));
 
     assertThatThrownBy(() -> builder.train("recording_1", 5))
         .isInstanceOf(PrototypeApiException.class)
@@ -198,8 +193,9 @@ class FishingDatasetBuilderServiceTest {
     assertThatThrownBy(() -> builder.train("recording_1", 3))
         .isInstanceOf(PrototypeApiException.class)
         .satisfies(
-            e -> assertThat(((PrototypeApiException) e).getCode())
-                .isEqualTo("UNSUPPORTED_CATCH_COUNT"));
+            e ->
+                assertThat(((PrototypeApiException) e).getCode())
+                    .isEqualTo("UNSUPPORTED_CATCH_COUNT"));
   }
 
   @Test
@@ -208,8 +204,6 @@ class FishingDatasetBuilderServiceTest {
     assertThatThrownBy(() -> builder.loadModel("../outside"))
         .isInstanceOf(PrototypeApiException.class)
         .satisfies(
-            e ->
-                assertThat(((PrototypeApiException) e).getCode())
-                    .isEqualTo("INVALID_MODEL_ID"));
+            e -> assertThat(((PrototypeApiException) e).getCode()).isEqualTo("INVALID_MODEL_ID"));
   }
 }

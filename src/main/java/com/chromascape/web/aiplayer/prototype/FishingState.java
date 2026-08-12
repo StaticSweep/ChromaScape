@@ -6,8 +6,8 @@ import java.util.List;
 /**
  * Feature-level game state used for both dataset examples and replay decision gates.
  *
- * <p>Identifiers, NPC indices, and exact coordinates beyond position are intentionally excluded from
- * semantic features because they change between recordings.
+ * <p>Identifiers, NPC indices, and exact coordinates beyond position are intentionally excluded
+ * from semantic features because they change between recordings.
  */
 public record FishingState(
     @JsonProperty("player") PlayerFeature player,

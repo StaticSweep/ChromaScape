@@ -51,9 +51,16 @@ public record PreflightReport(
 
   /** Creates a READY report. */
   public static PreflightReport ready(
-      String recordingId, String sessionId, boolean finalized, int snapshotCount,
-      int playerActionCount, int fishingActionCount, int alignedFishingActionCount,
-      int unsupportedActionCount, int actionQueueOverflowCount, int observedCatchDelta,
+      String recordingId,
+      String sessionId,
+      boolean finalized,
+      int snapshotCount,
+      int playerActionCount,
+      int fishingActionCount,
+      int alignedFishingActionCount,
+      int unsupportedActionCount,
+      int actionQueueOverflowCount,
+      int observedCatchDelta,
       boolean fishingXpIncreased) {
     return new PreflightReport(
         "READY",
@@ -75,18 +82,6 @@ public record PreflightReport(
   public static PreflightReport notReady(
       String recordingId, String sessionId, List<PreflightIssue> issues) {
     return new PreflightReport(
-        "NOT_READY",
-        recordingId,
-        sessionId,
-        false,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        false,
-        issues);
+        "NOT_READY", recordingId, sessionId, false, 0, 0, 0, 0, 0, 0, 0, false, issues);
   }
 }

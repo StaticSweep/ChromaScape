@@ -72,10 +72,14 @@ public class FishingReplayService {
           "MODEL_SCHEMA_UNSUPPORTED",
           "Model is not a supported fishing demonstration artifact",
           Map.of(
-              "modelId", modelId,
-              "schemaVersion", model.schemaVersion(),
-              "kind", model.kind() == null ? "" : model.kind(),
-              "requiredCatchCount", model.requiredCatchCount()));
+              "modelId",
+              modelId,
+              "schemaVersion",
+              model.schemaVersion(),
+              "kind",
+              model.kind() == null ? "" : model.kind(),
+              "requiredCatchCount",
+              model.requiredCatchCount()));
     }
     DebugSession session = preflightService.resolveRecording(recordingId);
 
@@ -137,8 +141,7 @@ public class FishingReplayService {
       Prediction prediction =
           FishingDemonstrationPolicy.predict(
               state, model.examples(), model.maxAcceptedPositionDistance());
-      SemanticAction expected =
-          FishingActionNormalizer.classify(aligned.action()).semanticAction();
+      SemanticAction expected = FishingActionNormalizer.classify(aligned.action()).semanticAction();
 
       if (prediction.isAbstain()) {
         RunReport failed =
@@ -190,7 +193,8 @@ public class FishingReplayService {
         return persist(failed);
       }
 
-      decisions.add(new RunDecision(tick, expected, prediction.action(), true, prediction.targetNpc()));
+      decisions.add(
+          new RunDecision(tick, expected, prediction.action(), true, prediction.targetNpc()));
       index++;
     }
 
@@ -233,7 +237,9 @@ public class FishingReplayService {
     }
     log.info(
         "Fishing replay run {}: status={} for test recording {}",
-        report.runId(), report.status(), report.testRecordingId());
+        report.runId(),
+        report.status(),
+        report.testRecordingId());
     return new RunReport(
         report.status(),
         report.runId(),

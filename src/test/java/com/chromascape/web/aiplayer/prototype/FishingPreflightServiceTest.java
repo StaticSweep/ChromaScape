@@ -64,7 +64,8 @@ class FishingPreflightServiceTest {
     List<PlayerAction> actions = new ArrayList<>();
     for (int i = 0; i < playerActionCount; i++) {
       actions.add(
-          new PlayerAction(1000L + i, 0, "Net", "Fishing spot", "NPC_FIRST_OPTION", 1, 1, 0, 1000L + i));
+          new PlayerAction(
+              1000L + i, 0, "Net", "Fishing spot", "NPC_FIRST_OPTION", 1, 1, 0, 1000L + i));
     }
     List<PlayerAction> supported = actions.subList(0, Math.min(fishingActionCount, actions.size()));
     List<PlayerAction> unsupported = new ArrayList<>();
@@ -74,7 +75,12 @@ class FishingPreflightServiceTest {
     }
     List<AlignedAction> aligned = new ArrayList<>();
     for (int i = 0; i < alignedCount; i++) {
-      aligned.add(new AlignedAction(supported.get(i % Math.max(1, supported.size())), new TickSnapshot(), 1000L + i, false));
+      aligned.add(
+          new AlignedAction(
+              supported.get(i % Math.max(1, supported.size())),
+              new TickSnapshot(),
+              1000L + i,
+              false));
     }
     return new RecordingContext(
         session,
@@ -105,7 +111,10 @@ class FishingPreflightServiceTest {
     when(sessionRepository.findByRecordingId("missing")).thenReturn(Optional.empty());
     assertThatThrownBy(() -> preflightService.resolveRecording("missing"))
         .isInstanceOf(PrototypeApiException.class)
-        .satisfies(e -> assertThat(((PrototypeApiException) e).getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+        .satisfies(
+            e ->
+                assertThat(((PrototypeApiException) e).getStatus())
+                    .isEqualTo(HttpStatus.NOT_FOUND));
   }
 
   @Test
@@ -117,7 +126,8 @@ class FishingPreflightServiceTest {
 
     PreflightReport report = preflightService.preflight("recording_2");
     assertThat(report.isReady()).isFalse();
-    assertThat(report.issues()).extracting(PreflightIssue::code)
+    assertThat(report.issues())
+        .extracting(PreflightIssue::code)
         .contains(PreflightReport.IssueCode.SESSION_NOT_FINALIZED);
   }
 
@@ -125,8 +135,7 @@ class FishingPreflightServiceTest {
   @DisplayName("a clean five-catch recording is ready")
   void readyWhenAllConditionsMet() {
     when(loader.load(session))
-        .thenReturn(
-            context(240, 2, 2, 2, 0, false, 5, true, true, true, true, 0, 0));
+        .thenReturn(context(240, 2, 2, 2, 0, false, 5, true, true, true, true, 0, 0));
 
     PreflightReport report = preflightService.preflight("recording_1");
     assertThat(report.isReady()).isTrue();
@@ -140,80 +149,96 @@ class FishingPreflightServiceTest {
   @Test
   @DisplayName("missing snapshots are reported")
   void noSnapshots() {
-    when(loader.load(session)).thenReturn(context(0, 2, 2, 2, 0, false, 5, true, true, true, true, 0, 0));
+    when(loader.load(session))
+        .thenReturn(context(0, 2, 2, 2, 0, false, 5, true, true, true, true, 0, 0));
     PreflightReport report = preflightService.preflight("recording_1");
     assertThat(report.isReady()).isFalse();
-    assertThat(report.issues()).extracting(PreflightIssue::code)
+    assertThat(report.issues())
+        .extracting(PreflightIssue::code)
         .contains(PreflightReport.IssueCode.NO_TICK_SNAPSHOTS);
   }
 
   @Test
   @DisplayName("no fishing actions are reported")
   void noFishingActions() {
-    when(loader.load(session)).thenReturn(context(10, 1, 0, 0, 0, false, 5, true, true, true, true, 0, 0));
+    when(loader.load(session))
+        .thenReturn(context(10, 1, 0, 0, 0, false, 5, true, true, true, true, 0, 0));
     PreflightReport report = preflightService.preflight("recording_1");
     assertThat(report.isReady()).isFalse();
-    assertThat(report.issues()).extracting(PreflightIssue::code)
+    assertThat(report.issues())
+        .extracting(PreflightIssue::code)
         .contains(PreflightReport.IssueCode.NO_FISHING_ACTIONS);
   }
 
   @Test
   @DisplayName("missing NPC telemetry is reported")
   void missingNpcTelemetry() {
-    when(loader.load(session)).thenReturn(context(10, 2, 2, 2, 0, false, 5, true, true, true, false, 0, 0));
+    when(loader.load(session))
+        .thenReturn(context(10, 2, 2, 2, 0, false, 5, true, true, true, false, 0, 0));
     PreflightReport report = preflightService.preflight("recording_1");
     assertThat(report.isReady()).isFalse();
-    assertThat(report.issues()).extracting(PreflightIssue::code)
+    assertThat(report.issues())
+        .extracting(PreflightIssue::code)
         .contains(PreflightReport.IssueCode.NPC_TELEMETRY_MISSING);
   }
 
   @Test
   @DisplayName("action without a snapshot is reported")
   void actionWithoutSnapshot() {
-    when(loader.load(session)).thenReturn(context(10, 2, 2, 1, 0, false, 5, true, true, true, true, 0, 1));
+    when(loader.load(session))
+        .thenReturn(context(10, 2, 2, 1, 0, false, 5, true, true, true, true, 0, 1));
     PreflightReport report = preflightService.preflight("recording_1");
     assertThat(report.isReady()).isFalse();
-    assertThat(report.issues()).extracting(PreflightIssue::code)
+    assertThat(report.issues())
+        .extracting(PreflightIssue::code)
         .contains(PreflightReport.IssueCode.ACTION_WITHOUT_SNAPSHOT);
   }
 
   @Test
   @DisplayName("action queue overflow is reported")
   void overflowReported() {
-    when(loader.load(session)).thenReturn(context(10, 2, 2, 2, 0, true, 5, true, true, true, true, 0, 0));
+    when(loader.load(session))
+        .thenReturn(context(10, 2, 2, 2, 0, true, 5, true, true, true, true, 0, 0));
     PreflightReport report = preflightService.preflight("recording_1");
     assertThat(report.isReady()).isFalse();
-    assertThat(report.issues()).extracting(PreflightIssue::code)
+    assertThat(report.issues())
+        .extracting(PreflightIssue::code)
         .contains(PreflightReport.IssueCode.ACTION_QUEUE_OVERFLOW);
   }
 
   @Test
   @DisplayName("unsupported gameplay actions are reported")
   void unsupportedActionsReported() {
-    when(loader.load(session)).thenReturn(context(10, 3, 2, 2, 1, false, 5, true, true, true, true, 0, 0));
+    when(loader.load(session))
+        .thenReturn(context(10, 3, 2, 2, 1, false, 5, true, true, true, true, 0, 0));
     PreflightReport report = preflightService.preflight("recording_1");
     assertThat(report.isReady()).isFalse();
-    assertThat(report.issues()).extracting(PreflightIssue::code)
+    assertThat(report.issues())
+        .extracting(PreflightIssue::code)
         .contains(PreflightReport.IssueCode.UNSUPPORTED_ACTION_PRESENT);
   }
 
   @Test
   @DisplayName("fewer or more than five catches are reported")
   void catchCountMismatch() {
-    when(loader.load(session)).thenReturn(context(10, 2, 2, 2, 0, false, 3, true, true, true, true, 0, 0));
+    when(loader.load(session))
+        .thenReturn(context(10, 2, 2, 2, 0, false, 3, true, true, true, true, 0, 0));
     PreflightReport report = preflightService.preflight("recording_1");
     assertThat(report.isReady()).isFalse();
-    assertThat(report.issues()).extracting(PreflightIssue::code)
+    assertThat(report.issues())
+        .extracting(PreflightIssue::code)
         .contains(PreflightReport.IssueCode.CATCH_COUNT_MISMATCH);
   }
 
   @Test
   @DisplayName("unchanged fishing XP is reported")
   void fishingXpUnchanged() {
-    when(loader.load(session)).thenReturn(context(10, 2, 2, 2, 0, false, 5, false, true, true, true, 0, 0));
+    when(loader.load(session))
+        .thenReturn(context(10, 2, 2, 2, 0, false, 5, false, true, true, true, 0, 0));
     PreflightReport report = preflightService.preflight("recording_1");
     assertThat(report.isReady()).isFalse();
-    assertThat(report.issues()).extracting(PreflightIssue::code)
+    assertThat(report.issues())
+        .extracting(PreflightIssue::code)
         .contains(PreflightReport.IssueCode.FISHING_XP_UNCHANGED);
   }
 }

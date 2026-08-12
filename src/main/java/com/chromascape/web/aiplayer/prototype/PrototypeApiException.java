@@ -41,10 +41,6 @@ public class PrototypeApiException extends RuntimeException {
 
   /** Builds the structured error body. */
   public Map<String, Object> toErrorBody() {
-    return Map.of(
-        "status", "REJECTED",
-        "code", code,
-        "message", getMessage(),
-        "details", details);
+    return Map.of("status", "REJECTED", "code", code, "message", getMessage(), "details", details);
   }
 }

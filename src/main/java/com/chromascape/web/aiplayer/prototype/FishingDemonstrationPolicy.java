@@ -27,12 +27,21 @@ public final class FishingDemonstrationPolicy {
           "animationActiveMismatch", 2,
           "planeMismatch", 100);
 
-  /** Prediction output: either a semantic action or an abstention reason. */
+  /**
+   * Prediction output: either a semantic action or an abstention reason, plus diagnostic metadata.
+   *
+   * <p>{@code policyDistance} and {@code matchedExampleTick} are diagnostic only; they never change
+   * the replay pass/fail semantics.
+   */
   public record Prediction(
-      SemanticAction action, String abstentionReason, FishingState.NearbyNpc targetNpc) {
+      SemanticAction action,
+      String abstentionReason,
+      FishingState.NearbyNpc targetNpc,
+      Double policyDistance,
+      Long matchedExampleTick) {
 
     public static Prediction abstain(String reason) {
-      return new Prediction(null, reason, null);
+      return new Prediction(null, reason, null, null, null);
     }
 
     public boolean isAbstain() {
@@ -87,7 +96,9 @@ public final class FishingDemonstrationPolicy {
       }
       double distance = distance(example.state(), state);
       if (distance < bestDistance
-          || (distance == bestDistance && best != null && example.sourceTick() < best.sourceTick())) {
+          || (distance == bestDistance
+              && best != null
+              && example.sourceTick() < best.sourceTick())) {
         best = example;
         bestDistance = distance;
       }
@@ -96,12 +107,11 @@ public final class FishingDemonstrationPolicy {
     if (best == null) {
       return Prediction.abstain("ABSTAIN_PLANE_MISMATCH");
     }
-    return new Prediction(best.action(), null, nearestNpc(state));
+    return new Prediction(best.action(), null, nearestNpc(state), bestDistance, best.sourceTick());
   }
 
   private static int manhattan(FishingState a, FishingState b) {
-    return Math.abs(a.player().x() - b.player().x())
-        + Math.abs(a.player().y() - b.player().y());
+    return Math.abs(a.player().x() - b.player().x()) + Math.abs(a.player().y() - b.player().y());
   }
 
   private static double distance(FishingState a, FishingState b) {

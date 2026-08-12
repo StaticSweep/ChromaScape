@@ -100,12 +100,14 @@ public class FishingDatasetBuilderService {
     List<SemanticAction> vocabulary = buildVocabulary(examples);
     Path datasetPath = writeDataset(datasetId, ctx, examples);
     Path manifestPath = writeManifest(datasetId, ctx, examples, vocabulary);
-    Path modelPath =
-        writeModel(modelId, datasetId, ctx, vocabulary, examples, required);
+    Path modelPath = writeModel(modelId, datasetId, ctx, vocabulary, examples, required);
 
     log.info(
         "Fishing model trained: modelId={}, datasetId={}, examples={}, recording={}",
-        modelId, datasetId, examples.size(), recordingId);
+        modelId,
+        datasetId,
+        examples.size(),
+        recordingId);
 
     return new TrainingResult(
         "TRAINED",
@@ -133,9 +135,9 @@ public class FishingDatasetBuilderService {
     List<DatasetExample> examples = new ArrayList<>();
     for (AlignedAction aligned : ctx.alignedActions()) {
       FishingState state =
-          FishingStateExtractor.extract(aligned.snapshot(), ctx.inventoryTotals(), ctx.initialInventoryTotal());
-      SemanticAction action =
-          FishingActionNormalizer.classify(aligned.action()).semanticAction();
+          FishingStateExtractor.extract(
+              aligned.snapshot(), ctx.inventoryTotals(), ctx.initialInventoryTotal());
+      SemanticAction action = FishingActionNormalizer.classify(aligned.action()).semanticAction();
       if (action == null) {
         continue;
       }
@@ -162,8 +164,7 @@ public class FishingDatasetBuilderService {
     return vocabulary;
   }
 
-  private Path writeDataset(
-      String datasetId, RecordingContext ctx, List<DatasetExample> examples) {
+  private Path writeDataset(String datasetId, RecordingContext ctx, List<DatasetExample> examples) {
     Path outputPath = datasetsDir().resolve(datasetId + ".jsonl");
     try {
       Files.createDirectories(outputPath.getParent());
@@ -198,8 +199,7 @@ public class FishingDatasetBuilderService {
     manifest.put("actionCount", ctx.playerActions().size());
     manifest.put("acceptedActionCount", examples.size());
     manifest.put(
-        "rejectedActionCount",
-        ctx.unsupportedActions().size() + ctx.unalignedActionCount());
+        "rejectedActionCount", ctx.unsupportedActions().size() + ctx.unalignedActionCount());
     manifest.put("alignmentFallbackCount", ctx.alignmentFallbackCount());
     manifest.put("catchCount", ctx.catchDelta());
     manifest.put(
@@ -255,8 +255,7 @@ public class FishingDatasetBuilderService {
     model.put("examples", trainingExamples);
     model.put("featureWeights", FishingDemonstrationPolicy.FEATURE_WEIGHTS);
     model.put(
-        "maxAcceptedPositionDistance",
-        FishingDemonstrationPolicy.MAX_ACCEPTED_POSITION_DISTANCE);
+        "maxAcceptedPositionDistance", FishingDemonstrationPolicy.MAX_ACCEPTED_POSITION_DISTANCE);
 
     Path modelPath = modelsDir().resolve(modelId + ".json");
     try {
@@ -315,9 +314,7 @@ public class FishingDatasetBuilderService {
   private void ensureEnabled() {
     if (!aiPlayerEnabled) {
       throw new PrototypeApiException(
-          HttpStatus.BAD_REQUEST,
-          "AI_PLAYER_DISABLED",
-          "AI player feature is disabled");
+          HttpStatus.BAD_REQUEST, "AI_PLAYER_DISABLED", "AI player feature is disabled");
     }
   }
 

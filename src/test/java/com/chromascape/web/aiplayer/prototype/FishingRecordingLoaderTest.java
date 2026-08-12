@@ -64,7 +64,8 @@ class FishingRecordingLoaderTest {
     playerState.put("skills", skills);
 
     TickSnapshot snap =
-        new TickSnapshot("debug_1", tick, LocalDateTime.now(), objectMapper.valueToTree(playerState));
+        new TickSnapshot(
+            "debug_1", tick, LocalDateTime.now(), objectMapper.valueToTree(playerState));
     List<Map<String, Object>> inventory = new ArrayList<>();
     if (inventoryTotal > 0) {
       inventory.add(Map.of("slot", 0, "itemId", 1, "quantity", inventoryTotal));
@@ -86,7 +87,13 @@ class FishingRecordingLoaderTest {
     details.put("target", "<col=ffff00>Fishing spot");
     details.put("menuAction", "NPC_FIRST_OPTION");
     TickLog logEntry =
-        new TickLog("debug_1", storedTick, LocalDateTime.now(), "PLAYER_ACTION", "Info", option + " Fishing spot");
+        new TickLog(
+            "debug_1",
+            storedTick,
+            LocalDateTime.now(),
+            "PLAYER_ACTION",
+            "Info",
+            option + " Fishing spot");
     logEntry.setEventType("MENU_CLICK");
     logEntry.setDetails(objectMapper.valueToTree(details));
     return logEntry;
@@ -94,11 +101,11 @@ class FishingRecordingLoaderTest {
 
   private void stubRepos(List<TickSnapshot> snapshots, List<TickLog> logs) {
     when(snapshotRepository.findBySessionIdOrderByTick("debug_1")).thenReturn(snapshots);
-    when(logRepository
-            .findBySessionIdAndSubsystemIgnoreCaseAndEventTypeIgnoreCaseOrderByTickAsc(
-                "debug_1", "PLAYER_ACTION", "MENU_CLICK"))
+    when(logRepository.findBySessionIdAndSubsystemIgnoreCaseAndEventTypeIgnoreCaseOrderByTickAsc(
+            "debug_1", "PLAYER_ACTION", "MENU_CLICK"))
         .thenReturn(logs);
-    when(logRepository.findBySessionIdAndSubsystemIgnoreCaseOrderByTickAsc("debug_1", "PLAYER_ACTION"))
+    when(logRepository.findBySessionIdAndSubsystemIgnoreCaseOrderByTickAsc(
+            "debug_1", "PLAYER_ACTION"))
         .thenReturn(logs);
   }
 
@@ -210,11 +217,7 @@ class FishingRecordingLoaderTest {
         new TickLog("debug_1", 1000L, LocalDateTime.now(), "PLAYER_ACTION", "Error", "overflow");
     overflow.setEventType("ACTION_QUEUE_OVERFLOW");
 
-    stubRepos(
-        List.of(snap),
-        List.of(
-            actionLog(1000, 1000, 0, "Net"),
-            overflow));
+    stubRepos(List.of(snap), List.of(actionLog(1000, 1000, 0, "Net"), overflow));
 
     RecordingContext ctx = loader.load(session);
     assertThat(ctx.overflowDetected()).isTrue();
