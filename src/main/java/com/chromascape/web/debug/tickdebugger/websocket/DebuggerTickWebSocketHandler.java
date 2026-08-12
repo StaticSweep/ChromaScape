@@ -1,8 +1,8 @@
 package com.chromascape.web.debug.tickdebugger.websocket;
 
 import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -18,13 +18,20 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
  * connected web clients for live debugging visualization.
  *
  * <p>Endpoint: {@code /ws/debugger/tick-stream}
+ *
+ * <p>The client set is a {@link CopyOnWriteArraySet} so broadcast iterates safely during concurrent
+ * connect/disconnect. Connect is idempotent; close and transport error remove the client, and a
+ * client is unregistered from ingestion only when its removal actually succeeded. A failed send
+ * removes and unregisters the client exactly once. Broadcast duration is measured and a warning is
+ * logged when a single broadcast exceeds 250 ms.
  */
 @Component
 public class DebuggerTickWebSocketHandler extends TextWebSocketHandler {
 
   private static final Logger log = LoggerFactory.getLogger(DebuggerTickWebSocketHandler.class);
+  private static final long SLOW_BROADCAST_WARN_MILLIS = 250L;
 
-  private final List<WebSocketSession> clients = new ArrayList<>();
+  private final Set<WebSocketSession> clients = new CopyOnWriteArraySet<>();
   private final TickStreamIngestionService ingestionService;
 
   public DebuggerTickWebSocketHandler(TickStreamIngestionService ingestionService) {
@@ -33,9 +40,11 @@ public class DebuggerTickWebSocketHandler extends TextWebSocketHandler {
 
   @Override
   public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-    clients.add(session);
-    ingestionService.registerDebuggerClient(session);
-    log.info("Debugger client connected: {} (total clients: {})", session.getId(), clients.size());
+    if (clients.add(session)) {
+      ingestionService.registerDebuggerClient(session);
+    }
+    log.info(
+        "Debugger client connected: {} (total clients: {})", session.getId(), getClientCount());
     super.afterConnectionEstablished(session);
   }
 
@@ -48,10 +57,11 @@ public class DebuggerTickWebSocketHandler extends TextWebSocketHandler {
 
   @Override
   public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-    clients.remove(session);
-    ingestionService.unregisterDebuggerClient(session);
+    if (clients.remove(session)) {
+      ingestionService.unregisterDebuggerClient(session);
+    }
     log.info(
-        "Debugger client disconnected: {} (total clients: {})", session.getId(), clients.size());
+        "Debugger client disconnected: {} (total clients: {})", session.getId(), getClientCount());
     super.afterConnectionClosed(session, status);
   }
 
@@ -62,7 +72,9 @@ public class DebuggerTickWebSocketHandler extends TextWebSocketHandler {
         session.getId(),
         exception.getMessage(),
         exception);
-    clients.remove(session);
+    if (clients.remove(session)) {
+      ingestionService.unregisterDebuggerClient(session);
+    }
     super.handleTransportError(session, exception);
   }
 
@@ -72,8 +84,8 @@ public class DebuggerTickWebSocketHandler extends TextWebSocketHandler {
    * @param message the message to broadcast
    */
   public void broadcast(TextMessage message) {
-    List<WebSocketSession> toRemove = new ArrayList<>();
-
+    long startNanos = System.nanoTime();
+    int clientCount = getClientCount();
     for (WebSocketSession client : clients) {
       if (client.isOpen()) {
         try {
@@ -82,16 +94,21 @@ public class DebuggerTickWebSocketHandler extends TextWebSocketHandler {
           }
         } catch (Exception e) {
           log.warn("Failed to send message to client {}: {}", client.getId(), e.getMessage());
-          toRemove.add(client);
+          removeClient(client);
         }
       } else {
-        toRemove.add(client);
+        removeClient(client);
       }
     }
+    long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000L;
+    if (elapsedMillis > SLOW_BROADCAST_WARN_MILLIS) {
+      log.warn("Slow debugger broadcast of {}ms to {} client(s)", elapsedMillis, clientCount);
+    }
+  }
 
-    // Remove dead clients
-    for (WebSocketSession client : toRemove) {
-      clients.remove(client);
+  /** Removes a dead client from the set and unregisters it only when removal actually succeeded. */
+  private void removeClient(WebSocketSession client) {
+    if (clients.remove(client)) {
       ingestionService.unregisterDebuggerClient(client);
     }
   }

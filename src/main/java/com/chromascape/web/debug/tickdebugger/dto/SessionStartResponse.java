@@ -32,6 +32,14 @@ public class SessionStartResponse {
   @JsonProperty("recordingFailureReason")
   private String recordingFailureReason;
 
+  /**
+   * Shadow run id opened for this session binding. Returned for observability and correlation only;
+   * Micro6 never routes ticks through it, ChromaScape derives routing from the connection binding.
+   */
+  @JsonProperty("shadowRunId")
+  @JsonInclude(JsonInclude.Include.NON_NULL)
+  private String shadowRunId;
+
   @JsonProperty("clientRequestId")
   @JsonInclude(JsonInclude.Include.NON_NULL)
   private String clientRequestId;
@@ -102,5 +110,13 @@ public class SessionStartResponse {
 
   public void setRecordingFailureReason(String recordingFailureReason) {
     this.recordingFailureReason = recordingFailureReason;
+  }
+
+  public String getShadowRunId() {
+    return shadowRunId;
+  }
+
+  public void setShadowRunId(String shadowRunId) {
+    this.shadowRunId = shadowRunId;
   }
 }
