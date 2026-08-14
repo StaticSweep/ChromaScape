@@ -18,7 +18,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Focused unit tests for {@link TaskDetectionService} task auto-record start/stop/finalize behavior.
+ * Focused unit tests for {@link TaskDetectionService} task auto-record start/stop/finalize
+ * behavior.
  *
  * <p>These tests verify that task-driven recordings persist the same metadata fields (videoPath,
  * endTime, durationMs, frameCount, fps, videoCodec) that manual/debug-session recordings already
@@ -203,8 +204,7 @@ class TaskDetectionServiceTest {
 
     service.onTaskEnded();
 
-    verify(recordingSessionRepository, never())
-        .save(argThat(s -> s.getVideoPath() != null));
+    verify(recordingSessionRepository, never()).save(argThat(s -> s.getVideoPath() != null));
     assertNull(service.getCurrentTask());
     assertNull(service.getCurrentTaskPlanId());
     assertNull(service.getCurrentTaskItemId());
@@ -228,15 +228,13 @@ class TaskDetectionServiceTest {
     service.onTaskDetected(TaskType.WOODCUTTING, "wc-script");
 
     when(recordingService.isRecording()).thenReturn(true);
-    when(recordingService.stopRecording())
-        .thenThrow(new RuntimeException("encoder flush failed"));
+    when(recordingService.stopRecording()).thenThrow(new RuntimeException("encoder flush failed"));
 
     // Must not propagate.
     assertDoesNotThrow(() -> service.onTaskEnded());
 
     // No row with a videoPath should be saved after a throw.
-    verify(recordingSessionRepository, never())
-        .save(argThat(s -> s.getVideoPath() != null));
+    verify(recordingSessionRepository, never()).save(argThat(s -> s.getVideoPath() != null));
     // State must still be cleared.
     assertNull(service.getCurrentTask());
     assertNull(service.getCurrentTaskPlanId());

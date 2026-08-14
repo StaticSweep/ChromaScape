@@ -36,7 +36,8 @@ class ScreenCaptureServiceTest {
   @Test
   void viewportSessionLifecycleRegistersUnifiedCaptureOnlyForFirstAndLastViewer() {
     UnifiedFrameCaptureService unifiedCaptureService = mock(UnifiedFrameCaptureService.class);
-    ScreenCaptureService service = new ScreenCaptureService(config(), unifiedConfig(), streamConfig(), unifiedCaptureService);
+    ScreenCaptureService service =
+        new ScreenCaptureService(config(), unifiedConfig(), streamConfig(), unifiedCaptureService);
 
     service.onViewportSessionOpened();
     service.onViewportSessionOpened();
@@ -53,7 +54,8 @@ class ScreenCaptureServiceTest {
   @Test
   void onFrameCapturedThrottlesViewportForwarding() {
     UnifiedFrameCaptureService unifiedCaptureService = mock(UnifiedFrameCaptureService.class);
-    ScreenCaptureService service = new ScreenCaptureService(config(), unifiedConfig(), streamConfig(), unifiedCaptureService);
+    ScreenCaptureService service =
+        new ScreenCaptureService(config(), unifiedConfig(), streamConfig(), unifiedCaptureService);
     WebsocketViewport viewport = mock(WebsocketViewport.class);
     ViewportManager.setInstance(viewport);
 

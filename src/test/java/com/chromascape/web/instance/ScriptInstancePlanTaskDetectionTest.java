@@ -40,8 +40,7 @@ class ScriptInstancePlanTaskDetectionTest {
     ScriptInstance.dispatchTaskDetection(taskDetectionService, null, null, "DemoMiningScript");
 
     verify(taskDetectionService).onTaskDetected(TaskType.MINING, "DemoMiningScript");
-    verify(taskDetectionService, never())
-        .onPlanTaskDetected(anyString(), anyString(), anyString());
+    verify(taskDetectionService, never()).onPlanTaskDetected(anyString(), anyString(), anyString());
   }
 
   /** A blank taskPlanId routes to heuristic detection (blank is treated as absent). */
@@ -50,7 +49,6 @@ class ScriptInstancePlanTaskDetectionTest {
     ScriptInstance.dispatchTaskDetection(taskDetectionService, "   ", null, "DemoFishingScript");
 
     verify(taskDetectionService).onTaskDetected(TaskType.FISHING, "DemoFishingScript");
-    verify(taskDetectionService, never())
-        .onPlanTaskDetected(anyString(), anyString(), anyString());
+    verify(taskDetectionService, never()).onPlanTaskDetected(anyString(), anyString(), anyString());
   }
 }

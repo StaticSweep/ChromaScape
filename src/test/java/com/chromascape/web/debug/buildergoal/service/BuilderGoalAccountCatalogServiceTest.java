@@ -29,24 +29,14 @@ class BuilderGoalAccountCatalogServiceTest {
 
   @BeforeEach
   void setUp() {
-    service = new BuilderGoalAccountCatalogService(launcherControlService, clientRegistryService, 30L);
+    service =
+        new BuilderGoalAccountCatalogService(launcherControlService, clientRegistryService, 30L);
   }
 
   private AccountDefinition account(
-      String id,
-      String email,
-      boolean enabled,
-      String status,
-      Map<String, Object> metadata) {
+      String id, String email, boolean enabled, String status, Map<String, Object> metadata) {
     return new AccountDefinition(
-        id,
-        id,
-        id,
-        email,
-        "launcher",
-        enabled,
-        status,
-        metadata == null ? Map.of() : metadata);
+        id, id, id, email, "launcher", enabled, status, metadata == null ? Map.of() : metadata);
   }
 
   @Test
@@ -87,8 +77,7 @@ class BuilderGoalAccountCatalogServiceTest {
 
   @Test
   void accountDefinition_missingPasswordIsNotLaunchReady() {
-    AccountDefinition account =
-        account("hash-1", "user@example.test", true, "ready", Map.of());
+    AccountDefinition account = account("hash-1", "user@example.test", true, "ready", Map.of());
 
     assertThat(account.hasEmail()).isTrue();
     assertThat(account.hasPassword()).isFalse();
@@ -142,8 +131,7 @@ class BuilderGoalAccountCatalogServiceTest {
 
   @Test
   void accountDefinition_disabledReasonTakesPrecedenceOverMissingCredentials() {
-    AccountDefinition account =
-        account("hash-1", null, false, "banned", Map.of());
+    AccountDefinition account = account("hash-1", null, false, "banned", Map.of());
 
     assertThat(account.isLaunchReady()).isFalse();
     assertThat(account.determineLaunchDisabledReason())
@@ -152,8 +140,7 @@ class BuilderGoalAccountCatalogServiceTest {
 
   @Test
   void accountDefinition_missingEmailTakesPrecedenceOverMissingPassword() {
-    AccountDefinition account =
-        account("hash-1", null, true, "ready", Map.of());
+    AccountDefinition account = account("hash-1", null, true, "ready", Map.of());
 
     assertThat(account.determineLaunchDisabledReason())
         .isEqualTo("Add an email to this account in launcher control");
@@ -181,10 +168,17 @@ class BuilderGoalAccountCatalogServiceTest {
             "accountbuilder",
             "IDLE",
             null,
-            Instant.now());
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     when(launcherControlService.listAccounts()).thenReturn(List.of(launcherAccount));
     when(launcherControlService.getBaseUrl()).thenReturn("http://192.168.1.6:8084");
-    when(clientRegistryService.findRunnableClientForRecovery(
+    when(clientRegistryService.findOnlineClientForRecovery(
             eq("hash-1"), eq("bigGreenMeat"), isNull(), any()))
         .thenReturn(Optional.of(targetClient));
 
@@ -206,13 +200,7 @@ class BuilderGoalAccountCatalogServiceTest {
   void listAccounts_reportsSetupNeededWhenCredentialsAreMissing() {
     LauncherAccount launcherAccount =
         new LauncherAccount(
-            "3720a9a3b5c9f57b",
-            "3720a9a3b5c9f57b",
-            "udasuAvuco",
-            null,
-            "ready",
-            true,
-            Map.of());
+            "3720a9a3b5c9f57b", "3720a9a3b5c9f57b", "udasuAvuco", null, "ready", true, Map.of());
     when(launcherControlService.listAccounts()).thenReturn(List.of(launcherAccount));
     when(launcherControlService.getBaseUrl()).thenReturn("http://192.168.1.6:8084");
 
@@ -273,8 +261,7 @@ class BuilderGoalAccountCatalogServiceTest {
     Map<String, Object> summary = service.listAccounts().get(0);
 
     assertThat(summary.get("runnable")).isEqualTo(false);
-    assertThat(summary.get("disabledReason"))
-        .isEqualTo("Account is banned in launcher control");
+    assertThat(summary.get("disabledReason")).isEqualTo("Account is banned in launcher control");
     assertThat(summary.get("launchDisabledReason"))
         .isEqualTo("Account is banned in launcher control");
     assertThat(summary).doesNotContainKey("password");

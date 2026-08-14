@@ -36,8 +36,19 @@ public class RecordingConfig {
   /** Whether to automatically record when game starts. */
   private boolean autoRecord = false;
 
-  /** Whether task-bound auto sessions should start recordings even if generic auto-record is off. */
+  /**
+   * Whether task-bound auto sessions should start recordings even if generic auto-record is off.
+   */
   private boolean autoRecordTaskSessions = true;
+
+  /**
+   * Maximum time to wait for RuneLite's canvas to expose capturable dimensions before startup fails
+   * and the session degrades to a tick-only debug session.
+   */
+  private long initialFrameTimeoutMs = 15_000;
+
+  /** Delay between initial frame-capture attempts while waiting for the canvas to become ready. */
+  private long initialFrameRetryIntervalMs = 250;
 
   public boolean isEnabled() {
     return enabled;
@@ -111,6 +122,28 @@ public class RecordingConfig {
     this.autoRecordTaskSessions = autoRecordTaskSessions;
   }
 
+  /** Maximum time to wait for a valid initial frame, clamped to [{@code 250}, {@code 120000}]. */
+  public long getInitialFrameTimeoutMs() {
+    return Math.max(250, Math.min(120_000, initialFrameTimeoutMs));
+  }
+
+  public void setInitialFrameTimeoutMs(long initialFrameTimeoutMs) {
+    this.initialFrameTimeoutMs = initialFrameTimeoutMs;
+  }
+
+  /**
+   * Delay between initial frame-capture attempts, clamped to [{@code 25}, {@code 5000}] and never
+   * exceeding the effective timeout.
+   */
+  public long getInitialFrameRetryIntervalMs() {
+    long interval = Math.max(25, Math.min(5000, initialFrameRetryIntervalMs));
+    return Math.min(interval, getInitialFrameTimeoutMs());
+  }
+
+  public void setInitialFrameRetryIntervalMs(long initialFrameRetryIntervalMs) {
+    this.initialFrameRetryIntervalMs = initialFrameRetryIntervalMs;
+  }
+
   @Override
   public String toString() {
     return "RecordingConfig{"
@@ -132,6 +165,10 @@ public class RecordingConfig {
         + autoRecord
         + ", autoRecordTaskSessions="
         + autoRecordTaskSessions
+        + ", initialFrameTimeoutMs="
+        + getInitialFrameTimeoutMs()
+        + ", initialFrameRetryIntervalMs="
+        + getInitialFrameRetryIntervalMs()
         + '}';
   }
 }

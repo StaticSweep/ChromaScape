@@ -2,6 +2,7 @@ package com.chromascape.web.recording.controller;
 
 import com.chromascape.utils.core.screen.window.WindowInfo;
 import com.chromascape.utils.core.screen.window.WindowSelectionService;
+import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.dto.RecordingSessionMetadataResponse;
@@ -12,7 +13,6 @@ import com.chromascape.web.recording.exception.FrameCaptureException;
 import com.chromascape.web.recording.exception.RecordingAlreadyInProgressException;
 import com.chromascape.web.recording.exception.RecordingDisabledException;
 import com.chromascape.web.recording.exception.RecordingException;
-import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.recording.service.RecordingService;
 import com.chromascape.web.recording.service.RecordingService.RecordingMetadata;
 import com.chromascape.web.recording.service.RecordingSessionMetadataService;
@@ -428,12 +428,16 @@ public class RecordingController {
                         "videoSizeBytes",
                         hasConfiguredVideoFile
                             ? sessionVideoFileSize(session)
-                            : (hasOrphanVideoFile ? videoFileSize(session.getRecordingId()) : null));
+                            : (hasOrphanVideoFile
+                                ? videoFileSize(session.getRecordingId())
+                                : null));
                     if (!playable) {
                       if (!finalized) {
                         map.put("videoError", "Recording is still in progress");
                       } else if (!hasVideoPath && hasOrphanVideoFile) {
-                        map.put("videoError", "Recording was not finalized properly - video path not set");
+                        map.put(
+                            "videoError",
+                            "Recording was not finalized properly - video path not set");
                       } else {
                         map.put("videoError", "Video file not found on disk");
                       }
@@ -664,7 +668,10 @@ public class RecordingController {
       Path path = Paths.get(session.getVideoPath());
       return Files.exists(path) ? Files.size(path) : null;
     } catch (Exception e) {
-      logger.warn("Failed to read configured video file size for {}: {}", session.getRecordingId(), e.getMessage());
+      logger.warn(
+          "Failed to read configured video file size for {}: {}",
+          session.getRecordingId(),
+          e.getMessage());
       return null;
     }
   }

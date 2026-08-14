@@ -118,7 +118,7 @@ body {
 
 .debugger-bottom {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
 }
@@ -126,7 +126,8 @@ body {
 .viewport-panel,
 .logs-panel,
 .bot-state-panel,
-.ai-inspector-panel {
+.ai-inspector-panel,
+.fishing-shadow-panel {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -349,6 +350,206 @@ body {
   border-radius: 10px;
   padding: 8px 10px;
   line-height: 1.4;
+}
+
+/* ==================== FISHING SHADOW AGENT ==================== */
+
+.fishing-shadow-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.shadow-feature-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shadow-feature-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  background: rgba(0, 0, 0, 0.25);
+  color: #9aa3b2;
+}
+
+.shadow-feature-badge.on {
+  background: rgba(40, 167, 69, 0.2);
+  color: #5cde7c;
+}
+
+.shadow-feature-badge.off {
+  background: rgba(220, 53, 69, 0.2);
+  color: #f0767e;
+}
+
+.shadow-model-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.shadow-model-controls select {
+  flex: 1;
+  min-width: 120px;
+  font-size: 12px;
+}
+
+.shadow-model-controls button {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.shadow-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.shadow-badge.inactive {
+  background: rgba(108, 117, 125, 0.2);
+  color: #adb5bd;
+}
+
+.shadow-badge.predicted {
+  background: rgba(40, 167, 69, 0.22);
+  color: #5cde7c;
+}
+
+.shadow-badge.abstained {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffd75e;
+}
+
+.shadow-badge.error {
+  background: rgba(220, 53, 69, 0.25);
+  color: #f0767e;
+}
+
+.shadow-validation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(13, 110, 253, 0.2);
+  color: #7cb3ff;
+}
+
+.shadow-validation-badge.not-validated {
+  background: rgba(108, 117, 125, 0.2);
+  color: #9aa3b2;
+}
+
+.shadow-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.shadow-detail-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9aa3b2;
+}
+
+.shadow-detail-value {
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
+.shadow-counters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.shadow-counter {
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 11px;
+  color: #cfd6e4;
+}
+
+.shadow-actions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.shadow-actions-table th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9aa3b2;
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.shadow-actions-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #cfd6e4;
+  white-space: nowrap;
+}
+
+.shadow-actions-table th {
+  white-space: nowrap;
+}
+
+.shadow-model-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shadow-detail-value code {
+  font-size: 11px;
+  color: #7cb3ff;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.shadow-feedback {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+
+.shadow-feedback.success {
+  background: rgba(40, 167, 69, 0.15);
+  color: #5cde7c;
+}
+
+.shadow-feedback.error {
+  background: rgba(220, 53, 69, 0.15);
+  color: #f0767e;
 }
 
 /* ==================== TICK-BASED STYLES ==================== */

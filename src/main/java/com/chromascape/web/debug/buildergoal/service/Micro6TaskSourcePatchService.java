@@ -70,10 +70,7 @@ public class Micro6TaskSourcePatchService {
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     if (response.statusCode() >= 400) {
       throw new IllegalStateException(
-          "Micro6 patch apply failed (HTTP "
-              + response.statusCode()
-              + "): "
-              + response.body());
+          "Micro6 patch apply failed (HTTP " + response.statusCode() + "): " + response.body());
     }
 
     JsonNode parsed = objectMapper.readTree(response.body());

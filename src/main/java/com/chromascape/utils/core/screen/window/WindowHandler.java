@@ -156,7 +156,13 @@ public class WindowHandler {
             Rectangle bounds = getWindowBounds(user32, hwnd);
             exactMatch.set(
                 new WindowInfo(
-                    "0", hwnd, title.trim(), selectedAccount, pid, isWindowVisible(user32, hwnd), bounds));
+                    "0",
+                    hwnd,
+                    title.trim(),
+                    selectedAccount,
+                    pid,
+                    isWindowVisible(user32, hwnd),
+                    bounds));
             logger.info("Found exact match: {}", title);
             return false; // stop enumeration
           }
@@ -179,7 +185,8 @@ public class WindowHandler {
 
     List<WindowInfo> filteredTargets =
         getAllTargetWindows().stream().filter(WindowHandler::isGameClientWindow).toList();
-    WindowInfo preferredTarget = selectBestWindow(filteredTargets, WindowHandler::detectCaptureSignature);
+    WindowInfo preferredTarget =
+        selectBestWindow(filteredTargets, WindowHandler::detectCaptureSignature);
     if (preferredTarget != null) {
       CaptureSignature signature = detectCaptureSignature(preferredTarget);
       logPreferredTargetSelection(
@@ -401,7 +408,8 @@ public class WindowHandler {
                       false,
                       "supported-client",
                       true,
-                      describeSelectionReason(List.of(window), window, detectCaptureSignature(window))))
+                      describeSelectionReason(
+                          List.of(window), window, detectCaptureSignature(window))))
           .toList();
     }
 
@@ -413,11 +421,7 @@ public class WindowHandler {
           .map(
               window ->
                   new WindowCandidate(
-                      window,
-                      true,
-                      "java-fallback",
-                      true,
-                      "fallback standalone Java window"))
+                      window, true, "java-fallback", true, "fallback standalone Java window"))
           .toList();
     }
 
@@ -585,7 +589,8 @@ public class WindowHandler {
     List<WindowInfo> visibleCandidates = preferVisibleCandidates(windows);
     boolean hasCaptureableCandidates =
         visibleCandidates.stream().anyMatch(window -> signatures.apply(window).canvasCount() > 0);
-    List<WindowInfo> captureableCandidates = preferCaptureableCandidates(visibleCandidates, signatures);
+    List<WindowInfo> captureableCandidates =
+        preferCaptureableCandidates(visibleCandidates, signatures);
     List<WindowInfo> candidates =
         hasCaptureableCandidates
             ? captureableCandidates
@@ -593,7 +598,8 @@ public class WindowHandler {
 
     Comparator<WindowInfo> comparator =
         hasCaptureableCandidates
-            ? Comparator.comparingInt((WindowInfo window) -> signatures.apply(window).canvasPriority())
+            ? Comparator.comparingInt(
+                    (WindowInfo window) -> signatures.apply(window).canvasPriority())
                 .thenComparingInt(window -> signatures.apply(window).canvasCount())
                 .thenComparingInt(WindowHandler::renderClientPriority)
                 .thenComparingInt(WindowHandler::clientTitlePriority)
@@ -613,8 +619,7 @@ public class WindowHandler {
   }
 
   private static List<WindowInfo> preferVisibleCandidates(List<WindowInfo> windows) {
-    List<WindowInfo> visibleCandidates =
-        windows.stream().filter(WindowInfo::isVisible).toList();
+    List<WindowInfo> visibleCandidates = windows.stream().filter(WindowInfo::isVisible).toList();
     return visibleCandidates.isEmpty() ? windows : visibleCandidates;
   }
 

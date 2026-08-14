@@ -34,7 +34,8 @@ class AiPlayerDatasetSchedulerTest {
 
     scheduler.exportScheduledPatchOutcomeDataset();
 
-    verify(datasetBuilder, never()).buildPatchOutcomeDatasetResult(any(LocalDateTime.class), any(LocalDateTime.class));
+    verify(datasetBuilder, never())
+        .buildPatchOutcomeDatasetResult(any(LocalDateTime.class), any(LocalDateTime.class));
   }
 
   @Test
@@ -42,7 +43,8 @@ class AiPlayerDatasetSchedulerTest {
     ReflectionTestUtils.setField(scheduler, "scheduledExportEnabled", true);
     ReflectionTestUtils.setField(scheduler, "exportEmpty", true);
     when(datasetBuilder.isAiPlayerEnabled()).thenReturn(true);
-    when(datasetBuilder.buildPatchOutcomeDatasetResult(any(LocalDateTime.class), any(LocalDateTime.class)))
+    when(datasetBuilder.buildPatchOutcomeDatasetResult(
+            any(LocalDateTime.class), any(LocalDateTime.class)))
         .thenReturn(
             new DatasetBuildResult(
                 "ds-1",
@@ -57,6 +59,7 @@ class AiPlayerDatasetSchedulerTest {
 
     scheduler.exportScheduledPatchOutcomeDataset();
 
-    verify(datasetBuilder).buildPatchOutcomeDatasetResult(any(LocalDateTime.class), any(LocalDateTime.class));
+    verify(datasetBuilder)
+        .buildPatchOutcomeDatasetResult(any(LocalDateTime.class), any(LocalDateTime.class));
   }
 }

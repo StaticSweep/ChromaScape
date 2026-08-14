@@ -24,8 +24,8 @@ import org.springframework.stereotype.Component;
 /**
  * A Websocket-based implementation of the {@link Viewport} interface.
  *
- * <p>This component is responsible for receiving visual updates from the bot, encoding them as
- * JPEG frames, and broadcasting them to connected clients via the {@link ViewportWebSocketHandler}.
+ * <p>This component is responsible for receiving visual updates from the bot, encoding them as JPEG
+ * frames, and broadcasting them to connected clients via the {@link ViewportWebSocketHandler}.
  *
  * <p>To ensure optimal performance, image conversion and network transmission are handled
  * asynchronously on a separate thread, with frame dropping logic to prevent backpressure on the
@@ -39,6 +39,7 @@ public class WebsocketViewport implements Viewport {
 
   /** Websocket handler to broadcast messages. */
   private final ViewportWebSocketHandler handler;
+
   private final ViewportStreamConfig viewportStreamConfig;
   private final JpegFrameEncoder jpegFrameEncoder;
 
@@ -53,6 +54,7 @@ public class WebsocketViewport implements Viewport {
 
   /** Frame sequence counter for ordering. */
   private final AtomicLong frameCounter = new AtomicLong(0);
+
   private final AtomicLong framesSkippedNoSessions = new AtomicLong(0);
   private final AtomicLong framesDroppedEncodeBackpressure = new AtomicLong(0);
   private final AtomicLong encodeCount = new AtomicLong(0);

@@ -55,7 +55,9 @@ public class BuilderGoalCodexController {
     try {
       return ResponseEntity.ok(
           orchestrationService.setIssueStatement(
-              sessionId, textValue(payload, "issueStatement"), textValueAllowBlank(payload, "context")));
+              sessionId,
+              textValue(payload, "issueStatement"),
+              textValueAllowBlank(payload, "context")));
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (IllegalStateException e) {
@@ -96,7 +98,8 @@ public class BuilderGoalCodexController {
   public ResponseEntity<Object> stopRun(
       @PathVariable String sessionId, @RequestBody(required = false) JsonNode payload) {
     try {
-      return ResponseEntity.ok(orchestrationService.stopRun(sessionId, textValue(payload, "reason")));
+      return ResponseEntity.ok(
+          orchestrationService.stopRun(sessionId, textValue(payload, "reason")));
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (IllegalStateException e) {
@@ -196,9 +199,11 @@ public class BuilderGoalCodexController {
   @GetMapping("/sessions/{sessionId}/replay-session-info")
   public ResponseEntity<Object> getReplaySessionInfo(
       @PathVariable String sessionId,
-      @org.springframework.web.bind.annotation.RequestParam(required = false) String debugSessionId) {
+      @org.springframework.web.bind.annotation.RequestParam(required = false)
+          String debugSessionId) {
     try {
-      return ResponseEntity.ok(orchestrationService.getReplaySessionInfo(sessionId, debugSessionId));
+      return ResponseEntity.ok(
+          orchestrationService.getReplaySessionInfo(sessionId, debugSessionId));
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     } catch (IllegalStateException e) {
@@ -226,7 +231,8 @@ public class BuilderGoalCodexController {
   public ResponseEntity<Object> getReplayTick(
       @PathVariable String sessionId,
       @PathVariable Long tick,
-      @org.springframework.web.bind.annotation.RequestParam(required = false) String debugSessionId) {
+      @org.springframework.web.bind.annotation.RequestParam(required = false)
+          String debugSessionId) {
     try {
       return ResponseEntity.ok(orchestrationService.getReplayTick(sessionId, debugSessionId, tick));
     } catch (IllegalArgumentException e) {

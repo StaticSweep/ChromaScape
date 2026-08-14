@@ -2,6 +2,7 @@ package com.chromascape.utils.core.screen.window;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
+import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.GDI32;
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef;
@@ -66,6 +67,16 @@ public class ScreenManager {
    * @return the window handle, or null if RuneLite is not running
    */
   private static HWND getCanvasHwnd() {
+    return resolveCanvasTarget().hwnd();
+  }
+
+  /**
+   * Resolves the canvas HWND together with a human-readable description of how it was derived.
+   *
+   * <p>Carries the resolution source forward so capture diagnostics can report whether the target
+   * came from explicit selection or automatic detection.
+   */
+  private static CanvasTarget resolveCanvasTarget() {
     HWND targetWindow = null;
     boolean usingSelection = false;
 
@@ -89,7 +100,7 @@ public class ScreenManager {
 
     if (targetWindow == null) {
       logger.warn("No target window available for capture");
-      return null;
+      return CanvasTarget.none();
     }
 
     HWND canvasHwnd = WindowHandler.findNthChildWindow(targetWindow, "SunAwtCanvas", 2);
@@ -102,7 +113,8 @@ public class ScreenManager {
 
     // Last resort: use parent window directly
     if (canvasHwnd == null) {
-      logger.warn("No SunAwtCanvas found for window {}, using parent window directly", targetWindow);
+      logger.warn(
+          "No SunAwtCanvas found for window {}, using parent window directly", targetWindow);
       canvasHwnd = targetWindow;
     }
 
@@ -111,7 +123,26 @@ public class ScreenManager {
         canvasHwnd,
         usingSelection ? "explicit selection" : "auto-detection");
 
-    return canvasHwnd;
+    return new CanvasTarget(canvasHwnd, usingSelection ? "explicit selection" : "auto-detection");
+  }
+
+  /** Capture target resolution: the window handle plus how it was derived. */
+  private record CanvasTarget(HWND hwnd, String source) {
+    private static CanvasTarget none() {
+      return new CanvasTarget(null, null);
+    }
+  }
+
+  /** Formats an HWND as a hexadecimal address, falling back to a readable placeholder. */
+  private static String formatHwnd(HWND hwnd) {
+    if (hwnd == null) {
+      return "0x0 (none)";
+    }
+    try {
+      return String.format("0x%X", Pointer.nativeValue(hwnd.getPointer()));
+    } catch (Exception e) {
+      return String.valueOf(hwnd);
+    }
   }
 
   /**
@@ -162,7 +193,8 @@ public class ScreenManager {
    * @throws RuntimeException if the window dimensions are invalid or the BitBlt operation fails.
    */
   public static BufferedImage captureWindow() {
-    HWND canvasHwnd = getCanvasHwnd();
+    CanvasTarget target = resolveCanvasTarget();
+    HWND canvasHwnd = target.hwnd();
     if (canvasHwnd == null) {
       throw new RuntimeException("Game window not found - is RuneLite running?");
     }
@@ -173,7 +205,11 @@ public class ScreenManager {
     int height = bounds.bottom - bounds.top;
 
     if (width <= 0 || height <= 0) {
-      throw new RuntimeException("Invalid dimensions");
+      String source = target.source() != null ? " via " + target.source() : "";
+      throw new RuntimeException(
+          String.format(
+              "Invalid dimensions for capture HWND %s%s: width=%d, height=%d",
+              formatHwnd(canvasHwnd), source, width, height));
     }
 
     // Retrieve the Device Context for the source window and create a compatible memory DC

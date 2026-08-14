@@ -15,8 +15,7 @@ import org.springframework.stereotype.Service;
 @ConditionalOnProperty(name = "analysis.provider", havingValue = "claude-mcp")
 public class ClaudeMcpAliasAnalysisProvider extends ClaudeMcpAnalysisProvider {
 
-  public ClaudeMcpAliasAnalysisProvider(
-      McpTransportClient transport, McpConfigProperties config) {
+  public ClaudeMcpAliasAnalysisProvider(McpTransportClient transport, McpConfigProperties config) {
     super(transport, config, "claude-mcp");
   }
 }

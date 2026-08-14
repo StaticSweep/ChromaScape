@@ -188,7 +188,8 @@ public class MicrobotAgentServerAdapter implements BotRuntimeAdapter {
     try {
       HttpResponse<String> response = get("/login");
       if (response.statusCode() != 200) {
-        throw new IllegalStateException("Agent login status failed with HTTP " + response.statusCode());
+        throw new IllegalStateException(
+            "Agent login status failed with HTTP " + response.statusCode());
       }
       JsonNode root = objectMapper.readTree(response.body());
       return new LoginStatus(
@@ -301,8 +302,7 @@ public class MicrobotAgentServerAdapter implements BotRuntimeAdapter {
         return true;
       }
       return Objects.equals(
-          activeProfileName == null ? null : activeProfileName.trim(),
-          expectedProfileName.trim());
+          activeProfileName == null ? null : activeProfileName.trim(), expectedProfileName.trim());
     }
   }
 

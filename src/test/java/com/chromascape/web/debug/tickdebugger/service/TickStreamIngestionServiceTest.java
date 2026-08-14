@@ -104,8 +104,8 @@ class TickStreamIngestionServiceTest {
   void processTickBatch_persistsQuestHelper() {
     String sessionId = "s1";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = strictV2Batch(sessionId, 100);
 
@@ -148,8 +148,8 @@ class TickStreamIngestionServiceTest {
   void processTickBatch_allowsMissingQuestHelper() {
     String sessionId = "s2";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = strictV2Batch(sessionId, 200);
     // questHelper intentionally omitted (left null)
@@ -168,8 +168,8 @@ class TickStreamIngestionServiceTest {
   void strictV2_acceptsNestedPosition() {
     String sessionId = "s3";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = new TickBatchMessage();
     batch.setSchemaVersion(2);
@@ -220,8 +220,8 @@ class TickStreamIngestionServiceTest {
   void strictV2_acceptsOldFlatPosition() {
     String sessionId = "s4";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = strictV2Batch(sessionId, 400);
     // strictV2Batch already sets flat x/z
@@ -242,8 +242,8 @@ class TickStreamIngestionServiceTest {
   void oldFlatPayload_synthesizesNestedFields() {
     String sessionId = "s5";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = strictV2Batch(sessionId, 500);
     Map<String, Object> playerState = new HashMap<>();
@@ -359,8 +359,8 @@ class TickStreamIngestionServiceTest {
   void strictV2_acceptsNestedPositionWithXAndZ() {
     String sessionId = "s9";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = new TickBatchMessage();
     batch.setSchemaVersion(2);
@@ -413,8 +413,8 @@ class TickStreamIngestionServiceTest {
   void strictV2_acceptsFlatXWorldY() {
     String sessionId = "s10";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = new TickBatchMessage();
     batch.setSchemaVersion(2);
@@ -462,8 +462,8 @@ class TickStreamIngestionServiceTest {
   void strictV2_acceptsWorldXWorldY() {
     String sessionId = "s12";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = strictV2Batch(sessionId, 1200);
     Map<String, Object> playerState = new LinkedHashMap<>();
@@ -549,8 +549,8 @@ class TickStreamIngestionServiceTest {
   void oldFlatXZ_synthesizesPositionY() {
     String sessionId = "s11";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = new TickBatchMessage();
     batch.setSchemaVersion(2);
@@ -650,8 +650,8 @@ class TickStreamIngestionServiceTest {
   void strictV2_acceptsNumericStringCoordinates() {
     String sessionId = "s21";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = strictV2Batch(sessionId, 2100);
     Map<String, Object> playerState = new LinkedHashMap<>();
@@ -681,8 +681,8 @@ class TickStreamIngestionServiceTest {
   void strictV2_normalizesNumericStringWorldCoordinates() {
     String sessionId = "s22";
     when(sessionService.getSession(sessionId))
-        .thenReturn(Optional.of(
-            new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
+        .thenReturn(
+            Optional.of(new DebugSession(sessionId, "account", "script", LocalDateTime.now(), 0L)));
 
     TickBatchMessage batch = strictV2Batch(sessionId, 2200);
     Map<String, Object> playerState = new LinkedHashMap<>();

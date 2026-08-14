@@ -42,9 +42,17 @@ class PatchOutcomeEvaluationServiceTest {
     when(taskPlanItemRepository.findByCompletedAtBetween(start, end))
         .thenReturn(List.of(completed, failed, excluded));
     when(citationRepository.findByItemId("item-1"))
-        .thenReturn(List.of(citation(EvidenceType.LOG), citation(EvidenceType.TICK_LOG), citation(EvidenceType.RECORDING_SESSION)));
+        .thenReturn(
+            List.of(
+                citation(EvidenceType.LOG),
+                citation(EvidenceType.TICK_LOG),
+                citation(EvidenceType.RECORDING_SESSION)));
     when(citationRepository.findByItemId("item-2"))
-        .thenReturn(List.of(citation(EvidenceType.LOG), citation(EvidenceType.TICK_LOG), citation(EvidenceType.RECORDING_SESSION)));
+        .thenReturn(
+            List.of(
+                citation(EvidenceType.LOG),
+                citation(EvidenceType.TICK_LOG),
+                citation(EvidenceType.RECORDING_SESSION)));
     when(citationRepository.findByItemId("item-3")).thenReturn(List.of(citation(EvidenceType.LOG)));
 
     Map<String, Object> result = service.evaluate(start, end, "QuestScript");

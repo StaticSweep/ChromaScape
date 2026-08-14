@@ -38,7 +38,8 @@ class TaskCitationValidationServiceTest {
                 citation(EvidenceType.TICK_LOG, 2L),
                 citation(EvidenceType.RECORDING_SESSION, 3L)));
 
-    TaskCitationValidationService.CitationValidationResult result = service.validateCitations(ITEM_ID);
+    TaskCitationValidationService.CitationValidationResult result =
+        service.validateCitations(ITEM_ID);
 
     assertThat(result.hasRequiredEvidenceTriplet()).isTrue();
   }
@@ -47,9 +48,12 @@ class TaskCitationValidationServiceTest {
   @DisplayName("hasRequiredEvidenceTriplet is false when LOG is missing")
   void hasRequiredEvidenceTriplet_returnsFalseWhenLogIsMissing() {
     when(citationRepository.findByItemId(ITEM_ID))
-        .thenReturn(List.of(citation(EvidenceType.TICK_LOG, 2L), citation(EvidenceType.RECORDING_SESSION, 3L)));
+        .thenReturn(
+            List.of(
+                citation(EvidenceType.TICK_LOG, 2L), citation(EvidenceType.RECORDING_SESSION, 3L)));
 
-    TaskCitationValidationService.CitationValidationResult result = service.validateCitations(ITEM_ID);
+    TaskCitationValidationService.CitationValidationResult result =
+        service.validateCitations(ITEM_ID);
 
     assertThat(result.hasRequiredEvidenceTriplet()).isFalse();
   }
@@ -58,9 +62,11 @@ class TaskCitationValidationServiceTest {
   @DisplayName("hasRequiredEvidenceTriplet is false when TICK_LOG is missing")
   void hasRequiredEvidenceTriplet_returnsFalseWhenTickLogIsMissing() {
     when(citationRepository.findByItemId(ITEM_ID))
-        .thenReturn(List.of(citation(EvidenceType.LOG, 1L), citation(EvidenceType.RECORDING_SESSION, 3L)));
+        .thenReturn(
+            List.of(citation(EvidenceType.LOG, 1L), citation(EvidenceType.RECORDING_SESSION, 3L)));
 
-    TaskCitationValidationService.CitationValidationResult result = service.validateCitations(ITEM_ID);
+    TaskCitationValidationService.CitationValidationResult result =
+        service.validateCitations(ITEM_ID);
 
     assertThat(result.hasRequiredEvidenceTriplet()).isFalse();
   }
@@ -71,7 +77,8 @@ class TaskCitationValidationServiceTest {
     when(citationRepository.findByItemId(ITEM_ID))
         .thenReturn(List.of(citation(EvidenceType.LOG, 1L), citation(EvidenceType.TICK_LOG, 2L)));
 
-    TaskCitationValidationService.CitationValidationResult result = service.validateCitations(ITEM_ID);
+    TaskCitationValidationService.CitationValidationResult result =
+        service.validateCitations(ITEM_ID);
 
     assertThat(result.hasRequiredEvidenceTriplet()).isFalse();
   }

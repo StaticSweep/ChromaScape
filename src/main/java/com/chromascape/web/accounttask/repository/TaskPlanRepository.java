@@ -26,7 +26,8 @@ public interface TaskPlanRepository extends JpaRepository<TaskPlan, Long> {
 
   List<TaskPlan> findBySourceRecordingId(String recordingId);
 
-  @Query("SELECT p FROM TaskPlan p WHERE p.accountName IS NULL OR TRIM(p.accountName) = '' ORDER BY p.createdAt DESC")
+  @Query(
+      "SELECT p FROM TaskPlan p WHERE p.accountName IS NULL OR TRIM(p.accountName) = '' ORDER BY p.createdAt DESC")
   List<TaskPlan> findUnassignedOrderByCreatedAtDesc();
 
   @Query("SELECT p FROM TaskPlan p WHERE p.accountName IS NULL OR TRIM(p.accountName) = ''")

@@ -57,11 +57,33 @@ public class SessionStartResponse {
       String recordingId,
       Long startTick,
       String recordingFailureReason) {
+    this(sessionId, recordingEnabled, recordingId, startTick, recordingFailureReason, null);
+  }
+
+  /**
+   * Full constructor accepting the transport correlation id directly so handlers can build a
+   * response without mutating a DTO after construction.
+   *
+   * @param sessionId the authoritative debug session id
+   * @param recordingEnabled whether recording is active
+   * @param recordingId the recording id, or null for a degraded (tick-only) session
+   * @param startTick the session start tick
+   * @param recordingFailureReason the degradation reason for a tick-only session, or null
+   * @param clientRequestId the echoed transport correlation id, or null
+   */
+  public SessionStartResponse(
+      String sessionId,
+      Boolean recordingEnabled,
+      String recordingId,
+      Long startTick,
+      String recordingFailureReason,
+      String clientRequestId) {
     this.sessionId = sessionId;
     this.recordingEnabled = recordingEnabled;
     this.recordingId = recordingId;
     this.startTick = startTick;
     this.recordingFailureReason = recordingFailureReason;
+    this.clientRequestId = clientRequestId;
   }
 
   public String getSessionId() {

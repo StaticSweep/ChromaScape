@@ -33,6 +33,7 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
 
   /** A thread-safe set of active WebSocket sessions. */
   private final Set<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
+
   private final ScreenCaptureService screenCaptureService;
 
   /**
@@ -54,6 +55,7 @@ public class ViewportWebSocketHandler extends TextWebSocketHandler {
 
   /** Ensures only one send loop is queued at a time. */
   private final AtomicBoolean sendScheduled = new AtomicBoolean(false);
+
   private final AtomicLong broadcastRequests = new AtomicLong(0);
   private final AtomicLong flushCycles = new AtomicLong(0);
   private final AtomicLong payloadsFlushed = new AtomicLong(0);

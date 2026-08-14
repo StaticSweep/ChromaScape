@@ -242,6 +242,28 @@ public class DebugSession {
    */
   public void markFailed(String code, String reason, String context) {
     this.lifecycleState = DebugSessionLifecycleState.FAILED;
+    this.failureDetails(code, reason, context);
+    this.lastStateAt = LocalDateTime.now();
+  }
+
+  /**
+   * Record failure diagnostics without transitioning the session out of its current lifecycle
+   * state.
+   *
+   * <p>Used when a non-fatal subsystem failure (e.g., video recording start) should degrade the
+   * session to tick-only operation while keeping it in RECORDING so tick ingestion and playback
+   * continue.
+   *
+   * @param code standardized failure code
+   * @param reason human-readable failure reason
+   * @param context additional context (e.g., exception message)
+   */
+  public void recordFailureDiagnostic(String code, String reason, String context) {
+    this.failureDetails(code, reason, context);
+    this.lastStateAt = LocalDateTime.now();
+  }
+
+  private void failureDetails(String code, String reason, String context) {
     this.failureCode = code;
     // Limit reason to 500 chars to match DB column limit
     this.failureReason =
@@ -249,7 +271,6 @@ public class DebugSession {
     // Limit context to first 1500 chars to prevent bloat
     this.failureContext =
         context != null && context.length() > 1500 ? context.substring(0, 1500) + "..." : context;
-    this.lastStateAt = LocalDateTime.now();
   }
 
   /**

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seeded-failure-source-binding/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "derivation", "failure_manifest_hash", "failure_code", "task_key", "source_snapshot_id", "file_id", "symbol", "start_line", "end_line", "preimage_hash"],
+  "properties": {
+    "schema": {"const": "seeded-failure-source-binding/v1"},
+    "derivation": {"const": "SEEDED_FIXTURE"},
+    "failure_manifest_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "failure_code": {"const": "UNSUPPORTED_FISH_DEFAULTED"},
+    "task_key": {"const": "FISHING_TRAINING"},
+    "source_snapshot_id": {"type": "string", "pattern": "^srcsnap_[0-9a-f]{24}$"},
+    "file_id": {"type": "string", "pattern": "^file_[0-9a-f]{16}$"},
+    "symbol": {"const": "FishingExecutionTask#getFishType(String)"},
+    "start_line": {"type": "integer", "minimum": 1},
+    "end_line": {"type": "integer", "minimum": 1},
+    "preimage_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

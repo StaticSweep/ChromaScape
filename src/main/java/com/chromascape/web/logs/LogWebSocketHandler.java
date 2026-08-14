@@ -1,8 +1,8 @@
 package com.chromascape.web.logs;
 
-import java.io.IOException;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;

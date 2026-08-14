@@ -9,8 +9,8 @@ import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
 import com.chromascape.web.viewport.config.ViewportStreamConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -193,8 +193,7 @@ public class ScreenCaptureService implements FrameListener {
   }
 
   public void onViewportSessionClosed() {
-    int sessions =
-        activeViewportSessions.updateAndGet(current -> current > 0 ? current - 1 : 0);
+    int sessions = activeViewportSessions.updateAndGet(current -> current > 0 ? current - 1 : 0);
     if (sessions == 0) {
       ensureUnsubscribed();
     }

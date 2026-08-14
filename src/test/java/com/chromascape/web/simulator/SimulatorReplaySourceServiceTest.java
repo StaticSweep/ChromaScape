@@ -67,7 +67,8 @@ class SimulatorReplaySourceServiceTest {
       session.setStartTick(0L);
       session.setEndTick(100L);
 
-      lenient().when(debugSessionRepository.findByRecordingId("rec-1"))
+      lenient()
+          .when(debugSessionRepository.findByRecordingId("rec-1"))
           .thenReturn(Optional.of(session));
     }
 
@@ -234,11 +235,7 @@ class SimulatorReplaySourceServiceTest {
     @DisplayName("Nested position.x/z with no position.y canonicalizes to replay x/z")
     void nestedPositionXZ_canonicalizesToReplay() {
       TickSnapshot snapshot =
-          createSnapshot(
-              0L,
-              "{\"position\":{\"x\":3200,\"z\":3200,\"plane\":0}}",
-              null,
-              null);
+          createSnapshot(0L, "{\"position\":{\"x\":3200,\"z\":3200,\"plane\":0}}", null, null);
 
       mockPage(snapshot);
 
@@ -256,8 +253,7 @@ class SimulatorReplaySourceServiceTest {
       TickSnapshot snapshot =
           createSnapshot(
               0L,
-              "{\"hp\":{\"current\":85,\"max\":99,\"percent\":85},"
-                  + "\"currentHp\":80}",
+              "{\"hp\":{\"current\":85,\"max\":99,\"percent\":85}," + "\"currentHp\":80}",
               null,
               null);
 
@@ -279,8 +275,7 @@ class SimulatorReplaySourceServiceTest {
       TickSnapshot snapshot =
           createSnapshot(
               0L,
-              "{\"prayer\":{\"current\":55,\"max\":70,\"percent\":78},"
-                  + "\"currentPrayer\":50}",
+              "{\"prayer\":{\"current\":55,\"max\":70,\"percent\":78}," + "\"currentPrayer\":50}",
               null,
               null);
 
@@ -333,7 +328,8 @@ class SimulatorReplaySourceServiceTest {
       session.setRecordingId("rec-1");
       session.setAccountName("TestPlayer");
 
-      lenient().when(debugSessionRepository.findByRecordingId("rec-1"))
+      lenient()
+          .when(debugSessionRepository.findByRecordingId("rec-1"))
           .thenReturn(Optional.of(session));
     }
 

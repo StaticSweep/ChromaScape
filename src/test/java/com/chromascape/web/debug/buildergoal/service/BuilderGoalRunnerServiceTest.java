@@ -3,6 +3,7 @@ package com.chromascape.web.debug.buildergoal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -41,6 +42,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -70,37 +73,50 @@ class BuilderGoalRunnerServiceTest {
   private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
   private final Map<String, PatchLoopIteration> savedIterations = new ConcurrentHashMap<>();
   private BuilderGoalRunStateMutationService mutationDelegate;
+  private BuilderGoalLaunchOperationService launchOperationService;
+  private BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator;
   private BuilderGoalRunnerService service;
+
+  private BuilderGoalRunnerService createService(
+      BuilderGoalLaunchOperationService launchOperations,
+      BuilderGoalLocalLaunchCoordinatorService coordinator,
+      Executor launchExecutor) {
+    return new BuilderGoalRunnerService(
+        iterationRepository,
+        persistenceService,
+        evidenceService,
+        sessionResolverService,
+        scriptExecutionService,
+        analysisProvider,
+        micro6ExecutorCatalogService,
+        logRepository,
+        launcherControlService,
+        accountCatalogService,
+        clientRegistryService,
+        micro6TaskSourcePatchService,
+        micro6TargetRelaunchService,
+        targetPreparationService,
+        mutationService,
+        launchOperations,
+        coordinator,
+        objectMapper,
+        Runnable::run,
+        launchExecutor,
+        "http://127.0.0.1:8098",
+        300000L,
+        3,
+        15000L);
+  }
 
   @BeforeEach
   void setUp() {
-    Executor directExecutor = Runnable::run;
     savedIterations.clear();
     mutationDelegate =
         new BuilderGoalRunStateMutationService(
             iterationRepository, persistenceService, objectMapper);
-    service =
-        new BuilderGoalRunnerService(
-            iterationRepository,
-            persistenceService,
-            evidenceService,
-            sessionResolverService,
-            scriptExecutionService,
-            analysisProvider,
-            micro6ExecutorCatalogService,
-            logRepository,
-            launcherControlService,
-            accountCatalogService,
-            clientRegistryService,
-            micro6TaskSourcePatchService,
-            micro6TargetRelaunchService,
-            targetPreparationService,
-            mutationService,
-            objectMapper,
-            directExecutor,
-            300000L,
-            3,
-            15000L);
+    launchOperationService = new BuilderGoalLaunchOperationService();
+    localLaunchCoordinator = new BuilderGoalLocalLaunchCoordinatorService();
+    service = createService(launchOperationService, localLaunchCoordinator, Runnable::run);
 
     BuilderGoalLauncherControlService.LauncherMachine machine =
         new BuilderGoalLauncherControlService.LauncherMachine(
@@ -227,6 +243,10 @@ class BuilderGoalRunnerServiceTest {
         .when(launcherControlService.findMachineByUuid("machine-1"))
         .thenReturn(Optional.of(machine));
     lenient().when(launcherControlService.isBuilderGoalRunnableMachine(machine)).thenReturn(true);
+    // Catalog lookup is deliberately allowed to use either the cached (false) or live (true)
+    // path depending on whether the assertion exercises import, launch, or publish validation.
+    // Keep the default null so tests only need to stub catalog content when it is relevant.
+    lenient().when(micro6ExecutorCatalogService.getCatalog(anyBoolean())).thenReturn(null);
   }
 
   @Test
@@ -277,17 +297,370 @@ class BuilderGoalRunnerServiceTest {
   }
 
   @Test
-  void launchAccount_preparesTargetWithoutPublishingTask() {
+  void importPayload_emptySettingsEnvelopeRemainsEmpty() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(null);
+
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "configurable_woodcutting",
+                  "settings": {}
+                }
+                """));
+
+    assertThat(response.get("taskKey")).isEqualTo("configurable_woodcutting");
+    assertThat(response.get("settings")).isEqualTo(Map.of());
+    assertThat(response.get("settingsCount")).isEqualTo(0);
+  }
+
+  @Test
+  void importPayload_resolvesCatalogAliasToCanonicalTaskKey() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false))
+        .thenReturn(
+            objectMapper.readTree(
+                """
+                {
+                  "catalog_state": "READY",
+                  "tasks": [
+                    {
+                      "key": "FISHING_TRAINING",
+                      "task_key": "FISHING_TRAINING",
+                      "display_name": "Fishing Training",
+                      "runnable": true,
+                      "settings_schema_state": "NOT_REQUESTED"
+                    }
+                  ],
+                  "aliases": [
+                    {
+                      "alias": "Fish Training",
+                      "normalized_alias": "FISH_TRAINING",
+                      "task_key": "FISHING_TRAINING"
+                    }
+                  ]
+                }
+                """));
+
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "FISH_TRAINING",
+                  "settings": {}
+                }
+                """));
+
+    assertThat(response.get("taskKey")).isEqualTo("FISHING_TRAINING");
+    assertThat(response.get("settings")).isEqualTo(Map.of());
+  }
+
+  @Test
+  void importPayload_settingsEnvelopeIsAuthoritativeEvenWhenEmpty() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(null);
+
+    // A present settings envelope (including {}) wins over top-level transport fields that would
+    // otherwise look like legacy raw settings.
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "configurable_woodcutting",
+                  "world": 360,
+                  "source": "catalog_task",
+                  "account_id": "hash-1",
+                  "settings": {}
+                }
+                """));
+
+    assertThat(response.get("settings")).isEqualTo(Map.of());
+    assertThat(response.get("settingsCount")).isEqualTo(0);
+  }
+
+  @Test
+  void importPayload_nonEmptySettingsEnvelopeIsPreserved() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(null);
+
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "configurable_woodcutting",
+                  "settings": {
+                    "treeType": "WILLOW",
+                    "targetLevel": 35
+                  }
+                }
+                """));
+
+    assertThat(response.get("settings"))
+        .isEqualTo(Map.of("treeType", "WILLOW", "targetLevel", 35));
+    assertThat(response.get("settingsCount")).isEqualTo(2);
+  }
+
+  @Test
+  void importPayload_nestedTaskMetadataSettingsIsUsed() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(null);
+
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "builder_execution": {
+                    "task_key": "configurable_woodcutting",
+                    "task_metadata": {
+                      "settings": {
+                        "treeType": "WILLOW"
+                      }
+                    }
+                  }
+                }
+                """));
+
+    assertThat(response.get("taskKey")).isEqualTo("configurable_woodcutting");
+    assertThat(response.get("settings")).isEqualTo(Map.of("treeType", "WILLOW"));
+  }
+
+  @Test
+  void importPayload_legacyRawSettingsStripReservedTransportFields() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(null);
+
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "configurable_woodcutting",
+                  "taskKey": "configurable_woodcutting",
+                  "taskName": "configurable_woodcutting",
+                  "title": "Woodcutting",
+                  "name": "Woodcutting",
+                  "display_name": "Woodcutting",
+                  "world": 360,
+                  "source": "catalog_task",
+                  "account_id": "hash-1",
+                  "accountId": "hash-1",
+                  "builder_execution": {},
+                  "queue_payload_preview": {},
+                  "node_context": {},
+                  "task_metadata": {},
+                  "treeType": "WILLOW",
+                  "targetLevel": 35
+                }
+                """));
+
+    assertThat(response.get("settings"))
+        .isEqualTo(Map.of("treeType", "WILLOW", "targetLevel", 35));
+    assertThat(response.get("settingsCount")).isEqualTo(2);
+  }
+
+  @Test
+  void importPayload_legacyRawSettingsStripControlMetadataFields() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(null);
+
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "configurable_woodcutting",
+                  "persist_settings": true,
+                  "execution_mode": "queue",
+                  "client_type": "micro6",
+                  "queueable": true,
+                  "enabled": true,
+                  "runnable": true,
+                  "treeType": "WILLOW"
+                }
+                """));
+
+    assertThat(response.get("settings"))
+        .isEqualTo(Map.of("treeType", "WILLOW"));
+  }
+
+  @Test
+  void importPayload_nestedLegacyTaskMetadataStripReservedFields() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(null);
+
+    // Legacy nested task metadata with no settings envelope: reserved transport fields are removed
+    // and the remaining object becomes the settings.
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "builder_execution": {
+                    "task_key": "configurable_woodcutting",
+                    "task_metadata": {
+                      "task_key": "configurable_woodcutting",
+                      "display_name": "Woodcutting",
+                      "world": 360,
+                      "source": "catalog_task",
+                      "treeType": "WILLOW"
+                    }
+                  }
+                }
+                """));
+
+    assertThat(response.get("taskKey")).isEqualTo("configurable_woodcutting");
+    assertThat(response.get("settings")).isEqualTo(Map.of("treeType", "WILLOW"));
+    assertThat(response.get("settingsCount")).isEqualTo(1);
+  }
+
+  @Test
+  void importPayload_rejectsNonObjectSettingsEnvelope() throws Exception {
+    assertThatThrownBy(
+            () ->
+                service.importPayload(
+                    objectMapper.readTree(
+                        """
+                        {
+                          "task_key": "configurable_woodcutting",
+                          "settings": "WILLOW"
+                        }
+                        """)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("settings must be a JSON object");
+  }
+
+  @Test
+  void startRun_rejectsImportedPersistedSettingsMismatch() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+
+    Map<String, Object> response =
+        service.startRun(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "configurable_woodcutting",
+                  "settings": {
+                    "treeType": "WILLOW"
+                  }
+                }
+                """),
+            "hash-1",
+            null,
+            null,
+            null,
+            "machine-1",
+            null,
+            null);
+
+    assertThat(response.get("accepted")).isEqualTo(true);
+
+    // Simulate a persisted run whose settings drifted from the imported payload: the mismatch must
+    // fail closed before publish.
+    ArgumentCaptor<PatchLoopIteration> captor = ArgumentCaptor.forClass(PatchLoopIteration.class);
+    verify(iterationRepository, times(1)).save(captor.capture());
+    PatchLoopIteration persisted = captor.getValue();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> metadata =
+        objectMapper.convertValue(persisted.getTaskMetadataJson(), Map.class);
+    metadata.put("settings", Map.of("treeType", "OAK"));
+    persisted.setTaskMetadataJson(objectMapper.valueToTree(metadata));
+
+    assertThatThrownBy(() -> invokePublishIteration(persisted))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("imported task settings that do not match");
+  }
+
+  private Object invokePublishIteration(PatchLoopIteration iteration) throws Exception {
+    Method publishIteration =
+        BuilderGoalRunnerService.class.getDeclaredMethod("publishIteration", PatchLoopIteration.class);
+    publishIteration.setAccessible(true);
+    try {
+      return publishIteration.invoke(service, iteration);
+    } catch (java.lang.reflect.InvocationTargetException e) {
+      if (e.getCause() instanceof RuntimeException re) {
+        throw re;
+      }
+      throw e;
+    }
+  }
+
+  @Test
+  void startRun_emptySettingsRoundTripIsConsistent() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret")
+        );
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+
+    Map<String, Object> response =
+        service.startRun(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "configurable_woodcutting",
+                  "settings": {}
+                }
+                """),
+            "hash-1",
+            null,
+            null,
+            null,
+            "machine-1",
+            null,
+            null);
+
+    assertThat(response.get("accepted")).isEqualTo(true);
+
+    ArgumentCaptor<PatchLoopIteration> captor = ArgumentCaptor.forClass(PatchLoopIteration.class);
+    verify(iterationRepository, times(1)).save(captor.capture());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> metadata =
+        objectMapper.convertValue(captor.getValue().getTaskMetadataJson(), Map.class);
+    assertThat(metadata.get("settings")).isEqualTo(Map.of());
+  }
+
+  @Test
+  void launchAccount_acceptsAsynchronouslyAndReachesReadyWithoutPublishingTask() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret")
+        );
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
@@ -299,30 +672,120 @@ class BuilderGoalRunnerServiceTest {
             "accountbuilder_builderpro",
             "IDLE",
             null,
-            Instant.now());
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(targetPreparationService.ensureReady(
-            any(Micro6TargetPreparationService.PreparationRequest.class)))
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
         .thenReturn(
             new Micro6TargetPreparationService.PreparationResult(
                 targetClient,
-                Map.of("state", Micro6TargetPreparationService.PHASE_READY_TO_PUBLISH),
+                Map.of(
+                    "state", Micro6TargetPreparationService.PHASE_READY_TO_PUBLISH,
+                    "local_executor_base_url", "http://127.0.0.1:8098",
+                    "launcher_log_file", "C:\\micro6\\micro6-recovery-launch.log"),
                 null,
                 null));
 
     Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
 
-    assertThat(result.get("accepted")).isEqualTo(true);
+    assertThat(result.get("operationId")).isNotNull();
+    assertThat(result.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_READY);
     assertThat(result.get("accountId")).isEqualTo("hash-1");
+    assertThat(result.get("accountName")).isEqualTo("bigGreenMeat");
     assertThat(result.get("launcherMachineUuid")).isEqualTo("machine-1");
     assertThat(result.get("world")).isEqualTo(360);
-    @SuppressWarnings("unchecked")
-    Map<String, Object> targetPreparation = (Map<String, Object>) result.get("targetPreparation");
-    assertThat(targetPreparation)
-        .containsEntry("state", Micro6TargetPreparationService.PHASE_READY_TO_PUBLISH);
+    assertThat(result.get("deduplicated")).isEqualTo(false);
+    assertThat(result.get("success")).isEqualTo(true);
+    assertThat(result.get("terminal")).isEqualTo(true);
+    assertThat(result.get("statusUrl"))
+        .isEqualTo("/api/debug/builder-goals/launch-operations/" + result.get("operationId"));
     verify(targetPreparationService)
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
     verify(iterationRepository, never()).save(any(PatchLoopIteration.class));
+  }
+
+  @Test
+  void launchAccount_cancellationEscapingPreparationMarksOperationFailed() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            "user@example.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret")
+        );
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenThrow(new BuilderGoalLaunchCancelledException());
+
+    Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
+
+    assertThat(result.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_FAILED);
+    assertThat(result.get("terminal")).isEqualTo(true);
+    assertThat(result.get("success")).isEqualTo(false);
+    assertThat(result.get("message")).isEqualTo("Launch cancelled (lease lost or stopped)");
+  }
+
+  @Test
+  void launchAccount_cancellationAfterWatchdogTerminalizationLeavesOperationUnchanged() {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            "user@example.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret")
+        );
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenAnswer(
+            invocation -> {
+              // The watchdog terminalizes the operation while the relaunch worker is mid-flight.
+              BuilderGoalLocalLaunchCoordinatorService.LeaseHandle leaseHandle =
+                  invocation.getArgument(1);
+              launchOperationService.markWatchdogFailed(leaseHandle.ownerId());
+              throw new BuilderGoalLaunchCancelledException();
+            });
+
+    Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
+
+    assertThat(result.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_FAILED);
+    assertThat(result.get("message"))
+        .isEqualTo("Launch operation timed out waiting for Micro6 readiness");
   }
 
   @Test
@@ -332,11 +795,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
@@ -348,7 +815,14 @@ class BuilderGoalRunnerServiceTest {
             "accountbuilder_builderpro",
             "IDLE",
             null,
-            java.time.Instant.now());
+            java.time.Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -389,11 +863,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of());
+            Map.of()
+        );
     PatchLoopIteration activeIteration = new PatchLoopIteration();
     activeIteration.setIterationId("buildergoal_active_1");
     activeIteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
@@ -454,11 +932,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     PatchLoopIteration staleIteration = new PatchLoopIteration();
     staleIteration.setIterationId("buildergoal_stale_1");
     staleIteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
@@ -659,10 +1141,10 @@ class BuilderGoalRunnerServiceTest {
                 "settings",
                 Map.of("treeType", "WILLOW", "targetLevel", 35),
                 "mule_account",
-                    Map.of(
-                        "account_id", "hash-1",
-                        "account_name", "bigGreenMeat",
-                        "launcher_machine_uuid", "machine-1"),
+                Map.of(
+                    "account_id", "hash-1",
+                    "account_name", "bigGreenMeat",
+                    "launcher_machine_uuid", "machine-1"),
                 "source",
                 "catalog_task")));
 
@@ -680,10 +1162,10 @@ class BuilderGoalRunnerServiceTest {
                 "settings",
                 Map.of("treeType", "OAK"),
                 "mule_account",
-                    Map.of(
-                        "account_id", "hash-1",
-                        "account_name", "bigGreenMeat",
-                        "launcher_machine_uuid", "machine-1"),
+                Map.of(
+                    "account_id", "hash-1",
+                    "account_name", "bigGreenMeat",
+                    "launcher_machine_uuid", "machine-1"),
                 "source",
                 "catalog_task")));
 
@@ -874,11 +1356,11 @@ class BuilderGoalRunnerServiceTest {
                 "settings",
                 Map.of("treeType", "WILLOW", "targetLevel", 35),
                 "mule_account",
-                    Map.of(
-                        "account_id", "hash-1",
-                        "account_hash", "hash-1",
-                        "account_name", "bigGreenMeat",
-                        "launcher_machine_uuid", "machine-1"),
+                Map.of(
+                    "account_id", "hash-1",
+                    "account_hash", "hash-1",
+                    "account_name", "bigGreenMeat",
+                    "launcher_machine_uuid", "machine-1"),
                 "source",
                 "catalog_task")));
 
@@ -887,11 +1369,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
@@ -903,7 +1389,14 @@ class BuilderGoalRunnerServiceTest {
             "accountbuilder_builderpro",
             "IDLE",
             null,
-            Instant.now());
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
 
     when(iterationRepository.findByIterationId("buildergoal_rerun0001"))
         .thenReturn(Optional.of(iteration));
@@ -1009,8 +1502,8 @@ class BuilderGoalRunnerServiceTest {
             objectMapper.valueToTree(
                 Map.of(
                     "annotations",
-                        java.util.List.of(
-                            Map.of(
+                    java.util.List.of(
+                        Map.of(
                             "label",
                             "stuck at bank",
                             "note",
@@ -1093,10 +1586,10 @@ class BuilderGoalRunnerServiceTest {
                 "micro6_publish",
                 Map.of("status", "FAILED"),
                 "recovery_workspace",
-                    Map.of(
-                        "active_start_seconds", 13,
-                        "active_end_seconds", 20,
-                        "selected_evidence_ids", java.util.List.of("log_restore_1")))));
+                Map.of(
+                    "active_start_seconds", 13,
+                    "active_end_seconds", 20,
+                    "selected_evidence_ids", java.util.List.of("log_restore_1")))));
     when(iterationRepository.findByIterationId("buildergoal_restore0001"))
         .thenReturn(Optional.of(iteration));
     when(evidenceService.collectEvidence(eq(iteration), any())).thenReturn(sampleEvidenceBundle());
@@ -1173,7 +1666,7 @@ class BuilderGoalRunnerServiceTest {
                 "task_key", "configurable_woodcutting",
                 "micro6_publish", Map.of("status", "FAILED"))));
     when(iterationRepository.findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
-                BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL, "recording_123"))
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL, "recording_123"))
         .thenReturn(Optional.of(iteration));
 
     Map<String, Object> run = service.getRunSummaryByRecordingId("recording_123");
@@ -1186,7 +1679,7 @@ class BuilderGoalRunnerServiceTest {
   @Test
   void getRunSummaryByRecordingId_rejectsMissingRecording() {
     when(iterationRepository.findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
-                BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL, "missing_recording"))
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL, "missing_recording"))
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.getRunSummaryByRecordingId("missing_recording"))
@@ -1201,11 +1694,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of());
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -1228,12 +1725,18 @@ class BuilderGoalRunnerServiceTest {
             null,
             null,
             "http://127.0.0.1:8098",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null);
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
-                42, true, "http://127.0.0.1:8098", "QUEUED"));
+                42, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null));
 
     Map<String, Object> response =
         service.publishOnly(
@@ -1255,17 +1758,69 @@ class BuilderGoalRunnerServiceTest {
   }
 
   @Test
+  void publishOnly_neverInvokesPreparationValidationOrLaunch() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of()
+        );
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
+    when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
+        .thenReturn(dispatchReadyHealth());
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
+        .thenReturn(
+            ScriptExecutionService.Micro6PublishResult.success(
+                99, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null));
+
+    Map<String, Object> response =
+        service.publishOnly(
+            "hash-1",
+            "machine-1",
+            "configurable_woodcutting",
+            Map.of("treeType", "WILLOW"),
+            360,
+            null,
+            false,
+            null);
+
+    assertThat(response.get("published")).isEqualTo(true);
+    // Publish Task must never run shared preparation, validation, Gradle, cleanup, or launch.
+    verify(targetPreparationService, never()).ensureReady(any(), any(), any(), any());
+    verify(micro6TargetRelaunchService, never())
+        .restartTarget(
+            anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any(), any());
+    verify(micro6TargetRelaunchService, never())
+        .restartTarget(anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any());
+  }
+
+  @Test
   void publishOnly_defersWhenExecutorIsNotReachable() {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of());
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -1288,6 +1843,12 @@ class BuilderGoalRunnerServiceTest {
             null,
             null,
             "http://127.0.0.1:8098",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null);
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
 
@@ -1316,11 +1877,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of());
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -1343,6 +1908,12 @@ class BuilderGoalRunnerServiceTest {
             null,
             null,
             "http://127.0.0.1:8098",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null);
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
 
@@ -1391,7 +1962,11 @@ class BuilderGoalRunnerServiceTest {
     service.syncPendingLaunches();
 
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class), any());
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -1411,8 +1986,10 @@ class BuilderGoalRunnerServiceTest {
                     "launcher_machine_uuid", "machine-1"),
                 "target_preparation",
                 Map.of(
-                    "state", Micro6TargetRelaunchService.PHASE_PROCESS_EXITED,
-                    "message", "Micro6 process exited before readiness"))));
+                    "state",
+                    Micro6TargetRelaunchService.PHASE_PROCESS_EXITED,
+                    "message",
+                    "Micro6 process exited before readiness"))));
     when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
             BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(List.of(iteration));
@@ -1423,7 +2000,11 @@ class BuilderGoalRunnerServiceTest {
 
     assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.FAILED);
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class), any());
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -1433,11 +2014,15 @@ class BuilderGoalRunnerServiceTest {
             "3720a9a3b5c9f57b",
             "3720a9a3b5c9f57b",
             "udasuAvuco",
+            "udasuAvuco",
+            "udasuAvuco",
+            AccountIdentityContract.HASH_SCHEME,
             "udasu@example.test",
             "launcher",
             true,
             "ready",
-            Map.of());
+            Map.of()
+        );
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-udasu",
@@ -1449,12 +2034,19 @@ class BuilderGoalRunnerServiceTest {
             "accountbuilder",
             "IDLE",
             null,
-            java.time.Instant.now());
+            java.time.Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     ArgumentCaptor<Map<String, Object>> metadataCaptor = ArgumentCaptor.forClass(Map.class);
 
     when(accountCatalogService.findAccount("3720a9a3b5c9f57b")).thenReturn(Optional.of(account));
-    when(clientRegistryService.findRunnableClientForRecovery(
-            eq("3720a9a3b5c9f57b"), eq("udasuAvuco"), isNull(), any()))
+    when(clientRegistryService.findDispatchReadyClientForRecovery(
+            eq("3720a9a3b5c9f57b"), eq("udasuAvuco"), isNull(), any(), eq(360)))
         .thenReturn(Optional.of(targetClient));
     when(micro6ExecutorCatalogService.getCatalogForBaseUrl("http://127.0.0.1:18098", true))
         .thenReturn(
@@ -1486,11 +2078,17 @@ class BuilderGoalRunnerServiceTest {
                 null,
                 null,
                 "http://127.0.0.1:18098",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null));
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
-                77, false, "http://127.0.0.1:18098", "QUEUED"));
+                77, false, "http://127.0.0.1:18098", "QUEUED", "QUEUED", null));
 
     Map<String, Object> response =
         service.publishOnly(
@@ -1523,11 +2121,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of());
+            Map.of()
+        );
     PatchLoopIteration deferred = new PatchLoopIteration();
     deferred.setIterationId("buildergoal_publish_only_deferred");
     deferred.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
@@ -1574,11 +2176,17 @@ class BuilderGoalRunnerServiceTest {
                 null,
                 null,
                 "http://127.0.0.1:8098",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null));
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
-                43, false, "http://127.0.0.1:8098", "QUEUED"));
+                43, false, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null));
 
     Map<String, Object> response =
         service.publishOnly(
@@ -1603,11 +2211,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of());
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(
@@ -1629,7 +2241,18 @@ class BuilderGoalRunnerServiceTest {
   void startRun_rejectsBeforePersistenceWhenLaunchCredentialsAreMissing() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
-            "hash-1", "hash-1", "bigGreenMeat", null, "launcher", true, "ready", Map.of());
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            null,
+            "launcher",
+            true,
+            "ready",
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(
@@ -1657,7 +2280,11 @@ class BuilderGoalRunnerServiceTest {
     verify(iterationRepository, never()).save(any(PatchLoopIteration.class));
     verify(persistenceService, never()).saveIteration(any(PatchLoopIteration.class));
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -1667,11 +2294,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of());
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(() -> service.launchAccount("hash-1", "machine-1", 360))
@@ -1679,7 +2310,11 @@ class BuilderGoalRunnerServiceTest {
         .hasMessageContaining("missing a password for local Micro6 relaunch");
 
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -1689,11 +2324,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -1726,7 +2365,18 @@ class BuilderGoalRunnerServiceTest {
   void publishOnly_publishesWithoutLaunchCredentialsToExistingExecutor() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
-            "hash-1", "hash-1", "bigGreenMeat", null, "launcher", true, "ready", Map.of());
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            null,
+            "launcher",
+            true,
+            "ready",
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -1749,12 +2399,18 @@ class BuilderGoalRunnerServiceTest {
             null,
             null,
             "http://127.0.0.1:8098",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null);
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
-                42, true, "http://127.0.0.1:8098", "QUEUED"));
+                42, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null));
 
     Map<String, Object> response =
         service.publishOnly(
@@ -1773,7 +2429,11 @@ class BuilderGoalRunnerServiceTest {
     assertThat(response.get("launchFallback")).isEqualTo(false);
     verify(scriptExecutionService, times(1)).publishMicro6Task(anyString(), anyMap(), any());
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -1783,11 +2443,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             false,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(
@@ -1815,11 +2479,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of());
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(
@@ -1838,7 +2506,11 @@ class BuilderGoalRunnerServiceTest {
 
     verify(iterationRepository, never()).save(any(PatchLoopIteration.class));
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -1904,11 +2576,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "user@example.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     PatchLoopIteration iteration = new PatchLoopIteration();
     iteration.setIterationId("buildergoal_cancel_race");
     iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
@@ -1929,7 +2605,10 @@ class BuilderGoalRunnerServiceTest {
         .thenReturn(Optional.of(iteration));
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(targetPreparationService.ensureReady(
-            any(Micro6TargetPreparationService.PreparationRequest.class), any()))
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
         .thenAnswer(
             invocation -> {
               // Simulate stopRun committing while the relaunch worker is in its readiness poll.
@@ -1949,17 +2628,133 @@ class BuilderGoalRunnerServiceTest {
   }
 
   @Test
+  void pendingLaunchCancellationWithAlreadyTerminalIterationPerformsNoTransition()
+      throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            "user@example.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret")
+        );
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_cancel_terminal");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "world", 360,
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_hash", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"),
+                "settings", Map.of("treeType", "WILLOW"))));
+    when(iterationRepository.findByIterationId("buildergoal_cancel_terminal"))
+        .thenReturn(Optional.of(iteration));
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenAnswer(
+            invocation -> {
+              // Simulate operator Stop terminalizing the iteration mid-flight.
+              iteration.setStatus(PatchLoopStatus.CANCELLED);
+              throw new BuilderGoalLaunchCancelledException();
+            });
+
+    Method continuePendingLaunch =
+        BuilderGoalRunnerService.class.getDeclaredMethod("continuePendingLaunch", String.class);
+    continuePendingLaunch.setAccessible(true);
+    continuePendingLaunch.invoke(service, "buildergoal_cancel_terminal");
+
+    verify(persistenceService, never())
+        .markIterationFailed(any(), anyString(), anyString(), anyString());
+  }
+
+  @Test
+  void pendingLaunchCancellationLeaseLossMarksNonTerminalIterationFailed() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            "user@example.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret")
+        );
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_cancel_lease_loss");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "world", 360,
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_hash", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"),
+                "settings", Map.of("treeType", "WILLOW"))));
+    when(iterationRepository.findByIterationId("buildergoal_cancel_lease_loss"))
+        .thenReturn(Optional.of(iteration));
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenThrow(new BuilderGoalLaunchCancelledException());
+
+    Method continuePendingLaunch =
+        BuilderGoalRunnerService.class.getDeclaredMethod("continuePendingLaunch", String.class);
+    continuePendingLaunch.setAccessible(true);
+    continuePendingLaunch.invoke(service, "buildergoal_cancel_lease_loss");
+
+    verify(persistenceService)
+        .markIterationFailed(
+            eq(iteration),
+            eq(PatchLoopFailureCode.SCRIPT_START_FAILED),
+            eq("Micro6 launch was cancelled before the executor became ready"),
+            eq("lease lost or stop requested"));
+  }
+
+  @Test
   void startRun_persistsComputedAccountReadinessNotRawLauncherMetadata() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -2008,11 +2803,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
@@ -2024,9 +2823,16 @@ class BuilderGoalRunnerServiceTest {
             "accountbuilder_builderpro",
             "IDLE",
             null,
-            Instant.now());
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
-    when(clientRegistryService.findRunnableClientForRecovery(
+    when(clientRegistryService.findOnlineClientForRecovery(
             eq("hash-1"), eq("bigGreenMeat"), isNull(), any()))
         .thenReturn(Optional.of(targetClient));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
@@ -2106,17 +2912,47 @@ class BuilderGoalRunnerServiceTest {
   }
 
   @Test
+  void runSummary_pausedStatusSurvivesSummaryGenerationAndRemainsStoppable() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_paused0001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setPrompt("35 Woodcutting");
+    iteration.setStatus(PatchLoopStatus.RUNNING_SCRIPT);
+    iteration.setRunSessionId("session-1");
+
+    Map<String, Object> taskMetadata = new LinkedHashMap<>();
+    taskMetadata.put("display_name", "35 Woodcutting");
+    taskMetadata.put("task_start_confirmed", true);
+    taskMetadata.put("micro6_publish", Map.of("status", "PAUSED", "entry_id", 1001));
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    when(iterationRepository.findByIterationId("buildergoal_paused0001"))
+        .thenReturn(Optional.of(iteration));
+
+    Map<String, Object> run = service.getRunSummary("buildergoal_paused0001");
+
+    assertThat(run).containsEntry("status", "PAUSED");
+    assertThat(run).containsEntry("displayStatus", "PAUSED");
+    assertThat(run).containsEntry("canStop", true);
+    assertThat(String.valueOf(run.get("status"))).doesNotContain("RUNNING");
+  }
+
+  @Test
   void launchAccount_rejectsMissingWorldBeforePreparation() {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(() -> service.launchAccount("hash-1", "machine-1", null))
@@ -2124,7 +2960,11 @@ class BuilderGoalRunnerServiceTest {
         .hasMessage("world must be between 300 and 700");
 
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -2134,11 +2974,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(() -> service.launchAccount("hash-1", "machine-1", 299))
@@ -2146,7 +2990,11 @@ class BuilderGoalRunnerServiceTest {
         .hasMessage("world must be between 300 and 700");
 
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -2156,11 +3004,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(() -> service.launchAccount("hash-1", "machine-1", 701))
@@ -2168,7 +3020,11 @@ class BuilderGoalRunnerServiceTest {
         .hasMessage("world must be between 300 and 700");
 
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -2178,14 +3034,21 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(targetPreparationService.ensureReady(
-            any(Micro6TargetPreparationService.PreparationRequest.class)))
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
         .thenReturn(
             new Micro6TargetPreparationService.PreparationResult(
                 new Micro6OnlineClientRegistryService.TargetClient(
@@ -2198,20 +3061,406 @@ class BuilderGoalRunnerServiceTest {
                     "accountbuilder_builderpro",
                     "IDLE",
                     null,
-                    Instant.now()),
+                    Instant.now(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
                 Map.of("state", Micro6TargetPreparationService.PHASE_READY_TO_PUBLISH),
                 null,
                 null));
 
-    assertThat(service.launchAccount("hash-1", "machine-1", 300).get("accepted")).isEqualTo(true);
-    assertThat(service.launchAccount("hash-1", "machine-1", 700).get("accepted")).isEqualTo(true);
+    Map<String, Object> lower = service.launchAccount("hash-1", "machine-1", 300);
+    assertThat(lower.get("operationId")).isNotNull();
+    assertThat(lower.get("world")).isEqualTo(300);
+    assertThat(lower.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_READY);
+    Map<String, Object> upper = service.launchAccount("hash-1", "machine-1", 700);
+    assertThat(upper.get("operationId")).isNotNull();
+    assertThat(upper.get("world")).isEqualTo(700);
+    assertThat(upper.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_READY);
+  }
+
+  private BuilderGoalAccountCatalogService.AccountDefinition credentialedAccount() {
+    return new BuilderGoalAccountCatalogService.AccountDefinition(
+        "hash-1",
+        "hash-1",
+        "bigGreenMeat",
+        "bigGreenMeat",
+        "bigGreenMeat",
+        AccountIdentityContract.HASH_SCHEME,
+        "IlaWalter280@outlook.com",
+        "launcher",
+        true,
+        "ready",
+        Map.of("password", "s3cret")
+    );
+  }
+
+  private Micro6OnlineClientRegistryService.TargetClient targetClientAt(String baseUrl) {
+    return new Micro6OnlineClientRegistryService.TargetClient(
+        "client-1",
+        "bigGreenMeat",
+        "hash-1",
+        baseUrl,
+        "0.0.0.0:8098",
+        "micro6",
+        "accountbuilder_builderpro",
+        "IDLE",
+        null,
+        Instant.now(),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
+  }
+
+  private ScriptExecutionService.Micro6ExecutorHealthResult dispatchReadyHealth() {
+    return new ScriptExecutionService.Micro6ExecutorHealthResult(
+        true,
+        true,
+        "READY_TO_PUBLISH",
+        null,
+        "bigGreenMeat",
+        "hash-1",
+        "bigGreenMeat",
+        "hash-1",
+        false,
+        null,
+        "accountbuilder_ready",
+        "logged_in",
+        null,
+        null,
+        null,
+        "http://127.0.0.1:8098",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
+  }
+
+  @Test
+  void launchAccount_reusesReadyExecutorWhenHealthConfirmsDispatch() {
+    when(accountCatalogService.findAccount("hash-1"))
+        .thenReturn(Optional.of(credentialedAccount()));
+    Micro6OnlineClientRegistryService.TargetClient targetClient =
+        new Micro6OnlineClientRegistryService.TargetClient(
+            "client-1",
+            "bigGreenMeat",
+            "hash-1",
+            "http://127.0.0.1:8098",
+            "0.0.0.0:8098",
+            "micro6",
+            "accountbuilder_builderpro",
+            "IDLE",
+            null,
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenReturn(
+            new Micro6TargetPreparationService.PreparationResult(
+                targetClient,
+                Map.of(
+                    "state",
+                    Micro6TargetPreparationService.PHASE_READY_TO_PUBLISH,
+                    "readiness_phase",
+                    Micro6TargetRelaunchService.PHASE_READY,
+                    "readiness_reason",
+                    "dispatch-ready",
+                    "local_executor_base_url",
+                    "http://127.0.0.1:8098",
+                    "reused_executor",
+                    true,
+                    "launcher_log_file",
+                    "C:\\micro6\\micro6-recovery-launch.log"),
+                null,
+                null));
+
+    Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
+
+    assertThat(result.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_READY);
+    assertThat(result.get("reusedExecutor")).isEqualTo(true);
+    assertThat(result.get("success")).isEqualTo(true);
+    assertThat(result.get("terminal")).isEqualTo(true);
+    // Reuse happens inside the shared lease-protected preparation, not before it.
+    verify(targetPreparationService, times(1)).ensureReady(any(), any(), any(), any());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> target = (Map<String, Object>) result.get("target");
+    assertThat(target).containsEntry("advertised_base_url", "http://127.0.0.1:8098");
+  }
+
+  @Test
+  void launchAccount_nonReadyExecutorCallsSharedPreparationAndReplaces() {
+    when(accountCatalogService.findAccount("hash-1"))
+        .thenReturn(Optional.of(credentialedAccount()));
+    Micro6OnlineClientRegistryService.TargetClient targetClient =
+        new Micro6OnlineClientRegistryService.TargetClient(
+            "client-2",
+            "bigGreenMeat",
+            "hash-1",
+            "http://127.0.0.1:8098",
+            "0.0.0.0:8098",
+            "micro6",
+            "accountbuilder_builderpro",
+            "IDLE",
+            null,
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenReturn(
+            new Micro6TargetPreparationService.PreparationResult(
+                targetClient,
+                Map.of(
+                    "state",
+                    Micro6TargetPreparationService.PHASE_READY_TO_PUBLISH,
+                    "readiness_phase",
+                    Micro6TargetRelaunchService.PHASE_READY,
+                    "readiness_reason",
+                    "dispatch-ready",
+                    "local_executor_base_url",
+                    "http://127.0.0.1:8098",
+                    "reused_executor",
+                    false,
+                    "launcher_log_file",
+                    "C:\\micro6\\micro6-recovery-launch.log"),
+                null,
+                null));
+
+    Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
+
+    // A non-ready executor is never a CONFLICT: the shared lease-protected preparation replaces it.
+    assertThat(result.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_READY);
+    assertThat(result.get("reusedExecutor")).isEqualTo(false);
+    assertThat(result.get("success")).isEqualTo(true);
+    assertThat(result.get("terminal")).isEqualTo(true);
+    verify(targetPreparationService, times(1)).ensureReady(any(), any(), any(), any());
+  }
+
+  static class RecordingExecutor implements Executor {
+    final java.util.List<Runnable> tasks = new java.util.ArrayList<>();
+
+    @Override
+    public void execute(Runnable command) {
+      tasks.add(command);
+    }
+  }
+
+  @Test
+  void launchAccount_deduplicatesConcurrentRequestsForSameAccount() {
+    RecordingExecutor recordingExecutor = new RecordingExecutor();
+    BuilderGoalRunnerService isolated =
+        createService(
+            new BuilderGoalLaunchOperationService(),
+            new BuilderGoalLocalLaunchCoordinatorService(),
+            recordingExecutor);
+    when(accountCatalogService.findAccount("hash-1"))
+        .thenReturn(Optional.of(credentialedAccount()));
+
+    Map<String, Object> first = isolated.launchAccount("hash-1", "machine-1", 360);
+    Map<String, Object> second = isolated.launchAccount("hash-1", "machine-1", 360);
+
+    assertThat(recordingExecutor.tasks).hasSize(1);
+    assertThat(first.get("operationId")).isEqualTo(second.get("operationId"));
+    assertThat(first.get("deduplicated")).isEqualTo(false);
+    assertThat(second.get("deduplicated")).isEqualTo(true);
+    assertThat(first.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_QUEUED);
+    assertThat(second.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_QUEUED);
+  }
+
+  @Test
+  void launchAccount_marksFailedWhenPreparationThrows() {
+    when(accountCatalogService.findAccount("hash-1"))
+        .thenReturn(Optional.of(credentialedAccount()));
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenThrow(
+            new Micro6TargetPreparationService.PreparationException(
+                Micro6TargetRelaunchService.PHASE_PROCESS_EXITED,
+                "Micro6 relaunch process exited before the local executor became ready"));
+
+    Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
+
+    assertThat(result.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_FAILED);
+    assertThat(result.get("success")).isEqualTo(false);
+    assertThat(result.get("terminal")).isEqualTo(true);
+    assertThat(String.valueOf(result.get("message"))).contains("process exited");
+    assertThat(result.get("readinessPhase"))
+        .isEqualTo(Micro6TargetRelaunchService.PHASE_PROCESS_EXITED);
+  }
+
+  @Test
+  void launchAccount_progressIsFedIntoTheOperationEvenOnFailure() {
+    when(accountCatalogService.findAccount("hash-1"))
+        .thenReturn(Optional.of(credentialedAccount()));
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenAnswer(
+            invocation -> {
+              @SuppressWarnings("unchecked")
+              java.util.function.Consumer<Micro6TargetRelaunchService.RelaunchProgress> listener =
+                  invocation.getArgument(3);
+              listener.accept(
+                  new Micro6TargetRelaunchService.RelaunchProgress(
+                      Micro6TargetRelaunchService.PHASE_WAITING_FOR_ACCOUNT,
+                      "Micro6 local executor came up but did not identify the selected account yet",
+                      "http://127.0.0.1:8098",
+                      "bigGreenMeat",
+                      "hash-1",
+                      "bigGreenMeat",
+                      "hash-1",
+                      1234L,
+                      false,
+                      null,
+                      "starting_accountbuilder",
+                      "waiting_for_login",
+                      1,
+                      5,
+                      null,
+                      ":runelite-client:run",
+                      "--profile-email=********",
+                      false,
+                      "C:\\micro6\\micro6-recovery-launch.log",
+                      null,
+                      null,
+                      null));
+              listener.accept(
+                  new Micro6TargetRelaunchService.RelaunchProgress(
+                      Micro6TargetRelaunchService.PHASE_PROCESS_EXITED,
+                      "Micro6 relaunch process exited before the local executor became ready",
+                      "http://127.0.0.1:8098",
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      null,
+                      ":runelite-client:run",
+                      "--profile-email=********",
+                      false,
+                      "C:\\micro6\\micro6-recovery-launch.log",
+                      "PROCESS_EXITED",
+                      "process exited detail",
+                      null));
+              throw new Micro6TargetPreparationService.PreparationException(
+                  Micro6TargetRelaunchService.PHASE_PROCESS_EXITED,
+                  "Micro6 relaunch process exited before the local executor became ready");
+            });
+
+    Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
+
+    assertThat(result.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_FAILED);
+    assertThat(result.get("launcherLogFile")).isEqualTo("C:\\micro6\\micro6-recovery-launch.log");
+    assertThat(result.get("failureKind")).isEqualTo("PROCESS_EXITED");
+    assertThat(result.get("failureDetail")).isEqualTo("process exited detail");
+    assertThat(result.get("launchArgsPreview")).isEqualTo("--profile-email=********");
+    assertThat(result.get("readinessPhase"))
+        .isEqualTo(Micro6TargetRelaunchService.PHASE_PROCESS_EXITED);
+  }
+
+  @Test
+  void launchOperationService_mapsRelaunchProgressPhases() {
+    BuilderGoalLaunchOperationService ops = new BuilderGoalLaunchOperationService();
+    BuilderGoalLaunchOperationService.CreateResult created =
+        ops.createOrReuse("hash-1", "hash-1", "bigGreenMeat", "machine-1", 360);
+    String operationId = created.operation().getOperationId();
+    ops.updateStatus(
+        operationId,
+        BuilderGoalLaunchOperationService.STATUS_CHECKING_EXISTING,
+        "Checking for an existing matching Micro6 executor");
+    Map<String, Object> checking = ops.toResponse(operationId, false);
+    assertThat(checking.get("status"))
+        .isEqualTo(BuilderGoalLaunchOperationService.STATUS_CHECKING_EXISTING);
+
+    ops.updateProgress(
+        operationId,
+        new Micro6TargetRelaunchService.RelaunchProgress(
+            Micro6TargetRelaunchService.PHASE_WAITING_FOR_DISPATCH,
+            "Micro6 local executor is waiting for login",
+            "http://127.0.0.1:8098",
+            null,
+            null,
+            null,
+            null,
+            null,
+            true,
+            "waiting_for_login",
+            "starting_accountbuilder",
+            "waiting_for_login",
+            1,
+            5,
+            null,
+            ":runelite-client:run",
+            null,
+            false,
+            null,
+            null,
+            null,
+            null));
+    Map<String, Object> waiting = ops.toResponse(operationId, false);
+    assertThat(waiting.get("status"))
+        .isEqualTo(BuilderGoalLaunchOperationService.STATUS_WAITING_FOR_DISPATCH);
+    assertThat(waiting.get("readinessPhase"))
+        .isEqualTo(Micro6TargetRelaunchService.PHASE_WAITING_FOR_DISPATCH);
+    assertThat(String.valueOf(waiting.get("message"))).contains("waiting for login");
+    assertThat(waiting.get("terminal")).isEqualTo(false);
   }
 
   @Test
   void publishOnly_succeedsWithoutLauncherMachineWhenExecutorIsAvailable() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
-            "hash-1", "hash-1", "bigGreenMeat", null, "launcher", true, "ready", Map.of());
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            null,
+            "launcher",
+            true,
+            "ready",
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -2235,11 +3484,17 @@ class BuilderGoalRunnerServiceTest {
                 null,
                 null,
                 "http://127.0.0.1:8098",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null));
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
-                42, true, "http://127.0.0.1:8098", "QUEUED"));
+                42, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null));
 
     Map<String, Object> response =
         service.publishOnly(
@@ -2263,7 +3518,18 @@ class BuilderGoalRunnerServiceTest {
   void publishOnly_acceptsCredentiallessAccountWhenFallbackIsFalse() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
-            "hash-1", "hash-1", "bigGreenMeat", null, "launcher", true, "ready", Map.of());
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            null,
+            "launcher",
+            true,
+            "ready",
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -2287,11 +3553,17 @@ class BuilderGoalRunnerServiceTest {
                 null,
                 null,
                 "http://127.0.0.1:8098",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null));
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
-                42, true, "http://127.0.0.1:8098", "QUEUED"));
+                42, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null));
 
     Map<String, Object> response =
         service.publishOnly(
@@ -2307,7 +3579,11 @@ class BuilderGoalRunnerServiceTest {
     assertThat(response.get("accepted")).isEqualTo(true);
     assertThat(response.get("published")).isEqualTo(true);
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -2317,11 +3593,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     BuilderGoalLauncherControlService.LauncherMachine offline =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-offline", "Machine Offline", "OFFLINE", true, false, Map.of());
@@ -2365,11 +3645,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     BuilderGoalLauncherControlService.LauncherMachine remote =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-remote", "jew (jomar)", "ONLINE", true, true, Map.of());
@@ -2413,11 +3697,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     BuilderGoalLauncherControlService.LauncherMachine disabled =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-disabled", "Machine Disabled", "ONLINE", false, true, Map.of());
@@ -2461,11 +3749,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(launcherControlService.findMachineByUuid("unknown-machine")).thenReturn(Optional.empty());
 
@@ -2474,7 +3766,11 @@ class BuilderGoalRunnerServiceTest {
         .hasMessage("Selected launcher machine was not found");
 
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -2484,11 +3780,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     BuilderGoalLauncherControlService.LauncherMachine offline =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-offline", "Machine Offline", "OFFLINE", true, false, Map.of());
@@ -2504,7 +3804,11 @@ class BuilderGoalRunnerServiceTest {
         .hasMessage("Launcher machine is offline");
 
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -2514,11 +3818,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     BuilderGoalLauncherControlService.LauncherMachine remote =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-remote", "jew (jomar)", "ONLINE", true, true, Map.of());
@@ -2534,7 +3842,11 @@ class BuilderGoalRunnerServiceTest {
         .hasMessage("Builder Goal local dev launches only run on the local ChromaScape host");
 
     verify(targetPreparationService, never())
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -2544,11 +3856,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
@@ -2560,10 +3876,20 @@ class BuilderGoalRunnerServiceTest {
             "accountbuilder_builderpro",
             "IDLE",
             null,
-            Instant.now());
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(targetPreparationService.ensureReady(
-            any(Micro6TargetPreparationService.PreparationRequest.class)))
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
         .thenReturn(
             new Micro6TargetPreparationService.PreparationResult(
                 targetClient,
@@ -2573,10 +3899,15 @@ class BuilderGoalRunnerServiceTest {
 
     Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
 
-    assertThat(result.get("accepted")).isEqualTo(true);
+    assertThat(result.get("operationId")).isNotNull();
+    assertThat(result.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_READY);
     assertThat(result.get("launcherMachineUuid")).isEqualTo("machine-1");
     verify(targetPreparationService)
-        .ensureReady(any(Micro6TargetPreparationService.PreparationRequest.class));
+        .ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any());
   }
 
   @Test
@@ -2586,11 +3917,15 @@ class BuilderGoalRunnerServiceTest {
             "hash-1",
             "hash-1",
             "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
             "IlaWalter280@outlook.com",
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret"));
+            Map.of("password", "s3cret")
+        );
     BuilderGoalLauncherControlService.LauncherMachine remote =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-remote", "jew (jomar)", "ONLINE", true, true, Map.of());
@@ -2624,7 +3959,18 @@ class BuilderGoalRunnerServiceTest {
   void publishOnly_withoutFallbackStillWorksWithoutMachine() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
-            "hash-1", "hash-1", "bigGreenMeat", null, "launcher", true, "ready", Map.of());
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            null,
+            "launcher",
+            true,
+            "ready",
+            Map.of()
+        );
     when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
@@ -2648,11 +3994,17 @@ class BuilderGoalRunnerServiceTest {
                 null,
                 null,
                 "http://127.0.0.1:8098",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null));
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
-                42, true, "http://127.0.0.1:8098", "QUEUED"));
+                42, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null));
 
     Map<String, Object> response =
         service.publishOnly(
@@ -3030,5 +4382,332 @@ class BuilderGoalRunnerServiceTest {
                 "Willow tree",
                 "Camera angle obstructed")));
     return bundle;
+  }
+
+  @Test
+  void launchAccount_passesRealCancellationToPreparation() {
+    when(accountCatalogService.findAccount("hash-1"))
+        .thenReturn(Optional.of(credentialedAccount()));
+    AtomicReference<BuilderGoalLaunchCancellation> capturedCancellation = new AtomicReference<>();
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenAnswer(
+            invocation -> {
+              capturedCancellation.set(invocation.getArgument(2));
+              return new Micro6TargetPreparationService.PreparationResult(
+                  targetClientAt("http://127.0.0.1:8098"),
+                  Map.of("state", Micro6TargetPreparationService.PHASE_READY_TO_PUBLISH),
+                  null,
+                  null);
+            });
+
+    Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
+
+    assertThat(result.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_READY);
+    BuilderGoalLaunchCancellation cancellation = capturedCancellation.get();
+    assertThat(cancellation).isNotNull();
+    // The active-work cancellation (not a no-op) must be passed into preparation so the
+    // watchdog/stop can abort the worker.
+    assertThat(cancellation.isCancelled()).isFalse();
+  }
+
+  @Test
+  void pendingLaunch_leaseConflictPersistsWaitingForLeaseAndDoesNotFail() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "hash-1",
+            "hash-1",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            "user@example.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret")
+        );
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_lease_wait");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.QUEUED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "world", 360,
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_hash", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"),
+                "settings", Map.of("treeType", "WILLOW"))));
+    when(iterationRepository.findByIterationId("buildergoal_lease_wait"))
+        .thenReturn(Optional.of(iteration));
+    when(accountCatalogService.findAccount("hash-1")).thenReturn(Optional.of(account));
+
+    // Another workflow holds the lease for the same machine+port.
+    localLaunchCoordinator.tryAcquire("machine-1", 8098, "other-account", "op-other");
+
+    Method continuePendingLaunch =
+        BuilderGoalRunnerService.class.getDeclaredMethod("continuePendingLaunch", String.class);
+    continuePendingLaunch.setAccessible(true);
+    continuePendingLaunch.invoke(service, "buildergoal_lease_wait");
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> savedMetadata =
+        objectMapper.convertValue(iteration.getTaskMetadataJson(), Map.class);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> preparation = (Map<String, Object>) savedMetadata.get("target_preparation");
+    assertThat(preparation.get("state")).isEqualTo("WAITING_FOR_LOCAL_LAUNCH_LEASE");
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.QUEUED);
+    verify(targetPreparationService, never()).ensureReady(any(), any(), any(), any());
+    verify(persistenceService, never()).markIterationFailed(any(), any(), anyString(), anyString());
+  }
+
+  @Test
+  void recovery_conflictBeforePatchDoesNotApplyOrChangePhase() throws Exception {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_recovery_conflict");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setPatchId("patch-123");
+    iteration.setAnalysisResponseJson(
+        objectMapper.readTree(
+            """
+            {
+              "schemaVersion": "2.0.0",
+              "analysisId": "analysis-123",
+              "status": "SUCCESS",
+              "patchDraft": {
+                "patchId": "patch-123",
+                "description": "fix",
+                "changes": [
+                  { "filePath": "tasks/x.java", "oldText": "old", "newText": "new" }
+                ]
+              }
+            }
+            """));
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "task_key", "configurable_woodcutting",
+                "display_name", "Configurable Woodcutting",
+                "micro6_publish", Map.of("status", "FAILED"),
+                "recovery", Map.of("phase", "PATCH_PLAN_READY"),
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_hash", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "launcher_machine_uuid", "machine-1"))));
+    when(iterationRepository.findByIterationId("buildergoal_recovery_conflict"))
+        .thenReturn(Optional.of(iteration));
+
+    // Another workflow holds the lease, so recovery must conflict before patching.
+    localLaunchCoordinator.tryAcquire("machine-1", 8098, "other-account", "op-other");
+
+    assertThatThrownBy(() -> service.approveRecovery("buildergoal_recovery_conflict"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("holds the local launch lease");
+    verify(micro6TaskSourcePatchService, never()).applyPatch(any(), any(), any(), any());
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> savedMetadata =
+        objectMapper.convertValue(iteration.getTaskMetadataJson(), Map.class);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> recovery = (Map<String, Object>) savedMetadata.get("recovery");
+    assertThat(recovery.get("phase")).isEqualTo("PATCH_PLAN_READY");
+    assertThat(iteration.getMicro6RevisionId()).isNull();
+  }
+
+  @Test
+  void recovery_holdsLeaseAcrossPatchRelaunchAndRepublish() throws Exception {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_recovery_lease");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setPatchId("patch-123");
+    iteration.setImportedPayloadJson(
+        objectMapper.readTree(
+            """
+            {
+              "task_key": "configurable_woodcutting",
+              "settings": { "treeType": "WILLOW" }
+            }
+            """));
+    iteration.setAnalysisResponseJson(
+        objectMapper.readTree(
+            """
+            {
+              "schemaVersion": "2.0.0",
+              "analysisId": "analysis-123",
+              "status": "SUCCESS",
+              "patchDraft": {
+                "patchId": "patch-123",
+                "description": "fix",
+                "changes": [
+                  { "filePath": "tasks/x.java", "oldText": "old", "newText": "new" }
+                ]
+              }
+            }
+            """));
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "task_key", "configurable_woodcutting",
+                "display_name", "Configurable Woodcutting",
+                "settings", Map.of("treeType", "WILLOW"),
+                "world", 360,
+                "micro6_publish", Map.of("status", "FAILED"),
+                "recovery", Map.of("phase", "PATCH_PLAN_READY"),
+                "mule_account",
+                    Map.of(
+                        "account_id", "hash-1",
+                        "account_hash", "hash-1",
+                        "account_name", "bigGreenMeat",
+                        "email", "user@example.com",
+                        "launcher_machine_uuid", "machine-1"))));
+    when(iterationRepository.findByIterationId("buildergoal_recovery_lease"))
+        .thenReturn(Optional.of(iteration));
+
+    Micro6TaskSourcePatchService.PatchApplyResult patchResult =
+        new Micro6TaskSourcePatchService.PatchApplyResult(
+            "configurable_woodcutting", "rev-1", 1, 1, "patched");
+    when(micro6TaskSourcePatchService.applyPatch(
+            isNull(), eq("configurable_woodcutting"), eq("buildergoal_recovery_lease"), any()))
+        .thenReturn(patchResult);
+    AtomicBoolean leaseHeldDuringRelaunch = new AtomicBoolean(false);
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenAnswer(
+            invocation -> {
+              BuilderGoalLocalLaunchCoordinatorService.LeaseHandle lease =
+                  invocation.getArgument(1);
+              // The recovery workflow must still hold the lease while it relaunches.
+              leaseHeldDuringRelaunch.set(localLaunchCoordinator.holdsLease(lease));
+              return new Micro6TargetPreparationService.PreparationResult(
+                  targetClientAt("http://127.0.0.1:8098"),
+                  Map.of(
+                      "state",
+                      Micro6TargetPreparationService.PHASE_READY_TO_PUBLISH,
+                      "launcher_pid",
+                      5555L),
+                  null,
+                  null);
+            });
+    when(scriptExecutionService.reserveMicro6EntryId()).thenReturn(100);
+    when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
+        .thenReturn(
+            new ScriptExecutionService.Micro6ExecutorHealthResult(
+                true,
+                true,
+                "READY_TO_PUBLISH",
+                "dispatch-ready",
+                "bigGreenMeat",
+                "hash-1",
+                "bigGreenMeat",
+                "hash-1",
+                false,
+                null,
+                "accountbuilder_ready",
+                "logged_in",
+                null,
+                null,
+                null,
+                "http://127.0.0.1:8098",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null));
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
+        .thenReturn(
+            ScriptExecutionService.Micro6PublishResult.success(
+                100, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null));
+
+    Map<String, Object> response = service.approveRecovery("buildergoal_recovery_lease");
+
+    assertThat(response.get("recoveryPhase")).isEqualTo("WAITING_FOR_DEBUG_BIND");
+    // The recovery workflow held the lease across the relaunch, and the finally block released it.
+    assertThat(leaseHeldDuringRelaunch.get()).isTrue();
+    assertThat(
+            localLaunchCoordinator
+                .tryAcquire("machine-1", 8098, "hash-1", "after-recovery")
+                .isSuccess())
+        .isTrue();
+  }
+
+  @Test
+  void launchAccount_hashMismatchOverridesMatchingName() {
+    when(accountCatalogService.findAccount("hash-1"))
+        .thenReturn(Optional.of(credentialedAccount()));
+    Micro6OnlineClientRegistryService.TargetClient replacement =
+        new Micro6OnlineClientRegistryService.TargetClient(
+            "client-new",
+            "bigGreenMeat",
+            "hash-1",
+            "http://127.0.0.1:8098",
+            "0.0.0.0:8098",
+            "micro6",
+            "accountbuilder_builderpro",
+            "IDLE",
+            null,
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    when(targetPreparationService.ensureReady(
+            any(Micro6TargetPreparationService.PreparationRequest.class),
+            any(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle.class),
+            any(BuilderGoalLaunchCancellation.class),
+            any()))
+        .thenReturn(
+            new Micro6TargetPreparationService.PreparationResult(
+                replacement,
+                Map.of(
+                    "state",
+                    Micro6TargetPreparationService.PHASE_READY_TO_PUBLISH,
+                    "readiness_phase",
+                    Micro6TargetRelaunchService.PHASE_READY,
+                    "readiness_reason",
+                    "dispatch-ready",
+                    "local_executor_base_url",
+                    "http://127.0.0.1:8098",
+                    "reused_executor",
+                    false,
+                    "launcher_log_file",
+                    "C:\\micro6\\micro6-recovery-launch.log"),
+                null,
+                null));
+
+    Map<String, Object> result = service.launchAccount("hash-1", "machine-1", 360);
+
+    // A matching display name cannot override a resolved-hash mismatch: a mismatched executor is
+    // never reused or reported as CONFLICT; the shared preparation replaces it under the lease.
+    assertThat(result.get("status")).isEqualTo(BuilderGoalLaunchOperationService.STATUS_READY);
+    assertThat(result.get("reusedExecutor")).isEqualTo(false);
+    assertThat(result.get("success")).isEqualTo(true);
+    verify(targetPreparationService, times(1)).ensureReady(any(), any(), any(), any());
+    assertThat(
+            localLaunchCoordinator
+                .tryAcquire("machine-1", 8098, "hash-1", "after-launch")
+                .isSuccess())
+        .isTrue();
   }
 }

@@ -18,8 +18,8 @@ import org.springframework.stereotype.Service;
  * Manages end-to-end Codex MCP verification with server-side caching.
  *
  * <p>Runs a real minimal MCP analyze call through the production transport path to confirm that
- * Codex is the active runtime provider. Results are cached with a configurable TTL to avoid
- * running live verification on every UI poll.
+ * Codex is the active runtime provider. Results are cached with a configurable TTL to avoid running
+ * live verification on every UI poll.
  */
 @Service
 public class McpVerificationService {
@@ -38,8 +38,7 @@ public class McpVerificationService {
       McpTransportClient mcpTransportClient,
       AnalysisProvider analysisProvider,
       @Value("${analysis.mcp.verification-ttl-seconds:300}") long verificationTtlSeconds,
-      @Value("${analysis.mcp.enable-manual-verification:true}")
-          boolean enableManualVerification) {
+      @Value("${analysis.mcp.enable-manual-verification:true}") boolean enableManualVerification) {
     this.mcpTransportClient = mcpTransportClient;
     this.analysisProvider = analysisProvider;
     this.verificationTtlSeconds = verificationTtlSeconds;
@@ -66,23 +65,21 @@ public class McpVerificationService {
     }
     long ageSeconds = Duration.between(verifiedAt, Instant.now()).getSeconds();
     if (ageSeconds > verificationTtlSeconds) {
-      logger.debug("Cached verification result expired (age: {}s, ttl: {}s)", ageSeconds,
+      logger.debug(
+          "Cached verification result expired (age: {}s, ttl: {}s)",
+          ageSeconds,
           verificationTtlSeconds);
       return null;
     }
     return result;
   }
 
-  /**
-   * Returns the last verification attempt timestamp.
-   */
+  /** Returns the last verification attempt timestamp. */
   public Instant getLastVerificationAttempt() {
     return lastVerificationAttempt;
   }
 
-  /**
-   * Returns whether manual verification is enabled via configuration.
-   */
+  /** Returns whether manual verification is enabled via configuration. */
   public boolean isManualVerificationEnabled() {
     return enableManualVerification;
   }
@@ -142,8 +139,7 @@ public class McpVerificationService {
     if (runtimeProvider == null) {
       logger.warn("MCP health metadata missing provider field");
       McpVerificationResult failure =
-          McpVerificationResult.failure(
-              "MCP bridge health metadata missing provider field", null);
+          McpVerificationResult.failure("MCP bridge health metadata missing provider field", null);
       cachedResult = failure;
       return failure;
     }
@@ -156,8 +152,7 @@ public class McpVerificationService {
           normalizedProvider);
       McpVerificationResult failure =
           McpVerificationResult.failure(
-              "Runtime wrapper is using " + normalizedProvider + ", not Codex",
-              normalizedProvider);
+              "Runtime wrapper is using " + normalizedProvider + ", not Codex", normalizedProvider);
       cachedResult = failure;
       return failure;
     }
@@ -166,10 +161,9 @@ public class McpVerificationService {
     try {
       AnalysisV2Request minimalRequest = AnalysisV2Request.createMinimalVerificationRequest();
       analysisProvider.analyzeEvidence(minimalRequest);
-      logger.info("End-to-end Codex MCP verification succeeded - provider: codex, model: {}",
-          runtimeModel);
-      McpVerificationResult success =
-          McpVerificationResult.success(runtimeProvider, runtimeModel);
+      logger.info(
+          "End-to-end Codex MCP verification succeeded - provider: codex, model: {}", runtimeModel);
+      McpVerificationResult success = McpVerificationResult.success(runtimeProvider, runtimeModel);
       cachedResult = success;
       return success;
     } catch (Exception e) {

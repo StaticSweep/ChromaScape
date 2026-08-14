@@ -31,7 +31,9 @@ public class TaskPlanAccountService {
   public Optional<String> resolveAccountName(String sourceSessionId, String sourceRecordingId) {
     if (sourceSessionId != null && !sourceSessionId.isBlank()) {
       var session = debugSessionRepository.findBySessionId(sourceSessionId).orElse(null);
-      if (session != null && session.getAccountName() != null && !session.getAccountName().isBlank()) {
+      if (session != null
+          && session.getAccountName() != null
+          && !session.getAccountName().isBlank()) {
         return Optional.of(session.getAccountName().trim());
       }
     }

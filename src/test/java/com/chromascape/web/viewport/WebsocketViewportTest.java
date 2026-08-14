@@ -27,7 +27,8 @@ class WebsocketViewportTest {
   void publishFrameSkipsEncodeWhenNoSessionsAreActive() {
     when(handler.getActiveSessionCount()).thenReturn(0);
 
-    WebsocketViewport viewport = new WebsocketViewport(handler, streamConfig(), new JpegFrameEncoder());
+    WebsocketViewport viewport =
+        new WebsocketViewport(handler, streamConfig(), new JpegFrameEncoder());
     viewport.publishFrame(new BufferedImage(20, 10, BufferedImage.TYPE_3BYTE_BGR), 20, 10);
 
     assertEquals(1, viewport.getFramesSkippedNoSessions());
@@ -38,11 +39,14 @@ class WebsocketViewportTest {
   void publishFrameBroadcastsBinaryPayloadWithHeader() {
     when(handler.getActiveSessionCount()).thenReturn(1);
 
-    WebsocketViewport viewport = new WebsocketViewport(handler, streamConfig(), new JpegFrameEncoder());
+    WebsocketViewport viewport =
+        new WebsocketViewport(handler, streamConfig(), new JpegFrameEncoder());
     viewport.publishFrame(new BufferedImage(40, 20, BufferedImage.TYPE_3BYTE_BGR), 320, 240);
 
     ArgumentCaptor<byte[]> payloadCaptor = ArgumentCaptor.forClass(byte[].class);
-    await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> verify(handler).broadcast(payloadCaptor.capture()));
+    await()
+        .atMost(2, TimeUnit.SECONDS)
+        .untilAsserted(() -> verify(handler).broadcast(payloadCaptor.capture()));
 
     byte[] payload = payloadCaptor.getValue();
     assertTrue(payload.length > 16);

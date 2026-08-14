@@ -5,16 +5,23 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '33';
+  static BUILDER_GOAL_BUNDLE_VERSION = '39';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
+  static BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS = 2000;
+  static BUILDER_GOAL_LAUNCH_OPERATION_KEY = 'taskPlanner.builderGoalLaunchOperationId';
+  static BUILDER_GOAL_RUN_POLL_INTERVAL_MS = 2000;
+  static BUILDER_GOAL_RUN_TRACKER_KEY = 'taskPlanner.builderGoalRunTrackerIterationId';
 
   static BUILDER_GOAL_STATUS_LABELS = {
     AWAITING_EXECUTOR_CONFIRMATION: 'Executor request sent; awaiting confirmation.',
     RECONCILING: 'Executor request sent; awaiting confirmation.',
+    ACCEPTED: 'Task accepted and queued by the executor; waiting for script start.',
     ASSIGNED: 'Executor assigned the task; waiting for confirmed script start.',
     QUEUED: 'Task accepted and queued by the executor.',
+    RUNNING: 'Task started; the executor confirmed the script is running.',
+    PAUSED: 'Task paused; the executor suspended the task.',
     STOPPING: 'Stop requested; awaiting executor confirmation.',
     PUBLISH_FAILED: 'Task publish failed.',
     FAILED: 'Task execution failed.',
@@ -22,6 +29,22 @@ class AccountTaskPlanner {
   };
 
   static ACTIVE_PRE_START_STATUSES = new Set([
+    'PREPARING_TARGET',
+    'WAITING_FOR_LOCAL_LAUNCH_LEASE',
+    'CHECKING_EXISTING',
+    'REUSING_EXECUTOR',
+    'PREPARING_BUILD',
+    'STOPPING_EXISTING',
+    'BUILDING_MICRO6',
+    'LAUNCHING_PROCESS',
+    'WAITING_FOR_PORT',
+    'WAITING_FOR_HEALTH',
+    'WAITING_FOR_ACCOUNT',
+    'WAITING_FOR_LOGIN',
+    'WAITING_FOR_WORLD',
+    'WAITING_FOR_SCRIPT',
+    'WAITING_FOR_DISPATCH',
+    'READY_TO_PUBLISH',
     'PUBLISHING',
     'AWAITING_EXECUTOR_CONFIRMATION',
     'RECONCILING',
@@ -31,9 +54,107 @@ class AccountTaskPlanner {
     'QUEUED',
     'ASSIGNED',
     'RUNNING',
+    'PAUSED',
     'WAITING_FOR_DEBUG_BIND',
     'STOPPING',
   ]);
+
+  static BUILDER_GOAL_LAUNCH_PHASE_LABELS = {
+    QUEUED: 'Launch queued; preparing the local Micro6 workspace',
+    CHECKING_EXISTING: 'Checking for an existing matching Micro6 executor',
+    REUSING_EXECUTOR: 'Reusing the matching dispatch-ready Micro6 executor',
+    PREPARING_BUILD: 'Validating the Micro6 launch configuration before stopping anything',
+    STOPPING_EXISTING: 'Stopping the existing Micro6 session before launching a replacement',
+    BUILDING_MICRO6: 'Building and launching the local Micro6 workspace via Gradle',
+    LAUNCHING_PROCESS: 'Micro6 process started; waiting for it to come online',
+    WAITING_FOR_PORT: 'Waiting for the Micro6 executor port',
+    WAITING_FOR_HEALTH: 'Waiting for the Micro6 executor health check',
+    WAITING_FOR_ACCOUNT: 'Waiting for world/login — Micro6 has not identified the account yet',
+    WAITING_FOR_LOGIN: 'Waiting for login (auto-login, authenticator, or manual login)',
+    WAITING_FOR_WORLD: 'Waiting for the client to log into the requested world',
+    WAITING_FOR_SCRIPT: 'Waiting for AccountBuilder execution loop readiness',
+    WAITING_FOR_DISPATCH: 'Waiting for dispatch readiness (AccountBuilder initialization)',
+    READY: 'Micro6 executor is dispatch-ready',
+    CONFLICT: 'Another workflow holds the local launch lease',
+    FAILED: 'Micro6 account launch failed',
+  };
+
+  /**
+   * Human-readable labels for every phase that can appear during a Run Task lifecycle,
+   * from launch acceptance through task publication or failure. These cover both the
+   * preparation-state values and the granular readiness phases surfaced by the backend.
+   */
+  static BUILDER_GOAL_RUN_PHASE_LABELS = {
+    PREPARING_TARGET: 'Preparing the launch target',
+    WAITING_FOR_LOCAL_LAUNCH_LEASE: 'Waiting for the local launch lease',
+    CHECKING_EXISTING: 'Checking for an existing Micro6 executor',
+    REUSING_EXECUTOR: 'Reusing the matching dispatch-ready executor',
+    PREPARING_BUILD: 'Preparing the Micro6 build',
+    STOPPING_EXISTING: 'Stopping the existing Micro6 session',
+    BUILDING_MICRO6: 'Building and launching Micro6 via Gradle',
+    LAUNCHING_PROCESS: 'Micro6 process started; waiting for it to come online',
+    WAITING_FOR_PORT: 'Waiting for the Micro6 executor port',
+    WAITING_FOR_HEALTH: 'Waiting for the Micro6 executor health check',
+    WAITING_FOR_ACCOUNT: 'Waiting for the account to be identified',
+    WAITING_FOR_LOGIN: 'Waiting for login (auto-login, authenticator, or manual)',
+    WAITING_FOR_WORLD: 'Waiting for the client to log into the requested world',
+    WAITING_FOR_SCRIPT: 'Waiting for AccountBuilder execution loop readiness',
+    WAITING_FOR_DISPATCH: 'Waiting for dispatch readiness',
+    READY_TO_PUBLISH: 'Executor is dispatch-ready; preparing to publish',
+    PUBLISHED: 'Task published successfully',
+    ACCEPTED: 'Task accepted and queued by the executor; waiting for script start',
+    QUEUED: 'Task accepted and queued by the executor',
+    ASSIGNED: 'Executor assigned the task; waiting for confirmed script start',
+    RUNNING: 'Task started; the executor confirmed the script is running',
+    PAUSED: 'Task paused; the executor suspended the task',
+    BUILD_FAILED: 'Micro6 failed to compile before the client could start',
+    PROCESS_EXITED: 'The Micro6 process exited unexpectedly',
+  };
+
+  /**
+   * Maps each phase to a 1-based step number for the determinate step indicator.
+   * REUSING_EXECUTOR, STOPPING_EXISTING, and PREPARING_BUILD share step 4 because they
+   * are alternative branches at the same logical point in the lifecycle.
+   */
+  static BUILDER_GOAL_RUN_PHASE_STEPS = {
+    PREPARING_TARGET: 1,
+    WAITING_FOR_LOCAL_LAUNCH_LEASE: 2,
+    CHECKING_EXISTING: 3,
+    PREPARING_BUILD: 4,
+    REUSING_EXECUTOR: 4,
+    STOPPING_EXISTING: 4,
+    BUILDING_MICRO6: 5,
+    LAUNCHING_PROCESS: 6,
+    WAITING_FOR_PORT: 7,
+    WAITING_FOR_HEALTH: 8,
+    WAITING_FOR_ACCOUNT: 9,
+    WAITING_FOR_LOGIN: 9,
+    WAITING_FOR_WORLD: 9,
+    WAITING_FOR_SCRIPT: 10,
+    WAITING_FOR_DISPATCH: 10,
+    READY_TO_PUBLISH: 11,
+    PUBLISHED: 12,
+    ACCEPTED: 12,
+    QUEUED: 12,
+    ASSIGNED: 12,
+    RUNNING: 12,
+    PAUSED: 12,
+    COMPLETED: 12,
+  };
+
+  static BUILDER_GOAL_RUN_PHASE_TOTAL_STEPS = 12;
+
+  /**
+   * Formats a Builder Goal launch-operation phase into a user-facing label. Returns null when no
+   * special label is defined (caller should display the raw phase).
+   */
+  static formatBuilderGoalLaunchPhase(status) {
+    if (!status) {
+      return null;
+    }
+    const normalized = String(status).toUpperCase();
+    return AccountTaskPlanner.BUILDER_GOAL_LAUNCH_PHASE_LABELS[normalized] || null;
+  }
 
   /**
    * Formats a Builder Goal run status into a user-facing label. Returns null
@@ -80,6 +201,35 @@ class AccountTaskPlanner {
       localStorage.getItem('taskPlanner.selectedBuilderGoalTaskKey') || '';
     this.builderGoalRefreshHandle = null;
     this.builderGoalBundleMismatch = false;
+    this.builderGoalLaunchOperationId =
+      localStorage.getItem(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY) || '';
+    this.builderGoalLaunchPollHandle = null;
+    // Exact-run progress tracker state. The iteration id is persisted so an in-flight
+    // launch can resume after a debugger refresh.
+    const storedRunTracker = localStorage.getItem(AccountTaskPlanner.BUILDER_GOAL_RUN_TRACKER_KEY) || '';
+    let parsedRunTracker = null;
+    try {
+      parsedRunTracker = storedRunTracker ? JSON.parse(storedRunTracker) : null;
+    } catch (error) {
+      // Backward compatibility with the original ID-only localStorage format.
+    }
+    const restoredRunTrackerId =
+      parsedRunTracker && typeof parsedRunTracker === 'object'
+        ? parsedRunTracker.iterationId || ''
+        : typeof parsedRunTracker === 'string'
+          ? parsedRunTracker
+          : storedRunTracker;
+    this.builderGoalRunTrackerIterationId = restoredRunTrackerId;
+    this.builderGoalRunTrackerStatusUrl =
+      parsedRunTracker && typeof parsedRunTracker === 'object'
+        ? parsedRunTracker.statusUrl || ''
+        : '';
+    this.builderGoalRunTrackerPollHandle = null;
+    this.builderGoalRunTrackerPollGeneration = 0;
+    this.builderGoalRunTrackerPollFailures = 0;
+    this.builderGoalRunTrackerPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_RUN_POLL_INTERVAL_MS;
+    this.builderGoalRunTrackerStartedAt = 0;
+    this.builderGoalRunTrackerLastPhase = null;
     this.builderGoalConfigDirty = false;
     this.builderGoalConfigLoadedKey = '';
     this.builderGoalAnalysisModal = null;
@@ -108,6 +258,13 @@ class AccountTaskPlanner {
     this.recoveryLastError = '';
     this.codexSessionId = localStorage.getItem('taskPlanner.builderGoalCodexSessionId') || '';
     this.codexSession = null;
+    this.builderGoalLaunchPollGeneration = 0;
+    this.builderGoalLaunchPollFailures = 0;
+    this.builderGoalLaunchPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS;
+    this.builderGoalLaunchRefreshRequired = false;
+    // Every config prefill owns a generation. Selection changes and manual edits advance it so
+    // a late /config/last response can never overwrite the operator's newer draft.
+    this.builderGoalConfigPrefillGeneration = 0;
   }
 
   /**
@@ -134,6 +291,15 @@ class AccountTaskPlanner {
       this.builderGoalRefreshHandle = setInterval(() => {
         this.loadBuilderGoalRuns();
       }, 10000);
+    }
+    if (!this.builderGoalBundleMismatch && this.builderGoalLaunchOperationId) {
+      this.startBuilderGoalLaunchPolling(this.builderGoalLaunchOperationId);
+    }
+    if (!this.builderGoalBundleMismatch && this.builderGoalRunTrackerIterationId) {
+      this.startBuilderGoalRunTracking(this.builderGoalRunTrackerIterationId, {
+        resume: true,
+        statusUrl: this.builderGoalRunTrackerStatusUrl
+      });
     }
   }
 
@@ -448,6 +614,7 @@ class AccountTaskPlanner {
     }
     if (this.builderGoalTaskSelect) {
       this.builderGoalTaskSelect.addEventListener('change', async () => {
+        const preserveDraft = Boolean(this.builderGoalConfigDirty);
         this.selectedBuilderGoalTaskKey = this.builderGoalTaskSelect.value || '';
         if (this.selectedBuilderGoalTaskKey) {
           localStorage.setItem(
@@ -456,6 +623,12 @@ class AccountTaskPlanner {
           );
         } else {
           localStorage.removeItem('taskPlanner.selectedBuilderGoalTaskKey');
+        }
+        // A dirty editor belongs to the operator, so changing the dropdown changes only the
+        // envelope task_key and keeps the manually edited settings intact. A clean editor is
+        // allowed to load the newly selected task's saved config below.
+        if (preserveDraft) {
+          this.syncBuilderGoalConfigTaskKey(this.selectedBuilderGoalTaskKey);
         }
         await this.prefillBuilderGoalConfigForSelection();
         this.renderBuilderGoalClientStatus();
@@ -1238,23 +1411,43 @@ class AccountTaskPlanner {
 
   async prefillBuilderGoalConfigForSelection(options = {}) {
     const force = Boolean(options.force);
+    this.builderGoalConfigPrefillGeneration =
+      (this.builderGoalConfigPrefillGeneration || 0) + 1;
+    const generation = this.builderGoalConfigPrefillGeneration;
     const selectedTask = this.getSelectedBuilderGoalTask();
     const selectedAccount = this.getSelectedBuilderGoalAccount();
     if (!this.builderGoalConfigInput) {
       return;
     }
 
+    const nextKey = this.getBuilderGoalConfigContextKey(
+      selectedAccount?.accountId,
+      selectedTask?.task_key
+    );
+    const isCurrentPrefill = () =>
+      generation === this.builderGoalConfigPrefillGeneration &&
+      nextKey === this.getBuilderGoalConfigContextKey() &&
+      (force || !this.builderGoalConfigDirty);
+
     if (!selectedTask || !selectedAccount) {
-      if (!this.builderGoalConfigInput.value.trim() || force) {
-        this.builderGoalConfigInput.value = '{}';
-        this.builderGoalConfigDirty = false;
-        this.builderGoalConfigLoadedKey = this.getBuilderGoalConfigContextKey();
+      const currentDraft = this.parseBuilderGoalConfigInput();
+      const taskEnvelopeNeedsSync =
+        Boolean(selectedTask) &&
+        !this.builderGoalConfigDirty &&
+        !currentDraft.error &&
+        currentDraft.taskKey !== selectedTask.task_key;
+      if ((!this.builderGoalConfigInput.value.trim() || force || taskEnvelopeNeedsSync) && isCurrentPrefill()) {
+        this.setBuilderGoalConfigEditor({}, {
+          accountId: selectedAccount?.accountId || '',
+          taskKey: selectedTask?.task_key || this.selectedBuilderGoalTaskKey || '',
+          dirty: false,
+          invalidatePrefill: false
+        });
       }
       this.renderBuilderGoalConfigMeta();
       return;
     }
 
-    const nextKey = this.getBuilderGoalConfigContextKey(selectedAccount.accountId, selectedTask.task_key);
     if (!force && this.builderGoalConfigDirty) {
       this.renderBuilderGoalConfigMeta();
       return;
@@ -1272,13 +1465,20 @@ class AccountTaskPlanner {
       const response = await fetch(`/api/debug/builder-goals/config/last?${query.toString()}`);
       if (response.ok) {
         const payload = await response.json();
-        if (payload?.configAvailable && payload.settings && typeof payload.settings === 'object') {
+        if (
+          isCurrentPrefill() &&
+          payload?.configAvailable &&
+          payload.settings &&
+          typeof payload.settings === 'object' &&
+          !Array.isArray(payload.settings)
+        ) {
           this.setBuilderGoalWorldValue(payload.world);
           this.setBuilderGoalConfigEditor(payload.settings, {
-            accountId: payload.accountId,
-            taskKey: payload.taskKey,
+            accountId: payload.accountId || selectedAccount.accountId,
+            taskKey: payload.taskKey || selectedTask.task_key,
             displayName: payload.displayName,
-            dirty: false
+            dirty: false,
+            invalidatePrefill: false
           });
           return;
         }
@@ -1287,30 +1487,90 @@ class AccountTaskPlanner {
       console.debug('Could not load latest builder goal config:', error);
     }
 
+    // The request may have completed after a task/account change or a manual edit. In either
+    // case leave the newer editor content alone instead of applying this stale fallback.
+    if (!isCurrentPrefill()) {
+      return;
+    }
     this.setBuilderGoalWorldValue(360);
     this.setBuilderGoalConfigEditor({}, {
       accountId: selectedAccount.accountId,
       taskKey: selectedTask.task_key,
       displayName: selectedTask.display_name || selectedTask.panel_display_name || selectedTask.task_key,
-      dirty: false
+      dirty: false,
+      invalidatePrefill: false
     });
   }
 
   setBuilderGoalConfigEditor(settings, options = {}) {
     if (!this.builderGoalConfigInput) return;
-    const configObject =
+    if (options.invalidatePrefill !== false) {
+      this.builderGoalConfigPrefillGeneration =
+        (this.builderGoalConfigPrefillGeneration || 0) + 1;
+    }
+    let configObject =
       settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
-    this.builderGoalConfigInput.value = JSON.stringify(configObject, null, 2);
+    let embeddedTaskKey = null;
+    // Accept an envelope here as well as the server's nested settings object. This keeps the
+    // editor API tolerant of saved/imported payloads while always rendering one canonical shape.
+    const isEnvelopeLike =
+      (configObject.settings && typeof configObject.settings === 'object' && !Array.isArray(configObject.settings)) ||
+      configObject.task_key ||
+      configObject.taskKey ||
+      configObject.builder_execution ||
+      configObject.queue_payload_preview;
+    if (isEnvelopeLike) {
+      const normalized = this.normalizePastedConfig(configObject);
+      if (!normalized.error) {
+        configObject = normalized.settings;
+        embeddedTaskKey = normalized.taskKey;
+      }
+    }
+    const hasExplicitTaskKey = Object.prototype.hasOwnProperty.call(options, 'taskKey');
+    const resolvedTaskKey = hasExplicitTaskKey
+      ? (options.taskKey || '')
+      : (embeddedTaskKey || this.getSelectedBuilderGoalTask()?.task_key || this.selectedBuilderGoalTaskKey || '');
+    const editorObject = {};
+    if (resolvedTaskKey) {
+      editorObject.task_key = resolvedTaskKey;
+    }
+    editorObject.settings = configObject;
+    this.builderGoalConfigInput.value = JSON.stringify(editorObject, null, 2);
     this.builderGoalConfigDirty = Boolean(options.dirty);
     this.builderGoalConfigLoadedKey = this.getBuilderGoalConfigContextKey(
       options.accountId,
-      options.taskKey
+      resolvedTaskKey
     );
     this.renderBuilderGoalConfigMeta({
       savedDisplayName: options.displayName || null,
       loadedFromRun: options.loadedFromRun || false,
       loadedRunLabel: options.loadedRunLabel || null
     });
+  }
+
+  /**
+   * Changes only the task_key in a dirty editor draft. Legacy raw settings are wrapped in the
+   * canonical envelope so their values survive a task-selector change.
+   */
+  syncBuilderGoalConfigTaskKey(taskKey) {
+    const resolvedTaskKey = (taskKey || '').toString().trim();
+    if (!this.builderGoalConfigInput) {
+      return false;
+    }
+    const parsed = this.parseBuilderGoalConfigInput();
+    if (parsed.error) {
+      // Do not destroy an invalid draft; the operator still needs to see and correct it.
+      return false;
+    }
+    if (parsed.taskKey === (resolvedTaskKey || null) && parsed.settings && typeof parsed.settings === 'object') {
+      return true;
+    }
+    this.setBuilderGoalConfigEditor(parsed.settings || {}, {
+      accountId: this.selectedBuilderGoalAccountId,
+      taskKey: resolvedTaskKey,
+      dirty: true
+    });
+    return true;
   }
 
   renderBuilderGoalConfigMeta(extra = {}) {
@@ -1325,7 +1585,7 @@ class AccountTaskPlanner {
         `Editing config for ${extra.savedDisplayName || selectedTask?.display_name || selectedTask?.task_key}.`
       );
     } else {
-      parts.push('Paste a raw settings object, a {"settings": {...}} envelope, or a full builder payload.');
+      parts.push('Choose a task to load a {"task_key", "settings"} editor envelope, or paste legacy settings JSON.');
     }
     if (selectedAccount?.displayName || selectedAccount?.accountName) {
       parts.push(`Account: ${selectedAccount.displayName || selectedAccount.accountName}.`);
@@ -1339,7 +1599,7 @@ class AccountTaskPlanner {
     } else {
       parts.push('The editor will prefill from the last saved run for this account and task when available.');
     }
-    parts.push('If the JSON includes task_key, ChromaScape will auto-select that task.');
+    parts.push('Manual edits may change task_key; ChromaScape will keep settings and synchronize the task selector.');
     this.builderGoalConfigMeta.innerHTML = `<span class="text-muted">${this.escapeHtml(parts.join(' '))}</span>`;
   }
 
@@ -1396,6 +1656,14 @@ class AccountTaskPlanner {
 
   handleBuilderGoalConfigInput() {
     this.builderGoalConfigDirty = true;
+    this.builderGoalConfigPrefillGeneration =
+      (this.builderGoalConfigPrefillGeneration || 0) + 1;
+    // A valid manually entered task_key is authoritative for the selector. Unknown keys become
+    // placeholders so an operator can still run/import a task while the live catalog is degraded.
+    const parsed = this.parseBuilderGoalConfigInput();
+    if (!parsed.error && parsed.taskKey && parsed.taskKey !== this.selectedBuilderGoalTaskKey) {
+      this.selectBuilderGoalTask(parsed.taskKey);
+    }
     this.renderBuilderGoalConfigMeta();
     this.renderBuilderGoalClientStatus();
     this.updateBuilderGoalRunButtonState();
@@ -1409,15 +1677,23 @@ class AccountTaskPlanner {
       this.loadScriptCatalog()
     ];
     const settled = await Promise.allSettled(loaders);
-    for (const outcome of settled) {
-      if (outcome.status === 'rejected') {
-        // Each loader already surfaced its own section-specific error display. Log
-        // unexpected rejections without letting them escape as unhandled rejections.
+    let coreLoadersSucceeded = true;
+    for (let i = 0; i < settled.length; i++) {
+      if (settled[i].status === 'rejected') {
+        // Only the three core loaders gate the manual-refresh gate; the catalog loader is
+        // optional and surfaces its own degraded-state display.
+        if (i < 3) {
+          coreLoadersSucceeded = false;
+        }
         console.error(
           '[AccountTaskPlanner] Builder Goal refresh loader failed',
-          outcome.reason
+          settled[i].reason
         );
       }
+    }
+    // A successful manual refresh clears the refresh-required gate so Publish re-enables.
+    if (coreLoadersSucceeded) {
+      this.builderGoalLaunchRefreshRequired = false;
     }
     this.renderBuilderGoalClientStatus();
     this.updateBuilderGoalRunButtonState();
@@ -1665,15 +1941,23 @@ class AccountTaskPlanner {
     const canLaunchAccount = availability.canLaunchAccount;
     const canPrimaryRun = availability.canRunTask;
     const canPublish = availability.canPublishTask;
-    this.runBuilderGoalBtn.disabled = !canPrimaryRun;
+    // While an asynchronous launch operation is active, Launch Account and Run Task stay disabled
+    // so a duplicate client cannot be started for the same account.
+    const launchOperationActive = Boolean(this.builderGoalLaunchOperationId);
+    const runTrackerActive = Boolean(this.builderGoalRunTrackerIterationId);
+    this.runBuilderGoalBtn.disabled = !canPrimaryRun || launchOperationActive || runTrackerActive;
     if (this.launchBuilderGoalAccountBtn) {
-      this.launchBuilderGoalAccountBtn.disabled = !canLaunchAccount;
+      this.launchBuilderGoalAccountBtn.disabled =
+        !canLaunchAccount || launchOperationActive || runTrackerActive;
     }
     if (this.publishBuilderGoalBtn) {
-      this.publishBuilderGoalBtn.disabled = !canPublish;
+      // Publish stays disabled after a READY refresh failure until a manual refresh succeeds.
+      this.publishBuilderGoalBtn.disabled =
+        !canPublish || Boolean(this.builderGoalLaunchRefreshRequired) || runTrackerActive;
     }
     if (this.runImportedBuilderGoalBtn) {
-      this.runImportedBuilderGoalBtn.disabled = !availability.canRunImported;
+      this.runImportedBuilderGoalBtn.disabled =
+        !availability.canRunImported || launchOperationActive || runTrackerActive;
     }
   }
 
@@ -1691,6 +1975,10 @@ class AccountTaskPlanner {
       account?.executorOnline !== undefined
         ? account.executorOnline === true
         : account?.online === true;
+    const selectedAccountEligible =
+      account?.selectedAccountEligible !== undefined
+        ? account.selectedAccountEligible === true
+        : executorOnline;
     const runnable = Boolean(account && account.runnable);
     const launchReady = runnable && Boolean(account.launchReady);
     const machineRunnable = Boolean(
@@ -1699,7 +1987,7 @@ class AccountTaskPlanner {
     const canLaunchAccount = launchReady && machineRunnable && Boolean(hasWorld);
     const canRunTask = canLaunchAccount && Boolean(hasTask) && Boolean(configValid);
     const canPublishTask =
-      runnable && executorOnline && Boolean(hasTask) && Boolean(hasWorld) && Boolean(configValid);
+      runnable && selectedAccountEligible && Boolean(hasTask) && Boolean(hasWorld) && Boolean(configValid);
     const canRunImported =
       canLaunchAccount && Boolean(hasWorld) && Boolean(importedRunnable) && Boolean(configValid);
     return {
@@ -2095,17 +2383,10 @@ class AccountTaskPlanner {
       world
     });
 
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(
-      () => controller.abort(),
-      AccountTaskPlanner.BUILDER_GOAL_PUBLISH_TIMEOUT_MS
-    );
-
     try {
       const response = await fetch('/api/debug/builder-goals/launch-account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
         body: JSON.stringify({
           accountId: selectedAccount.accountId,
           launcherMachineUuid: selectedMachine.machineUuid,
@@ -2116,31 +2397,667 @@ class AccountTaskPlanner {
       if (!response.ok) {
         throw new Error(result.error || `HTTP ${response.status}`);
       }
-      await Promise.all([
-        this.loadBuilderGoalAccounts(),
-        this.loadBuilderGoalMachines(),
-        this.loadBuilderGoalRuns()
-      ]);
-      this.renderBuilderGoalClientStatus(
-        `Launch completed for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}.`,
-        'success'
-      );
+      if (result.operationId) {
+        const terminalStatuses = new Set(['READY', 'CONFLICT', 'FAILED']);
+        if (terminalStatuses.has(String(result.status || '').toUpperCase())) {
+          const generation = this.builderGoalLaunchPollGeneration;
+          await this.handleBuilderGoalLaunchOperationView(result, generation);
+        } else {
+          this.startBuilderGoalLaunchPolling(result.operationId);
+          this.renderBuilderGoalClientStatus(
+            `Launch accepted for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. Polling launch operation ${result.operationId}.`,
+            'info'
+          );
+        }
+      } else {
+        await Promise.all([
+          this.loadBuilderGoalAccounts(),
+          this.loadBuilderGoalMachines(),
+          this.loadBuilderGoalRuns()
+        ]);
+        this.renderBuilderGoalClientStatus(
+          `Launch completed for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}.`,
+          'success'
+        );
+      }
     } catch (error) {
       console.error('Failed to launch builder goal account:', error);
-      const timedOut = error && error.name === 'AbortError';
-      const message = timedOut
-        ? 'Account launch timed out before launcher control confirmed success.'
-        : error.message;
+      const message = error.message;
       this.renderBuilderGoalClientStatus(`Failed to launch account: ${message}`, 'danger');
       alert('Failed to launch account: ' + message);
     } finally {
-      clearTimeout(timeoutHandle);
+      this.updateBuilderGoalRunButtonState();
+    }
+  }
+
+  /**
+   * Begins polling a launch operation every two seconds. The operation id survives page refreshes
+   * through localStorage so an in-flight launch is never lost when the browser reloads.
+   */
+  startBuilderGoalLaunchPolling(operationId) {
+    this.stopBuilderGoalLaunchPolling(false);
+    this.builderGoalLaunchOperationId = operationId;
+    localStorage.setItem(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY, operationId);
+    if (this.launchBuilderGoalAccountBtn) {
+      this.launchBuilderGoalAccountBtn.disabled = true;
+      this.launchBuilderGoalAccountBtn.innerHTML =
+        '<i class="bi bi-hourglass me-1"></i>Launching...';
+    }
+    this.updateBuilderGoalRunButtonState();
+    this.pollBuilderGoalLaunchOperation();
+  }
+
+  stopBuilderGoalLaunchPolling(clearStorage = true) {
+    if (this.builderGoalLaunchPollHandle) {
+      clearTimeout(this.builderGoalLaunchPollHandle);
+      this.builderGoalLaunchPollHandle = null;
+    }
+    this.builderGoalLaunchOperationId = '';
+    this.builderGoalLaunchPollFailures = 0;
+    this.builderGoalLaunchPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS;
+    // Increment generation so any in-flight poll response is discarded
+    this.builderGoalLaunchPollGeneration += 1;
+    if (clearStorage) {
+      localStorage.removeItem(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY);
+    }
+  }
+
+  scheduleNextBuilderGoalLaunchPoll(delayMs) {
+    if (this.builderGoalLaunchPollHandle) {
+      clearTimeout(this.builderGoalLaunchPollHandle);
+    }
+    this.builderGoalLaunchPollHandle = setTimeout(
+      () => this.pollBuilderGoalLaunchOperation(),
+      delayMs
+    );
+  }
+
+  async pollBuilderGoalLaunchOperation() {
+    const operationId = this.builderGoalLaunchOperationId;
+    if (!operationId) {
+      return;
+    }
+    const currentGeneration = this.builderGoalLaunchPollGeneration;
+    let view = null;
+    try {
+      const response = await fetch(
+        `/api/debug/builder-goals/launch-operations/${encodeURIComponent(operationId)}`
+      );
+      // Ignore late responses from stopped or replaced polling sessions
+      if (this.builderGoalLaunchOperationId !== operationId ||
+          this.builderGoalLaunchPollGeneration !== currentGeneration) {
+        return;
+      }
+      if (response.status === 404) {
+        this.stopBuilderGoalLaunchPolling();
+        this.renderBuilderGoalClientStatus(
+          'The previous launch operation is no longer tracked. ChromaScape may have restarted or the status expired. Click Launch Account to start a fresh launch.',
+          'warning'
+        );
+        if (this.launchBuilderGoalAccountBtn) {
+          this.launchBuilderGoalAccountBtn.innerHTML =
+            '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
+        }
+        this.updateBuilderGoalRunButtonState();
+        return;
+      }
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      view = result;
+      // Recheck generation after JSON parsing to discard late responses
+      if (this.builderGoalLaunchOperationId !== operationId ||
+          this.builderGoalLaunchPollGeneration !== currentGeneration) {
+        return;
+      }
+      // Reset failure count on successful poll
+      this.builderGoalLaunchPollFailures = 0;
+      this.builderGoalLaunchPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS;
+    } catch (error) {
+      // Recheck generation in rejection path before changing counters or scheduling
+      if (this.builderGoalLaunchOperationId !== operationId ||
+          this.builderGoalLaunchPollGeneration !== currentGeneration) {
+        return;
+      }
+      console.error('Failed to poll builder goal launch operation:', error);
+      this.builderGoalLaunchPollFailures += 1;
+      // Bounded backoff: double delay up to 30 seconds
+      this.builderGoalLaunchPollNextDelay = Math.min(
+        AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS * Math.pow(2, Math.min(this.builderGoalLaunchPollFailures, 4)),
+        30000
+      );
+      if (this.builderGoalLaunchPollFailures >= 3) {
+        this.renderBuilderGoalClientStatus(
+          `Reconnecting to launch operation... (attempt ${this.builderGoalLaunchPollFailures})`,
+          'info'
+        );
+      }
+      this.scheduleNextBuilderGoalLaunchPoll(this.builderGoalLaunchPollNextDelay);
+      return;
+    }
+    await this.handleBuilderGoalLaunchOperationView(view, currentGeneration);
+  }
+
+  async handleBuilderGoalLaunchOperationView(view, currentGeneration = null) {
+    if (!view || !view.status) {
+      this.scheduleNextBuilderGoalLaunchPoll(this.builderGoalLaunchPollNextDelay);
+      return;
+    }
+    // Every polling lifecycle owns one generation. Use the supplied generation or capture the
+    // current generation; never default to zero.
+    const generation =
+      typeof currentGeneration === 'number' ? currentGeneration : this.builderGoalLaunchPollGeneration;
+    const status = String(view.status).toUpperCase();
+    const phaseLabel =
+      AccountTaskPlanner.formatBuilderGoalLaunchPhase(status) || view.status;
+    const accountLabel = view.accountName || view.accountId || 'account';
+    const worldSuffix = view.world ? ` in world ${view.world}` : '';
+    if (status === 'READY') {
+      // Stop polling and record the expected post-stop generation before refreshing.
+      this.stopBuilderGoalLaunchPolling();
+      const expectedGeneration = this.builderGoalLaunchPollGeneration;
+      const reuseSuffix = view.reusedExecutor ? ' (reused an existing ready executor)' : '';
+      // Keep both Launch and Publish disabled until all refreshes settle
+      if (this.launchBuilderGoalAccountBtn) {
+        this.launchBuilderGoalAccountBtn.disabled = true;
+        this.launchBuilderGoalAccountBtn.innerHTML =
+          '<i class="bi bi-hourglass me-1"></i>Refreshing...';
+      }
+      if (this.publishBuilderGoalBtn) {
+        this.publishBuilderGoalBtn.disabled = true;
+      }
+      try {
+        await Promise.all([
+          this.loadBuilderGoalAccounts(),
+          this.loadBuilderGoalMachines(),
+          this.loadBuilderGoalRuns()
+        ]);
+        // Require exact expected generation equality before rendering so stale work never
+        // renders, schedules, or changes buttons.
+        if (this.builderGoalLaunchPollGeneration !== expectedGeneration) {
+          return;
+        }
+    this.builderGoalLaunchRefreshRequired = false;
+        this.renderBuilderGoalClientStatus(
+          `Launch completed for ${accountLabel}${worldSuffix}. The Micro6 executor is dispatch-ready${reuseSuffix}. Publish Task is now available.`,
+          'success'
+        );
+        if (this.launchBuilderGoalAccountBtn) {
+          this.launchBuilderGoalAccountBtn.disabled = false;
+          this.launchBuilderGoalAccountBtn.innerHTML =
+            '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
+        }
+        this.updateBuilderGoalRunButtonState();
+      } catch (error) {
+        console.warn('Failed to refresh builder goal data after launch:', error);
+        // READY refresh failure: gate Publish behind a manual refresh, restore Launch.
+        this.builderGoalLaunchRefreshRequired = true;
+        this.renderBuilderGoalClientStatus(
+          `Launch completed for ${accountLabel}${worldSuffix} but data refresh failed. Manually refresh before publishing.`,
+          'warning'
+        );
+        if (this.launchBuilderGoalAccountBtn) {
+          this.launchBuilderGoalAccountBtn.disabled = false;
+          this.launchBuilderGoalAccountBtn.innerHTML =
+            '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
+        }
+        this.updateBuilderGoalRunButtonState();
+      }
+      return;
+    }
+    if (status === 'FAILED') {
+      this.stopBuilderGoalLaunchPolling();
+      const readinessPhase = String(view.readinessPhase || '').toUpperCase();
+      const failureKind = String(view.failureKind || '').toUpperCase();
+      const isBuildFailure =
+        readinessPhase === 'BUILD_FAILED' ||
+        ['GRADLE_TASK_FAILED', 'BUILD_OUTPUT_LOCK', 'LAUNCH_CONFIGURATION_INVALID', 'GRADLE_TIMEOUT'].includes(failureKind);
+      if (isBuildFailure) {
+        const logHtml = view.launcherLogFile
+          ? `<br><code>${this.escapeHtml(view.launcherLogFile)}</code>`
+          : '';
+        if (this.builderGoalClientStatus) {
+          this.builderGoalClientStatus.innerHTML =
+            `<span class="text-danger">Micro6 build failed before the client could launch.${logHtml}</span>`;
+        }
+      } else {
+        const reason = view.message || phaseLabel;
+        this.renderBuilderGoalClientStatus(`Failed to launch account: ${reason}`, 'danger');
+      }
       if (this.launchBuilderGoalAccountBtn) {
         this.launchBuilderGoalAccountBtn.innerHTML =
           '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
       }
       this.updateBuilderGoalRunButtonState();
+      return;
     }
+    if (status === 'CONFLICT') {
+      this.stopBuilderGoalLaunchPolling();
+      // Render the server message exactly once; do not append duplicate guidance
+      const reason = view.message || phaseLabel;
+      this.renderBuilderGoalClientStatus(reason, 'warning');
+      if (this.launchBuilderGoalAccountBtn) {
+        this.launchBuilderGoalAccountBtn.innerHTML =
+          '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account';
+      }
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+    this.renderBuilderGoalClientStatus(
+      `Launching ${accountLabel}${worldSuffix}: ${view.message || phaseLabel}`,
+      'info'
+    );
+    // Schedule next poll for active operations
+    this.scheduleNextBuilderGoalLaunchPoll(this.builderGoalLaunchPollNextDelay);
+  }
+
+  // -------------------------------------------------------------------------
+  // Exact-run progress tracking (polled from GET /runs/{iterationId}).
+  // This owns the primary progress panel after Run Task returns an accepted
+  // response. The ten-second run-list refresh remains as a secondary overview.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Begins polling the exact run every two seconds. The iteration id survives page
+   * refreshes through localStorage so an in-flight launch is never lost.
+   */
+  startBuilderGoalRunTracking(iterationId, options = {}) {
+    this.stopBuilderGoalRunTracking(false);
+    this.builderGoalRunTrackerIterationId = iterationId;
+    this.builderGoalRunTrackerStatusUrl =
+      typeof options.statusUrl === 'string' &&
+      options.statusUrl.startsWith('/api/debug/builder-goals/')
+        ? options.statusUrl
+        : '';
+    this.builderGoalRunTrackerStartedAt = options.resume ? 0 : Date.now();
+    localStorage.setItem(
+      AccountTaskPlanner.BUILDER_GOAL_RUN_TRACKER_KEY,
+      JSON.stringify({ iterationId, statusUrl: this.builderGoalRunTrackerStatusUrl })
+    );
+    if (this.runBuilderGoalBtn) {
+      this.runBuilderGoalBtn.disabled = true;
+    }
+    this.updateBuilderGoalRunButtonState();
+    this.pollBuilderGoalRun();
+  }
+
+  stopBuilderGoalRunTracking(clearStorage = true) {
+    if (this.builderGoalRunTrackerPollHandle) {
+      clearTimeout(this.builderGoalRunTrackerPollHandle);
+      this.builderGoalRunTrackerPollHandle = null;
+    }
+    this.builderGoalRunTrackerIterationId = '';
+    this.builderGoalRunTrackerStatusUrl = '';
+    this.builderGoalRunTrackerPollFailures = 0;
+    this.builderGoalRunTrackerPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_RUN_POLL_INTERVAL_MS;
+    this.builderGoalRunTrackerPollGeneration += 1;
+    if (clearStorage) {
+      localStorage.removeItem(AccountTaskPlanner.BUILDER_GOAL_RUN_TRACKER_KEY);
+    }
+  }
+
+  scheduleNextBuilderGoalRunPoll(delayMs) {
+    if (this.builderGoalRunTrackerPollHandle) {
+      clearTimeout(this.builderGoalRunTrackerPollHandle);
+    }
+    this.builderGoalRunTrackerPollHandle = setTimeout(
+      () => this.pollBuilderGoalRun(),
+      delayMs
+    );
+  }
+
+  async pollBuilderGoalRun() {
+    const iterationId = this.builderGoalRunTrackerIterationId;
+    if (!iterationId) {
+      return;
+    }
+    const currentGeneration = this.builderGoalRunTrackerPollGeneration;
+    let run = null;
+    try {
+      const statusUrl = this.builderGoalRunTrackerStatusUrl ||
+        `/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}`;
+      const response = await fetch(statusUrl);
+      if (this.builderGoalRunTrackerIterationId !== iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== currentGeneration) {
+        return;
+      }
+      if (response.status === 400 || response.status === 404) {
+        const result = await response.json().catch(() => ({}));
+        // Confirmed missing/expired run — stop polling.
+        this.stopBuilderGoalRunTracking();
+        this.renderBuilderGoalClientStatus(
+          'The tracked run is no longer available. It may have expired or ChromaScape may have restarted.',
+          'warning'
+        );
+        if (this.runBuilderGoalBtn) {
+          this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+        }
+        this.updateBuilderGoalRunButtonState();
+        return;
+      }
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      if (this.builderGoalRunTrackerIterationId !== iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== currentGeneration) {
+        return;
+      }
+      this.builderGoalRunTrackerPollFailures = 0;
+      this.builderGoalRunTrackerPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_RUN_POLL_INTERVAL_MS;
+      run = result;
+    } catch (error) {
+      if (this.builderGoalRunTrackerIterationId !== iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== currentGeneration) {
+        return;
+      }
+      console.error('Failed to poll builder goal run progress:', error);
+      this.builderGoalRunTrackerPollFailures += 1;
+      this.builderGoalRunTrackerPollNextDelay = Math.min(
+        AccountTaskPlanner.BUILDER_GOAL_RUN_POLL_INTERVAL_MS *
+          Math.pow(2, Math.min(this.builderGoalRunTrackerPollFailures, 4)),
+        30000
+      );
+      if (this.builderGoalRunTrackerPollFailures >= 3) {
+        if (this.builderGoalClientStatus) {
+          const phase = this.builderGoalRunTrackerLastPhase || 'preparing';
+          this.builderGoalClientStatus.innerHTML =
+            `<span class="text-info"><i class="bi bi-arrow-repeat me-1"></i>` +
+            `Reconnecting to run progress... (attempt ${this.builderGoalRunTrackerPollFailures})` +
+            ` — last phase: ${this.escapeHtml(phase)}</span>`;
+        }
+      }
+      this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
+      return;
+    }
+    this.handleBuilderGoalRunView(run, currentGeneration);
+  }
+
+  async handleBuilderGoalRunView(run, currentGeneration = null) {
+    if (!run) {
+      this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
+      return;
+    }
+    const generation =
+      typeof currentGeneration === 'number'
+        ? currentGeneration
+        : this.builderGoalRunTrackerPollGeneration;
+    const phase = this.resolveBuilderGoalRunPhase(run);
+    this.builderGoalRunTrackerLastPhase = phase;
+    const publishStatus = String(run.publishStatus || '').toUpperCase();
+    const readinessPhase = String(run.targetReadinessPhase || '').toUpperCase();
+    const status = String(run.status || '').toUpperCase();
+
+    const taskStarted =
+      run.taskStartedObserved === true || run.taskStartConfirmed === true;
+
+    // Confirmed completion is terminal and displayed as success.
+    if (publishStatus === 'COMPLETED') {
+      this.stopBuilderGoalRunTracking();
+      this.renderBuilderGoalRunProgress(run, { terminal: true, tone: 'success' });
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after completion:', e);
+      }
+      return;
+    }
+
+    // PAUSED is an active, non-terminal executor state. Keep tracking and controls available,
+    // but never route it through the started/running confirmation branch.
+    if (publishStatus === 'PAUSED') {
+      this.renderBuilderGoalRunProgress(run, { terminal: false, tone: 'warning' });
+      if (this.builderGoalRunTrackerIterationId !== run.iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== generation) {
+        return;
+      }
+      this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
+      return;
+    }
+
+    // "Task started" is displayed only after RUNNING is confirmed by the executor.
+    if (publishStatus === 'RUNNING' && taskStarted) {
+      this.stopBuilderGoalRunTracking();
+      const accountLabel = run.accountName || run.targetAccountName || run.accountId || 'account';
+      this.renderBuilderGoalClientStatus(
+        `Task started for ${accountLabel}. The Micro6 executor confirmed the script is running — monitor the runs list for execution progress.`,
+        'success'
+      );
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after task start:', e);
+      }
+      return;
+    }
+
+    // Terminal: build failure
+    if (readinessPhase === 'BUILD_FAILED') {
+      this.stopBuilderGoalRunTracking();
+      this.renderBuilderGoalRunFailure(run);
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after build failure:', e);
+      }
+      return;
+    }
+
+    // Terminal: process exited (non-build failure)
+    if (readinessPhase === 'PROCESS_EXITED') {
+      this.stopBuilderGoalRunTracking();
+      const detail = run.targetReadinessReason || run.launchFailureDetail ||
+        'The Micro6 process exited before the executor became ready.';
+      this.renderBuilderGoalClientStatus(
+        `Micro6 launch failed: ${detail}`,
+        'danger'
+      );
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after process exit:', e);
+      }
+      return;
+    }
+
+    // Terminal: publish failed
+    if (publishStatus === 'PUBLISH_FAILED') {
+      this.stopBuilderGoalRunTracking();
+      this.renderBuilderGoalClientStatus(
+        `Task publish failed: ${run.publishError || 'unknown error'}`,
+        'danger'
+      );
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after publish failure:', e);
+      }
+      return;
+    }
+
+    // Terminal: cancelled
+    if (run.cancelled) {
+      this.stopBuilderGoalRunTracking();
+      this.renderBuilderGoalClientStatus('Run cancelled.', 'warning');
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      return;
+    }
+
+    // Terminal: a generic preparation failure that did not map to one of the named phases.
+    if (status === 'FAILED') {
+      this.stopBuilderGoalRunTracking();
+      this.renderBuilderGoalRunFailure(run, { buildFailure: false });
+      if (this.runBuilderGoalBtn) {
+        this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
+      }
+      this.updateBuilderGoalRunButtonState();
+      try {
+        await this.loadBuilderGoalRuns();
+      } catch (e) {
+        console.warn('Failed to refresh runs after generic failure:', e);
+      }
+      return;
+    }
+
+    // Accepted/queued/assigned remain active: keep polling until the executor confirms RUNNING or
+    // a terminal state. HTTP acceptance alone is never presented as a task start.
+    if (['ACCEPTED', 'QUEUED', 'ASSIGNED'].includes(publishStatus)) {
+      this.renderBuilderGoalRunProgress(run, { terminal: false });
+      if (this.builderGoalRunTrackerIterationId !== run.iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== generation) {
+        return;
+      }
+      this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
+      return;
+    }
+
+    // Active: render progress panel and schedule next poll
+    this.renderBuilderGoalRunProgress(run, { terminal: false });
+    if (this.builderGoalRunTrackerIterationId !== run.iterationId ||
+        this.builderGoalRunTrackerPollGeneration !== generation) {
+      return;
+    }
+    this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
+  }
+
+  /**
+   * Resolves the current phase from a run summary. Prefers the publish/activation status, then the
+   * granular readiness phase, then the preparation state.
+   */
+  resolveBuilderGoalRunPhase(run) {
+    if (!run) return null;
+    const publishStatus = String(run.publishStatus || '').toUpperCase();
+    if (['COMPLETED', 'RUNNING', 'PAUSED', 'ASSIGNED', 'QUEUED', 'ACCEPTED', 'PUBLISHED'].includes(publishStatus)) {
+      return publishStatus;
+    }
+    if (run.publishedAt) return 'PUBLISHED';
+    const readinessPhase = String(run.targetReadinessPhase || '').toUpperCase();
+    if (readinessPhase && readinessPhase !== 'NULL') return readinessPhase;
+    const prepState = String(run.targetPreparationState || '').toUpperCase();
+    if (prepState && prepState !== 'NULL') return prepState;
+    return null;
+  }
+
+  formatBuilderGoalRunPhaseLabel(phase) {
+    if (!phase) return 'Preparing';
+    const normalized = String(phase).toUpperCase();
+    return AccountTaskPlanner.BUILDER_GOAL_RUN_PHASE_LABELS[normalized] || normalized;
+  }
+
+  /**
+   * Renders the live progress panel into #builderGoalClientStatus.
+   */
+  renderBuilderGoalRunProgress(run, options = {}) {
+    if (!this.builderGoalClientStatus) return;
+    const phase = this.resolveBuilderGoalRunPhase(run);
+    const label = this.formatBuilderGoalRunPhaseLabel(phase);
+    const terminal = Boolean(options.terminal);
+    const tone = options.tone || (terminal ? 'success' : 'info');
+    const accountLabel = run.accountName || run.targetAccountName || run.accountId || 'account';
+    const worldSuffix = run.world ? ` • World ${run.world}` : '';
+    const taskLabel = run.displayName || run.taskKey || 'task';
+    const detailMessage = run.targetPreparationMessage || run.targetReadinessReason || '';
+
+    // Elapsed time
+    let elapsedText = '';
+    const startedAt = run.createdAt
+      ? new Date(run.createdAt).getTime()
+      : this.builderGoalRunTrackerStartedAt;
+    if (startedAt) {
+      const elapsedMs = Date.now() - startedAt;
+      if (elapsedMs > 0) {
+        const seconds = Math.floor(elapsedMs / 1000);
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        elapsedText = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      }
+    }
+
+    // Step indicator
+    const stepNum = AccountTaskPlanner.BUILDER_GOAL_RUN_PHASE_STEPS[String(phase).toUpperCase()] || 0;
+    const totalSteps = AccountTaskPlanner.BUILDER_GOAL_RUN_PHASE_TOTAL_STEPS;
+    const barWidth = stepNum > 0 ? Math.round((stepNum / totalSteps) * 100) : 5;
+    const stepHtml = stepNum > 0
+      ? `<div class="progress mt-1" style="height: 6px;"><div class="progress-bar bg-${tone === 'success' ? 'success' : 'primary'}" role="progressbar" style="width: ${barWidth}%;"></div></div>
+         <small class="text-muted">Step ${stepNum} of ${totalSteps}</small>`
+      : '';
+
+    // Metadata chips
+    const metaParts = [];
+    metaParts.push(`<i class="bi bi-person me-1"></i>${this.escapeHtml(accountLabel)}`);
+    if (run.world) metaParts.push(`<i class="bi bi-globe2 me-1"></i>World ${this.escapeHtml(String(run.world))}`);
+    metaParts.push(`<i class="bi bi-list-task me-1"></i>${this.escapeHtml(taskLabel)}`);
+    if (elapsedText) metaParts.push(`<i class="bi bi-clock me-1"></i>${this.escapeHtml(elapsedText)}`);
+    if (run.attemptId) metaParts.push(`<i class="bi bi-tag me-1"></i>attempt ${this.escapeHtml(String(run.attemptId))}`);
+    if (run.effectiveGradleTask) metaParts.push(`<i class="bi bi-gear me-1"></i>${this.escapeHtml(run.effectiveGradleTask)}`);
+    if (run.launcherPid) metaParts.push(`<i class="bi bi-cpu me-1"></i>PID ${this.escapeHtml(String(run.launcherPid))}`);
+
+    // View Launch Log action
+    const iterationId = run.iterationId || this.builderGoalRunTrackerIterationId;
+    const viewLogHtml = iterationId
+      ? `<a href="javascript:void(0)" onclick="window.accountTaskPlanner.loadBuilderGoalRunLogs('${this.escapeHtml(iterationId)}')" class="small text-decoration-none ms-2"><i class="bi bi-file-text me-1"></i>View Launch Log</a>`
+      : '';
+
+    const spinnerHtml = terminal
+      ? '<i class="bi bi-check-circle-fill me-1"></i>'
+      : '<span class="spinner-border spinner-border-sm me-1"></span>';
+
+    this.builderGoalClientStatus.innerHTML =
+      `<div class="text-${tone}"><strong>${spinnerHtml}${this.escapeHtml(label)}</strong>${viewLogHtml}</div>` +
+      (detailMessage ? `<div class="small text-muted mt-1">${this.escapeHtml(detailMessage)}</div>` : '') +
+      `<div class="small text-muted mt-1">${metaParts.join(' • ')}</div>` +
+      stepHtml;
+  }
+
+  /**
+   * Renders an actionable build-failure panel with the sanitized compiler summary
+   * and a View Launch Log action.
+   */
+  renderBuilderGoalRunFailure(run, options = {}) {
+    if (!this.builderGoalClientStatus) return;
+    const summary = run.targetReadinessReason || run.launchFailureDetail || run.failureReason ||
+      'Micro6 failed to compile before the client could start.';
+    const iterationId = run.iterationId || this.builderGoalRunTrackerIterationId;
+    const viewLogHtml = iterationId
+      ? `<a href="javascript:void(0)" onclick="window.accountTaskPlanner.loadBuilderGoalRunLogs('${this.escapeHtml(iterationId)}')" class="text-decoration-none"><i class="bi bi-file-text me-1"></i>View Launch Log</a>`
+      : '';
+    const logPathHtml = run.launchLogFile
+      ? `<div class="small text-muted mt-1"><code>${this.escapeHtml(run.launchLogFile)}</code></div>`
+      : '';
+    const buildFailure = options.buildFailure !== false;
+    const title = buildFailure
+      ? 'Micro6 failed to compile before the client could start.'
+      : 'Builder Goal run failed.';
+    this.builderGoalClientStatus.innerHTML =
+      `<div class="text-danger"><strong><i class="bi bi-exclamation-octagon me-1"></i>` +
+      `${this.escapeHtml(title)}</strong></div>` +
+      `<div class="small mt-1">${this.escapeHtml(summary)}</div>` +
+      logPathHtml +
+      (viewLogHtml ? `<div class="small mt-1">${viewLogHtml}</div>` : '');
   }
 
   async runBuilderGoal() {
@@ -2281,10 +3198,17 @@ class AccountTaskPlanner {
         selectedTask.task_key
       );
       this.renderBuilderGoalConfigMeta();
-      this.renderBuilderGoalClientStatus(
-        `Launch accepted for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. ChromaScape is now waiting for that account's local micro6 executor to become dispatch-ready and will publish ${selectedTask.display_name || selectedTask.task_key} automatically when it is ready.`,
-        'success'
-      );
+      const trackedIterationId = result?.run?.iterationId;
+      if (trackedIterationId) {
+        this.startBuilderGoalRunTracking(trackedIterationId, {
+          statusUrl: result.statusUrl
+        });
+      } else {
+        this.renderBuilderGoalClientStatus(
+          `Launch accepted for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. ChromaScape is now waiting for that account's local micro6 executor to become dispatch-ready and will publish ${selectedTask.display_name || selectedTask.task_key} automatically when it is ready.`,
+          'success'
+        );
+      }
     } catch (error) {
       console.error('Failed to publish builder goal task:', error);
       const timedOut = error && error.name === 'AbortError';
@@ -2450,7 +3374,7 @@ class AccountTaskPlanner {
         );
         this.renderBuilderGoalConfigMeta();
         this.renderBuilderGoalClientStatus(
-          `Published ${selectedTask.display_name || selectedTask.task_key} to the running micro6 executor for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}.`,
+          `Task accepted/queued for ${selectedTask.display_name || selectedTask.task_key} on the running micro6 executor for ${selectedAccount.displayName || selectedAccount.accountName || selectedAccount.accountId} in world ${world}. Waiting for the executor to confirm script start.`,
           'success'
         );
       }
@@ -3192,6 +4116,12 @@ class AccountTaskPlanner {
     if (preparationState === 'WAITING_FOR_ACCOUNT') {
       return run.targetPreparationMessage || 'Waiting for selected account to appear on executor health';
     }
+    if (preparationState === 'WAITING_FOR_WORLD') {
+      return run.targetPreparationMessage || 'Waiting for the client to log into the requested world';
+    }
+    if (preparationState === 'WAITING_FOR_SCRIPT') {
+      return run.targetPreparationMessage || 'Waiting for AccountBuilder execution loop readiness';
+    }
     if (preparationState === 'WAITING_FOR_DISPATCH') {
       return run.targetPreparationMessage || 'Waiting for executor dispatch readiness';
     }
@@ -3239,13 +4169,16 @@ class AccountTaskPlanner {
       return 'Published to Micro6 queue';
     }
     if (runStatus === 'WAITING_FOR_TASK_START') {
-      return 'Published to Micro6 queue and waiting for task start';
+      return 'Task accepted/queued; waiting for the Micro6 executor to confirm script start';
     }
     if (runStatus === 'WAITING_FOR_DEBUG_BIND') {
       return 'Task started; waiting for ChromaScape debug binding';
     }
     if (runStatus === 'RUNNING') {
       return 'Running from Micro6 queue';
+    }
+    if (runStatus === 'PAUSED') {
+      return 'Task paused; the executor suspended the task';
     }
     if (runStatus === 'COMPLETED') {
       return 'Published run completed';

@@ -29,10 +29,8 @@ public class AiPlayerDatasetScheduler {
   }
 
   @Scheduled(
-      fixedDelayString =
-          "${ai-player.dataset.patch-outcomes.schedule-fixed-delay-ms:3600000}",
-      initialDelayString =
-          "${ai-player.dataset.patch-outcomes.initial-delay-ms:60000}")
+      fixedDelayString = "${ai-player.dataset.patch-outcomes.schedule-fixed-delay-ms:3600000}",
+      initialDelayString = "${ai-player.dataset.patch-outcomes.initial-delay-ms:60000}")
   public void exportScheduledPatchOutcomeDataset() {
     if (!scheduledExportEnabled || !datasetBuilder.isAiPlayerEnabled()) {
       return;
@@ -43,7 +41,10 @@ public class AiPlayerDatasetScheduler {
     try {
       DatasetBuildResult result = datasetBuilder.buildPatchOutcomeDatasetResult(startTime, endTime);
       if (!exportEmpty && result.getRecordCount() == 0) {
-        log.info("Skipping empty scheduled patch-outcome export for window {} -> {}", startTime, endTime);
+        log.info(
+            "Skipping empty scheduled patch-outcome export for window {} -> {}",
+            startTime,
+            endTime);
         return;
       }
       log.info(

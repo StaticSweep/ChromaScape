@@ -60,7 +60,8 @@ public class BuilderGoalAccountCatalogService {
               .map(this::toAccountDefinition)
               .sorted(
                   (left, right) ->
-                      left.displayName().toLowerCase(Locale.ENGLISH)
+                      left.displayName()
+                          .toLowerCase(Locale.ENGLISH)
                           .compareTo(right.displayName().toLowerCase(Locale.ENGLISH)))
               .toList();
       cache.set(accounts);
@@ -75,11 +76,15 @@ public class BuilderGoalAccountCatalogService {
   private AccountDefinition toAccountDefinition(
       BuilderGoalLauncherControlService.LauncherAccount launcherAccount) {
     String displayName =
-        firstNonBlank(launcherAccount.displayName(), launcherAccount.email(), launcherAccount.accountId());
+        firstNonBlank(
+            launcherAccount.displayName(), launcherAccount.email(), launcherAccount.accountId());
     return new AccountDefinition(
         launcherAccount.accountId(),
         launcherAccount.accountHash(),
+        firstNonBlank(launcherAccount.accountName(), displayName),
+        firstNonBlank(launcherAccount.launchProfileName(), displayName),
         displayName,
+        launcherAccount.accountHashScheme(),
         launcherAccount.email(),
         "launcher",
         launcherAccount.enabled(),
@@ -90,6 +95,7 @@ public class BuilderGoalAccountCatalogService {
   private Map<String, Object> toSummary(AccountDefinition account) {
     Micro6OnlineClientRegistryService.TargetClient matchedClient = findMatchingClient(account);
     boolean executorOnline = matchedClient != null;
+    boolean selectedAccountEligible = isSelectedAccountEligible(account, matchedClient);
     boolean runnable = account.isRunnable();
     boolean hasEmail = account.hasEmail();
     boolean hasPassword = account.hasPassword();
@@ -98,12 +104,18 @@ public class BuilderGoalAccountCatalogService {
     Map<String, Object> summary = new LinkedHashMap<>();
     summary.put("accountId", account.accountId());
     summary.put("accountHash", account.accountHash());
-    summary.put("accountName", account.displayName());
+    summary.put("accountName", account.accountName());
     summary.put("displayName", account.displayName());
+    summary.put("launchProfileName", account.launchProfileName());
+    summary.put("accountHashScheme", account.accountHashScheme());
     summary.put("email", account.email());
     summary.put("source", account.source());
     summary.put("online", executorOnline);
     summary.put("executorOnline", executorOnline);
+    summary.put("selectedAccountEligible", selectedAccountEligible);
+    summary.put(
+        "selectedAccountEligibilityReason",
+        selectedAccountEligibilityReason(account, matchedClient, selectedAccountEligible));
     summary.put("enabled", account.enabled());
     summary.put("status", account.status());
     summary.put("runnable", runnable);
@@ -116,11 +128,51 @@ public class BuilderGoalAccountCatalogService {
     return summary;
   }
 
-  private Micro6OnlineClientRegistryService.TargetClient findMatchingClient(AccountDefinition account) {
+  private Micro6OnlineClientRegistryService.TargetClient findMatchingClient(
+      AccountDefinition account) {
     return clientRegistryService
-        .findRunnableClientForRecovery(
-            account.accountHash(), account.displayName(), null, Instant.now().minusSeconds(45))
+        .findOnlineClientForRecovery(
+            account.accountHash(), account.accountName(), null, Instant.now().minusSeconds(45))
         .orElse(null);
+  }
+
+  private boolean isSelectedAccountEligible(
+      AccountDefinition account,
+      Micro6OnlineClientRegistryService.TargetClient client) {
+    if (account == null || client == null) {
+      return false;
+    }
+    return AccountIdentityContract.hasRequiredScheme(account.accountHashScheme())
+        && clientRegistryService.isSelectedAccountEligible(client, account.accountHash());
+  }
+
+  private String selectedAccountEligibilityReason(
+      AccountDefinition account,
+      Micro6OnlineClientRegistryService.TargetClient client,
+      boolean eligible) {
+    if (eligible) {
+      return null;
+    }
+    if (client == null) {
+      return "No matching executor identity is online";
+    }
+    if (!AccountIdentityContract.hasRequiredScheme(account.accountHashScheme())) {
+      return "Selected account did not report account hash scheme " + AccountIdentityContract.HASH_SCHEME;
+    }
+    if (!clientRegistryService.isDispatchReady(client)) {
+      return "Executor is online but not generically dispatch-ready";
+    }
+    if (!AccountIdentityContract.hasRequiredScheme(client.accountHashScheme())) {
+      return "Executor did not report account hash scheme " + AccountIdentityContract.HASH_SCHEME;
+    }
+    if (!AccountIdentityContract.matchesHash(client.accountHash(), account.accountHash())) {
+      return "Executor actual account hash does not match the selected account";
+    }
+    if (client.requestedWorld() == null || client.currentWorld() == null
+        || !client.requestedWorld().equals(client.currentWorld())) {
+      return "Executor world identity is not confirmed";
+    }
+    return "Selected-account eligibility evidence is incomplete";
   }
 
   private static boolean isBanned(String status) {
@@ -151,7 +203,10 @@ public class BuilderGoalAccountCatalogService {
   public record AccountDefinition(
       String accountId,
       String accountHash,
+      String accountName,
+      String launchProfileName,
       String displayName,
+      String accountHashScheme,
       String email,
       String source,
       boolean enabled,
@@ -162,7 +217,32 @@ public class BuilderGoalAccountCatalogService {
       Objects.requireNonNull(accountId, "accountId");
       Objects.requireNonNull(displayName, "displayName");
       Objects.requireNonNull(source, "source");
-      metadata = metadata != null ? Collections.unmodifiableMap(new LinkedHashMap<>(metadata)) : Map.of();
+      metadata =
+          metadata != null ? Collections.unmodifiableMap(new LinkedHashMap<>(metadata)) : Map.of();
+    }
+
+    /** Compatibility constructor for persisted/test callers using the original account shape. */
+    public AccountDefinition(
+        String accountId,
+        String accountHash,
+        String displayName,
+        String email,
+        String source,
+        boolean enabled,
+        String status,
+        Map<String, Object> metadata) {
+      this(
+          accountId,
+          accountHash,
+          displayName,
+          displayName,
+          displayName,
+          null,
+          email,
+          source,
+          enabled,
+          status,
+          metadata);
     }
 
     public boolean isRunnable() {

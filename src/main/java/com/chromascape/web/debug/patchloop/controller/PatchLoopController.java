@@ -113,8 +113,7 @@ public class PatchLoopController {
 
     } catch (IllegalArgumentException e) {
       logger.warn("Invalid request: {}", e.getMessage());
-      return ResponseEntity.badRequest()
-          .body(buildErrorBody("INVALID_REQUEST", e.getMessage()));
+      return ResponseEntity.badRequest().body(buildErrorBody("INVALID_REQUEST", e.getMessage()));
 
     } catch (Exception e) {
       logger.error("Failed to execute iteration", e);
@@ -285,8 +284,7 @@ public class PatchLoopController {
 
     } catch (IllegalArgumentException e) {
       logger.warn("Invalid graph request: {}", e.getMessage());
-      return ResponseEntity.badRequest()
-          .body(buildErrorBody("INVALID_REQUEST", e.getMessage()));
+      return ResponseEntity.badRequest().body(buildErrorBody("INVALID_REQUEST", e.getMessage()));
 
     } catch (com.chromascape.web.debug.patchloop.graph.GraphCompilationException e) {
       logger.warn("Graph compilation failed: {}", e.getMessage());
@@ -473,8 +471,8 @@ public class PatchLoopController {
             // Determine wrapper readiness from metadata
             // Determine wrapper readiness from metadata (may not always be present)
             String wrapperStatus = readStringMetadata(metadata, "wrapper_status", null);
-            wrapperReady = "ready".equalsIgnoreCase(
-                wrapperStatus != null ? wrapperStatus : "unknown");
+            wrapperReady =
+                "ready".equalsIgnoreCase(wrapperStatus != null ? wrapperStatus : "unknown");
             availabilityReason =
                 readStringMetadata(
                     metadata,
@@ -521,14 +519,17 @@ public class PatchLoopController {
           "statusHeadline",
           computeStatusHeadline(
               frameworkProvider, backend, available, bridgeHealthy, resolvedRuntimeProvider));
-      status.put("statusDetail", buildStatusDetail(frameworkProvider, resolvedRuntimeProvider,
-          runtimeModel, backend, bridgeHealthy));
+      status.put(
+          "statusDetail",
+          buildStatusDetail(
+              frameworkProvider, resolvedRuntimeProvider, runtimeModel, backend, bridgeHealthy));
 
       // Verification cache details
       McpVerificationResult cachedVr = mcpVerificationService.getCachedResult();
       if (cachedVr != null) {
-        status.put("lastVerifiedAt", cachedVr.getVerifiedAt() != null
-            ? cachedVr.getVerifiedAt().toString() : null);
+        status.put(
+            "lastVerifiedAt",
+            cachedVr.getVerifiedAt() != null ? cachedVr.getVerifiedAt().toString() : null);
         status.put("lastVerificationOutcome", cachedVr.getOutcome());
         status.put("lastVerificationError", cachedVr.getError());
       } else {
@@ -540,8 +541,7 @@ public class PatchLoopController {
       // Verification availability
       status.put(
           "verificationAvailable",
-          computeVerificationAvailable(
-              backend, bridgeHealthy, resolvedRuntimeProvider));
+          computeVerificationAvailable(backend, bridgeHealthy, resolvedRuntimeProvider));
 
       return ResponseEntity.ok(status);
 
@@ -581,8 +581,8 @@ public class PatchLoopController {
 
   // ========== Normalized status helpers ==========
 
-  private boolean computeUsingCodexMcp(String frameworkProvider, String runtimeProvider,
-      String backend) {
+  private boolean computeUsingCodexMcp(
+      String frameworkProvider, String runtimeProvider, String backend) {
     if (!"mcp".equals(backend)) {
       return false;
     }
@@ -596,8 +596,12 @@ public class PatchLoopController {
     return cached != null && cached.isSuccess() && "codex-cli".equals(runtimeProvider);
   }
 
-  private String computeConnectionState(String frameworkProvider, String backend,
-      boolean available, boolean bridgeHealthy, String runtimeProvider) {
+  private String computeConnectionState(
+      String frameworkProvider,
+      String backend,
+      boolean available,
+      boolean bridgeHealthy,
+      String runtimeProvider) {
     if ("api".equals(backend)) {
       return "PROVIDER_MISCONFIGURED";
     }
@@ -620,8 +624,12 @@ public class PatchLoopController {
     return "PROVIDER_MISCONFIGURED";
   }
 
-  private String computeStatusHeadline(String frameworkProvider, String backend,
-      boolean available, boolean bridgeHealthy, String runtimeProvider) {
+  private String computeStatusHeadline(
+      String frameworkProvider,
+      String backend,
+      boolean available,
+      boolean bridgeHealthy,
+      String runtimeProvider) {
     if ("api".equals(backend)) {
       return "Not using MCP";
     }
@@ -655,8 +663,12 @@ public class PatchLoopController {
     return true;
   }
 
-  private String buildStatusDetail(String frameworkProvider, String runtimeProvider,
-      String runtimeModel, String backend, boolean bridgeHealthy) {
+  private String buildStatusDetail(
+      String frameworkProvider,
+      String runtimeProvider,
+      String runtimeModel,
+      String backend,
+      boolean bridgeHealthy) {
     StringBuilder sb = new StringBuilder();
     sb.append("Framework: ").append(frameworkProvider);
     sb.append(", wrapper: ").append(runtimeProvider);
@@ -823,16 +835,18 @@ public class PatchLoopController {
                   + taskCount
                   + " tasks) - verify executor bind/config");
         }
-        sourceMap.put(
-            "micro6_executor", sourceMeta);
+        sourceMap.put("micro6_executor", sourceMeta);
       }
     } catch (Exception e) {
       sourceMap.put(
           "micro6_executor",
           Map.of(
-              "ok", false,
-              "error", e.getMessage() == null ? "executor catalog unavailable" : e.getMessage(),
-              "source", "micro6_executor_catalog"));
+              "ok",
+              false,
+              "error",
+              e.getMessage() == null ? "executor catalog unavailable" : e.getMessage(),
+              "source",
+              "micro6_executor_catalog"));
       errors.add(
           "micro6_executor: "
               + (e.getMessage() == null ? "executor catalog unavailable" : e.getMessage()));
@@ -906,7 +920,8 @@ public class PatchLoopController {
       return null;
     }
     String displayName =
-        firstNonBlankText(row.path("display_name").asText(null), row.path("name").asText(null), taskKey);
+        firstNonBlankText(
+            row.path("display_name").asText(null), row.path("name").asText(null), taskKey);
 
     Map<String, Object> normalized = new LinkedHashMap<>();
     normalized.put("client_type", "micro6");
@@ -919,7 +934,8 @@ public class PatchLoopController {
       normalized.put("panel_display_name", row.path("panel_display_name").asText());
     }
     if (row.path("search_aliases").isArray()) {
-      normalized.put("search_aliases", objectMapper.convertValue(row.path("search_aliases"), List.class));
+      normalized.put(
+          "search_aliases", objectMapper.convertValue(row.path("search_aliases"), List.class));
     }
     if (row.path("runnable").isBoolean()) {
       normalized.put("runnable", row.path("runnable").asBoolean());

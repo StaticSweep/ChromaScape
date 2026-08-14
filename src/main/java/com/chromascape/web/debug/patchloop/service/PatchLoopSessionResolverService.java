@@ -40,7 +40,8 @@ public class PatchLoopSessionResolverService {
     iteration.setRunSessionId(resolved.getSession().getSessionId());
     iteration.setRunRecordingId(resolved.getSession().getRecordingId());
 
-    SessionContextDto sessionContext = readSessionContext(iteration).orElseGet(SessionContextDto::new);
+    SessionContextDto sessionContext =
+        readSessionContext(iteration).orElseGet(SessionContextDto::new);
     sessionContext.setDebugSessionId(resolved.getSession().getSessionId());
     if (resolved.getSession().getRecordingId() != null
         && !resolved.getSession().getRecordingId().isBlank()) {
@@ -55,7 +56,8 @@ public class PatchLoopSessionResolverService {
       return Optional.empty();
     }
     try {
-      return Optional.of(objectMapper.treeToValue(iteration.getSessionContext(), SessionContextDto.class));
+      return Optional.of(
+          objectMapper.treeToValue(iteration.getSessionContext(), SessionContextDto.class));
     } catch (Exception e) {
       return Optional.empty();
     }
@@ -66,7 +68,8 @@ public class PatchLoopSessionResolverService {
     Optional<SessionContextDto> sessionContextOpt = readSessionContext(iteration);
     if (sessionContextOpt.isPresent()) {
       SessionContextDto sessionContext = sessionContextOpt.get();
-      if (sessionContext.getDebugSessionId() != null && !sessionContext.getDebugSessionId().isBlank()) {
+      if (sessionContext.getDebugSessionId() != null
+          && !sessionContext.getDebugSessionId().isBlank()) {
         DebugSession session =
             debugSessionRepository
                 .findBySessionId(sessionContext.getDebugSessionId())
@@ -96,7 +99,8 @@ public class PatchLoopSessionResolverService {
     if (allowRunSessionReuse
         && iteration.getRunSessionId() != null
         && !iteration.getRunSessionId().isBlank()) {
-      Optional<DebugSession> session = debugSessionRepository.findBySessionId(iteration.getRunSessionId());
+      Optional<DebugSession> session =
+          debugSessionRepository.findBySessionId(iteration.getRunSessionId());
       if (session.isPresent()) {
         return Optional.of(new ResolvedSessionContext(session.get(), SOURCE_RUN_SESSION));
       }

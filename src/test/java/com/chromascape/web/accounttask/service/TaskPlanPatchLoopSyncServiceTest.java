@@ -35,7 +35,8 @@ class TaskPlanPatchLoopSyncServiceTest {
 
   @BeforeEach
   void setUp() {
-    service = new TaskPlanPatchLoopSyncService(itemRepository, iterationRepository, executionService);
+    service =
+        new TaskPlanPatchLoopSyncService(itemRepository, iterationRepository, executionService);
   }
 
   @Test

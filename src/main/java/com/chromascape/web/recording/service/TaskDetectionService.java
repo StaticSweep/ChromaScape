@@ -177,9 +177,9 @@ public class TaskDetectionService {
    *
    * <p>If {@code stopRecording()} returns {@code null}, the finalization is treated as a failure:
    * an error is logged and no bogus DB row is written. If {@code stopRecording()} throws, the
-   * exception is logged and swallowed so it does not break the script lifecycle (e.g. the
-   * {@code ScriptInstance} finally chain that broadcasts a stopped state). In all cases task state
-   * is cleared via the single {@code finally} block.
+   * exception is logged and swallowed so it does not break the script lifecycle (e.g. the {@code
+   * ScriptInstance} finally chain that broadcasts a stopped state). In all cases task state is
+   * cleared via the single {@code finally} block.
    *
    * @param reason human-readable description of why finalization is happening, for logging only
    */

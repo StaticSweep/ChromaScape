@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService;
 import com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryService;
@@ -42,10 +43,7 @@ class BuilderGoalRunnerControllerTest {
   void setUp() {
     controller =
         new BuilderGoalRunnerController(
-            builderGoalRunnerService,
-            launcherControlService,
-            clientRegistryService,
-            objectMapper);
+            builderGoalRunnerService, launcherControlService, clientRegistryService, objectMapper);
   }
 
   @Test
@@ -64,8 +62,34 @@ class BuilderGoalRunnerControllerTest {
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> body = (List<Map<String, Object>>) response.getBody();
     assertThat(body).hasSize(1);
-    assertThat(body.get(0).get("machineUuid"))
-        .isEqualTo("1d391d65-6c97-5b77-b676-964f157e8c73");
+    assertThat(body.get(0).get("machineUuid")).isEqualTo("1d391d65-6c97-5b77-b676-964f157e8c73");
+  }
+
+  @Test
+  void getRunSummary_returnsRunSummary() {
+    Map<String, Object> run = new LinkedHashMap<>();
+    run.put("iterationId", "buildergoal_123");
+    run.put("targetPreparationState", "BUILDING_MICRO6");
+    when(builderGoalRunnerService.getRunSummary("buildergoal_123")).thenReturn(run);
+
+    ResponseEntity<Object> response = controller.getRunSummary("buildergoal_123");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody()).isEqualTo(run);
+    verify(builderGoalRunnerService).getRunSummary("buildergoal_123");
+  }
+
+  @Test
+  void getRunSummary_returnsNotFoundForMissingRun() {
+    when(builderGoalRunnerService.getRunSummary("missing"))
+        .thenThrow(new IllegalArgumentException("Builder goal run not found: missing"));
+
+    ResponseEntity<Object> response = controller.getRunSummary("missing");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body.get("error")).isEqualTo("Builder goal run not found: missing");
   }
 
   @Test
@@ -89,8 +113,7 @@ class BuilderGoalRunnerControllerTest {
   void listMachines_badGatewayDetailsNeverDiscloseConfiguredToken() {
     when(launcherControlService.listMachineSummaries())
         .thenThrow(new IllegalStateException("HTTP 401: echo secret-token"));
-    when(launcherControlService.describeSanitizedFailure(any()))
-        .thenReturn("HTTP 401: echo ***");
+    when(launcherControlService.describeSanitizedFailure(any())).thenReturn("HTTP 401: echo ***");
 
     ResponseEntity<Object> response = controller.listMachines();
 
@@ -105,8 +128,7 @@ class BuilderGoalRunnerControllerTest {
   void listMachines_badGatewayResponseContainsNeitherTokenNorAuthorizationHeader() {
     when(launcherControlService.listMachineSummaries())
         .thenThrow(
-            new IllegalStateException(
-                "HTTP 401: Authorization: Bearer secret-token expired"));
+            new IllegalStateException("HTTP 401: Authorization: Bearer secret-token expired"));
     when(launcherControlService.describeSanitizedFailure(any()))
         .thenReturn("HTTP 401: Authorization: Bearer *** expired");
 
@@ -127,7 +149,9 @@ class BuilderGoalRunnerControllerTest {
   @Test
   void listMachines_badGatewayDetailsAreNonNullForParsingFailures() {
     when(launcherControlService.listMachineSummaries())
-        .thenThrow(new IllegalStateException("Failed to load launcher machines: JsonParseException: Unexpected token"));
+        .thenThrow(
+            new IllegalStateException(
+                "Failed to load launcher machines: JsonParseException: Unexpected token"));
     when(launcherControlService.describeSanitizedFailure(any()))
         .thenReturn("JsonParseException: Unexpected token");
 
@@ -151,7 +175,8 @@ class BuilderGoalRunnerControllerTest {
             new RuntimeException(
                 "upstream response Authorization: Bearer secret-token should not leak"));
     when(launcherControlService.describeSanitizedFailure(any()))
-        .thenReturn("RuntimeException: upstream response Authorization: Bearer *** should not leak");
+        .thenReturn(
+            "RuntimeException: upstream response Authorization: Bearer *** should not leak");
 
     ResponseEntity<Object> response = controller.importPayload(objectMapper.createObjectNode());
 
@@ -203,7 +228,8 @@ class BuilderGoalRunnerControllerTest {
     when(builderGoalRunnerService.saveRecoveryAnnotations(eq("buildergoal_rec0001"), eq(null)))
         .thenReturn(result);
 
-    ResponseEntity<Object> response = controller.saveRecoveryAnnotations("buildergoal_rec0001", null);
+    ResponseEntity<Object> response =
+        controller.saveRecoveryAnnotations("buildergoal_rec0001", null);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     @SuppressWarnings("unchecked")
@@ -219,7 +245,8 @@ class BuilderGoalRunnerControllerTest {
     when(builderGoalRunnerService.resolveRecoveryEvidence(eq("buildergoal_rec0001"), eq(null)))
         .thenReturn(result);
 
-    ResponseEntity<Object> response = controller.resolveRecoveryEvidence("buildergoal_rec0001", null);
+    ResponseEntity<Object> response =
+        controller.resolveRecoveryEvidence("buildergoal_rec0001", null);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     @SuppressWarnings("unchecked")
@@ -303,7 +330,8 @@ class BuilderGoalRunnerControllerTest {
     when(builderGoalRunnerService.openRecoveryWorkspaceByRecordingId("recording_123"))
         .thenReturn(workspace);
 
-    ResponseEntity<Object> response = controller.openRecoveryWorkspaceByRecordingId("recording_123");
+    ResponseEntity<Object> response =
+        controller.openRecoveryWorkspaceByRecordingId("recording_123");
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     @SuppressWarnings("unchecked")
@@ -317,8 +345,7 @@ class BuilderGoalRunnerControllerTest {
     Map<String, Object> state = new LinkedHashMap<>();
     state.put("iterationId", "buildergoal_rec0001");
     state.put("recoveryPhase", "AWAITING_OPERATOR_PROMPT");
-    when(builderGoalRunnerService.getRecoveryStateByRecordingId("recording_123"))
-        .thenReturn(state);
+    when(builderGoalRunnerService.getRecoveryStateByRecordingId("recording_123")).thenReturn(state);
 
     ResponseEntity<Object> response = controller.getRecoveryStateByRecordingId("recording_123");
 
@@ -392,14 +419,17 @@ class BuilderGoalRunnerControllerTest {
   }
 
   @Test
-  void launchAccount_delegatesToServiceAndReturnsOk() throws Exception {
+  void launchAccount_delegatesToServiceAndReturnsAccepted() throws Exception {
     Map<String, Object> result = new LinkedHashMap<>();
-    result.put("accepted", true);
+    result.put("operationId", "op-123");
+    result.put("status", BuilderGoalLaunchOperationService.STATUS_QUEUED);
     result.put("accountId", "hash-1");
+    result.put("accountName", "bigGreenMeat");
     result.put("launcherMachineUuid", "machine-1");
     result.put("world", 360);
-    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360))
-        .thenReturn(result);
+    result.put("deduplicated", false);
+    result.put("statusUrl", "/api/debug/builder-goals/launch-operations/op-123");
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360)).thenReturn(result);
 
     com.fasterxml.jackson.databind.JsonNode payload =
         objectMapper.readTree(
@@ -412,13 +442,50 @@ class BuilderGoalRunnerControllerTest {
             """);
     ResponseEntity<Object> response = controller.launchAccount(payload);
 
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
     @SuppressWarnings("unchecked")
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(body).isNotNull();
-    assertThat(body.get("accepted")).isEqualTo(true);
+    assertThat(body.get("operationId")).isEqualTo("op-123");
+    assertThat(body.get("status")).isEqualTo("QUEUED");
+    assertThat(body.get("accountId")).isEqualTo("hash-1");
+    assertThat(body.get("accountName")).isEqualTo("bigGreenMeat");
+    assertThat(body.get("launcherMachineUuid")).isEqualTo("machine-1");
     assertThat(body.get("world")).isEqualTo(360);
+    assertThat(body.get("deduplicated")).isEqualTo(false);
+    assertThat(body.get("statusUrl"))
+        .isEqualTo("/api/debug/builder-goals/launch-operations/op-123");
     verify(builderGoalRunnerService).launchAccount("hash-1", "machine-1", 360);
+  }
+
+  @Test
+  void launchAccount_returnsAcceptedWithDeduplicatedFlagForActiveOperation() throws Exception {
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("operationId", "op-123");
+    result.put("status", BuilderGoalLaunchOperationService.STATUS_QUEUED);
+    result.put("accountId", "hash-1");
+    result.put("accountName", "bigGreenMeat");
+    result.put("launcherMachineUuid", "machine-1");
+    result.put("world", 360);
+    result.put("deduplicated", true);
+    result.put("statusUrl", "/api/debug/builder-goals/launch-operations/op-123");
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360)).thenReturn(result);
+
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "world": 360
+            }
+            """);
+    ResponseEntity<Object> response = controller.launchAccount(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body.get("deduplicated")).isEqualTo(true);
   }
 
   @Test
@@ -463,7 +530,62 @@ class BuilderGoalRunnerControllerTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(body)
-        .containsEntry("error", "Selected launcher account is missing an email for local Micro6 relaunch");
+        .containsEntry(
+            "error", "Selected launcher account is missing an email for local Micro6 relaunch");
+  }
+
+  @Test
+  void getLaunchOperation_returnsCurrentState() {
+    Map<String, Object> view = new LinkedHashMap<>();
+    view.put("operationId", "op-123");
+    view.put("status", "WAITING_FOR_DISPATCH");
+    view.put("message", "Micro6 local executor is waiting for login");
+    view.put("readinessPhase", "WAITING_FOR_DISPATCH");
+    view.put("terminal", false);
+    view.put("success", false);
+    when(builderGoalRunnerService.getLaunchOperation("op-123")).thenReturn(view);
+
+    ResponseEntity<Object> response = controller.getLaunchOperation("op-123");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body.get("operationId")).isEqualTo("op-123");
+    assertThat(body.get("status")).isEqualTo("WAITING_FOR_DISPATCH");
+    assertThat(body.get("terminal")).isEqualTo(false);
+  }
+
+  @Test
+  void getLaunchOperation_returnsNotFoundForUnknownOrExpired() {
+    when(builderGoalRunnerService.getLaunchOperation("missing"))
+        .thenThrow(new IllegalArgumentException("Launch operation not found or expired: missing"));
+
+    ResponseEntity<Object> response = controller.getLaunchOperation("missing");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "Launch operation not found or expired: missing");
+  }
+
+  @Test
+  void getLaunchOperation_sanitizesUnexpectedFailuresWithoutCredentials() {
+    when(builderGoalRunnerService.getLaunchOperation("op-123"))
+        .thenThrow(
+            new IllegalStateException(
+                "upstream response Authorization: Bearer secret-token should not leak"));
+    when(launcherControlService.describeSanitizedFailure(any()))
+        .thenReturn(
+            "IllegalStateException: upstream response Authorization: Bearer *** should not leak");
+
+    ResponseEntity<Object> response = controller.getLaunchOperation("op-123");
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(String.valueOf(body.get("details")))
+        .contains("Bearer ***")
+        .doesNotContain("secret-token");
   }
 
   @Test
@@ -534,7 +656,13 @@ class BuilderGoalRunnerControllerTest {
   @Test
   void runPayload_returnsConflictWhenLaunchCredentialsAreMissing() throws Exception {
     when(builderGoalRunnerService.startCatalogTaskRun(
-            eq("hash-1"), eq("machine-1"), eq("configurable_woodcutting"), any(), any(), eq(360), any()))
+            eq("hash-1"),
+            eq("machine-1"),
+            eq("configurable_woodcutting"),
+            any(),
+            any(),
+            eq(360),
+            any()))
         .thenThrow(
             new IllegalStateException(
                 "Selected launcher account is missing a password for local Micro6 relaunch"));
@@ -555,9 +683,9 @@ class BuilderGoalRunnerControllerTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(body)
-        .containsEntry("error", "Selected launcher account is missing a password for local Micro6 relaunch");
+        .containsEntry(
+            "error", "Selected launcher account is missing a password for local Micro6 relaunch");
   }
-
 
   @Test
   void publishTask_returnsConflictWhenDisabledAccountRejectsPublish() throws Exception {
@@ -601,5 +729,68 @@ class BuilderGoalRunnerControllerTest {
     assertThat(body).containsEntry("service", "chromascape-builder-goal");
     assertThat(body).containsKey("timestamp");
     assertThat((String) body.get("timestamp")).isNotBlank();
+  }
+
+  @Test
+  void launchAccount_returnsServiceUnavailableWhenExecutorRejects() throws Exception {
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360))
+        .thenThrow(
+            new BuilderGoalRunnerService.LaunchSubmissionException(
+                "Launch executor cannot accept the request right now"));
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "world": 360
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.launchAccount(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsKey("error");
+    assertThat(body).containsKey("guidance");
+  }
+
+  @Test
+  void launchAccount_errorBodiesAreSanitized() throws Exception {
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360))
+        .thenThrow(
+            new IllegalArgumentException(
+                "invalid credentials --profile-email=user@example.com:supersecret"));
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "world": 360
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.launchAccount(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(String.valueOf(body.get("error"))).doesNotContain("supersecret");
+    assertThat(String.valueOf(body.get("error"))).contains("********");
+  }
+
+  @Test
+  void getLaunchOperation_notFoundBodyIsSanitized() {
+    when(builderGoalRunnerService.getLaunchOperation("op-1"))
+        .thenThrow(
+            new IllegalArgumentException(
+                "operation not found Authorization: Bearer leaked-secret"));
+    ResponseEntity<Object> response = controller.getLaunchOperation("op-1");
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(String.valueOf(body.get("error"))).doesNotContain("leaked-secret");
   }
 }

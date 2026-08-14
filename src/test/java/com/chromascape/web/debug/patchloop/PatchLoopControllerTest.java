@@ -812,7 +812,8 @@ class PatchLoopControllerTest {
   }
 
   @Test
-  @DisplayName("GET /provider/status returns CODEX_CONNECTED_VERIFIED when cached verification succeeded")
+  @DisplayName(
+      "GET /provider/status returns CODEX_CONNECTED_VERIFIED when cached verification succeeded")
   void testGetProviderStatusReturnsVerified() throws Exception {
     when(analysisClient.getProviderName()).thenReturn("codex-mcp");
     Map<String, Object> metadata = new HashMap<>();
@@ -905,8 +906,9 @@ class PatchLoopControllerTest {
         .thenReturn(new McpHealthResponse(true, "2.0.0", metadata));
     when(mcpVerificationService.isManualVerificationEnabled()).thenReturn(true);
     when(mcpVerificationService.getCachedResult())
-        .thenReturn(McpVerificationResult.failure("Verification analyze call failed: timeout",
-            "codex-cli"));
+        .thenReturn(
+            McpVerificationResult.failure(
+                "Verification analyze call failed: timeout", "codex-cli"));
 
     ResponseEntity<Object> response = controller.getProviderStatus();
     assertEquals(HttpStatus.OK, response.getStatusCode());

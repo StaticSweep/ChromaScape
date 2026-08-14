@@ -17,6 +17,7 @@ public class TickBatchMessage {
 
   /** Message type identifier. */
   private String type;
+
   /** Replay schema version for strict compatibility checks. */
   private Integer schemaVersion;
 
@@ -29,9 +30,11 @@ public class TickBatchMessage {
   /** ISO-8601 timestamp of when this tick occurred. */
   private String timestamp;
 
-  /** Player state map containing position, HP, prayer, animation, etc.
-   * Contains both canonical nested fields (position, hp, prayer, energy, animation)
-   * and legacy flat aliases (x, z, currentHp, runEnergy, animationId). */
+  /**
+   * Player state map containing position, HP, prayer, animation, etc. Contains both canonical
+   * nested fields (position, hp, prayer, energy, animation) and legacy flat aliases (x, z,
+   * currentHp, runEnergy, animationId).
+   */
   private Map<String, Object> playerState;
 
   /** Inventory items list. */
@@ -72,8 +75,10 @@ public class TickBatchMessage {
 
   /** Ground items. */
   private List<Map<String, Object>> groundItems;
+
   /** Nearby players. */
   private List<Map<String, Object>> players;
+
   /** Widget state subset. */
   private List<Map<String, Object>> widgets;
 
@@ -151,27 +156,42 @@ public class TickBatchMessage {
   public String getType() {
     return type;
   }
-  public void setType(String type) { this.type = type; }
+
+  public void setType(String type) {
+    this.type = type;
+  }
 
   public Integer getSchemaVersion() {
     return schemaVersion;
   }
-  public void setSchemaVersion(Integer schemaVersion) { this.schemaVersion = schemaVersion; }
+
+  public void setSchemaVersion(Integer schemaVersion) {
+    this.schemaVersion = schemaVersion;
+  }
 
   public String getSessionId() {
     return sessionId;
   }
-  public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+
+  public void setSessionId(String sessionId) {
+    this.sessionId = sessionId;
+  }
 
   public long getTick() {
     return tick;
   }
-  public void setTick(long tick) { this.tick = tick; }
+
+  public void setTick(long tick) {
+    this.tick = tick;
+  }
 
   public String getTimestamp() {
     return timestamp;
   }
-  public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
+
+  public void setTimestamp(String timestamp) {
+    this.timestamp = timestamp;
+  }
 
   public Map<String, Object> getPlayerState() {
     return playerState;
@@ -184,77 +204,122 @@ public class TickBatchMessage {
   public List<Map<String, Object>> getInventory() {
     return inventory;
   }
-  public void setInventory(List<Map<String, Object>> inventory) { this.inventory = inventory; }
+
+  public void setInventory(List<Map<String, Object>> inventory) {
+    this.inventory = inventory;
+  }
 
   public List<Map<String, Object>> getEquipment() {
     return equipment;
   }
-  public void setEquipment(List<Map<String, Object>> equipment) { this.equipment = equipment; }
+
+  public void setEquipment(List<Map<String, Object>> equipment) {
+    this.equipment = equipment;
+  }
 
   public List<Map<String, Object>> getThreats() {
     return threats;
   }
-  public void setThreats(List<Map<String, Object>> threats) { this.threats = threats; }
+
+  public void setThreats(List<Map<String, Object>> threats) {
+    this.threats = threats;
+  }
 
   public List<Map<String, Object>> getProjectiles() {
     return projectiles;
   }
-  public void setProjectiles(List<Map<String, Object>> projectiles) { this.projectiles = projectiles; }
+
+  public void setProjectiles(List<Map<String, Object>> projectiles) {
+    this.projectiles = projectiles;
+  }
 
   public Map<String, Integer> getCooldowns() {
     return cooldowns;
   }
-  public void setCooldowns(Map<String, Integer> cooldowns) { this.cooldowns = cooldowns; }
+
+  public void setCooldowns(Map<String, Integer> cooldowns) {
+    this.cooldowns = cooldowns;
+  }
 
   public List<TickLogEntry> getLogs() {
     return logs;
   }
-  public void setLogs(List<TickLogEntry> logs) { this.logs = logs; }
+
+  public void setLogs(List<TickLogEntry> logs) {
+    this.logs = logs;
+  }
 
   public List<TickOverlayEntry> getOverlays() {
     return overlays;
   }
-  public void setOverlays(List<TickOverlayEntry> overlays) { this.overlays = overlays; }
+
+  public void setOverlays(List<TickOverlayEntry> overlays) {
+    this.overlays = overlays;
+  }
 
   public Map<String, Object> getQuest() {
     return quest;
   }
-  public void setQuest(Map<String, Object> quest) { this.quest = quest; }
+
+  public void setQuest(Map<String, Object> quest) {
+    this.quest = quest;
+  }
 
   public Map<String, Object> getQuestHelper() {
     return questHelper;
   }
-  public void setQuestHelper(Map<String, Object> questHelper) { this.questHelper = questHelper; }
+
+  public void setQuestHelper(Map<String, Object> questHelper) {
+    this.questHelper = questHelper;
+  }
 
   public List<Map<String, Object>> getNpcs() {
     return npcs;
   }
-  public void setNpcs(List<Map<String, Object>> npcs) { this.npcs = npcs; }
+
+  public void setNpcs(List<Map<String, Object>> npcs) {
+    this.npcs = npcs;
+  }
 
   public List<Map<String, Object>> getGameObjects() {
     return gameObjects;
   }
-  public void setGameObjects(List<Map<String, Object>> gameObjects) { this.gameObjects = gameObjects; }
+
+  public void setGameObjects(List<Map<String, Object>> gameObjects) {
+    this.gameObjects = gameObjects;
+  }
 
   public List<Map<String, Object>> getGroundObjects() {
     return groundObjects;
   }
-  public void setGroundObjects(List<Map<String, Object>> groundObjects) { this.groundObjects = groundObjects; }
+
+  public void setGroundObjects(List<Map<String, Object>> groundObjects) {
+    this.groundObjects = groundObjects;
+  }
 
   public List<Map<String, Object>> getGroundItems() {
     return groundItems;
   }
-  public void setGroundItems(List<Map<String, Object>> groundItems) { this.groundItems = groundItems; }
+
+  public void setGroundItems(List<Map<String, Object>> groundItems) {
+    this.groundItems = groundItems;
+  }
 
   public List<Map<String, Object>> getPlayers() {
     return players;
   }
-  public void setPlayers(List<Map<String, Object>> players) { this.players = players; }
+
+  public void setPlayers(List<Map<String, Object>> players) {
+    this.players = players;
+  }
 
   public List<Map<String, Object>> getWidgets() {
     return widgets;
   }
-  public void setWidgets(List<Map<String, Object>> widgets) { this.widgets = widgets; }
+
+  public void setWidgets(List<Map<String, Object>> widgets) {
+    this.widgets = widgets;
+  }
 
   /** Individual log entry within a tick batch. */
   public static class TickLogEntry {

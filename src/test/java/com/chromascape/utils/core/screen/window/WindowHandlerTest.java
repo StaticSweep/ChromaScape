@@ -1,8 +1,8 @@
 package com.chromascape.utils.core.screen.window;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,8 +21,7 @@ class WindowHandlerTest {
         WindowHandler.extractAccountName("Leeuwbot V2.0.61 - bigGreenMeat", "Leeuwbot"));
     assertEquals("alpha", WindowHandler.extractAccountName("RuneLite - alpha", "RuneLite"));
     assertEquals(
-        "bigGreenMeat",
-        WindowHandler.extractAccountName("Leeuwbot - bigGreenMeat", "Leeuwbot"));
+        "bigGreenMeat", WindowHandler.extractAccountName("Leeuwbot - bigGreenMeat", "Leeuwbot"));
     assertNull(WindowHandler.extractAccountName("Leeuwbot V2.0.61", "Leeuwbot"));
   }
 
@@ -33,7 +32,8 @@ class WindowHandlerTest {
 
     WindowInfo best =
         WindowHandler.selectBestWindow(
-            List.of(wrapper, runelite), (Predicate<WindowInfo>) window -> "3".equals(window.getId()));
+            List.of(wrapper, runelite),
+            (Predicate<WindowInfo>) window -> "3".equals(window.getId()));
 
     assertEquals("3", best.getId());
     assertEquals("- RuneLite", best.getTitle());
@@ -74,8 +74,8 @@ class WindowHandlerTest {
             (Function<WindowInfo, WindowHandler.CaptureSignature>)
                 window ->
                     "1".equals(window.getId())
-                    ? new WindowHandler.CaptureSignature(2, true, area(window))
-                    : new WindowHandler.CaptureSignature(0, false, area(window)));
+                        ? new WindowHandler.CaptureSignature(2, true, area(window))
+                        : new WindowHandler.CaptureSignature(0, false, area(window)));
 
     assertEquals("1", best.getId());
     assertEquals("Leeuwbot V2.0.61 - bigGreenMeat", best.getTitle());
@@ -106,9 +106,9 @@ class WindowHandlerTest {
             List.of(wrapper, secondWrapper),
             (Function<WindowInfo, WindowHandler.CaptureSignature>)
                 window ->
-                "2".equals(window.getId())
-                    ? new WindowHandler.CaptureSignature(2, true, area(window))
-                    : new WindowHandler.CaptureSignature(1, false, area(window)));
+                    "2".equals(window.getId())
+                        ? new WindowHandler.CaptureSignature(2, true, area(window))
+                        : new WindowHandler.CaptureSignature(1, false, area(window)));
 
     assertEquals(1, deduplicated.size());
     assertEquals("2", deduplicated.get(0).getId());
@@ -124,9 +124,9 @@ class WindowHandlerTest {
             List.of(firstRunelite, secondRunelite),
             (Function<WindowInfo, WindowHandler.CaptureSignature>)
                 window ->
-                "2".equals(window.getId())
-                    ? new WindowHandler.CaptureSignature(2, true, area(window))
-                    : new WindowHandler.CaptureSignature(1, false, area(window)));
+                    "2".equals(window.getId())
+                        ? new WindowHandler.CaptureSignature(2, true, area(window))
+                        : new WindowHandler.CaptureSignature(1, false, area(window)));
 
     assertEquals("2", best.getId());
   }
@@ -153,8 +153,7 @@ class WindowHandlerTest {
         WindowHandler.isSupportedClientWindowTitle(
             "Merge pull request #1811 from bgatfa/fix/walker-opens-nonblocking-doors · infuse21/Microbot@b0a4607 - Google Chrome"));
     assertFalse(
-        WindowHandler.isSupportedClientWindowTitle(
-            "runelite – gradle.properties [runelite]"));
+        WindowHandler.isSupportedClientWindowTitle("runelite – gradle.properties [runelite]"));
   }
 
   private static WindowInfo window(String id, String title, int pid, int width, int height) {

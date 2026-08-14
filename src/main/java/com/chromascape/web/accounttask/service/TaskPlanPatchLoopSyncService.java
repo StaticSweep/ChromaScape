@@ -35,7 +35,8 @@ public class TaskPlanPatchLoopSyncService {
   @Transactional
   public void syncExecutingItems() {
     List<TaskPlanItem> executingItems =
-        itemRepository.findByStatusAndPatchLoopIterationIdIsNotNull(TaskPlanItem.ItemStatus.EXECUTING);
+        itemRepository.findByStatusAndPatchLoopIterationIdIsNotNull(
+            TaskPlanItem.ItemStatus.EXECUTING);
 
     for (TaskPlanItem item : executingItems) {
       String iterationId = item.getPatchLoopIterationId();
@@ -43,7 +44,8 @@ public class TaskPlanPatchLoopSyncService {
         continue;
       }
 
-      Optional<PatchLoopIteration> optionalIteration = iterationRepository.findByIterationId(iterationId);
+      Optional<PatchLoopIteration> optionalIteration =
+          iterationRepository.findByIterationId(iterationId);
       if (optionalIteration.isEmpty()) {
         continue;
       }
@@ -61,7 +63,11 @@ public class TaskPlanPatchLoopSyncService {
       } else {
         String reason = buildFailureSummary(iteration);
         executionService.markItemFailed(item.getItemId(), reason);
-        log.info("Marked plan item {} FAILED from iteration {} ({})", item.getItemId(), iterationId, status);
+        log.info(
+            "Marked plan item {} FAILED from iteration {} ({})",
+            item.getItemId(),
+            iterationId,
+            status);
       }
     }
   }

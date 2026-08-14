@@ -8,5 +8,6 @@ package com.chromascape.web.debug.tickdebugger.dto;
  */
 public interface SessionCountProjection {
   String getSessionId();
+
   Long getCount();
 }

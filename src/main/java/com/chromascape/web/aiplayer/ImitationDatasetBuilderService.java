@@ -97,7 +97,8 @@ public class ImitationDatasetBuilderService {
     }
 
     Map<String, Object> manifest =
-        baseManifest("logs", datasetId, startTime, endTime, accountName, records.size(), logs.size(), 0);
+        baseManifest(
+            "logs", datasetId, startTime, endTime, accountName, records.size(), logs.size(), 0);
     manifest.put("source_tables", List.of("logs"));
     manifest.put("source_signals", List.of("logs", "ticks", "script_name"));
     manifest.put("evidence_triplet_filter", Map.of("applied", false, "reason", "not_applicable"));
@@ -160,14 +161,19 @@ public class ImitationDatasetBuilderService {
     manifest.put(
         "evidence_triplet_filter",
         Map.of(
-            "applied", true,
-            "required_types", List.of("LOG", "TICK_LOG", "RECORDING_SESSION"),
-            "included_records", records.size(),
-            "excluded_records", excluded));
+            "applied",
+            true,
+            "required_types",
+            List.of("LOG", "TICK_LOG", "RECORDING_SESSION"),
+            "included_records",
+            records.size(),
+            "excluded_records",
+            excluded));
     return writeDataset(datasetId, "patch_outcomes", records, manifest, items.size(), excluded);
   }
 
-  private List<LogEntity> loadLogs(String accountName, LocalDateTime startTime, LocalDateTime endTime) {
+  private List<LogEntity> loadLogs(
+      String accountName, LocalDateTime startTime, LocalDateTime endTime) {
     if (accountName != null && !accountName.isBlank()) {
       return logRepository.findBySourceAndTimestampBetweenOrderByTimestampAsc(
           accountName, startTime, endTime);
@@ -226,7 +232,8 @@ public class ImitationDatasetBuilderService {
         records);
   }
 
-  private void writeJsonLines(Path outputPath, List<Map<String, Object>> records) throws IOException {
+  private void writeJsonLines(Path outputPath, List<Map<String, Object>> records)
+      throws IOException {
     try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
       for (Map<String, Object> record : records) {
         writer.write(objectMapper.writeValueAsString(record));
@@ -275,7 +282,7 @@ public class ImitationDatasetBuilderService {
             "ai_player_enabled", aiPlayerEnabled,
             "shadow_mode", shadowMode,
             "control_enabled", controlEnabled,
-            "control_allowed", aiPlayerEnabled && controlEnabled));
+            "control_allowed", false));
     return manifest;
   }
 

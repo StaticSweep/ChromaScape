@@ -2,7 +2,7 @@ package com.chromascape.web.recording.service;
 
 import com.chromascape.utils.core.screen.FrameEvent;
 import com.chromascape.utils.core.screen.FrameListener;
-import com.chromascape.utils.core.screen.window.ScreenManager;
+import com.chromascape.web.recording.capture.WindowFrameCapture;
 import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.exception.FrameCaptureException;
@@ -50,8 +50,10 @@ public class RecordingService implements FrameListener {
   private final RecordingConfig config;
   private final UnifiedCaptureConfig unifiedConfig;
   private final UnifiedFrameCaptureService unifiedCaptureService;
+  private final WindowFrameCapture windowFrameCapture;
   private final ExecutorService encoderThread;
   private final AtomicBoolean recording = new AtomicBoolean(false);
+  private final AtomicBoolean recordingStarting = new AtomicBoolean(false);
   private final AtomicLong frameCount = new AtomicLong(0);
   private final AtomicLong droppedFrameCount = new AtomicLong(0);
   private final AtomicLong duplicatedFrameCount = new AtomicLong(0);
@@ -82,10 +84,12 @@ public class RecordingService implements FrameListener {
   public RecordingService(
       RecordingConfig config,
       UnifiedCaptureConfig unifiedConfig,
-      UnifiedFrameCaptureService unifiedCaptureService) {
+      UnifiedFrameCaptureService unifiedCaptureService,
+      WindowFrameCapture windowFrameCapture) {
     this.config = config;
     this.unifiedConfig = unifiedConfig;
     this.unifiedCaptureService = unifiedCaptureService;
+    this.windowFrameCapture = windowFrameCapture;
 
     // Encoder thread - consumes frames from buffer and encodes them
     this.encoderThread =
@@ -126,14 +130,19 @@ public class RecordingService implements FrameListener {
    * @return The recording ID for this session
    */
   public String startRecording(RecordingTriggerSource triggerSource) {
+    if (!config.isEnabled()) {
+      logger.warn("Recording is disabled");
+      throw new RecordingDisabledException();
+    }
+
     if (recording.get()) {
       logger.warn("Recording is already in progress: {}", currentRecordingId);
       throw new RecordingAlreadyInProgressException(currentRecordingId);
     }
 
-    if (!config.isEnabled()) {
-      logger.warn("Recording is disabled");
-      throw new RecordingDisabledException();
+    if (!recordingStarting.compareAndSet(false, true)) {
+      logger.warn("Recording is already starting: {}", currentRecordingId);
+      throw new RecordingAlreadyInProgressException(currentRecordingId);
     }
 
     currentTriggerSource = triggerSource;
@@ -144,43 +153,10 @@ public class RecordingService implements FrameListener {
       String filename = currentRecordingId + ".mp4";
       currentRecordingFile = Paths.get(config.getOutputDirectory(), filename).toFile();
 
-      // Try to capture first frame to get actual dimensions
-      BufferedImage firstFrame = null;
-      String lastCaptureError = null;
-      int maxAttempts = 5;
-      for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-          firstFrame = ScreenManager.captureWindow();
-          if (firstFrame != null) {
-            break;
-          }
-        } catch (RuntimeException e) {
-          lastCaptureError = e.getMessage();
-          logger.warn(
-              "Failed to capture frame for recording (attempt {}/{}): {}",
-              attempt,
-              maxAttempts,
-              e.getMessage());
-        }
-        if (attempt < maxAttempts) {
-          logger.warn(
-              "Failed to capture frame for recording (attempt {}/{}), retrying...",
-              attempt,
-              maxAttempts);
-          try {
-            Thread.sleep(100);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logger.warn("Recording start interrupted while waiting for initial frame");
-            break;
-          }
-        }
-      }
-
-      if (firstFrame == null) {
-        logger.error("Failed to capture first frame after {} attempts", maxAttempts);
-        throw new FrameCaptureException(maxAttempts, lastCaptureError);
-      }
+      // Wait (bounded) for RuneLite's canvas to expose capturable dimensions. The SunAwtCanvas
+      // may exist while its Win32 client rectangle is still 0x0, so retry without blocking the
+      // RuneLite client thread until the deadline expires.
+      BufferedImage firstFrame = waitForInitialFrame();
 
       BufferedImage normalizedFirstFrame = normalizeFrameDimensions(firstFrame);
       int width = normalizedFirstFrame.getWidth();
@@ -243,7 +219,98 @@ public class RecordingService implements FrameListener {
       throw new RecordingException(
           "Unexpected error during recording initialization: " + e.getMessage(),
           "An unexpected error occurred while starting the recording. Please try again or check the logs.");
+    } finally {
+      recordingStarting.set(false);
     }
+  }
+
+  /**
+   * Polls {@link WindowFrameCapture} until a valid (positive-dimension) frame arrives or the
+   * configured readiness deadline expires.
+   *
+   * <p>Only one thread may perform readiness capture because {@code recordingStarting} is set
+   * before this method runs. On interruption the interrupt flag is restored and startup aborts.
+   *
+   * @return the first valid frame
+   * @throws FrameCaptureException if the deadline expires or the thread is interrupted
+   */
+  private BufferedImage waitForInitialFrame() {
+    long timeoutMs = config.getInitialFrameTimeoutMs();
+    long retryIntervalMs = config.getInitialFrameRetryIntervalMs();
+    long startNanos = System.nanoTime();
+    long deadlineNanos = startNanos + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+    String lastError = null;
+    boolean firstFailureLogged = false;
+    long lastProgressLogNanos = 0;
+    int attempts = 0;
+
+    while (true) {
+      attempts++;
+      String captureError = null;
+      try {
+        BufferedImage captured = windowFrameCapture.capture();
+        if (captured == null) {
+          captureError = "capture returned no frame";
+        } else if (captured.getWidth() <= 0 || captured.getHeight() <= 0) {
+          captureError =
+              String.format("invalid dimensions %dx%d", captured.getWidth(), captured.getHeight());
+        } else {
+          long waitMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+          logger.info(
+              "Initial frame ready after {} attempts in {} ms: {}x{}",
+              attempts,
+              waitMs,
+              captured.getWidth(),
+              captured.getHeight());
+          return captured;
+        }
+      } catch (RuntimeException e) {
+        captureError = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+      }
+
+      if (captureError != null) {
+        lastError = captureError;
+        if (!firstFailureLogged) {
+          firstFailureLogged = true;
+          logger.warn("Failed to capture initial frame (attempt {}): {}", attempts, lastError);
+        }
+      }
+
+      long nowNanos = System.nanoTime();
+      long remainingNanos = deadlineNanos - nowNanos;
+      if (remainingNanos <= 0) {
+        break;
+      }
+
+      if (nowNanos - lastProgressLogNanos > TimeUnit.SECONDS.toNanos(2)) {
+        lastProgressLogNanos = nowNanos;
+        logger.info(
+            "Waiting for RuneLite window to become capturable (attempt {}, elapsed {} ms)...",
+            attempts,
+            TimeUnit.NANOSECONDS.toMillis(nowNanos - startNanos));
+      }
+
+      long sleepMs = Math.min(retryIntervalMs, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
+      if (sleepMs <= 0) {
+        break;
+      }
+      try {
+        Thread.sleep(sleepMs);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+        logger.warn("Recording start interrupted while waiting for initial frame");
+        throw new FrameCaptureException(attempts, timeoutMs, elapsedMs, lastError, true);
+      }
+    }
+
+    long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+    logger.error(
+        "Timed out waiting for initial frame after {} attempts over {} ms: {}",
+        attempts,
+        elapsedMs,
+        lastError);
+    throw new FrameCaptureException(attempts, timeoutMs, elapsedMs, lastError, false);
   }
 
   /**
@@ -728,6 +795,13 @@ public class RecordingService implements FrameListener {
 
     // Clear buffer
     frameBuffer.clear();
+
+    // Remove any zero-byte/partial MP4 left behind by a failed start
+    if (currentRecordingFile != null
+        && currentRecordingFile.exists()
+        && !currentRecordingFile.delete()) {
+      logger.warn("Failed to delete partial recording file: {}", currentRecordingFile);
+    }
 
     // Reset state but don't shutdown schedulers
     recording.set(false);

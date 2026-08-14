@@ -78,8 +78,10 @@ public class SimulatorReplaySourceService {
     List<ReplayCatalogEntry> entries = new ArrayList<>();
     for (DebugSession session : page) {
       long tickCount = tickSnapshotRepository.countBySessionId(session.getSessionId());
-      long positionFrameCount = tickSnapshotRepository.countWithPositionTelemetry(session.getSessionId());
-      double positionCoveragePct = tickCount > 0 ? ((double) positionFrameCount * 100.0) / (double) tickCount : 0.0;
+      long positionFrameCount =
+          tickSnapshotRepository.countWithPositionTelemetry(session.getSessionId());
+      double positionCoveragePct =
+          tickCount > 0 ? ((double) positionFrameCount * 100.0) / (double) tickCount : 0.0;
       boolean replayable = tickCount > 0 && positionFrameCount > 0;
       String replayabilityReason =
           replayable
@@ -190,8 +192,8 @@ public class SimulatorReplaySourceService {
   /**
    * Canonicalize playerState field names from micro6 conventions to OpenRune conventions.
    *
-   * <p>Handles both legacy flat fields (worldX→x, worldY→z, currentHp→hp, currentPrayer→prayer)
-   * and new canonical nested fields (position.x→x, position.y/z→z, hp.current→hp,
+   * <p>Handles both legacy flat fields (worldX→x, worldY→z, currentHp→hp, currentPrayer→prayer) and
+   * new canonical nested fields (position.x→x, position.y/z→z, hp.current→hp,
    * prayer.current→prayer). Other fields are passed through unchanged.
    */
   private JsonNode canonicalizePlayerState(JsonNode playerState) {

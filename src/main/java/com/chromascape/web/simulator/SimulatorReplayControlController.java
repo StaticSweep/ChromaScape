@@ -126,7 +126,8 @@ public class SimulatorReplayControlController {
                 && ((firstFrame.getPlayerState().has("x") && firstFrame.getPlayerState().has("z"))
                     || (firstFrame.getPlayerState().has("worldX")
                         && firstFrame.getPlayerState().has("worldY")));
-        boolean strictSchema = firstFrame.getSchemaVersion() != null && firstFrame.getSchemaVersion() >= 2;
+        boolean strictSchema =
+            firstFrame.getSchemaVersion() != null && firstFrame.getSchemaVersion() >= 2;
         if (!hasPosition) {
           return ResponseEntity.status(HttpStatus.CONFLICT)
               .body(
@@ -147,7 +148,8 @@ public class SimulatorReplayControlController {
           replayControlService.start(player, sessionId, speed, actorId, recordingId, sourceMode);
       return mapSuccessResponse(result);
     } catch (SimulatorReplayControlException e) {
-      if (e.getMessage() != null && e.getMessage().contains("No debug session found for recordingId")) {
+      if (e.getMessage() != null
+          && e.getMessage().contains("No debug session found for recordingId")) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
             .body(
                 errorResponse(

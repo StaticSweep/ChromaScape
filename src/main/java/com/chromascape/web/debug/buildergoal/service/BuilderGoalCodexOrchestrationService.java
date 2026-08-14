@@ -1,11 +1,11 @@
 package com.chromascape.web.debug.buildergoal.service;
 
-import com.chromascape.web.integration.adapter.RuntimeAdapterRegistry;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickOverlayRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
+import com.chromascape.web.integration.adapter.RuntimeAdapterRegistry;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -82,7 +82,8 @@ public class BuilderGoalCodexOrchestrationService {
     return toSessionResponse(session, false);
   }
 
-  public Map<String, Object> setIssueStatement(String sessionId, String issueStatement, String context) {
+  public Map<String, Object> setIssueStatement(
+      String sessionId, String issueStatement, String context) {
     CodexSession session = requireSession(sessionId);
     String iterationId = requireActiveIterationId(session);
     builderGoalRunnerService.openRecoveryWorkspace(iterationId);
@@ -180,7 +181,8 @@ public class BuilderGoalCodexOrchestrationService {
     return builderGoalRunnerService.resolveRecoveryEvidence(iterationId, payload);
   }
 
-  public Map<String, Object> generatePatchPlan(String sessionId, JsonNode payload) throws Exception {
+  public Map<String, Object> generatePatchPlan(String sessionId, JsonNode payload)
+      throws Exception {
     CodexSession session = requireSession(sessionId);
     String iterationId = requireActiveIterationId(session);
     JsonNode effectivePayload = payload;
@@ -189,11 +191,14 @@ public class BuilderGoalCodexOrchestrationService {
           objectMapper.valueToTree(
               Map.of(
                   "prompt",
-                  firstNonBlank(session.issueStatement, "Create a Micro6 patch plan from the selected evidence."),
+                  firstNonBlank(
+                      session.issueStatement,
+                      "Create a Micro6 patch plan from the selected evidence."),
                   "context",
                   ""));
     }
-    Map<String, Object> result = builderGoalRunnerService.analyzeFailure(iterationId, effectivePayload);
+    Map<String, Object> result =
+        builderGoalRunnerService.analyzeFailure(iterationId, effectivePayload);
     session.lastPatchPlanStatus = stringValue(result.get("status"));
     addMessage(
         session,
@@ -306,14 +311,13 @@ public class BuilderGoalCodexOrchestrationService {
             runRecordingId != null
                 ? debugSessionRepository.findByRecordingId(runRecordingId)
                 : Optional.empty());
-    String debugSessionId =
-        debugSession.map(DebugSession::getSessionId).orElse(runSessionId);
+    String debugSessionId = debugSession.map(DebugSession::getSessionId).orElse(runSessionId);
     String recordingId =
-        firstNonBlank(
-            debugSession.map(DebugSession::getRecordingId).orElse(null),
-            runRecordingId);
+        firstNonBlank(debugSession.map(DebugSession::getRecordingId).orElse(null), runRecordingId);
     Optional<RecordingSession> recordingSession =
-        recordingId != null ? recordingSessionRepository.findByRecordingId(recordingId) : Optional.empty();
+        recordingId != null
+            ? recordingSessionRepository.findByRecordingId(recordingId)
+            : Optional.empty();
 
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("iterationId", resolvedIterationId);
@@ -345,8 +349,13 @@ public class BuilderGoalCodexOrchestrationService {
     long resolvedStart = startTick != null ? startTick : 0L;
     Long resolvedEnd = endTick;
     if (resolvedEnd == null) {
-      long maxTick = Optional.ofNullable(tickLogRepository.findMaxTickBySessionId(resolvedDebugSessionId))
-          .orElseGet(() -> tickSnapshotRepository.findMaxTickBySessionId(resolvedDebugSessionId).orElse(0L));
+      long maxTick =
+          Optional.ofNullable(tickLogRepository.findMaxTickBySessionId(resolvedDebugSessionId))
+              .orElseGet(
+                  () ->
+                      tickSnapshotRepository
+                          .findMaxTickBySessionId(resolvedDebugSessionId)
+                          .orElse(0L));
       resolvedEnd = Math.min(maxTick, resolvedStart + 25);
       if (resolvedEnd < resolvedStart) {
         resolvedEnd = resolvedStart;
@@ -385,8 +394,7 @@ public class BuilderGoalCodexOrchestrationService {
         tickSnapshotRepository.findBySessionIdAndTick(resolvedDebugSessionId, tick).orElse(null));
     response.put("logs", tickLogRepository.findBySessionIdAndTick(resolvedDebugSessionId, tick));
     response.put(
-        "overlays",
-        tickOverlayRepository.findBySessionIdAndTick(resolvedDebugSessionId, tick));
+        "overlays", tickOverlayRepository.findBySessionIdAndTick(resolvedDebugSessionId, tick));
     return response;
   }
 
@@ -431,7 +439,8 @@ public class BuilderGoalCodexOrchestrationService {
     if (workspace == null) {
       return;
     }
-    session.activeRecordingId = firstNonBlank(stringValue(workspace.get("recordingId")), session.activeRecordingId);
+    session.activeRecordingId =
+        firstNonBlank(stringValue(workspace.get("recordingId")), session.activeRecordingId);
     session.activeDebugSessionId =
         firstNonBlank(stringValue(workspace.get("debugSessionId")), session.activeDebugSessionId);
     session.issueStatement =
@@ -461,7 +470,8 @@ public class BuilderGoalCodexOrchestrationService {
     DebugSession session =
         debugSessionRepository
             .findBySessionId(debugSessionId)
-            .orElseThrow(() -> new IllegalArgumentException("Debug session not found: " + debugSessionId));
+            .orElseThrow(
+                () -> new IllegalArgumentException("Debug session not found: " + debugSessionId));
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("sessionId", session.getSessionId());
     response.put("scriptName", session.getScriptName());
@@ -474,8 +484,10 @@ public class BuilderGoalCodexOrchestrationService {
     response.put("lifecycleState", session.getLifecycleStateOrDefault().name());
     response.put("failureCode", session.getFailureCode());
     response.put("failureReason", session.getFailureReason());
-    response.put("minTick", tickSnapshotRepository.findMinTickBySessionId(debugSessionId).orElse(null));
-    response.put("maxTick", tickSnapshotRepository.findMaxTickBySessionId(debugSessionId).orElse(null));
+    response.put(
+        "minTick", tickSnapshotRepository.findMinTickBySessionId(debugSessionId).orElse(null));
+    response.put(
+        "maxTick", tickSnapshotRepository.findMaxTickBySessionId(debugSessionId).orElse(null));
     return response;
   }
 
@@ -520,7 +532,8 @@ public class BuilderGoalCodexOrchestrationService {
     return requireActiveIterationId(requireSession(sessionId));
   }
 
-  private String resolveDebugSessionId(String sessionId, String iterationId, String debugSessionId) {
+  private String resolveDebugSessionId(
+      String sessionId, String iterationId, String debugSessionId) {
     if (debugSessionId != null && !debugSessionId.isBlank()) {
       return debugSessionId.trim();
     }
@@ -565,7 +578,8 @@ public class BuilderGoalCodexOrchestrationService {
 
   private String requireActiveIterationId(CodexSession session) {
     if (session.activeIterationId == null || session.activeIterationId.isBlank()) {
-      throw new IllegalStateException("This Codex session is not bound to an active Builder Goal run");
+      throw new IllegalStateException(
+          "This Codex session is not bound to an active Builder Goal run");
     }
     return session.activeIterationId;
   }

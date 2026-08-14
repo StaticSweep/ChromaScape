@@ -39,6 +39,15 @@ Setup:
      that directory, so `../micro6` resolves to the sibling of the ChromaScape project.
    - `BUILDER_GOAL_LAUNCHER_LOCAL_MACHINE_UUID`: launcher machine UUID treated as the local
      ChromaScape host. If unset, the launcher hostname is used instead.
+   - `BUILDER_GOAL_MICRO6_VALIDATION_TIMEOUT_MS`: bounded timeout for canonical Gradle task
+     discovery before an existing Micro6 process is replaced; defaults to 300000 ms to allow a
+     cold composite workspace to configure its included builds.
+
+   - Builder Goal local launches use the production launcher at
+     `C:\Dev\IdeaProjects\micro6\launch-buildergoal-client.ps1`. ChromaScape verifies the launcher
+     contract (`-ContractVersion`, requires `contract_version == 2`) before any preflight or
+     process cleanup. See `docs\BUILDER_GOAL_LAUNCHER_CONTRACT.md` for the full contract. There is
+     no executable launcher copy under ChromaScape `docs\`; the Micro6 copy is the source of truth.
 
 3. Restart ChromaScape from Windows (see below). The restart script loads `.env.local` before
    starting `bootRun`. Existing process environment variables are never overwritten.
@@ -170,8 +179,10 @@ Builder Goal local launch config loaded: projectDir=C:\Dev\IdeaProjects\micro6, 
 Then open `http://localhost:8090/debugger` and confirm:
 
 1. Launch Host selects `CZC8518C27` as the local host.
-2. The executor becomes dispatch-ready.
-3. Fishing Training can be published.
+2. Select the migrated canonical game-account hash `b01c7f006bace664`; do not select the obsolete profile-derived `3720a9a3b5c9f57b` value. Keep `udasuAvuco` as the display/profile name where shown.
+3. The executor reports `account_hash_scheme=accountconnector/v1`, actual and expected hashes match, and the selected-account eligibility is true.
+4. The executor becomes dispatch-ready on the requested world.
+5. Fishing Training can be published.
 
 Machines endpoint (HTTP 200 with the local machine marked `localMachine: true`):
 

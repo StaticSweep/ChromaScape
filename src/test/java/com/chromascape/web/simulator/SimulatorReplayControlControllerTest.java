@@ -95,7 +95,9 @@ class SimulatorReplayControlControllerTest {
       ReplayFramePageResponse.FrameData frame = new ReplayFramePageResponse.FrameData();
       frame.setTick(1L);
       when(sourceService.frames("rec-1", 0, 1))
-          .thenReturn(new ReplayFramePageResponse("rec-1", "sess-1", java.util.List.of(frame), null, false));
+          .thenReturn(
+              new ReplayFramePageResponse(
+                  "rec-1", "sess-1", java.util.List.of(frame), null, false));
       when(service.start(null, "latest", null, null, "rec-1", "tick"))
           .thenReturn(Map.of("success", true, "message", "Started"));
       ResponseEntity<Map<String, Object>> response =
@@ -107,7 +109,8 @@ class SimulatorReplayControlControllerTest {
     @DisplayName("start returns 409 when recording has no tick frames")
     void startRecordingNotReplayableNoFrames() {
       when(sourceService.frames("rec-empty", 0, 1))
-          .thenReturn(new ReplayFramePageResponse("rec-empty", "sess-1", java.util.List.of(), null, false));
+          .thenReturn(
+              new ReplayFramePageResponse("rec-empty", "sess-1", java.util.List.of(), null, false));
       ResponseEntity<Map<String, Object>> response =
           controller.start(Map.of("recordingId", "rec-empty", "sourceMode", "tick"));
       assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
@@ -118,7 +121,9 @@ class SimulatorReplayControlControllerTest {
     @DisplayName("start returns 409 when no debug session exists for recording")
     void startRecordingNotReplayableNoDebugSession() {
       when(sourceService.frames("rec-missing", 0, 1))
-          .thenThrow(new SimulatorReplayControlException("No debug session found for recordingId: rec-missing"));
+          .thenThrow(
+              new SimulatorReplayControlException(
+                  "No debug session found for recordingId: rec-missing"));
       ResponseEntity<Map<String, Object>> response =
           controller.start(Map.of("recordingId", "rec-missing", "sourceMode", "tick"));
       assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
@@ -130,7 +135,8 @@ class SimulatorReplayControlControllerTest {
     void startMissingPlayerActionMode() {
       when(service.start(null, "latest", null, null, null, null))
           .thenReturn(Map.of("success", true, "message", "Started"));
-      ResponseEntity<Map<String, Object>> response = controller.start(Map.of("sessionId", "latest"));
+      ResponseEntity<Map<String, Object>> response =
+          controller.start(Map.of("sessionId", "latest"));
       assertEquals(HttpStatus.OK, response.getStatusCode());
     }
 
@@ -181,8 +187,7 @@ class SimulatorReplayControlControllerTest {
     void startDomainFailure() {
       Map<String, Object> upstreamResult =
           Map.of("success", false, "message", "Player not found: unknown");
-      when(service.start("player1", "latest", null, null, null, null))
-          .thenReturn(upstreamResult);
+      when(service.start("player1", "latest", null, null, null, null)).thenReturn(upstreamResult);
 
       ResponseEntity<Map<String, Object>> response = controller.start(Map.of("player", "player1"));
 
@@ -309,10 +314,7 @@ class SimulatorReplayControlControllerTest {
     @DisplayName("players returns 200 with selected and player list")
     void playersSuccess() {
       Map<String, Object> result =
-          Map.of(
-              "success", true,
-              "players", java.util.List.of("dev-one"),
-              "selected", "dev-one");
+          Map.of("success", true, "players", java.util.List.of("dev-one"), "selected", "dev-one");
       when(service.getPlayers()).thenReturn(result);
 
       ResponseEntity<Map<String, Object>> response = controller.getPlayers();
@@ -355,10 +357,11 @@ class SimulatorReplayControlControllerTest {
       ReplayFramePageResponse.FrameData frame = new ReplayFramePageResponse.FrameData();
       frame.setTick(1L);
       when(sourceService.frames("rec-42", 0, 1))
-          .thenReturn(new ReplayFramePageResponse("rec-42", "sess-42", java.util.List.of(frame), null, false));
+          .thenReturn(
+              new ReplayFramePageResponse(
+                  "rec-42", "sess-42", java.util.List.of(frame), null, false));
       Map<String, Object> result = Map.of("success", true, "message", "Started tick replay");
-      when(service.start("player1", "latest", null, null, "rec-42", "tick"))
-          .thenReturn(result);
+      when(service.start("player1", "latest", null, null, "rec-42", "tick")).thenReturn(result);
 
       ResponseEntity<Map<String, Object>> response =
           controller.start(

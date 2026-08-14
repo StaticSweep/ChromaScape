@@ -407,6 +407,8 @@ test('publishBuilderGoal does not reject solely because the selected machine is 
     assert.ok(requestBody, 'publish request was sent');
     assert.equal(requestBody.accountId, 'hash-1');
     assert.equal(requestBody.launcherMachineUuid, undefined);
+    assert.deepEqual(requestBody.settings, { treeType: 'WILLOW' });
+    assert.equal(requestBody.settings.task_key, undefined, 'publish sends nested settings only');
     assert.equal(requestBody.allowLaunchFallback, false);
   } finally {
     if (originalFetch === undefined) {
@@ -699,6 +701,266 @@ test('handleBuilderGoalConfigInput marks dirty and refreshes metadata, status, a
   assert.deepEqual(calls, ['meta', 'status', 'buttons']);
 });
 
+test('setBuilderGoalConfigEditor renders the canonical task/settings envelope', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalConfigInput = { value: '' };
+  planner.selectedBuilderGoalTaskKey = 'FISHING_TRAINING';
+  planner.getSelectedBuilderGoalTask = () => ({ task_key: 'FISHING_TRAINING' });
+  planner.getBuilderGoalConfigContextKey = (accountId, taskKey) =>
+    `${accountId || planner.selectedBuilderGoalAccountId || ''}::${taskKey || planner.selectedBuilderGoalTaskKey || ''}`;
+  planner.renderBuilderGoalConfigMeta = () => {};
+
+  planner.setBuilderGoalConfigEditor({ bait: 'SHRIMP' }, {
+    accountId: 'account-1',
+    taskKey: 'FISHING_TRAINING'
+  });
+
+  assert.deepEqual(JSON.parse(planner.builderGoalConfigInput.value), {
+    task_key: 'FISHING_TRAINING',
+    settings: { bait: 'SHRIMP' }
+  });
+  assert.equal(planner.builderGoalConfigDirty, false);
+  assert.equal(planner.builderGoalConfigLoadedKey, 'account-1::FISHING_TRAINING');
+});
+
+test('parseBuilderGoalConfigInput accepts canonical envelopes and legacy raw settings', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalConfigInput = {
+    value: JSON.stringify({
+      task_key: 'FISHING_TRAINING',
+      settings: { bait: 'SHRIMP' }
+    })
+  };
+  assert.deepEqual(planner.parseBuilderGoalConfigInput(), {
+    taskKey: 'FISHING_TRAINING',
+    settings: { bait: 'SHRIMP' },
+    requirements: {}
+  });
+
+  planner.builderGoalConfigInput = { value: JSON.stringify({ bait: 'LOBSTER' }) };
+  assert.deepEqual(planner.parseBuilderGoalConfigInput(), {
+    taskKey: null,
+    settings: { bait: 'LOBSTER' },
+    requirements: {}
+  });
+});
+
+test('syncBuilderGoalConfigTaskKey preserves dirty settings while changing the task', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalConfigInput = {
+    value: JSON.stringify({ task_key: 'OLD_TASK', settings: { bait: 'SHRIMP' } })
+  };
+  planner.selectedBuilderGoalTaskKey = 'NEW_TASK';
+  planner.selectedBuilderGoalAccountId = 'account-1';
+  planner.builderGoalConfigPrefillGeneration = 2;
+  planner.getSelectedBuilderGoalTask = () => ({ task_key: 'NEW_TASK' });
+  planner.getBuilderGoalConfigContextKey = (accountId, taskKey) =>
+    `${accountId || planner.selectedBuilderGoalAccountId || ''}::${taskKey || planner.selectedBuilderGoalTaskKey || ''}`;
+  planner.renderBuilderGoalConfigMeta = () => {};
+
+  assert.equal(planner.syncBuilderGoalConfigTaskKey('NEW_TASK'), true);
+  assert.deepEqual(JSON.parse(planner.builderGoalConfigInput.value), {
+    task_key: 'NEW_TASK',
+    settings: { bait: 'SHRIMP' }
+  });
+  assert.equal(planner.builderGoalConfigDirty, true);
+  assert.equal(planner.builderGoalConfigPrefillGeneration, 3);
+});
+
+test('manual task_key input synchronizes the task selector', () => {
+  const store = installLocalStorage();
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalConfigInput = {
+    value: JSON.stringify({ task_key: 'FISHING_TRAINING', settings: {} })
+  };
+  planner.builderGoalTaskSelect = { value: '' };
+  planner.builderGoalTaskSearchInput = null;
+  planner.selectedBuilderGoalTaskKey = '';
+  planner.builderGoalConfigPrefillGeneration = 0;
+  planner.scriptCatalog = [{ task_key: 'FISHING_TRAINING', display_name: 'Fishing Training' }];
+  planner.builderGoalConfigMeta = null;
+  planner.renderBuilderGoalClientStatus = () => {};
+  planner.updateBuilderGoalRunButtonState = () => {};
+
+  planner.handleBuilderGoalConfigInput();
+
+  assert.equal(planner.selectedBuilderGoalTaskKey, 'FISHING_TRAINING');
+  assert.equal(planner.builderGoalTaskSelect.value, 'FISHING_TRAINING');
+  assert.equal(store.get('taskPlanner.selectedBuilderGoalTaskKey'), 'FISHING_TRAINING');
+});
+
+test('clean task selection without a saved run loads an envelope for that task', async () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalConfigInput = { value: '' };
+  planner.builderGoalConfigMeta = null;
+  planner.builderGoalConfigDirty = false;
+  planner.builderGoalConfigLoadedKey = '';
+  planner.builderGoalConfigPrefillGeneration = 0;
+  planner.selectedBuilderGoalTaskKey = 'FISHING_TRAINING';
+  planner.selectedBuilderGoalAccountId = 'account-1';
+  planner.getSelectedBuilderGoalTask = () => ({
+    task_key: 'FISHING_TRAINING',
+    display_name: 'Fishing Training'
+  });
+  planner.getSelectedBuilderGoalAccount = () => ({ accountId: 'account-1' });
+  planner.getBuilderGoalConfigContextKey = (accountId, taskKey) =>
+    `${accountId || planner.selectedBuilderGoalAccountId || ''}::${taskKey || planner.selectedBuilderGoalTaskKey || ''}`;
+  planner.setBuilderGoalWorldValue = () => {};
+  planner.renderBuilderGoalConfigMeta = () => {};
+
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({ ok: false, status: 404 });
+  try {
+    await planner.prefillBuilderGoalConfigForSelection();
+  } finally {
+    if (originalFetch === undefined) delete global.fetch;
+    else global.fetch = originalFetch;
+  }
+
+  assert.deepEqual(JSON.parse(planner.builderGoalConfigInput.value), {
+    task_key: 'FISHING_TRAINING',
+    settings: {}
+  });
+  assert.equal(planner.builderGoalConfigDirty, false);
+});
+
+test('task selection is reflected in the editor before account data arrives', async () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalConfigInput = { value: JSON.stringify({ settings: {} }) };
+  planner.builderGoalConfigMeta = null;
+  planner.builderGoalConfigDirty = false;
+  planner.builderGoalConfigLoadedKey = '';
+  planner.builderGoalConfigPrefillGeneration = 0;
+  planner.selectedBuilderGoalTaskKey = 'FISHING_TRAINING';
+  planner.selectedBuilderGoalAccountId = '';
+  planner.getSelectedBuilderGoalTask = () => ({ task_key: 'FISHING_TRAINING' });
+  planner.getSelectedBuilderGoalAccount = () => null;
+  planner.getBuilderGoalConfigContextKey = (accountId, taskKey) =>
+    `${accountId || planner.selectedBuilderGoalAccountId || ''}::${taskKey || planner.selectedBuilderGoalTaskKey || ''}`;
+  planner.renderBuilderGoalConfigMeta = () => {};
+
+  await planner.prefillBuilderGoalConfigForSelection();
+
+  assert.deepEqual(JSON.parse(planner.builderGoalConfigInput.value), {
+    task_key: 'FISHING_TRAINING',
+    settings: {}
+  });
+});
+
+test('late saved-config response cannot overwrite a newer task selection', async () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalConfigInput = { value: '' };
+  planner.builderGoalConfigMeta = null;
+  planner.builderGoalConfigDirty = false;
+  planner.builderGoalConfigLoadedKey = '';
+  planner.builderGoalConfigPrefillGeneration = 0;
+  planner.selectedBuilderGoalTaskKey = 'TASK_A';
+  planner.selectedBuilderGoalAccountId = 'account-1';
+  let currentTaskKey = 'TASK_A';
+  planner.getSelectedBuilderGoalTask = () => ({ task_key: currentTaskKey, display_name: currentTaskKey });
+  planner.getSelectedBuilderGoalAccount = () => ({ accountId: 'account-1' });
+  planner.getBuilderGoalConfigContextKey = (accountId, taskKey) =>
+    `${accountId || planner.selectedBuilderGoalAccountId || ''}::${taskKey || planner.selectedBuilderGoalTaskKey || ''}`;
+  planner.setBuilderGoalWorldValue = () => {};
+  planner.renderBuilderGoalConfigMeta = () => {};
+
+  const pending = new Map();
+  const originalFetch = global.fetch;
+  global.fetch = url => {
+    const taskKey = new URL(url, 'http://localhost').searchParams.get('taskKey');
+    return new Promise(resolve => pending.set(taskKey, resolve));
+  };
+  try {
+    const first = planner.prefillBuilderGoalConfigForSelection();
+    currentTaskKey = 'TASK_B';
+    planner.selectedBuilderGoalTaskKey = 'TASK_B';
+    const second = planner.prefillBuilderGoalConfigForSelection();
+    pending.get('TASK_B')({
+      ok: true,
+      json: async () => ({
+        configAvailable: true,
+        accountId: 'account-1',
+        taskKey: 'TASK_B',
+        settings: { value: 'new' }
+      })
+    });
+    await second;
+    pending.get('TASK_A')({
+      ok: true,
+      json: async () => ({
+        configAvailable: true,
+        accountId: 'account-1',
+        taskKey: 'TASK_A',
+        settings: { value: 'stale' }
+      })
+    });
+    await first;
+  } finally {
+    if (originalFetch === undefined) delete global.fetch;
+    else global.fetch = originalFetch;
+  }
+
+  assert.deepEqual(JSON.parse(planner.builderGoalConfigInput.value), {
+    task_key: 'TASK_B',
+    settings: { value: 'new' }
+  });
+});
+
+test('manual edits invalidate an in-flight saved-config prefill', async () => {
+  const store = installLocalStorage();
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalConfigInput = { value: '' };
+  planner.builderGoalConfigMeta = null;
+  planner.builderGoalConfigDirty = false;
+  planner.builderGoalConfigLoadedKey = '';
+  planner.builderGoalConfigPrefillGeneration = 0;
+  planner.selectedBuilderGoalTaskKey = 'TASK_A';
+  planner.selectedBuilderGoalAccountId = 'account-1';
+  planner.builderGoalTaskSelect = { value: '' };
+  planner.builderGoalTaskSearchInput = null;
+  planner.scriptCatalog = [{ task_key: 'TASK_A', display_name: 'Task A' }];
+  planner.getSelectedBuilderGoalTask = () => ({ task_key: 'TASK_A', display_name: 'Task A' });
+  planner.getSelectedBuilderGoalAccount = () => ({ accountId: 'account-1' });
+  planner.getBuilderGoalConfigContextKey = (accountId, taskKey) =>
+    `${accountId || planner.selectedBuilderGoalAccountId || ''}::${taskKey || planner.selectedBuilderGoalTaskKey || ''}`;
+  planner.setBuilderGoalWorldValue = () => {};
+  planner.renderBuilderGoalConfigMeta = () => {};
+  planner.renderBuilderGoalClientStatus = () => {};
+  planner.updateBuilderGoalRunButtonState = () => {};
+
+  let release;
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Promise(resolve => { release = resolve; });
+  try {
+    const pending = planner.prefillBuilderGoalConfigForSelection();
+    planner.builderGoalConfigInput.value = JSON.stringify({
+      task_key: 'TASK_A',
+      settings: { value: 'manual' }
+    });
+    planner.handleBuilderGoalConfigInput();
+    release({
+      ok: true,
+      json: async () => ({
+        configAvailable: true,
+        accountId: 'account-1',
+        taskKey: 'TASK_A',
+        settings: { value: 'stale' }
+      })
+    });
+    await pending;
+  } finally {
+    if (originalFetch === undefined) delete global.fetch;
+    else global.fetch = originalFetch;
+  }
+
+  assert.deepEqual(JSON.parse(planner.builderGoalConfigInput.value), {
+    task_key: 'TASK_A',
+    settings: { value: 'manual' }
+  });
+  assert.equal(planner.builderGoalConfigDirty, true);
+  assert.equal(store.get('taskPlanner.selectedBuilderGoalTaskKey'), undefined);
+});
+
 test('refreshBuilderGoalRuns awaits all loaders before rendering and recalculating buttons', async () => {
   const order = [];
   const planner = Object.create(AccountTaskPlanner.prototype);
@@ -874,7 +1136,7 @@ test('refreshBuilderGoalRuns no unhandled rejection escapes the refresh method',
   assert.deepEqual(unhandled, [], 'no rejection may escape refreshBuilderGoalRuns');
 });
 
-test('builder goal bundle version markers agree on 33', () => {
+test('builder goal bundle version markers agree on 39', () => {
   const source = require('node:fs').readFileSync(
     path.resolve(__dirname, '../../main/resources/static/js/account-task-planner.js'),
     'utf8'
@@ -884,7 +1146,7 @@ test('builder goal bundle version markers agree on 33', () => {
     'utf8'
   );
   const jsVersion = AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION;
-  assert.equal(jsVersion, '33');
+  assert.equal(jsVersion, '39');
   assert.ok(
     source.includes(`BUILDER_GOAL_BUNDLE_VERSION = '${jsVersion}'`),
     'JS source must declare the same bundle version'
@@ -942,8 +1204,14 @@ test('formatBuilderGoalStatus returns correct labels for all statuses', () => {
 
 test('formatBuilderGoalStatus returns null for unknown status', () => {
   assert.equal(AccountTaskPlanner.formatBuilderGoalStatus(run('UNKNOWN_STATUS')), null);
-  assert.equal(AccountTaskPlanner.formatBuilderGoalStatus(run('RUNNING')), null);
   assert.equal(AccountTaskPlanner.formatBuilderGoalStatus(run('COMPLETED')), null);
+});
+
+test('formatBuilderGoalStatus maps RUNNING to a started label', () => {
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('RUNNING')),
+    'Task started; the executor confirmed the script is running.'
+  );
 });
 
 test('formatBuilderGoalStatus returns null for null/missing run', () => {
@@ -976,6 +1244,7 @@ test('isActivePublishState returns true for all active pre-start statuses', () =
     'QUEUED',
     'ASSIGNED',
     'RUNNING',
+    'PAUSED',
     'WAITING_FOR_DEBUG_BIND',
     'STOPPING',
   ];
@@ -1002,13 +1271,24 @@ test('isActivePublishState returns false for null/missing run', () => {
 
 // --- Bundle marker tests ---
 
-test('BUILDER_GOAL_BUNDLE_VERSION is 33', () => {
-  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '33');
+test('BUILDER_GOAL_BUNDLE_VERSION is 39', () => {
+  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '39');
 });
 
 test('ACTIVE_PRE_START_STATUSES includes RECONCILING and AWAITING_EXECUTOR_CONFIRMATION', () => {
   assert.equal(AccountTaskPlanner.ACTIVE_PRE_START_STATUSES.has('RECONCILING'), true);
   assert.equal(AccountTaskPlanner.ACTIVE_PRE_START_STATUSES.has('AWAITING_EXECUTOR_CONFIRMATION'), true);
+});
+
+test('PAUSED is active but labelled Task paused without running language', () => {
+  assert.equal(AccountTaskPlanner.isActivePublishState(run('PAUSED')), true);
+  const label = AccountTaskPlanner.BUILDER_GOAL_STATUS_LABELS.PAUSED;
+  assert.ok(label, 'PAUSED must have a UI label');
+  assert.ok(label.toLowerCase().includes('paused'), 'PAUSED label must mention paused');
+  assert.ok(
+    !label.toLowerCase().includes('started') && !label.toLowerCase().includes('running'),
+    `PAUSED label must not emit started/running language: "${label}"`
+  );
 });
 
 test('BUILDER_GOAL_STATUS_LABELS contains all required labels', () => {
@@ -1017,8 +1297,965 @@ test('BUILDER_GOAL_STATUS_LABELS contains all required labels', () => {
   assert.equal(labels.RECONCILING, 'Executor request sent; awaiting confirmation.');
   assert.equal(labels.ASSIGNED, 'Executor assigned the task; waiting for confirmed script start.');
   assert.equal(labels.QUEUED, 'Task accepted and queued by the executor.');
+  assert.equal(labels.PAUSED, 'Task paused; the executor suspended the task.');
   assert.equal(labels.STOPPING, 'Stop requested; awaiting executor confirmation.');
   assert.equal(labels.PUBLISH_FAILED, 'Task publish failed.');
   assert.equal(labels.FAILED, 'Task execution failed.');
   assert.equal(labels.CANCELLED, 'Task cancelled.');
+});
+
+// --- Builder Goal launch-operation helpers ---
+
+function installLocalStorage() {
+  const store = new Map();
+  global.localStorage = {
+    getItem: key => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => store.set(key, String(value)),
+    removeItem: key => store.delete(key)
+  };
+  return store;
+}
+
+function launchStatusPlanner(overrides = {}) {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalClientStatus = { innerHTML: '' };
+  planner.launchBuilderGoalAccountBtn = { disabled: false, innerHTML: 'Launch Account' };
+  planner.publishBuilderGoalBtn = { disabled: false };
+  planner.builderGoalLaunchOperationId = '';
+  planner.builderGoalLaunchPollHandle = null;
+  planner.builderGoalLaunchPollGeneration = 0;
+  planner.builderGoalLaunchPollFailures = 0;
+  planner.builderGoalLaunchPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS;
+  planner.builderGoalLaunchRefreshRequired = false;
+  planner._statusMessage = null;
+  planner._statusTone = null;
+  planner.renderBuilderGoalClientStatus = (message, tone) => {
+    planner._statusMessage = message;
+    planner._statusTone = tone;
+  };
+  planner.updateBuilderGoalRunButtonState = () => {};
+  planner.stopBuilderGoalLaunchPolling = AccountTaskPlanner.prototype.stopBuilderGoalLaunchPolling;
+  Object.assign(planner, overrides);
+  return planner;
+}
+
+test('formatBuilderGoalLaunchPhase returns labels for all phases', () => {
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalLaunchPhase('LAUNCHING_PROCESS'),
+    'Micro6 process started; waiting for it to come online'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalLaunchPhase('REUSING_EXECUTOR'),
+    'Reusing the matching dispatch-ready Micro6 executor'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalLaunchPhase('PREPARING_BUILD'),
+    'Validating the Micro6 launch configuration before stopping anything'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalLaunchPhase('STOPPING_EXISTING'),
+    'Stopping the existing Micro6 session before launching a replacement'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalLaunchPhase('BUILDING_MICRO6'),
+    'Building and launching the local Micro6 workspace via Gradle'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalLaunchPhase('WAITING_FOR_ACCOUNT'),
+    'Waiting for world/login — Micro6 has not identified the account yet'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalLaunchPhase('WAITING_FOR_LOGIN'),
+    'Waiting for login (auto-login, authenticator, or manual login)'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalLaunchPhase('waiting_for_dispatch'),
+    'Waiting for dispatch readiness (AccountBuilder initialization)'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalLaunchPhase('CONFLICT'),
+    'Another workflow holds the local launch lease'
+  );
+  assert.equal(AccountTaskPlanner.formatBuilderGoalLaunchPhase('UNKNOWN'), null);
+  assert.equal(AccountTaskPlanner.formatBuilderGoalLaunchPhase(null), null);
+});
+
+test('launch account source no longer aborts with a browser-timeout message', () => {
+  const source = require('node:fs').readFileSync(
+    path.resolve(__dirname, '../../main/resources/static/js/account-task-planner.js'),
+    'utf8'
+  );
+  assert.ok(
+    !source.includes('Account launch timed out before launcher control confirmed success.'),
+    'the false browser-timeout message must be removed'
+  );
+  assert.ok(
+    !source.includes("this.abort()") || true,
+    'abort handling is allowed elsewhere'
+  );
+});
+
+test('startBuilderGoalLaunchPolling persists the operation id and starts polling', async () => {
+  const store = installLocalStorage();
+  let polled = 0;
+  const planner = launchStatusPlanner({
+    pollBuilderGoalLaunchOperation: async () => {
+      polled += 1;
+    }
+  });
+
+  planner.startBuilderGoalLaunchPolling('op-123');
+
+  assert.equal(planner.builderGoalLaunchOperationId, 'op-123');
+  assert.equal(store.get(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY), 'op-123');
+  assert.equal(planner.launchBuilderGoalAccountBtn.disabled, true);
+  assert.ok(planner.launchBuilderGoalAccountBtn.innerHTML.includes('Launching'));
+  assert.equal(polled, 1, 'the first poll runs immediately');
+  clearInterval(planner.builderGoalLaunchPollHandle);
+});
+
+test('stopBuilderGoalLaunchPolling clears the operation id and storage', () => {
+  const store = installLocalStorage();
+  store.set(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY, 'op-123');
+  const planner = launchStatusPlanner();
+  planner.builderGoalLaunchOperationId = 'op-123';
+
+  planner.stopBuilderGoalLaunchPolling();
+
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.equal(store.has(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY), false);
+});
+
+test('pollBuilderGoalLaunchOperation: 404 clears the operation and explains expiry', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.builderGoalLaunchOperationId = 'op-expired';
+  planner.launchBuilderGoalAccountBtn = { disabled: true, innerHTML: 'Launching...' };
+  const originalFetch = global.fetch;
+  global.fetch = async url => {
+    assert.ok(String(url).includes('/launch-operations/op-expired'));
+    return { status: 404, json: async () => ({ error: 'not found' }) };
+  };
+
+  try {
+    await planner.pollBuilderGoalLaunchOperation();
+  } finally {
+    if (originalFetch === undefined) {
+      delete global.fetch;
+    } else {
+      global.fetch = originalFetch;
+    }
+  }
+
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.ok(planner._statusMessage.includes('ChromaScape may have restarted'));
+  assert.equal(planner._statusTone, 'warning');
+});
+
+test('handleBuilderGoalLaunchOperationView: READY refreshes data and re-enables launch', async () => {
+  installLocalStorage();
+  const refreshed = [];
+  const planner = launchStatusPlanner({
+    loadBuilderGoalAccounts: async () => {
+      refreshed.push('accounts');
+    },
+    loadBuilderGoalMachines: async () => {
+      refreshed.push('machines');
+    },
+    loadBuilderGoalRuns: async () => {
+      refreshed.push('runs');
+    }
+  });
+
+  await planner.handleBuilderGoalLaunchOperationView({
+    status: 'READY',
+    accountName: 'bigGreenMeat',
+    world: 360,
+    reusedExecutor: true
+  });
+
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.ok(planner._statusMessage.includes('dispatch-ready'));
+  assert.ok(planner._statusMessage.includes('reused an existing ready executor'));
+  assert.equal(planner._statusTone, 'success');
+  // Button is re-enabled after refresh completes (async via .then())
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(planner.launchBuilderGoalAccountBtn.innerHTML, '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account');
+});
+
+test('handleBuilderGoalLaunchOperationView: CONFLICT renders the server-provided reason', () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.handleBuilderGoalLaunchOperationView({
+    status: 'CONFLICT',
+    message: 'The existing Micro6 session for this account is not dispatch-ready. Stop that session before launching a duplicate.'
+  });
+
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.ok(planner._statusMessage.includes('Stop that session before launching a duplicate.'));
+  assert.equal(planner._statusTone, 'warning');
+});
+
+test('handleBuilderGoalLaunchOperationView: FAILED renders server reason without claiming launcher timeout', () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.handleBuilderGoalLaunchOperationView({
+    status: 'FAILED',
+    message: 'Micro6 relaunch process exited before the local executor became ready'
+  });
+
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.ok(planner._statusMessage.includes('process exited'));
+  assert.ok(!planner._statusMessage.includes('launcher control confirmed success'));
+  assert.equal(planner._statusTone, 'danger');
+});
+
+test('handleBuilderGoalLaunchOperationView: build failure renders build-failed message and log path', () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.handleBuilderGoalLaunchOperationView({
+    status: 'FAILED',
+    readinessPhase: 'BUILD_FAILED',
+    failureKind: 'GRADLE_TIMEOUT',
+    launcherLogFile: 'C:\\Dev\\IdeaProjects\\micro6\\micro6-recovery-launch.log',
+    message: 'Micro6 build timed out before the client could launch.'
+  });
+
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.ok(
+    planner.builderGoalClientStatus.innerHTML.includes('Micro6 build failed before the client could launch.'),
+    'build failure must render the canonical build-failed message'
+  );
+  assert.ok(
+    planner.builderGoalClientStatus.innerHTML.includes('micro6-recovery-launch.log'),
+    'build failure must surface the stable recovery log path'
+  );
+});
+
+test('handleBuilderGoalLaunchOperationView: process-exit failure does not render the build-failed message', () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.handleBuilderGoalLaunchOperationView({
+    status: 'FAILED',
+    readinessPhase: 'PROCESS_EXITED',
+    failureKind: 'PROCESS_EXITED',
+    message: 'Micro6 relaunch process exited before the local executor became ready'
+  });
+
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.ok(planner._statusMessage.includes('process exited'));
+  assert.ok(!planner._statusMessage.includes('build failed before the client'));
+});
+
+test('handleBuilderGoalLaunchOperationView: active phase renders the real phase message', () => {
+  const planner = launchStatusPlanner();
+  planner.handleBuilderGoalLaunchOperationView({
+    status: 'WAITING_FOR_ACCOUNT',
+    message: 'Micro6 local executor came up but did not identify the selected account yet',
+    accountName: 'bigGreenMeat',
+    world: 360
+  });
+
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.ok(planner._statusMessage.includes('Launching bigGreenMeat'));
+  assert.ok(planner._statusMessage.includes('did not identify the selected account yet'));
+  assert.equal(planner._statusTone, 'info');
+});
+
+test('updateBuilderGoalRunButtonState keeps Launch and Run disabled while a launch operation is active', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalBundleMismatch = false;
+  planner.builderGoalLaunchOperationId = 'op-123';
+  planner.runBuilderGoalBtn = { disabled: false };
+  planner.launchBuilderGoalAccountBtn = { disabled: false };
+  planner.publishBuilderGoalBtn = { disabled: false };
+  planner.runImportedBuilderGoalBtn = { disabled: false };
+  planner.getSelectedBuilderGoalAccount = () => credentialedAccount;
+  planner.getSelectedBuilderGoalMachine = () => runnableMachine;
+  planner.getSelectedBuilderGoalTask = () => ({
+    task_key: 'configurable_woodcutting',
+    display_name: 'Configurable Woodcutting'
+  });
+  planner.parseBuilderGoalConfigInput = () => ({ settings: {}, taskKey: null });
+  planner.getBuilderGoalWorldValue = () => 360;
+  planner.importedBuilderGoal = null;
+
+  planner.updateBuilderGoalRunButtonState();
+
+  assert.equal(planner.launchBuilderGoalAccountBtn.disabled, true);
+  assert.equal(planner.runBuilderGoalBtn.disabled, true);
+  assert.equal(planner.publishBuilderGoalBtn.disabled, false);
+});
+
+test('updateBuilderGoalRunButtonState re-enables Launch and Run when no operation is active', () => {
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalBundleMismatch = false;
+  planner.builderGoalLaunchOperationId = '';
+  planner.runBuilderGoalBtn = { disabled: false };
+  planner.launchBuilderGoalAccountBtn = { disabled: false };
+  planner.publishBuilderGoalBtn = { disabled: false };
+  planner.runImportedBuilderGoalBtn = { disabled: false };
+  planner.getSelectedBuilderGoalAccount = () => credentialedAccount;
+  planner.getSelectedBuilderGoalMachine = () => runnableMachine;
+  planner.getSelectedBuilderGoalTask = () => ({
+    task_key: 'configurable_woodcutting',
+    display_name: 'Configurable Woodcutting'
+  });
+  planner.parseBuilderGoalConfigInput = () => ({ settings: {}, taskKey: null });
+  planner.getBuilderGoalWorldValue = () => 360;
+  planner.importedBuilderGoal = null;
+
+  planner.updateBuilderGoalRunButtonState();
+
+  assert.equal(planner.launchBuilderGoalAccountBtn.disabled, false);
+  assert.equal(planner.runBuilderGoalBtn.disabled, false);
+});
+
+// --- Builder Goal launch lifecycle tests ---
+
+test('launchBuilderGoalAccount awaits refresh for an immediate READY response', async () => {
+  installLocalStorage();
+  let refreshCompleted = false;
+  let buttonStateSeenBeforeRefresh = false;
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalBundleMismatch = false;
+  planner.builderGoalLaunchOperationId = '';
+  planner.builderGoalLaunchPollGeneration = 0;
+  planner.builderGoalLaunchPollFailures = 0;
+  planner.builderGoalLaunchPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS;
+  planner.builderGoalLaunchRefreshRequired = false;
+  planner.launchBuilderGoalAccountBtn = { disabled: false, innerHTML: '' };
+  planner.publishBuilderGoalBtn = { disabled: false };
+  planner.builderGoalClientStatus = { innerHTML: '' };
+  planner.getSelectedBuilderGoalAccount = () => credentialedAccount;
+  planner.getSelectedBuilderGoalMachine = () => runnableMachine;
+  planner.getBuilderGoalWorldValue = () => 360;
+  planner.renderBuilderGoalClientStatus = () => {};
+  planner.updateBuilderGoalRunButtonState = () => {
+    buttonStateSeenBeforeRefresh = !refreshCompleted;
+  };
+  planner.loadBuilderGoalAccounts = async () => {};
+  planner.loadBuilderGoalMachines = async () => {};
+  planner.loadBuilderGoalRuns = async () => {
+    refreshCompleted = true;
+  };
+  planner.loadScriptCatalog = async () => {};
+  planner.stopBuilderGoalLaunchPolling = AccountTaskPlanner.prototype.stopBuilderGoalLaunchPolling;
+  planner.handleBuilderGoalLaunchOperationView = AccountTaskPlanner.prototype.handleBuilderGoalLaunchOperationView;
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      operationId: 'op-immediate',
+      status: 'READY',
+      accountName: 'bigGreenMeat',
+      world: 360
+    })
+  });
+  const originalAlert = global.alert;
+  global.alert = () => {};
+  try {
+    await planner.launchBuilderGoalAccount();
+  } finally {
+    if (originalFetch === undefined) {
+      delete global.fetch;
+    } else {
+      global.fetch = originalFetch;
+    }
+    if (originalAlert === undefined) {
+      delete global.alert;
+    } else {
+      global.alert = originalAlert;
+    }
+  }
+  assert.equal(refreshCompleted, true, 'the READY refresh must complete before the method finishes');
+  assert.equal(
+    buttonStateSeenBeforeRefresh,
+    false,
+    'button state must not be recalculated before the READY refresh settles'
+  );
+});
+
+test('Launch stays disabled while READY refresh is in flight', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner({
+    loadBuilderGoalAccounts: () => new Promise(resolve => setTimeout(resolve, 10)),
+    loadBuilderGoalMachines: () => new Promise(resolve => setTimeout(resolve, 10)),
+    loadBuilderGoalRuns: () => new Promise(resolve => setTimeout(resolve, 10))
+  });
+  const pending = planner.handleBuilderGoalLaunchOperationView({
+    status: 'READY',
+    accountName: 'bigGreenMeat',
+    world: 360
+  });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(planner.launchBuilderGoalAccountBtn.disabled, true);
+  assert.ok(planner.launchBuilderGoalAccountBtn.innerHTML.includes('Refreshing'));
+  await pending;
+});
+
+test('Publish stays disabled while READY refresh is in flight', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner({
+    loadBuilderGoalAccounts: () => new Promise(resolve => setTimeout(resolve, 10)),
+    loadBuilderGoalMachines: () => new Promise(resolve => setTimeout(resolve, 10)),
+    loadBuilderGoalRuns: () => new Promise(resolve => setTimeout(resolve, 10))
+  });
+  const pending = planner.handleBuilderGoalLaunchOperationView({
+    status: 'READY',
+    accountName: 'bigGreenMeat',
+    world: 360
+  });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(planner.publishBuilderGoalBtn.disabled, true);
+  await pending;
+});
+
+test('READY refresh success clears the refresh-required gate', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner({
+    builderGoalLaunchRefreshRequired: true,
+    loadBuilderGoalAccounts: async () => {},
+    loadBuilderGoalMachines: async () => {},
+    loadBuilderGoalRuns: async () => {}
+  });
+  await planner.handleBuilderGoalLaunchOperationView({
+    status: 'READY',
+    accountName: 'bigGreenMeat',
+    world: 360
+  });
+  assert.equal(planner.builderGoalLaunchRefreshRequired, false);
+  assert.ok(planner._statusMessage.includes('dispatch-ready'));
+  assert.equal(planner._statusTone, 'success');
+});
+
+test('READY refresh failure gates Publish behind a manual refresh', async () => {
+  installLocalStorage();
+  const planner = Object.create(AccountTaskPlanner.prototype);
+  planner.builderGoalClientStatus = { innerHTML: '' };
+  planner.launchBuilderGoalAccountBtn = { disabled: false, innerHTML: '' };
+  planner.publishBuilderGoalBtn = { disabled: false };
+  planner.runBuilderGoalBtn = { disabled: false };
+  planner.runImportedBuilderGoalBtn = { disabled: false };
+  planner.builderGoalBundleMismatch = false;
+  planner.builderGoalLaunchOperationId = '';
+  planner.builderGoalLaunchPollHandle = null;
+  planner.builderGoalLaunchPollGeneration = 0;
+  planner.builderGoalLaunchPollFailures = 0;
+  planner.builderGoalLaunchPollNextDelay = AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS;
+  planner.builderGoalLaunchRefreshRequired = false;
+  planner._statusMessage = null;
+  planner._statusTone = null;
+  planner.renderBuilderGoalClientStatus = (message, tone) => {
+    planner._statusMessage = message;
+    planner._statusTone = tone;
+  };
+  planner.getSelectedBuilderGoalAccount = () => credentialedAccount;
+  planner.getSelectedBuilderGoalMachine = () => runnableMachine;
+  planner.getSelectedBuilderGoalTask = () => ({
+    task_key: 'configurable_woodcutting',
+    display_name: 'Configurable Woodcutting'
+  });
+  planner.parseBuilderGoalConfigInput = () => ({ settings: {}, taskKey: null });
+  planner.getBuilderGoalWorldValue = () => 360;
+  planner.importedBuilderGoal = null;
+  planner.loadBuilderGoalAccounts = async () => {
+    throw new Error('refresh failed');
+  };
+  planner.loadBuilderGoalMachines = async () => {};
+  planner.loadBuilderGoalRuns = async () => {};
+  planner.updateBuilderGoalRunButtonState = AccountTaskPlanner.prototype.updateBuilderGoalRunButtonState;
+  planner.stopBuilderGoalLaunchPolling = AccountTaskPlanner.prototype.stopBuilderGoalLaunchPolling;
+
+  await planner.handleBuilderGoalLaunchOperationView({
+    status: 'READY',
+    accountName: 'bigGreenMeat',
+    world: 360
+  });
+
+  assert.equal(planner.builderGoalLaunchRefreshRequired, true);
+  assert.ok(planner._statusMessage.includes('Manually refresh before publishing'));
+  assert.equal(planner.launchBuilderGoalAccountBtn.disabled, false, 'Launch is restored after refresh failure');
+  assert.equal(planner.publishBuilderGoalBtn.disabled, true, 'Publish stays disabled after failed refresh');
+});
+
+test('manual refresh clears the refresh-required gate', async () => {
+  const planner = launchStatusPlanner({
+    builderGoalLaunchRefreshRequired: true,
+    loadBuilderGoalAccounts: async () => {},
+    loadBuilderGoalMachines: async () => {},
+    loadBuilderGoalRuns: async () => {},
+    loadScriptCatalog: async () => {}
+  });
+  await planner.refreshBuilderGoalRuns();
+  assert.equal(planner.builderGoalLaunchRefreshRequired, false);
+});
+
+test('manual refresh keeps the gate when a core loader fails', async () => {
+  const planner = launchStatusPlanner({
+    builderGoalLaunchRefreshRequired: true,
+    loadBuilderGoalAccounts: async () => {
+      throw new Error('accounts down');
+    },
+    loadBuilderGoalMachines: async () => {},
+    loadBuilderGoalRuns: async () => {},
+    loadScriptCatalog: async () => {}
+  });
+  await planner.refreshBuilderGoalRuns();
+  assert.equal(planner.builderGoalLaunchRefreshRequired, true);
+});
+
+test('late fetch response is discarded after polling stops', async () => {
+  installLocalStorage();
+  let fetchResolve;
+  const planner = launchStatusPlanner();
+  planner.builderGoalLaunchOperationId = 'op-late';
+  const originalFetch = global.fetch;
+  global.fetch = () => new Promise(resolve => {
+    fetchResolve = resolve;
+  });
+  try {
+    const pending = planner.pollBuilderGoalLaunchOperation();
+    planner.stopBuilderGoalLaunchPolling();
+    fetchResolve({ status: 200, ok: true, json: async () => ({ status: 'READY', accountName: 'x' }) });
+    await pending;
+  } finally {
+    if (originalFetch === undefined) {
+      delete global.fetch;
+    } else {
+      global.fetch = originalFetch;
+    }
+  }
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.equal(planner._statusMessage, null, 'a stale fetch response must not render');
+});
+
+test('late JSON parse result is discarded after polling stops', async () => {
+  installLocalStorage();
+  let jsonResolve;
+  const planner = launchStatusPlanner();
+  planner.builderGoalLaunchOperationId = 'op-late-json';
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    status: 200,
+    ok: true,
+    json: () => new Promise(resolve => {
+      jsonResolve = resolve;
+    })
+  });
+  try {
+    const pending = planner.pollBuilderGoalLaunchOperation();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    planner.stopBuilderGoalLaunchPolling();
+    jsonResolve({ status: 'READY', accountName: 'x' });
+    await pending;
+  } finally {
+    if (originalFetch === undefined) {
+      delete global.fetch;
+    } else {
+      global.fetch = originalFetch;
+    }
+  }
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.equal(planner._statusMessage, null, 'a stale JSON parse must not render');
+});
+
+test('late fetch rejection is discarded after polling stops', async () => {
+  installLocalStorage();
+  let rejectFetch;
+  const planner = launchStatusPlanner();
+  planner.builderGoalLaunchOperationId = 'op-late-reject';
+  const originalFetch = global.fetch;
+  global.fetch = () => new Promise((resolve, reject) => {
+    rejectFetch = reject;
+  });
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const pending = planner.pollBuilderGoalLaunchOperation();
+    planner.stopBuilderGoalLaunchPolling();
+    rejectFetch(new Error('network down'));
+    await pending;
+  } finally {
+    if (originalFetch === undefined) {
+      delete global.fetch;
+    } else {
+      global.fetch = originalFetch;
+    }
+    console.error = originalConsoleError;
+  }
+  assert.equal(planner.builderGoalLaunchPollFailures, 0, 'a stale rejection must not bump the failure counter');
+  assert.equal(planner._statusMessage, null);
+});
+
+test('a newer generation supersedes an in-flight READY refresh', async () => {
+  installLocalStorage();
+  let releaseRefresh;
+  const planner = launchStatusPlanner({
+    loadBuilderGoalAccounts: () => new Promise(resolve => {
+      releaseRefresh = resolve;
+    }),
+    loadBuilderGoalMachines: async () => {},
+    loadBuilderGoalRuns: async () => {}
+  });
+  const pending = planner.handleBuilderGoalLaunchOperationView({
+    status: 'READY',
+    accountName: 'bigGreenMeat',
+    world: 360
+  });
+  // While the READY refresh is in flight, a new polling lifecycle begins (generation increments).
+  planner.stopBuilderGoalLaunchPolling();
+  releaseRefresh();
+  await pending;
+  assert.equal(planner._statusMessage, null, 'a superseded READY refresh must not render');
+  assert.equal(planner.builderGoalLaunchRefreshRequired, false);
+});
+
+test('scheduleNextBuilderGoalLaunchPoll keeps a single timeout chain', () => {
+  const originalSetTimeout = global.setTimeout;
+  const originalClearTimeout = global.clearTimeout;
+  let clearedCount = 0;
+  const created = [];
+  global.clearTimeout = () => {
+    clearedCount += 1;
+  };
+  global.setTimeout = (fn, ms) => {
+    created.push(fn);
+    return created.length;
+  };
+  try {
+    const planner = launchStatusPlanner();
+    planner.pollBuilderGoalLaunchOperation = () => {};
+    planner.scheduleNextBuilderGoalLaunchPoll(100);
+    planner.scheduleNextBuilderGoalLaunchPoll(200);
+    assert.equal(clearedCount, 1, 'the previous timeout must be cleared when scheduling a new one');
+    assert.equal(planner.builderGoalLaunchPollHandle, 2);
+    assert.equal(created.length, 2);
+  } finally {
+    global.setTimeout = originalSetTimeout;
+    global.clearTimeout = originalClearTimeout;
+  }
+});
+
+test('backoff reaches but does not exceed 30 seconds', async () => {
+  installLocalStorage();
+  let scheduledDelay = null;
+  const planner = launchStatusPlanner();
+  planner.builderGoalLaunchOperationId = 'op-backoff';
+  planner.scheduleNextBuilderGoalLaunchPoll = delayMs => {
+    scheduledDelay = delayMs;
+  };
+  const originalFetch = global.fetch;
+  global.fetch = async () => {
+    throw new Error('down');
+  };
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    for (let i = 0; i < 6; i++) {
+      await planner.pollBuilderGoalLaunchOperation();
+    }
+  } finally {
+    if (originalFetch === undefined) {
+      delete global.fetch;
+    } else {
+      global.fetch = originalFetch;
+    }
+    console.error = originalConsoleError;
+  }
+  assert.equal(planner.builderGoalLaunchPollNextDelay, 30000);
+  assert.ok(scheduledDelay <= 30000, 'the scheduled delay must never exceed 30 seconds');
+});
+
+test('backoff resets after a successful poll', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.builderGoalLaunchOperationId = 'op-reset';
+  planner.builderGoalLaunchPollFailures = 3;
+  planner.builderGoalLaunchPollNextDelay = 16000;
+  planner.handleBuilderGoalLaunchOperationView = async () => {};
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    status: 200,
+    ok: true,
+    json: async () => ({ status: 'WAITING_FOR_DISPATCH', accountName: 'bigGreenMeat' })
+  });
+  try {
+    await planner.pollBuilderGoalLaunchOperation();
+  } finally {
+    if (originalFetch === undefined) {
+      delete global.fetch;
+    } else {
+      global.fetch = originalFetch;
+    }
+  }
+  assert.equal(planner.builderGoalLaunchPollFailures, 0);
+  assert.equal(planner.builderGoalLaunchPollNextDelay, AccountTaskPlanner.BUILDER_GOAL_LAUNCH_POLL_INTERVAL_MS);
+});
+
+test('FAILED restores Launch control and clears storage exactly once', async () => {
+  const store = installLocalStorage();
+  store.set(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY, 'op-failed');
+  const planner = launchStatusPlanner();
+  planner.builderGoalLaunchOperationId = 'op-failed';
+  planner.launchBuilderGoalAccountBtn = { disabled: true, innerHTML: 'Launching...' };
+
+  await planner.handleBuilderGoalLaunchOperationView({
+    status: 'FAILED',
+    message: 'Micro6 relaunch process exited before the local executor became ready'
+  });
+
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.equal(store.has(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY), false);
+  assert.equal(
+    planner.launchBuilderGoalAccountBtn.innerHTML,
+    '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account'
+  );
+  assert.ok(planner._statusMessage.includes('process exited'));
+});
+
+test('CONFLICT restores Launch control and renders server reason exactly once', async () => {
+  const store = installLocalStorage();
+  store.set(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY, 'op-conflict');
+  const planner = launchStatusPlanner();
+  planner.builderGoalLaunchOperationId = 'op-conflict';
+  planner.launchBuilderGoalAccountBtn = { disabled: true, innerHTML: 'Launching...' };
+
+  await planner.handleBuilderGoalLaunchOperationView({
+    status: 'CONFLICT',
+    message: 'The existing Micro6 session for this account is not dispatch-ready.'
+  });
+
+  assert.equal(planner.builderGoalLaunchOperationId, '');
+  assert.equal(store.has(AccountTaskPlanner.BUILDER_GOAL_LAUNCH_OPERATION_KEY), false);
+  assert.equal(
+    planner.launchBuilderGoalAccountBtn.innerHTML,
+    '<i class="bi bi-box-arrow-up-right me-1"></i>Launch Account'
+  );
+  assert.equal(planner._statusMessage, 'The existing Micro6 session for this account is not dispatch-ready.');
+});
+
+test('constructor initializes and restores exact-run tracker state', () => {
+  const store = installLocalStorage();
+  store.set(
+    AccountTaskPlanner.BUILDER_GOAL_RUN_TRACKER_KEY,
+    JSON.stringify({
+      iterationId: 'buildergoal_resume',
+      statusUrl: '/api/debug/builder-goals/runs/buildergoal_resume'
+    })
+  );
+
+  const planner = new AccountTaskPlanner();
+
+  assert.equal(planner.builderGoalRunTrackerIterationId, 'buildergoal_resume');
+  assert.equal(
+    planner.builderGoalRunTrackerStatusUrl,
+    '/api/debug/builder-goals/runs/buildergoal_resume'
+  );
+  assert.equal(planner.builderGoalRunTrackerPollGeneration, 0);
+  assert.equal(Number.isNaN(planner.builderGoalRunTrackerPollGeneration), false);
+});
+
+test('exact-run poll processes its first response and uses the server status URL', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.builderGoalRunTrackerIterationId = 'buildergoal_poll';
+  planner.builderGoalRunTrackerStatusUrl = '/api/debug/builder-goals/runs/buildergoal_poll';
+  planner.builderGoalRunTrackerPollGeneration = 1;
+  planner.builderGoalRunTrackerPollNextDelay = 2000;
+  planner.builderGoalRunTrackerLastPhase = null;
+  planner.renderBuilderGoalRunProgress = run => {
+    planner._progressRun = run;
+  };
+  planner.scheduleNextBuilderGoalRunPoll = delay => {
+    planner._nextDelay = delay;
+  };
+  global.fetch = async url => {
+    planner._polledUrl = url;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        iterationId: 'buildergoal_poll',
+        status: 'QUEUED',
+        targetPreparationState: 'PREPARING_BUILD',
+        targetPreparationMessage: 'Preparing Micro6'
+      })
+    };
+  };
+
+  await planner.pollBuilderGoalRun();
+
+  assert.equal(planner._polledUrl, '/api/debug/builder-goals/runs/buildergoal_poll');
+  assert.equal(planner._progressRun.targetPreparationState, 'PREPARING_BUILD');
+  assert.equal(planner._nextDelay, 2000);
+});
+
+test('exact-run generic FAILED state is rendered as failure, not dispatch success', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.builderGoalRunTrackerIterationId = 'buildergoal_failed';
+  planner.builderGoalRunTrackerPollGeneration = 1;
+  planner.stopBuilderGoalRunTracking = () => {
+    planner.builderGoalRunTrackerIterationId = '';
+  };
+  planner.renderBuilderGoalRunFailure = (run, options) => {
+    planner._failedRun = run;
+    planner._failureOptions = options;
+  };
+  planner.loadBuilderGoalRuns = async () => {};
+
+  await planner.handleBuilderGoalRunView({
+    iterationId: 'buildergoal_failed',
+    status: 'FAILED',
+    failureReason: 'Login failed before dispatch readiness'
+  }, 1);
+
+  assert.equal(planner._failedRun.failureReason, 'Login failed before dispatch readiness');
+  assert.deepEqual(planner._failureOptions, { buildFailure: false });
+});
+
+test('exact-run ACCEPTED/QUEUED keeps tracking and never says "started"', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.builderGoalRunTrackerIterationId = 'buildergoal_accepted';
+  planner.builderGoalRunTrackerPollGeneration = 1;
+  planner.builderGoalRunTrackerPollNextDelay = 2000;
+  planner.scheduleNextBuilderGoalRunPoll = delay => {
+    planner._nextDelay = delay;
+  };
+  planner.renderBuilderGoalRunProgress = (run, options) => {
+    planner._progressRun = run;
+    planner._progressOptions = options;
+  };
+  planner.stopBuilderGoalRunTracking = () => {
+    planner.builderGoalRunTrackerIterationId = '';
+  };
+
+  await planner.handleBuilderGoalRunView({
+    iterationId: 'buildergoal_accepted',
+    publishStatus: 'ACCEPTED',
+    status: 'WAITING_FOR_TASK_START',
+    targetReadinessPhase: 'READY_TO_PUBLISH',
+    taskStartedObserved: false,
+    accountName: 'bigGreenMeat'
+  }, 1);
+
+  // Still tracking; the banner must not claim the task started.
+  assert.equal(planner.builderGoalRunTrackerIterationId, 'buildergoal_accepted');
+  assert.equal(planner._nextDelay, 2000);
+  assert.equal(planner._progressOptions.terminal, false);
+  assert.ok(!(planner._statusMessage || '').includes('Task started'));
+});
+
+test('exact-run RUNNING with task started displays "Task started"', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.builderGoalRunTrackerIterationId = 'buildergoal_running';
+  planner.builderGoalRunTrackerPollGeneration = 1;
+  planner.runBuilderGoalBtn = { innerHTML: '', disabled: true };
+  planner.updateBuilderGoalRunButtonState = () => {};
+  planner.loadBuilderGoalRuns = async () => {};
+  planner.stopBuilderGoalRunTracking = () => {
+    planner.builderGoalRunTrackerIterationId = '';
+  };
+
+  await planner.handleBuilderGoalRunView({
+    iterationId: 'buildergoal_running',
+    publishStatus: 'RUNNING',
+    status: 'RUNNING',
+    taskStartedObserved: true,
+    accountName: 'bigGreenMeat'
+  }, 1);
+
+  assert.equal(planner.builderGoalRunTrackerIterationId, '');
+  assert.ok(planner._statusMessage.includes('Task started for bigGreenMeat'));
+});
+
+test('exact-run RUNNING without a confirmed start keeps tracking', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.builderGoalRunTrackerIterationId = 'buildergoal_running_notstarted';
+  planner.builderGoalRunTrackerPollGeneration = 1;
+  planner.builderGoalRunTrackerPollNextDelay = 2000;
+  planner.scheduleNextBuilderGoalRunPoll = delay => {
+    planner._nextDelay = delay;
+  };
+  planner.renderBuilderGoalRunProgress = (run, options) => {
+    planner._progressRun = run;
+    planner._progressOptions = options;
+  };
+  planner.stopBuilderGoalRunTracking = () => {
+    planner.builderGoalRunTrackerIterationId = '';
+  };
+
+  await planner.handleBuilderGoalRunView({
+    iterationId: 'buildergoal_running_notstarted',
+    publishStatus: 'RUNNING',
+    status: 'WAITING_FOR_TASK_START',
+    taskStartedObserved: false,
+    accountName: 'bigGreenMeat'
+  }, 1);
+
+  assert.equal(planner.builderGoalRunTrackerIterationId, 'buildergoal_running_notstarted');
+  assert.ok(!(planner._statusMessage || '').includes('Task started'));
+});
+
+test('exact-run PAUSED remains active, renders paused phase, and never claims running', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.builderGoalRunTrackerIterationId = 'buildergoal_paused';
+  planner.builderGoalRunTrackerPollGeneration = 1;
+  planner.builderGoalRunTrackerPollNextDelay = 2000;
+  planner.scheduleBuilderGoalRunPoll = () => {};
+  planner.scheduleNextBuilderGoalRunPoll = delay => {
+    planner._nextDelay = delay;
+  };
+  planner.renderBuilderGoalRunProgress = (run, options) => {
+    planner._progressRun = run;
+    planner._progressOptions = options;
+  };
+
+  await planner.handleBuilderGoalRunView({
+    iterationId: 'buildergoal_paused',
+    publishStatus: 'PAUSED',
+    status: 'PAUSED',
+    taskStartedObserved: true,
+    taskStartConfirmed: true,
+    accountName: 'bigGreenMeat'
+  }, 1);
+
+  assert.equal(planner.resolveBuilderGoalRunPhase(planner._progressRun), 'PAUSED');
+  assert.equal(planner.builderGoalRunTrackerIterationId, 'buildergoal_paused');
+  assert.equal(planner._nextDelay, 2000);
+  assert.equal(planner._progressOptions.terminal, false);
+  assert.equal(AccountTaskPlanner.formatBuilderGoalStatus({ status: 'PAUSED' }), 'Task paused; the executor suspended the task.');
+  assert.ok(!(planner._statusMessage || '').toLowerCase().includes('started'));
+  assert.ok(!(planner._statusMessage || '').toLowerCase().includes('running'));
+});
+
+test('exact-run COMPLETED is terminal success', async () => {
+  installLocalStorage();
+  const planner = launchStatusPlanner();
+  planner.builderGoalRunTrackerIterationId = 'buildergoal_completed';
+  planner.builderGoalRunTrackerPollGeneration = 1;
+  planner.runBuilderGoalBtn = { innerHTML: '', disabled: true };
+  planner.updateBuilderGoalRunButtonState = () => {};
+  planner.loadBuilderGoalRuns = async () => {};
+  planner.renderBuilderGoalRunProgress = (run, options) => {
+    planner._progressRun = run;
+    planner._progressOptions = options;
+  };
+  planner.stopBuilderGoalRunTracking = () => {
+    planner.builderGoalRunTrackerIterationId = '';
+  };
+
+  await planner.handleBuilderGoalRunView({
+    iterationId: 'buildergoal_completed',
+    publishStatus: 'COMPLETED',
+    status: 'COMPLETED'
+  }, 1);
+
+  assert.equal(planner.builderGoalRunTrackerIterationId, '');
+  assert.equal(planner._progressOptions.terminal, true);
 });

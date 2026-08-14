@@ -29,7 +29,8 @@ public class BuilderGoalLauncherControlService {
 
   public static final String MANAGED_CLIENT_TYPE = "leeuwbot";
 
-  private static final Logger log = LoggerFactory.getLogger(BuilderGoalLauncherControlService.class);
+  private static final Logger log =
+      LoggerFactory.getLogger(BuilderGoalLauncherControlService.class);
   private static final List<String> TERMINAL_STATUSES = List.of("succeeded", "failed", "expired");
 
   private final ObjectMapper objectMapper;
@@ -55,7 +56,8 @@ public class BuilderGoalLauncherControlService {
       @Value("${builder-goal.launcher.default-machine-uuid:}") String defaultMachineUuid,
       @Value("${builder-goal.launcher.local-machine-uuid:}") String localMachineUuid,
       @Value("${builder-goal.launcher.accounts-path:/api/v1/accounts}") String accountsPath,
-      @Value("${builder-goal.launcher.machines-path:/api/v1/launcher/machines}") String machinesPath,
+      @Value("${builder-goal.launcher.machines-path:/api/v1/launcher/machines}")
+          String machinesPath,
       @Value("${builder-goal.launcher.start-command-path:/api/v1/launcher/commands/start}")
           String startCommandPath,
       @Value("${builder-goal.launcher.command-status-path:/api/v1/launcher/commands}")
@@ -104,8 +106,7 @@ public class BuilderGoalLauncherControlService {
       }
       return accounts;
     } catch (Exception e) {
-      throw new IllegalStateException(
-          "Failed to load launcher accounts: " + sanitizedCause(e), e);
+      throw new IllegalStateException("Failed to load launcher accounts: " + sanitizedCause(e), e);
     }
   }
 
@@ -141,10 +142,7 @@ public class BuilderGoalLauncherControlService {
   }
 
   public boolean isBuilderGoalRunnableMachine(LauncherMachine machine) {
-    return machine != null
-        && machine.enabled()
-        && machine.online()
-        && isLocalMachine(machine);
+    return machine != null && machine.enabled() && machine.online() && isLocalMachine(machine);
   }
 
   public String getBuilderGoalMachineDisabledReason(LauncherMachine machine) {
@@ -239,8 +237,7 @@ public class BuilderGoalLauncherControlService {
           throw new IllegalStateException(
               sanitizeForDisplay(
                   firstNonBlank(
-                      latest.lastError(),
-                      "Launcher command ended with status " + latest.status()),
+                      latest.lastError(), "Launcher command ended with status " + latest.status()),
                   "Launcher command ended with status " + latest.status()));
         }
         return latest;
@@ -253,7 +250,8 @@ public class BuilderGoalLauncherControlService {
       }
     }
     throw new IllegalStateException(
-        "Launcher command polling timed out before launch completed for command " + normalizedCommandId);
+        "Launcher command polling timed out before launch completed for command "
+            + normalizedCommandId);
   }
 
   public CommandStatus getCommandStatus(String commandId) {
@@ -289,9 +287,9 @@ public class BuilderGoalLauncherControlService {
   }
 
   /**
-   * Builds a non-null, bounded, credential-free description of a launcher failure for callers
-   * that render error details to a browser. The configured token, authorization headers, and
-   * unbounded upstream bodies never leak through this method.
+   * Builds a non-null, bounded, credential-free description of a launcher failure for callers that
+   * render error details to a browser. The configured token, authorization headers, and unbounded
+   * upstream bodies never leak through this method.
    */
   public String describeSanitizedFailure(Throwable failure) {
     if (failure == null) {
@@ -331,8 +329,7 @@ public class BuilderGoalLauncherControlService {
     String accountHash =
         firstNonBlank(
             textValue(item.path("account_hash")),
-            textValue(item.path("accountHash")),
-            textValue(item.path("hash")));
+            textValue(item.path("accountHash")));
     String displayName =
         firstNonBlank(
             textValue(item.path("display_name")),
@@ -345,17 +342,41 @@ public class BuilderGoalLauncherControlService {
     if (displayName == null && accountHash == null) {
       return null;
     }
+    String launcherAccountId =
+        firstNonBlank(
+            textValue(item.path("launcher_account_id")),
+            textValue(item.path("launcherAccountId")),
+            textValue(item.path("id")),
+            firstNonBlank(accountHash, displayName));
+    String accountName =
+        firstNonBlank(
+            textValue(item.path("account_name")),
+            textValue(item.path("accountName")),
+            textValue(item.path("rsn")),
+            textValue(item.path("username")));
+    String launchProfileName =
+        firstNonBlank(
+            textValue(item.path("launch_profile_name")),
+            textValue(item.path("launchProfileName")),
+            textValue(item.path("profile_name")),
+            textValue(item.path("profile")),
+            displayName);
+    String accountHashScheme =
+        firstNonBlank(
+            textValue(item.path("account_hash_scheme")),
+            textValue(item.path("accountHashScheme")));
     String status =
         firstNonBlank(
-            textValue(item.path("status")),
-            textValue(item.path("account_status")),
-            "unknown");
+            textValue(item.path("status")), textValue(item.path("account_status")), "unknown");
     boolean enabled = booleanValue(item.path("enabled"), true);
     String email = firstNonBlank(textValue(item.path("email")), textValue(item.path("login_name")));
     return new LauncherAccount(
-        firstNonBlank(accountHash, displayName),
+        launcherAccountId,
         accountHash,
+        accountName,
+        launchProfileName,
         displayName,
+        accountHashScheme,
         email,
         status,
         enabled,
@@ -391,8 +412,7 @@ public class BuilderGoalLauncherControlService {
     boolean enabled = booleanValue(item.path("enabled"), true);
     boolean online =
         booleanValue(
-            item.path("online"),
-            booleanValue(item.path("is_online"), !isOfflineStatus(status)));
+            item.path("online"), booleanValue(item.path("is_online"), !isOfflineStatus(status)));
     return new LauncherMachine(
         firstNonBlank(machineUuid, displayName),
         displayName,
@@ -500,7 +520,8 @@ public class BuilderGoalLauncherControlService {
             .GET()
             .header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
     applyAuth(builder);
-    HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+    HttpResponse<String> response =
+        httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     if (response.statusCode() >= 400) {
       throw new IllegalStateException(
           "HTTP " + response.statusCode() + ": " + sanitizeUpstreamError(response.body()));
@@ -517,7 +538,8 @@ public class BuilderGoalLauncherControlService {
             .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
             .POST(HttpRequest.BodyPublishers.ofString(body));
     applyAuth(builder);
-    HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+    HttpResponse<String> response =
+        httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     if (response.statusCode() >= 400) {
       throw new IllegalStateException(
           "HTTP " + response.statusCode() + ": " + sanitizeUpstreamError(response.body()));
@@ -526,8 +548,8 @@ public class BuilderGoalLauncherControlService {
   }
 
   /**
-   * Builds a non-null, actionable cause string from a parsing/transport failure: the exception
-   * type plus its message, falling back to the class name so callers never see a bare {@code null}.
+   * Builds a non-null, actionable cause string from a parsing/transport failure: the exception type
+   * plus its message, falling back to the class name so callers never see a bare {@code null}.
    */
   private String sanitizedCause(Exception e) {
     if (e == null) {
@@ -537,7 +559,8 @@ public class BuilderGoalLauncherControlService {
     if (message == null || message.isBlank()) {
       return e.getClass().getSimpleName();
     }
-    return sanitizeForDisplay(e.getClass().getSimpleName() + ": " + message, e.getClass().getSimpleName());
+    return sanitizeForDisplay(
+        e.getClass().getSimpleName() + ": " + message, e.getClass().getSimpleName());
   }
 
   /**
@@ -557,19 +580,19 @@ public class BuilderGoalLauncherControlService {
   }
 
   /**
-   * Central launcher-error sanitizer used for every launcher-controlled error string:
-   * exception messages, HTTP error bodies, parsed {@code last_error} values, and controller
-   * details. Processing order:
+   * Central launcher-error sanitizer used for every launcher-controlled error string: exception
+   * messages, HTTP error bodies, parsed {@code last_error} values, and controller details.
+   * Processing order:
    *
    * <ol>
-   *   <li>Null or blank input falls back to the supplied fallback text (or the exception class
-   *       name where the fallback is the caller's context).</li>
-   *   <li>Every exact occurrence of the configured launcher token is removed.</li>
+   *   <li>Null or blank input falls back to the supplied fallback text (or the exception class name
+   *       where the fallback is the caller's context).
+   *   <li>Every exact occurrence of the configured launcher token is removed.
    *   <li>{@code Authorization: Bearer …} and standalone {@code Bearer …} credential forms are
-   *       redacted.</li>
-   *   <li>Surrounding whitespace is trimmed.</li>
-   *   <li>The already-redacted text is truncated to 500 characters.</li>
-   *   <li>{@code …(truncated)} is appended when truncation occurred.</li>
+   *       redacted.
+   *   <li>Surrounding whitespace is trimmed.
+   *   <li>The already-redacted text is truncated to 500 characters.
+   *   <li>{@code …(truncated)} is appended when truncation occurred.
    * </ol>
    *
    * <p>The result is always non-null and nonblank, so it is safe for exception messages, HTTP
@@ -690,13 +713,38 @@ public class BuilderGoalLauncherControlService {
   public record LauncherAccount(
       String accountId,
       String accountHash,
+      String accountName,
+      String launchProfileName,
       String displayName,
+      String accountHashScheme,
       String email,
       String status,
       boolean enabled,
       Map<String, Object> metadata) {
     public LauncherAccount {
       metadata = immutableMetadata(metadata);
+    }
+
+    /** Compatibility constructor for launcher fixtures that predate separated identity fields. */
+    public LauncherAccount(
+        String accountId,
+        String accountHash,
+        String displayName,
+        String email,
+        String status,
+        boolean enabled,
+        Map<String, Object> metadata) {
+      this(
+          accountId,
+          accountHash,
+          displayName,
+          displayName,
+          displayName,
+          null,
+          email,
+          status,
+          enabled,
+          metadata);
     }
   }
 

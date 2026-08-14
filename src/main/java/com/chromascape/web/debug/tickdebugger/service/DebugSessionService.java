@@ -2,7 +2,6 @@ package com.chromascape.web.debug.tickdebugger.service;
 
 import com.chromascape.web.debug.tickdebugger.dto.DebugSessionSummary;
 import com.chromascape.web.debug.tickdebugger.dto.SessionCountProjection;
-import com.chromascape.web.debug.tickdebugger.dto.SessionCounts;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionFailureCode;
@@ -15,6 +14,7 @@ import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
+import com.chromascape.web.recording.exception.FrameCaptureException;
 import com.chromascape.web.recording.service.RecordingService;
 import com.chromascape.web.recording.service.RecordingService.RecordingMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -156,37 +156,45 @@ public class DebugSessionService {
 
         log.info("Started recording {} for debug session {}", recordingId, sessionId);
       } catch (Exception e) {
-        // Recording start failed - mark session as FAILED and persist it
+        // Recording start failed - degrade to a tick-only session instead of failing the session.
+        // The session stays in RECORDING so tick ingestion and playback continue; only video is
+        // lost. Failure diagnostics are recorded for later inspection.
         String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-        session.markFailed(
+        String failureContext =
+            e instanceof FrameCaptureException ? e.getMessage() : getStackTraceString(e);
+        session.recordFailureDiagnostic(
             DebugSessionFailureCode.REC_START_FAILED,
-            "Failed to start recording: " + errorMsg,
-            getStackTraceString(e));
+            "Recording failed to start; continuing debug session without video: " + errorMsg,
+            failureContext);
 
-        // Save failure state in the current transaction (will commit when method returns)
+        // Save the diagnostic state in the current transaction (will commit when method returns)
         try {
           sessionRepository.save(session);
           log.error(
-              "Session {} marked as FAILED and persisted: code={}, reason={}",
+              "Session {} recording start degraded: code={}, reason={}",
               sessionId,
               session.getFailureCode(),
               errorMsg);
         } catch (Exception saveEx) {
           log.error(
-              "Failed to persist failure state for session {}: {}", sessionId, saveEx.getMessage());
+              "Failed to persist recording-start diagnostic for session {}: {}",
+              sessionId,
+              saveEx.getMessage());
         }
 
-        // Return partial success - session created but recording failed
-        // Set recordingEnabled to false to indicate failure
+        // Return partial success - session continues tick-only (no recording linked)
+        recordingEnabled = false;
+        recordingId = null;
+        recordingFailureReason = "Recording failed to start: " + errorMsg;
         log.warn(
-            "Returning partial success for session {}: "
-                + "session created in FAILED state, recording not started",
-            sessionId);
-        return new SessionStartResponse(sessionId, false, null, startTick, errorMsg);
+            "Degrading session {} to tick-only mode after recording start failure: {}",
+            sessionId,
+            errorMsg);
       }
     } else if (Boolean.TRUE.equals(recordingEnabled)) {
       recordingFailureReason = recordingBlockedReason(triggerSource);
-      log.warn("Auto-recording blocked: source={}, reason={}", triggerSource, recordingFailureReason);
+      log.warn(
+          "Auto-recording blocked: source={}, reason={}", triggerSource, recordingFailureReason);
       recordingEnabled = false;
     }
 
@@ -366,8 +374,8 @@ public class DebugSessionService {
    * Implicitly finalize a debug session when Micro6 disconnects without sending SESSION_STOP.
    *
    * <p>This is the fallback path triggered by WebSocket disconnect or transport error. It mirrors
-   * {@link #stopSession(String, Long, boolean)} but uses distinct logging to differentiate
-   * implicit finalization from explicit SESSION_STOP.
+   * {@link #stopSession(String, Long, boolean)} but uses distinct logging to differentiate implicit
+   * finalization from explicit SESSION_STOP.
    *
    * @param sessionId the debug session ID to finalize
    * @param cause human-readable cause ("disconnect" or "transport error") for logging
@@ -377,8 +385,7 @@ public class DebugSessionService {
     Optional<DebugSession> sessionOpt = sessionRepository.findBySessionId(sessionId);
 
     if (sessionOpt.isEmpty()) {
-      log.warn(
-          "Attempted to finalize non-existent session on {}: {}", cause, sessionId);
+      log.warn("Attempted to finalize non-existent session on {}: {}", cause, sessionId);
       return;
     }
 
@@ -421,17 +428,12 @@ public class DebugSessionService {
                 sessionId);
           }
         } catch (Exception e) {
-          String errorMsg =
-              e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+          String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
           session.markFailed(
               DebugSessionFailureCode.REC_STOP_FAILED,
               "Failed to stop recording on " + cause + ": " + errorMsg,
               getStackTraceString(e));
-          log.error(
-              "Recording stop failed on {} for session {}: {}",
-              cause,
-              sessionId,
-              errorMsg);
+          log.error("Recording stop failed on {} for session {}: {}", cause, sessionId, errorMsg);
         }
       }
 
@@ -441,10 +443,7 @@ public class DebugSessionService {
 
       if (session.getLifecycleState() != DebugSessionLifecycleState.FAILED) {
         session.transitionTo(DebugSessionLifecycleState.FINALIZED);
-        log.info(
-            "Session {} transitioned to FINALIZED via implicit stop on {}",
-            sessionId,
-            cause);
+        log.info("Session {} transitioned to FINALIZED via implicit stop on {}", sessionId, cause);
       }
 
       sessionRepository.save(session);
@@ -456,11 +455,7 @@ public class DebugSessionService {
           "Failed to finalize session on " + cause + ": " + errorMsg,
           getStackTraceString(e));
       sessionRepository.save(session);
-      log.error(
-          "Session {} implicit finalization on {} failed: {}",
-          sessionId,
-          cause,
-          errorMsg);
+      log.error("Session {} implicit finalization on {} failed: {}", sessionId, cause, errorMsg);
     }
 
     long duration =
@@ -566,12 +561,19 @@ public class DebugSessionService {
       return false;
     }
 
-    LocalDateTime start = current.getStartTime() != null ? current.getStartTime().minusMinutes(5) : LocalDateTime.now().minusMinutes(5);
-    LocalDateTime end = current.getEndTime() != null ? current.getEndTime().plusMinutes(5) : LocalDateTime.now().plusMinutes(1);
+    LocalDateTime start =
+        current.getStartTime() != null
+            ? current.getStartTime().minusMinutes(5)
+            : LocalDateTime.now().minusMinutes(5);
+    LocalDateTime end =
+        current.getEndTime() != null
+            ? current.getEndTime().plusMinutes(5)
+            : LocalDateTime.now().plusMinutes(1);
 
     DebugSession best = null;
     long bestTickCount = 0;
-    for (DebugSession candidate : sessionRepository.findByStartTimeBetweenOrderByStartTimeDesc(start, end)) {
+    for (DebugSession candidate :
+        sessionRepository.findByStartTimeBetweenOrderByStartTimeDesc(start, end)) {
       if (candidate.getId().equals(current.getId())) {
         continue;
       }
@@ -772,11 +774,11 @@ public class DebugSessionService {
   }
 
   /**
-   * Persist recording metadata (video path, duration, frames, fps) onto the linked
-   * {@link RecordingSession} row.
+   * Persist recording metadata (video path, duration, frames, fps) onto the linked {@link
+   * RecordingSession} row.
    *
-   * <p>Extracted as a shared helper used by both explicit {@link #stopSession} and implicit
-   * {@link #finalizeSessionOnDisconnect} paths.
+   * <p>Extracted as a shared helper used by both explicit {@link #stopSession} and implicit {@link
+   * #finalizeSessionOnDisconnect} paths.
    */
   private void persistRecordingMetadata(DebugSession session, RecordingMetadata metadata) {
     if (metadata == null || session.getRecordingId() == null) {
@@ -809,11 +811,9 @@ public class DebugSessionService {
       return;
     }
 
-    Optional<RecordingSession> recOpt =
-        recordingSessionRepository.findByRecordingId(recordingId);
+    Optional<RecordingSession> recOpt = recordingSessionRepository.findByRecordingId(recordingId);
     if (recOpt.isEmpty()) {
-      log.debug(
-          "No RecordingSession row for recordingId={} — nothing to backfill", recordingId);
+      log.debug("No RecordingSession row for recordingId={} — nothing to backfill", recordingId);
       return;
     }
 
@@ -830,8 +830,7 @@ public class DebugSessionService {
     }
 
     // Check if the .mp4 file exists on disk
-    Path videoFile =
-        Paths.get(recordingConfig.getOutputDirectory(), recordingId + ".mp4");
+    Path videoFile = Paths.get(recordingConfig.getOutputDirectory(), recordingId + ".mp4");
 
     if (!Files.exists(videoFile)) {
       log.warn(
@@ -859,10 +858,11 @@ public class DebugSessionService {
         rec.setVideoPath(videoFile.toAbsolutePath().toString());
       }
       if (rec.getEndTime() == null) {
-        rec.setEndTime(
-            session.getEndTime() != null ? session.getEndTime() : LocalDateTime.now());
+        rec.setEndTime(session.getEndTime() != null ? session.getEndTime() : LocalDateTime.now());
       }
-      if (rec.getDurationMs() == null && session.getStartTime() != null && rec.getEndTime() != null) {
+      if (rec.getDurationMs() == null
+          && session.getStartTime() != null
+          && rec.getEndTime() != null) {
         rec.setDurationMs(
             java.time.Duration.between(session.getStartTime(), rec.getEndTime()).toMillis());
       }
@@ -890,8 +890,8 @@ public class DebugSessionService {
   }
 
   /**
-   * Scan for and repair orphaned recording sessions where the .mp4 exists on disk but
-   * {@code recording_sessions.video_path} and {@code end_time} remain null.
+   * Scan for and repair orphaned recording sessions where the .mp4 exists on disk but {@code
+   * recording_sessions.video_path} and {@code end_time} remain null.
    *
    * <p>Intended as an admin repair path for sessions orphaned before disconnect finalization was
    * implemented. Scans recent incomplete rows and backfills metadata from on-disk files.
@@ -920,36 +920,29 @@ public class DebugSessionService {
       }
 
       // Check if the .mp4 file exists on disk
-      Path videoFile =
-          Paths.get(recordingConfig.getOutputDirectory(), recordingId + ".mp4");
+      Path videoFile = Paths.get(recordingConfig.getOutputDirectory(), recordingId + ".mp4");
 
       if (!Files.exists(videoFile)) {
-        log.debug(
-            "Orphan-repair scan: no .mp4 for recordingId={}, skipping", recordingId);
+        log.debug("Orphan-repair scan: no .mp4 for recordingId={}, skipping", recordingId);
         continue;
       }
 
       try {
         long fileSize = Files.size(videoFile);
         if (fileSize == 0) {
-          log.warn(
-              "Orphan-repair scan: empty .mp4 for recordingId={}, skipping", recordingId);
+          log.warn("Orphan-repair scan: empty .mp4 for recordingId={}, skipping", recordingId);
           continue;
         }
 
         // Find the debug session linked to this recording
-        Optional<DebugSession> sessionOpt =
-            sessionRepository.findByRecordingId(recordingId);
+        Optional<DebugSession> sessionOpt = sessionRepository.findByRecordingId(recordingId);
 
         // Backfill RecordingSession metadata
         if (rec.getVideoPath() == null || rec.getVideoPath().isBlank()) {
           rec.setVideoPath(videoFile.toAbsolutePath().toString());
         }
         if (rec.getEndTime() == null) {
-          rec.setEndTime(
-              sessionOpt
-                  .map(DebugSession::getEndTime)
-                  .orElse(LocalDateTime.now()));
+          rec.setEndTime(sessionOpt.map(DebugSession::getEndTime).orElse(LocalDateTime.now()));
         }
         if (rec.getDurationMs() == null && rec.getStartTime() != null && rec.getEndTime() != null) {
           rec.setDurationMs(
@@ -981,11 +974,7 @@ public class DebugSessionService {
             rec.getEndTime());
 
       } catch (Exception e) {
-        log.error(
-            "Orphan-repair: failed for recordingId={}: {}",
-            recordingId,
-            e.getMessage(),
-            e);
+        log.error("Orphan-repair: failed for recordingId={}: {}", recordingId, e.getMessage(), e);
       }
     }
 
@@ -1005,8 +994,7 @@ public class DebugSessionService {
       return false;
     }
 
-    Optional<RecordingSession> recOpt =
-        recordingSessionRepository.findByRecordingId(recordingId);
+    Optional<RecordingSession> recOpt = recordingSessionRepository.findByRecordingId(recordingId);
     if (recOpt.isEmpty()) {
       log.warn("Orphan-repair: no RecordingSession row for recordingId={}", recordingId);
       return false;
@@ -1015,8 +1003,7 @@ public class DebugSessionService {
     RecordingSession rec = recOpt.get();
 
     // Check if the .mp4 file exists on disk
-    Path videoFile =
-        Paths.get(recordingConfig.getOutputDirectory(), recordingId + ".mp4");
+    Path videoFile = Paths.get(recordingConfig.getOutputDirectory(), recordingId + ".mp4");
 
     if (!Files.exists(videoFile)) {
       log.warn(
@@ -1033,15 +1020,13 @@ public class DebugSessionService {
         return false;
       }
 
-      Optional<DebugSession> sessionOpt =
-          sessionRepository.findByRecordingId(recordingId);
+      Optional<DebugSession> sessionOpt = sessionRepository.findByRecordingId(recordingId);
 
       if (rec.getVideoPath() == null || rec.getVideoPath().isBlank()) {
         rec.setVideoPath(videoFile.toAbsolutePath().toString());
       }
       if (rec.getEndTime() == null) {
-        rec.setEndTime(
-            sessionOpt.map(DebugSession::getEndTime).orElse(LocalDateTime.now()));
+        rec.setEndTime(sessionOpt.map(DebugSession::getEndTime).orElse(LocalDateTime.now()));
       }
       if (rec.getDurationMs() == null && rec.getStartTime() != null && rec.getEndTime() != null) {
         rec.setDurationMs(
@@ -1069,8 +1054,7 @@ public class DebugSessionService {
       return true;
 
     } catch (Exception e) {
-      log.error(
-          "Orphan-repair: failed for recordingId={}: {}", recordingId, e.getMessage(), e);
+      log.error("Orphan-repair: failed for recordingId={}: {}", recordingId, e.getMessage(), e);
       return false;
     }
   }

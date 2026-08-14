@@ -174,9 +174,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
   /** Handle SESSION_START message from Micro6. */
   private void handleSessionStart(WebSocketSession wsSession, JsonNode root) {
-    // Single-response guard: once the success response is written, any later exception in this
-    // handler must not emit a second (ERROR) response to the same SESSION_START.
-    boolean successResponseSent = false;
+    // Response-attempt guard: set immediately before the first sendMessage call. At most one
+    // response-write attempt is allowed per SESSION_START, so a failure while writing the
+    // success/degraded response never produces a second (ERROR) response, and exceptions before
+    // any response attempt still produce exactly one correlated SESSION_START failed.
+    boolean responseAttempted = false;
     try {
       SessionStartRequest request = objectMapper.treeToValue(root, SessionStartRequest.class);
       String clientRequestId = request.getClientRequestId();
@@ -264,42 +266,65 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
             shadowRunId);
       }
 
-      // Echo the transport correlation id unchanged and expose the run id for observability.
-      response.setClientRequestId(clientRequestId);
-      response.setShadowRunId(shadowRunId);
+      // Echo the transport correlation id unchanged and expose the run id for observability. The
+      // full constructor carries clientRequestId to avoid handler-side mutation of the DTO.
+      SessionStartResponse outbound =
+          new SessionStartResponse(
+              response.getSessionId(),
+              response.getRecordingEnabled(),
+              response.getRecordingId(),
+              response.getStartTick(),
+              response.getRecordingFailureReason(),
+              clientRequestId);
+      outbound.setShadowRunId(shadowRunId);
 
       log.info(
           "SESSION_START result: sessionId={}, shadowRunId={}, recordingId={}, failureReason={}, clientRequestId={}",
-          response.getSessionId(),
+          outbound.getSessionId(),
           shadowRunId,
-          response.getRecordingId() != null ? response.getRecordingId() : "none",
-          response.getRecordingFailureReason() != null
-              ? response.getRecordingFailureReason()
+          outbound.getRecordingId() != null ? outbound.getRecordingId() : "none",
+          outbound.getRecordingFailureReason() != null
+              ? outbound.getRecordingFailureReason()
               : "none",
-          response.getClientRequestId() != null ? response.getClientRequestId() : "none");
+          outbound.getClientRequestId() != null ? outbound.getClientRequestId() : "none");
 
       // Open the shadow run before the first tick. The run id is unique per binding, so a
       // conflicting duplicate open is practically impossible; a rejection is logged and does not
       // undo the binding.
-      shadowDecisionService.openSession(response.getSessionId(), shadowRunId);
+      shadowDecisionService.openSession(outbound.getSessionId(), shadowRunId);
 
-      // Send response back to Micro6 with the sessionId. When sending fails after the binding was
-      // created, ownership is retained so disconnect cleanup finalizes and releases it.
-      String responseJson = objectMapper.writeValueAsString(response);
-      wsSession.sendMessage(new TextMessage(responseJson));
-      successResponseSent = true;
+      // Send response back to Micro6 with the sessionId. The guard is armed before the first
+      // response write: when sending the success/degraded response throws, no additional ERROR is
+      // attempted, the server binding is retained so disconnect finalization cleans up the created
+      // session, and the socket is closed to trigger that finalization.
+      responseAttempted = true;
+      String responseJson = objectMapper.writeValueAsString(outbound);
+      try {
+        wsSession.sendMessage(new TextMessage(responseJson));
+      } catch (Exception sendFailure) {
+        log.error(
+            "Failed to send SESSION_START response for session {}; closing connection for disconnect finalization: {}",
+            outbound.getSessionId(),
+            sendFailure.getMessage());
+        try {
+          wsSession.close(CloseStatus.SERVER_ERROR);
+        } catch (Exception ignored) {
+          // best-effort
+        }
+        return;
+      }
 
       log.info(
           "Sent SESSION_START response to Micro6: sessionId={}, shadowRunId={}",
-          response.getSessionId(),
+          outbound.getSessionId(),
           shadowRunId);
 
       // Broadcast session creation to all debugger clients
-      broadcastSessionStartToDebugger(response, request.getAccountName());
+      broadcastSessionStartToDebugger(outbound, request.getAccountName());
 
     } catch (Exception e) {
       log.error("Error handling SESSION_START: {}", e.getMessage(), e);
-      if (!successResponseSent) {
+      if (!responseAttempted) {
         String clientRequestId =
             root.has("clientRequestId") && !root.get("clientRequestId").isNull()
                 ? root.get("clientRequestId").asText()

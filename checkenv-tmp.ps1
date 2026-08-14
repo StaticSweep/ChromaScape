@@ -1,0 +1,5 @@
+Write-Output "USER_SPRING_PROFILES=[$([Environment]::GetEnvironmentVariable('SPRING_PROFILES_ACTIVE','User'))]"
+Write-Output "MACHINE_SPRING_PROFILES=[$([Environment]::GetEnvironmentVariable('SPRING_PROFILES_ACTIVE','Machine'))]"
+Write-Output "PROCESS_SPRING_PROFILES=[$env:SPRING_PROFILES_ACTIVE]"
+Write-Output "USER_STAB=[$([Environment]::GetEnvironmentVariable('STABILIZATION_AUTH_TOKEN','User'))]"
+Write-Output "GRADLE_HOME=[$([Environment]::GetEnvironmentVariable('GRADLE_HOME','User'))]"

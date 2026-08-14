@@ -85,7 +85,8 @@ class PatchLoopSessionResolverServiceTest {
     PatchLoopSessionResolverService.ResolvedSessionContext resolved =
         service.resolveForIteration(iteration).orElseThrow();
 
-    assertEquals(PatchLoopSessionResolverService.SOURCE_RUN_SESSION, resolved.getResolutionSource());
+    assertEquals(
+        PatchLoopSessionResolverService.SOURCE_RUN_SESSION, resolved.getResolutionSource());
     verify(debugSessionRepository, never()).findFirstByScriptNameOrderByStartTimeDesc("TestScript");
   }
 

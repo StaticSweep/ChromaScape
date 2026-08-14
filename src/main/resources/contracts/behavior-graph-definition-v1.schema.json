@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "behavior-graph-definition/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "graph_id", "graph_hash", "identity", "nodes", "edges", "trace_modes", "control_allowed"],
+  "properties": {
+    "schema": {"const": "behavior-graph-definition/v1"},
+    "graph_id": {"type": "string", "pattern": "^graph_[0-9a-f]{24}$"},
+    "graph_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "identity": {"type": "object"},
+    "nodes": {"type": "array", "minItems": 2, "maxItems": 256, "items": {"$ref": "#/$defs/node"}},
+    "edges": {"type": "array", "maxItems": 255, "items": {"$ref": "#/$defs/edge"}},
+    "trace_modes": {"type": "array", "items": {"enum": ["RECORDED", "POLICY_REPLAY", "SHADOW"]}},
+    "control_allowed": {"const": false}
+  },
+  "$defs": {
+    "node": {"type": "object", "required": ["id", "ordinal", "type"], "properties": {"id": {"type": "string", "pattern": "^node_[0-9]+_[0-9a-f]{12}$"}, "ordinal": {"type": "integer", "minimum": 0}, "type": {"enum": ["START", "ACTION", "GATE", "ABSTAIN", "RECOVERY", "TERMINAL"]}, "source_tick_range": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "integer"}, "end": {"type": "integer"}}}, "evidence_ids": {"type": "array", "items": {"type": "string"}}}},
+    "edge": {"type": "object", "required": ["id", "from", "to"], "properties": {"id": {"type": "string", "pattern": "^edge_[0-9]+_[0-9]+_[0-9a-f]{12}$"}, "from": {"type": "string"}, "to": {"type": "string"}}}
+  }
+}

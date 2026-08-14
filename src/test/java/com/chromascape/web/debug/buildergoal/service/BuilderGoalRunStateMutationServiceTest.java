@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.web.debug.patchloop.entity.PatchLoopFailureCode;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIteration;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIterationRepository;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopStatus;
@@ -175,7 +176,7 @@ class BuilderGoalRunStateMutationServiceTest {
 
     ScriptExecutionService.Micro6PublishResult result =
         ScriptExecutionService.Micro6PublishResult.success(
-            1001, true, "http://127.0.0.1:8098", "QUEUED");
+            1001, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null);
 
     BuilderGoalRunStateMutationService.ApplyOutcomeResult outcome =
         mutationService.applyPublishOutcome("bg_outcome0001", 1001, result);
@@ -201,7 +202,7 @@ class BuilderGoalRunStateMutationServiceTest {
 
     ScriptExecutionService.Micro6PublishResult result =
         ScriptExecutionService.Micro6PublishResult.success(
-            1001, true, "http://127.0.0.1:8098", "QUEUED");
+            1001, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null);
 
     assertThatThrownBy(() -> mutationService.applyPublishOutcome("bg_mismatch0001", 1001, result))
         .isInstanceOf(IllegalStateException.class)
@@ -223,7 +224,7 @@ class BuilderGoalRunStateMutationServiceTest {
 
     ScriptExecutionService.Micro6PublishResult result =
         ScriptExecutionService.Micro6PublishResult.success(
-            1001, true, "http://127.0.0.1:8098", "QUEUED");
+            1001, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null);
 
     BuilderGoalRunStateMutationService.ApplyOutcomeResult outcome =
         mutationService.applyPublishOutcome("bg_stopwins0001", 1001, result);
@@ -246,7 +247,7 @@ class BuilderGoalRunStateMutationServiceTest {
 
     ScriptExecutionService.Micro6PublishResult result =
         ScriptExecutionService.Micro6PublishResult.success(
-            1001, true, "http://127.0.0.1:8098", "QUEUED");
+            1001, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null);
 
     BuilderGoalRunStateMutationService.ApplyOutcomeResult outcome =
         mutationService.applyPublishOutcome("bg_term_outcome0001", 1001, result);
@@ -274,6 +275,8 @@ class BuilderGoalRunStateMutationServiceTest {
             false,
             "micro6_local_executor",
             "RECONCILING",
+            null,
+            null,
             1001,
             false,
             "http://127.0.0.1:8098",
@@ -345,6 +348,164 @@ class BuilderGoalRunStateMutationServiceTest {
     assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.CANCELLED);
     assertThat(readPublish(iteration)).containsEntry("status", "CANCELLED");
     assertThat(iteration.getRunSuccess()).isNull();
+  }
+
+  @Test
+  void applyExecutorStatus_mapsAcceptedQueuedAssignedRunning() {
+    PatchLoopIteration iteration = publishedIteration("bg_activation0001", "ACCEPTED");
+    when(iterationRepository.findByIterationIdForUpdate("bg_activation0001"))
+        .thenReturn(Optional.of(iteration));
+
+    // ACCEPTED persists as ACCEPTED.
+    mutationService.applyExecutorStatus(
+        "bg_activation0001",
+        1001,
+        executorStatus(
+            "ACCEPTED", null, Map.of("status", "ACCEPTED", "activation_state", "RECEIVED")),
+        LocalDateTime.now());
+    assertThat(readPublish(iteration)).containsEntry("status", "ACCEPTED");
+    assertThat(readPublish(iteration)).containsEntry("activation_state", "RECEIVED");
+
+    // QUEUED persists as QUEUED.
+    mutationService.applyExecutorStatus(
+        "bg_activation0001",
+        1001,
+        executorStatus("QUEUED", null, Map.of("status", "QUEUED", "activation_state", "QUEUED")),
+        LocalDateTime.now());
+    assertThat(readPublish(iteration)).containsEntry("status", "QUEUED");
+
+    // ASSIGNED persists as ASSIGNED.
+    mutationService.applyExecutorStatus(
+        "bg_activation0001",
+        1001,
+        executorStatus(
+            "ASSIGNED", null, Map.of("status", "ASSIGNED", "activation_state", "ASSIGNED")),
+        LocalDateTime.now());
+    assertThat(readPublish(iteration)).containsEntry("status", "ASSIGNED");
+
+    // RUNNING with a confirmed task start transitions the row to RUNNING_SCRIPT.
+    mutationService.applyExecutorStatus(
+        "bg_activation0001",
+        1001,
+        executorStatus(
+            "RUNNING",
+            null,
+            Map.of(
+                "status", "RUNNING",
+                "activation_state", "ACTIVE",
+                "task_started", true,
+                "debug_session_id", "session-1")),
+        LocalDateTime.now());
+    assertThat(readPublish(iteration)).containsEntry("status", "RUNNING");
+    assertThat(readPublish(iteration)).containsEntry("activation_state", "ACTIVE");
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.RUNNING_SCRIPT);
+  }
+
+  @Test
+  void applyExecutorStatus_pausedSurvivesReconciliationAsDistinctStatus() {
+    PatchLoopIteration iteration = publishedIteration("bg_paused0001", "ACCEPTED");
+    when(iterationRepository.findByIterationIdForUpdate("bg_paused0001"))
+        .thenReturn(Optional.of(iteration));
+
+    mutationService.applyExecutorStatus(
+        "bg_paused0001",
+        1001,
+        executorStatus(
+            "PAUSED",
+            null,
+            Map.of(
+                "status", "PAUSED",
+                "activation_state", "PAUSED",
+                "task_started", true,
+                "debug_session_id", "session-1")),
+        LocalDateTime.now());
+
+    assertThat(readPublish(iteration)).containsEntry("status", "PAUSED");
+    assertThat(readPublish(iteration)).containsEntry("activation_state", "PAUSED");
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.RUNNING_SCRIPT);
+  }
+
+  @Test
+  void applyExecutorStatus_pausedRemainsStoppableAndNotTerminal() {
+    PatchLoopIteration iteration = publishedIteration("bg_paused_stop0001", "PAUSED");
+    when(iterationRepository.findByIterationIdForUpdate("bg_paused_stop0001"))
+        .thenReturn(Optional.of(iteration));
+
+    mutationService.applyExecutorStatus(
+        "bg_paused_stop0001",
+        1001,
+        executorStatus(
+            "PAUSED",
+            null,
+            Map.of(
+                "status", "PAUSED",
+                "activation_state", "PAUSED",
+                "task_started", true,
+                "debug_session_id", "session-1")),
+        LocalDateTime.now());
+
+    // PAUSED stays active/non-terminal: the row must not be terminal and must remain eligible for
+    // stop/resume reconciliation.
+    assertThat(readPublish(iteration)).containsEntry("status", "PAUSED");
+    assertThat(iteration.getStatus().isTerminal()).isFalse();
+  }
+
+  @Test
+  void applyExecutorStatus_pausedWithoutStartBindingIsStillActivatedAndActive() {
+    PatchLoopIteration iteration = publishedIteration("bg_paused_unbound0001", "QUEUED");
+    when(iterationRepository.findByIterationIdForUpdate("bg_paused_unbound0001"))
+        .thenReturn(Optional.of(iteration));
+
+    // A pause can race the task-start/debug-session callback.  PAUSED itself is the executor's
+    // authoritative activation signal; missing optional binding fields must not trigger the start
+    // timeout or turn the run into a waiting/failed state.
+    BuilderGoalRunStateMutationService.StatusApplyResult result =
+        mutationService.applyExecutorStatus(
+            "bg_paused_unbound0001",
+            1001,
+            executorStatus(
+                "PAUSED",
+                null,
+                Map.of("status", "PAUSED", "activation_state", "PAUSED")),
+            LocalDateTime.now().plusMinutes(10));
+
+    assertThat(result.terminal()).isFalse();
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.RUNNING_SCRIPT);
+    assertThat(readPublish(iteration)).containsEntry("status", "PAUSED");
+    assertThat(readPublish(iteration)).containsEntry("activation_state", "PAUSED");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> metadata =
+        objectMapper.convertValue(iteration.getTaskMetadataJson(), Map.class);
+    assertThat(metadata).containsEntry("task_start_confirmed", true);
+  }
+
+  @Test
+  void applyExecutorStatus_queuedWithStoppedScriptTimesOutWithScriptStartFailed() {
+    PatchLoopIteration iteration = newIteration("bg_start_timeout0001");
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    Map<String, Object> publish = new LinkedHashMap<>();
+    publish.put("entry_id", 1001);
+    publish.put("status", "QUEUED");
+    // Older than the 300s run-timeout measured from published_at.
+    publish.put("published_at", LocalDateTime.now().minusSeconds(301).toString());
+    publish.put("activation_state", "QUEUED");
+    metadata.put("micro6_publish", publish);
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(metadata));
+    when(iterationRepository.findByIterationIdForUpdate("bg_start_timeout0001"))
+        .thenReturn(Optional.of(iteration));
+
+    BuilderGoalRunStateMutationService.StatusApplyResult result =
+        mutationService.applyExecutorStatus(
+            "bg_start_timeout0001",
+            1001,
+            executorStatus(
+                "QUEUED", null, Map.of("status", "QUEUED", "activation_state", "QUEUED")),
+            LocalDateTime.now());
+
+    assertThat(result.terminal()).isTrue();
+    assertThat(iteration.getStatus()).isEqualTo(PatchLoopStatus.FAILED);
+    assertThat(iteration.getFailureCode()).isEqualTo(PatchLoopFailureCode.SCRIPT_START_FAILED);
+    assertThat(iteration.getFailureReason()).contains("Task start timed out").contains("QUEUED");
   }
 
   @Test
@@ -660,6 +821,40 @@ class BuilderGoalRunStateMutationServiceTest {
 
     assertThat(result.revived()).isFalse();
     assertThat(result.reason()).isEqualTo("entry_id_mismatch");
+  }
+
+  @Test
+  void applyLateReconcile_rejectsNearMatchIterationIdentity() {
+    PatchLoopIteration iteration = terminalIteration("bg_late_identity0001");
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    Map<String, Object> publish = new LinkedHashMap<>();
+    publish.put("entry_id", 1001);
+    publish.put("status", "PUBLISH_FAILED");
+    metadata.put("micro6_publish", publish);
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(metadata));
+    when(iterationRepository.findByIterationIdForUpdate("bg_late_identity0001"))
+        .thenReturn(Optional.of(iteration));
+
+    ScriptExecutionService.Micro6RunStatusResult executorResult =
+        new ScriptExecutionService.Micro6RunStatusResult(
+            true,
+            "RUNNING",
+            null,
+            objectMapper.valueToTree(
+                Map.of("status", "RUNNING", "entry_id", 1001, "task_key", "FISHING_TRAINING")),
+            "http://127.0.0.1:8098",
+            1001);
+
+    BuilderGoalRunStateMutationService.ReconcileApplyResult result =
+        mutationService.applyLateReconcile(
+            "bg_late_identity0001",
+            1001,
+            "BG_LATE_IDENTITY0001",
+            "FISHING_TRAINING",
+            executorResult);
+
+    assertThat(result.revived()).isFalse();
+    assertThat(result.reason()).isEqualTo("iteration_id_mismatch");
   }
 
   @Test

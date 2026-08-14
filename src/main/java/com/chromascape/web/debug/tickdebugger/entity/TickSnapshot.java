@@ -37,11 +37,12 @@ public class TickSnapshot {
   @Column(nullable = false)
   private LocalDateTime timestamp;
 
-  /** Player state as JSON (position, HP, prayer, animation, energy, etc.).
-   * Contains canonical nested fields (position{x,y,z,plane}, hp{current,max,percent},
-   * prayer{current,max,percent}, energy, animation, interacting, skills)
-   * and legacy flat aliases (x, z, worldX, worldY, plane, currentHp, maxHp,
-   * currentPrayer, maxPrayer, runEnergy, animationId) for backward compatibility. */
+  /**
+   * Player state as JSON (position, HP, prayer, animation, energy, etc.). Contains canonical nested
+   * fields (position{x,y,z,plane}, hp{current,max,percent}, prayer{current,max,percent}, energy,
+   * animation, interacting, skills) and legacy flat aliases (x, z, worldX, worldY, plane,
+   * currentHp, maxHp, currentPrayer, maxPrayer, runEnergy, animationId) for backward compatibility.
+   */
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(nullable = false)
   private JsonNode playerState;
@@ -93,12 +94,15 @@ public class TickSnapshot {
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "ground_items")
   private JsonNode groundItems;
+
   /** Nearby players as JSON array. */
   @JdbcTypeCode(SqlTypes.JSON)
   private JsonNode players;
+
   /** Widgets as JSON array. */
   @JdbcTypeCode(SqlTypes.JSON)
   private JsonNode widgets;
+
   /** Replay schema version for strict pipeline compatibility. */
   @Column(name = "schema_version")
   private Integer schemaVersion;

@@ -32,6 +32,14 @@ public interface TickLogRepository extends JpaRepository<TickLog, Long> {
   List<TickLog> findBySessionIdAndSubsystemIgnoreCaseOrderByTickAsc(
       String sessionId, String subsystem);
 
+  /**
+   * Find player actions ({@code PLAYER_ACTION}/{@code MENU_CLICK}) for a session, ordered by the
+   * enclosing batch tick. Callers must order by {@code details.sourceTick} then {@code
+   * details.sequence} for full determinism.
+   */
+  List<TickLog> findBySessionIdAndSubsystemIgnoreCaseAndEventTypeIgnoreCaseOrderByTickAsc(
+      String sessionId, String subsystem, String eventType);
+
   /** Search logs by message content. */
   List<TickLog> findBySessionIdAndMessageContainingIgnoreCaseOrderByTickAsc(
       String sessionId, String searchTerm);

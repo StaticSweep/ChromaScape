@@ -100,6 +100,8 @@ public class BuilderGoalRunnerService {
   private static final String PREPARATION_STATE_WAITING_FOR_AGENT = "WAITING_FOR_AGENT";
   private static final String PREPARATION_STATE_LOGGING_IN = "LOGGING_IN";
   private static final String PREPARATION_STATE_READY_TO_PUBLISH = "READY_TO_PUBLISH";
+  private static final String PREPARATION_STATE_WAITING_FOR_LAUNCH_LEASE =
+      "WAITING_FOR_LOCAL_LAUNCH_LEASE";
   private static final String DISPLAY_STATUS_WAITING_FOR_TASK_START = "WAITING_FOR_TASK_START";
   private static final String DISPLAY_STATUS_WAITING_FOR_DEBUG_BIND = "WAITING_FOR_DEBUG_BIND";
   private static final String DISPLAY_STATUS_AWAITING_EXECUTOR_CONFIRMATION =
@@ -133,12 +135,53 @@ public class BuilderGoalRunnerService {
   private final Micro6TargetRelaunchService micro6TargetRelaunchService;
   private final Micro6TargetPreparationService targetPreparationService;
   private final BuilderGoalRunStateMutationService mutationService;
+  private final BuilderGoalLaunchOperationService launchOperationService;
+  private final BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator;
   private final ObjectMapper objectMapper;
   private final Executor patchLoopExecutor;
+  private final Executor launchExecutor;
   private final long runTimeoutMs;
   private final int maxConsecutiveStatusFailures;
   private final long statusFailureGraceMs;
+  private final int executorPort;
   private final Set<String> pendingLaunchIterations = ConcurrentHashMap.newKeySet();
+  private final ConcurrentHashMap<String, ActiveLaunchWork> activeLaunchWork =
+      new ConcurrentHashMap<>();
+
+  /**
+   * Tracks an active launch worker so the watchdog and operator stop can cancel and interrupt it.
+   * Created and registered under its owner ID before executor submission so the watchdog can never
+   * race a not-yet-registered worker.
+   */
+  private static final class ActiveLaunchWork implements BuilderGoalLaunchCancellation {
+    final BuilderGoalLocalLaunchCoordinatorService.LeaseHandle leaseHandle;
+    final java.util.concurrent.atomic.AtomicBoolean cancelled =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+    final java.util.concurrent.atomic.AtomicReference<Thread> workerThread =
+        new java.util.concurrent.atomic.AtomicReference<>();
+
+    ActiveLaunchWork(BuilderGoalLocalLaunchCoordinatorService.LeaseHandle leaseHandle) {
+      this.leaseHandle = leaseHandle;
+    }
+
+    /** Attaches the executing worker thread as its first action. */
+    void attachCurrentThread() {
+      workerThread.set(Thread.currentThread());
+    }
+
+    @Override
+    public boolean isCancelled() {
+      return cancelled.get();
+    }
+
+    void cancel() {
+      cancelled.set(true);
+      Thread thread = workerThread.get();
+      if (thread != null && thread.isAlive()) {
+        thread.interrupt();
+      }
+    }
+  }
 
   public BuilderGoalRunnerService(
       PatchLoopIterationRepository iterationRepository,
@@ -156,8 +199,13 @@ public class BuilderGoalRunnerService {
       Micro6TargetRelaunchService micro6TargetRelaunchService,
       Micro6TargetPreparationService targetPreparationService,
       BuilderGoalRunStateMutationService mutationService,
+      BuilderGoalLaunchOperationService launchOperationService,
+      BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator,
       ObjectMapper objectMapper,
       @Qualifier("patchLoopExecutor") Executor patchLoopExecutor,
+      @Qualifier("builderGoalLaunchExecutor") Executor launchExecutor,
+      @Value("${chromascape.patchloop.micro6-executor.base-url:http://127.0.0.1:8098}")
+          String micro6ExecutorBaseUrl,
       @Value("${builder-goal.run-timeout-ms:300000}") long runTimeoutMs,
       @Value("${builder-goal.status-sync-max-consecutive-failures:3}")
           int maxConsecutiveStatusFailures,
@@ -177,8 +225,12 @@ public class BuilderGoalRunnerService {
     this.micro6TargetRelaunchService = micro6TargetRelaunchService;
     this.targetPreparationService = targetPreparationService;
     this.mutationService = mutationService;
+    this.launchOperationService = launchOperationService;
+    this.localLaunchCoordinator = localLaunchCoordinator;
     this.objectMapper = objectMapper;
     this.patchLoopExecutor = patchLoopExecutor;
+    this.launchExecutor = launchExecutor;
+    this.executorPort = resolveExecutorPort(micro6ExecutorBaseUrl);
     this.runTimeoutMs = runTimeoutMs;
     this.maxConsecutiveStatusFailures = maxConsecutiveStatusFailures;
     this.statusFailureGraceMs = statusFailureGraceMs;
@@ -189,6 +241,12 @@ public class BuilderGoalRunnerService {
     BuilderGoalCatalogSnapshot catalogSnapshot = getBuilderGoalCatalogSnapshot(false);
     JsonNode catalogTask =
         findTaskInCatalog(normalized.taskKey(), catalogSnapshot.catalogPayload());
+    String canonicalTaskKey = canonicalTaskKey(catalogTask, normalized.taskKey());
+    if (!canonicalTaskKey.equals(normalized.taskKey())) {
+      normalized =
+          new NormalizedPayload(
+              canonicalTaskKey, normalized.displayName(), normalized.settings(), normalized.world());
+    }
     return buildImportResponse(normalized, catalogTask, catalogSnapshot);
   }
 
@@ -197,6 +255,22 @@ public class BuilderGoalRunnerService {
     return accountCatalogService.listAccounts();
   }
 
+  /**
+   * Starts an asynchronous Builder Goal account launch and returns the launch-operation view.
+   *
+   * <p>Validation (account, credentials, world, launcher machine) happens synchronously so bad
+   * requests fail fast. The request then always queues the shared lease-protected preparation
+   * ({@link Micro6TargetPreparationService#ensureReady}) which inspects any existing executor under
+   * the local launch lease, reuses only a matching dispatch-ready executor, and otherwise replaces
+   * non-ready, unreachable, or mismatched executors. The operation finishes at {@code READY} when
+   * the executor is dispatch-ready and never publishes a task.
+   *
+   * <p>Both Launch Account and Run Task serialize through the same shared preparation service under
+   * the local machine/port lease, eliminating the pre-lease reuse race.
+   *
+   * <p>The server-side readiness watchdog (90 minutes by default) controls how long a launch waits;
+   * browser lifetime never does.
+   */
   public Map<String, Object> launchAccount(
       String accountId, String launcherMachineUuid, Integer world) {
     if (accountId == null || accountId.isBlank()) {
@@ -212,33 +286,196 @@ public class BuilderGoalRunnerService {
     requireValidWorld(world);
     requireLaunchableMachine(launcherMachineUuid);
 
+    String accountKey = firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId());
+    BuilderGoalLaunchOperationService.CreateResult createResult =
+        launchOperationService.createOrReuse(
+            selectedAccount.accountId(),
+            selectedAccount.accountHash(),
+            selectedAccount.displayName(),
+            launcherMachineUuid,
+            world);
+    BuilderGoalLaunchOperationService.LaunchOperation operation = createResult.operation();
+    if (createResult.deduplicated()) {
+      logger.info(
+          "Deduplicating Builder Goal launch for account {} onto active operation {}",
+          accountKey,
+          operation.getOperationId());
+      return launchOperationService.toResponse(operation.getOperationId(), true);
+    }
+
+    launchOperationService.updateStatus(
+        operation.getOperationId(),
+        BuilderGoalLaunchOperationService.STATUS_CHECKING_EXISTING,
+        "Checking for an existing matching Micro6 executor");
+
+    launchOperationService.updateStatus(
+        operation.getOperationId(),
+        BuilderGoalLaunchOperationService.STATUS_QUEUED,
+        "Queued local Micro6 workspace launch");
+
+    // Serialize via the local launch coordinator
+    BuilderGoalLocalLaunchCoordinatorService.AcquireResult acquireResult =
+        localLaunchCoordinator.tryAcquire(
+            launcherMachineUuid, executorPort, accountKey, operation.getOperationId());
+    if (acquireResult.conflict() != null) {
+      BuilderGoalLocalLaunchCoordinatorService.Conflict conflict = acquireResult.conflict();
+      launchOperationService.markConflict(
+          operation.getOperationId(),
+          "Another workflow ("
+              + conflict.workflowType()
+              + ", owner="
+              + conflict.ownerId()
+              + ") currently holds the local launch lease. Wait for that workflow to complete (or"
+              + " fail) before launching again.");
+      return launchOperationService.toResponse(operation.getOperationId(), false);
+    }
+    BuilderGoalLocalLaunchCoordinatorService.LeaseHandle leaseHandle = acquireResult.handle();
+
+    // Register active work before executor submission so the watchdog can never observe an
+    // unregistered worker; the worker attaches its thread as its first action.
+    ActiveLaunchWork work = new ActiveLaunchWork(leaseHandle);
+    activeLaunchWork.put(operation.getOperationId(), work);
+
     try {
+      launchExecutor.execute(
+          () -> {
+            work.attachCurrentThread();
+            try {
+              continueLaunchOperation(
+                  operation.getOperationId(),
+                  selectedAccount,
+                  launcherMachineUuid,
+                  world,
+                  leaseHandle,
+                  work);
+            } finally {
+              activeLaunchWork.remove(operation.getOperationId(), work);
+              localLaunchCoordinator.release(leaseHandle);
+            }
+          });
+    } catch (java.util.concurrent.RejectedExecutionException e) {
+      activeLaunchWork.remove(operation.getOperationId(), work);
+      localLaunchCoordinator.release(leaseHandle);
+      launchOperationService.clearActiveAndTransition(
+          operation.getOperationId(), "Launch executor is at capacity. Try again in a moment.");
+      throw new LaunchSubmissionException("Launch executor cannot accept the request right now");
+    }
+    return launchOperationService.toResponse(operation.getOperationId(), false);
+  }
+
+  /**
+   * Returns the current view of a launch operation for the polling endpoint. Throws {@link
+   * IllegalArgumentException} when the operation is unknown or expired.
+   */
+  public Map<String, Object> getLaunchOperation(String operationId) {
+    return launchOperationService.toResponse(operationId, false);
+  }
+
+  private void continueLaunchOperation(
+      String operationId,
+      BuilderGoalAccountCatalogService.AccountDefinition selectedAccount,
+      String launcherMachineUuid,
+      Integer world,
+      BuilderGoalLocalLaunchCoordinatorService.LeaseHandle leaseHandle,
+      ActiveLaunchWork work) {
+    // Check cancellation before touching Micro6
+    if (work.isCancelled()) {
+      handleCancellation(operationId);
+      return;
+    }
+    // Verify the operation is still active and the lease is held before touching Micro6
+    BuilderGoalLaunchOperationService.LaunchOperation operation =
+        launchOperationService.get(operationId).orElse(null);
+    if (operation == null || operation.isTerminal()) {
+      logger.info(
+          "Launch operation {} is no longer active; exiting without launching", operationId);
+      return;
+    }
+    if (!localLaunchCoordinator.holdsLease(leaseHandle)) {
+      logger.warn("Lease expired for launch operation {}; exiting without launching", operationId);
+      return;
+    }
+    try {
+      // Check cancellation before starting Micro6 preparation
+      if (work.isCancelled()) {
+        handleCancellation(operationId);
+        return;
+      }
       Micro6TargetPreparationService.PreparationResult preparationResult =
           targetPreparationService.ensureReady(
               new Micro6TargetPreparationService.PreparationRequest(
                   firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId()),
                   selectedAccount.accountHash(),
-                  selectedAccount.displayName(),
+                  firstNonBlank(selectedAccount.launchProfileName(), selectedAccount.displayName()),
                   selectedAccount.email(),
                   selectedAccount.password(),
                   world,
                   launcherMachineUuid,
-                  null));
-
-      Map<String, Object> response = new LinkedHashMap<>();
-      response.put("accepted", true);
-      response.put("accountId", selectedAccount.accountId());
-      response.put("accountHash", selectedAccount.accountHash());
-      response.put("accountName", selectedAccount.displayName());
-      response.put("launcherMachineUuid", launcherMachineUuid);
-      response.put("world", world);
-      response.put("targetClient", buildTargetMetadata(preparationResult.targetClient()));
-      response.put("targetPreparation", preparationResult.metadata());
-      return response;
+                  null),
+              leaseHandle,
+              work,
+              progress -> launchOperationService.updateProgress(operationId, progress));
+      // Mark READY only if the operation is still active and cancellation has not occurred.
+      if (!work.isCancelled()) {
+        launchOperationService.markReady(
+            operationId, preparationResult.targetClient(), preparationResult.metadata(), false);
+      }
+    } catch (BuilderGoalLaunchCancelledException e) {
+      // Cancellation escaped from Micro6 preparation/relaunch (watchdog, operator Stop, or
+      // unexpected lease loss). If the canceller already terminalized the operation, perform no
+      // transition; otherwise mark the workflow FAILED with a credential-free reason so the
+      // launch never hangs in an active state.
+      handleCancellation(operationId, "Launch cancelled (lease lost or stopped)");
     } catch (Micro6TargetPreparationService.PreparationException e) {
-      throw new IllegalStateException(
-          firstNonBlank(e.getMessage(), "Failed to launch local Micro6 workspace"), e);
+      String launchLogFile = null;
+      String failureKind = null;
+      String failureDetail = null;
+      String attemptId = null;
+      if (e.getCause() instanceof Micro6TargetRelaunchService.RelaunchException relaunchException) {
+        launchLogFile =
+            relaunchException.getLaunchLogFile() != null
+                ? relaunchException.getLaunchLogFile().toString()
+                : null;
+        failureKind = relaunchException.getFailureKind();
+        failureDetail = relaunchException.getFailureDetail();
+        attemptId = relaunchException.getAttemptId();
+      }
+      launchOperationService.markFailed(
+          operationId,
+          firstNonBlank(e.getMessage(), "Failed to launch local Micro6 workspace"),
+          e.getPhase(),
+          launchLogFile);
+      launchOperationService.preserveFailureDetails(
+          operationId, failureKind, failureDetail, attemptId);
+    } catch (Exception e) {
+      launchOperationService.markFailed(
+          operationId,
+          firstNonBlank(e.getMessage(), "Failed to launch local Micro6 workspace"),
+          null,
+          null);
     }
+  }
+
+  private boolean isCancelled(String operationId) {
+    ActiveLaunchWork work = activeLaunchWork.get(operationId);
+    return work != null && work.isCancelled();
+  }
+
+  private void handleCancellation(String operationId) {
+    handleCancellation(operationId, "Launch cancelled by watchdog timeout");
+  }
+
+  private void handleCancellation(String operationId, String reason) {
+    // Only transition if the watchdog hasn't already marked this operation FAILED
+    BuilderGoalLaunchOperationService.LaunchOperation operation =
+        launchOperationService.get(operationId).orElse(null);
+    if (operation == null || operation.isTerminal()) {
+      logger.info(
+          "Launch operation {} already terminal; skipping cancellation transition", operationId);
+      return;
+    }
+    launchOperationService.markFailed(
+        operationId, reason, BuilderGoalLaunchOperationService.STATUS_FAILED, null);
   }
 
   @Transactional(readOnly = true)
@@ -427,6 +664,13 @@ public class BuilderGoalRunnerService {
       Integer world,
       Map<String, Object> provenance) {
     NormalizedPayload normalized = normalizePayload(payload);
+    JsonNode canonicalCatalogTask = resolveCatalogTask(normalized.taskKey());
+    String canonicalTaskKey = canonicalTaskKey(canonicalCatalogTask, normalized.taskKey());
+    if (!canonicalTaskKey.equals(normalized.taskKey())) {
+      normalized =
+          new NormalizedPayload(
+              canonicalTaskKey, normalized.displayName(), normalized.settings(), normalized.world());
+    }
     BuilderGoalAccountCatalogService.AccountDefinition selectedAccount =
         resolveSelectedAccount(accountId);
     if (selectedAccount == null) {
@@ -479,8 +723,10 @@ public class BuilderGoalRunnerService {
     queuePendingLaunch(iteration.getIterationId());
 
     iteration = iterationRepository.findByIterationId(iteration.getIterationId()).orElse(iteration);
+    String iterationId = iteration.getIterationId();
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("run", toRunSummary(iteration));
+    response.put("statusUrl", "/api/debug/builder-goals/runs/" + iterationId);
     response.put(
         "import",
         buildImportResponse(
@@ -517,6 +763,7 @@ public class BuilderGoalRunnerService {
       throw new IllegalArgumentException("taskKey is required");
     }
     JsonNode catalogTask = resolveCatalogTask(taskKey);
+    String canonicalTaskKey = canonicalTaskKey(catalogTask, taskKey);
     String resolvedDisplayName =
         firstNonBlank(
             displayName,
@@ -524,7 +771,7 @@ public class BuilderGoalRunnerService {
             catalogTask != null ? textValue(catalogTask.path("panel_display_name")) : null,
             taskKey);
     Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("task_key", taskKey);
+    payload.put("task_key", canonicalTaskKey);
     payload.put("title", resolvedDisplayName);
     payload.put("settings", settings != null ? settings : Map.of());
     payload.put("source", "catalog_task");
@@ -578,6 +825,7 @@ public class BuilderGoalRunnerService {
     if (taskKey == null || taskKey.isBlank()) {
       throw new IllegalArgumentException("taskKey is required");
     }
+    taskKey = canonicalTaskKey(resolveCatalogTask(taskKey), taskKey);
     BuilderGoalAccountCatalogService.AccountDefinition selectedAccount =
         resolveSelectedAccount(accountId);
     if (selectedAccount == null) {
@@ -603,7 +851,7 @@ public class BuilderGoalRunnerService {
     }
     Optional<Micro6OnlineClientRegistryService.TargetClient> matchingClient =
         targetBaseUrl == null || targetBaseUrl.isBlank()
-            ? findRunnableClientForAccount(selectedAccount)
+            ? findDispatchReadyClientForAccount(selectedAccount, world)
             : Optional.empty();
     String effectiveTargetBaseUrl =
         firstNonBlank(
@@ -788,24 +1036,58 @@ public class BuilderGoalRunnerService {
       return;
     }
 
+    // Acquire the local launch lease before touching Micro6
+    String accountKey = firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId());
+    BuilderGoalLocalLaunchCoordinatorService.AcquireResult acquireResult =
+        localLaunchCoordinator.tryAcquire(
+            launcherMachineUuid, executorPort, accountKey, iterationId);
+    if (acquireResult.conflict() != null) {
+      // Persist WAITING_FOR_LOCAL_LAUNCH_LEASE so scheduled reconciliation retries
+      BuilderGoalLocalLaunchCoordinatorService.Conflict conflict = acquireResult.conflict();
+      updatePreparationState(
+          iteration,
+          taskMetadata,
+          PREPARATION_STATE_WAITING_FOR_LAUNCH_LEASE,
+          "Waiting for the local launch lease; another workflow ("
+              + conflict.workflowType()
+              + ", owner="
+              + conflict.ownerId()
+              + ") currently holds it. This run will retry automatically once the lease is free.");
+      return;
+    }
+    BuilderGoalLocalLaunchCoordinatorService.LeaseHandle leaseHandle = acquireResult.handle();
+    ActiveLaunchWork pendingWork = new ActiveLaunchWork(leaseHandle);
+    pendingWork.attachCurrentThread();
+    activeLaunchWork.put(iterationId, pendingWork);
+
     try {
+      // Check cancellation before starting Micro6 preparation
+      if (pendingWork.isCancelled()) {
+        return;
+      }
       Micro6TargetPreparationService.PreparationResult preparationResult =
           targetPreparationService.ensureReady(
               new Micro6TargetPreparationService.PreparationRequest(
                   firstNonBlank(selectedAccount.accountHash(), selectedAccount.accountId()),
                   selectedAccount.accountHash(),
-                  selectedAccount.displayName(),
+                  firstNonBlank(selectedAccount.launchProfileName(), selectedAccount.displayName()),
                   selectedAccount.email(),
                   selectedAccount.password(),
                   intValue(taskMetadata.get("world")),
                   launcherMachineUuid,
                   null),
+              leaseHandle,
+              pendingWork,
               progress ->
                   updatePreparationProgress(
                       iterationId, selectedAccount, launcherMachineUuid, progress));
 
+      // Check iteration terminal/cancelled state before publishing
       iteration = iterationRepository.findByIterationId(iterationId).orElse(iteration);
       if (iteration.getStatus() != null && iteration.getStatus().isTerminal()) {
+        return;
+      }
+      if (pendingWork.isCancelled()) {
         return;
       }
       taskMetadata = readTaskMetadata(iteration);
@@ -828,6 +1110,23 @@ public class BuilderGoalRunnerService {
             e.getMessage());
         return;
       }
+    } catch (BuilderGoalLaunchCancelledException e) {
+      // Cancellation escaped from Micro6 preparation/relaunch (watchdog, operator Stop, or
+      // unexpected lease loss). If Stop already terminalized the iteration, perform no
+      // transition; otherwise mark the run FAILED with a credential-free reason so the pending
+      // launch never hangs.
+      iteration = iterationRepository.findByIterationId(iterationId).orElse(iteration);
+      if (iteration.getStatus() != null && iteration.getStatus().isTerminal()) {
+        logger.info(
+            "Pending launch {} already terminal after cancellation; leaving it unchanged",
+            iterationId);
+        return;
+      }
+      persistenceService.markIterationFailed(
+          iteration,
+          PatchLoopFailureCode.SCRIPT_START_FAILED,
+          "Micro6 launch was cancelled before the executor became ready",
+          "lease lost or stop requested");
     } catch (Micro6TargetPreparationService.PreparationException e) {
       iteration = iterationRepository.findByIterationId(iterationId).orElse(iteration);
       // A stop request can race with the relaunch worker's final readiness poll. Preserve the
@@ -840,20 +1139,21 @@ public class BuilderGoalRunnerService {
       Throwable cause = e.getCause();
       if (cause instanceof Micro6TargetRelaunchService.RelaunchException relaunchException) {
         Map<String, Object> updates = new LinkedHashMap<>();
-        updates.put("state", Micro6TargetRelaunchService.PHASE_PROCESS_EXITED);
-        updates.put("readiness_phase", Micro6TargetRelaunchService.PHASE_PROCESS_EXITED);
+        updates.put("state", relaunchException.getPhase());
+        updates.put("readiness_phase", relaunchException.getPhase());
         updates.put("readiness_reason", relaunchException.getMessage());
         updates.put(
             "launcher_log_file",
             relaunchException.getLaunchLogFile() != null
-            ? relaunchException.getLaunchLogFile().toString()
-            : null);
+                ? relaunchException.getLaunchLogFile().toString()
+                : null);
         updates.put("effective_gradle_task", relaunchException.getEffectiveGradleTask());
         updates.put("launch_args_preview", relaunchException.getMaskedLaunchArgs());
         updates.put("launch_failure_kind", relaunchException.getFailureKind());
         updates.put("launch_failure_detail", relaunchException.getFailureDetail());
         updates.put(
             "last_observed_readiness_phase", relaunchException.getLastObservedReadinessPhase());
+        updates.put("attempt_id", relaunchException.getAttemptId());
         mergeTargetPreparationMetadata(currentTaskMetadata, updates);
         iteration.setTaskMetadataJson(objectMapper.valueToTree(currentTaskMetadata));
         persistenceService.saveIteration(iteration);
@@ -884,6 +1184,9 @@ public class BuilderGoalRunnerService {
           PatchLoopFailureCode.INTERNAL_ERROR,
           firstNonBlank(e.getMessage(), "Failed to continue local Micro6 launch"),
           stackTrace(e));
+    } finally {
+      activeLaunchWork.remove(iterationId, pendingWork);
+      localLaunchCoordinator.release(leaseHandle);
     }
   }
 
@@ -897,6 +1200,30 @@ public class BuilderGoalRunnerService {
         .filter(this::shouldContinuePendingLaunch)
         .limit(10)
         .forEach(iteration -> queuePendingLaunch(iteration.getIterationId()));
+  }
+
+  /**
+   * Periodically checks for launch operations that have exceeded the active watchdog duration and
+   * transitions them to FAILED.
+   */
+  @Scheduled(fixedDelayString = "${builder-goal.launch.watchdog-check-interval-ms:60000}")
+  public void checkLaunchWatchdog() {
+    java.util.List<String> failedIds = launchOperationService.checkActiveWatchdog();
+    if (failedIds.isEmpty()) {
+      return;
+    }
+    for (String operationId : failedIds) {
+      ActiveLaunchWork work = activeLaunchWork.get(operationId);
+      if (work != null) {
+        logger.warn(
+            "Watchdog: cancelling launch worker for operation {} (account={})",
+            operationId,
+            work.leaseHandle.accountKey());
+        work.cancel();
+        // Do NOT release the lease from the scheduler thread; the worker's finally block
+        // owns that responsibility.
+      }
+    }
   }
 
   private boolean shouldContinuePendingLaunch(PatchLoopIteration iteration) {
@@ -916,10 +1243,17 @@ public class BuilderGoalRunnerService {
     return preparationState == null
         || preparationState.isBlank()
         || PREPARATION_STATE_PREPARING_TARGET.equalsIgnoreCase(preparationState)
+        || PREPARATION_STATE_WAITING_FOR_LAUNCH_LEASE.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_CHECKING_EXISTING.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_REUSING_EXECUTOR.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_STOPPING_EXISTING.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_PREPARING_BUILD.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_BUILDING_MICRO6.equalsIgnoreCase(preparationState)
         || Micro6TargetRelaunchService.PHASE_LAUNCHING_PROCESS.equalsIgnoreCase(preparationState)
         || Micro6TargetRelaunchService.PHASE_WAITING_FOR_PORT.equalsIgnoreCase(preparationState)
         || Micro6TargetRelaunchService.PHASE_WAITING_FOR_HEALTH.equalsIgnoreCase(preparationState)
         || Micro6TargetRelaunchService.PHASE_WAITING_FOR_ACCOUNT.equalsIgnoreCase(preparationState)
+        || Micro6TargetRelaunchService.PHASE_WAITING_FOR_LOGIN.equalsIgnoreCase(preparationState)
         || Micro6TargetRelaunchService.PHASE_WAITING_FOR_DISPATCH.equalsIgnoreCase(
             preparationState);
   }
@@ -961,6 +1295,7 @@ public class BuilderGoalRunnerService {
     updates.put("launcher_log_file", progress.launchLogFile());
     updates.put("launch_failure_kind", progress.launchFailureKind());
     updates.put("launch_failure_detail", progress.launchFailureDetail());
+    updates.put("attempt_id", progress.attemptId());
     updates.put("launch_mode", "local_micro6_project");
     updates.put("launcher_machine_uuid", launcherMachineUuid);
     updates.put(
@@ -1402,6 +1737,35 @@ public class BuilderGoalRunnerService {
       taskKey = iteration.getScriptName();
     }
 
+    // Acquire the local launch lease before any Micro6 mutation (patch or relaunch)
+    String recoveryAccountKey =
+        firstNonBlank(
+            stringValue(readAccountMetadata(taskMetadata).get("account_hash")),
+            stringValue(readAccountMetadata(taskMetadata).get("account_id")));
+    String recoveryMachineUuid =
+        stringValue(readAccountMetadata(taskMetadata).get("launcher_machine_uuid"));
+    if (recoveryAccountKey == null || recoveryMachineUuid == null) {
+      throw new IllegalStateException(
+          "Cannot acquire launch lease for recovery: account or machine metadata is missing");
+    }
+    BuilderGoalLocalLaunchCoordinatorService.AcquireResult recoveryAcquire =
+        localLaunchCoordinator.tryAcquire(
+            recoveryMachineUuid,
+            executorPort,
+            recoveryAccountKey,
+            "recovery:" + iteration.getIterationId());
+    if (recoveryAcquire.conflict() != null) {
+      BuilderGoalLocalLaunchCoordinatorService.Conflict conflict = recoveryAcquire.conflict();
+      throw new IllegalStateException(
+          "Another workflow ("
+              + conflict.workflowType()
+              + ", owner="
+              + conflict.ownerId()
+              + ") currently holds the local launch lease. Retry recovery after that workflow"
+              + " completes or fails.");
+    }
+    BuilderGoalLocalLaunchCoordinatorService.LeaseHandle recoveryLease = recoveryAcquire.handle();
+
     try {
       updateRecoveryState(
           iteration, taskMetadata, RECOVERY_APPLYING_PATCH, "Applying patch to Micro6 task source");
@@ -1423,7 +1787,7 @@ public class BuilderGoalRunnerService {
       Micro6TargetPreparationService.PreparationResult preparationResult =
           targetPreparationService.ensureReady(
               new Micro6TargetPreparationService.PreparationRequest(
-              firstNonBlank(
+                  firstNonBlank(
                       stringValue(accountMetadata.get("account_hash")),
                       stringValue(accountMetadata.get("account_id"))),
                   stringValue(accountMetadata.get("account_hash")),
@@ -1434,7 +1798,10 @@ public class BuilderGoalRunnerService {
                   resolveAccountPassword(accountMetadata),
                   normalized.world(),
                   stringValue(accountMetadata.get("launcher_machine_uuid")),
-                  resolveTargetBaseUrl(taskMetadata)));
+                  resolveTargetBaseUrl(taskMetadata)),
+              recoveryLease,
+              BuilderGoalLaunchCancellation.NONE,
+              null);
 
       updateRecoveryState(
           iteration,
@@ -1551,6 +1918,8 @@ public class BuilderGoalRunnerService {
           RECOVERY_FAILED,
           firstNonBlank(e.getMessage(), "Fix + Relaunch failed"));
       throw e;
+    } finally {
+      localLaunchCoordinator.release(recoveryLease);
     }
   }
 
@@ -1576,6 +1945,12 @@ public class BuilderGoalRunnerService {
 
     if (stopResult.isPrePublish()) {
       // Cancel pre-publish runs transactionally via the mutation service.
+      // Flag and interrupt any active launch worker before removing from tracking.
+      ActiveLaunchWork work = activeLaunchWork.get(iterationId);
+      if (work != null) {
+        work.cancel();
+        // Do NOT release the lease here; the worker's finally block owns that
+      }
       pendingLaunchIterations.remove(iterationId);
       mutationService.cancelPrePublish(iterationId, reason);
     } else {
@@ -1787,8 +2162,16 @@ public class BuilderGoalRunnerService {
       String executorIterationId = null;
       String executorTaskKey = null;
       if (statusResult != null && statusResult.rawResponse() != null) {
-        executorIterationId = textValue(statusResult.rawResponse().path("iteration_id"));
-        executorTaskKey = textValue(statusResult.rawResponse().path("task_key"));
+        // Preserve identity-bearing whitespace. The late-reconcile mutation must reject a
+        // near-match rather than allowing the generic text normalizer to turn it into the
+        // persisted canonical key.
+        executorIterationId = strictTextValue(statusResult.rawResponse().path("iteration_id"));
+        executorTaskKey = strictTextValue(statusResult.rawResponse().path("task_key"));
+        if (executorTaskKey == null) {
+          // Older executor status payloads used queued_task for the same canonical identity.
+          // Preserve its raw value as well; the mutation layer performs the exact comparison.
+          executorTaskKey = strictTextValue(statusResult.rawResponse().path("queued_task"));
+        }
       }
 
       // Apply late reconcile via mutation service (locked, with identity verification).
@@ -2014,9 +2397,9 @@ public class BuilderGoalRunnerService {
 
   private ScriptExecutionService.Micro6ExecutorHealthResult
       refreshTargetPreparationAfterPublishFailure(
-      PatchLoopIteration iteration,
-      Map<String, Object> taskMetadata,
-      ScriptExecutionService.Micro6PublishResult publishResult) {
+          PatchLoopIteration iteration,
+          Map<String, Object> taskMetadata,
+          ScriptExecutionService.Micro6PublishResult publishResult) {
     ScriptExecutionService.Micro6ExecutorHealthResult healthResult =
         scriptExecutionService.getMicro6ExecutorHealth(taskMetadata);
     String reason;
@@ -2096,34 +2479,30 @@ public class BuilderGoalRunnerService {
     String expectedHash =
         firstNonBlank(
             stringValue(accountMetadata.get("account_hash")),
-            stringValue(targetPreparationMetadata.get("resolved_account_hash")),
             stringValue(targetMetadata.get("account_hash")),
             stringValue(targetPreparationMetadata.get("requested_account_hash")),
             stringValue(targetMetadata.get("requested_account_hash")));
     String expectedName =
         firstNonBlank(
             stringValue(accountMetadata.get("account_name")),
-            stringValue(targetPreparationMetadata.get("resolved_account_name")),
             stringValue(targetMetadata.get("account_name")),
             stringValue(targetPreparationMetadata.get("requested_account_name")),
             stringValue(targetMetadata.get("requested_account_name")));
 
-    if (equalsNormalized(expectedHash, healthResult.resolvedAccountHash())
-        || equalsNormalized(expectedHash, healthResult.requestedAccountHash())) {
-      return true;
+    // The actual logged-in hash is authoritative. Requested/compatibility hashes and matching
+    // names never override a present hash mismatch.
+    if (expectedHash != null) {
+      return AccountIdentityContract.matchesHash(expectedHash, healthResult.resolvedAccountHash());
     }
-    if (equalsNormalized(expectedName, healthResult.resolvedAccountName())
-        || equalsNormalized(expectedName, healthResult.requestedAccountName())) {
-      return true;
-    }
-    return expectedHash == null && expectedName == null;
+    return AccountIdentityContract.normalizeName(expectedName) != null
+        && AccountIdentityContract.normalizeName(expectedName)
+            .equals(AccountIdentityContract.normalizeName(healthResult.resolvedAccountName()));
   }
 
   private boolean equalsNormalized(String left, String right) {
-    if (left == null || right == null) {
-      return false;
-    }
-    return left.trim().equalsIgnoreCase(right.trim());
+    return AccountIdentityContract.normalizeHash(left)
+        != null
+        && AccountIdentityContract.matchesHash(left, right);
   }
 
   private void syncPublishedRunSafely(PatchLoopIteration iteration) {
@@ -2176,7 +2555,7 @@ public class BuilderGoalRunnerService {
               result.failureReason(),
               "Task failed. Add your observations, select the relevant evidence, and generate a"
                   + " patch plan."));
-  }
+    }
     if (result.sendExecutorCancel()) {
       scriptExecutionService.stopMicro6PublishedRun(
           readTaskMetadata(freshIteration), entryId, "Executor cancellation from status sync");
@@ -2490,11 +2869,11 @@ public class BuilderGoalRunnerService {
     catalog
         .path("tasks")
         .forEach(
-        node ->
-            tasks.add(
-                normalizeCatalogTaskMap(
-                    objectMapper.convertValue(
-                        node, new TypeReference<LinkedHashMap<String, Object>>() {}))));
+            node ->
+                tasks.add(
+                    normalizeCatalogTaskMap(
+                        objectMapper.convertValue(
+                            node, new TypeReference<LinkedHashMap<String, Object>>() {}))));
     return tasks;
   }
 
@@ -2576,8 +2955,69 @@ public class BuilderGoalRunnerService {
     return new ArrayList<>(byTaskKey.values());
   }
 
+  private String canonicalTaskKey(JsonNode catalogTask, String fallback) {
+    if (catalogTask == null || catalogTask.isNull() || catalogTask.isMissingNode()) {
+      return fallback;
+    }
+    String canonical =
+        firstNonBlank(
+            textValue(catalogTask.path("canonical_task_key")),
+            textValue(catalogTask.path("task_key")),
+            textValue(catalogTask.path("key")));
+    return canonical != null ? canonical : fallback;
+  }
+
   private JsonNode findTaskInCatalog(String taskKey, JsonNode catalog) {
     if (catalog == null || catalog.isNull()) {
+      return null;
+    }
+    JsonNode direct = findDirectTaskInCatalog(taskKey, catalog);
+    if (direct != null) {
+      return direct;
+    }
+
+    String normalizedTarget = normalizeTaskKey(taskKey);
+    JsonNode aliases = catalog.path("aliases");
+    if (aliases.isArray()) {
+      for (JsonNode alias : aliases) {
+        String aliasValue =
+            firstNonBlank(textValue(alias.path("normalized_alias")), textValue(alias.path("alias")));
+        if (aliasValue == null || !normalizeTaskKey(aliasValue).equals(normalizedTarget)) {
+          continue;
+        }
+        String targetKey =
+            firstNonBlank(
+                textValue(alias.path("task_key")),
+                textValue(alias.path("canonical_task_key")),
+                textValue(alias.path("target_task_key")));
+        JsonNode target = findDirectTaskInCatalog(targetKey, catalog);
+        if (target != null) {
+          return target;
+        }
+      }
+    }
+
+    // Some older catalog producers only published aliases on the task row. Resolve those as a
+    // compatibility fallback while still returning the canonical task row.
+    JsonNode tasks = catalog.path("tasks");
+    if (tasks.isArray()) {
+      for (JsonNode task : tasks) {
+        JsonNode searchAliases = task.path("search_aliases");
+        if (!searchAliases.isArray()) {
+          continue;
+        }
+        for (JsonNode alias : searchAliases) {
+          if (normalizeTaskKey(textValue(alias)).equals(normalizedTarget)) {
+            return task;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  private JsonNode findDirectTaskInCatalog(String taskKey, JsonNode catalog) {
+    if (taskKey == null || taskKey.isBlank() || catalog == null || catalog.isNull()) {
       return null;
     }
     JsonNode tasks = catalog.path("tasks");
@@ -2853,9 +3293,6 @@ public class BuilderGoalRunnerService {
 
     JsonNode builderExecution = payload.path("builder_execution");
     JsonNode queuePreview = payload.path("queue_payload_preview");
-    JsonNode builderMetadata = builderExecution.path("task_metadata");
-    JsonNode queueMetadata = queuePreview.path("task_metadata");
-
     String taskKey =
         firstNonBlank(
             textValue(builderExecution.path("task_key")),
@@ -2865,11 +3302,7 @@ public class BuilderGoalRunnerService {
       throw new IllegalArgumentException("Builder payload is missing task_key");
     }
 
-    JsonNode settingsNode =
-        firstNonEmptyObjectNode(builderMetadata, queueMetadata, payload.path("settings"));
-    if (!isNonEmptyObject(settingsNode)) {
-      settingsNode = payload;
-    }
+    JsonNode settingsNode = resolveAuthoritativeSettings(payload, builderExecution, queuePreview);
 
     Map<String, Object> settings =
         objectMapper.convertValue(
@@ -3345,7 +3778,17 @@ public class BuilderGoalRunnerService {
             stringValue(targetMetadata.get("requested_account_hash"))));
     response.put(
         "agentServerBaseUrl", stringValue(targetPreparationMetadata.get("agent_server_base_url")));
-    response.put("launchProfileName", null);
+    response.put(
+        "launchProfileName",
+        firstNonBlank(
+            stringValue(accountMetadata.get("launch_profile_name")),
+            stringValue(targetMetadata.get("launch_profile_name"))));
+    response.put(
+        "accountHashScheme",
+        firstNonBlank(
+            stringValue(accountMetadata.get("account_hash_scheme")),
+            stringValue(targetPreparationMetadata.get("account_hash_scheme")),
+            stringValue(targetMetadata.get("account_hash_scheme"))));
     response.put(
         "launchArgsPreview", stringValue(targetPreparationMetadata.get("launch_args_preview")));
     response.put(
@@ -3364,24 +3807,25 @@ public class BuilderGoalRunnerService {
     response.put(
         "launcherMachineUuid",
         firstNonBlank(
-        stringValue(targetPreparationMetadata.get("launcher_machine_uuid")),
-        stringValue(accountMetadata.get("launcher_machine_uuid"))));
+            stringValue(targetPreparationMetadata.get("launcher_machine_uuid")),
+            stringValue(accountMetadata.get("launcher_machine_uuid"))));
     response.put(
         "launcherMachineName",
         firstNonBlank(
-        stringValue(targetPreparationMetadata.get("launcher_machine_name")),
-        stringValue(accountMetadata.get("launcher_machine_name"))));
+            stringValue(targetPreparationMetadata.get("launcher_machine_name")),
+            stringValue(accountMetadata.get("launcher_machine_name"))));
     response.put(
         "launcherBaseUrl",
         firstNonBlank(
-        stringValue(targetPreparationMetadata.get("launcher_base_url")),
-        stringValue(accountMetadata.get("launcher_base_url"))));
+            stringValue(targetPreparationMetadata.get("launcher_base_url")),
+            stringValue(accountMetadata.get("launcher_base_url"))));
     response.put(
         "launcherCommandId", stringValue(targetPreparationMetadata.get("launcher_command_id")));
     response.put(
         "launcherCommandStatus",
         stringValue(targetPreparationMetadata.get("launcher_command_status")));
     response.put("launchMode", stringValue(targetPreparationMetadata.get("launch_mode")));
+    response.put("attemptId", stringValue(targetPreparationMetadata.get("attempt_id")));
     response.put("launcherPid", longValue(targetPreparationMetadata.get("launcher_pid")));
     response.put("launchLogFile", stringValue(targetPreparationMetadata.get("launcher_log_file")));
     response.put("portOwnerPid", longValue(targetPreparationMetadata.get("port_owner_pid")));
@@ -3392,6 +3836,14 @@ public class BuilderGoalRunnerService {
     response.put("loginState", stringValue(targetPreparationMetadata.get("login_state")));
     response.put("loginAttempt", intValue(targetPreparationMetadata.get("login_attempt")));
     response.put("loginAttemptMax", intValue(targetPreparationMetadata.get("login_attempt_max")));
+    response.put("requestedWorld", intValue(targetPreparationMetadata.get("requested_world")));
+    response.put("currentWorld", intValue(targetPreparationMetadata.get("current_world")));
+    response.put("worldMatched", boolValue(targetPreparationMetadata.get("world_matched")));
+    response.put("pathfinderReady", boolValue(targetPreparationMetadata.get("pathfinder_ready")));
+    response.put(
+        "scriptLifecycleState",
+        stringValue(targetPreparationMetadata.get("script_lifecycle_state")));
+    response.put("scriptLoopAlive", boolValue(targetPreparationMetadata.get("script_loop_alive")));
     response.put(
         "loginTerminalReason",
         stringValueAllowBlank(targetPreparationMetadata.get("login_terminal_reason")));
@@ -3981,16 +4433,177 @@ public class BuilderGoalRunnerService {
     return objectMapper.createObjectNode();
   }
 
+  /**
+   * Extracts only task settings from an imported Builder Goal payload. An explicit settings object
+   * is authoritative even when empty; only a genuinely legacy raw-settings payload is allowed to
+   * use its top-level fields. This prevents transport fields such as task_key, title, world, and
+   * account_id from being persisted or sent to Micro6 as task settings.
+   */
+  private JsonNode resolveAuthoritativeSettings(
+      JsonNode payload, JsonNode builderExecution, JsonNode queuePreview) {
+    JsonNode directSettings = payload.get("settings");
+    if (directSettings != null) {
+      return requireSettingsObject(directSettings, "settings");
+    }
+
+    JsonNode builderMetadata = builderExecution.get("task_metadata");
+    if (builderMetadata != null) {
+      JsonNode nestedSettings = builderMetadata.get("settings");
+      return nestedSettings != null
+          ? requireSettingsObject(nestedSettings, "builder_execution.task_metadata.settings")
+          : stripReservedFields(builderMetadata);
+    }
+
+    JsonNode queueMetadata = queuePreview.get("task_metadata");
+    if (queueMetadata != null) {
+      JsonNode nestedSettings = queueMetadata.get("settings");
+      return nestedSettings != null
+          ? requireSettingsObject(nestedSettings, "queue_payload_preview.task_metadata.settings")
+          : stripReservedFields(queueMetadata);
+    }
+
+    // Legacy raw settings have no settings/envelope field. Remove every known transport field
+    // before treating the remaining top-level object as configuration.
+    return stripReservedFields(payload);
+  }
+
+  /**
+   * Removes every reserved transport field from a legacy settings candidate. The same filter is
+   * applied to legacy nested task metadata and to raw top-level settings so that task identity,
+   * account identity, and node context never leak into persisted task settings.
+   */
+  private JsonNode stripReservedFields(JsonNode candidate) {
+    if (candidate == null || !candidate.isObject()) {
+      return candidate;
+    }
+    com.fasterxml.jackson.databind.node.ObjectNode filtered = objectMapper.createObjectNode();
+    candidate
+        .fields()
+        .forEachRemaining(
+            entry -> {
+              String key = entry.getKey();
+              if (!RESERVED_SETTINGS_TRANSPORT_FIELDS.contains(key)) {
+                filtered.set(key, entry.getValue());
+              }
+            });
+    return filtered;
+  }
+
+  private static final java.util.Set<String> RESERVED_SETTINGS_TRANSPORT_FIELDS =
+      java.util.Set.of(
+          "task_key",
+          "taskKey",
+          "taskName",
+          "title",
+          "name",
+          "display_name",
+          "world",
+          "source",
+          "account_id",
+          "accountId",
+          "account_hash",
+          "accountHash",
+          "account_hash_scheme",
+          "accountHashScheme",
+          "launcher_account_id",
+          "launcherAccountId",
+          "launcher_machine_uuid",
+          "launcherMachineUuid",
+          "launcher_machine_name",
+          "launcherMachineName",
+          "requested_account_hash",
+          "requestedAccountHash",
+          "requested_account_name",
+          "requestedAccountName",
+          "requested_account_id",
+          "requestedAccountId",
+          "requested_launcher_machine_uuid",
+          "requestedLauncherMachineUuid",
+          "requested_launcher_machine_name",
+          "requestedLauncherMachineName",
+          "launch_profile_name",
+          "launchProfileName",
+          "launch_profile",
+          "launchProfile",
+          "launch_extra_args",
+          "launchExtraArgs",
+          "launch_attempt_id",
+          "launchAttemptId",
+          "launcher_base_url",
+          "launcherBaseUrl",
+          "target_client_id",
+          "targetClientId",
+          "target_base_url",
+          "targetBaseUrl",
+          "local_executor_base_url",
+          "localExecutorBaseUrl",
+          "advertised_base_url",
+          "advertisedBaseUrl",
+          "executor_bind_addr",
+          "executorBindAddr",
+          "process_id",
+          "processId",
+          "entry_id",
+          "entryId",
+          "iteration_id",
+          "iterationId",
+          "run_id",
+          "runId",
+          "session_id",
+          "sessionId",
+          "recording_id",
+          "recordingId",
+          "provenance",
+          "target_metadata",
+          // Builder Goal transport/control fields. These are metadata in legacy flat payloads,
+          // never task arguments (an explicitly present settings object bypasses this filter and
+          // remains authoritative, including {}).
+          "settings",
+          "persist_settings",
+          "execution_mode",
+          "executionMode",
+          "client_type",
+          "clientType",
+          "queueable",
+          "enabled",
+          "runnable",
+          "catalog_validation",
+          "catalog_validation_skipped",
+          "catalog_validation_error",
+          "target_preparation",
+          "micro6_target",
+          "micro6_publish",
+          "builder_execution",
+          "queue_payload_preview",
+          "node_context",
+          "task_metadata");
+
+  private JsonNode requireSettingsObject(JsonNode node, String fieldName) {
+    if (node == null || !node.isObject()) {
+      throw new IllegalArgumentException(fieldName + " must be a JSON object");
+    }
+    return node;
+  }
+
   private boolean isNonEmptyObject(JsonNode node) {
     return node != null && node.isObject() && node.fields().hasNext();
   }
 
   private void validateStoredSettingsConsistency(PatchLoopIteration iteration) {
-    if (!hasMissingStoredSettings(iteration)) {
+    if (iteration == null || iteration.getImportedPayloadJson() == null) {
       return;
     }
-    throw new IllegalStateException(
-        "Builder Goal run has imported task settings, but saved launch settings are empty");
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    if (!(taskMetadata.get("settings") instanceof Map<?, ?> persistedSettings)) {
+      throw new IllegalStateException("Builder Goal run is missing persisted task settings");
+    }
+    NormalizedPayload imported = normalizePayload(iteration.getImportedPayloadJson());
+    JsonNode importedSettings = objectMapper.valueToTree(imported.settings());
+    JsonNode storedSettings = objectMapper.valueToTree(persistedSettings);
+    if (!importedSettings.equals(storedSettings)) {
+      throw new IllegalStateException(
+          "Builder Goal run has imported task settings that do not match its persisted launch settings");
+    }
   }
 
   private String firstNonBlank(String... values) {
@@ -4008,6 +4621,15 @@ public class BuilderGoalRunnerService {
     }
     String text = node.asText(null);
     return text == null || text.isBlank() ? null : text.trim();
+  }
+
+  /** Reads an identity field without trimming whitespace that must be validated exactly. */
+  private String strictTextValue(JsonNode node) {
+    if (node == null || node.isMissingNode() || node.isNull()) {
+      return null;
+    }
+    String text = node.asText(null);
+    return text == null || text.isBlank() ? null : text;
   }
 
   private String textValueAllowBlank(JsonNode payload, String fieldName) {
@@ -4070,6 +4692,14 @@ public class BuilderGoalRunnerService {
     }
     if (isBannedStatus(selectedAccount.status())) {
       throw new IllegalStateException("Selected launcher account is banned");
+    }
+    if (AccountIdentityContract.normalizeHash(selectedAccount.accountHash()) == null) {
+      throw new IllegalStateException(
+          "Selected launcher account is missing the canonical game-account hash");
+    }
+    if (!AccountIdentityContract.hasRequiredScheme(selectedAccount.accountHashScheme())) {
+      throw new IllegalStateException(
+          "Selected launcher account is missing the canonical account hash scheme");
     }
   }
 
@@ -4156,6 +4786,7 @@ public class BuilderGoalRunnerService {
     target.put("client_id", targetClient.clientId());
     target.put("account_name", targetClient.accountName());
     target.put("account_hash", targetClient.accountHash());
+    target.put("account_hash_scheme", targetClient.accountHashScheme());
     target.put("advertised_base_url", targetClient.advertisedBaseUrl());
     target.put("executor_bind_addr", targetClient.executorBindAddr());
     target.put("source_client_type", targetClient.sourceClientType());
@@ -4170,8 +4801,27 @@ public class BuilderGoalRunnerService {
     if (account == null) {
       return Optional.empty();
     }
-    return clientRegistryService.findRunnableClientForRecovery(
+    return clientRegistryService.findOnlineClientForRecovery(
         account.accountHash(), account.displayName(), null, Instant.now().minusSeconds(45));
+  }
+
+  /**
+   * Dispatch-ready variant used when selecting the executor that a Builder Goal task should be
+   * published to. Requires the client to be online AND on the requested world with a live
+   * AccountBuilder loop; a wrong-world or stopped-script client is never selected.
+   */
+  private Optional<Micro6OnlineClientRegistryService.TargetClient>
+      findDispatchReadyClientForAccount(
+          BuilderGoalAccountCatalogService.AccountDefinition account, Integer expectedWorld) {
+    if (account == null) {
+      return Optional.empty();
+    }
+    return clientRegistryService.findDispatchReadyClientForRecovery(
+        account.accountHash(),
+        account.displayName(),
+        null,
+        Instant.now().minusSeconds(45),
+        expectedWorld);
   }
 
   private Map<String, Object> buildRequestedTargetMetadataFromAccount(
@@ -4180,7 +4830,10 @@ public class BuilderGoalRunnerService {
     Map<String, Object> target = new LinkedHashMap<>();
     target.put("requested_account_id", account.accountId());
     target.put("requested_account_hash", account.accountHash());
-    target.put("requested_account_name", account.displayName());
+    target.put(
+        "requested_account_name",
+        firstNonBlank(account.accountName(), account.displayName()));
+    target.put("account_hash_scheme", AccountIdentityContract.HASH_SCHEME);
     if (machine != null) {
       target.put("requested_launcher_machine_uuid", machine.machineUuid());
       target.put("requested_launcher_machine_name", machine.displayName());
@@ -4207,7 +4860,12 @@ public class BuilderGoalRunnerService {
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("account_id", account.accountId());
     metadata.put("account_hash", account.accountHash());
-    metadata.put("account_name", account.displayName());
+    metadata.put(
+        "account_hash_scheme",
+        account.accountHashScheme());
+    metadata.put("account_name", firstNonBlank(account.accountName(), account.displayName()));
+    metadata.put("launch_profile_name", account.launchProfileName());
+    metadata.put("launcher_account_id", account.accountId());
     metadata.put("display_name", account.displayName());
     metadata.put("email", account.email());
     metadata.put("has_password", account.hasPassword());
@@ -4636,10 +5294,15 @@ public class BuilderGoalRunnerService {
 
   private String mapPublishStatus(String micro6Status) {
     if (micro6Status == null || micro6Status.isBlank()) {
-      return "PUBLISHED";
+      return "RECONCILING";
     }
-    if ("QUEUED".equalsIgnoreCase(micro6Status) || "ACCEPTED".equalsIgnoreCase(micro6Status)) {
+    if ("QUEUED".equalsIgnoreCase(micro6Status)) {
       return "QUEUED";
+    }
+    if ("ACCEPTED".equalsIgnoreCase(micro6Status)
+        || "RECEIVED".equalsIgnoreCase(micro6Status)
+        || "PENDING".equalsIgnoreCase(micro6Status)) {
+      return "ACCEPTED";
     }
     if ("ASSIGNED".equalsIgnoreCase(micro6Status)) {
       return "ASSIGNED";
@@ -4653,13 +5316,16 @@ public class BuilderGoalRunnerService {
     if ("COMPLETED".equalsIgnoreCase(micro6Status)) {
       return "COMPLETED";
     }
-    if ("RUNNING".equalsIgnoreCase(micro6Status) || "PAUSED".equalsIgnoreCase(micro6Status)) {
+    if ("RUNNING".equalsIgnoreCase(micro6Status)) {
       return "RUNNING";
     }
-    if ("PENDING".equalsIgnoreCase(micro6Status) || "RECEIVED".equalsIgnoreCase(micro6Status)) {
-      return "RECONCILING";
+    if ("PAUSED".equalsIgnoreCase(micro6Status)) {
+      // PAUSED is an activated-but-suspended state and must not collapse into RUNNING: the summary
+      // and UI label it "Task paused" while resume/stop remain available.
+      return "PAUSED";
     }
-    return "PUBLISHED";
+    // Unknown executor states are ambiguous, never confirmation of publication.
+    return "RECONCILING";
   }
 
   private String deriveDisplayStatus(PatchLoopIteration iteration, String publishStatus) {
@@ -4685,6 +5351,10 @@ public class BuilderGoalRunnerService {
         && iteration.getStatus() != null
         && !iteration.getStatus().isTerminal()) {
       return "STOPPING";
+    }
+    if ("PAUSED".equalsIgnoreCase(publishStatus)) {
+      // PAUSED is activated but suspended: preserve the public state and active controls.
+      return "PAUSED";
     }
     if ("RECONCILING".equalsIgnoreCase(publishStatus)) {
       // Ambiguous execute outcome: display a waiting state, never "Publish failed".
@@ -4758,6 +5428,21 @@ public class BuilderGoalRunnerService {
     return builder.toString();
   }
 
+  /** Derives the local Micro6 executor port from the configured executor base URL. */
+  private static int resolveExecutorPort(String micro6ExecutorBaseUrl) {
+    if (micro6ExecutorBaseUrl != null && !micro6ExecutorBaseUrl.isBlank()) {
+      try {
+        java.net.URI uri = java.net.URI.create(micro6ExecutorBaseUrl.trim());
+        if (uri.getPort() > 0) {
+          return uri.getPort();
+        }
+      } catch (Exception ignored) {
+        // fall through to the default port
+      }
+    }
+    return 8098;
+  }
+
   private static final class PublishDeferredException extends IllegalStateException {
     private final String phase;
 
@@ -4826,6 +5511,16 @@ public class BuilderGoalRunnerService {
     private static CatalogValidationResult reject(
         String status, String errorMessage, JsonNode catalogTask) {
       return new CatalogValidationResult(status, false, true, errorMessage, catalogTask);
+    }
+  }
+
+  /**
+   * Thrown when the launch executor rejects a submission (capacity reached). Controllers map this
+   * to HTTP 503.
+   */
+  public static class LaunchSubmissionException extends RuntimeException {
+    public LaunchSubmissionException(String message) {
+      super(message);
     }
   }
 }

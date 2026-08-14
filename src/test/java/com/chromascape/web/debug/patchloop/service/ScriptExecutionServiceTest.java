@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,17 +53,41 @@ class ScriptExecutionServiceTest {
             0L); // Zero timeout-recovery probe window keeps ambiguous-timeout tests fast.
   }
 
+  private String acceptedBody(int entryId, String taskKey) {
+    return "{\"success\":true,\"status\":\"ACCEPTED\",\"activation_state\":\"RECEIVED\","
+        + "\"entry_id\":"
+        + entryId
+        + ",\"task_key\":\""
+        + taskKey
+        + "\",\"queued_task\":\""
+        + taskKey
+        + "\"}";
+  }
+
+  private ScriptExecutionService serviceWithProbeWindow(long probeMs) {
+    return new ScriptExecutionService(
+        stateHandler,
+        taskDetectionService,
+        new ObjectMapper(),
+        "micro6_local_executor",
+        "http://127.0.0.1:8098",
+        httpClient,
+        probeMs);
+  }
+
   @Test
   @DisplayName("Micro6 backend returns COMPLETED terminal status")
   @SuppressWarnings("unchecked")
   void runScriptAndWait_micro6Completed() throws Exception {
     when(executeResponse.statusCode()).thenReturn(200);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "MyScript"));
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body()).thenReturn("{\"status\":\"COMPLETED\"}");
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(executeResponse, statusResponse);
 
-    ScriptExecutionService.ScriptExecutionResult result = service.runScriptAndWait("MyScript", 1000);
+    ScriptExecutionService.ScriptExecutionResult result =
+        service.runScriptAndWait("MyScript", 1000);
 
     assertThat(result.success()).isTrue();
     assertThat(result.backend()).isEqualTo("micro6_local_executor");
@@ -76,12 +101,14 @@ class ScriptExecutionServiceTest {
   @SuppressWarnings("unchecked")
   void runScriptAndWait_micro6Failed() throws Exception {
     when(executeResponse.statusCode()).thenReturn(200);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "MyScript"));
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body()).thenReturn("{\"status\":\"FAILED\",\"error_message\":\"boom\"}");
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(executeResponse, statusResponse);
 
-    ScriptExecutionService.ScriptExecutionResult result = service.runScriptAndWait("MyScript", 1000);
+    ScriptExecutionService.ScriptExecutionResult result =
+        service.runScriptAndWait("MyScript", 1000);
 
     assertThat(result.success()).isFalse();
     assertThat(result.backend()).isEqualTo("micro6_local_executor");
@@ -95,6 +122,7 @@ class ScriptExecutionServiceTest {
   @SuppressWarnings("unchecked")
   void runScriptAndWait_micro6Timeout() throws Exception {
     when(executeResponse.statusCode()).thenReturn(200);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "MyScript"));
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body()).thenReturn("{\"status\":\"RUNNING\"}");
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
@@ -118,7 +146,8 @@ class ScriptExecutionServiceTest {
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(executeResponse);
 
-    ScriptExecutionService.ScriptExecutionResult result = service.runScriptAndWait("MyScript", 1000);
+    ScriptExecutionService.ScriptExecutionResult result =
+        service.runScriptAndWait("MyScript", 1000);
 
     assertThat(result.success()).isFalse();
     assertThat(result.backend()).isEqualTo("micro6_local_executor");
@@ -131,6 +160,7 @@ class ScriptExecutionServiceTest {
   @SuppressWarnings("unchecked")
   void runScriptAndWait_micro6UsesTargetBaseUrl() throws Exception {
     when(executeResponse.statusCode()).thenReturn(200);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "configurable_woodcutting"));
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body()).thenReturn("{\"status\":\"COMPLETED\"}");
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
@@ -144,7 +174,8 @@ class ScriptExecutionServiceTest {
             Map.of("advertised_base_url", "http://192.168.1.77:8098"));
 
     ScriptExecutionService.ScriptExecutionResult result =
-        service.runScriptAndWait("execution-1", "micro6:configurable_woodcutting", 1000, taskMetadata);
+        service.runScriptAndWait(
+            "execution-1", "micro6:configurable_woodcutting", 1000, taskMetadata);
 
     ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
     verify(httpClient, org.mockito.Mockito.times(2))
@@ -162,18 +193,71 @@ class ScriptExecutionServiceTest {
   @SuppressWarnings("unchecked")
   void publishMicro6Task_returnsPublishedResult() throws Exception {
     when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "configurable_woodcutting"));
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(executeResponse);
 
     ScriptExecutionService.Micro6PublishResult result =
         service.publishMicro6Task(
-            "micro6:configurable_woodcutting",
-            Map.of("task_key", "configurable_woodcutting"));
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
 
     assertThat(result.published()).isTrue();
-    assertThat(result.publishStatus()).isEqualTo("PUBLISHED");
+    // HTTP acceptance is mapped to ACCEPTED, not PUBLISHED; "task started" only appears on RUNNING.
+    assertThat(result.publishStatus()).isEqualTo("ACCEPTED");
+    assertThat(result.executorStatus()).isEqualTo("ACCEPTED");
     assertThat(result.entryId()).isNotNull();
     assertThat(result.errorMessage()).isNull();
+  }
+
+  @Test
+  @DisplayName("Micro6 execute HTTP 200 with a malformed body is not marked published")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_malformedBodyIsNotPublished() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn("this is not json");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("RECONCILING");
+  }
+
+  @Test
+  @DisplayName("Micro6 execute with a mismatched entry id fails closed")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_mismatchedEntryIdFailsClosed() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(acceptedBody(999, "configurable_woodcutting"));
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("RECONCILING");
+  }
+
+  @Test
+  @DisplayName("Micro6 execute with a mismatched task identity fails closed")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_mismatchedTaskIdentityFailsClosed() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "some_other_task"));
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("RECONCILING");
   }
 
   @Test
@@ -181,6 +265,7 @@ class ScriptExecutionServiceTest {
   @SuppressWarnings("unchecked")
   void publishMicro6Task_separatesCommandProvenanceFromClickTelemetry() throws Exception {
     when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "configurable_woodcutting"));
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(executeResponse);
 
@@ -206,7 +291,8 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
-  @DisplayName("Micro6 publish returns RECONCILING when execute times out twice and no acceptance is confirmed")
+  @DisplayName(
+      "Micro6 publish returns RECONCILING when execute times out twice and no acceptance is confirmed")
   @SuppressWarnings("unchecked")
   void publishMicro6Task_returnsReconcilingAfterAmbiguousTimeout() throws Exception {
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
@@ -214,8 +300,7 @@ class ScriptExecutionServiceTest {
 
     ScriptExecutionService.Micro6PublishResult result =
         service.publishMicro6Task(
-            "micro6:configurable_woodcutting",
-            Map.of("task_key", "configurable_woodcutting"));
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
 
     assertThat(result.published()).isFalse();
     assertThat(result.publishStatus()).isEqualTo("RECONCILING");
@@ -240,27 +325,251 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
-  @DisplayName("Micro6 publish recovers from execute timeout by attaching to already queued run")
+  @DisplayName("Micro6 publish attaches to a verified already-queued run after a 409 conflict")
   @SuppressWarnings("unchecked")
-  void publishMicro6Task_recoversTimedOutExecuteByAttachingToExistingRun() throws Exception {
+  void publishMicro6Task_attachesToVerifiedAlreadyQueuedRun() throws Exception {
     HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
     when(conflictResponse.statusCode()).thenReturn(409);
     when(conflictResponse.body())
-        .thenReturn("{\"error_message\":\"task_already_queued\",\"existing_entry_id\":1337}");
+        .thenReturn(
+            "{\"error_code\":\"CONFLICT\",\"existing_entry_id\":1337,"
+                + "\"task_key\":\"configurable_woodcutting\",\"existing_status\":\"RUNNING\"}");
+    HttpResponse<String> statusProbe = org.mockito.Mockito.mock(HttpResponse.class);
+    when(statusProbe.statusCode()).thenReturn(200);
+    when(statusProbe.body())
+        .thenReturn(
+            "{\"status\":\"RUNNING\",\"entry_id\":1337,\"task_key\":\"configurable_woodcutting\"}");
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-        .thenThrow(new HttpTimeoutException("request timed out"))
+        .thenReturn(conflictResponse)
+        .thenReturn(statusProbe);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        serviceWithProbeWindow(5000).publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isTrue();
+    assertThat(result.publishStatus()).isEqualTo("RUNNING");
+    assertThat(result.entryId()).isEqualTo(1337);
+    assertThat(result.attachedToExisting()).isTrue();
+    assertThat(result.errorMessage()).isNull();
+  }
+
+  @Test
+  @DisplayName("Micro6 conflict with mismatched task_key fails closed as DUPLICATE_OR_CONFLICTING_DISPATCH")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_conflictTaskKeyMismatchRejectsAttachment() throws Exception {
+    HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
+    when(conflictResponse.statusCode()).thenReturn(409);
+    when(conflictResponse.body())
+        .thenReturn(
+            "{\"error_code\":\"CONFLICT\",\"existing_entry_id\":1337,"
+                + "\"task_key\":\"mining_training\",\"existing_status\":\"RUNNING\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(conflictResponse);
 
     ScriptExecutionService.Micro6PublishResult result =
         service.publishMicro6Task(
-            "micro6:configurable_woodcutting",
-            Map.of("task_key", "configurable_woodcutting"));
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("DUPLICATE_OR_CONFLICTING_DISPATCH");
+    assertThat(result.attachedToExisting()).isFalse();
+    assertThat(result.errorMessage()).contains("different task");
+  }
+
+  @Test
+  @DisplayName("Micro6 conflict missing identity fields fails closed (never attaches on entry id alone)")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_conflictMissingIdentityFieldsFailsClosed() throws Exception {
+    HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
+    when(conflictResponse.statusCode()).thenReturn(409);
+    when(conflictResponse.body())
+        .thenReturn("{\"error_code\":\"CONFLICT\",\"existing_entry_id\":1337}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(conflictResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("PUBLISH_FAILED");
+    assertThat(result.errorMessage()).contains("rejected task");
+  }
+
+  @Test
+  @DisplayName("Micro6 conflict with invalid existing_entry_id fails closed")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_conflictInvalidEntryIdFailsClosed() throws Exception {
+    HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
+    when(conflictResponse.statusCode()).thenReturn(409);
+    when(conflictResponse.body())
+        .thenReturn(
+            "{\"error_code\":\"CONFLICT\",\"existing_entry_id\":0,"
+                + "\"task_key\":\"configurable_woodcutting\",\"existing_status\":\"RUNNING\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(conflictResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("PUBLISH_FAILED");
+  }
+
+  @Test
+  @DisplayName("Micro6 conflict whose polled entry id mismatches fails closed as conflicting dispatch")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_conflictPolledEntryIdMismatchRejectsAttachment() throws Exception {
+    HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
+    when(conflictResponse.statusCode()).thenReturn(409);
+    when(conflictResponse.body())
+        .thenReturn(
+            "{\"error_code\":\"CONFLICT\",\"existing_entry_id\":1337,"
+                + "\"task_key\":\"configurable_woodcutting\",\"existing_status\":\"RUNNING\"}");
+    HttpResponse<String> statusProbe = org.mockito.Mockito.mock(HttpResponse.class);
+    when(statusProbe.statusCode()).thenReturn(200);
+    when(statusProbe.body())
+        .thenReturn(
+            "{\"status\":\"RUNNING\",\"entry_id\":9999,\"task_key\":\"configurable_woodcutting\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(conflictResponse)
+        .thenReturn(statusProbe);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        serviceWithProbeWindow(5000).publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("DUPLICATE_OR_CONFLICTING_DISPATCH");
+    assertThat(result.errorMessage()).contains("mismatched entry id");
+  }
+
+  @Test
+  @DisplayName("Micro6 conflict whose polled task identity mismatches rejects attachment")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_conflictPolledTaskMismatchRejectsAttachment() throws Exception {
+    HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
+    when(conflictResponse.statusCode()).thenReturn(409);
+    when(conflictResponse.body())
+        .thenReturn(
+            "{\"error_code\":\"CONFLICT\",\"existing_entry_id\":1337,"
+                + "\"task_key\":\"configurable_woodcutting\",\"existing_status\":\"RUNNING\"}");
+    HttpResponse<String> statusProbe = org.mockito.Mockito.mock(HttpResponse.class);
+    when(statusProbe.statusCode()).thenReturn(200);
+    when(statusProbe.body())
+        .thenReturn(
+            "{\"status\":\"RUNNING\",\"entry_id\":1337,\"task_key\":\"mining_training\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(conflictResponse)
+        .thenReturn(statusProbe);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        serviceWithProbeWindow(5000).publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("DUPLICATE_OR_CONFLICTING_DISPATCH");
+    assertThat(result.errorMessage()).contains("mismatched task identity");
+  }
+
+  @Test
+  @DisplayName("Micro6 conflict whose polled status is not attachable rejects attachment")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_conflictUnattachableStatusRejectsAttachment() throws Exception {
+    HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
+    when(conflictResponse.statusCode()).thenReturn(409);
+    when(conflictResponse.body())
+        .thenReturn(
+            "{\"error_code\":\"CONFLICT\",\"existing_entry_id\":1337,"
+                + "\"task_key\":\"configurable_woodcutting\",\"existing_status\":\"COMPLETED\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(conflictResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        serviceWithProbeWindow(5000).publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("DUPLICATE_OR_CONFLICTING_DISPATCH");
+    assertThat(result.errorMessage()).contains("not in an attachable status");
+  }
+
+  @Test
+  @DisplayName("Micro6 conflict with unknown snapshot status never attaches on a later runnable poll")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_conflictUnknownSnapshotStatusRejectsAttachment() throws Exception {
+    HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
+    when(conflictResponse.statusCode()).thenReturn(409);
+    when(conflictResponse.body())
+        .thenReturn(
+            "{\"error_code\":\"CONFLICT\",\"existing_entry_id\":1337,"
+                + "\"task_key\":\"configurable_woodcutting\",\"existing_status\":\"UNKNOWN\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(conflictResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("DUPLICATE_OR_CONFLICTING_DISPATCH");
+    assertThat(result.errorMessage()).contains("not in an attachable status");
+  }
+
+  @Test
+  @DisplayName("Micro6 conflict whose poll never confirms identity enters RECONCILING")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_conflictAmbiguousPollEntersReconciling() throws Exception {
+    HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
+    when(conflictResponse.statusCode()).thenReturn(409);
+    when(conflictResponse.body())
+        .thenReturn(
+            "{\"error_code\":\"CONFLICT\",\"existing_entry_id\":1337,"
+                + "\"task_key\":\"configurable_woodcutting\",\"existing_status\":\"RUNNING\"}");
+    HttpResponse<String> notFoundProbe = org.mockito.Mockito.mock(HttpResponse.class);
+    when(notFoundProbe.statusCode()).thenReturn(404);
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(conflictResponse)
+        .thenReturn(notFoundProbe);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        serviceWithProbeWindow(100).publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("RECONCILING");
+    assertThat(result.entryId()).isEqualTo(1337);
+  }
+
+  @Test
+  @DisplayName("Micro6 conflict on a PAUSED existing entry is attachable")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_conflictPausedEntryAttaches() throws Exception {
+    HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
+    when(conflictResponse.statusCode()).thenReturn(409);
+    when(conflictResponse.body())
+        .thenReturn(
+            "{\"error_code\":\"CONFLICT\",\"existing_entry_id\":1337,"
+                + "\"task_key\":\"configurable_woodcutting\",\"existing_status\":\"PAUSED\"}");
+    HttpResponse<String> statusProbe = org.mockito.Mockito.mock(HttpResponse.class);
+    when(statusProbe.statusCode()).thenReturn(200);
+    when(statusProbe.body())
+        .thenReturn(
+            "{\"status\":\"PAUSED\",\"entry_id\":1337,\"task_key\":\"configurable_woodcutting\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(conflictResponse)
+        .thenReturn(statusProbe);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        serviceWithProbeWindow(5000).publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
 
     assertThat(result.published()).isTrue();
-    assertThat(result.publishStatus()).isEqualTo("PUBLISHED");
+    assertThat(result.publishStatus()).isEqualTo("PAUSED");
     assertThat(result.entryId()).isEqualTo(1337);
     assertThat(result.attachedToExisting()).isTrue();
-    assertThat(result.errorMessage()).isNull();
   }
 
   @Test
@@ -274,9 +583,7 @@ class ScriptExecutionServiceTest {
 
     ScriptExecutionService.Micro6RunStatusResult result =
         service.getMicro6RunStatus(
-            Map.of(
-                "micro6_target",
-                Map.of("advertised_base_url", "http://192.168.1.55:8098")),
+            Map.of("micro6_target", Map.of("advertised_base_url", "http://192.168.1.55:8098")),
             1337);
 
     ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
@@ -289,7 +596,8 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
-  @DisplayName("Micro6 executor health reports publish-ready when logged in and AccountBuilder is ready")
+  @DisplayName(
+      "Micro6 executor health reports publish-ready when logged in and AccountBuilder is ready")
   @SuppressWarnings("unchecked")
   void getMicro6ExecutorHealth_reportsPublishReady() throws Exception {
     when(statusResponse.statusCode()).thenReturn(200);
@@ -301,7 +609,13 @@ class ScriptExecutionServiceTest {
               "account_hash": "hash-1",
               "dispatch_hold": false,
               "startup_state": "accountbuilder_ready",
-              "login_state": "logged_in"
+              "login_state": "logged_in",
+              "requested_world": 360,
+              "current_world": 360,
+              "world_matched": true,
+              "pathfinder_ready": true,
+              "script_lifecycle_state": "RUNNING",
+              "script_loop_alive": true
             }
             """);
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
@@ -309,7 +623,11 @@ class ScriptExecutionServiceTest {
 
     ScriptExecutionService.Micro6ExecutorHealthResult result =
         service.getMicro6ExecutorHealth(
-            Map.of("micro6_target", Map.of("advertised_base_url", "http://192.168.1.77:8098")));
+            Map.of(
+                "world",
+                360,
+                "micro6_target",
+                Map.of("advertised_base_url", "http://192.168.1.77:8098")));
 
     assertThat(result.reachable()).isTrue();
     assertThat(result.publishReady()).isTrue();
@@ -319,7 +637,8 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
-  @DisplayName("Micro6 executor health reports concrete dispatch reason when logged in but startup is incomplete")
+  @DisplayName(
+      "Micro6 executor health reports concrete dispatch reason when logged in but startup is incomplete")
   @SuppressWarnings("unchecked")
   void getMicro6ExecutorHealth_reportsDispatchReason() throws Exception {
     when(statusResponse.statusCode()).thenReturn(200);
@@ -331,7 +650,13 @@ class ScriptExecutionServiceTest {
               "account_hash": "hash-1",
               "dispatch_hold": false,
               "startup_state": "initializing_bot_logic",
-              "login_state": "logged_in"
+              "login_state": "logged_in",
+              "requested_world": 360,
+              "current_world": 360,
+              "world_matched": true,
+              "pathfinder_ready": true,
+              "script_lifecycle_state": "RUNNING",
+              "script_loop_alive": true
             }
             """);
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
@@ -339,12 +664,220 @@ class ScriptExecutionServiceTest {
 
     ScriptExecutionService.Micro6ExecutorHealthResult result =
         service.getMicro6ExecutorHealth(
-            Map.of("micro6_target", Map.of("advertised_base_url", "http://192.168.1.77:8098")));
+            Map.of(
+                "world",
+                360,
+                "micro6_target",
+                Map.of("advertised_base_url", "http://192.168.1.77:8098")));
 
     assertThat(result.reachable()).isTrue();
     assertThat(result.publishReady()).isFalse();
     assertThat(result.readinessPhase()).isEqualTo("WAITING_FOR_DISPATCH");
     assertThat(result.readinessReason()).contains("still initializing");
+  }
+
+  @Test
+  @DisplayName("Micro6 health uses account name only when no expected hash is supplied")
+  @SuppressWarnings("unchecked")
+  void getMicro6ExecutorHealth_nameFallbackRequiresExactSelectedName() throws Exception {
+    when(statusResponse.statusCode()).thenReturn(200);
+    when(statusResponse.body())
+        .thenReturn(
+            """
+            {
+              "account_name": "FallbackName",
+              "dispatch_hold": false,
+              "startup_state": "accountbuilder_ready",
+              "login_state": "logged_in",
+              "current_world": 360,
+              "pathfinder_ready": true,
+              "script_lifecycle_state": "RUNNING",
+              "script_loop_alive": true
+            }
+            """);
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(statusResponse);
+
+    ScriptExecutionService.Micro6ExecutorHealthResult matching =
+        service.getMicro6ExecutorHealth(
+            Map.of(
+                "world", 360,
+                "micro6_target", Map.of("advertised_base_url", "http://192.168.1.77:8098", "account_name", "fallbackname")));
+
+    assertThat(matching.publishReady()).isTrue();
+
+    when(statusResponse.body())
+        .thenReturn(
+            """
+            {
+              "account_name": "DifferentName",
+              "dispatch_hold": false,
+              "startup_state": "accountbuilder_ready",
+              "login_state": "logged_in",
+              "current_world": 360,
+              "pathfinder_ready": true,
+              "script_lifecycle_state": "RUNNING",
+              "script_loop_alive": true
+            }
+            """);
+
+    ScriptExecutionService.Micro6ExecutorHealthResult mismatching =
+        service.getMicro6ExecutorHealth(
+            Map.of(
+                "world", 360,
+                "micro6_target", Map.of("advertised_base_url", "http://192.168.1.77:8098", "account_name", "fallbackname")));
+
+    assertThat(mismatching.publishReady()).isFalse();
+    assertThat(mismatching.readinessPhase()).isEqualTo("WAITING_FOR_ACCOUNT");
+  }
+
+  @Test
+  @DisplayName(
+      "Micro6 execute task identity rejects a prefix collision (FISHING vs FISHING_TRAINING)")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_prefixCollisionDoesNotMatch() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "FISHING"));
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:FISHING_TRAINING", Map.of("task_key", "FISHING_TRAINING"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("RECONCILING");
+  }
+
+  @Test
+  @DisplayName(
+      "Micro6 execute task identity rejects a suffix collision (FISHING_TRAINING vs FISHING)")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_suffixCollisionDoesNotMatch() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "FISHING_TRAINING"));
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task("micro6:FISHING", Map.of("task_key", "FISHING"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("RECONCILING");
+  }
+
+  @Test
+  @DisplayName("Micro6 execute task identity rejects a case-only mismatch")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_caseOnlyMismatchDoesNotMatch() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "fishing_training"));
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:FISHING_TRAINING", Map.of("task_key", "FISHING_TRAINING"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("RECONCILING");
+  }
+
+  @Test
+  @DisplayName("Micro6 execute task identity rejects a whitespace mismatch")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_whitespaceMismatchDoesNotMatch() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "FISHING_TRAINING "));
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:FISHING_TRAINING", Map.of("task_key", "FISHING_TRAINING"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("RECONCILING");
+  }
+
+  @Test
+  @DisplayName("Micro6 execute task identity accepts an exact normalized task_key match")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_exactNormalizedTaskKeyMatches() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "FISHING_TRAINING"));
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:FISHING_TRAINING", Map.of("task_key", "FISHING_TRAINING"));
+
+    assertThat(result.published()).isTrue();
+    assertThat(result.publishStatus()).isEqualTo("ACCEPTED");
+  }
+
+  @Test
+  @DisplayName(
+      "Micro6 execute accepts a display name that resolves to the canonical task key via the catalog")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_displayNameResolvesToCanonicalTaskKey() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    // The executor returns a display name whose normalization differs from the task key.
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "Woodcutting"));
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService serviceWithResolver =
+        new ScriptExecutionService(
+            stateHandler,
+            taskDetectionService,
+            new ObjectMapper(),
+            "micro6_local_executor",
+            "http://127.0.0.1:8098",
+            httpClient,
+            0L,
+            (Function<String, String>)
+                candidate ->
+                    "configurable_woodcutting".equals(candidate) || "Woodcutting".equals(candidate)
+                        ? "configurable_woodcutting"
+                        : null);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        serviceWithResolver.publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isTrue();
+    assertThat(result.publishStatus()).isEqualTo("ACCEPTED");
+  }
+
+  @Test
+  @DisplayName(
+      "Micro6 execute rejects a display name that does not resolve through the catalog resolver")
+  @SuppressWarnings("unchecked")
+  void publishMicro6Task_unresolvableDisplayNameDoesNotMatch() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "Woodcutting"));
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService serviceWithNullResolver =
+        new ScriptExecutionService(
+            stateHandler,
+            taskDetectionService,
+            new ObjectMapper(),
+            "micro6_local_executor",
+            "http://127.0.0.1:8098",
+            httpClient,
+            0L,
+            (Function<String, String>) candidate -> null);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        serviceWithNullResolver.publishMicro6Task(
+            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+
+    assertThat(result.published()).isFalse();
+    assertThat(result.publishStatus()).isEqualTo("RECONCILING");
   }
 
   private String bodyOf(HttpRequest request) throws Exception {

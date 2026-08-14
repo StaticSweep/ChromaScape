@@ -1,0 +1,11 @@
+package com.chromascape.web.aiplayer.contract;
+
+public enum CurrentSliceFailureCode {
+  IDENTITY_GROUP_MISSING,
+  IDENTITY_FIELD_MISSING,
+  IDENTITY_MISMATCH,
+  HASH_FORMAT_INVALID,
+  HASH_MISMATCH,
+  CLIENT_CAPABILITY_INVALID,
+  CONTROL_FORBIDDEN
+}

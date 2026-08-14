@@ -44,9 +44,11 @@ class TaskPlanExecutionServiceTest {
     TaskPlan plan = plan(TaskPlanStatus.APPROVED);
 
     when(itemRepository.findByItemId(ITEM_ID)).thenReturn(Optional.of(item));
-    when(itemRepository.save(any(TaskPlanItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(itemRepository.save(any(TaskPlanItem.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
     when(planRepository.findByPlanId(PLAN_ID)).thenReturn(Optional.of(plan));
-    when(planRepository.save(any(TaskPlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(planRepository.save(any(TaskPlan.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     TaskPlanItem result = service.markItemExecuting(ITEM_ID, ITERATION_ID);
 
@@ -57,18 +59,21 @@ class TaskPlanExecutionServiceTest {
   }
 
   @Test
-  @DisplayName("markItemCompleted marks item terminal and completes plan when all items are completed")
+  @DisplayName(
+      "markItemCompleted marks item terminal and completes plan when all items are completed")
   void markItemCompleted_marksItemAndCompletesPlan() {
     TaskPlanItem item = item(TaskPlanItem.ItemStatus.EXECUTING);
     TaskPlanItem sibling = sibling(TaskPlanItem.ItemStatus.COMPLETED);
     TaskPlan plan = plan(TaskPlanStatus.EXECUTING);
 
     when(itemRepository.findByItemId(ITEM_ID)).thenReturn(Optional.of(item));
-    when(itemRepository.save(any(TaskPlanItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(itemRepository.save(any(TaskPlanItem.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
     when(planRepository.findByPlanId(PLAN_ID)).thenReturn(Optional.of(plan));
     when(itemRepository.findByPlanIdOrderBySortOrderAsc(PLAN_ID))
         .thenReturn(List.of(item, sibling));
-    when(planRepository.save(any(TaskPlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(planRepository.save(any(TaskPlan.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     TaskPlanItem result = service.markItemCompleted(ITEM_ID, "Patch loop completed");
 
@@ -87,11 +92,13 @@ class TaskPlanExecutionServiceTest {
     TaskPlan plan = plan(TaskPlanStatus.EXECUTING);
 
     when(itemRepository.findByItemId(ITEM_ID)).thenReturn(Optional.of(item));
-    when(itemRepository.save(any(TaskPlanItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(itemRepository.save(any(TaskPlanItem.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
     when(planRepository.findByPlanId(PLAN_ID)).thenReturn(Optional.of(plan));
     when(itemRepository.findByPlanIdOrderBySortOrderAsc(PLAN_ID))
         .thenReturn(List.of(item, sibling));
-    when(planRepository.save(any(TaskPlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(planRepository.save(any(TaskPlan.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     TaskPlanItem result = service.markItemFailed(ITEM_ID, "Patch loop ended with FAILED");
 

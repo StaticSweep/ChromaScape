@@ -41,7 +41,12 @@ class PatchLoopSimpleApiIntegrationTest {
   void setUp() {
     controller =
         new PatchLoopController(
-            orchestratorService, graphOrchestratorService, null, null, null, micro6ExecutorCatalogService);
+            orchestratorService,
+            graphOrchestratorService,
+            null,
+            null,
+            null,
+            micro6ExecutorCatalogService);
   }
 
   @Test

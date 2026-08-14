@@ -11,7 +11,6 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,8 +19,8 @@ import org.junit.jupiter.api.Test;
  * HTTP-backed regression tests for {@link BuilderGoalLauncherControlService}.
  *
  * <p>Uses {@link com.sun.net.httpserver.HttpServer} on an ephemeral port, mirroring the existing
- * MCP transport test pattern, so launcher parsing and null-tolerant metadata handling are
- * exercised against a real HTTP round trip.
+ * MCP transport test pattern, so launcher parsing and null-tolerant metadata handling are exercised
+ * against a real HTTP round trip.
  */
 class BuilderGoalLauncherControlServiceTest {
 
@@ -167,7 +166,11 @@ class BuilderGoalLauncherControlServiceTest {
         {
           "accounts": [
             {
-              "account_hash": "3720a9a3b5c9f57b",
+              "launcher_account_id": "launcher-udasu",
+              "account_hash": "b01c7f006bace664",
+              "account_hash_scheme": "accountconnector/v1",
+              "account_name": "udasuAvuco",
+              "launch_profile_name": "udasuAvuco",
               "display_name": "udasuAvuco",
               "enabled": true,
               "status": "ready",
@@ -182,7 +185,11 @@ class BuilderGoalLauncherControlServiceTest {
     assertThat(accounts).hasSize(1);
     assertThat(accounts.get(0).metadata()).containsKey("runtime");
     assertThat(accounts.get(0).metadata().get("runtime")).isNull();
-    assertThat(accounts.get(0).accountHash()).isEqualTo("3720a9a3b5c9f57b");
+    assertThat(accounts.get(0).accountId()).isEqualTo("launcher-udasu");
+    assertThat(accounts.get(0).accountHash()).isEqualTo("b01c7f006bace664");
+    assertThat(accounts.get(0).accountName()).isEqualTo("udasuAvuco");
+    assertThat(accounts.get(0).launchProfileName()).isEqualTo("udasuAvuco");
+    assertThat(accounts.get(0).accountHashScheme()).isEqualTo("accountconnector/v1");
     assertThat(accounts.get(0).displayName()).isEqualTo("udasuAvuco");
   }
 
@@ -226,8 +233,7 @@ class BuilderGoalLauncherControlServiceTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("HTTP 401")
         .hasMessageContaining("unauthorized")
-        .satisfies(
-            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+        .satisfies(throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
   }
 
   @Test
@@ -238,8 +244,7 @@ class BuilderGoalLauncherControlServiceTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Failed to load launcher machines")
         .hasMessageContaining("JsonParseException")
-        .satisfies(
-            throwable -> assertThat(throwable.getMessage()).isNotNull().isNotBlank());
+        .satisfies(throwable -> assertThat(throwable.getMessage()).isNotNull().isNotBlank());
   }
 
   @Test
@@ -250,9 +255,7 @@ class BuilderGoalLauncherControlServiceTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Failed to submit launcher start command")
         .hasMessageContaining("HTTP 500")
-        .satisfies(
-            throwable ->
-                assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+        .satisfies(throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
   }
 
   @Test
@@ -275,9 +278,7 @@ class BuilderGoalLauncherControlServiceTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Failed to read launcher command status for cmd-1")
         .hasMessageContaining("HTTP 500")
-        .satisfies(
-            throwable ->
-                assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+        .satisfies(throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
   }
 
   @Test
@@ -292,8 +293,7 @@ class BuilderGoalLauncherControlServiceTest {
         .hasMessageContaining("Failed to load launcher machines")
         .hasMessageContaining("HTTP 500")
         .hasMessageContaining("upstream exploded")
-        .satisfies(
-            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+        .satisfies(throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
   }
 
   @Test
@@ -304,8 +304,7 @@ class BuilderGoalLauncherControlServiceTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Failed to load launcher machines")
         .hasMessageContaining("JsonParseException")
-        .satisfies(
-            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+        .satisfies(throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
   }
 
   @Test
@@ -316,8 +315,7 @@ class BuilderGoalLauncherControlServiceTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Failed to submit launcher start command")
         .hasMessageContaining("JsonParseException")
-        .satisfies(
-            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+        .satisfies(throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
   }
 
   @Test
@@ -328,8 +326,7 @@ class BuilderGoalLauncherControlServiceTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Failed to read launcher command status for cmd-1")
         .hasMessageContaining("JsonParseException")
-        .satisfies(
-            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+        .satisfies(throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
   }
 
   @Test
@@ -349,8 +346,7 @@ class BuilderGoalLauncherControlServiceTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("account hash")
         .hasMessageContaining("rejected")
-        .satisfies(
-            throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
+        .satisfies(throwable -> assertThat(throwable.getMessage()).doesNotContain("secret-token"));
   }
 
   @Test
@@ -368,10 +364,7 @@ class BuilderGoalLauncherControlServiceTest {
 
     BuilderGoalLauncherControlService.CommandStatus status = service.getCommandStatus("cmd-1");
 
-    assertThat(status.lastError())
-        .isNotNull()
-        .isNotBlank()
-        .doesNotContain("secret-token");
+    assertThat(status.lastError()).isNotNull().isNotBlank().doesNotContain("secret-token");
   }
 
   @Test
@@ -404,9 +397,7 @@ class BuilderGoalLauncherControlServiceTest {
             new IllegalStateException(
                 "prefix secret-token middle secret-token suffix secret-token"));
 
-    assertThat(description)
-        .doesNotContain("secret-token")
-        .isEqualTo("prefix  middle  suffix");
+    assertThat(description).doesNotContain("secret-token").isEqualTo("prefix  middle  suffix");
   }
 
   @Test

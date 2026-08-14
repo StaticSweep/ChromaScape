@@ -30,7 +30,8 @@ public class PatchOutcomeEvaluationService {
 
   public Map<String, Object> evaluate(
       LocalDateTime startTime, LocalDateTime endTime, String scriptName) {
-    List<TaskPlanItem> allItems = taskPlanItemRepository.findByCompletedAtBetween(startTime, endTime);
+    List<TaskPlanItem> allItems =
+        taskPlanItemRepository.findByCompletedAtBetween(startTime, endTime);
     List<TaskPlanItem> scriptFiltered =
         allItems.stream()
             .filter(
@@ -57,7 +58,9 @@ public class PatchOutcomeEvaluationService {
         eligible.stream()
             .collect(
                 Collectors.groupingBy(
-                    item -> normalize(item.getScriptName()), LinkedHashMap::new, Collectors.counting()));
+                    item -> normalize(item.getScriptName()),
+                    LinkedHashMap::new,
+                    Collectors.counting()));
     Map<String, Long> byStatus =
         eligible.stream()
             .collect(
@@ -76,7 +79,9 @@ public class PatchOutcomeEvaluationService {
     List<Map<String, Object>> topScripts =
         byScript.entrySet().stream()
             .sorted(Map.Entry.<String, Long>comparingByValue(Comparator.reverseOrder()))
-            .map(entry -> Map.<String, Object>of("scriptName", entry.getKey(), "count", entry.getValue()))
+            .map(
+                entry ->
+                    Map.<String, Object>of("scriptName", entry.getKey(), "count", entry.getValue()))
             .toList();
 
     Map<String, Object> result = new LinkedHashMap<>();

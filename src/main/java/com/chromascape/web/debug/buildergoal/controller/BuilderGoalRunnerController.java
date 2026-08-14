@@ -1,7 +1,8 @@
 package com.chromascape.web.debug.buildergoal.controller;
 
-import com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlService;
+import com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService;
+import com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizer;
 import com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,9 +41,9 @@ public class BuilderGoalRunnerController {
   /**
    * Lightweight connectivity probe for MCP wrapper clients.
    *
-   * <p>Returns a simple UP/DOWN status without calling the launcher, Micro6, database-heavy
-   * catalog generation, or recording lookup. MCP wrappers use this as a connectivity check
-   * during registration and at startup.
+   * <p>Returns a simple UP/DOWN status without calling the launcher, Micro6, database-heavy catalog
+   * generation, or recording lookup. MCP wrappers use this as a connectivity check during
+   * registration and at startup.
    */
   @GetMapping("/mcp-health")
   public ResponseEntity<Map<String, Object>> mcpHealth() {
@@ -58,10 +59,12 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.importPayload(payload));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to import builder goal payload", "details", sanitizeFailure(e)));
+          .body(
+              Map.of(
+                  "error", "Failed to import builder goal payload", "details", sanitizeFailure(e)));
     }
   }
 
@@ -95,8 +98,7 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
           .body(
               Map.of(
-                  "error", "Failed to load launcher machines",
-                  "details", sanitizeMachineError(e)));
+                  "error", "Failed to load launcher machines", "details", sanitizeMachineError(e)));
     }
   }
 
@@ -106,10 +108,15 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.getLatestConfig(accountId, taskKey));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to load latest builder goal config", "details", sanitizeFailure(e)));
+          .body(
+              Map.of(
+                  "error",
+                  "Failed to load latest builder goal config",
+                  "details",
+                  sanitizeFailure(e)));
     }
   }
 
@@ -118,10 +125,15 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(clientRegistryService.recordHeartbeat(payload));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to record Micro6 client heartbeat", "details", sanitizeFailure(e)));
+          .body(
+              Map.of(
+                  "error",
+                  "Failed to record Micro6 client heartbeat",
+                  "details",
+                  sanitizeFailure(e)));
     }
   }
 
@@ -131,15 +143,55 @@ public class BuilderGoalRunnerController {
       String accountId = textValue(payload.path("accountId"));
       String launcherMachineUuid = textValue(payload.path("launcherMachineUuid"));
       Integer world = intValue(payload.path("world"));
-      return ResponseEntity.ok(
-          builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world));
+      // The launch runs on a dedicated executor with a server-side readiness watchdog. The POST
+      // returns HTTP 202 immediately; the browser polls the operation via statusUrl.
+      return ResponseEntity.accepted()
+          .body(builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world));
+    } catch (BuilderGoalRunnerService.LaunchSubmissionException e) {
+      return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+          .body(
+              Map.of(
+                  "error", "Launch executor is at capacity",
+                  "details", sanitizeFailure(e),
+                  "guidance",
+                      "A different account launch is in progress. Wait for it to complete (or fail) before launching another account."));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(
+              Map.of(
+                  "error",
+                  sanitizeMessage(e.getMessage()),
+                  "guidance",
+                  "Another account or workflow currently owns the local launch coordinator. Retry after the active launch completes."));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to launch builder goal account", "details", sanitizeFailure(e)));
+          .body(
+              Map.of(
+                  "error", "Failed to launch builder goal account", "details", sanitizeFailure(e)));
+    }
+  }
+
+  /**
+   * Returns the current state of an asynchronous Builder Goal account launch. Unknown or expired
+   * operations (for example after a ChromaScape restart) return {@code 404}.
+   */
+  @GetMapping("/launch-operations/{operationId}")
+  public ResponseEntity<Object> getLaunchOperation(@PathVariable String operationId) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.getLaunchOperation(operationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.status(HttpStatus.NOT_FOUND)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(
+              Map.of(
+                  "error",
+                  "Failed to load builder goal launch operation",
+                  "details",
+                  sanitizeFailure(e)));
     }
   }
 
@@ -163,14 +215,16 @@ public class BuilderGoalRunnerController {
                 accountId, launcherMachineUuid, taskKey, settings, displayName, world, provenance));
       }
 
-      JsonNode builderPayload = payload.path("builderPayload").isObject() ? payload.path("builderPayload") : payload;
+      JsonNode builderPayload =
+          payload.path("builderPayload").isObject() ? payload.path("builderPayload") : payload;
       return ResponseEntity.ok(
           builderGoalRunnerService.startRun(
               builderPayload, accountId, null, null, null, launcherMachineUuid, world, provenance));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(Map.of("error", "Failed to start builder goal run", "details", sanitizeFailure(e)));
@@ -185,8 +239,7 @@ public class BuilderGoalRunnerController {
       String taskKey = textValue(payload.path("taskKey"));
       Integer world = intValue(payload.path("world"));
       String targetBaseUrl = textValue(payload.path("targetBaseUrl"));
-      boolean allowLaunchFallback =
-          payload.path("allowLaunchFallback").asBoolean(false);
+      boolean allowLaunchFallback = payload.path("allowLaunchFallback").asBoolean(false);
       if (accountId == null || taskKey == null) {
         return ResponseEntity.badRequest()
             .body(Map.of("error", "accountId and taskKey are required"));
@@ -208,12 +261,33 @@ public class BuilderGoalRunnerController {
               allowLaunchFallback,
               provenance));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to publish builder goal task", "details", sanitizeFailure(e)));
+          .body(
+              Map.of(
+                  "error", "Failed to publish builder goal task", "details", sanitizeFailure(e)));
+    }
+  }
+
+  @GetMapping("/runs/{iterationId}")
+  public ResponseEntity<Object> getRunSummary(@PathVariable String iterationId) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.getRunSummary(iterationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.status(HttpStatus.NOT_FOUND)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(
+              Map.of(
+                  "error",
+                  "Failed to load builder goal run summary",
+                  "details",
+                  sanitizeFailure(e)));
     }
   }
 
@@ -222,12 +296,18 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.getRunConfig(iterationId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to load builder goal run config", "details", sanitizeFailure(e)));
+          .body(
+              Map.of(
+                  "error",
+                  "Failed to load builder goal run config",
+                  "details",
+                  sanitizeFailure(e)));
     }
   }
 
@@ -236,12 +316,15 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.getRunLogs(iterationId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to load builder goal run logs", "details", sanitizeFailure(e)));
+          .body(
+              Map.of(
+                  "error", "Failed to load builder goal run logs", "details", sanitizeFailure(e)));
     }
   }
 
@@ -250,10 +333,11 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.getRunSummaryByRecordingId(recordingId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to resolve builder goal run", "details", sanitizeFailure(e)));
+          .body(
+              Map.of("error", "Failed to resolve builder goal run", "details", sanitizeFailure(e)));
     }
   }
 
@@ -262,12 +346,15 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.getRunLogsByRecordingId(recordingId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to load builder goal run logs", "details", sanitizeFailure(e)));
+          .body(
+              Map.of(
+                  "error", "Failed to load builder goal run logs", "details", sanitizeFailure(e)));
     }
   }
 
@@ -276,9 +363,10 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.rerun(iterationId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(Map.of("error", "Failed to rerun builder goal", "details", sanitizeFailure(e)));
@@ -290,9 +378,10 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.buildAnalysisDraft(iterationId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(Map.of("error", "Failed to build analysis draft", "details", sanitizeFailure(e)));
@@ -305,12 +394,14 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.analyzeFailure(iterationId, payload));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to analyze builder goal run", "details", sanitizeFailure(e)));
+          .body(
+              Map.of("error", "Failed to analyze builder goal run", "details", sanitizeFailure(e)));
     }
   }
 
@@ -319,13 +410,18 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.approveRecovery(iterationId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
-              Map.of("error", "Failed to approve builder goal recovery", "details", sanitizeFailure(e)));
+              Map.of(
+                  "error",
+                  "Failed to approve builder goal recovery",
+                  "details",
+                  sanitizeFailure(e)));
     }
   }
 
@@ -334,13 +430,18 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.approveRecovery(iterationId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
-              Map.of("error", "Failed to approve builder goal recovery", "details", sanitizeFailure(e)));
+              Map.of(
+                  "error",
+                  "Failed to approve builder goal recovery",
+                  "details",
+                  sanitizeFailure(e)));
     }
   }
 
@@ -349,30 +450,32 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.openRecoveryWorkspace(iterationId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
-              Map.of(
-                  "error", "Failed to open recovery workspace", "details", sanitizeFailure(e)));
+              Map.of("error", "Failed to open recovery workspace", "details", sanitizeFailure(e)));
     }
   }
 
   @PostMapping("/recordings/{recordingId}/recovery-workspace")
-  public ResponseEntity<Object> openRecoveryWorkspaceByRecordingId(@PathVariable String recordingId) {
+  public ResponseEntity<Object> openRecoveryWorkspaceByRecordingId(
+      @PathVariable String recordingId) {
     try {
-      return ResponseEntity.ok(builderGoalRunnerService.openRecoveryWorkspaceByRecordingId(recordingId));
+      return ResponseEntity.ok(
+          builderGoalRunnerService.openRecoveryWorkspaceByRecordingId(recordingId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
-              Map.of(
-                  "error", "Failed to open recovery workspace", "details", sanitizeFailure(e)));
+              Map.of("error", "Failed to open recovery workspace", "details", sanitizeFailure(e)));
     }
   }
 
@@ -383,17 +486,15 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.ok(
           builderGoalRunnerService.saveRecoveryAnnotations(iterationId, payload));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
               Map.of(
-                  "error",
-                  "Failed to save recovery annotations",
-                  "details",
-                  sanitizeFailure(e)));
+                  "error", "Failed to save recovery annotations", "details", sanitizeFailure(e)));
     }
   }
 
@@ -404,17 +505,15 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.ok(
           builderGoalRunnerService.resolveRecoveryEvidence(iterationId, payload));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(
               Map.of(
-                  "error",
-                  "Failed to resolve recovery evidence",
-                  "details",
-                  sanitizeFailure(e)));
+                  "error", "Failed to resolve recovery evidence", "details", sanitizeFailure(e)));
     }
   }
 
@@ -423,12 +522,10 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.getRecoveryState(iterationId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(
-              Map.of(
-                  "error", "Failed to load recovery state", "details", sanitizeFailure(e)));
+          .body(Map.of("error", "Failed to load recovery state", "details", sanitizeFailure(e)));
     }
   }
 
@@ -437,12 +534,10 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.getRecoveryStateByRecordingId(recordingId));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(
-              Map.of(
-                  "error", "Failed to load recovery state", "details", sanitizeFailure(e)));
+          .body(Map.of("error", "Failed to load recovery state", "details", sanitizeFailure(e)));
     }
   }
 
@@ -452,9 +547,10 @@ public class BuilderGoalRunnerController {
     try {
       return ResponseEntity.ok(builderGoalRunnerService.stopRun(iterationId, payload));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
-      return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(Map.of("error", "Failed to stop builder goal run", "details", sanitizeFailure(e)));
@@ -462,19 +558,21 @@ public class BuilderGoalRunnerController {
   }
 
   /**
-   * Sanitizes a launcher machine-discovery failure into an actionable detail string. The
-   * exception type and a non-null message are preserved while credentials (such as a bearer
-   * token) are masked.
+   * Sanitizes a launcher machine-discovery failure into an actionable detail string. The exception
+   * type and a non-null message are preserved while credentials (such as a bearer token) are
+   * masked.
    */
   private String sanitizeMachineError(Exception e) {
     return sanitizeFailure(e);
   }
 
   /**
-   * Converts unexpected service failures into bounded, credential-free details for the browser.
-   * The launcher service owns the sanitizer because it knows the configured launcher token and
-   * upstream bearer-header formats. A fallback is retained for lightweight unit-test mocks or a
-   * misbehaving sanitizer implementation so HTTP error construction never throws a second error.
+   * Converts unexpected service failures into bounded, credential-free details for the browser. The
+   * launcher service owns the sanitizer because it knows the configured launcher token and upstream
+   * bearer-header formats. A fallback is retained for lightweight unit-test mocks or a misbehaving
+   * sanitizer implementation so HTTP error construction never throws a second error. The result is
+   * always passed through {@link BuilderGoalSensitiveTextSanitizer} so no credential pattern can
+   * leak.
    */
   private String sanitizeFailure(Throwable failure) {
     String detail = launcherControlService.describeSanitizedFailure(failure);
@@ -484,7 +582,12 @@ public class BuilderGoalRunnerController {
       }
       return failure.getClass().getSimpleName();
     }
-    return detail;
+    return BuilderGoalSensitiveTextSanitizer.sanitize(detail);
+  }
+
+  /** Sanitizes a message before it is exposed in an HTTP error body. */
+  private String sanitizeMessage(String message) {
+    return BuilderGoalSensitiveTextSanitizer.sanitize(message);
   }
 
   private String textValue(JsonNode node) {
@@ -518,8 +621,10 @@ public class BuilderGoalRunnerController {
     JsonNode inputOrigin = firstPresent(payload, "inputOrigin", "input_origin");
     JsonNode userClicked = firstPresent(payload, "userClicked", "user_clicked");
     JsonNode scriptClicked = firstPresent(payload, "scriptClicked", "script_clicked");
-    if (initiatedBy.isMissingNode() && inputOrigin.isMissingNode()
-        && userClicked.isMissingNode() && scriptClicked.isMissingNode()) {
+    if (initiatedBy.isMissingNode()
+        && inputOrigin.isMissingNode()
+        && userClicked.isMissingNode()
+        && scriptClicked.isMissingNode()) {
       return null;
     }
     Map<String, Object> provenance = new java.util.LinkedHashMap<>();

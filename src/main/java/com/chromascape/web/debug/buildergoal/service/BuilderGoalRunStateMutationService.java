@@ -194,6 +194,12 @@ public class BuilderGoalRunStateMutationService {
     }
     mergedPublish.put("attached_to_existing", result.attachedToExisting());
     mergedPublish.put("micro6_base_url", result.micro6BaseUrl());
+    if (result.executorStatus() != null) {
+      mergedPublish.put("executor_status", result.executorStatus());
+    }
+    if (result.activationState() != null) {
+      mergedPublish.put("activation_state", result.activationState());
+    }
     if (result.errorMessage() != null) {
       mergedPublish.put("last_error", result.errorMessage());
     }
@@ -449,7 +455,8 @@ public class BuilderGoalRunStateMutationService {
     }
     Map<String, Object> targetPreparation = readTargetPreparationMetadata(taskMetadata);
     String preparationState = stringValue(targetPreparation.get("state"));
-    if (!Micro6TargetRelaunchService.PHASE_PROCESS_EXITED.equalsIgnoreCase(preparationState)) {
+    if (!Micro6TargetRelaunchService.PHASE_PROCESS_EXITED.equalsIgnoreCase(preparationState)
+        && !Micro6TargetRelaunchService.PHASE_BUILD_FAILED.equalsIgnoreCase(preparationState)) {
       return false;
     }
 
@@ -666,8 +673,20 @@ public class BuilderGoalRunStateMutationService {
           firstNonBlank(statusResult.errorMessage(), "Micro6 task was cancelled"));
     }
 
-    boolean taskStarted = isTaskStarted(statusResult);
-    boolean taskStartConfirmed = isTaskStartConfirmed(statusResult);
+    // PAUSED is an activated-but-suspended executor state.  The executor may legitimately omit
+    // task_started/debug_session_id while the task is suspended (for example when it was paused
+    // before the debug binding callback completed).  Do not reinterpret that state as a queued
+    // task that never started: preserve PAUSED, keep the iteration active, and allow later resume
+    // or stop reconciliation to operate on the same entry.
+    boolean paused = "PAUSED".equalsIgnoreCase(executorStatus);
+    boolean taskStarted = paused || isTaskStarted(statusResult);
+    boolean taskStartConfirmed = paused || isTaskStartConfirmed(statusResult);
+    if (paused && !Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"))) {
+      // applyTaskStartFields mirrors the optional wire field and may have just written false;
+      // PAUSED itself is the authoritative activation evidence for this status.
+      taskMetadata.put("task_start_confirmed", true);
+      metadataChanged = true;
+    }
     boolean waitingForStart = !taskStartConfirmed;
     if (("RUNNING".equalsIgnoreCase(executorStatus) || "PAUSED".equalsIgnoreCase(executorStatus))
         && taskStartConfirmed
@@ -799,6 +818,15 @@ public class BuilderGoalRunStateMutationService {
       taskMetadata.put("task_start_confirmed", taskStarted);
       changed = true;
     }
+    String activationState = textValue(raw.path("activation_state"));
+    if (!Objects.equals(activationState, stringValue(publishMetadata.get("activation_state")))) {
+      if (activationState != null) {
+        publishMetadata.put("activation_state", activationState);
+      } else {
+        publishMetadata.remove("activation_state");
+      }
+      changed = true;
+    }
     String currentTask = textValue(raw.path("current_task"));
     if (!Objects.equals(currentTask, stringValue(taskMetadata.get("current_task")))) {
       if (currentTask != null) {
@@ -882,7 +910,23 @@ public class BuilderGoalRunStateMutationService {
     iteration.setRunEndTime(LocalDateTime.now());
     iteration.setRunSuccess(false);
     iteration.setFailureCode(PatchLoopFailureCode.SCRIPT_START_FAILED);
-    iteration.setFailureReason("Task start timed out");
+    // Preserve the last observed activation state and any executor-reported reason so the operator
+    // can distinguish an accepted-but-queued task from a confirmed start.
+    String lastActivationState = stringValue(publishMetadata.get("activation_state"));
+    String lastExecutorReason =
+        statusResult != null
+                && statusResult.errorMessage() != null
+                && !statusResult.errorMessage().isBlank()
+            ? statusResult.errorMessage()
+            : stringValue(publishMetadata.get("last_error"));
+    String timeoutDetail = "Task start timed out";
+    if (lastActivationState != null && !lastActivationState.isBlank()) {
+      timeoutDetail += " (last activation state: " + lastActivationState + ")";
+    }
+    if (lastExecutorReason != null && !lastExecutorReason.isBlank()) {
+      timeoutDetail += " (executor: " + lastExecutorReason + ")";
+    }
+    iteration.setFailureReason(timeoutDetail);
     iteration.transitionTo(PatchLoopStatus.FAILED);
     iterationRepository.save(iteration);
     return new StatusApplyResult(
@@ -894,7 +938,7 @@ public class BuilderGoalRunStateMutationService {
         true,
         false,
         false,
-        "Task start timed out",
+        timeoutDetail,
         iteration);
   }
 
@@ -926,10 +970,13 @@ public class BuilderGoalRunStateMutationService {
 
   private String mapPublishStatus(String micro6Status) {
     if (micro6Status == null || micro6Status.isBlank()) {
-      return "PUBLISHED";
+      return "RECONCILING";
     }
-    if ("QUEUED".equalsIgnoreCase(micro6Status) || "ACCEPTED".equalsIgnoreCase(micro6Status)) {
+    if ("QUEUED".equalsIgnoreCase(micro6Status)) {
       return "QUEUED";
+    }
+    if ("ACCEPTED".equalsIgnoreCase(micro6Status) || "RECEIVED".equalsIgnoreCase(micro6Status)) {
+      return "ACCEPTED";
     }
     if ("ASSIGNED".equalsIgnoreCase(micro6Status)) {
       return "ASSIGNED";
@@ -943,13 +990,19 @@ public class BuilderGoalRunStateMutationService {
     if ("COMPLETED".equalsIgnoreCase(micro6Status)) {
       return "COMPLETED";
     }
-    if ("RUNNING".equalsIgnoreCase(micro6Status) || "PAUSED".equalsIgnoreCase(micro6Status)) {
+    if ("RUNNING".equalsIgnoreCase(micro6Status)) {
       return "RUNNING";
     }
-    if ("PENDING".equalsIgnoreCase(micro6Status) || "RECEIVED".equalsIgnoreCase(micro6Status)) {
-      return "RECONCILING";
+    if ("PAUSED".equalsIgnoreCase(micro6Status)) {
+      // PAUSED is an activated-but-suspended state that must survive status reconciliation and
+      // summary rendering as PAUSED rather than being collapsed into RUNNING.
+      return "PAUSED";
     }
-    return "PUBLISHED";
+    if ("PENDING".equalsIgnoreCase(micro6Status)) {
+      return "ACCEPTED";
+    }
+    // An unrecognized executor status is genuinely ambiguous, never a confirmation of a start.
+    return "RECONCILING";
   }
 
   // ------------------------------------------------------------------
@@ -1051,7 +1104,9 @@ public class BuilderGoalRunStateMutationService {
     if (executorIterationId == null || executorIterationId.isBlank()) {
       return new ReconcileApplyResult(iterationId, false, "missing_executor_iteration_id");
     }
-    if (!executorIterationId.trim().equalsIgnoreCase(storedIterationId)) {
+    // Iteration IDs are opaque ownership tokens. Do not trim or case-fold a response before
+    // comparing it: a near-match could attach an executor entry to a different persisted run.
+    if (!executorIterationId.equals(storedIterationId)) {
       return new ReconcileApplyResult(iterationId, false, "iteration_id_mismatch");
     }
 
@@ -1065,7 +1120,10 @@ public class BuilderGoalRunStateMutationService {
     if (executorTaskKey == null || executorTaskKey.isBlank()) {
       return new ReconcileApplyResult(iterationId, false, "missing_executor_task_key");
     }
-    if (storedTaskKey == null || !executorTaskKey.trim().equalsIgnoreCase(storedTaskKey)) {
+    // Task keys are canonical catalog identities. Do not trim, case-fold, or otherwise normalize
+    // an executor response during late reconciliation: an alias or near-match could attach a
+    // different task to this persisted run.
+    if (storedTaskKey == null || !executorTaskKey.equals(storedTaskKey)) {
       return new ReconcileApplyResult(iterationId, false, "task_key_mismatch");
     }
 
@@ -1172,6 +1230,7 @@ public class BuilderGoalRunStateMutationService {
         "readiness_reason", firstNonBlank(healthResult.readinessReason(), fallbackReason));
     preparation.put("resolved_account_name", healthResult.resolvedAccountName());
     preparation.put("resolved_account_hash", healthResult.resolvedAccountHash());
+    preparation.put("account_hash_scheme", AccountIdentityContract.HASH_SCHEME);
     preparation.put("requested_account_name", healthResult.requestedAccountName());
     preparation.put("requested_account_hash", healthResult.requestedAccountHash());
     preparation.put("dispatch_hold", healthResult.dispatchHold());
@@ -1181,6 +1240,12 @@ public class BuilderGoalRunStateMutationService {
     preparation.put("login_attempt", healthResult.loginAttempt());
     preparation.put("login_attempt_max", healthResult.loginAttemptMax());
     preparation.put("login_terminal_reason", healthResult.loginTerminalReason());
+    preparation.put("requested_world", healthResult.requestedWorld());
+    preparation.put("current_world", healthResult.currentWorld());
+    preparation.put("world_matched", healthResult.worldMatched());
+    preparation.put("pathfinder_ready", healthResult.pathfinderReady());
+    preparation.put("script_lifecycle_state", healthResult.scriptLifecycleState());
+    preparation.put("script_loop_alive", healthResult.scriptLoopAlive());
     taskMetadata.put("target_preparation", preparation);
   }
 

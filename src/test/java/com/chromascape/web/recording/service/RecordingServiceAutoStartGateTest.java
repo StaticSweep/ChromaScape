@@ -3,6 +3,7 @@ package com.chromascape.web.recording.service;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.chromascape.web.recording.capture.WindowFrameCapture;
 import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
@@ -24,10 +25,12 @@ class RecordingServiceAutoStartGateTest {
   private RecordingService newService(RecordingConfig config) {
     UnifiedCaptureConfig unifiedConfig = new UnifiedCaptureConfig();
     UnifiedFrameCaptureService capture = mock(UnifiedFrameCaptureService.class);
-    return new RecordingService(config, unifiedConfig, capture);
+    WindowFrameCapture windowFrameCapture = mock(WindowFrameCapture.class);
+    return new RecordingService(config, unifiedConfig, capture, windowFrameCapture);
   }
 
-  private RecordingConfig config(boolean enabled, boolean autoRecord, boolean autoRecordTaskSessions) {
+  private RecordingConfig config(
+      boolean enabled, boolean autoRecord, boolean autoRecordTaskSessions) {
     RecordingConfig c = new RecordingConfig();
     c.setEnabled(enabled);
     c.setAutoRecord(autoRecord);

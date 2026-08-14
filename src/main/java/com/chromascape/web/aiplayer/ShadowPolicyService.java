@@ -2,6 +2,7 @@ package com.chromascape.web.aiplayer;
 
 import com.chromascape.web.decisions.entity.DecisionEntity;
 import com.chromascape.web.decisions.entity.DecisionRepository;
+import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -34,6 +35,13 @@ public class ShadowPolicyService {
 
   public ShadowPolicyService(DecisionRepository decisionRepository) {
     this.decisionRepository = decisionRepository;
+  }
+
+  @PostConstruct
+  void enforceReadOnlyAtStartup() {
+    if (controlEnabled) {
+      log.warn("FEATURES_AI_PLAYER_CONTROL was requested, but AI Routine permanently enforces control_allowed=false");
+    }
   }
 
   /**
@@ -117,7 +125,15 @@ public class ShadowPolicyService {
     return controlEnabled;
   }
 
+  public boolean isControlRequested() {
+    return controlEnabled;
+  }
+
+  /**
+   * AI Routine is permanently read-only in this slice. The configured control flag is retained
+   * only for diagnostics and is never an authority decision.
+   */
   public boolean isControlAllowed() {
-    return enabled && controlEnabled;
+    return false;
   }
 }

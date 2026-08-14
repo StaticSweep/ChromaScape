@@ -74,17 +74,13 @@ public class ViewportPipelineDebugController {
                 "frameProcessingErrors", screenCaptureService.getFrameProcessingErrors()),
             "websocket",
             Map.ofEntries(
-                Map.entry(
-                    "activeSessions", viewportWebSocketHandler.getActiveSessionCount()),
-                Map.entry(
-                    "broadcastRequests", viewportWebSocketHandler.getBroadcastRequests()),
+                Map.entry("activeSessions", viewportWebSocketHandler.getActiveSessionCount()),
+                Map.entry("broadcastRequests", viewportWebSocketHandler.getBroadcastRequests()),
                 Map.entry("flushCycles", viewportWebSocketHandler.getFlushCycles()),
-                Map.entry(
-                    "payloadsFlushed", viewportWebSocketHandler.getPayloadsFlushed()),
+                Map.entry("payloadsFlushed", viewportWebSocketHandler.getPayloadsFlushed()),
                 Map.entry(
                     "sessionSendSuccesses", viewportWebSocketHandler.getSessionSendSuccesses()),
-                Map.entry(
-                    "sessionSendErrors", viewportWebSocketHandler.getSessionSendErrors()),
+                Map.entry("sessionSendErrors", viewportWebSocketHandler.getSessionSendErrors()),
                 Map.entry(
                     "framesSkippedNoSessions", websocketViewport.getFramesSkippedNoSessions()),
                 Map.entry(
@@ -92,10 +88,8 @@ public class ViewportPipelineDebugController {
                     websocketViewport.getFramesDroppedEncodeBackpressure()),
                 Map.entry("encodeCount", websocketViewport.getEncodeCount()),
                 Map.entry("avgEncodeMs", websocketViewport.getAverageEncodeTimeMs()),
-                Map.entry(
-                    "maxEncodeMs", websocketViewport.getMaxEncodeTimeMs()),
-                Map.entry(
-                    "avgPayloadBytes", websocketViewport.getAveragePayloadBytes()),
+                Map.entry("maxEncodeMs", websocketViewport.getMaxEncodeTimeMs()),
+                Map.entry("avgPayloadBytes", websocketViewport.getAveragePayloadBytes()),
                 Map.entry("targetFps", viewportStreamConfig.getTargetFps()),
                 Map.entry("jpegQuality", viewportStreamConfig.getJpegQuality()),
                 Map.entry("maxLongEdge", viewportStreamConfig.getMaxLongEdge())));

@@ -1,5 +1,7 @@
 package com.chromascape.web.debug.patchloop.service;
 
+import com.chromascape.web.debug.buildergoal.service.AccountIdentityContract;
+import com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluator;
 import com.chromascape.web.instance.RunConfig;
 import com.chromascape.web.instance.ScriptInstance;
 import com.chromascape.web.instance.ScriptInstanceManager;
@@ -56,6 +58,13 @@ public class ScriptExecutionService {
 
   /** Timeout-recovery probe window after an ambiguous execute timeout. Injectable for tests. */
   private final long micro6TimeoutRecoveryProbeMs;
+
+  /**
+   * Resolves a display name to a canonical Micro6 task key through the task catalog. Display-name
+   * identity comparison is only permitted after this resolution; a null-returning resolver (the
+   * default, when no catalog is available) means display-name aliases never match.
+   */
+  private final java.util.function.Function<String, String> displayNameToTaskKeyResolver;
 
   /** Tracks active runs keyed by executionId for execution-scoped control. */
   private final ConcurrentHashMap<String, ActiveRun> activeRuns = new ConcurrentHashMap<>();
@@ -119,6 +128,26 @@ public class ScriptExecutionService {
       String micro6ExecutorBaseUrl,
       HttpClient httpClient,
       long micro6TimeoutRecoveryProbeMs) {
+    this(
+        stateHandler,
+        taskDetectionService,
+        objectMapper,
+        executionBackend,
+        micro6ExecutorBaseUrl,
+        httpClient,
+        micro6TimeoutRecoveryProbeMs,
+        null);
+  }
+
+  ScriptExecutionService(
+      WebSocketStateHandler stateHandler,
+      TaskDetectionService taskDetectionService,
+      ObjectMapper objectMapper,
+      String executionBackend,
+      String micro6ExecutorBaseUrl,
+      HttpClient httpClient,
+      long micro6TimeoutRecoveryProbeMs,
+      java.util.function.Function<String, String> displayNameToTaskKeyResolver) {
     this.instanceManager = ScriptInstanceManager.getInstance();
     this.stateHandler = stateHandler;
     this.taskDetectionService = taskDetectionService;
@@ -127,6 +156,8 @@ public class ScriptExecutionService {
     this.micro6ExecutorBaseUrl = micro6ExecutorBaseUrl;
     this.httpClient = httpClient;
     this.micro6TimeoutRecoveryProbeMs = Math.max(0L, micro6TimeoutRecoveryProbeMs);
+    this.displayNameToTaskKeyResolver =
+        displayNameToTaskKeyResolver != null ? displayNameToTaskKeyResolver : candidate -> null;
   }
 
   /** Result of a script execution. */
@@ -157,7 +188,8 @@ public class ScriptExecutionService {
      * Ambiguous publish outcome: the execute request timed out and the executor has not confirmed
      * acceptance. The run must be reconciled via status polling, not treated as failed.
      */
-    public static ScriptExecutionResult reconciling(String backend, Integer entryId, String errorMessage) {
+    public static ScriptExecutionResult reconciling(
+        String backend, Integer entryId, String errorMessage) {
       String message =
           errorMessage != null && !errorMessage.isBlank()
               ? errorMessage
@@ -170,6 +202,8 @@ public class ScriptExecutionService {
       boolean published,
       String backend,
       String publishStatus,
+      String executorStatus,
+      String activationState,
       Integer entryId,
       boolean attachedToExisting,
       String micro6BaseUrl,
@@ -179,11 +213,15 @@ public class ScriptExecutionService {
         Integer entryId,
         boolean attachedToExisting,
         String micro6BaseUrl,
-        String publishStatus) {
+        String publishStatus,
+        String executorStatus,
+        String activationState) {
       return new Micro6PublishResult(
           true,
           BACKEND_MICRO6_LOCAL_EXECUTOR,
           publishStatus,
+          executorStatus,
+          activationState,
           entryId,
           attachedToExisting,
           micro6BaseUrl,
@@ -195,11 +233,14 @@ public class ScriptExecutionService {
      * whether it accepted the entry. The caller must reconcile via status polling rather than
      * treating this as a terminal publish failure.
      */
-    public static Micro6PublishResult reconciling(Integer entryId, String micro6BaseUrl, String errorMessage) {
+    public static Micro6PublishResult reconciling(
+        Integer entryId, String micro6BaseUrl, String errorMessage) {
       return new Micro6PublishResult(
           false,
           BACKEND_MICRO6_LOCAL_EXECUTOR,
           "RECONCILING",
+          null,
+          null,
           entryId,
           false,
           micro6BaseUrl,
@@ -212,11 +253,35 @@ public class ScriptExecutionService {
           BACKEND_MICRO6_LOCAL_EXECUTOR,
           "PUBLISH_FAILED",
           null,
+          null,
+          null,
+          false,
+          micro6BaseUrl,
+          errorMessage);
+    }
+
+    /**
+     * A confirmed task/entry identity mismatch on a duplicate attempt: the executor holds the entry
+     * for a different canonical task, or the referenced entry's identity/status cannot be safely
+     * attached to. Never attach in this state.
+     */
+    public static Micro6PublishResult conflictingDispatch(
+        Integer entryId, String micro6BaseUrl, String errorMessage) {
+      return new Micro6PublishResult(
+          false,
+          BACKEND_MICRO6_LOCAL_EXECUTOR,
+          "DUPLICATE_OR_CONFLICTING_DISPATCH",
+          null,
+          null,
+          entryId,
           false,
           micro6BaseUrl,
           errorMessage);
     }
   }
+
+  /** Structured identity parsed from a Micro6 409 conflict response. */
+  public record Micro6ConflictIdentity(int existingEntryId, String taskKey, String existingStatus) {}
 
   public record Micro6RunStatusResult(
       boolean found,
@@ -243,7 +308,13 @@ public class ScriptExecutionService {
       Integer loginAttemptMax,
       String loginTerminalReason,
       String micro6BaseUrl,
-      JsonNode rawResponse) {}
+      JsonNode rawResponse,
+      Integer requestedWorld,
+      Integer currentWorld,
+      Boolean worldMatched,
+      Boolean pathfinderReady,
+      String scriptLifecycleState,
+      Boolean scriptLoopAlive) {}
 
   /**
    * Runs a script and waits for completion (backward-compatible overload, unscoped).
@@ -270,10 +341,7 @@ public class ScriptExecutionService {
   }
 
   public ScriptExecutionResult runScriptAndWait(
-      String executionId,
-      String scriptName,
-      long timeoutMs,
-      Map<String, Object> taskMetadata) {
+      String executionId, String scriptName, long timeoutMs, Map<String, Object> taskMetadata) {
     String normalizedScript = normalizeScriptName(scriptName);
     String selectedBackend = resolveBackend(scriptName);
     activeExecutionBackend.set(selectedBackend);
@@ -368,10 +436,7 @@ public class ScriptExecutionService {
   }
 
   private ScriptExecutionResult runViaMicro6LocalExecutor(
-      String executionId,
-      String scriptName,
-      long timeoutMs,
-      Map<String, Object> taskMetadata) {
+      String executionId, String scriptName, long timeoutMs, Map<String, Object> taskMetadata) {
     final long startTime = System.currentTimeMillis();
     final int entryId = micro6EntryIdSeq.incrementAndGet();
     int trackedEntryId = entryId;
@@ -381,8 +446,7 @@ public class ScriptExecutionService {
 
     if (executionId != null) {
       activeRuns.put(
-          executionId,
-          new ActiveRun(BACKEND_MICRO6_LOCAL_EXECUTOR, entryId, null, targetBaseUrl));
+          executionId, new ActiveRun(BACKEND_MICRO6_LOCAL_EXECUTOR, entryId, null, targetBaseUrl));
     }
 
     try {
@@ -397,9 +461,7 @@ public class ScriptExecutionService {
               scriptName,
               publishResult.entryId());
           return ScriptExecutionResult.reconciling(
-              BACKEND_MICRO6_LOCAL_EXECUTOR,
-              publishResult.entryId(),
-              publishResult.errorMessage());
+              BACKEND_MICRO6_LOCAL_EXECUTOR, publishResult.entryId(), publishResult.errorMessage());
         }
         return ScriptExecutionResult.failure(
             BACKEND_MICRO6_LOCAL_EXECUTOR, "FAILED", publishResult.errorMessage());
@@ -470,26 +532,6 @@ public class ScriptExecutionService {
         activeRuns.remove(executionId);
       }
     }
-  }
-
-  private Integer tryResolveAlreadyQueuedEntry(HttpResponse<String> executeResponse) {
-    if (executeResponse == null || executeResponse.statusCode() != 409) {
-      return null;
-    }
-    try {
-      JsonNode body = objectMapper.readTree(executeResponse.body());
-      String errorMessage = body.path("error_message").asText("");
-      if (!"task_already_queued".equalsIgnoreCase(errorMessage)) {
-        return null;
-      }
-      if (body.has("existing_entry_id") && body.get("existing_entry_id").canConvertToInt()) {
-        int existingEntryId = body.get("existing_entry_id").asInt(-1);
-        return existingEntryId > 0 ? existingEntryId : null;
-      }
-    } catch (Exception e) {
-      logger.debug("Failed to parse Micro6 conflict response: {}", e.getMessage());
-    }
-    return null;
   }
 
   private Micro6PublishResult publishMicro6TaskInternal(
@@ -583,13 +625,9 @@ public class ScriptExecutionService {
     }
 
     if (executeResponse.statusCode() >= 400) {
-      Integer existingEntryId = tryResolveAlreadyQueuedEntry(executeResponse);
-      if (existingEntryId != null) {
-        logger.info(
-            "Attached to existing Micro6 run for task {} (existing_entry_id={})",
-            scriptName,
-            existingEntryId);
-        return Micro6PublishResult.success(existingEntryId, true, targetBaseUrl, "PUBLISHED");
+      Micro6ConflictIdentity conflictIdentity = parseConflictIdentity(executeResponse);
+      if (conflictIdentity != null) {
+        return resolveConflictAttachment(scriptName, taskKey, targetBaseUrl, conflictIdentity);
       }
       String parsedExecutorError = parseMicro6ExecuteError(executeResponse);
       return Micro6PublishResult.failure(
@@ -600,7 +638,367 @@ public class ScriptExecutionService {
           targetBaseUrl);
     }
 
-    return Micro6PublishResult.success(entryId, false, targetBaseUrl, "PUBLISHED");
+    return mapExecuteAcceptedResult(executeResponse, entryId, taskKey, targetBaseUrl);
+  }
+
+  /**
+   * Parses a 409 conflict body into a structured identity. Returns null when the body is not a
+   * conflict, is not valid JSON, or omits any of the three mandatory identity fields ({@code
+   * existing_entry_id}, {@code task_key}, {@code existing_status}) so a missing-field conflict
+   * always fails closed into the generic failure path rather than attaching on an entry id alone.
+   */
+  private Micro6ConflictIdentity parseConflictIdentity(HttpResponse<String> executeResponse) {
+    if (executeResponse == null || executeResponse.statusCode() != 409) {
+      return null;
+    }
+    try {
+      JsonNode body = objectMapper.readTree(executeResponse.body());
+      if (body == null || !body.isObject()) {
+        return null;
+      }
+      if (!body.has("existing_entry_id")
+          || !body.has("task_key")
+          || !body.has("existing_status")) {
+        return null;
+      }
+      JsonNode existingEntryNode = body.get("existing_entry_id");
+      if (existingEntryNode == null || !existingEntryNode.canConvertToInt()) {
+        return null;
+      }
+      int existingEntryId = existingEntryNode.asInt(-1);
+      if (existingEntryId <= 0) {
+        return null;
+      }
+      String taskKey = rawTextNode(body, "task_key");
+      String existingStatus = textNode(body, "existing_status");
+      if (taskKey == null || taskKey.isBlank() || existingStatus == null || existingStatus.isBlank()) {
+        return null;
+      }
+      return new Micro6ConflictIdentity(existingEntryId, taskKey, existingStatus);
+    } catch (Exception e) {
+      logger.debug("Failed to parse Micro6 conflict response: {}", e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Safe duplicate attachment: the conflict's {@code task_key} must exactly equal the requested
+   * canonical key, the referenced entry is then polled, and only an entry whose returned id, task
+   * identity, and status all match the whitelist is attached to. An ambiguous poll result returns
+   * RECONCILING; a confirmed identity mismatch returns DUPLICATE_OR_CONFLICTING_DISPATCH.
+   */
+  private Micro6PublishResult resolveConflictAttachment(
+      String scriptName, String taskKey, String targetBaseUrl, Micro6ConflictIdentity conflict) {
+    // Conflict attachment is an ownership decision. Only the exact canonical key may attach;
+    // aliases, display names, case changes, and whitespace are rejected before polling.
+    if (!matchesCanonicalTaskIdentity(conflict.taskKey(), taskKey)) {
+      logger.warn(
+          "Micro6 conflict task_key mismatch: requested {} but existing entry {} holds {}",
+          taskKey,
+          conflict.existingEntryId(),
+          conflict.taskKey());
+      return Micro6PublishResult.conflictingDispatch(
+          conflict.existingEntryId(),
+          targetBaseUrl,
+          "Micro6 duplicate entry "
+              + conflict.existingEntryId()
+              + " is held by a different task (existing="
+              + conflict.taskKey()
+              + ", requested="
+              + taskKey
+              + ")");
+    }
+
+    // The conflict snapshot is mandatory identity evidence, not merely advisory text.  A
+    // terminal/unknown snapshot cannot be made attachable by a later status response: accepting
+    // that combination would allow an entry-id race or a reused entry to be attached silently.
+    if (!isAttachableExistingStatus(conflict.existingStatus())) {
+      return Micro6PublishResult.conflictingDispatch(
+          conflict.existingEntryId(),
+          targetBaseUrl,
+          "Micro6 duplicate entry "
+              + conflict.existingEntryId()
+              + " is not in an attachable status: "
+              + conflict.existingStatus());
+    }
+
+    long deadline = System.currentTimeMillis() + micro6TimeoutRecoveryProbeMs;
+    while (System.currentTimeMillis() < deadline) {
+      Micro6RunStatusResult statusResult =
+          getMicro6RunStatus(Map.of("local_executor_base_url", targetBaseUrl), conflict.existingEntryId());
+      if (statusResult.found()) {
+        return verifyEntryForAttachment(scriptName, taskKey, targetBaseUrl, conflict, statusResult);
+      }
+      try {
+        Thread.sleep(1000L);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return Micro6PublishResult.reconciling(
+            conflict.existingEntryId(),
+            targetBaseUrl,
+            "Interrupted while verifying duplicate entry "
+                + conflict.existingEntryId()
+                + " before attach");
+      }
+    }
+    logger.warn(
+        "Micro6 duplicate attachment could not confirm identity of entry {} within the probe window; entering RECONCILING",
+        conflict.existingEntryId());
+    return Micro6PublishResult.reconciling(
+        conflict.existingEntryId(),
+        targetBaseUrl,
+        "Micro6 duplicate entry "
+            + conflict.existingEntryId()
+            + " could not be identity-confirmed within the probe window");
+  }
+
+  private Micro6PublishResult verifyEntryForAttachment(
+      String scriptName,
+      String taskKey,
+      String targetBaseUrl,
+      Micro6ConflictIdentity conflict,
+      Micro6RunStatusResult statusResult) {
+    JsonNode raw = statusResult.rawResponse();
+    if (raw == null || !raw.isObject()) {
+      return Micro6PublishResult.reconciling(
+          conflict.existingEntryId(),
+          targetBaseUrl,
+          "Micro6 duplicate entry "
+              + conflict.existingEntryId()
+              + " returned a malformed status response");
+    }
+    int returnedEntryId = raw.path("entry_id").asInt(-1);
+    if (returnedEntryId != conflict.existingEntryId()) {
+      logger.warn(
+          "Micro6 duplicate entry identity mismatch: conflict referenced {} but status returned {}",
+          conflict.existingEntryId(),
+          returnedEntryId);
+      return Micro6PublishResult.conflictingDispatch(
+          conflict.existingEntryId(),
+          targetBaseUrl,
+          "Micro6 duplicate entry "
+              + conflict.existingEntryId()
+              + " returned a mismatched entry id "
+              + returnedEntryId);
+    }
+    String returnedTaskKey =
+        firstNonBlank(rawTextNode(raw, "task_key"), rawTextNode(raw, "queued_task"));
+    if (!matchesCanonicalTaskIdentity(returnedTaskKey, taskKey)) {
+      logger.warn(
+          "Micro6 duplicate entry task mismatch: requested {} but entry {} holds {}",
+          taskKey,
+          conflict.existingEntryId(),
+          returnedTaskKey);
+      return Micro6PublishResult.conflictingDispatch(
+          conflict.existingEntryId(),
+          targetBaseUrl,
+          "Micro6 duplicate entry "
+              + conflict.existingEntryId()
+              + " returned a mismatched task identity");
+    }
+    String returnedStatus = statusResult.status();
+    if (!isAttachableExistingStatus(returnedStatus)) {
+      logger.warn(
+          "Micro6 duplicate entry {} is not in an attachable status: {}",
+          conflict.existingEntryId(),
+          returnedStatus);
+      return Micro6PublishResult.conflictingDispatch(
+          conflict.existingEntryId(),
+          targetBaseUrl,
+          "Micro6 duplicate entry "
+              + conflict.existingEntryId()
+              + " is not in an attachable status: "
+              + returnedStatus);
+    }
+    if (!conflict.existingStatus().equalsIgnoreCase(returnedStatus)) {
+      // The conflict snapshot raced the status poll. A second identity/status-confirming poll is
+      // required before attach; one transient state change is not stable evidence.
+      Micro6RunStatusResult secondPoll =
+          getMicro6RunStatus(
+              Map.of("local_executor_base_url", targetBaseUrl), conflict.existingEntryId());
+      if (!secondPoll.found()
+          || !sameEntryAndTask(secondPoll.rawResponse(), conflict.existingEntryId(), taskKey)
+          || !isAttachableExistingStatus(secondPoll.status())
+          || !returnedStatus.equalsIgnoreCase(secondPoll.status())) {
+        return Micro6PublishResult.reconciling(
+            conflict.existingEntryId(),
+            targetBaseUrl,
+            "Micro6 duplicate entry status changed during identity verification; awaiting stable reconciliation");
+      }
+      returnedStatus = secondPoll.status();
+    }
+    logger.info(
+        "Attached to existing Micro6 run for task {} (existing_entry_id={}, status={})",
+        scriptName,
+        conflict.existingEntryId(),
+        returnedStatus);
+    return Micro6PublishResult.success(
+        conflict.existingEntryId(),
+        true,
+        targetBaseUrl,
+        mapPublishStatusForTransport(returnedStatus),
+        returnedStatus,
+        null);
+  }
+
+  /**
+   * Statuses that may safely own a re-attached run. PAUSED is intentionally included: a paused run
+   * is an active (non-terminal) owned entry and can be resumed, so attachment must not be blocked.
+   */
+  private boolean isAttachableExistingStatus(String status) {
+    if (status == null || status.isBlank()) {
+      return false;
+    }
+    return "RECEIVED".equalsIgnoreCase(status)
+        || "PENDING".equalsIgnoreCase(status)
+        || "ACCEPTED".equalsIgnoreCase(status)
+        || "ASSIGNED".equalsIgnoreCase(status)
+        || "QUEUED".equalsIgnoreCase(status)
+        || "RUNNING".equalsIgnoreCase(status)
+        || "PAUSED".equalsIgnoreCase(status);
+  }
+
+  /**
+   * Parses a successful {@code /execute} response. A sub-400 status is no longer treated as proof
+   * of publication: the body must be valid JSON advertising {@code success=true} with a matching
+   * {@code entry_id} and {@code task_key}/{@code queued_task}. Malformed, empty, or mismatched
+   * bodies fail closed as RECONCILING so the status-sync loop reconciles the true outcome; an
+   * explicit {@code success:false} body is a definitive publish failure.
+   */
+  private Micro6PublishResult mapExecuteAcceptedResult(
+      HttpResponse<String> executeResponse, int entryId, String taskKey, String targetBaseUrl) {
+    String body = executeResponse == null ? null : executeResponse.body();
+    if (body == null || body.isBlank()) {
+      return Micro6PublishResult.reconciling(
+          entryId,
+          targetBaseUrl,
+          "Micro6 execute returned an empty response body for entry " + entryId);
+    }
+    JsonNode accepted;
+    try {
+      accepted = objectMapper.readTree(body);
+    } catch (Exception e) {
+      logger.warn(
+          "Micro6 execute response body for entry {} is not valid JSON: {}",
+          entryId,
+          e.getMessage());
+      return Micro6PublishResult.reconciling(
+          entryId,
+          targetBaseUrl,
+          "Micro6 execute returned a non-JSON response for entry " + entryId);
+    }
+    if (accepted == null || !accepted.isObject()) {
+      return Micro6PublishResult.reconciling(
+          entryId,
+          targetBaseUrl,
+          "Micro6 execute returned a malformed response for entry " + entryId);
+    }
+    if (!accepted.path("success").asBoolean(false)) {
+      return Micro6PublishResult.failure(
+          "Micro6 executor did not accept the task (success=false for entry " + entryId + ")",
+          targetBaseUrl);
+    }
+    int returnedEntryId = accepted.path("entry_id").asInt(-1);
+    if (returnedEntryId != entryId) {
+      return Micro6PublishResult.reconciling(
+          entryId,
+          targetBaseUrl,
+          "Micro6 execute returned a mismatched entry_id (expected "
+              + entryId
+              + ", got "
+              + returnedEntryId
+              + ")");
+    }
+    String returnedTaskKey = rawTextNode(accepted, "task_key");
+    String returnedQueuedTask = rawTextNode(accepted, "queued_task");
+    boolean taskIdentityMatches =
+        matchesTaskIdentity(returnedTaskKey, taskKey)
+            || matchesTaskIdentity(returnedQueuedTask, taskKey);
+    if (!taskIdentityMatches) {
+      return Micro6PublishResult.reconciling(
+          entryId,
+          targetBaseUrl,
+          "Micro6 execute returned a mismatched task identity for entry " + entryId);
+    }
+    String executorStatus = firstNonBlank(textNode(accepted, "status"), "ACCEPTED");
+    String activationState = textNode(accepted, "activation_state");
+    return Micro6PublishResult.success(
+        entryId,
+        false,
+        targetBaseUrl,
+        mapPublishStatusForTransport(executorStatus),
+        executorStatus,
+        activationState);
+  }
+
+  /**
+   * Matches a successful execute response. A display name is accepted only when the catalog
+   * resolver explicitly maps that exact token to the requested canonical key. No implicit case,
+   * punctuation, alias, or whitespace normalization is performed.
+   */
+  private boolean matchesTaskIdentity(String candidate, String taskKey) {
+    if (candidate == null || candidate.isBlank() || taskKey == null || taskKey.isBlank()) {
+      return false;
+    }
+    if (candidate.equals(taskKey)) {
+      return true;
+    }
+    try {
+      String resolved = displayNameToTaskKeyResolver.apply(candidate);
+      return resolved != null && resolved.equals(taskKey);
+    } catch (RuntimeException resolverFailure) {
+      logger.debug(
+          "Micro6 task identity resolver failed for candidate {}: {}",
+          candidate,
+          resolverFailure.getMessage());
+      return false;
+    }
+  }
+
+  /** Strict identity comparison used for duplicate attachment and status reconciliation. */
+  private boolean matchesCanonicalTaskIdentity(String candidate, String taskKey) {
+    return candidate != null
+        && taskKey != null
+        && !candidate.isBlank()
+        && !taskKey.isBlank()
+        && candidate.equals(taskKey);
+  }
+
+  private boolean sameEntryAndTask(JsonNode raw, int entryId, String taskKey) {
+    if (raw == null || !raw.isObject() || raw.path("entry_id").asInt(-1) != entryId) {
+      return false;
+    }
+    String returnedTaskKey =
+        firstNonBlank(rawTextNode(raw, "task_key"), rawTextNode(raw, "queued_task"));
+    return matchesCanonicalTaskIdentity(returnedTaskKey, taskKey);
+  }
+
+  /** Maps an executor status to the transport publish-status vocabulary for the immediate UI. */
+  private String mapPublishStatusForTransport(String executorStatus) {
+    if (executorStatus == null || executorStatus.isBlank()) {
+      return "RECONCILING";
+    }
+    if ("QUEUED".equalsIgnoreCase(executorStatus)) {
+      return "QUEUED";
+    }
+    if ("ACCEPTED".equalsIgnoreCase(executorStatus)
+        || "RECEIVED".equalsIgnoreCase(executorStatus)
+        || "PENDING".equalsIgnoreCase(executorStatus)) {
+      return "ACCEPTED";
+    }
+    if ("ASSIGNED".equalsIgnoreCase(executorStatus)) {
+      return "ASSIGNED";
+    }
+    if ("RUNNING".equalsIgnoreCase(executorStatus)) {
+      return "RUNNING";
+    }
+    if ("PAUSED".equalsIgnoreCase(executorStatus)) {
+      // PAUSED is an activated-but-suspended state, never collapsed into RUNNING. Keeping it
+      // distinct in the transport vocabulary lets the planner label it "Task paused" and leaves
+      // resume/stop controls active without implying a running script loop.
+      return "PAUSED";
+    }
+    return "RECONCILING";
   }
 
   private Micro6PublishResult recoverAcceptedPublishAfterTimeout(
@@ -614,42 +1012,30 @@ public class ScriptExecutionService {
       try {
         Micro6RunStatusResult statusResult =
             getMicro6RunStatus(Map.of("local_executor_base_url", targetBaseUrl), entryId);
-        if (isAcceptedPublishStatus(statusResult)) {
+        // A status value alone is not proof that the reserved entry was accepted. The executor
+        // must echo the exact entry id and canonical task key before timeout recovery can attach
+        // the persisted run to that status.
+        if (isAcceptedPublishStatus(statusResult)
+            && sameEntryAndTask(statusResult.rawResponse(), entryId, taskKey)) {
           logger.info(
               "Recovered timed out Micro6 publish for task {} on {} via status {} for entry {}",
               scriptName,
               targetBaseUrl,
               statusResult.status(),
               entryId);
-          return Micro6PublishResult.success(entryId, false, targetBaseUrl, "PUBLISHED");
+          return Micro6PublishResult.success(
+              entryId,
+              false,
+              targetBaseUrl,
+              mapPublishStatusForTransport(statusResult.status()),
+              statusResult.status(),
+              null);
         }
       } catch (Exception statusException) {
         logger.debug(
             "Micro6 publish timeout recovery status poll failed for entry {}: {}",
             entryId,
             statusException.getMessage());
-      }
-
-      try {
-        Micro6ExecutorHealthResult healthResult =
-            getMicro6ExecutorHealth(Map.of("local_executor_base_url", targetBaseUrl));
-        JsonNode rawHealth = healthResult.rawResponse();
-        String currentTask = rawHealth == null ? null : textNode(rawHealth, "current_task");
-        if (healthResult.reachable()
-            && currentTask != null
-            && matchesPublishedTask(currentTask, scriptName, taskKey)) {
-          logger.info(
-              "Recovered timed out Micro6 publish for task {} on {} via /health current_task='{}'",
-              scriptName,
-              targetBaseUrl,
-              currentTask);
-          return Micro6PublishResult.success(entryId, false, targetBaseUrl, "PUBLISHED");
-        }
-      } catch (Exception healthException) {
-        logger.debug(
-            "Micro6 publish timeout recovery health probe failed for entry {}: {}",
-            entryId,
-            healthException.getMessage());
       }
 
       try {
@@ -674,19 +1060,34 @@ public class ScriptExecutionService {
       return false;
     }
     return "PENDING".equalsIgnoreCase(status)
+        || "RECEIVED".equalsIgnoreCase(status)
         || "QUEUED".equalsIgnoreCase(status)
+        || "ASSIGNED".equalsIgnoreCase(status)
         || "RUNNING".equalsIgnoreCase(status)
+        || "PAUSED".equalsIgnoreCase(status)
         || "COMPLETED".equalsIgnoreCase(status)
         || "ACCEPTED".equalsIgnoreCase(status);
   }
 
-  private boolean matchesPublishedTask(String currentTask, String scriptName, String taskKey) {
-    if (currentTask == null || currentTask.isBlank()) {
+  /**
+   * Health-based timeout recovery is only valid when health exposes the same entry identity and
+   * canonical task key. A display name/current_task without an entry id is ambiguous and must
+   * remain RECONCILING.
+   */
+  private boolean matchesPublishedHealthEntry(JsonNode rawHealth, int entryId, String taskKey) {
+    if (rawHealth == null || !rawHealth.isObject()) {
       return false;
     }
-    String normalizedCurrentTask = normalizeTaskToken(currentTask);
-    return normalizedCurrentTask.contains(normalizeTaskToken(scriptName))
-        || normalizedCurrentTask.contains(normalizeTaskToken(taskKey));
+    int reportedEntryId = rawHealth.path("current_entry_id").asInt(-1);
+    if (reportedEntryId < 0) {
+      reportedEntryId = rawHealth.path("entry_id").asInt(-1);
+    }
+    if (reportedEntryId != entryId) {
+      return false;
+    }
+    String reportedTaskKey =
+        firstNonBlank(rawTextNode(rawHealth, "task_key"), rawTextNode(rawHealth, "queued_task"));
+    return matchesCanonicalTaskIdentity(reportedTaskKey, taskKey);
   }
 
   private String normalizeTaskToken(String value) {
@@ -694,7 +1095,8 @@ public class ScriptExecutionService {
       return "";
     }
     String normalized = value;
-    if (normalized.regionMatches(true, 0, SCRIPT_SOURCE_PREFIX_MICRO6, 0, SCRIPT_SOURCE_PREFIX_MICRO6.length())) {
+    if (normalized.regionMatches(
+        true, 0, SCRIPT_SOURCE_PREFIX_MICRO6, 0, SCRIPT_SOURCE_PREFIX_MICRO6.length())) {
       normalized = normalized.substring(SCRIPT_SOURCE_PREFIX_MICRO6.length());
     }
     return normalized.replaceAll("[^a-zA-Z0-9]+", "").toLowerCase();
@@ -1015,8 +1417,7 @@ public class ScriptExecutionService {
     controlMicro6Run(micro6BaseUrl, entryId, action, null);
   }
 
-  private void controlMicro6Run(
-      String micro6BaseUrl, int entryId, String action, String reason) {
+  private void controlMicro6Run(String micro6BaseUrl, int entryId, String action, String reason) {
     try {
       String body =
           reason == null || reason.isBlank()
@@ -1048,9 +1449,9 @@ public class ScriptExecutionService {
   /**
    * Sends a Micro6 run control request and reports whether it was accepted by the executor.
    *
-   * <p>Unlike {@link #controlMicro6Run(String, int, String, String)}, this variant returns
-   * {@code true} only when the executor responds with an HTTP status below 400, allowing callers
-   * to distinguish a delivered control request from a fire-and-forget attempt.
+   * <p>Unlike {@link #controlMicro6Run(String, int, String, String)}, this variant returns {@code
+   * true} only when the executor responds with an HTTP status below 400, allowing callers to
+   * distinguish a delivered control request from a fire-and-forget attempt.
    *
    * @return {@code true} if the executor accepted the request (HTTP &lt; 400); {@code false} on a
    *     non-2xx/3xx response or any network/serialization failure
@@ -1096,7 +1497,8 @@ public class ScriptExecutionService {
     return micro6EntryIdSeq.incrementAndGet();
   }
 
-  public Micro6PublishResult publishMicro6Task(String scriptName, Map<String, Object> taskMetadata) {
+  public Micro6PublishResult publishMicro6Task(
+      String scriptName, Map<String, Object> taskMetadata) {
     return publishMicro6Task(scriptName, taskMetadata, null);
   }
 
@@ -1173,7 +1575,8 @@ public class ScriptExecutionService {
               .timeout(Duration.ofSeconds(5))
               .GET()
               .build();
-      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() >= 400) {
         return new Micro6ExecutorHealthResult(
             false,
@@ -1192,16 +1595,20 @@ public class ScriptExecutionService {
             null,
             null,
             targetBaseUrl,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null);
       }
       JsonNode payload = objectMapper.readTree(response.body());
       Map<String, Object> targetMetadata = readMicro6TargetMetadata(taskMetadata);
-      String resolvedAccountHash =
-          firstNonBlank(
-              textNode(payload, "account_hash"), stringValue(targetMetadata.get("account_hash")));
-      String resolvedAccountName =
-          firstNonBlank(
-              textNode(payload, "account_name"), stringValue(targetMetadata.get("account_name")));
+      // account_hash is actual logged-in identity only. Never backfill it from launch/profile
+      // metadata, because requested identity is not evidence of the account currently logged in.
+      String resolvedAccountHash = textNode(payload, "account_hash");
+      String resolvedAccountName = textNode(payload, "account_name");
       String requestedAccountName =
           firstNonBlank(
               textNode(payload, "requested_account_name"),
@@ -1212,35 +1619,90 @@ public class ScriptExecutionService {
               textNode(payload, "requested_account_hash"),
               stringValue(targetMetadata.get("requested_account_hash")),
               stringValue(targetMetadata.get("account_hash")));
-      boolean dispatchHold = payload.path("dispatch_hold").asBoolean(false);
+      Boolean dispatchHold =
+          payload.path("dispatch_hold").isBoolean()
+              ? payload.path("dispatch_hold").asBoolean()
+              : null;
       String dispatchHoldReason = textNode(payload, "dispatch_hold_reason");
-      String startupState =
-          firstNonBlank(
-              textNode(payload, "startup_state"), inferStartupStateFromTarget(targetMetadata, payload));
-      String loginState =
-          firstNonBlank(textNode(payload, "login_state"), inferLoginStateFromTarget(targetMetadata, payload));
-      Integer loginAttempt = payload.path("login_attempt").isNumber() ? payload.path("login_attempt").asInt() : null;
+      String startupState = textNode(payload, "startup_state");
+      String loginState = textNode(payload, "login_state");
+      Integer loginAttempt =
+          payload.path("login_attempt").isNumber() ? payload.path("login_attempt").asInt() : null;
       Integer loginAttemptMax =
-          payload.path("login_attempt_max").isNumber() ? payload.path("login_attempt_max").asInt() : null;
+          payload.path("login_attempt_max").isNumber()
+              ? payload.path("login_attempt_max").asInt()
+              : null;
       String loginTerminalReason = textNode(payload, "login_terminal_reason");
-      boolean publishReady =
-          isMicro6ExecutorPublishReady(dispatchHold, startupState, loginState, loginTerminalReason);
-      String readinessPhase = publishReady ? "READY_TO_PUBLISH" : "WAITING_FOR_DISPATCH";
-      String readinessReason =
-          publishReady
-              ? null
-              : buildMicro6DispatchHoldReason(
-                  dispatchHoldReason,
-                  startupState,
-                  loginState,
-                  loginAttempt,
-                  loginAttemptMax,
-                  loginTerminalReason);
+      // World verification: never label the requested world as the observed world unless Micro6
+      // confirms the client is logged into it. Missing observed world is never matched.
+      Integer requestedWorld = intValue(taskMetadata.get("world"));
+      Integer observedWorld =
+          payload.path("current_world").isNumber() ? payload.path("current_world").asInt() : null;
+      boolean worldMatched =
+          requestedWorld != null
+              && observedWorld != null
+              && requestedWorld.intValue() == observedWorld.intValue();
+      boolean pathfinderReady = payload.path("pathfinder_ready").asBoolean(false);
+      String scriptLifecycleState = textNode(payload, "script_lifecycle_state");
+      boolean scriptLoopAlive = payload.path("script_loop_alive").asBoolean(false);
+      // Shared readiness classification in the canonical ordering port → health → account → login →
+      // world → script → dispatch. A client still logging in is reported as WAITING_FOR_LOGIN,
+      // never
+      // as WAITING_FOR_WORLD.
+      Micro6ExecutorReadinessEvaluator.Evaluation readiness =
+          Micro6ExecutorReadinessEvaluator.evaluate(
+              dispatchHold,
+              dispatchHoldReason,
+              startupState,
+              loginState,
+              loginAttempt,
+              loginAttemptMax,
+              loginTerminalReason,
+              worldMatched,
+              requestedWorld,
+              observedWorld,
+              pathfinderReady,
+              scriptLoopAlive,
+              scriptLifecycleState);
+      String expectedAccountHash =
+          firstNonBlank(
+              stringValue(targetMetadata.get("account_hash")),
+              stringValue(targetMetadata.get("requested_account_hash")));
+      String expectedAccountName =
+          firstNonBlank(
+              stringValue(targetMetadata.get("account_name")),
+              stringValue(targetMetadata.get("requested_account_name")));
+      String accountHashScheme = textNode(payload, "account_hash_scheme");
+      if (expectedAccountHash != null
+          && (!AccountIdentityContract.hasRequiredScheme(accountHashScheme)
+              || !AccountIdentityContract.matchesHash(resolvedAccountHash, expectedAccountHash)
+              || (textNode(payload, "requested_account_hash") != null
+                  && !AccountIdentityContract.matchesHash(
+                      textNode(payload, "requested_account_hash"), expectedAccountHash)))) {
+        readiness =
+            new Micro6ExecutorReadinessEvaluator.Evaluation(
+                "WAITING_FOR_ACCOUNT",
+                "Micro6 local executor actual account identity does not match the selected canonical account",
+                false);
+      }
+      // A canonical hash is authoritative whenever the selected target provides one. Only when
+      // no expected hash exists may the legacy account name be used as the identity fallback; a
+      // name mismatch must not allow readiness to proceed.
+      if (expectedAccountHash == null
+          && expectedAccountName != null
+          && !AccountIdentityContract.normalizeName(expectedAccountName)
+              .equals(AccountIdentityContract.normalizeName(resolvedAccountName))) {
+        readiness =
+            new Micro6ExecutorReadinessEvaluator.Evaluation(
+                "WAITING_FOR_ACCOUNT",
+                "Micro6 local executor actual account name does not match the selected account",
+                false);
+      }
       return new Micro6ExecutorHealthResult(
           true,
-          publishReady,
-          readinessPhase,
-          readinessReason,
+          readiness.publishReady(),
+          readiness.phase(),
+          readiness.reason(),
           resolvedAccountName,
           resolvedAccountHash,
           requestedAccountName,
@@ -1253,7 +1715,13 @@ public class ScriptExecutionService {
           loginAttemptMax,
           loginTerminalReason,
           targetBaseUrl,
-          payload);
+          payload,
+          requestedWorld,
+          observedWorld,
+          worldMatched,
+          pathfinderReady,
+          scriptLifecycleState,
+          scriptLoopAlive);
     } catch (Exception e) {
       return new Micro6ExecutorHealthResult(
           false,
@@ -1272,6 +1740,12 @@ public class ScriptExecutionService {
           null,
           null,
           targetBaseUrl,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
           null);
     }
   }
@@ -1290,7 +1764,8 @@ public class ScriptExecutionService {
    * @return {@code true} if the executor accepted the stop request (HTTP &lt; 400); {@code false}
    *     on a non-2xx/3xx response or any network/serialization failure
    */
-  public boolean stopMicro6PublishedRun(Map<String, Object> taskMetadata, Integer entryId, String reason) {
+  public boolean stopMicro6PublishedRun(
+      Map<String, Object> taskMetadata, Integer entryId, String reason) {
     if (entryId == null || entryId <= 0) {
       return false;
     }
@@ -1319,6 +1794,33 @@ public class ScriptExecutionService {
     }
     String text = node.asText(null);
     return text == null || text.isBlank() ? null : text.trim();
+  }
+
+  /** Returns a JSON text value without trimming identity-bearing whitespace. */
+  private String rawTextNode(JsonNode payload, String fieldName) {
+    if (payload == null || fieldName == null || fieldName.isBlank()) {
+      return null;
+    }
+    JsonNode node = payload.path(fieldName);
+    if (node.isMissingNode() || node.isNull()) {
+      return null;
+    }
+    String text = node.asText(null);
+    return text == null || text.isBlank() ? null : text;
+  }
+
+  private Integer intValue(Object value) {
+    if (value instanceof Number) {
+      return ((Number) value).intValue();
+    }
+    if (value instanceof String stringValue) {
+      try {
+        return Integer.parseInt(stringValue.trim());
+      } catch (NumberFormatException ignored) {
+        return null;
+      }
+    }
+    return null;
   }
 
   @SuppressWarnings("unchecked")
@@ -1352,110 +1854,6 @@ public class ScriptExecutionService {
 
   private String inferLoginStateFromTarget(Map<String, Object> targetMetadata, JsonNode payload) {
     return inferStartupStateFromTarget(targetMetadata, payload) == null ? null : "logged_in";
-  }
-
-  private boolean isMicro6ExecutorPublishReady(
-      boolean dispatchHold, String startupState, String loginState, String loginTerminalReason) {
-    if (dispatchHold) {
-      return false;
-    }
-    if (!"accountbuilder_ready".equalsIgnoreCase(startupState)) {
-      return false;
-    }
-    if (loginState == null || loginState.isBlank()) {
-      return true;
-    }
-    if ("logged_in".equalsIgnoreCase(loginState)) {
-      return true;
-    }
-    return "auto_login_in_progress".equalsIgnoreCase(loginState) && loginTerminalReason == null
-        ? false
-        : false;
-  }
-
-  private String buildMicro6DispatchHoldReason(
-      String dispatchHoldReason,
-      String startupState,
-      String loginState,
-      Integer loginAttempt,
-      Integer loginAttemptMax,
-      String loginTerminalReason) {
-    if ("initializing_bot_logic".equalsIgnoreCase(startupState)) {
-      return "Micro6 local executor is logged in but AccountBuilder bot logic is still initializing";
-    }
-    if ("bot_initialization_failed".equalsIgnoreCase(startupState)) {
-      return "Micro6 local executor failed to initialize AccountBuilder bot logic";
-    }
-    if ("logged_in".equalsIgnoreCase(loginState)
-        && startupState != null
-        && !"accountbuilder_ready".equalsIgnoreCase(startupState)) {
-      return "Micro6 local executor is logged in but AccountBuilder is not ready yet: "
-          + startupState;
-    }
-    if ("auto_login_failed".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor is waiting for manual login after auto-login exhausted "
-          + firstNonBlank(formatAttemptCounts(loginAttempt, loginAttemptMax), "its attempts");
-    }
-    if ("authenticator_required".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor is waiting for manual authenticator input";
-    }
-    if ("auto_login_in_progress".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor is attempting auto-login"
-          + formatAttemptSuffix(loginAttempt, loginAttemptMax);
-    }
-    if ("profile_bootstrap_pending".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor is preparing the requested profile for auto-login";
-    }
-    if ("waiting_for_profile_lock".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor is waiting to acquire the profile lock before auto-login"
-          + formatAttemptSuffix(loginAttempt, loginAttemptMax);
-    }
-    if ("waiting_for_profile_record".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor could not find the requested profile yet"
-          + formatAttemptSuffix(loginAttempt, loginAttemptMax);
-    }
-    if ("profile_bootstrap_failed".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor failed before auto-login could be armed";
-    }
-    if ("waiting_for_login_screen".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor is waiting for the login screen"
-          + formatAttemptSuffix(loginAttempt, loginAttemptMax);
-    }
-    if ("runtime_not_ready".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor is still initializing the auto-login runtime";
-    }
-    if ("runtime_not_ready_timeout".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor auto-login runtime never became ready";
-    }
-    if ("login_screen_not_ready_timeout".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor login screen never became ready";
-    }
-    if ("waiting_for_login".equalsIgnoreCase(dispatchHoldReason)
-        || "waiting_for_login".equalsIgnoreCase(loginState)) {
-      return "Micro6 local executor is waiting for login";
-    }
-    if ("starting_accountbuilder".equalsIgnoreCase(dispatchHoldReason)
-        && startupState != null
-        && !"starting_accountbuilder".equalsIgnoreCase(startupState)) {
-      return "Micro6 local executor is online but not dispatch-ready: " + startupState;
-    }
-    if (loginTerminalReason != null && !loginTerminalReason.isBlank()) {
-      return "Micro6 local executor is online but not dispatch-ready: " + loginTerminalReason;
-    }
-    return "Micro6 local executor is online but not dispatch-ready: "
-        + firstNonBlank(dispatchHoldReason, startupState, loginState, "dispatch_hold");
-  }
-
-  private String formatAttemptCounts(Integer loginAttempt, Integer loginAttemptMax) {
-    if (loginAttempt == null || loginAttemptMax == null || loginAttemptMax <= 0) {
-      return null;
-    }
-    return loginAttempt + "/" + loginAttemptMax;
-  }
-
-  private String formatAttemptSuffix(Integer loginAttempt, Integer loginAttemptMax) {
-    String counts = formatAttemptCounts(loginAttempt, loginAttemptMax);
-    return counts != null ? " (" + counts + ")" : "";
   }
 
   private String firstNonBlank(String... values) {

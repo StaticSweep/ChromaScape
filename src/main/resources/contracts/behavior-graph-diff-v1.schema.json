@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "behavior-graph-diff/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "base_graph_id", "base_graph_hash", "operations", "control_allowed"],
+  "properties": {
+    "schema": {"const": "behavior-graph-diff/v1"},
+    "base_graph_id": {"type": "string", "pattern": "^graph_[0-9a-f]{24}$"},
+    "base_graph_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "operations": {"type": "array", "items": {"type": "object", "required": ["op"], "properties": {"op": {"enum": ["add_node", "remove_node", "replace_semantics", "add_edge", "remove_edge"]}, "node": {"type": "object"}, "edge": {"type": "object"}, "node_id": {"type": "string"}}}},
+    "reason": {"type": "string"},
+    "control_allowed": {"const": false}
+  }
+}

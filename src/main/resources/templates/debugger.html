@@ -382,7 +382,7 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
-        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="33">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="39">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Builder Goal Runner</label>
             <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
@@ -390,7 +390,7 @@
             </button>
           </div>
           <div class="small text-muted mb-2">
-            Select an account, choose a Micro6 task, set the task settings and world, and run it. ChromaScape will launch the local micro6 workspace, wait for the executor to become dispatch-ready, and then publish the task.
+            Select an account, choose a Micro6 task, set the task settings and world, and run it. The JSON editor shows the selected task as a <code>{"task_key", "settings"}</code> envelope so an operator can edit either value directly. ChromaScape will launch the local micro6 workspace, wait for the executor to become dispatch-ready, and then publish the task. Launch Account only prepares the executor; Publish Task sends the selected task without relaunching it. An existing non-ready Micro6 session for the same account must be stopped before a duplicate can be launched.
           </div>
           <div class="mb-2">
             <label class="form-label small mb-1" for="builderGoalAccountSelect">Account</label>
@@ -424,9 +424,9 @@
               id="builderGoalConfigInput"
               class="form-control form-control-sm font-monospace"
               rows="10"
-              placeholder='Paste either {"treeType":"WILLOW"} or a full builder payload with task_key/settings'></textarea>
+              placeholder='{"task_key":"FISHING_TRAINING","settings":{}}'></textarea>
             <div id="builderGoalConfigMeta" class="small text-muted mt-1">
-              Paste a raw settings object, a <code>{"settings":{...}}</code> envelope, or a full builder payload. If the JSON includes a <code>task_key</code>, ChromaScape will auto-select that task.
+              Choose a task to load the canonical <code>{"task_key":"...","settings":{...}}</code> envelope. Legacy raw settings and full builder payloads are still accepted; a valid <code>task_key</code> synchronizes the task selector.
             </div>
           </div>
           <div class="mb-2">
@@ -448,7 +448,7 @@
             <button class="btn btn-sm btn-primary flex-fill" id="runBuilderGoalBtn" disabled title="Launch the local Micro6 workspace for the account and publish the selected task">
               <i class="bi bi-play-fill me-1"></i>Run Task
             </button>
-            <button class="btn btn-sm btn-outline-primary flex-fill" id="launchBuilderGoalAccountBtn" disabled title="Launch the local Micro6 workspace for the selected account without publishing a task">
+            <button class="btn btn-sm btn-outline-primary flex-fill" id="launchBuilderGoalAccountBtn" disabled title="Launch the local Micro6 workspace for the selected account without publishing a task. The launch runs server-side and this page polls its progress until the executor is dispatch-ready.">
               <i class="bi bi-box-arrow-up-right me-1"></i>Launch Account
             </button>
             <button class="btn btn-sm btn-outline-success flex-fill" id="publishBuilderGoalBtn" disabled title="Publish the selected task to an already-running Micro6 executor for this account without relaunching the client">
@@ -1027,6 +1027,12 @@
             <div class="text-muted fst-italic">Scanning for anomalies...</div>
           </div>
         </div>
+        <div class="fishing-shadow-panel glass-panel">
+          <h5><i class="bi bi-fishing me-2"></i>Fishing Shadow Agent</h5>
+          <div id="fishingShadowContent" class="fishing-shadow-content">
+            <div class="text-muted fst-italic">Loading shadow agent...</div>
+          </div>
+        </div>
       </section>
     </div>
   </div>
@@ -1098,9 +1104,10 @@
     </div>
   </div>
 
-  <script src="/js/debugger.js?v=14"></script>
+  <script src="/js/fishing-shadow-core.js?v=1"></script>
+  <script src="/js/debugger.js?v=15"></script>
   <script src="/js/patchloop.js?v=2"></script>
-  <script src="/js/account-task-planner.js?v=33"></script>
+<script src="/js/account-task-planner.js?v=39"></script>
 </body>
 
 </html>

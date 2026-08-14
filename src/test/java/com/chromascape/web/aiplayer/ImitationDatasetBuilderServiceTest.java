@@ -59,7 +59,8 @@ class ImitationDatasetBuilderServiceTest {
     LocalDateTime now = LocalDateTime.of(2026, 6, 16, 10, 0);
     LogEntity log = new LogEntity(now, "INFO", "hello", "acct", "ScriptA");
     log.setTick(123);
-    when(logRepository.findBySourceAndTimestampBetweenOrderByTimestampAsc("acct", now.minusHours(1), now))
+    when(logRepository.findBySourceAndTimestampBetweenOrderByTimestampAsc(
+            "acct", now.minusHours(1), now))
         .thenReturn(List.of(log));
 
     DatasetBuildResult result = service.buildDatasetResult("acct", now.minusHours(1), now);

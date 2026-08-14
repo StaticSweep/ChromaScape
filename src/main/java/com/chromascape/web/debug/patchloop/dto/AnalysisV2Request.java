@@ -58,8 +58,8 @@ public class AnalysisV2Request {
   /**
    * Creates a minimal verification request for end-to-end provider verification.
    *
-   * <p>Used by {@code McpVerificationService} to run a lightweight real analysis call through
-   * the production MCP path without requiring full evidence.
+   * <p>Used by {@code McpVerificationService} to run a lightweight real analysis call through the
+   * production MCP path without requiring full evidence.
    *
    * @return a minimal request suitable for provider verification
    */
@@ -170,7 +170,14 @@ public class AnalysisV2Request {
   @Override
   public int hashCode() {
     return Objects.hash(
-        schemaVersion, promptType, target, prompt, context, evidenceSelectors, evidenceBundle, config);
+        schemaVersion,
+        promptType,
+        target,
+        prompt,
+        context,
+        evidenceSelectors,
+        evidenceBundle,
+        config);
   }
 
   @Override

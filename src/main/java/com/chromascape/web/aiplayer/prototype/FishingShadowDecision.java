@@ -29,4 +29,11 @@ public record FishingShadowDecision(
     @JsonProperty("abstentionReason") String abstentionReason,
     @JsonProperty("policyDistance") Double policyDistance,
     @JsonProperty("matchedExampleTick") Long matchedExampleTick,
-    @JsonProperty("latencyMicros") long latencyMicros) {}
+    @JsonProperty("latencyMicros") long latencyMicros) {
+
+  /** AI Routine recommendations can never dispatch gameplay input. */
+  @JsonProperty("control_allowed")
+  public boolean controlAllowed() {
+    return false;
+  }
+}

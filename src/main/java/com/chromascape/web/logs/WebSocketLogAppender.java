@@ -46,6 +46,7 @@ public class WebSocketLogAppender extends AbstractAppender {
 
   /** ISO 8601 formatter for timestamps in WebSocket payload. */
   private static final DateTimeFormatter ISO_INSTANT = DateTimeFormatter.ISO_INSTANT;
+
   /** Raw stderr stream that bypasses the application's redirected System.err logger bridge. */
   private static final PrintStream RAW_STDERR =
       new PrintStream(new FileOutputStream(FileDescriptor.err), true);

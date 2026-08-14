@@ -172,9 +172,7 @@ public class TickStreamIngestionService {
           batch.getCooldowns() != null ? objectMapper.valueToTree(batch.getCooldowns()) : null;
       JsonNode quest = batch.getQuest() != null ? objectMapper.valueToTree(batch.getQuest()) : null;
       JsonNode questHelper =
-          batch.getQuestHelper() != null
-              ? objectMapper.valueToTree(batch.getQuestHelper())
-              : null;
+          batch.getQuestHelper() != null ? objectMapper.valueToTree(batch.getQuestHelper()) : null;
 
       // NEW: Convert expanded world state to JSON
       JsonNode npcs = batch.getNpcs() != null ? objectMapper.valueToTree(batch.getNpcs()) : null;
@@ -519,9 +517,7 @@ public class TickStreamIngestionService {
     // --- Position normalization ---
     Object positionObj = normalized.get("position");
     Map<String, Object> position =
-        positionObj instanceof Map
-            ? new LinkedHashMap<>((Map<String, Object>) positionObj)
-            : null;
+        positionObj instanceof Map ? new LinkedHashMap<>((Map<String, Object>) positionObj) : null;
     if (position != null) {
       normalized.put("position", position);
     }

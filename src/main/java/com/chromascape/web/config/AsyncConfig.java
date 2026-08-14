@@ -32,4 +32,29 @@ public class AsyncConfig {
     executor.initialize();
     return executor;
   }
+
+  /**
+   * Single-worker executor for asynchronous Builder Goal account launches.
+   *
+   * <p>A single local executor port cannot support two concurrent relaunches. Only one worker
+   * processes launches at a time. Rejected submissions are handled at the service layer with clear
+   * HTTP 503 responses.
+   *
+   * <p>Account launches can wait for the local Micro6 executor to become dispatch-ready for up to
+   * the 90-minute server-side watchdog. Keeping them on a dedicated pool prevents long login waits
+   * from exhausting the patch-loop workers or the request threads.
+   */
+  @Bean(name = "builderGoalLaunchExecutor")
+  public Executor builderGoalLaunchExecutor() {
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(1);
+    executor.setMaxPoolSize(1);
+    executor.setQueueCapacity(0);
+    executor.setThreadNamePrefix("builder-goal-launch-");
+    executor.setWaitForTasksToCompleteOnShutdown(true);
+    executor.setAwaitTerminationSeconds(30);
+    executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+    executor.initialize();
+    return executor;
+  }
 }

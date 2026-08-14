@@ -65,6 +65,49 @@ public class ScriptStabilizationSnapshot {
   @Column(length = 255)
   private String topFailureSignature;
 
+  @Column(length = 200)
+  private String matrixHash;
+
+  @Column(length = 200)
+  private String planHash;
+
+  @Column(length = 200)
+  private String buildId;
+
+  @Column(length = 200)
+  private String catalogHash;
+
+  @Column private Double firstAttemptPassRate;
+
+  @Column private Double eventualPassRate;
+
+  @Column private Double evidenceCompleteRate;
+
+  @Column private Double cleanupSuccessRate;
+
+  @Column(length = 50)
+  private String comparisonStatus;
+
+  @Column(length = 255)
+  private String groupKey;
+
+  @Column(length = 200)
+  private String artifactDigest;
+
+  @Column(length = 200)
+  private String executorInstanceId;
+
+  @Column(length = 200)
+  private String sourceSnapshotId;
+
+  @Column private Integer retryCount;
+
+  @Column(columnDefinition = "TEXT")
+  private String matrixJson;
+
+  @Column(columnDefinition = "TEXT")
+  private String incomparableJson;
+
   @Column(nullable = false)
   private LocalDateTime capturedAt;
 
@@ -202,6 +245,134 @@ public class ScriptStabilizationSnapshot {
 
   public void setTopFailureSignature(String topFailureSignature) {
     this.topFailureSignature = topFailureSignature;
+  }
+
+  public String getMatrixHash() {
+    return matrixHash;
+  }
+
+  public void setMatrixHash(String matrixHash) {
+    this.matrixHash = matrixHash;
+  }
+
+  public String getPlanHash() {
+    return planHash;
+  }
+
+  public void setPlanHash(String planHash) {
+    this.planHash = planHash;
+  }
+
+  public String getBuildId() {
+    return buildId;
+  }
+
+  public void setBuildId(String buildId) {
+    this.buildId = buildId;
+  }
+
+  public String getCatalogHash() {
+    return catalogHash;
+  }
+
+  public void setCatalogHash(String catalogHash) {
+    this.catalogHash = catalogHash;
+  }
+
+  public Double getFirstAttemptPassRate() {
+    return firstAttemptPassRate;
+  }
+
+  public void setFirstAttemptPassRate(Double firstAttemptPassRate) {
+    this.firstAttemptPassRate = firstAttemptPassRate;
+  }
+
+  public Double getEventualPassRate() {
+    return eventualPassRate;
+  }
+
+  public void setEventualPassRate(Double eventualPassRate) {
+    this.eventualPassRate = eventualPassRate;
+  }
+
+  public Double getEvidenceCompleteRate() {
+    return evidenceCompleteRate;
+  }
+
+  public void setEvidenceCompleteRate(Double evidenceCompleteRate) {
+    this.evidenceCompleteRate = evidenceCompleteRate;
+  }
+
+  public Double getCleanupSuccessRate() {
+    return cleanupSuccessRate;
+  }
+
+  public void setCleanupSuccessRate(Double cleanupSuccessRate) {
+    this.cleanupSuccessRate = cleanupSuccessRate;
+  }
+
+  public String getComparisonStatus() {
+    return comparisonStatus;
+  }
+
+  public void setComparisonStatus(String comparisonStatus) {
+    this.comparisonStatus = comparisonStatus;
+  }
+
+  public String getGroupKey() {
+    return groupKey;
+  }
+
+  public void setGroupKey(String groupKey) {
+    this.groupKey = groupKey;
+  }
+
+  public String getArtifactDigest() {
+    return artifactDigest;
+  }
+
+  public void setArtifactDigest(String artifactDigest) {
+    this.artifactDigest = artifactDigest;
+  }
+
+  public String getExecutorInstanceId() {
+    return executorInstanceId;
+  }
+
+  public void setExecutorInstanceId(String executorInstanceId) {
+    this.executorInstanceId = executorInstanceId;
+  }
+
+  public String getSourceSnapshotId() {
+    return sourceSnapshotId;
+  }
+
+  public void setSourceSnapshotId(String sourceSnapshotId) {
+    this.sourceSnapshotId = sourceSnapshotId;
+  }
+
+  public Integer getRetryCount() {
+    return retryCount;
+  }
+
+  public void setRetryCount(Integer retryCount) {
+    this.retryCount = retryCount;
+  }
+
+  public String getMatrixJson() {
+    return matrixJson;
+  }
+
+  public void setMatrixJson(String matrixJson) {
+    this.matrixJson = matrixJson;
+  }
+
+  public String getIncomparableJson() {
+    return incomparableJson;
+  }
+
+  public void setIncomparableJson(String incomparableJson) {
+    this.incomparableJson = incomparableJson;
   }
 
   public LocalDateTime getCapturedAt() {

@@ -40,8 +40,7 @@ public class McpVerificationResult {
 
   /** Creates a failed verification result. */
   public static McpVerificationResult failure(String error, String runtimeProvider) {
-    return new McpVerificationResult(
-        false, "failed", error, runtimeProvider, null, Instant.now());
+    return new McpVerificationResult(false, "failed", error, runtimeProvider, null, Instant.now());
   }
 
   public boolean isSuccess() {

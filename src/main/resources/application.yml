@@ -16,6 +16,12 @@ spring:
 
 # LeeuwBot Integration Configuration
 leeuwbot:
+  candidate-registry:
+    base-url: ${LEEUWBOT_CANDIDATE_REGISTRY_URL:http://127.0.0.1:8081}
+    token: ${LEEUWBOT_CANDIDATE_REGISTRY_TOKEN:}
+  signing:
+    private-key-path: ${CANDIDATE_SIGNING_PRIVATE_KEY_PATH:}
+    key-id: ${CANDIDATE_SIGNING_KEY_ID:}
   integration:
     # Enable/disable integration with LeeuwBot API
     enabled: ${LEEUWBOT_ENABLED:true}
@@ -65,6 +71,11 @@ leeuwbot:
       width: ${LEEUWBOT_STREAM_WIDTH:800}
       height: ${LEEUWBOT_STREAM_HEIGHT:600}
 
+# AI Routine capture transport authentication
+ai-routine:
+  capture:
+    token: ${AI_ROUTINE_CAPTURE_TOKEN:}
+
 # Server configuration
 server:
   port: ${SERVER_PORT:8090}  # Changed from 8080 to avoid conflict with leeuwbot-api
@@ -106,16 +117,25 @@ builder-goal:
     refresh-seconds: ${BUILDER_GOAL_ACCOUNT_CATALOG_REFRESH_SECONDS:30}
   recovery:
     micro6-project-dir: ${BUILDER_GOAL_MICRO6_PROJECT_DIR:../micro6}
-    gradle-run-task: ${BUILDER_GOAL_MICRO6_GRADLE_RUN_TASK::runelite-client:run}
+    gradle-run-task: ${BUILDER_GOAL_MICRO6_GRADLE_RUN_TASK::client:runBuilderGoal}
     launch-command-template: ${BUILDER_GOAL_MICRO6_LAUNCH_COMMAND_TEMPLATE:}
     extra-run-args: ${BUILDER_GOAL_MICRO6_EXTRA_RUN_ARGS:}
     world: ${BUILDER_GOAL_MICRO6_WORLD:360}
     launch-timeout-ms: ${BUILDER_GOAL_MICRO6_LAUNCH_TIMEOUT_MS:5400000}
+    validation-timeout-ms: ${BUILDER_GOAL_MICRO6_VALIDATION_TIMEOUT_MS:300000}
     heartbeat-poll-interval-ms: ${BUILDER_GOAL_MICRO6_HEARTBEAT_POLL_INTERVAL_MS:2000}
     launch-log-file: ${BUILDER_GOAL_MICRO6_LAUNCH_LOG_FILE:micro6-recovery-launch.log}
     agent-ready-timeout-ms: ${BUILDER_GOAL_AGENT_READY_TIMEOUT_MS:120000}
     login-timeout-seconds: ${BUILDER_GOAL_LOGIN_TIMEOUT_SECONDS:60}
     agent-poll-interval-ms: ${BUILDER_GOAL_AGENT_POLL_INTERVAL_MS:2000}
+  # Launch operation lifecycle
+  launch:
+    # Retention duration for terminal launch operations (ms)
+    terminal-retention-ms: ${BUILDER_GOAL_LAUNCH_TERMINAL_RETENTION_MS:1800000}
+    # Maximum duration an active operation waits before watchdog failure (ms, default ~95 min)
+    active-watchdog-ms: ${BUILDER_GOAL_LAUNCH_ACTIVE_WATCHDOG_MS:5700000}
+    # Interval for the active-operation watchdog check (ms)
+    watchdog-check-interval-ms: ${BUILDER_GOAL_LAUNCH_WATCHDOG_CHECK_INTERVAL_MS:60000}
 
 # Unified Frame Capture - Single capture thread for all consumers
 unified-capture:
@@ -165,6 +185,10 @@ recording:
   auto-record: ${RECORDING_AUTO:false}
   # Automatically record task-bound Micro6 debug sessions even when generic auto-record is off
   auto-record-task-sessions: ${RECORDING_AUTO_TASK_SESSIONS:true}
+  # Maximum time to wait for RuneLite's canvas to expose capturable dimensions
+  initial-frame-timeout-ms: ${RECORDING_INITIAL_FRAME_TIMEOUT_MS:15000}
+  # Delay between initial frame-capture attempts
+  initial-frame-retry-interval-ms: ${RECORDING_INITIAL_FRAME_RETRY_INTERVAL_MS:250}
 
 # Tick Debugger Configuration - For tick-based debugging
 tick-debugger:
@@ -282,6 +306,7 @@ features:
   ai-player:
     enabled: ${FEATURES_AI_PLAYER_ENABLED:false}
     shadow-mode: ${FEATURES_AI_PLAYER_SHADOW:false}
+    # Observable request only; ShadowPolicyService permanently enforces false.
     control-enabled: ${FEATURES_AI_PLAYER_CONTROL:false}
 
 # AI Player Configuration
