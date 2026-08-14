@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,6 +140,8 @@ public class Micro6RuntimeRegistryClient {
       String catalogVersion,
       String catalogHash,
       String schemaBundleHash,
+      String catalogState,
+      String schemaBundleState,
       Instant observedAt) {
 
     /** Core identity (machine/executor/session) is required on every forwarded status. */
@@ -151,9 +154,39 @@ public class Micro6RuntimeRegistryClient {
       return hasCoreIdentity() && catalogVersion != null;
     }
 
+    /** Both lifecycle states must be present on every forwarded status. */
+    public boolean hasLifecycleStates() {
+      return catalogState != null && schemaBundleState != null;
+    }
+
+    /**
+     * The catalog/schema-bundle state combination must be one the contract defines. Unknown or
+     * impossible combinations are a permanent contract error before the body is processed.
+     */
+    public boolean hasValidLifecycleStates() {
+      if (!hasLifecycleStates()) {
+        return false;
+      }
+      if (!Set.of("READY", "DEGRADED", "GENERATING", "UNAVAILABLE").contains(catalogState)) {
+        return false;
+      }
+      if (!Set.of("NOT_AVAILABLE", "GENERATING", "AVAILABLE", "ERROR")
+          .contains(schemaBundleState)) {
+        return false;
+      }
+      if ("AVAILABLE".equals(schemaBundleState)
+          && (schemaBundleHash == null || !schemaBundleHash.startsWith("sha256:"))) {
+        return false;
+      }
+      if (!"AVAILABLE".equals(schemaBundleState) && schemaBundleHash != null) {
+        return false;
+      }
+      return true;
+    }
+
     static ResponseIdentity from(HttpHeaders headers) {
       if (headers == null) {
-        return new ResponseIdentity(null, null, null, null, null, null, null);
+        return new ResponseIdentity(null, null, null, null, null, null, null, null, null);
       }
       return new ResponseIdentity(
           header(headers, "X-Micro6-Machine-Uuid"),
@@ -162,6 +195,8 @@ public class Micro6RuntimeRegistryClient {
           header(headers, "X-Micro6-Catalog-Version"),
           header(headers, "X-Micro6-Catalog-Hash"),
           header(headers, "X-Micro6-Schema-Bundle-Hash"),
+          header(headers, "X-Micro6-Catalog-State"),
+          header(headers, "X-Micro6-Schema-Bundle-State"),
           parseInstant(header(headers, "X-Micro6-Observed-At")));
     }
 

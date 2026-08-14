@@ -222,14 +222,19 @@ class Micro6CatalogEndToEndIntegrationTest {
     assertThat(lightweight.path("catalog_state").asText()).isEqualTo("READY");
 
     // ChromaScape requests the full catalog while generation is active -> 202 GENERATING.
+    registry.schemaBundleStateByRef.put("dev-micro6:SC584A", "GENERATING");
+    registry.catalogStateByRef.put("dev-micro6:SC584A", "GENERATING");
     executor.fullStatus = 202;
     executor.fullBody =
         "{\"status\":\"GENERATING\",\"catalog_mode\":\"FULL\",\"catalog_state\":\"GENERATING\"}";
     JsonNode generating = service.getCatalogForExecutor("dev-micro6:SC584A", "full", true);
     assertThat(generating.path("catalog_state").asText()).isEqualTo("GENERATING");
 
-    // Generation completes; the executor serves a ready full catalog with a schema bundle.
-    registry.schemaBundleStateByRef.put("dev-micro6:SC584A", "GENERATING");
+    // Generation completes; the executor serves a ready full catalog with a schema bundle and the
+    // runtime heartbeat catches up to AVAILABLE with the attested bundle hash.
+    registry.schemaBundleStateByRef.put("dev-micro6:SC584A", "AVAILABLE");
+    registry.catalogStateByRef.put("dev-micro6:SC584A", "READY");
+    registry.schemaBundleHashByRef.put("dev-micro6:SC584A", TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
     executor.fullStatus = 200;
     executor.fullBody = TestMicro6Catalog.json(TestMicro6Catalog.full());
     JsonNode ready = service.getCatalogForExecutor("dev-micro6:SC584A", "full", true);
@@ -237,9 +242,7 @@ class Micro6CatalogEndToEndIntegrationTest {
     assertThat(ready.path("schema_bundle_hash").asText())
         .isEqualTo(TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
 
-    // The runtime heartbeat catches up to AVAILABLE with the attested bundle hash.
-    registry.schemaBundleStateByRef.put("dev-micro6:SC584A", "AVAILABLE");
-    registry.schemaBundleHashByRef.put("dev-micro6:SC584A", TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+    // A subsequent non-refresh request is served from the fresh same-identity cache.
     JsonNode cached = service.getCatalogForExecutor("dev-micro6:SC584A", "full", false);
     assertThat(cached.path("catalog_state").asText()).isEqualTo("READY");
     assertThat(executor.fullCalls).isEqualTo(2);

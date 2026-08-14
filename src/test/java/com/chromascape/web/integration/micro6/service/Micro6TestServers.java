@@ -199,6 +199,8 @@ final class Micro6TestServers {
         // the real backend proxy. Hashes are read from the fetched payload when present.
         String catalogHash = "";
         String schemaBundleHash = "";
+        String catalogState = catalogStateByRef.get(endpointRef);
+        String schemaBundleState = schemaBundleStateByRef.get(endpointRef);
         try {
           JsonNode parsed = mapper.readTree(body);
           if (parsed != null && parsed.isObject()) {
@@ -208,9 +210,22 @@ final class Micro6TestServers {
             if (parsed.has("schema_bundle_hash")) {
               schemaBundleHash = parsed.get("schema_bundle_hash").asText();
             }
+            if (catalogState == null && parsed.has("catalog_state")) {
+              catalogState = parsed.get("catalog_state").asText();
+            }
+            if (schemaBundleState == null && parsed.has("schema_bundle_state")) {
+              schemaBundleState = parsed.get("schema_bundle_state").asText();
+            }
           }
         } catch (Exception ignored) {
           // identity headers default to empty when the body is not JSON
+        }
+        if (catalogState == null) {
+          catalogState = "READY";
+        }
+        if (schemaBundleState == null) {
+          // Lightweight catalogs carry no bundle: attest NOT_AVAILABLE unless a bundle hash exists.
+          schemaBundleState = schemaBundleHash.isEmpty() ? "NOT_AVAILABLE" : "AVAILABLE";
         }
         exchange.getResponseHeaders().set("X-Micro6-Machine-Uuid", machineUuidFor(endpointRef));
         exchange.getResponseHeaders()
@@ -228,6 +243,8 @@ final class Micro6TestServers {
         if (!schemaBundleHash.isEmpty()) {
           exchange.getResponseHeaders().set("X-Micro6-Schema-Bundle-Hash", schemaBundleHash);
         }
+        exchange.getResponseHeaders().set("X-Micro6-Catalog-State", catalogState);
+        exchange.getResponseHeaders().set("X-Micro6-Schema-Bundle-State", schemaBundleState);
         exchange.getResponseHeaders().set("X-Micro6-Observed-At", java.time.Instant.now().toString());
         if (omitIdentityHeaders) {
           exchange.getResponseHeaders().remove("X-Micro6-Machine-Uuid");
@@ -236,6 +253,8 @@ final class Micro6TestServers {
           exchange.getResponseHeaders().remove("X-Micro6-Catalog-Version");
           exchange.getResponseHeaders().remove("X-Micro6-Catalog-Hash");
           exchange.getResponseHeaders().remove("X-Micro6-Schema-Bundle-Hash");
+          exchange.getResponseHeaders().remove("X-Micro6-Catalog-State");
+          exchange.getResponseHeaders().remove("X-Micro6-Schema-Bundle-State");
           exchange.getResponseHeaders().remove("X-Micro6-Observed-At");
         }
         write(exchange, response.statusCode(), body);
@@ -267,6 +286,34 @@ final class Micro6TestServers {
       String catalogState = catalogStateByRef.get(endpointRef);
       String schemaBundleState = schemaBundleStateByRef.get(endpointRef);
       String sessionId = sessionIdFor(endpointRef);
+      // Defaults mirror a healthy runtime whose full catalog has been generated and cached: the
+      // executor serves a READY full catalog whose attested bundle hash is the runtime's bundle.
+      if (catalogHash == null) {
+        try {
+          JsonNode parsed = mapper.readTree(executor.fullBody);
+          if (parsed != null && parsed.isObject() && parsed.has("catalog_hash")) {
+            catalogHash = parsed.get("catalog_hash").asText();
+          }
+        } catch (Exception ignored) {
+          // fall through to null
+        }
+      }
+      if (schemaBundleHash == null) {
+        try {
+          JsonNode parsed = mapper.readTree(executor.fullBody);
+          if (parsed != null && parsed.isObject() && parsed.has("schema_bundle_hash")) {
+            schemaBundleHash = parsed.get("schema_bundle_hash").asText();
+          }
+        } catch (Exception ignored) {
+          // fall through to null
+        }
+      }
+      if (catalogState == null) {
+        catalogState = "READY";
+      }
+      if (schemaBundleState == null) {
+        schemaBundleState = schemaBundleHash == null ? "NOT_AVAILABLE" : "AVAILABLE";
+      }
       StringBuilder json =
           new StringBuilder("{")
               .append("\"machine_uuid\":\"")

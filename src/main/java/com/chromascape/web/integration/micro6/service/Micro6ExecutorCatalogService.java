@@ -219,7 +219,8 @@ public class Micro6ExecutorCatalogService {
     // The cache is identity-scoped: only a fresh entry whose identity matches the currently
     // resolved runtime is usable. Full-mode cache entries additionally require the runtime's
     // schema bundle hash to match exactly; a changed bundle invalidates the old full cache while
-    // the lightweight cache is unaffected.
+    // the lightweight cache is unaffected. The runtime's schema-bundle state also drives how a
+    // same-identity cached full catalog may be exposed (see cacheMatchesRuntime).
     String key = cacheKey(runtime, normalizedMode);
     CachedCatalog cached = executorCache.get(key);
     if (!forceRefresh
@@ -227,11 +228,10 @@ public class Micro6ExecutorCatalogService {
         && cached.isFresh(config.getExecutorCatalog().getRefreshSeconds())
         && cacheMatchesRuntime(cached, runtime, normalizedMode)) {
       String state = cached.state();
-      if ("full".equals(normalizedMode)
-          && "GENERATING".equals(runtime.schemaBundleState())
-          && cached.schemaBundleHash() != null) {
-        // A runtime re-generating its schema bundle may only expose the prior same-identity full
-        // catalog as STALE, never as fresh READY.
+      if ("full".equals(normalizedMode) && !"AVAILABLE".equals(runtime.schemaBundleState())) {
+        // GENERATING/ERROR/NOT_AVAILABLE: prior same-identity full data may be returned only as
+        // STALE, never as fresh READY. An unknown state was already rejected as CONTRACT_INVALID
+        // by identityHeaderPresenceError.
         state = "STALE";
       }
       return catalogResponse(
@@ -448,6 +448,13 @@ public class Micro6ExecutorCatalogService {
             + " (machine/executor/session required)";
       }
     }
+    // Every forwarded lifecycle status must carry valid catalog/schema-bundle states; a missing or
+    // impossible combination is a permanent contract error before the body is processed.
+    if (!identity.hasValidLifecycleStates()) {
+      return "backend response lifecycle states invalid (catalog_state=" + identity.catalogState()
+          + " schema_bundle_state=" + identity.schemaBundleState()
+          + " bundle_hash=" + identity.schemaBundleHash() + ")";
+    }
     return null;
   }
 
@@ -544,9 +551,11 @@ public class Micro6ExecutorCatalogService {
 
   /**
    * A cached entry is usable for the currently resolved runtime only when its identity (machine,
-   * executor instance, session) matches and its catalog metadata has not drifted. In full mode the
-   * cached schema bundle hash must equal the runtime's when the runtime attests one: a changed
-   * bundle invalidates the old full cache while the lightweight cache ignores bundle changes.
+   * executor instance, session) matches and its catalog metadata has not drifted. In full mode a
+   * runtime attesting {@code AVAILABLE} requires exact schema-bundle hash equality with the cache.
+   * A runtime in any other schema-bundle state (GENERATING/ERROR/NOT_AVAILABLE) still matches a
+   * same-identity cached full entry so the caller may serve it as STALE only. Lightweight mode
+   * ignores bundle changes.
    */
   private boolean cacheMatchesRuntime(
       CachedCatalog cached, Micro6Runtime runtime, String mode) {
@@ -569,10 +578,10 @@ public class Micro6ExecutorCatalogService {
         && !Objects.equals(runtime.catalogHash(), cached.catalogHash())) {
       return false;
     }
-    if ("full".equals(mode)
-        && runtime.schemaBundleHash() != null
-        && !Objects.equals(cached.schemaBundleHash(), runtime.schemaBundleHash())) {
-      return false;
+    if ("full".equals(mode) && "AVAILABLE".equals(runtime.schemaBundleState())) {
+      // AVAILABLE requires exact bundle-hash equality; a missing runtime bundle was already
+      // rejected as CONTRACT_INVALID upstream.
+      return Objects.equals(cached.schemaBundleHash(), runtime.schemaBundleHash());
     }
     return true;
   }

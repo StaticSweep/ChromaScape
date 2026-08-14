@@ -160,8 +160,10 @@ public final class Micro6CatalogV2Contract {
     // Per-task settings schema hashes must match the executor's canonicalization.
     validateSchemaHashes(payload, reasons);
 
-    // Schema bundle hash recomputation must match when the catalog is valid.
-    if (reasons.isEmpty() || hasNoHardSchemaFailures(payload)) {
+    // Both READY and DEGRADED full catalogs carry an attested schema bundle; only a failed or
+    // unavailable generation has none. The degraded bundle covers available schemas, non-applicable
+    // states, and schema errors, so it must be verified and required for both lifecycle states.
+    if (!"UNAVAILABLE".equalsIgnoreCase(state)) {
       String attestedBundle = text(payload.get("schema_bundle_hash"));
       String recomputedBundle =
           Micro6CanonicalHash.schemaBundleHash(payload, recomputedCatalogHash);
@@ -170,8 +172,7 @@ public final class Micro6CatalogV2Contract {
           && !attestedBundle.equals(recomputedBundle)) {
         reasons.add("schema_bundle_hash_mismatch");
       }
-      if ("READY".equalsIgnoreCase(state)
-          && (attestedBundle == null || !isSha256(attestedBundle))) {
+      if (attestedBundle == null || !isSha256(attestedBundle)) {
         reasons.add("schema_bundle_hash_missing");
       }
     }
@@ -385,19 +386,6 @@ public final class Micro6CatalogV2Contract {
         reasons.add("task_schema_hash_mismatch:" + taskKey);
       }
     }
-  }
-
-  private static boolean hasNoHardSchemaFailures(JsonNode payload) {
-    JsonNode tasks = payload.get("tasks");
-    if (tasks == null || !tasks.isArray()) {
-      return false;
-    }
-    for (JsonNode task : tasks) {
-      if (task != null && task.has("args_schema")) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /** Classifies a verified catalog payload into a ChromaScape consumption state. */

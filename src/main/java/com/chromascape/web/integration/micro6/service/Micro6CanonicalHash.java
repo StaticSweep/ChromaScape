@@ -32,6 +32,9 @@ import java.util.TreeMap;
 final class Micro6CanonicalHash {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String SHA_256 = "SHA-256";
+  private static final String SCHEMA_STATE_AVAILABLE = "AVAILABLE";
+  private static final String SCHEMA_STATE_NOT_APPLICABLE = "NOT_APPLICABLE";
+  private static final String SCHEMA_STATE_ERROR = "ERROR";
 
   private Micro6CanonicalHash() {}
 
@@ -129,30 +132,57 @@ final class Micro6CanonicalHash {
   }
 
   /**
-   * Recomputes the schema bundle hash over a valid full catalog. Includes the summary {@code
-   * catalogHash} plus, per schema-bearing canonical task, the sorted task key, schema version,
-   * per-task schema hash, and canonicalized args schema.
+   * Recomputes the schema bundle hash over a full catalog using the SC-584A degraded-bundle
+   * contract. Includes the summary {@code catalogHash} plus, per canonical task sorted by {@code
+   * task_key}, the attested schema state. This mirrors the Micro6 producer exactly:
+   *
+   * <ul>
+   *   <li>{@code AVAILABLE}: {@code settings_schema_version}, {@code settings_schema_hash}, and
+   *       {@code args_schema} are required.</li>
+   *   <li>{@code NOT_REQUESTED}: no schema-bearing or reason field is present.</li>
+   *   <li>{@code NOT_APPLICABLE}: {@code schema_not_applicable_reason} is present.</li>
+   *   <li>{@code ERROR}: {@code schema_error_reason} is present and {@code
+   *       schema_validation_errors} is a lexicographically sorted array.</li>
+   * </ul>
+   *
+   * <p>Both {@code READY} and {@code DEGRADED} full catalogs carry a bundle; only a failed or
+   * unavailable generation has none.
    */
   static String schemaBundleHash(JsonNode payload, String catalogHash) {
     if (catalogHash == null) {
       return null;
     }
     JsonNode tasksNode = payload.get("tasks");
-    if (tasksNode == null || !tasksNode.isArray()) {
+    if (tasksNode == null || !tasksNode.isArray() || tasksNode.isEmpty()) {
       return null;
     }
     List<Map<String, Object>> schemaTasks = new ArrayList<>();
     for (JsonNode task : tasksNode) {
-      if (task == null || task.isNull() || !task.has("args_schema")) {
+      if (task == null || task.isNull()) {
         continue;
       }
       Map<String, Object> entry = new LinkedHashMap<>();
       entry.put("task_key", nodeValue(task.get("task_key")));
-      entry.put("settings_schema_version", nodeValue(task.get("settings_schema_version")));
-      entry.put("settings_schema_hash", nodeValue(task.get("settings_schema_hash")));
-      // Micro6 publishes the already-canonicalized schema in the payload, so recomputation must
-      // apply the same schema canonicalization before embedding it in the bundle.
-      entry.put("args_schema", nodeValue(canonicalizeSchema(task.get("args_schema"))));
+      String state = nodeValue(task.get("settings_schema_state"));
+      entry.put("settings_schema_state", state);
+      if (SCHEMA_STATE_AVAILABLE.equals(state)) {
+        entry.put("settings_schema_version", nodeValue(task.get("settings_schema_version")));
+        entry.put("settings_schema_hash", nodeValue(task.get("settings_schema_hash")));
+        // Micro6 publishes the already-canonicalized schema in the payload, so recomputation must
+        // apply the same schema canonicalization before embedding it in the bundle.
+        entry.put("args_schema", nodeValue(canonicalizeSchema(task.get("args_schema"))));
+      } else if (SCHEMA_STATE_NOT_APPLICABLE.equals(state)) {
+        entry.put("schema_not_applicable_reason", nodeValue(task.get("schema_not_applicable_reason")));
+      } else if (SCHEMA_STATE_ERROR.equals(state)) {
+        entry.put("schema_error_reason", nodeValue(task.get("schema_error_reason")));
+        List<String> errors = new ArrayList<>();
+        JsonNode validationErrors = task.get("schema_validation_errors");
+        if (validationErrors != null && validationErrors.isArray()) {
+          validationErrors.forEach(item -> errors.add(nodeValue(item)));
+        }
+        errors.sort(String::compareTo);
+        entry.put("schema_validation_errors", errors);
+      }
       schemaTasks.add(entry);
     }
     if (schemaTasks.isEmpty()) {

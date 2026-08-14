@@ -16,7 +16,7 @@ final class TestMicro6Catalog {
   static final String GOLDEN_SETTINGS_SCHEMA_HASH =
       "sha256:95d587eacd8492a5f65e56e34fcf6085ab0c85aa2643da7f69823b9be0cf0957";
   static final String GOLDEN_SCHEMA_BUNDLE_HASH =
-      "sha256:93e263fa9413599010166a886f710579b056ab72487ff8fa8fab6fac7f0f073f";
+      "sha256:815b527d3704999719e42c882536740f6313401b1bba9ed4422b173c04a4f100";
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -142,6 +142,19 @@ final class TestMicro6Catalog {
   /** Recomputes and rewrites the attested catalog hash after a fixture mutation. */
   static ObjectNode rehash(ObjectNode node) {
     node.put("catalog_hash", Micro6CanonicalHash.catalogHash(node, "micro6-executor/v1"));
+    return node;
+  }
+
+  /** Recomputes and rewrites the attested schema bundle hash after a task mutation. */
+  static ObjectNode rehashBundle(ObjectNode node) {
+    String catalogHash = Micro6CanonicalHash.catalogHash(node, "micro6-executor/v1");
+    node.put("catalog_hash", catalogHash);
+    String bundle = Micro6CanonicalHash.schemaBundleHash(node, catalogHash);
+    if (bundle == null) {
+      node.remove("schema_bundle_hash");
+    } else {
+      node.put("schema_bundle_hash", bundle);
+    }
     return node;
   }
 

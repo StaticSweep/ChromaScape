@@ -21,7 +21,7 @@ class Micro6CanonicalHashTest {
   private static final String GOLDEN_SETTINGS_SCHEMA_HASH =
       "sha256:95d587eacd8492a5f65e56e34fcf6085ab0c85aa2643da7f69823b9be0cf0957";
   private static final String GOLDEN_SCHEMA_BUNDLE_HASH =
-      "sha256:93e263fa9413599010166a886f710579b056ab72487ff8fa8fab6fac7f0f073f";
+      "sha256:815b527d3704999719e42c882536740f6313401b1bba9ed4422b173c04a4f100";
 
   private static ObjectNode fishingTask(boolean withSchema) {
     ObjectNode task = MAPPER.createObjectNode();

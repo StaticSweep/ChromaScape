@@ -266,4 +266,54 @@ class Micro6CatalogIdentityHardeningTest {
     assertThat(second.path("catalog").path("schema_bundle_hash").asText())
         .isEqualTo(TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
   }
+
+  @Test
+  void errorRuntimeExposesPriorFullCatalogOnlyAsStale() throws Exception {
+    String ref = "dev-micro6:ERRSTALE";
+    start(ref, "executor-A");
+    executor.fullBody = TestMicro6Catalog.json(TestMicro6Catalog.full());
+    registry.schemaBundleHashByRef.put(ref, TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+    registry.schemaBundleStateByRef.put(ref, "AVAILABLE");
+
+    JsonNode first = service.getCatalogForExecutor(ref, "full", false);
+    assertThat(first.path("catalog_state").asText()).isEqualTo("READY");
+
+    // A generation failure transitions the runtime to ERROR: the prior same-identity full catalog
+    // may only be exposed as STALE, never as fresh READY.
+    registry.schemaBundleStateByRef.put(ref, "ERROR");
+    JsonNode second = service.getCatalogForExecutor(ref, "full", false);
+    assertThat(second.path("catalog_state").asText()).isEqualTo("STALE");
+    assertThat(second.path("catalog").isObject()).isTrue();
+  }
+
+  @Test
+  void notAvailableRuntimeExposesPriorFullCatalogOnlyAsStale() throws Exception {
+    String ref = "dev-micro6:NASSTALE";
+    start(ref, "executor-A");
+    executor.fullBody = TestMicro6Catalog.json(TestMicro6Catalog.full());
+    registry.schemaBundleHashByRef.put(ref, TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+    registry.schemaBundleStateByRef.put(ref, "AVAILABLE");
+
+    JsonNode first = service.getCatalogForExecutor(ref, "full", false);
+    assertThat(first.path("catalog_state").asText()).isEqualTo("READY");
+
+    // A reboot resets the runtime to NOT_AVAILABLE: the prior same-identity full catalog may only
+    // be exposed as STALE, never as fresh READY.
+    registry.schemaBundleStateByRef.put(ref, "NOT_AVAILABLE");
+    JsonNode second = service.getCatalogForExecutor(ref, "full", false);
+    assertThat(second.path("catalog_state").asText()).isEqualTo("STALE");
+    assertThat(second.path("catalog").isObject()).isTrue();
+  }
+
+  @Test
+  void unknownBundleStateOnResponseIsContractInvalid() throws Exception {
+    String ref = "dev-micro6:UNKNOWNSTATE";
+    start(ref, "executor-A");
+    executor.fullBody = TestMicro6Catalog.json(TestMicro6Catalog.full());
+    registry.schemaBundleStateByRef.put(ref, "WHATEVER");
+
+    JsonNode rejected = service.getCatalogForExecutor(ref, "full", true);
+    assertThat(rejected.path("catalog_state").asText()).isEqualTo("UNAVAILABLE");
+    assertThat(rejected.path("reason_code").asText()).isEqualTo("IDENTITY_UNVERIFIED");
+  }
 }

@@ -121,12 +121,24 @@ class Micro6CatalogV2ContractTest {
 
   @Test
   void degradedCatalogIsAcceptedAsDegraded() {
+    // A DEGRADED catalog is still selectable and cacheable: its complete degraded bundle (covering
+    // available schemas, non-applicable states, and schema errors) must verify.
+    ObjectNode payload = TestMicro6Catalog.full();
+    payload.put("catalog_state", "DEGRADED");
+    payload.put("schema_bundle_hash", TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+    ValidationResult result = Micro6CatalogV2Contract.validateFull(payload);
+    assertThat(result.valid()).as("reasons: %s", result.reasons()).isTrue();
+    assertThat(Micro6CatalogV2Contract.classify(payload, result)).isEqualTo(CatalogState.DEGRADED);
+  }
+
+  @Test
+  void degradedCatalogWithoutAttestedBundleFailsValidation() {
     ObjectNode payload = TestMicro6Catalog.full();
     payload.put("catalog_state", "DEGRADED");
     payload.remove("schema_bundle_hash");
     ValidationResult result = Micro6CatalogV2Contract.validateFull(payload);
-    assertThat(result.valid()).isTrue();
-    assertThat(Micro6CatalogV2Contract.classify(payload, result)).isEqualTo(CatalogState.DEGRADED);
+    assertThat(result.valid()).isFalse();
+    assertThat(result.reasons()).contains("schema_bundle_hash_missing");
   }
 
   @Test
@@ -164,6 +176,7 @@ class Micro6CatalogV2ContractTest {
     task.remove("args_schema");
     task.remove("settings_schema_hash");
     task.remove("settings_schema_version");
+    TestMicro6Catalog.rehashBundle(payload);
 
     ValidationResult missing = Micro6CatalogV2Contract.validateFull(payload);
     assertThat(missing.valid()).isFalse();
@@ -171,6 +184,7 @@ class Micro6CatalogV2ContractTest {
         .anyMatch(r -> r.contains("task_schema_not_applicable_reason_missing:FISHING_TRAINING"));
 
     task.put("schema_not_applicable_reason", "settings are managed by the host");
+    TestMicro6Catalog.rehashBundle(payload);
     ValidationResult withReason = Micro6CatalogV2Contract.validateFull(payload);
     assertThat(withReason.valid()).as("reasons: %s", withReason.reasons()).isTrue();
   }
@@ -183,6 +197,7 @@ class Micro6CatalogV2ContractTest {
     task.remove("args_schema");
     task.remove("settings_schema_hash");
     task.remove("settings_schema_version");
+    TestMicro6Catalog.rehashBundle(payload);
 
     ValidationResult missing = Micro6CatalogV2Contract.validateFull(payload);
     assertThat(missing.valid()).isFalse();
@@ -190,6 +205,7 @@ class Micro6CatalogV2ContractTest {
         .anyMatch(r -> r.contains("task_schema_error_reason_missing:FISHING_TRAINING"));
 
     task.put("schema_error_reason", "schema compilation failed");
+    TestMicro6Catalog.rehashBundle(payload);
     ValidationResult withReason = Micro6CatalogV2Contract.validateFull(payload);
     assertThat(withReason.valid()).as("reasons: %s", withReason.reasons()).isTrue();
     // Even a catalog_state READY payload with an ERROR task is never usable as READY.
@@ -273,6 +289,7 @@ class Micro6CatalogV2ContractTest {
     task.remove("settings_schema_version");
     task.put("schema_error_reason", "schema_validation_failed");
     task.put("schema_validation_errors", "not-an-array");
+    TestMicro6Catalog.rehashBundle(payload);
     ValidationResult result = Micro6CatalogV2Contract.validateFull(payload);
     assertThat(result.valid()).isFalse();
     assertThat(result.reasons())
