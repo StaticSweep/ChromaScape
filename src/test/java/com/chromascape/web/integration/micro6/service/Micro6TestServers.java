@@ -1,0 +1,252 @@
+package com.chromascape.web.integration.micro6.service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Test doubles for the assembled integration test: a fake authenticated leeuwbotapi runtime
+ * registry and a fake Micro6 executor HTTP server.
+ */
+final class Micro6TestServers {
+
+  static final class FakeMicro6Executor {
+    private final HttpServer server;
+    final String url;
+    volatile int lightweightStatus = 200;
+    volatile String lightweightBody = "{}";
+    volatile int fullStatus = 200;
+    volatile String fullBody = "{}";
+    volatile boolean dropConnections = false;
+    volatile long lightweightDelayMs = 0;
+    volatile long fullDelayMs = 0;
+    volatile int lightweightCalls = 0;
+    volatile int fullCalls = 0;
+
+    FakeMicro6Executor() throws IOException {
+      server = HttpServer.create(new InetSocketAddress(0), 0);
+      server.createContext(
+          "/api/v1/catalog",
+          exchange -> {
+            String mode =
+                exchange.getRequestURI().getQuery() == null
+                    ? ""
+                    : exchange.getRequestURI().getQuery();
+            if (dropConnections) {
+              exchange.close();
+              return;
+            }
+            boolean full = mode.contains("mode=full");
+            long delay = full ? fullDelayMs : lightweightDelayMs;
+            if (delay > 0) {
+              try {
+                Thread.sleep(delay);
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              }
+            }
+            if (full) {
+              fullCalls++;
+              write(exchange, fullStatus, fullBody);
+            } else {
+              lightweightCalls++;
+              write(exchange, lightweightStatus, lightweightBody);
+            }
+          });
+      server.start();
+      url = "http://127.0.0.1:" + server.getAddress().getPort();
+    }
+
+    void stop() {
+      server.stop(0);
+    }
+  }
+
+  static final class FakeLeeuwbotApi {
+    private final HttpServer server;
+    final String url;
+    final Map<String, FakeMicro6Executor> executorsByRef = new ConcurrentHashMap<>();
+    final Map<String, String> executorInstanceByRef = new ConcurrentHashMap<>();
+    final Map<String, String> stateByRef = new ConcurrentHashMap<>();
+    final Map<String, String> catalogHashByRef = new ConcurrentHashMap<>();
+    final Map<String, String> catalogVersionByRef = new ConcurrentHashMap<>();
+    final Map<String, String> sessionIdByRef = new ConcurrentHashMap<>();
+    final Map<String, Runnable> beforeCatalogHook = new ConcurrentHashMap<>();
+    final ObjectMapper mapper = new ObjectMapper();
+    volatile boolean rewriteCatalogIdentity = true;
+
+    FakeLeeuwbotApi() throws IOException {
+      server = HttpServer.create(new InetSocketAddress(0), 0);
+      server.createContext(
+          "/api/v1/launcher/runtimes/micro6/",
+          exchange -> {
+            String path = exchange.getRequestURI().getPath();
+            String prefix = "/api/v1/launcher/runtimes/micro6/";
+            String tail = path.substring(prefix.length());
+            String endpointRef = tail;
+            if (tail.endsWith("/catalog")) {
+              endpointRef = tail.substring(0, tail.length() - "/catalog".length());
+              handleCatalog(exchange, endpointRef);
+              return;
+            }
+            handleResolve(exchange, endpointRef);
+          });
+      server.createContext(
+          "/api/v1/launcher/runtimes/micro6",
+          exchange -> {
+            if (exchange.getRequestURI().getPath().equals("/api/v1/launcher/runtimes/micro6")) {
+              StringBuilder json = new StringBuilder("{\"runtimes\":[");
+              boolean first = true;
+              for (Map.Entry<String, FakeMicro6Executor> entry : executorsByRef.entrySet()) {
+                if (!first) {
+                  json.append(",");
+                }
+                first = false;
+                json.append(runtimeJson(entry.getKey(), entry.getValue()));
+              }
+              json.append("]}");
+              write(exchange, 200, json.toString());
+            }
+          });
+      server.start();
+      url = "http://127.0.0.1:" + server.getAddress().getPort();
+    }
+
+    void register(String endpointRef, String executorInstanceId, FakeMicro6Executor executor) {
+      executorsByRef.put(endpointRef, executor);
+      executorInstanceByRef.put(endpointRef, executorInstanceId);
+      stateByRef.put(endpointRef, "ONLINE");
+    }
+
+    void setState(String endpointRef, String state) {
+      stateByRef.put(endpointRef, state);
+    }
+
+    void stop() {
+      server.stop(0);
+    }
+
+    private void handleResolve(com.sun.net.httpserver.HttpExchange exchange, String endpointRef) {
+      FakeMicro6Executor executor = executorsByRef.get(endpointRef);
+      if (executor == null) {
+        write(
+            exchange,
+            404,
+            "{\"error\":\"unknown endpoint reference\",\"reason_code\":\"ENDPOINT_REF_UNKNOWN\"}");
+        return;
+      }
+      write(exchange, 200, runtimeJson(endpointRef, executor));
+    }
+
+    private void handleCatalog(com.sun.net.httpserver.HttpExchange exchange, String endpointRef) {
+      FakeMicro6Executor executor = executorsByRef.get(endpointRef);
+      if (executor == null) {
+        write(
+            exchange,
+            404,
+            "{\"error\":\"unknown endpoint reference\",\"reason_code\":\"ENDPOINT_REF_UNKNOWN\"}");
+        return;
+      }
+      Runnable hook = beforeCatalogHook.get(endpointRef);
+      if (hook != null) {
+        hook.run();
+      }
+      // Faithful proxy: the registry fetches the executor's catalog server-side. A dropped
+      // connection or unreachable executor surfaces as 502, mirroring the real proxy.
+      String query = exchange.getRequestURI().getQuery();
+      boolean full = query != null && query.contains("mode=full");
+      String catalogUrl = executor.url + "/api/v1/catalog?mode=" + (full ? "full" : "lightweight");
+      try {
+        java.net.http.HttpClient client =
+            java.net.http.HttpClient.newBuilder().connectTimeout(Duration.ofMillis(2000)).build();
+        java.net.http.HttpRequest request =
+            java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(catalogUrl))
+                .timeout(Duration.ofMillis(2000))
+                .GET()
+                .build();
+        java.net.http.HttpResponse<String> response =
+            client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+        String body = response.body();
+        // The catalog payload must carry the same executor identity the registry resolved, or the
+        // consumer rejects it as an identity conflict. Mirrors the real executor/registry contract.
+        if (rewriteCatalogIdentity && body != null && !body.isEmpty()) {
+          try {
+            JsonNode parsed = mapper.readTree(body);
+            if (parsed != null && parsed.isObject()) {
+              ((ObjectNode) parsed)
+                  .put("executor_instance_id", executorInstanceByRef.get(endpointRef));
+              body = mapper.writeValueAsString(parsed);
+            }
+          } catch (Exception ignored) {
+            // leave the body untouched if it is not JSON
+          }
+        }
+        write(exchange, response.statusCode(), body);
+      } catch (Exception e) {
+        write(
+            exchange,
+            502,
+            "{\"error\":\"executor_unreachable\",\"reason_code\":\"EXECUTOR_UNREACHABLE\"}");
+      }
+    }
+
+    private String runtimeJson(String endpointRef, FakeMicro6Executor executor) {
+      String state = stateByRef.getOrDefault(endpointRef, "ONLINE");
+      String catalogHash = catalogHashByRef.get(endpointRef);
+      String catalogVersion = catalogVersionByRef.getOrDefault(endpointRef, "2");
+      String sessionId = sessionIdByRef.getOrDefault(endpointRef, "session-" + endpointRef.hashCode());
+      StringBuilder json =
+          new StringBuilder("{")
+              .append("\"machine_uuid\":\"machine-")
+              .append(endpointRef.hashCode())
+              .append("\",")
+              .append("\"session_id\":\"")
+              .append(sessionId)
+              .append("\",")
+              .append("\"account_hash\":\"0123456789abcdef\",")
+              .append("\"client_type\":\"micro6\",")
+              .append("\"executor_instance_id\":\"")
+              .append(executorInstanceByRef.get(endpointRef))
+              .append("\",")
+              .append("\"catalog_version\":\"")
+              .append(catalogVersion)
+              .append("\",");
+      if (catalogHash != null) {
+        json.append("\"catalog_hash\":\"").append(catalogHash).append("\",");
+      }
+      json.append("\"runtime_state\":\"")
+          .append(state)
+          .append("\",")
+          .append("\"endpoint_ref\":\"")
+          .append(endpointRef)
+          .append("\",")
+          .append("\"advertised_base_url\":\"")
+          .append(executor.url)
+          .append("\"")
+          .append("}");
+      return json.toString();
+    }
+  }
+
+  private static void write(com.sun.net.httpserver.HttpExchange exchange, int status, String body) {
+    try {
+      byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+      exchange.getResponseHeaders().set("Content-Type", "application/json");
+      exchange.sendResponseHeaders(status, bytes.length);
+      try (OutputStream out = exchange.getResponseBody()) {
+        out.write(bytes);
+      }
+    } catch (IOException e) {
+      exchange.close();
+    }
+  }
+}

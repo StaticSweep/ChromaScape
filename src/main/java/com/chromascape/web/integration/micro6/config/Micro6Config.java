@@ -14,6 +14,7 @@ public class Micro6Config {
 
   private LogShipperConfig logShipper = new LogShipperConfig();
   private ExecutorCatalogConfig executorCatalog = new ExecutorCatalogConfig();
+  private RuntimeSelectionConfig runtimeSelection = new RuntimeSelectionConfig();
 
   public LogShipperConfig getLogShipper() {
     return logShipper;
@@ -29,6 +30,14 @@ public class Micro6Config {
 
   public void setExecutorCatalog(ExecutorCatalogConfig executorCatalog) {
     this.executorCatalog = executorCatalog;
+  }
+
+  public RuntimeSelectionConfig getRuntimeSelection() {
+    return runtimeSelection;
+  }
+
+  public void setRuntimeSelection(RuntimeSelectionConfig runtimeSelection) {
+    this.runtimeSelection = runtimeSelection;
   }
 
   /** Configuration for the log file shipper service. */
@@ -144,6 +153,87 @@ public class Micro6Config {
 
     public void setRefreshSeconds(int refreshSeconds) {
       this.refreshSeconds = refreshSeconds;
+    }
+  }
+
+  /**
+   * Configuration for authenticated Micro6 executor selection through the leeuwbotapi runtime
+   * registry.
+   *
+   * <p>The browser never submits a raw executor URL: ChromaScape resolves opaque endpoint
+   * references against the authenticated registry and the registry fetches catalogs server-side. A
+   * fixed local URL remains an explicit development fallback only (dev-fallback), visibly marked
+   * {@code DEV_STATIC_ROUTE} and never usable as production or acceptance evidence.
+   */
+  public static class RuntimeSelectionConfig {
+    /** Enable authenticated runtime selection. When false the legacy fixed-URL path is used. */
+    private boolean enabled = true;
+
+    /** Base URL of the leeuwbotapi mule service. */
+    private String registryBaseUrl = "http://127.0.0.1:8084";
+
+    /** Bearer token for the authenticated registry. Defaults to the shared ChromaScape API key. */
+    private String registryAuthToken = "";
+
+    /** Request timeout for registry calls in milliseconds. */
+    private int requestTimeoutMs = 5000;
+
+    /** Enable the explicit development-only fixed-URL fallback (DEV_STATIC_ROUTE). */
+    private boolean devFallbackEnabled = false;
+
+    /** Fixed local executor base URL used only by the development fallback. */
+    private String devFallbackBaseUrl = "http://127.0.0.1:8098";
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+      this.enabled = enabled;
+    }
+
+    public String getRegistryBaseUrl() {
+      return registryBaseUrl;
+    }
+
+    public void setRegistryBaseUrl(String registryBaseUrl) {
+      this.registryBaseUrl = registryBaseUrl;
+    }
+
+    public String getRegistryAuthToken() {
+      if (registryAuthToken != null && !registryAuthToken.isBlank()) {
+        return registryAuthToken;
+      }
+      String env = System.getenv("CHROMASCAPE_API_KEY");
+      return env != null && !env.isBlank() ? env : "dev-token";
+    }
+
+    public void setRegistryAuthToken(String registryAuthToken) {
+      this.registryAuthToken = registryAuthToken;
+    }
+
+    public int getRequestTimeoutMs() {
+      return requestTimeoutMs;
+    }
+
+    public void setRequestTimeoutMs(int requestTimeoutMs) {
+      this.requestTimeoutMs = requestTimeoutMs;
+    }
+
+    public boolean isDevFallbackEnabled() {
+      return devFallbackEnabled;
+    }
+
+    public void setDevFallbackEnabled(boolean devFallbackEnabled) {
+      this.devFallbackEnabled = devFallbackEnabled;
+    }
+
+    public String getDevFallbackBaseUrl() {
+      return devFallbackBaseUrl;
+    }
+
+    public void setDevFallbackBaseUrl(String devFallbackBaseUrl) {
+      this.devFallbackBaseUrl = devFallbackBaseUrl;
     }
   }
 }
