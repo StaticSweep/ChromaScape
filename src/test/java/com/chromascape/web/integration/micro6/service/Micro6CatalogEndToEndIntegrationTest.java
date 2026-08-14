@@ -209,4 +209,68 @@ class Micro6CatalogEndToEndIntegrationTest {
     assertThat(full1.path("catalog").path("schema_bundle_hash").asText())
         .isEqualTo(TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
   }
+
+  @Test
+  @DisplayName("assembled bootstrap: NOT_AVAILABLE -> GENERATING -> AVAILABLE with cache invalidation")
+  void assembledBootstrapLifecycle() throws Exception {
+    // Bootstrap: the launcher heartbeat reports NOT_AVAILABLE (no bundle hash yet).
+    registry.schemaBundleStateByRef.put("dev-micro6:SC584A", "NOT_AVAILABLE");
+    registry.catalogStateByRef.put("dev-micro6:SC584A", "READY");
+
+    // Backend sees the runtime ONLINE; ChromaScape's lightweight catalog is served immediately.
+    JsonNode lightweight = service.getCatalogForExecutor("dev-micro6:SC584A", "lightweight", false);
+    assertThat(lightweight.path("catalog_state").asText()).isEqualTo("READY");
+
+    // ChromaScape requests the full catalog while generation is active -> 202 GENERATING.
+    executor.fullStatus = 202;
+    executor.fullBody =
+        "{\"status\":\"GENERATING\",\"catalog_mode\":\"FULL\",\"catalog_state\":\"GENERATING\"}";
+    JsonNode generating = service.getCatalogForExecutor("dev-micro6:SC584A", "full", true);
+    assertThat(generating.path("catalog_state").asText()).isEqualTo("GENERATING");
+
+    // Generation completes; the executor serves a ready full catalog with a schema bundle.
+    registry.schemaBundleStateByRef.put("dev-micro6:SC584A", "GENERATING");
+    executor.fullStatus = 200;
+    executor.fullBody = TestMicro6Catalog.json(TestMicro6Catalog.full());
+    JsonNode ready = service.getCatalogForExecutor("dev-micro6:SC584A", "full", true);
+    assertThat(ready.path("catalog_state").asText()).isEqualTo("READY");
+    assertThat(ready.path("schema_bundle_hash").asText())
+        .isEqualTo(TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+
+    // The runtime heartbeat catches up to AVAILABLE with the attested bundle hash.
+    registry.schemaBundleStateByRef.put("dev-micro6:SC584A", "AVAILABLE");
+    registry.schemaBundleHashByRef.put("dev-micro6:SC584A", TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+    JsonNode cached = service.getCatalogForExecutor("dev-micro6:SC584A", "full", false);
+    assertThat(cached.path("catalog_state").asText()).isEqualTo("READY");
+    assertThat(executor.fullCalls).isEqualTo(2);
+
+    // Schema-only change: the bundle hash changes while the catalog hash stays stable, so the old
+    // full cache is invalidated and the lightweight cache is untouched.
+    ObjectNode changed = (ObjectNode) TestMicro6Catalog.full().deepCopy();
+    ObjectNode task = (ObjectNode) changed.path("tasks").get(0);
+    ObjectNode schema = (ObjectNode) task.path("args_schema").deepCopy();
+    ((ObjectNode) schema.path("fields").get(0)).put("default", 71);
+    task.set("args_schema", schema);
+    task.put("settings_schema_hash", Micro6CanonicalHash.settingsSchemaHash(schema));
+    changed.put("catalog_hash", TestMicro6Catalog.GOLDEN_CATALOG_HASH);
+    String newBundle =
+        Micro6CanonicalHash.schemaBundleHash(changed, TestMicro6Catalog.GOLDEN_CATALOG_HASH);
+    changed.put("schema_bundle_hash", newBundle);
+    executor.fullBody = TestMicro6Catalog.json(changed);
+    registry.schemaBundleHashByRef.put("dev-micro6:SC584A", newBundle);
+
+    JsonNode afterChange = service.getCatalogForExecutor("dev-micro6:SC584A", "full", false);
+    assertThat(executor.fullCalls)
+        .as("schema-only change must invalidate the old full cache")
+        .isEqualTo(3);
+    assertThat(afterChange.path("catalog_state").asText()).isEqualTo("READY");
+    assertThat(afterChange.path("schema_bundle_hash").asText()).isEqualTo(newBundle);
+    assertThat(afterChange.path("catalog_hash").asText())
+        .isEqualTo(TestMicro6Catalog.GOLDEN_CATALOG_HASH);
+
+    // The lightweight catalog still serves from cache without re-fetching.
+    JsonNode lightweightAfter = service.getCatalogForExecutor("dev-micro6:SC584A", "lightweight", false);
+    assertThat(lightweightAfter.path("catalog_state").asText()).isEqualTo("READY");
+    assertThat(executor.lightweightCalls).isEqualTo(1);
+  }
 }

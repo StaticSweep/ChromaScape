@@ -235,12 +235,7 @@ public final class Micro6CatalogV2Contract {
         reasons.add("task_schema_state_not_not_requested:" + taskKey);
         return;
       }
-      if (task.has("args_schema")) {
-        reasons.add("task_schema_not_requested_has_args:" + taskKey);
-      }
-      if (task.has("settings_schema_hash")) {
-        reasons.add("task_schema_not_requested_has_hash:" + taskKey);
-      }
+      validateNotRequestedFields(task, taskKey, reasons);
       return;
     }
     String state = text(task.get("settings_schema_state"));
@@ -262,12 +257,7 @@ public final class Micro6CatalogV2Contract {
         }
         break;
       case SCHEMA_STATE_NOT_REQUESTED:
-        if (task.has("args_schema")) {
-          reasons.add("task_schema_not_requested_has_args:" + taskKey);
-        }
-        if (task.has("settings_schema_hash")) {
-          reasons.add("task_schema_not_requested_has_hash:" + taskKey);
-        }
+        validateNotRequestedFields(task, taskKey, reasons);
         break;
       case SCHEMA_STATE_NOT_APPLICABLE:
         if (isBlank(text(task.get("schema_not_applicable_reason")))) {
@@ -278,9 +268,40 @@ public final class Micro6CatalogV2Contract {
         if (isBlank(text(task.get("schema_error_reason")))) {
           reasons.add("task_schema_error_reason_missing:" + taskKey);
         }
+        JsonNode validationErrors = task.get("schema_validation_errors");
+        if (validationErrors != null && !validationErrors.isArray()) {
+          reasons.add("task_schema_validation_errors_not_array:" + taskKey);
+        }
         break;
       default:
         reasons.add("task_schema_state_invalid:" + taskKey + ":" + state);
+    }
+  }
+
+  /**
+   * A {@code NOT_REQUESTED} row must not carry any schema-bearing field: no schema object, hash,
+   * version, or reason. The legacy {@code settings_unavailable_reason} is tolerated only while the
+   * producer compatibility shim is scheduled for removal.
+   */
+  private static void validateNotRequestedFields(
+      JsonNode task, String taskKey, List<String> reasons) {
+    if (task.has("args_schema")) {
+      reasons.add("task_schema_not_requested_has_args:" + taskKey);
+    }
+    if (task.has("settings_schema_hash")) {
+      reasons.add("task_schema_not_requested_has_hash:" + taskKey);
+    }
+    if (task.has("settings_schema_version")) {
+      reasons.add("task_schema_not_requested_has_version:" + taskKey);
+    }
+    if (task.has("schema_error_reason")) {
+      reasons.add("task_schema_not_requested_has_error_reason:" + taskKey);
+    }
+    if (task.has("schema_validation_errors")) {
+      reasons.add("task_schema_not_requested_has_validation_errors:" + taskKey);
+    }
+    if (task.has("schema_not_applicable_reason")) {
+      reasons.add("task_schema_not_requested_has_not_applicable_reason:" + taskKey);
     }
   }
 

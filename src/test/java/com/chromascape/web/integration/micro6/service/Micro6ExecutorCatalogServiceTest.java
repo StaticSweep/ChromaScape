@@ -255,4 +255,169 @@ class Micro6ExecutorCatalogServiceTest {
     assertThat(result.path("dev_static_route").asBoolean()).isTrue();
     assertThat(result.path("route_disclaimer").asText()).isNotBlank();
   }
+
+  @Test
+  void schemaOnlyChangeInvalidatesFullCache() throws Exception {
+    String ref = "dev-micro6:SCHSCHEMA";
+    start(ref, "executor-schema");
+    ObjectNode initial = TestMicro6Catalog.full();
+    executor.fullBody = TestMicro6Catalog.json(initial);
+    registry.schemaBundleHashByRef.put(ref, TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+    registry.schemaBundleStateByRef.put(ref, "AVAILABLE");
+
+    JsonNode first = service.getCatalogForExecutor(ref, "full", false);
+    assertThat(first.path("catalog_state").asText()).isEqualTo("READY");
+    assertThat(first.path("schema_bundle_hash").asText())
+        .isEqualTo(TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+    assertThat(executor.fullCalls).isEqualTo(1);
+
+    // Schema-only change: same catalog hash, different schema bundle.
+    ObjectNode changed = (ObjectNode) initial.deepCopy();
+    ObjectNode task = (ObjectNode) changed.path("tasks").get(0);
+    ObjectNode schema = (ObjectNode) task.path("args_schema").deepCopy();
+    ((ObjectNode) schema.path("fields").get(0)).put("default", 33);
+    task.set("args_schema", schema);
+    task.put("settings_schema_hash", Micro6CanonicalHash.settingsSchemaHash(schema));
+    changed.put("catalog_hash", TestMicro6Catalog.GOLDEN_CATALOG_HASH);
+    String newBundle =
+        Micro6CanonicalHash.schemaBundleHash(changed, TestMicro6Catalog.GOLDEN_CATALOG_HASH);
+    changed.put("schema_bundle_hash", newBundle);
+    executor.fullBody = TestMicro6Catalog.json(changed);
+    registry.schemaBundleHashByRef.put(ref, newBundle);
+
+    JsonNode second = service.getCatalogForExecutor(ref, "full", false);
+    assertThat(executor.fullCalls).as("schema-only change must invalidate the full cache").isEqualTo(2);
+    assertThat(second.path("catalog_state").asText()).isEqualTo("READY");
+    assertThat(second.path("schema_bundle_hash").asText()).isEqualTo(newBundle);
+  }
+
+  @Test
+  void lightweightCacheSurvivesSchemaOnlyChange() throws Exception {
+    String ref = "dev-micro6:SCHLIGHT";
+    start(ref, "executor-schema");
+    executor.lightweightBody = TestMicro6Catalog.json(TestMicro6Catalog.lightweight());
+    registry.schemaBundleHashByRef.put(ref, TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+    registry.schemaBundleStateByRef.put(ref, "AVAILABLE");
+
+    JsonNode first = service.getCatalogForExecutor(ref, "lightweight", false);
+    assertThat(first.path("catalog_state").asText()).isEqualTo("READY");
+    assertThat(executor.lightweightCalls).isEqualTo(1);
+
+    // A changed bundle must not touch the lightweight cache.
+    registry.schemaBundleHashByRef.put(ref, "sha256:" + "c".repeat(64));
+    JsonNode second = service.getCatalogForExecutor(ref, "lightweight", false);
+    assertThat(executor.lightweightCalls)
+        .as("lightweight cache must ignore schema bundle changes")
+        .isEqualTo(1);
+    assertThat(second.path("catalog_state").asText()).isEqualTo("READY");
+  }
+
+  @Test
+  void runtimeAvailableWithoutBundleIsContractInvalid() throws Exception {
+    String ref = "dev-micro6:SCHAVAIL";
+    start(ref, "executor-schema");
+    registry.schemaBundleStateByRef.put(ref, "AVAILABLE");
+    // No schema_bundle_hash is attested while the runtime claims AVAILABLE.
+
+    JsonNode result = service.getCatalogForExecutor(ref, "full", false);
+    assertThat(result.path("catalog_state").asText()).isEqualTo("UNAVAILABLE");
+    assertThat(result.path("reason_code").asText()).isEqualTo("CONTRACT_INVALID");
+    assertThat(executor.fullCalls).isZero();
+  }
+
+  @Test
+  void tenConcurrentCallersProduceOneRequest() throws Exception {
+    String ref = "dev-micro6:TEN";
+    start(ref, "executor-ten");
+    executor.lightweightBody = TestMicro6Catalog.json(TestMicro6Catalog.lightweight());
+    executor.lightweightDelayMs = 400;
+
+    java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(10);
+    try {
+      java.util.List<java.util.concurrent.Future<JsonNode>> futures = new java.util.ArrayList<>();
+      for (int i = 0; i < 10; i++) {
+        futures.add(pool.submit(() -> service.getCatalogForExecutor(ref, "lightweight", false)));
+      }
+      for (java.util.concurrent.Future<JsonNode> future : futures) {
+        assertThat(future.get().path("catalog_state").asText()).isEqualTo("READY");
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+    assertThat(executor.lightweightCalls).isEqualTo(1);
+  }
+
+  @Test
+  void failedWinnerRetriesAndAllCallersReceiveReplacementResult() throws Exception {
+    String ref = "dev-micro6:RETRY";
+    start(ref, "executor-retry");
+    executor.lightweightBody = TestMicro6Catalog.json(TestMicro6Catalog.lightweight());
+    executor.lightweightDelayMs = 400;
+
+    // Seed a failed in-flight future for the exact identity key so every caller observes an
+    // exceptional winner, retries acquisition, and coalesces onto a single replacement fetch.
+    String key = seedFailedInflight(ref);
+
+    java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(10);
+    try {
+      java.util.List<java.util.concurrent.Future<JsonNode>> futures = new java.util.ArrayList<>();
+      for (int i = 0; i < 10; i++) {
+        futures.add(pool.submit(() -> service.getCatalogForExecutor(ref, "lightweight", false)));
+      }
+      for (java.util.concurrent.Future<JsonNode> future : futures) {
+        assertThat(future.get().path("catalog_state").asText()).isEqualTo("READY");
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+
+    // One failed winner + one replacement request.
+    assertThat(executor.lightweightCalls)
+        .as("failed winner followed by retry must produce only one replacement request")
+        .isEqualTo(1);
+    assertThat(inflightSize()).isZero();
+  }
+
+  @Test
+  void inflightMapIsClearedAfterSuccess() throws Exception {
+    String ref = "dev-micro6:CLEAR";
+    start(ref, "executor-clear");
+    executor.lightweightBody = TestMicro6Catalog.json(TestMicro6Catalog.lightweight());
+
+    service.getCatalogForExecutor(ref, "lightweight", false);
+    assertThat(inflightSize()).isZero();
+  }
+
+  private String seedFailedInflight(String ref) throws Exception {
+    java.lang.reflect.Field field =
+        Micro6ExecutorCatalogService.class.getDeclaredField("inflightFetches");
+    field.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<JsonNode>>
+        map =
+            (java.util.concurrent.ConcurrentHashMap<
+                    String, java.util.concurrent.CompletableFuture<JsonNode>>)
+                field.get(service);
+    String machineUuid = "machine-" + ref.hashCode();
+    String sessionId = "session-" + ref.hashCode();
+    String key = machineUuid + "|" + "executor-retry" + "|" + sessionId + "|lightweight";
+    java.util.concurrent.CompletableFuture<JsonNode> failed =
+        new java.util.concurrent.CompletableFuture<>();
+    failed.completeExceptionally(new RuntimeException("winner failed"));
+    map.put(key, failed);
+    return key;
+  }
+
+  private int inflightSize() throws Exception {
+    java.lang.reflect.Field field =
+        Micro6ExecutorCatalogService.class.getDeclaredField("inflightFetches");
+    field.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<JsonNode>>
+        map =
+            (java.util.concurrent.ConcurrentHashMap<
+                    String, java.util.concurrent.CompletableFuture<JsonNode>>)
+                field.get(service);
+    return map.size();
+  }
 }

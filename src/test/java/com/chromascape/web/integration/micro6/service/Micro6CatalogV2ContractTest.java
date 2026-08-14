@@ -243,6 +243,43 @@ class Micro6CatalogV2ContractTest {
   }
 
   @Test
+  void notRequestedForbidsSchemaVersionAndReasonFields() {
+    ObjectNode payload = TestMicro6Catalog.lightweight();
+    ObjectNode task = (ObjectNode) payload.path("tasks").get(0);
+    task.put("settings_schema_state", "NOT_REQUESTED");
+    task.put("settings_schema_version", "1");
+    task.put("schema_error_reason", "stale_error");
+    task.set("schema_validation_errors", com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode());
+    task.put("schema_not_applicable_reason", "stale_reason");
+    ValidationResult result = Micro6CatalogV2Contract.validateLightweight(payload);
+    assertThat(result.valid()).isFalse();
+    assertThat(result.reasons())
+        .anyMatch(r -> r.contains("task_schema_not_requested_has_version:FISHING_TRAINING"));
+    assertThat(result.reasons())
+        .anyMatch(r -> r.contains("task_schema_not_requested_has_error_reason:FISHING_TRAINING"));
+    assertThat(result.reasons())
+        .anyMatch(r -> r.contains("task_schema_not_requested_has_validation_errors:FISHING_TRAINING"));
+    assertThat(result.reasons())
+        .anyMatch(r -> r.contains("task_schema_not_requested_has_not_applicable_reason:FISHING_TRAINING"));
+  }
+
+  @Test
+  void errorSchemaStateRejectsNonArrayValidationErrors() {
+    ObjectNode payload = TestMicro6Catalog.full();
+    ObjectNode task = (ObjectNode) payload.path("tasks").get(0);
+    task.put("settings_schema_state", "ERROR");
+    task.remove("args_schema");
+    task.remove("settings_schema_hash");
+    task.remove("settings_schema_version");
+    task.put("schema_error_reason", "schema_validation_failed");
+    task.put("schema_validation_errors", "not-an-array");
+    ValidationResult result = Micro6CatalogV2Contract.validateFull(payload);
+    assertThat(result.valid()).isFalse();
+    assertThat(result.reasons())
+        .anyMatch(r -> r.contains("task_schema_validation_errors_not_array:FISHING_TRAINING"));
+  }
+
+  @Test
   void readyCatalogWithCatalogValidFalseIsRejected() {
     ObjectNode payload = TestMicro6Catalog.full();
     payload.put("catalog_valid", false);

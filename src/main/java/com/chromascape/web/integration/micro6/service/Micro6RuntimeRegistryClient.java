@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
@@ -51,6 +52,8 @@ public class Micro6RuntimeRegistryClient {
       String catalogVersion,
       String catalogHash,
       String schemaBundleHash,
+      String catalogState,
+      String schemaBundleState,
       String runtimeState,
       Instant lastHeartbeatAt,
       Instant expiresAt,
@@ -117,14 +120,68 @@ public class Micro6RuntimeRegistryClient {
             mode,
             parseError.getMessage());
       }
-      return new CatalogFetch(response.statusCode(), body, response.body());
+      ResponseIdentity identity = ResponseIdentity.from(response.headers());
+      return new CatalogFetch(response.statusCode(), body, response.body(), identity);
     } catch (Exception e) {
       throw new Micro6RegistryException(
           "registry_unreachable", "Failed to reach Micro6 runtime registry: " + e.getMessage(), e);
     }
   }
 
-  public record CatalogFetch(int statusCode, JsonNode body, String rawBody) {}
+  /**
+   * Backend-attested response identity carried on catalog proxy responses (200/202/503). Headers
+   * are parsed case-insensitively; a missing optional hash is {@code null}.
+   */
+  public record ResponseIdentity(
+      String machineUuid,
+      String executorInstanceId,
+      String sessionId,
+      String catalogVersion,
+      String catalogHash,
+      String schemaBundleHash,
+      Instant observedAt) {
+
+    /** Core identity (machine/executor/session) is required on every forwarded status. */
+    public boolean hasCoreIdentity() {
+      return machineUuid != null && executorInstanceId != null && sessionId != null;
+    }
+
+    /** Full identity expected on 200 responses. */
+    public boolean hasFullIdentity() {
+      return hasCoreIdentity() && catalogVersion != null;
+    }
+
+    static ResponseIdentity from(HttpHeaders headers) {
+      if (headers == null) {
+        return new ResponseIdentity(null, null, null, null, null, null, null);
+      }
+      return new ResponseIdentity(
+          header(headers, "X-Micro6-Machine-Uuid"),
+          header(headers, "X-Micro6-Executor-Instance-Id"),
+          header(headers, "X-Micro6-Session-Id"),
+          header(headers, "X-Micro6-Catalog-Version"),
+          header(headers, "X-Micro6-Catalog-Hash"),
+          header(headers, "X-Micro6-Schema-Bundle-Hash"),
+          parseInstant(header(headers, "X-Micro6-Observed-At")));
+    }
+
+    private static String header(HttpHeaders headers, String name) {
+      return headers.firstValue(name).map(String::trim).filter(v -> !v.isEmpty()).orElse(null);
+    }
+
+    private static Instant parseInstant(String value) {
+      if (value == null) {
+        return null;
+      }
+      try {
+        return Instant.parse(value);
+      } catch (Exception e) {
+        return null;
+      }
+    }
+  }
+
+  public record CatalogFetch(int statusCode, JsonNode body, String rawBody, ResponseIdentity identity) {}
 
   private JsonNode sendGet(String path) {
     if (baseUrl == null) {
@@ -173,6 +230,8 @@ public class Micro6RuntimeRegistryClient {
         text(node.get("catalog_version")),
         text(node.get("catalog_hash")),
         text(node.get("schema_bundle_hash")),
+        text(node.get("catalog_state")),
+        text(node.get("schema_bundle_state")),
         text(node.get("runtime_state")),
         instant(node.get("last_heartbeat_at")),
         instant(node.get("expires_at")),

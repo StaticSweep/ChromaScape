@@ -5,6 +5,7 @@ import com.chromascape.web.integration.micro6.service.Micro6CatalogV2Contract.Ca
 import com.chromascape.web.integration.micro6.service.Micro6CatalogV2Contract.ValidationResult;
 import com.chromascape.web.integration.micro6.service.Micro6RuntimeRegistryClient.CatalogFetch;
 import com.chromascape.web.integration.micro6.service.Micro6RuntimeRegistryClient.Micro6Runtime;
+import com.chromascape.web.integration.micro6.service.Micro6RuntimeRegistryClient.ResponseIdentity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
@@ -202,55 +204,79 @@ public class Micro6ExecutorCatalogService {
           runtime.reasons() == null ? List.of("runtime is not selectable") : runtime.reasons());
     }
 
+    // A runtime attesting AVAILABLE must carry a valid schema bundle hash; a missing bundle while
+    // the runtime says AVAILABLE is a permanent contract error and never satisfies the cache.
+    if ("full".equals(normalizedMode)
+        && "AVAILABLE".equals(runtime.schemaBundleState())
+        && (runtime.schemaBundleHash() == null || !isValidSha256(runtime.schemaBundleHash()))) {
+      return unavailablePayload(
+          normalizedRef,
+          normalizedMode,
+          "CONTRACT_INVALID",
+          List.of("runtime reports schema_bundle_state AVAILABLE without a valid schema bundle hash"));
+    }
+
     // The cache is identity-scoped: only a fresh entry whose identity matches the currently
-    // resolved runtime is usable.
+    // resolved runtime is usable. Full-mode cache entries additionally require the runtime's
+    // schema bundle hash to match exactly; a changed bundle invalidates the old full cache while
+    // the lightweight cache is unaffected.
     String key = cacheKey(runtime, normalizedMode);
     CachedCatalog cached = executorCache.get(key);
     if (!forceRefresh
         && cached != null
         && cached.isFresh(config.getExecutorCatalog().getRefreshSeconds())
-        && cacheMatchesRuntime(cached, runtime)) {
-      return catalogResponse(normalizedRef, normalizedMode, cached.state(), cached.payload(), List.of());
+        && cacheMatchesRuntime(cached, runtime, normalizedMode)) {
+      String state = cached.state();
+      if ("full".equals(normalizedMode)
+          && "GENERATING".equals(runtime.schemaBundleState())
+          && cached.schemaBundleHash() != null) {
+        // A runtime re-generating its schema bundle may only expose the prior same-identity full
+        // catalog as STALE, never as fresh READY.
+        state = "STALE";
+      }
+      return catalogResponse(
+          normalizedRef, normalizedMode, state, cached.payload().deepCopy(), List.of());
     }
 
     return awaitOrFetch(runtime, normalizedRef, normalizedMode);
   }
 
   /**
-   * Coalesces concurrent requests for the same executor identity+mode onto a single in-flight fetch.
-   * Only the winning request updates the cache; the losers await the winner's result.
+   * Coalesces concurrent requests for the same executor identity+mode onto a single in-flight
+   * fetch. A failed winner's entry is removed and acquisition is retried in a loop, so no waiter
+   * ever calls {@code doFetch} without owning the map entry.
    */
   private JsonNode awaitOrFetch(Micro6Runtime runtime, String normalizedRef, String normalizedMode) {
     String key = cacheKey(runtime, normalizedMode);
-    CompletableFuture<JsonNode> inflight = inflightFetches.get(key);
-    if (inflight != null) {
-      try {
-        return inflight.join();
-      } catch (Exception winnerFailed) {
-        // The winner failed and cleared its entry; fall through to fetch ourselves.
+    while (true) {
+      CompletableFuture<JsonNode> existing = inflightFetches.get(key);
+      if (existing != null) {
+        try {
+          return existing.join();
+        } catch (CompletionException failure) {
+          // The winner failed and its entry is removed; retry acquisition instead of fetching
+          // directly while another caller may still be owning the entry.
+          inflightFetches.remove(key, existing);
+          continue;
+        }
       }
-    }
-    CompletableFuture<JsonNode> future = new CompletableFuture<>();
-    CompletableFuture<JsonNode> winner = inflightFetches.putIfAbsent(key, future);
-    if (winner != null) {
-      try {
-        return winner.join();
-      } catch (Exception winnerFailed) {
-        // The winner failed and cleared its entry; fetch ourselves.
+
+      CompletableFuture<JsonNode> candidate = new CompletableFuture<>();
+      if (inflightFetches.putIfAbsent(key, candidate) != null) {
+        continue;
       }
-    } else {
+
       try {
         JsonNode result = doFetch(runtime, normalizedRef, normalizedMode);
-        future.complete(result);
+        candidate.complete(result);
         return result;
-      } catch (Throwable t) {
-        future.completeExceptionally(t);
-        throw t;
+      } catch (Throwable failure) {
+        candidate.completeExceptionally(failure);
+        throw failure;
       } finally {
-        inflightFetches.remove(key, future);
+        inflightFetches.remove(key, candidate);
       }
     }
-    return doFetch(runtime, normalizedRef, normalizedMode);
   }
 
   /** Fetches, validates, binds to the resolved runtime identity, and caches a catalog. */
@@ -263,7 +289,21 @@ public class Micro6ExecutorCatalogService {
           runtime, normalizedMode, "REGISTRY_FAILURE", e.reasonCode(), List.of(e.getMessage()));
     }
 
+    // The backend must stamp identity headers on the executor lifecycle statuses (200/202/503);
+    // missing required headers are a permanent IDENTITY_UNVERIFIED failure. Other statuses are
+    // registry errors and carry no executor identity to verify.
+    String presenceError = identityHeaderPresenceError(fetch);
+    if (presenceError != null) {
+      return unavailablePayload(
+          normalizedRef, normalizedMode, "IDENTITY_UNVERIFIED", List.of(presenceError));
+    }
+
     if (fetch.statusCode() == 202) {
+      String drift = identityValueError(runtime, fetch);
+      if (drift != null) {
+        return unavailablePayload(
+            normalizedRef, normalizedMode, "IDENTITY_UNVERIFIED", List.of(drift));
+      }
       // Generation active: never touch the cache.
       return catalogResponse(
           normalizedRef,
@@ -273,6 +313,11 @@ public class Micro6ExecutorCatalogService {
           List.of("catalog generation is in progress; no data replaced"));
     }
     if (fetch.statusCode() == 503) {
+      String drift = identityValueError(runtime, fetch);
+      if (drift != null) {
+        return unavailablePayload(
+            normalizedRef, normalizedMode, "IDENTITY_UNVERIFIED", List.of(drift));
+      }
       return staleOrUnavailable(
           runtime,
           normalizedMode,
@@ -313,16 +358,10 @@ public class Micro6ExecutorCatalogService {
           validation.reasons());
     }
 
-    // Bind the payload's identity to the resolved runtime: a conflicting catalog is never cached
-    // and never served as last-known-good for a different identity.
-    String identityConflict = identityConflict(payload, runtime);
-    if (identityConflict != null) {
-      return unavailablePayload(
-          normalizedRef, normalizedMode, "IDENTITY_CONFLICT", List.of(identityConflict));
-    }
-
     // Re-resolve after the fetch to guard the heartbeat/process-replacement race. If the executor
-    // identity changed while the catalog was being fetched, discard it instead of caching.
+    // identity changed while the catalog was being fetched, discard it instead of caching. This
+    // runs before the header/payload identity checks so a mid-fetch identity change reports
+    // RUNTIME_CHANGED rather than a secondary identity conflict.
     Micro6Runtime runtimeAfter;
     try {
       runtimeAfter = registryClient.resolveRuntime(normalizedRef);
@@ -341,6 +380,23 @@ public class Micro6ExecutorCatalogService {
           normalizedMode,
           "RUNTIME_CHANGED",
           List.of("executor identity changed while the catalog was being fetched"));
+    }
+
+    // The backend-attested response identity must agree with the resolved runtime before the
+    // payload is trusted.
+    String drift = identityValueError(runtime, fetch);
+    if (drift != null) {
+      return unavailablePayload(
+          normalizedRef, normalizedMode, "IDENTITY_UNVERIFIED", List.of(drift));
+    }
+
+    // Bind the payload's identity to both the resolved runtime and the backend-attested response
+    // identity: a conflicting catalog is never cached and never served as last-known-good for a
+    // different identity.
+    String identityConflict = identityConflict(payload, runtime, fetch.identity());
+    if (identityConflict != null) {
+      return unavailablePayload(
+          normalizedRef, normalizedMode, "IDENTITY_CONFLICT", List.of(identityConflict));
     }
 
     CatalogState state = Micro6CatalogV2Contract.classify(payload, validation);
@@ -363,25 +419,94 @@ public class Micro6ExecutorCatalogService {
             payloadCatalogVersion(payload),
             validation.catalogHash(),
             validation.schemaBundleHash(),
-            payload,
+            payload.deepCopy(),
             Instant.now(),
             stateName);
     executorCache.put(cacheKey(runtime, normalizedMode), entry);
-    return catalogResponse(normalizedRef, normalizedMode, stateName, payload, List.of());
+    return catalogResponse(normalizedRef, normalizedMode, stateName, payload.deepCopy(), List.of());
   }
 
   /**
-   * Returns a human-readable conflict description when the catalog payload's attested identity
-   * disagrees with the resolved runtime, or {@code null} when the payload is consistent.
+   * Requires the backend identity headers expected for each executor lifecycle status. 200 requires
+   * the full identity (machine/executor/session/version); 202 and 503 require the core identity
+   * (machine/executor/session). Non-lifecycle statuses carry no executor identity and are skipped.
+   * Returns a human-readable failure description, or {@code null} when the headers are present.
    */
-  private String identityConflict(JsonNode payload, Micro6Runtime runtime) {
+  private String identityHeaderPresenceError(CatalogFetch fetch) {
+    ResponseIdentity identity = fetch.identity();
+    if (identity == null) {
+      return "backend response carried no identity headers";
+    }
+    if (fetch.statusCode() == 200) {
+      if (!identity.hasFullIdentity()) {
+        return "backend response identity headers incomplete for 200 (machine/executor/session/version required)";
+      }
+    } else if (fetch.statusCode() == 202 || fetch.statusCode() == 503) {
+      if (!identity.hasCoreIdentity()) {
+        return "backend response identity headers incomplete for HTTP "
+            + fetch.statusCode()
+            + " (machine/executor/session required)";
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Verifies the backend-attested response identity values against the resolved runtime. Core
+   * identity (machine/executor/session) must agree on every lifecycle status; on 200 the catalog
+   * version must agree as well. Returns a human-readable failure description, or {@code null} when
+   * the response identity is consistent.
+   */
+  private String identityValueError(Micro6Runtime runtime, CatalogFetch fetch) {
+    ResponseIdentity identity = fetch.identity();
+    if (!Objects.equals(identity.machineUuid(), runtime.machineUuid())) {
+      return "machine_uuid mismatch: header=" + identity.machineUuid() + " runtime="
+          + runtime.machineUuid();
+    }
+    if (!Objects.equals(identity.executorInstanceId(), runtime.executorInstanceId())) {
+      return "executor_instance_id mismatch: header=" + identity.executorInstanceId()
+          + " runtime=" + runtime.executorInstanceId();
+    }
+    if (!Objects.equals(identity.sessionId(), runtime.sessionId())) {
+      return "session_id mismatch: header=" + identity.sessionId() + " runtime="
+          + runtime.sessionId();
+    }
+    if (fetch.statusCode() == 200
+        && identity.catalogVersion() != null
+        && runtime.catalogVersion() != null
+        && !Objects.equals(identity.catalogVersion(), runtime.catalogVersion())) {
+      return "catalog version mismatch: header=" + identity.catalogVersion() + " runtime="
+          + runtime.catalogVersion();
+    }
+    return null;
+  }
+
+  /**
+   * Returns a human-readable conflict description when the catalog payload's attested identity or
+   * hashes disagree with the resolved runtime or the backend-attested response identity, or {@code
+   * null} when the payload is consistent with both.
+   */
+  private String identityConflict(
+      JsonNode payload, Micro6Runtime runtime, ResponseIdentity identity) {
     String payloadInstance = text(payload.get("executor_instance_id"));
+    if (payloadInstance != null
+        && identity.executorInstanceId() != null
+        && !payloadInstance.equals(identity.executorInstanceId())) {
+      return "executor_instance_id conflict: payload=" + payloadInstance + " header="
+          + identity.executorInstanceId();
+    }
     if (payloadInstance != null && !payloadInstance.equals(runtime.executorInstanceId())) {
       return "executor_instance_id conflict: payload=" + payloadInstance + " runtime="
           + runtime.executorInstanceId();
     }
     String payloadVersion =
         firstNonBlank(text(payload.get("catalog_version")), text(payload.get("version")));
+    if (payloadVersion != null
+        && identity.catalogVersion() != null
+        && !payloadVersion.equals(identity.catalogVersion())) {
+      return "catalog version conflict: payload=" + payloadVersion + " header="
+          + identity.catalogVersion();
+    }
     if (payloadVersion != null
         && runtime.catalogVersion() != null
         && !payloadVersion.equals(runtime.catalogVersion())) {
@@ -391,9 +516,23 @@ public class Micro6ExecutorCatalogService {
     String payloadHash = text(payload.get("catalog_hash"));
     if (payloadHash != null
         && isValidSha256(payloadHash)
+        && identity.catalogHash() != null
+        && !payloadHash.equals(identity.catalogHash())) {
+      return "catalog hash conflict: payload=" + payloadHash + " header=" + identity.catalogHash();
+    }
+    if (payloadHash != null
+        && isValidSha256(payloadHash)
         && runtime.catalogHash() != null
         && !payloadHash.equals(runtime.catalogHash())) {
       return "catalog hash conflict: payload=" + payloadHash + " runtime=" + runtime.catalogHash();
+    }
+    String payloadBundle = text(payload.get("schema_bundle_hash"));
+    if (payloadBundle != null
+        && isValidSha256(payloadBundle)
+        && identity.schemaBundleHash() != null
+        && !payloadBundle.equals(identity.schemaBundleHash())) {
+      return "schema bundle hash conflict: payload=" + payloadBundle + " header="
+          + identity.schemaBundleHash();
     }
     return null;
   }
@@ -405,9 +544,12 @@ public class Micro6ExecutorCatalogService {
 
   /**
    * A cached entry is usable for the currently resolved runtime only when its identity (machine,
-   * executor instance, session) matches and its catalog metadata has not drifted.
+   * executor instance, session) matches and its catalog metadata has not drifted. In full mode the
+   * cached schema bundle hash must equal the runtime's when the runtime attests one: a changed
+   * bundle invalidates the old full cache while the lightweight cache ignores bundle changes.
    */
-  private boolean cacheMatchesRuntime(CachedCatalog cached, Micro6Runtime runtime) {
+  private boolean cacheMatchesRuntime(
+      CachedCatalog cached, Micro6Runtime runtime, String mode) {
     if (!Objects.equals(cached.machineUuid(), runtime.machineUuid())) {
       return false;
     }
@@ -425,6 +567,11 @@ public class Micro6ExecutorCatalogService {
     if (runtime.catalogHash() != null
         && cached.catalogHash() != null
         && !Objects.equals(runtime.catalogHash(), cached.catalogHash())) {
+      return false;
+    }
+    if ("full".equals(mode)
+        && runtime.schemaBundleHash() != null
+        && !Objects.equals(cached.schemaBundleHash(), runtime.schemaBundleHash())) {
       return false;
     }
     return true;
@@ -471,13 +618,14 @@ public class Micro6ExecutorCatalogService {
   private JsonNode staleOrUnavailable(
       Micro6Runtime runtime, String mode, String reasonCode, String stateHint, List<String> reasons) {
     CachedCatalog cached = executorCache.get(cacheKey(runtime, mode));
-    if (cached != null && cached.payload() != null && cacheMatchesRuntime(cached, runtime)) {
+    if (cached != null && cached.payload() != null && cacheMatchesRuntime(cached, runtime, mode)) {
       log.warn(
           "[Micro6Catalog] refresh failed for ref={} mode={} code={}; serving last-known-good",
           runtime.endpointRef(),
           mode,
           reasonCode);
-      return catalogResponse(runtime.endpointRef(), mode, "STALE", cached.payload(), reasons);
+      return catalogResponse(
+          runtime.endpointRef(), mode, "STALE", cached.payload().deepCopy(), reasons);
     }
     return unavailablePayload(runtime.endpointRef(), mode, reasonCode, reasons);
   }

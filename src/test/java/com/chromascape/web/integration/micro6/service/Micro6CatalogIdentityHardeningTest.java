@@ -220,4 +220,50 @@ class Micro6CatalogIdentityHardeningTest {
     }
     assertThat(executor.lightweightCalls).isEqualTo(1);
   }
+
+  @Test
+  void missingIdentityHeadersOn200ArePermanentlyUnverified() throws Exception {
+    String ref = "dev-micro6:NOHDRS";
+    start(ref, "executor-A");
+    executor.lightweightBody = TestMicro6Catalog.json(TestMicro6Catalog.lightweight());
+    registry.omitIdentityHeaders = true;
+
+    JsonNode rejected = service.getCatalogForExecutor(ref, "lightweight", false);
+    assertThat(rejected.path("catalog_state").asText()).isEqualTo("UNAVAILABLE");
+    assertThat(rejected.path("reason_code").asText()).isEqualTo("IDENTITY_UNVERIFIED");
+  }
+
+  @Test
+  void responseExecutorHeaderMismatchIsRejected() throws Exception {
+    String ref = "dev-micro6:HDRMISMATCH";
+    start(ref, "executor-A");
+    executor.lightweightBody = TestMicro6Catalog.json(TestMicro6Catalog.lightweight());
+    registry.executorHeaderByRef.put(ref, "executor-WRONG");
+
+    JsonNode rejected = service.getCatalogForExecutor(ref, "lightweight", false);
+    assertThat(rejected.path("catalog_state").asText()).isEqualTo("UNAVAILABLE");
+    assertThat(rejected.path("reason_code").asText()).isEqualTo("IDENTITY_UNVERIFIED");
+    assertThat(rejected.path("reasons").toString()).contains("executor_instance_id mismatch");
+  }
+
+  @Test
+  void generatingRuntimeExposesPriorFullCatalogOnlyAsStale() throws Exception {
+    String ref = "dev-micro6:GENSTALE";
+    start(ref, "executor-A");
+    executor.fullBody = TestMicro6Catalog.json(TestMicro6Catalog.full());
+    registry.schemaBundleHashByRef.put(ref, TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+    registry.schemaBundleStateByRef.put(ref, "AVAILABLE");
+
+    JsonNode first = service.getCatalogForExecutor(ref, "full", false);
+    assertThat(first.path("catalog_state").asText()).isEqualTo("READY");
+
+    // The runtime transitions to GENERATING (re-generating its schema bundle). The prior
+    // same-identity full catalog may only be exposed as STALE, never as fresh READY.
+    registry.schemaBundleStateByRef.put(ref, "GENERATING");
+    JsonNode second = service.getCatalogForExecutor(ref, "full", false);
+    assertThat(second.path("catalog_state").asText()).isEqualTo("STALE");
+    assertThat(second.path("catalog").isObject()).isTrue();
+    assertThat(second.path("catalog").path("schema_bundle_hash").asText())
+        .isEqualTo(TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+  }
 }

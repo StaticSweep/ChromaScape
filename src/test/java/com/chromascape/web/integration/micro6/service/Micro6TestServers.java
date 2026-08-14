@@ -77,11 +77,16 @@ final class Micro6TestServers {
     final Map<String, String> executorInstanceByRef = new ConcurrentHashMap<>();
     final Map<String, String> stateByRef = new ConcurrentHashMap<>();
     final Map<String, String> catalogHashByRef = new ConcurrentHashMap<>();
+    final Map<String, String> schemaBundleHashByRef = new ConcurrentHashMap<>();
     final Map<String, String> catalogVersionByRef = new ConcurrentHashMap<>();
+    final Map<String, String> catalogStateByRef = new ConcurrentHashMap<>();
+    final Map<String, String> schemaBundleStateByRef = new ConcurrentHashMap<>();
     final Map<String, String> sessionIdByRef = new ConcurrentHashMap<>();
     final Map<String, Runnable> beforeCatalogHook = new ConcurrentHashMap<>();
+    final Map<String, String> executorHeaderByRef = new ConcurrentHashMap<>();
     final ObjectMapper mapper = new ObjectMapper();
     volatile boolean rewriteCatalogIdentity = true;
+    volatile boolean omitIdentityHeaders = false;
 
     FakeLeeuwbotApi() throws IOException {
       server = HttpServer.create(new InetSocketAddress(0), 0);
@@ -190,6 +195,49 @@ final class Micro6TestServers {
             // leave the body untouched if it is not JSON
           }
         }
+        // The registry stamps the resolved runtime identity onto the response headers exactly like
+        // the real backend proxy. Hashes are read from the fetched payload when present.
+        String catalogHash = "";
+        String schemaBundleHash = "";
+        try {
+          JsonNode parsed = mapper.readTree(body);
+          if (parsed != null && parsed.isObject()) {
+            if (parsed.has("catalog_hash")) {
+              catalogHash = parsed.get("catalog_hash").asText();
+            }
+            if (parsed.has("schema_bundle_hash")) {
+              schemaBundleHash = parsed.get("schema_bundle_hash").asText();
+            }
+          }
+        } catch (Exception ignored) {
+          // identity headers default to empty when the body is not JSON
+        }
+        exchange.getResponseHeaders().set("X-Micro6-Machine-Uuid", machineUuidFor(endpointRef));
+        exchange.getResponseHeaders()
+            .set(
+                "X-Micro6-Executor-Instance-Id",
+                executorHeaderByRef.getOrDefault(
+                    endpointRef, executorInstanceByRef.get(endpointRef)));
+        exchange.getResponseHeaders()
+            .set("X-Micro6-Session-Id", sessionIdFor(endpointRef));
+        exchange.getResponseHeaders()
+            .set("X-Micro6-Catalog-Version", catalogVersionFor(endpointRef));
+        if (!catalogHash.isEmpty()) {
+          exchange.getResponseHeaders().set("X-Micro6-Catalog-Hash", catalogHash);
+        }
+        if (!schemaBundleHash.isEmpty()) {
+          exchange.getResponseHeaders().set("X-Micro6-Schema-Bundle-Hash", schemaBundleHash);
+        }
+        exchange.getResponseHeaders().set("X-Micro6-Observed-At", java.time.Instant.now().toString());
+        if (omitIdentityHeaders) {
+          exchange.getResponseHeaders().remove("X-Micro6-Machine-Uuid");
+          exchange.getResponseHeaders().remove("X-Micro6-Executor-Instance-Id");
+          exchange.getResponseHeaders().remove("X-Micro6-Session-Id");
+          exchange.getResponseHeaders().remove("X-Micro6-Catalog-Version");
+          exchange.getResponseHeaders().remove("X-Micro6-Catalog-Hash");
+          exchange.getResponseHeaders().remove("X-Micro6-Schema-Bundle-Hash");
+          exchange.getResponseHeaders().remove("X-Micro6-Observed-At");
+        }
         write(exchange, response.statusCode(), body);
       } catch (Exception e) {
         write(
@@ -199,15 +247,30 @@ final class Micro6TestServers {
       }
     }
 
+    private String machineUuidFor(String endpointRef) {
+      return "machine-" + endpointRef.hashCode();
+    }
+
+    private String sessionIdFor(String endpointRef) {
+      return sessionIdByRef.getOrDefault(endpointRef, "session-" + endpointRef.hashCode());
+    }
+
+    private String catalogVersionFor(String endpointRef) {
+      return catalogVersionByRef.getOrDefault(endpointRef, "2");
+    }
+
     private String runtimeJson(String endpointRef, FakeMicro6Executor executor) {
       String state = stateByRef.getOrDefault(endpointRef, "ONLINE");
       String catalogHash = catalogHashByRef.get(endpointRef);
+      String schemaBundleHash = schemaBundleHashByRef.get(endpointRef);
       String catalogVersion = catalogVersionByRef.getOrDefault(endpointRef, "2");
-      String sessionId = sessionIdByRef.getOrDefault(endpointRef, "session-" + endpointRef.hashCode());
+      String catalogState = catalogStateByRef.get(endpointRef);
+      String schemaBundleState = schemaBundleStateByRef.get(endpointRef);
+      String sessionId = sessionIdFor(endpointRef);
       StringBuilder json =
           new StringBuilder("{")
-              .append("\"machine_uuid\":\"machine-")
-              .append(endpointRef.hashCode())
+              .append("\"machine_uuid\":\"")
+              .append(machineUuidFor(endpointRef))
               .append("\",")
               .append("\"session_id\":\"")
               .append(sessionId)
@@ -222,6 +285,15 @@ final class Micro6TestServers {
               .append("\",");
       if (catalogHash != null) {
         json.append("\"catalog_hash\":\"").append(catalogHash).append("\",");
+      }
+      if (schemaBundleHash != null) {
+        json.append("\"schema_bundle_hash\":\"").append(schemaBundleHash).append("\",");
+      }
+      if (catalogState != null) {
+        json.append("\"catalog_state\":\"").append(catalogState).append("\",");
+      }
+      if (schemaBundleState != null) {
+        json.append("\"schema_bundle_state\":\"").append(schemaBundleState).append("\",");
       }
       json.append("\"runtime_state\":\"")
           .append(state)
