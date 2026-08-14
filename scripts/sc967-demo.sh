@@ -48,6 +48,15 @@ if [[ "${SC967_ALLOW_REVISIONS:-false}" != "true" ]] && { [[ "$MICRO6_REV" != "$
   exit 2
 fi
 
+check_tree() {
+  local name="$1"; local repo="$2"; local status_file="$OUT_DIR/${name}.tree-status"
+  git -C "$repo" status --porcelain=v1 >"$status_file" 2>&1 || true
+  if [[ ! -s "$status_file" ]]; then GATES["${name}_clean"]="PASS"; else GATES["${name}_clean"]="FAIL"; fi
+}
+check_tree micro6 "$MICRO6_ROOT"
+check_tree chromascape "$ROOT"
+check_tree leeuwbotapi "$LEEUWBOT_API_ROOT"
+
 run_gate leeuwbot_go_tests bash -c "cd '$LEEUWBOT_API_ROOT/plugin-service' && go test ./..."
 run_gate leeuwbot_go_build bash -c "cd '$LEEUWBOT_API_ROOT/plugin-service' && go build ./..."
 run_gate chromascape_tests bash -c "cd '$ROOT' && JAVA_HOME=\"${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}\" ./gradlew --offline --no-daemon --no-watch-fs --max-workers=1 test"
@@ -78,6 +87,11 @@ def file_hash(path):
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 identity = {"control_allowed": False, "features_ai_player_control": False}
+identity["tree_status"] = {}
+for name in ("micro6", "chromascape", "leeuwbotapi"):
+    status_file = out / f"{name}.tree-status"
+    identity["tree_status"][name] = "CLEAN" if status_file.exists() and not status_file.read_text().strip() else "DIRTY"
+    gates[f"{name}_tree_state"] = "PASS" if identity["tree_status"][name] == "CLEAN" else "FAIL"
 if manifest_path.is_file():
     try:
         source = json.loads(manifest_path.read_text())

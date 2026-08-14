@@ -53,8 +53,6 @@ class PatchOutcomeEvaluationServiceTest {
                 citation(EvidenceType.LOG),
                 citation(EvidenceType.TICK_LOG),
                 citation(EvidenceType.RECORDING_SESSION)));
-    when(citationRepository.findByItemId("item-3")).thenReturn(List.of(citation(EvidenceType.LOG)));
-
     Map<String, Object> result = service.evaluate(start, end, "QuestScript");
 
     assertThat(result).containsEntry("totalItems", 2);

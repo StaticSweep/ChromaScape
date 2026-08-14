@@ -204,7 +204,7 @@ class StabilizationIngestionServiceTest {
         .thenReturn(false);
     when(runRepository.save(any(ScriptStabilizationRun.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
-    when(triageRepository.findByTriageKey("FISH_TRAINING::task_failed"))
+    when(triageRepository.findByTriageKey("FISH_TRAINING::sig:abc"))
         .thenReturn(Optional.empty());
     when(triageRepository.save(any(ScriptFailureTriage.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));

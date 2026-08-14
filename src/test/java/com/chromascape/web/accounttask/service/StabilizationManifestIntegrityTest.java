@@ -105,7 +105,11 @@ class StabilizationManifestIntegrityTest {
   @DisplayName("a PASS manifest that lacks complete evidence is rejected")
   void passWithoutCompleteEvidenceRejected() {
     JsonNode manifest = baseManifest();
-    ((ObjectNode) manifest).put("evidence_complete", false);
+    ObjectNode node = (ObjectNode) manifest;
+    node.put("evidence_complete", false);
+    node.put(
+        "manifest_hash",
+        "sha256:" + StabilizationHashUtil.sha256(node, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
 
     assertThatThrownBy(() -> service.ingestHarnessManifest(manifest))
         .isInstanceOf(IllegalArgumentException.class)

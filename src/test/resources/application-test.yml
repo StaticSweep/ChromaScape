@@ -13,6 +13,14 @@ spring:
 server:
   port: 0
 
+# Stabilization endpoints deliberately require separate read and write credentials outside the
+# local-development profile.  Use inert test-only values so Spring integration tests exercise the
+# production security configuration without requiring machine-local secrets.
+stabilization:
+  auth:
+    token: test-stabilization-read-token
+    write-token: test-stabilization-write-token
+
 # Simulator verifier - portable paths for WSL/Linux CI
 simulator:
   verifier:

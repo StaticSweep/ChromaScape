@@ -106,6 +106,27 @@ public class BehaviorGraphService {
     return node;
   }
 
+  @Transactional
+  public Map<String, Object> createAssistantDraft(String baseGraphId, Map<String, Object> diff) {
+    BehaviorGraphDefinition base = repository.findByGraphId(baseGraphId).orElseThrow(() -> error("NOT_FOUND", "base graph not found"));
+    if (!"PUBLISHED".equals(base.getState())) throw error("GRAPH_INVALID", "assistant drafts require a published base graph");
+    Map<String, Object> definition = response(base);
+    definition.put("assistant_diff", diff);
+    definition.put("state", "DRAFT");
+    definition.remove("graph_id");
+    definition.remove("graph_hash");
+    ObjectNode content = mapper.valueToTree(definition);
+    String hash = CanonicalJsonHasher.hash(content, null);
+    String graphId = "graph_" + hash.substring(7, 31);
+    CurrentSliceIdentity baseIdentity;
+    try { baseIdentity = mapper.readValue(base.getIdentityJson(), CurrentSliceIdentity.class); }
+    catch (Exception e) { throw error("GRAPH_INVALID", "base graph identity is invalid"); }
+    CurrentSliceIdentity identity = new CurrentSliceIdentity(baseIdentity.schema(), baseIdentity.task(), baseIdentity.run(), baseIdentity.client(), baseIdentity.capture(), baseIdentity.source(), new CurrentSliceIdentity.Graph(graphId, hash), baseIdentity.model(), baseIdentity.candidate(), false);
+    definition.put("schema", "behavior-graph-definition/v1"); definition.put("graph_id", graphId); definition.put("graph_hash", hash); definition.put("identity", identity); definition.put("control_allowed", false);
+    BehaviorGraphDefinition draft = new BehaviorGraphDefinition(); draft.setGraphId(graphId); draft.setGraphHash(hash); draft.setIdentityJson(write(identity)); draft.setDefinitionJson(write(definition)); draft.setState("DRAFT"); repository.save(draft);
+    return response(draft);
+  }
+
   @Transactional(readOnly = true)
   public Map<String, Object> get(String id) {
     BehaviorGraphDefinition entity = repository.findByGraphId(id).orElseThrow(() -> error("NOT_FOUND", "graph not found"));

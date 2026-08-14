@@ -7,6 +7,8 @@ import com.chromascape.web.aiplayer.routine.dto.RoutineApiDtos;
 import com.chromascape.web.aiplayer.routine.entity.RoutineCaptureRecord;
 import com.chromascape.web.aiplayer.routine.repository.RoutineCaptureRecordRepository;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
+import com.chromascape.web.debug.tickdebugger.entity.TickSnapshot;
+import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
@@ -35,18 +37,21 @@ public class RoutineCaptureIngestionService {
   private final RoutineCaptureRecordRepository repository;
   private final DebugSessionService debugSessions;
   private final RecordingSessionRepository recordingSessions;
+  private final TickSnapshotRepository snapshots;
 
   public RoutineCaptureIngestionService(
       ObjectMapper mapper,
       CurrentSliceIdentityValidator identities,
       RoutineCaptureRecordRepository repository,
       DebugSessionService debugSessions,
-      RecordingSessionRepository recordingSessions) {
+      RecordingSessionRepository recordingSessions,
+      TickSnapshotRepository snapshots) {
     this.mapper = mapper;
     this.identities = identities;
     this.repository = repository;
     this.debugSessions = debugSessions;
     this.recordingSessions = recordingSessions;
+    this.snapshots = snapshots;
   }
 
   @Transactional
@@ -100,10 +105,17 @@ public class RoutineCaptureIngestionService {
       String sessionId, RoutineApiDtos.BatchRequest request, List<JsonNode> values, boolean ticks, String idempotencyKey) {
     requireIdempotency(idempotencyKey);
     RoutineCaptureRecord entity = session(sessionId);
+    if (request.sessionId() != null && !sessionId.equals(request.sessionId())) conflict("IDENTITY_MISMATCH", "batch session_id does not match path");
     if (entity.isCompleted()) conflict("CAPTURE_BOUNDARY_UNCERTAIN", "session is complete");
     if (values == null) conflict("CAPTURE_SEQUENCE_GAP", "batch values are required");
     int sequence = request.sequence();
     String content = canonicalValues(values);
+    Map<String, String> idempotencies = idempotencies(entity, ticks);
+    String priorKey = idempotencies.get(idempotencyKey);
+    if (priorKey != null) {
+      if (!content.equals(priorKey)) conflict("DUPLICATE_SEQUENCE_CONFLICT", "idempotency key content differs");
+      return batchResponse(entity, sequence, values.size(), content);
+    }
     Map<String, String> seen = sequences(entity, ticks);
     String prior = seen.get(Integer.toString(sequence));
     if (prior != null) {
@@ -113,17 +125,21 @@ public class RoutineCaptureIngestionService {
     int expected = ticks ? entity.getNextTickSequence() : entity.getNextActionSequence();
     if (sequence != expected) conflict("CAPTURE_SEQUENCE_GAP", "expected sequence " + expected);
     seen.put(Integer.toString(sequence), content);
+    idempotencies.put(idempotencyKey, content);
     if (ticks) {
       List<JsonNode> all = values(entity.getTicksJson());
       all.addAll(values);
       entity.setTicksJson(writeJson(all));
       entity.setTickSequencesJson(writeJson(seen));
+      entity.setTickIdempotencyJson(writeJson(idempotencies));
       entity.setNextTickSequence(expected + 1);
+      persistDebuggerTicks(entity.getDebugSessionId(), values);
     } else {
       List<JsonNode> all = values(entity.getActionsJson());
       all.addAll(values);
       entity.setActionsJson(writeJson(all));
       entity.setActionSequencesJson(writeJson(seen));
+      entity.setActionIdempotencyJson(writeJson(idempotencies));
       entity.setNextActionSequence(expected + 1);
     }
     repository.save(entity);
@@ -204,6 +220,24 @@ public class RoutineCaptureIngestionService {
   @Transactional(readOnly = true)
   public List<JsonNode> actionsForSession(String sessionId) {
     return values(session(sessionId).getActionsJson());
+  }
+
+  private void persistDebuggerTicks(String debugSessionId, List<JsonNode> ticks) {
+    if (debugSessionId == null || debugSessionId.isBlank()) return;
+    for (JsonNode tick : ticks) {
+      JsonNode player = tick.get("player");
+      if (player == null) player = mapper.createObjectNode();
+      TickSnapshot snapshot = new TickSnapshot(debugSessionId, tick.path("tick").asLong(), java.time.LocalDateTime.now(), player);
+      snapshot.setInventory(tick.get("inventory")); snapshot.setNpcs(tick.get("nearby_npcs")); snapshot.setSchemaVersion(2);
+      snapshots.save(snapshot);
+    }
+  }
+
+  private Map<String, String> idempotencies(RoutineCaptureRecord entity, boolean ticks) {
+    JsonNode node = readJson(ticks ? entity.getTickIdempotencyJson() : entity.getActionIdempotencyJson());
+    Map<String, String> result = new LinkedHashMap<>();
+    node.fields().forEachRemaining(field -> result.put(field.getKey(), field.getValue().asText()));
+    return result;
   }
 
   private Map<String, String> sequences(RoutineCaptureRecord entity, boolean ticks) {

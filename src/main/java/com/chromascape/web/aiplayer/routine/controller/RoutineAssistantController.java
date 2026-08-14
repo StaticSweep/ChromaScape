@@ -1,8 +1,10 @@
 package com.chromascape.web.aiplayer.routine.controller;
 
 import com.chromascape.web.aiplayer.routine.dto.RoutineApiDtos;
+import com.chromascape.web.aiplayer.routine.service.RoutineCaptureIngestionService;
 import com.chromascape.web.aiplayer.routine.service.RoutineAssistantService;
 import java.util.Map;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,12 +12,15 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/ai-routine")
 public class RoutineAssistantController {
   private final RoutineAssistantService service;
-  public RoutineAssistantController(RoutineAssistantService service){this.service=service;}
-  @PostMapping("/runs/{runId}/assistant/conversations") public ResponseEntity<Object> create(@PathVariable String runId){return ResponseEntity.ok(service.create(runId));}
-  @PostMapping("/assistant/conversations/{id}/messages") public ResponseEntity<Object> message(@PathVariable String id,@RequestBody RoutineApiDtos.AssistantMessageRequest request){return ResponseEntity.accepted().body(service.message(id,request));}
-  @PostMapping("/assistant/conversations/{id}/stop") public ResponseEntity<Object> stop(@PathVariable String id){return ResponseEntity.ok(service.stop(id));}
-  @GetMapping("/assistant/conversations/{id}/events") public ResponseEntity<Object> events(@PathVariable String id,@RequestHeader(value="Last-Event-ID",defaultValue="0") long after){return ResponseEntity.ok(service.events(id,after));}
-  @PostMapping("/assistant/proposals/{id}/accept") public ResponseEntity<Object> accept(@PathVariable String id){return ResponseEntity.ok(service.accept(id));}
-  @PostMapping("/assistant/proposals/{id}/reject") public ResponseEntity<Object> reject(@PathVariable String id,@RequestBody(required=false) Map<String,String> body){return ResponseEntity.ok(service.reject(id,body==null?null:body.get("reason")));}
-  @ExceptionHandler(RoutineAssistantService.RoutineCaptureServiceException.class) public ResponseEntity<Object> error(RoutineAssistantService.RoutineCaptureServiceException e){return ResponseEntity.status(e.status()).body(Map.of("code",e.code(),"message",e.getMessage()));}
+  public RoutineAssistantController(RoutineAssistantService service) { this.service = service; }
+  @PostMapping("/runs/{runId}/assistant/conversations") public ResponseEntity<Object> create(@PathVariable String runId) { return ResponseEntity.ok(service.create(runId)); }
+  @PostMapping("/assistant/conversations/{id}/messages") public ResponseEntity<Object> message(@PathVariable String id, @RequestBody RoutineApiDtos.AssistantMessageRequest request) { return ResponseEntity.accepted().body(service.message(id, request)); }
+  @PostMapping("/assistant/conversations/{id}/stop") public ResponseEntity<Object> stop(@PathVariable String id) { return ResponseEntity.ok(service.stop(id)); }
+  @GetMapping(value = "/assistant/conversations/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  public ResponseEntity<String> events(@PathVariable String id, @RequestHeader(value = "Last-Event-ID", defaultValue = "0") long after) {
+    return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(service.sse(id, after));
+  }
+  @PostMapping("/assistant/proposals/{id}/accept") public ResponseEntity<Object> accept(@PathVariable String id) { return ResponseEntity.ok(service.accept(id)); }
+  @PostMapping("/assistant/proposals/{id}/reject") public ResponseEntity<Object> reject(@PathVariable String id, @RequestBody(required = false) Map<String, String> body) { return ResponseEntity.ok(service.reject(id, body == null ? null : body.get("reason"))); }
+  @ExceptionHandler(RoutineCaptureIngestionService.RoutineCaptureException.class) public ResponseEntity<Object> error(RoutineCaptureIngestionService.RoutineCaptureException e) { return ResponseEntity.status(e.status()).body(Map.of("code", e.code(), "message", e.getMessage())); }
 }

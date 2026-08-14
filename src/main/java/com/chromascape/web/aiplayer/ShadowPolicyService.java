@@ -122,7 +122,7 @@ public class ShadowPolicyService {
   }
 
   public boolean isControlEnabled() {
-    return controlEnabled;
+    return false;
   }
 
   public boolean isControlRequested() {

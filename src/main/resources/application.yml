@@ -18,7 +18,7 @@ spring:
 leeuwbot:
   candidate-registry:
     base-url: ${LEEUWBOT_CANDIDATE_REGISTRY_URL:http://127.0.0.1:8081}
-    token: ${LEEUWBOT_CANDIDATE_REGISTRY_TOKEN:}
+    token: ${STATIC_API_TOKEN:}
   signing:
     private-key-path: ${CANDIDATE_SIGNING_PRIVATE_KEY_PATH:}
     key-id: ${CANDIDATE_SIGNING_KEY_ID:}

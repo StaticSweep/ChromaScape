@@ -25,17 +25,20 @@ public record CurrentSliceIdentity(
   private static final Pattern MODEL = Pattern.compile("model_[0-9a-f]{24}");
   private static final Pattern CANDIDATE = Pattern.compile("cand_[0-9a-f]{24}");
 
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Task(
       @JsonProperty("task_key") String taskKey,
       @JsonProperty("settings_hash") String settingsHash,
       @JsonProperty("profile_id") String profileId,
       @JsonProperty("profile_hash") String profileHash,
       @JsonProperty("catalog_hash") String catalogHash) {}
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Run(
       @JsonProperty("run_id") String runId,
       @JsonProperty("attempt_id") String attemptId,
       @JsonProperty("entry_id") Integer entryId,
       @JsonProperty("executor_instance_id") String executorInstanceId) {}
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Client(
       @JsonProperty("client_id") String clientId,
       @JsonProperty("client_kind") String clientKind,
@@ -43,19 +46,24 @@ public record CurrentSliceIdentity(
       @JsonProperty("artifact_digest") String artifactDigest,
       @JsonProperty("adapter_contract") String adapterContract,
       @JsonProperty("domain") String domain) {}
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Capture(
       @JsonProperty("session_id") String sessionId,
       @JsonProperty("recording_id") String recordingId,
       @JsonProperty("recording_hash") String recordingHash) {}
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Source(
       @JsonProperty("source_snapshot_id") String sourceSnapshotId,
       @JsonProperty("source_manifest_hash") String sourceManifestHash) {}
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Graph(
       @JsonProperty("graph_id") String graphId,
       @JsonProperty("graph_hash") String graphHash) {}
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Model(
       @JsonProperty("model_id") String modelId,
       @JsonProperty("model_hash") String modelHash) {}
+  @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Candidate(
       @JsonProperty("candidate_id") String candidateId,
       @JsonProperty("candidate_hash") String candidateHash,

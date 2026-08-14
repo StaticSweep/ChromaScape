@@ -213,7 +213,8 @@ public class FishingDatasetBuilderService {
         Map.of(
             "ai_player_enabled", aiPlayerEnabled,
             "shadow_mode", shadowMode,
-            "control_enabled", controlEnabled,
+            "control_requested", controlEnabled,
+            "control_enabled", false,
             "control_allowed", false));
 
     Path manifestPath = datasetsDir().resolve(datasetId + ".manifest.json");

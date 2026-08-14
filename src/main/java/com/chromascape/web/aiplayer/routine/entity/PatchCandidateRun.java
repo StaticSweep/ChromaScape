@@ -20,6 +20,7 @@ public class PatchCandidateRun {
   @Column(name = "base_commit", nullable = false, length = 160) private String baseCommit;
   @Lob @Column(name = "patch_text", nullable = false) private String patchText;
   @Lob @Column(name = "binding_json", nullable = false) private String bindingJson;
+  @Lob @Column(name = "identity_json") private String identityJson;
   @Column(name = "patch_hash", nullable = false, length = 71) private String patchHash;
   @Column(name = "proposal_hash", nullable = false, length = 71) private String proposalHash;
   private String approverId;
@@ -54,6 +55,8 @@ public class PatchCandidateRun {
   public void setPatchText(String value) { patchText = value; }
   public String getBindingJson() { return bindingJson; }
   public void setBindingJson(String value) { bindingJson = value; }
+  public String getIdentityJson() { return identityJson; }
+  public void setIdentityJson(String value) { identityJson = value; }
   public String getPatchHash() { return patchHash; }
   public void setPatchHash(String value) { patchHash = value; }
   public String getProposalHash() { return proposalHash; }

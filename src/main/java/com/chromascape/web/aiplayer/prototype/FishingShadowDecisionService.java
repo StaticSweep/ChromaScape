@@ -386,7 +386,9 @@ public class FishingShadowDecisionService {
     Map<String, Object> status = new LinkedHashMap<>();
     status.put("enabled", enabled);
     status.put("shadowMode", shadowMode);
-    status.put("controlEnabled", controlEnabled);
+    status.put("controlEnabled", false);
+    status.put("controlRequested", controlEnabled);
+    status.put("controlAllowed", false);
     boolean operational = enabled && shadowMode && !controlEnabled;
     status.put("operational", operational);
 

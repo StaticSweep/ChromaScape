@@ -4,7 +4,10 @@ import com.chromascape.web.aiplayer.contract.CanonicalJsonHasher;
 import com.chromascape.web.aiplayer.routine.entity.PatchCandidateRun;
 import com.chromascape.web.aiplayer.routine.repository.PatchCandidateRunRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
+import com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -27,7 +30,7 @@ public class PatchCandidateWorkflowService {
       diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
       --- a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
       +++ b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
-      @@ -95,7 +95,10 @@
+      @@ -95,3 +95,6 @@
            private Fish getFishType(String fishName) {
       -        // Convert fish name to Fish enum - simple mapping
       -        switch (fishName.toLowerCase()) {
@@ -36,7 +39,7 @@ public class PatchCandidateWorkflowService {
       +        }
       +        // Convert fish name to Fish enum - simple mapping
       +        switch (fishName.trim().toLowerCase()) {
-      @@ -121,8 +124,7 @@
+      @@ -121,3 +124,2 @@
       -                System.out.println("[FishingExecutionTask] Warning: Unknown fish name '" + fishName + "', defaulting to SHRIMP");
       -                return Fish.SHRIMP;
       +                throw new UnsupportedFishTypeException(fishName);
@@ -45,7 +48,7 @@ public class PatchCandidateWorkflowService {
       new file mode 100644
       --- /dev/null
       +++ b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java
-      @@ -0,0 +1,9 @@
+      @@ -0,0 +1,8 @@
       +package net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing;
       +
       +/** Raised when a Fishing plan names a null, blank, or unsupported fish. */
@@ -58,7 +61,7 @@ public class PatchCandidateWorkflowService {
       new file mode 100644
       --- /dev/null
       +++ b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java
-      @@ -0,0 +1,58 @@
+      @@ -0,0 +1,25 @@
       +package net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing;
       +
       +import static org.junit.Assert.fail;
@@ -92,14 +95,14 @@ public class PatchCandidateWorkflowService {
   private final IsolatedPatchWorker worker;
   private final PatchCandidateRunRepository repository;
   private final Micro6SourceManifestClient source;
+  private final CurrentSliceIdentityValidator identities;
+  private final CandidateRegistryClient registry;
   @Value("${builder-goal.recovery.micro6-project-dir:../micro6}") private String micro6Root;
+  @Value("${leeuwbot.signing.private-key-path:}") private String signingKeyPath;
+  @Value("${leeuwbot.signing.key-id:}") private String signingKeyId;
 
-  public PatchCandidateWorkflowService(ObjectMapper mapper, IsolatedPatchWorker worker,
-      PatchCandidateRunRepository repository, Micro6SourceManifestClient source) {
-    this.mapper = mapper;
-    this.worker = worker;
-    this.repository = repository;
-    this.source = source;
+  public PatchCandidateWorkflowService(ObjectMapper mapper, IsolatedPatchWorker worker,      PatchCandidateRunRepository repository, Micro6SourceManifestClient source, CurrentSliceIdentityValidator identities, CandidateRegistryClient registry) {
+    this.mapper = mapper; this.worker = worker; this.repository = repository; this.source = source; this.identities = identities; this.registry = registry;
   }
 
   @Transactional
@@ -110,6 +113,11 @@ public class PatchCandidateWorkflowService {
     if (!"UNSUPPORTED_FISH_DEFAULTED".equals(String.valueOf(request.get("failure_code")))) {
       throw error(HttpStatus.UNPROCESSABLE_ENTITY, "FAILURE_CODE_MISMATCH", "seeded failure code is unsupported");
     }
+    Object identityValue = request.get("identity");
+    if (identityValue == null) throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_REQUIRED", "candidate identity through model is required");
+    CurrentSliceIdentity candidateIdentity;
+    try { candidateIdentity = identities.validate(mapper.convertValue(identityValue, CurrentSliceIdentity.class)); }
+    catch (RuntimeException e) { throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_INVALID", e.getMessage()); }
     Micro6SourceManifestClient.SourceBinding resolved = source.resolveFishingSource();
     String requestedBase = text(request, "base_commit");
     if (requestedBase != null && !requestedBase.equals(resolved.clientBuildId())) {
@@ -155,6 +163,7 @@ public class PatchCandidateWorkflowService {
     entity.setBaseCommit(baseCommit);
     entity.setPatchText(PATCH);
     entity.setBindingJson(write(binding));
+    entity.setIdentityJson(write(candidateIdentity));
     entity.setPatchHash(CanonicalJsonHasher.hash(mapper.valueToTree(PATCH), null));
     entity.setProposalHash(proposalHash);
     entity.setState("PATCH_PROPOSED");
@@ -194,14 +203,17 @@ public class PatchCandidateWorkflowService {
     IsolatedPatchWorker.BuildResult result = worker.run(new IsolatedPatchWorker.BuildRequest(
         Path.of(micro6Root), entity.getBaseCommit(), entity.getPatchText(),
         Set.of(SOURCE_FILE, EXCEPTION_FILE, TEST_FILE), List.of(), entity.getSourceSnapshotId(),
-        entity.getSourceFileId(), entity.getStartLine(), entity.getEndLine(), entity.getPreimageHash()));
+        entity.getSourceFileId(), entity.getStartLine(), entity.getEndLine(), entity.getPreimageHash(), entity.getFailureManifestHash(),
+        entity.getProposalHash(), entity.getApprovalHash(), entity.getPatchHash(), entity.getSourceManifestHash(), modelHash(entity.getIdentityJson())));
     entity.setState(result.status());
     Map<String, Object> buildResult = new LinkedHashMap<>();
     buildResult.put("status", result.status());
     buildResult.put("changed_files", result.changedFiles());
     buildResult.put("failure_code", result.failureCode());
     entity.setResultJson(write(buildResult));
-    // BUILT is deliberately not CERTIFIED: certification requires artifact hashing, signing, and registry verification.
+    if ("BUILT".equals(result.status())) {
+      registerCandidate(entity, result);
+    }
     repository.save(entity);
     return response(entity);
   }
@@ -209,14 +221,59 @@ public class PatchCandidateWorkflowService {
   @Transactional(readOnly = true)
   public Map<String, Object> get(String id) { return response(proposal(id)); }
 
+  private void registerCandidate(PatchCandidateRun entity, IsolatedPatchWorker.BuildResult result) {
+    if (signingKeyPath == null || signingKeyPath.isBlank() || signingKeyId == null || signingKeyId.isBlank()) {
+      entity.setState("FAILED"); entity.setResultJson(write(Map.of("failure_code", "SIGNING_KEY_UNAVAILABLE"))); return;
+    }
+    if (result.jarBytes() == null || result.sbomBytes() == null || result.certificationBytes() == null) {
+      entity.setState("FAILED"); entity.setResultJson(write(Map.of("failure_code", "CERTIFICATION_ARTIFACT_MISSING"))); return;
+    }
+    try {
+      Path bundle = Files.createTempDirectory("sc967-candidate-");
+      Path jar = bundle.resolve(result.jarName()); Path sbom = bundle.resolve(result.sbomName()); Path cert = bundle.resolve("certification.json"); Path manifestPath = bundle.resolve("manifest.json");
+      Files.write(jar, result.jarBytes()); Files.write(sbom, result.sbomBytes()); Files.write(cert, result.certificationBytes());
+      Map<String, Object> manifest = new LinkedHashMap<>(); manifest.put("schema", "certified-candidate/v1"); manifest.put("identity", read(entity.getIdentityJson())); manifest.put("control_allowed", false);
+      Map<String, Object> candidate = new LinkedHashMap<>(); candidate.put("key_id", signingKeyId); candidate.put("base_commit", entity.getBaseCommit()); candidate.put("baseline_failure_manifest_hash", entity.getFailureManifestHash()); candidate.put("source_snapshot_id", entity.getSourceSnapshotId()); candidate.put("source_manifest_hash", entity.getSourceManifestHash()); candidate.put("patch_hash", entity.getPatchHash()); candidate.put("proposal_hash", entity.getProposalHash()); candidate.put("approval_hash", entity.getApprovalHash()); candidate.put("post_patch_test_result_hash", hash(result.testReportBytes())); candidate.put("build_command_ids", List.of("compileJava", "checkstyleMain", "checkstyleTest", "test", "shadowJar", "generateRuntimeSbom")); candidate.put("jar_name", result.jarName()); candidate.put("jar_size", (long) result.jarBytes().length); candidate.put("jar_sha256", hash(result.jarBytes())); candidate.put("sbom_name", result.sbomName()); candidate.put("sbom_size", (long) result.sbomBytes().length); candidate.put("sbom_sha256", hash(result.sbomBytes())); candidate.put("certification_document_hash", hash(result.certificationBytes())); candidate.put("control_allowed", false); manifest.put("candidate", candidate);
+      CandidateSigner signer = new CandidateSigner(signingKeyId, Path.of(signingKeyPath));
+      String candidateHash = signer.unsignedHash(mapper.valueToTree(manifest)); candidate.put("candidate_hash", candidateHash); candidate.put("candidate_id", "cand_" + candidateHash.substring(7, 31)); candidate.put("signature", signer.signCandidateHash(candidateHash));
+      Files.writeString(manifestPath, write(manifest));
+      String registration = registry.register(manifestPath, jar, sbom, cert);
+      byte[] downloaded = registry.download(candidate.get("candidate_id").toString());
+      if (!hash(downloaded).equals(candidate.get("jar_sha256"))) throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
+      entity.setState("REGISTERED"); entity.setResultJson(write(Map.of("candidate_id", candidate.get("candidate_id"), "candidate_hash", candidateHash, "registration", registration, "download_sha256", hash(downloaded))));
+      if (!deleteBundle(bundle)) { entity.setState("FAILED"); entity.setResultJson(write(Map.of("failure_code", "CANDIDATE_BUNDLE_CLEANUP_FAILED"))); }
+    } catch (CandidateRegistryClient.RegistryException e) {
+      entity.setState(e.isUncertain() ? "REGISTERING_UNCERTAIN" : "REJECTED"); entity.setResultJson(write(Map.of("failure_code", e.getMessage())));
+    } catch (Exception e) {
+      entity.setState("FAILED"); entity.setResultJson(write(Map.of("failure_code", e.getMessage() == null ? "CANDIDATE_REGISTRATION_FAILED" : e.getMessage())));
+    }
+  }
+
+  private boolean deleteBundle(Path bundle) {
+    try (var stream = Files.walk(bundle)) {
+      final boolean[] clean = {true};
+      stream.sorted(java.util.Comparator.reverseOrder()).forEach(path -> { try { Files.deleteIfExists(path); } catch (Exception e) { clean[0] = false; } });
+      return clean[0] && !Files.exists(bundle);
+    } catch (Exception e) { return false; }
+  }
+  private static String hash(byte[] bytes) { try { byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes); StringBuilder value = new StringBuilder("sha256:"); for (byte b : digest) value.append(String.format("%02x", b)); return value.toString(); } catch (Exception e) { throw new IllegalStateException(e); } }
+
   private PatchCandidateRun proposal(String id) { return repository.findByProposalId(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "patch proposal not found")); }
+  @SuppressWarnings("unchecked") private String modelHash(String identityJson) {
+    Map<String, Object> identity = read(identityJson);
+    Object model = identity.get("model");
+    if (!(model instanceof Map)) throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_INVALID", "model identity is required");
+    Object value = ((Map<String, Object>) model).get("model_hash");
+    if (value == null || String.valueOf(value).isBlank()) throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_INVALID", "model_hash is required");
+    return String.valueOf(value);
+  }
   private String write(Object value) { try { return mapper.writeValueAsString(value); } catch (Exception e) { throw error(HttpStatus.UNPROCESSABLE_ENTITY, "PATCH_INVALID", "patch evidence is not serializable"); } }
   private static String text(Map<String, Object> request, String key) { Object value = request.get(key); return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value); }
   @SuppressWarnings("unchecked") private Map<String, Object> read(String json) { try { return mapper.readValue(json, Map.class); } catch (Exception e) { return Map.of(); } }
   private Map<String, Object> response(PatchCandidateRun entity) {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("proposal_id", entity.getProposalId()); result.put("status", entity.getState()); result.put("failure_binding", read(entity.getBindingJson()));
-    result.put("base_commit", entity.getBaseCommit()); result.put("patch", entity.getPatchText()); result.put("patch_hash", entity.getPatchHash()); result.put("proposal_hash", entity.getProposalHash());
+    result.put("identity", read(entity.getIdentityJson())); result.put("base_commit", entity.getBaseCommit()); result.put("patch", entity.getPatchText()); result.put("patch_hash", entity.getPatchHash()); result.put("proposal_hash", entity.getProposalHash());
     result.put("approver_id", entity.getApproverId()); result.put("approved_at", entity.getApprovedAt()); result.put("approval_hash", entity.getApprovalHash()); result.put("result", read(entity.getResultJson())); result.put("control_allowed", false);
     return result;
   }

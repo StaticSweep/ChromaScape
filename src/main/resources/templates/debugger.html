@@ -11,6 +11,7 @@
     integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPgv6ud+Mvd" crossorigin="anonymous" />
   <link rel="stylesheet" href="/css/style.css" />
   <link rel="stylesheet" href="/css/debugger.css?v=11" />
+  <link rel="stylesheet" href="/css/ai-routine.css?v=1" />
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
     crossorigin="anonymous"></script>
@@ -1105,7 +1106,26 @@
   </div>
 
   <script src="/js/fishing-shadow-core.js?v=1"></script>
+  <section id="ai-routine-panel" aria-label="AI Routine read-only debugger">
+    <h2>AI Routine · capture / graph / replay / shadow</h2>
+    <div class="ai-routine-grid">
+      <label>Run ID <output data-ai-value="runId">—</output></label>
+      <label>Session ID <output data-ai-value="sessionId">—</output></label>
+      <label>Recording ID <output data-ai-value="recordingId">—</output></label>
+      <label>Graph ID <output data-ai-value="graphId">—</output></label>
+      <label>Model ID <output data-ai-value="modelId">—</output></label>
+      <label>Candidate ID <output data-ai-value="candidateId">—</output></label>
+    </div>
+    <p data-ai-control>READ-ONLY (control_allowed=false)</p>
+    <label>Stabilization attempt (blank for RuneLite capture)<input data-ai-attempt /></label>
+    <label>Current-slice identity JSON<textarea data-ai-identity spellcheck="false"></textarea></label>
+    <button type="button" data-ai-start>Bind AI Routine run</button>
+    <label>Assistant message<textarea data-ai-text></textarea></label>
+    <button type="button" data-ai-message>Send Assistant message</button>
+    <pre data-ai-routine-output aria-live="polite"></pre>
+  </section>
   <script src="/js/debugger.js?v=15"></script>
+  <script src="/js/ai-routine.js?v=1"></script>
   <script src="/js/patchloop.js?v=2"></script>
 <script src="/js/account-task-planner.js?v=39"></script>
 </body>

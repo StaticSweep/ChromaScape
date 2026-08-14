@@ -30,6 +30,7 @@ public class CandidateRegistryClient {
   public byte[] download(String candidateId) throws Exception {
     validateId(candidateId);
     JsonNode manifest = mapper.readTree(lookup(candidateId)).path("manifest");
+    if (!manifest.has("jar_sha256")) manifest = manifest.path("candidate");
     String expected = manifest.path("jar_sha256").asText();
     HttpResponse<byte[]> response = sendBytes("/api/v1/candidates/" + candidateId + "/download");
     if (response.statusCode() / 100 != 2) throw new RegistryException("REGISTRY_REJECTED", false);

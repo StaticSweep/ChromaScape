@@ -687,8 +687,10 @@ class SimulatorVerifyServiceTest {
       java.nio.file.Path reportFile = java.nio.file.Paths.get(job.getReportPath());
       assertTrue(java.nio.file.Files.exists(reportFile), "Synthetic report file should exist");
       String content = java.nio.file.Files.readString(reportFile);
-      assertTrue(content.contains("\"passed\": false"), "Report must contain passed=false");
-      assertTrue(content.contains("\"error\""), "Report must contain error field");
+      com.fasterxml.jackson.databind.JsonNode report =
+          new com.fasterxml.jackson.databind.ObjectMapper().readTree(content);
+      assertFalse(report.path("passed").asBoolean(), "Report must contain passed=false");
+      assertTrue(report.has("error"), "Report must contain error field");
 
       // Cleanup
       java.nio.file.Files.walk(tempDir)
@@ -1026,8 +1028,6 @@ class SimulatorVerifyServiceTest {
       when(mockProcess.waitFor(
               org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any()))
           .thenReturn(true);
-      when(mockProcess.isAlive()).thenReturn(false);
-
       // Stub createVerifierProcess to return our mock
       doReturn(mockProcess)
           .when(spyService)
