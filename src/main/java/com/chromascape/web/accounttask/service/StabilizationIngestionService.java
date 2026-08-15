@@ -225,7 +225,10 @@ public class StabilizationIngestionService {
     }
 
     ScriptStabilizationRun run = new ScriptStabilizationRun();
-    run.setVerified(true);
+    // The direct harness-manifest route is LEGACY ingestion only: it can never create a verified
+    // certification record. Only the validated /report-bundles path may persist verified=true, so
+    // this route's rows are always excluded from certified matrices and KPIs.
+    run.setVerified(false);
     run.setReportId("harness-" + runId + "-" + attemptId);
     run.setSchemaVersion(schemaVersion);
     run.setScriptKey(manifest.path("task_key").asText("unknown"));

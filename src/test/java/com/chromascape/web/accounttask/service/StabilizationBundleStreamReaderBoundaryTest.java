@@ -182,4 +182,84 @@ class StabilizationBundleStreamReaderBoundaryTest {
         tempDir.resolve("i")))
         .hasMessageContaining("maximum header count");
   }
+
+  @Test
+  @DisplayName("a boundary-prefix that is not a real delimiter stays body data")
+  void boundaryPrefixStaysBodyData() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    body.append("Content-Disposition: form-data; name=\"completeMarker\"; filename=\"complete.marker\"\r\n");
+    body.append("Content-Type: text/plain\r\n\r\n");
+    // The literal \r\n--boundary-extra must remain part of the part body: it is not followed by
+    // \r\n or --, so it is not a delimiter.
+    body.append("COMPLETE\r\n--").append(boundary).append("-not-a-delimiter\r\n");
+    body.append("--").append(boundary).append("--\r\n");
+    StabilizationBundleStreamReader.StagedBundle bundle = StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("j"));
+    org.assertj.core.api.Assertions.assertThat(bundle.names()).contains("completeMarker");
+    try {
+      String content =
+          new String(java.nio.file.Files.readAllBytes(bundle.part("completeMarker")),
+              StandardCharsets.UTF_8);
+      org.assertj.core.api.Assertions.assertThat(content).contains("--" + boundary + "-not-a-delimiter");
+    } catch (java.io.IOException e) {
+      throw new AssertionError(e);
+    }
+  }
+
+  @Test
+  @DisplayName("a closing boundary -- suffix succeeds")
+  void closingBoundarySuffix() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    body.append("Content-Disposition: form-data; name=\"completeMarker\"; filename=\"complete.marker\"\r\n");
+    body.append("Content-Type: text/plain\r\n\r\n");
+    body.append("COMPLETE\r\n");
+    body.append("--").append(boundary).append("--\r\n");
+    StabilizationBundleStreamReader.StagedBundle bundle = StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("k"));
+    org.assertj.core.api.Assertions.assertThat(bundle.names()).contains("completeMarker");
+  }
+
+  @Test
+  @DisplayName("a filename= value cannot satisfy name= (token-exact disposition parsing)")
+  void filenameCannotSatisfyName() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    // name= is absent; only filename= is present. Substring matching would let name= match inside
+    // filename=, so the part must be rejected as missing its name.
+    body.append("Content-Disposition: form-data; filename=\"complete.marker\"\r\n");
+    body.append("Content-Type: text/plain\r\n\r\n");
+    body.append("COMPLETE\r\n");
+    body.append("--").append(boundary).append("--\r\n");
+    assertThatThrownBy(() -> StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("l")))
+        .hasMessageContaining("missing a name");
+  }
+
+  @Test
+  @DisplayName("quoted disposition parameters parse with escaped characters")
+  void quotedDispositionParameters() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    body.append("Content-Disposition: form-data; name=\"completeMarker\"; filename=\"complete.marker\"\r\n");
+    body.append("Content-Type: text/plain\r\n\r\n");
+    body.append("COMPLETE\r\n");
+    body.append("--").append(boundary).append("--\r\n");
+    StabilizationBundleStreamReader.StagedBundle bundle = StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("m"));
+    org.assertj.core.api.Assertions.assertThat(bundle.names()).contains("completeMarker");
+  }
 }
