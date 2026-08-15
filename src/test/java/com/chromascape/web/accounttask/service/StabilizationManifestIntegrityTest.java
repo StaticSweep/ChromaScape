@@ -131,4 +131,21 @@ class StabilizationManifestIntegrityTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("run_id");
   }
+
+  @Test
+  @DisplayName("direct manifest ingestion can never create a verified certification record")
+  void directManifestIngestionIsNeverVerified() {
+    when(runRepository.existsBySchemaVersionAndRunIdAndAttemptIdAndManifestHash(
+        any(), any(), any(), any())).thenReturn(false);
+
+    Map<String, Object> result = service.ingestHarnessManifest(baseManifest());
+    assertThat(result.get("saved")).isEqualTo(true);
+
+    org.mockito.ArgumentCaptor<ScriptStabilizationRun> captor =
+        org.mockito.ArgumentCaptor.forClass(ScriptStabilizationRun.class);
+    verify(runRepository).save(captor.capture());
+    ScriptStabilizationRun saved = captor.getValue();
+    assertThat(saved.getVerified()).as("direct /harness-manifest ingestion must never be verified")
+        .isFalse();
+  }
 }
