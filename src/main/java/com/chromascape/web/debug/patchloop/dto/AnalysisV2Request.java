@@ -89,7 +89,7 @@ public class AnalysisV2Request {
   }
 
   public String getSchemaVersion() {
-    return schemaVersion != null ? schemaVersion : SCHEMA_VERSION;
+    return schemaVersion;
   }
 
   public void setSchemaVersion(String schemaVersion) {

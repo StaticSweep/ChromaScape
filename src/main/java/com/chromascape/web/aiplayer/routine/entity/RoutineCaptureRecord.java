@@ -22,6 +22,7 @@ public class RoutineCaptureRecord {
   @Lob @Column(nullable = false) private String actionSequencesJson = "{}";
   @Lob @Column(nullable = false) private String tickIdempotencyJson = "{}";
   @Lob @Column(nullable = false) private String actionIdempotencyJson = "{}";
+  @Lob @Column(nullable = false) private String requestIdempotencyJson = "{}";
   @Column(nullable = false) private int nextTickSequence = 1;
   @Column(nullable = false) private int nextActionSequence = 1;
   @Column(nullable = false) private boolean completed;
@@ -58,6 +59,8 @@ public class RoutineCaptureRecord {
   public void setTickIdempotencyJson(String value) { tickIdempotencyJson = value; }
   public String getActionIdempotencyJson() { return actionIdempotencyJson; }
   public void setActionIdempotencyJson(String value) { actionIdempotencyJson = value; }
+  public String getRequestIdempotencyJson() { return requestIdempotencyJson; }
+  public void setRequestIdempotencyJson(String value) { requestIdempotencyJson = value; }
   public int getNextTickSequence() { return nextTickSequence; }
   public void setNextTickSequence(int value) { nextTickSequence = value; }
   public int getNextActionSequence() { return nextActionSequence; }

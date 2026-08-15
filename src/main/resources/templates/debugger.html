@@ -1116,10 +1116,16 @@
       <label>Model ID <output data-ai-value="modelId">—</output></label>
       <label>Candidate ID <output data-ai-value="candidateId">—</output></label>
     </div>
-    <p data-ai-control>READ-ONLY (control_allowed=false)</p>
-    <label>Stabilization attempt (blank for RuneLite capture)<input data-ai-attempt /></label>
+    <p data-ai-control>READ-ONLY — control_allowed=false</p>
+    <label>Client mode<select data-ai-client-kind><option value="MICRO6_MANAGED">Micro6 managed</option><option value="RUNELITE_CAPTURE">RuneLite capture</option></select></label>
+    <label>Stabilization attempt (Micro6 only)<input data-ai-attempt /></label>
+    <label>Capture token<input data-ai-token type="password" autocomplete="off" /></label>
     <label>Current-slice identity JSON<textarea data-ai-identity spellcheck="false"></textarea></label>
     <button type="button" data-ai-start>Bind AI Routine run</button>
+    <button type="button" data-ai-capture-start>Start capture</button>
+    <button type="button" data-ai-capture-status>Reconcile capture status</button>
+    <button type="button" data-ai-reconcile>Retry/reconcile uncertain request</button>
+    <output data-ai-sse-state>DISCONNECTED</output>
     <label>Assistant message<textarea data-ai-text></textarea></label>
     <button type="button" data-ai-message>Send Assistant message</button>
     <pre data-ai-routine-output aria-live="polite"></pre>

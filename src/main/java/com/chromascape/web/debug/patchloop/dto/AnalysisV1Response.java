@@ -52,7 +52,7 @@ public class AnalysisV1Response {
   }
 
   public String getSchemaVersion() {
-    return schemaVersion != null ? schemaVersion : SCHEMA_VERSION;
+    return schemaVersion;
   }
 
   public void setSchemaVersion(String schemaVersion) {

@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "certified-candidate/v1",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "required": ["schema", "identity", "candidate", "key_id", "base_commit", "source_snapshot_id", "source_manifest_hash", "baseline_fail_manifest_hash", "patch_hash", "proposal_hash", "approval_hash", "post_patch_test_result_hash", "jar_name", "jar_size", "jar_sha256", "sbom_name", "sbom_size", "sbom_sha256", "certification_document_hash", "build_commands", "control_allowed"],
   "properties": {
     "schema": {"const": "certified-candidate/v1"},
     "identity": {"type": "object"},
-    "candidate": {"type": "object", "required": ["candidate_id", "candidate_hash", "certification_hash"]},
+    "candidate": {"type": "object", "additionalProperties": false, "required": ["candidate_id", "candidate_hash", "certification_hash", "signature"], "properties": {"candidate_id": {"type": "string", "pattern": "^cand_[0-9a-f]{24}$"}, "candidate_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "certification_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "signature": {"type": "string", "minLength": 1}}},
     "key_id": {"type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._-]+$"},
     "base_commit": {"type": "string", "minLength": 1},
     "source_snapshot_id": {"type": "string", "pattern": "^srcsnap_[0-9a-f]{24}$"},
@@ -24,7 +24,7 @@
     "sbom_size": {"type": "integer", "minimum": 1},
     "sbom_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "certification_document_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "build_commands": {"type": "array", "items": {"type": "string"}},
+    "build_commands": {"type": "array", "minItems": 6, "items": {"type": "string"}},
     "control_allowed": {"const": false}
   }
 }

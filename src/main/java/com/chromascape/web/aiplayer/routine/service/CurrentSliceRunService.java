@@ -33,6 +33,15 @@ public class CurrentSliceRunService {
   }
 
   @Transactional
+  public Map<String, Object> createRunelite(CurrentSliceIdentity identity) {
+    if (identity == null || identity.client() == null || !"RUNELITE_CAPTURE".equals(identity.client().clientKind())) throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CLIENT_CAPABILITY_INVALID", "RuneLite capture client identity is required");
+    String runId = identity.run() == null || identity.run().runId() == null || identity.run().runId().isBlank() ? "run_" + UUID.randomUUID().toString().replace("-", "") : identity.run().runId();
+    CurrentSliceIdentity.Run run = new CurrentSliceIdentity.Run(runId, null, null, null);
+    CurrentSliceIdentity enriched = new CurrentSliceIdentity(identity.schema(), identity.task(), run, identity.client(), identity.capture(), identity.source(), identity.graph(), identity.model(), identity.candidate(), false);
+    return create(null, enriched);
+  }
+
+  @Transactional
   public Map<String, Object> create(String attemptId, CurrentSliceIdentity identity) {
     validator.validate(identity);
     boolean micro6 = identity.client() != null && "MICRO6_MANAGED".equals(identity.client().clientKind());

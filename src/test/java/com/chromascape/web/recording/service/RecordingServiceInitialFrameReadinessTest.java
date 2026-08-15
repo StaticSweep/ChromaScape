@@ -50,7 +50,11 @@ class RecordingServiceInitialFrameReadinessTest {
   private BufferedImage waitForInitialFrame(RecordingService service) throws Exception {
     Method m = RecordingService.class.getDeclaredMethod("waitForInitialFrame");
     m.setAccessible(true);
-    return (BufferedImage) m.invoke(service);
+    try {
+      return (BufferedImage) m.invoke(service);
+    } catch (java.lang.reflect.InvocationTargetException e) {
+      throw (RuntimeException) e.getCause();
+    }
   }
 
   private BufferedImage frame(int width, int height) {
@@ -122,7 +126,7 @@ class RecordingServiceInitialFrameReadinessTest {
     assertThatThrownBy(() -> waitForInitialFrame(service))
         .isInstanceOf(FrameCaptureException.class)
         .hasMessageContaining("Failed to capture initial frame after")
-        .hasMessageContaining("no frame captured");
+        .hasMessageContaining("capture returned no frame");
   }
 
   @Test

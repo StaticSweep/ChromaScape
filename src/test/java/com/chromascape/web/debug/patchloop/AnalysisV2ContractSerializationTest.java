@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
  */
 class AnalysisV2ContractSerializationTest {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
   @Test
   void testV2RequestSerialization() throws Exception {

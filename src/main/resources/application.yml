@@ -207,6 +207,7 @@ tick-debugger:
 
 # Micro6 Integration Configuration
 micro6:
+  expected-artifact-name: ${MICRO6_EXPECTED_ARTIFACT_NAME:}
   log-shipper:
     # Enable/disable log file shipper
     enabled: ${MICRO6_LOG_SHIPPER_ENABLED:false}

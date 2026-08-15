@@ -12,7 +12,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,8 +86,7 @@ public class Micro6RuntimeRegistryClient {
   }
 
   public Micro6Runtime resolveRuntime(String endpointRef) {
-    JsonNode node =
-        sendGet("/api/v1/launcher/runtimes/micro6/" + encodePath(endpointRef));
+    JsonNode node = sendGet("/api/v1/launcher/runtimes/micro6/" + encodePath(endpointRef));
     return parseRuntime(node);
   }
 
@@ -149,9 +147,16 @@ public class Micro6RuntimeRegistryClient {
       return machineUuid != null && executorInstanceId != null && sessionId != null;
     }
 
-    /** Full identity expected on 200 responses. */
+    /**
+     * Full identity expected on 200 responses: core identity plus the catalog version, a valid
+     * backend-attested catalog hash, and a valid {@code observed_at}. ChromaScape never accepts a
+     * 200 payload as attested identity without every applicable header.
+     */
     public boolean hasFullIdentity() {
-      return hasCoreIdentity() && catalogVersion != null;
+      return hasCoreIdentity()
+          && catalogVersion != null
+          && isValidSha256(catalogHash)
+          && observedAt != null;
     }
 
     /** Both lifecycle states must be present on every forwarded status. */
@@ -159,29 +164,86 @@ public class Micro6RuntimeRegistryClient {
       return catalogState != null && schemaBundleState != null;
     }
 
+    /** Matches {@code ^sha256:[0-9a-f]{64}$}. */
+    public static boolean isValidSha256(String value) {
+      return value != null && value.matches("^sha256:[0-9a-f]{64}$");
+    }
+
     /**
-     * The catalog/schema-bundle state combination must be one the contract defines. Unknown or
-     * impossible combinations are a permanent contract error before the body is processed.
+     * {@code observed_at} is valid when it is present, RFC3339 (enforced at parse time), no more
+     * than 30 seconds in the future, and recent enough for the runtime TTL. A timestamp within the
+     * 30-second future-skew allowance is treated as age zero: the skew covers launcher/backend
+     * clock differences without penalizing an otherwise fresh attestation.
+     *
+     * <ul>
+     *   <li>Missing timestamp: invalid.
+     *   <li>Null, zero, or negative TTL: invalid.
+     *   <li>{@code observedAt <= now}: valid when age is at most TTL.
+     *   <li>{@code now < observedAt <= now + 30s}: valid and treated as age zero.
+     *   <li>{@code observedAt > now + 30s}: invalid.
+     *   <li>TTL boundary is inclusive.
+     * </ul>
+     */
+    public boolean hasValidObservedAt(Instant now, Duration ttl) {
+      if (observedAt == null || now == null || ttl == null || ttl.isZero() || ttl.isNegative()) {
+        return false;
+      }
+
+      if (observedAt.isAfter(now.plusSeconds(30))) {
+        return false;
+      }
+
+      if (observedAt.isAfter(now)) {
+        return true;
+      }
+
+      return Duration.between(observedAt, now).compareTo(ttl) <= 0;
+    }
+
+    /**
+     * The catalog/schema-bundle state combination must be one the contract matrix defines. Unknown
+     * or impossible combinations (including {@code GENERATING+ERROR}, {@code READY+ERROR}, and any
+     * non-AVAILABLE state carrying a bundle hash) are a permanent contract error before the body is
+     * processed.
+     *
+     * <pre>
+     * Catalog state    Allowed schema state    Bundle hash
+     * READY            AVAILABLE               required
+     * READY            NOT_AVAILABLE           absent
+     * DEGRADED         AVAILABLE               required
+     * DEGRADED         NOT_AVAILABLE           absent
+     * DEGRADED         ERROR                   absent
+     * GENERATING       GENERATING              absent
+     * UNAVAILABLE      NOT_AVAILABLE           absent
+     * UNAVAILABLE      ERROR                   absent
+     * </pre>
      */
     public boolean hasValidLifecycleStates() {
       if (!hasLifecycleStates()) {
         return false;
       }
-      if (!Set.of("READY", "DEGRADED", "GENERATING", "UNAVAILABLE").contains(catalogState)) {
-        return false;
+      switch (catalogState) {
+        case "READY":
+        case "DEGRADED":
+          if ("AVAILABLE".equals(schemaBundleState)) {
+            return isValidSha256(schemaBundleHash);
+          }
+          if ("NOT_AVAILABLE".equals(schemaBundleState)) {
+            return schemaBundleHash == null;
+          }
+          return "DEGRADED".equals(catalogState)
+              && "ERROR".equals(schemaBundleState)
+              && schemaBundleHash == null;
+        case "GENERATING":
+          return "GENERATING".equals(schemaBundleState) && schemaBundleHash == null;
+        case "UNAVAILABLE":
+          if ("NOT_AVAILABLE".equals(schemaBundleState)) {
+            return schemaBundleHash == null;
+          }
+          return "ERROR".equals(schemaBundleState) && schemaBundleHash == null;
+        default:
+          return false;
       }
-      if (!Set.of("NOT_AVAILABLE", "GENERATING", "AVAILABLE", "ERROR")
-          .contains(schemaBundleState)) {
-        return false;
-      }
-      if ("AVAILABLE".equals(schemaBundleState)
-          && (schemaBundleHash == null || !schemaBundleHash.startsWith("sha256:"))) {
-        return false;
-      }
-      if (!"AVAILABLE".equals(schemaBundleState) && schemaBundleHash != null) {
-        return false;
-      }
-      return true;
     }
 
     static ResponseIdentity from(HttpHeaders headers) {
@@ -216,7 +278,8 @@ public class Micro6RuntimeRegistryClient {
     }
   }
 
-  public record CatalogFetch(int statusCode, JsonNode body, String rawBody, ResponseIdentity identity) {}
+  public record CatalogFetch(
+      int statusCode, JsonNode body, String rawBody, ResponseIdentity identity) {}
 
   private JsonNode sendGet(String path) {
     if (baseUrl == null) {
@@ -310,10 +373,10 @@ public class Micro6RuntimeRegistryClient {
   /**
    * Validates and returns a safe endpoint reference for use as a single URL path segment.
    *
-   * <p>The reference must never become a route or traversal vector: {@code /}, {@code ?}, {@code #},
-   * {@code %}, whitespace, and control characters are rejected outright, and {@code ..} traversal is
-   * forbidden. The returned value is embedded in a path built via the multi-argument {@link URI}
-   * constructor, which percent-encodes anything the path segment still requires.
+   * <p>The reference must never become a route or traversal vector: {@code /}, {@code ?}, {@code
+   * #}, {@code %}, whitespace, and control characters are rejected outright, and {@code ..}
+   * traversal is forbidden. The returned value is embedded in a path built via the multi-argument
+   * {@link URI} constructor, which percent-encodes anything the path segment still requires.
    */
   private String encodePath(String value) {
     if (value == null) {
@@ -363,9 +426,7 @@ public class Micro6RuntimeRegistryClient {
     URI base = URI.create(baseUrl);
     String basePath = base.getPath();
     String fullPath =
-        (basePath == null || basePath.isEmpty() || "/".equals(basePath))
-            ? path
-            : basePath + path;
+        (basePath == null || basePath.isEmpty() || "/".equals(basePath)) ? path : basePath + path;
     try {
       return new URI(base.getScheme(), null, base.getHost(), base.getPort(), fullPath, query, null);
     } catch (java.net.URISyntaxException e) {

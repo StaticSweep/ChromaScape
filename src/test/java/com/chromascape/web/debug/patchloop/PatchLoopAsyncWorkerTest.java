@@ -552,18 +552,17 @@ class PatchLoopAsyncWorkerTest {
     // Assert - Verify analysis was called and iteration was marked as failed
     verify(analysisProvider).analyzeEvidence(any());
 
-    // Assert - Verify terminal state was set (FAILED) and never transitioned to COMPLETED
-    ArgumentCaptor<PatchLoopStatus> statusCaptor = ArgumentCaptor.forClass(PatchLoopStatus.class);
-    verify(persistenceService).updateIterationStatus(eq(iteration), statusCaptor.capture());
+    // Assert - The provider failure is recorded through markIterationFailed (FAILED), never by a
+    // COMPLETED transition. The worker advances through RUNNING_SCRIPT/RUN_COMPLETED/
+    // COLLECTING_EVIDENCE/EVIDENCE_COLLECTED/ANALYZING before the provider failure.
+    org.mockito.ArgumentCaptor<String> failureCodeCaptor =
+        org.mockito.ArgumentCaptor.forClass(String.class);
+    verify(persistenceService)
+        .markIterationFailed(
+            eq(iteration), failureCodeCaptor.capture(), anyString(), any());
+    assertEquals(PatchLoopFailureCode.ANALYSIS_API_TIMEOUT, failureCodeCaptor.getValue());
 
-    // The last status update should be FAILED, not COMPLETED
-    // (terminal guard prevents COMPLETED transition after failure)
-    java.util.List<PatchLoopStatus> capturedStatuses = statusCaptor.getAllValues();
-    assertTrue(
-        capturedStatuses.contains(PatchLoopStatus.FAILED),
-        "FAILED status should be set when analysis fails");
-
-    // Assert - Verify COMPLETED was never called after terminal state
+    // Assert - COMPLETED was never requested after the failure (terminal guard).
     verify(persistenceService, never()).updateIterationStatus(iteration, PatchLoopStatus.COMPLETED);
   }
 

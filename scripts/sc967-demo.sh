@@ -49,8 +49,13 @@ if [[ "${SC967_ALLOW_REVISIONS:-false}" != "true" ]] && { [[ "$MICRO6_REV" != "$
 fi
 
 check_tree() {
-  local name="$1"; local repo="$2"; local status_file="$OUT_DIR/${name}.tree-status"
-  git -C "$repo" status --porcelain=v1 >"$status_file" 2>&1 || true
+  local name="$1"; local repo="$2"; local status_file="$OUT_DIR/${name}.tree-status"; local error_file="$OUT_DIR/${name}.tree-error"
+  : >"$status_file"; : >"$error_file"
+  if ! git -C "$repo" status --porcelain=v1 >"$status_file" 2>"$error_file"; then
+    printf 'UNAVAILABLE\n' >"$status_file"
+    GATES["${name}_clean"]="FAIL"
+    return 0
+  fi
   if [[ ! -s "$status_file" ]]; then GATES["${name}_clean"]="PASS"; else GATES["${name}_clean"]="FAIL"; fi
 }
 check_tree micro6 "$MICRO6_ROOT"
@@ -90,7 +95,8 @@ identity = {"control_allowed": False, "features_ai_player_control": False}
 identity["tree_status"] = {}
 for name in ("micro6", "chromascape", "leeuwbotapi"):
     status_file = out / f"{name}.tree-status"
-    identity["tree_status"][name] = "CLEAN" if status_file.exists() and not status_file.read_text().strip() else "DIRTY"
+    status = status_file.read_text().strip() if status_file.exists() else "UNAVAILABLE"
+    identity["tree_status"][name] = "CLEAN" if status == "" else ("UNAVAILABLE" if status == "UNAVAILABLE" else "DIRTY")
     gates[f"{name}_tree_state"] = "PASS" if identity["tree_status"][name] == "CLEAN" else "FAIL"
 if manifest_path.is_file():
     try:
@@ -111,9 +117,49 @@ if all(path.is_file() for path in fixtures):
 else:
     gates["fixtures"] = "FAIL"
 
-# Candidate registration is deliberately not inferred from files or configuration. Until the
-# real isolated worker and authenticated registry readback produce evidence, this gate is FAIL.
-gates.setdefault("candidate_registry", "FAIL")
+# Candidate registration is derived only from an actual authenticated registry transaction and
+# canonical GET/download readback. Missing worker artifacts or credentials is a hard FAIL.
+import os, urllib.request, urllib.error
+candidate_manifest_path = pathlib.Path(os.environ.get("SC967_CANDIDATE_MANIFEST", ""))
+candidate_jar_path = pathlib.Path(os.environ.get("SC967_CANDIDATE_JAR", ""))
+candidate_sbom_path = pathlib.Path(os.environ.get("SC967_CANDIDATE_SBOM", ""))
+candidate_cert_path = pathlib.Path(os.environ.get("SC967_CANDIDATE_CERTIFICATION", ""))
+registry_url = os.environ.get("SC967_CANDIDATE_REGISTRY_URL", "").rstrip("/")
+registry_token = os.environ.get("SC967_CANDIDATE_REGISTRY_TOKEN", "")
+candidate_ok = False
+if registry_url and registry_token and all(path.is_file() for path in (candidate_manifest_path, candidate_jar_path, candidate_sbom_path, candidate_cert_path)):
+    try:
+        candidate = json.loads(candidate_manifest_path.read_text())
+        candidate_id = candidate["candidate"]["candidate_id"]
+        boundary = "----sc967-demo-" + hashlib.sha256(candidate_manifest_path.read_bytes()).hexdigest()[:16]
+        parts = [("manifest", candidate_manifest_path, "application/json"), ("artifact", candidate_jar_path, "application/java-archive"), ("sbom", candidate_sbom_path, "application/json"), ("certification", candidate_cert_path, "application/json")]
+        body = bytearray()
+        for name, path, content_type in parts:
+            body.extend((f"--{boundary}\\r\\nContent-Disposition: form-data; name=\\\"{name}\\\"; filename=\\\"{path.name}\\\"\\r\\nContent-Type: {content_type}\\r\\n\\r\\n").encode())
+            body.extend(path.read_bytes()); body.extend(b"\\r\\n")
+        body.extend(f"--{boundary}--\\r\\n".encode())
+        headers = {"Authorization": "Bearer " + registry_token, "Content-Type": "multipart/form-data; boundary=" + boundary, "Idempotency-Key": "sha256:" + hashlib.sha256(candidate_manifest_path.read_bytes()).hexdigest()}
+        try:
+            request = urllib.request.Request(registry_url + "/api/v1/candidates", data=bytes(body), headers=headers, method="POST")
+            with urllib.request.urlopen(request, timeout=30) as response:
+                if response.status not in (201, 409): raise RuntimeError("registry registration status")
+        except urllib.error.HTTPError as error:
+            if error.code != 409: raise
+        def get_json(path):
+            request = urllib.request.Request(registry_url + path, headers={"Authorization": "Bearer " + registry_token})
+            with urllib.request.urlopen(request, timeout=30) as response: return json.loads(response.read())
+        stored = get_json("/api/v1/candidates/" + candidate_id)
+        stored_manifest = stored.get("manifest", {})
+        comparable = json.loads(json.dumps(stored_manifest))
+        if isinstance(comparable.get("identity"), dict): comparable["identity"].pop("candidate", None)
+        if stored.get("state") != "CERTIFIED_CANDIDATE" or json.dumps(comparable, sort_keys=True, separators=(",", ":")) != json.dumps(candidate, sort_keys=True, separators=(",", ":")): raise RuntimeError("registry manifest mismatch")
+        request = urllib.request.Request(registry_url + "/api/v1/candidates/" + candidate_id + "/download", headers={"Authorization": "Bearer " + registry_token})
+        with urllib.request.urlopen(request, timeout=30) as response: downloaded = response.read()
+        if response.headers.get("X-Candidate-ID") != candidate_id or response.headers.get("X-Artifact-SHA256") != candidate["jar_sha256"] or downloaded != candidate_jar_path.read_bytes(): raise RuntimeError("registry artifact mismatch")
+        candidate_ok = True
+    except Exception as exc:
+        identity["candidate_registry_error"] = str(exc)
+gates["candidate_registry"] = "PASS" if candidate_ok else "FAIL"
 all_pass = bool(gates) and all(value == "PASS" for value in gates.values())
 manifest = {
     "schema": "sc967-demo-manifest/v1",

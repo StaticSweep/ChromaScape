@@ -3,7 +3,7 @@
   "$id": "current-slice-identity/v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "task", "client", "control_allowed"],
+  "required": ["schema", "task", "run", "client", "control_allowed"],
   "properties": {
     "schema": {"const": "current-slice-identity/v1"},
     "task": {"$ref": "#/$defs/task"},

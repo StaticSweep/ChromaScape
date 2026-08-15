@@ -5,6 +5,7 @@ import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
 import com.chromascape.web.aiplayer.routine.dto.RoutineApiDtos;
 import com.chromascape.web.aiplayer.routine.entity.BehaviorGraphDefinition;
 import com.chromascape.web.aiplayer.routine.repository.BehaviorGraphDefinitionRepository;
+import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -12,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,16 +24,19 @@ public class BehaviorGraphService {
   private final RoutineCaptureIngestionService captures;
   private final RoutineCurationService curation;
   private final BehaviorGraphDefinitionRepository repository;
+  private final CurrentSliceRunRepository runs;
 
   public BehaviorGraphService(
       ObjectMapper mapper,
       RoutineCaptureIngestionService captures,
       RoutineCurationService curation,
-      BehaviorGraphDefinitionRepository repository) {
+      BehaviorGraphDefinitionRepository repository,
+      CurrentSliceRunRepository runs) {
     this.mapper = mapper;
     this.captures = captures;
     this.curation = curation;
     this.repository = repository;
+    this.runs = runs;
   }
 
   @Transactional
@@ -94,7 +99,13 @@ public class BehaviorGraphService {
     entity.setDefinitionJson(write(definition));
     entity.setState("DRAFT");
     repository.save(entity);
+    updateRunIdentity(graphIdentity, "GRAPH_DRAFT");
     return response(entity);
+  }
+
+  private void updateRunIdentity(CurrentSliceIdentity identity, String stage) {
+    if (identity.run() == null || identity.run().runId() == null) return;
+    runs.findByRunId(identity.run().runId()).ifPresent(run -> { run.setIdentityJson(write(identity)); run.setStage(stage); runs.save(run); });
   }
 
   private Map<String, Object> node(String type, int ordinal, Map<String, Object> semantic) {
@@ -110,7 +121,9 @@ public class BehaviorGraphService {
   public Map<String, Object> createAssistantDraft(String baseGraphId, Map<String, Object> diff) {
     BehaviorGraphDefinition base = repository.findByGraphId(baseGraphId).orElseThrow(() -> error("NOT_FOUND", "base graph not found"));
     if (!"PUBLISHED".equals(base.getState())) throw error("GRAPH_INVALID", "assistant drafts require a published base graph");
+    if (!base.getGraphHash().equals(String.valueOf(diff.get("base_graph_hash")))) throw error("IDENTITY_MISMATCH", "assistant diff base graph hash differs");
     Map<String, Object> definition = response(base);
+    applyOperations(definition, diff);
     definition.put("assistant_diff", diff);
     definition.put("state", "DRAFT");
     definition.remove("graph_id");
@@ -123,8 +136,57 @@ public class BehaviorGraphService {
     catch (Exception e) { throw error("GRAPH_INVALID", "base graph identity is invalid"); }
     CurrentSliceIdentity identity = new CurrentSliceIdentity(baseIdentity.schema(), baseIdentity.task(), baseIdentity.run(), baseIdentity.client(), baseIdentity.capture(), baseIdentity.source(), new CurrentSliceIdentity.Graph(graphId, hash), baseIdentity.model(), baseIdentity.candidate(), false);
     definition.put("schema", "behavior-graph-definition/v1"); definition.put("graph_id", graphId); definition.put("graph_hash", hash); definition.put("identity", identity); definition.put("control_allowed", false);
-    BehaviorGraphDefinition draft = new BehaviorGraphDefinition(); draft.setGraphId(graphId); draft.setGraphHash(hash); draft.setIdentityJson(write(identity)); draft.setDefinitionJson(write(definition)); draft.setState("DRAFT"); repository.save(draft);
+    BehaviorGraphDefinition draft = new BehaviorGraphDefinition(); draft.setGraphId(graphId); draft.setGraphHash(hash); draft.setIdentityJson(write(identity)); draft.setDefinitionJson(write(definition));    draft.setState("DRAFT"); repository.save(draft);
+    updateRunIdentity(identity, "GRAPH_DRAFT");
     return response(draft);
+  }
+
+  @SuppressWarnings("unchecked")
+  private void applyOperations(Map<String, Object> definition, Map<String, Object> diff) {
+    List<Map<String, Object>> nodes = new ArrayList<>();
+    Object existingNodes = definition.get("nodes");
+    if (existingNodes instanceof List<?> list) for (Object node : list) if (node instanceof Map<?, ?> value) nodes.add(new LinkedHashMap<>((Map<String, Object>) value));
+    List<Map<String, Object>> edges = new ArrayList<>();
+    Object existingEdges = definition.get("edges");
+    if (existingEdges instanceof List<?> list) for (Object edge : list) if (edge instanceof Map<?, ?> value) edges.add(new LinkedHashMap<>((Map<String, Object>) value));
+    Object operations = diff.get("operations");
+    if (operations instanceof List<?> list) for (Object value : list) {
+      if (!(value instanceof Map<?, ?> raw)) throw error("GRAPH_INVALID", "assistant operation is invalid");
+      Map<String, Object> operation = (Map<String, Object>) raw;
+      String op = String.valueOf(operation.get("op"));
+      if ("add_node".equals(op)) { Object node = operation.get("node"); if (!(node instanceof Map<?, ?> rawNode)) throw error("GRAPH_INVALID", "add_node requires node"); nodes.add(new LinkedHashMap<>((Map<String, Object>) rawNode)); }
+      else if ("remove_node".equals(op)) { String id = String.valueOf(operation.get("node_id")); boolean removed = nodes.removeIf(node -> id.equals(String.valueOf(node.get("id")))); if (!removed) throw error("GRAPH_INVALID", "remove_node target is missing"); edges.removeIf(edge -> id.equals(String.valueOf(edge.get("from"))) || id.equals(String.valueOf(edge.get("to")))); }
+      else if ("replace_semantics".equals(op)) { String id = String.valueOf(operation.get("node_id")); Map<String, Object> semantics = operation.get("node") instanceof Map<?, ?> rawNode ? (Map<String, Object>) rawNode : Map.of(); Map<String, Object> target = nodes.stream().filter(node -> id.equals(String.valueOf(node.get("id")))).findFirst().orElseThrow(() -> error("GRAPH_INVALID", "replace_semantics target is missing")); target.putAll(semantics); Map<String, Object> semanticOnly = new LinkedHashMap<>(target); semanticOnly.remove("id"); semanticOnly.remove("ordinal"); semanticOnly.remove("type"); target.put("id", "node_" + target.get("ordinal") + "_" + CanonicalJsonHasher.hash(mapper.valueToTree(semanticOnly), null).substring(7, 19)); }
+      else if ("add_edge".equals(op)) { Object edge = operation.get("edge"); if (!(edge instanceof Map<?, ?> rawEdge)) throw error("GRAPH_INVALID", "add_edge requires edge"); edges.add(new LinkedHashMap<>((Map<String, Object>) rawEdge)); }
+      else if ("remove_edge".equals(op)) { String id = String.valueOf(operation.get("edge_id")); boolean removed = edges.removeIf(edge -> id.equals(String.valueOf(edge.get("id")))); if (!removed) throw error("GRAPH_INVALID", "remove_edge target is missing"); }
+      else throw error("GRAPH_INVALID", "unsupported assistant operation");
+    }
+    if (nodes.size() > 256 || edges.size() > 255) throw error("GRAPH_LIMIT_EXCEEDED", "assistant draft exceeds graph limits");
+    Set<String> nodeIds = new java.util.HashSet<>();
+    for (Map<String, Object> node : nodes) {
+      String nodeId = String.valueOf(node.get("id"));
+      String type = String.valueOf(node.get("type"));
+      if (!nodeIds.add(nodeId) || !Set.of("START", "ACTION", "GATE", "ABSTAIN", "RECOVERY", "TERMINAL").contains(type)) throw error("GRAPH_INVALID", "assistant draft contains invalid or duplicate node");
+    }
+    Set<String> edgeIds = new java.util.HashSet<>();
+    Map<String, List<String>> adjacency = new java.util.HashMap<>();
+    for (Map<String, Object> edge : edges) {
+      String edgeId = String.valueOf(edge.get("id")); String from = String.valueOf(edge.get("from")); String to = String.valueOf(edge.get("to"));
+      if (!edgeIds.add(edgeId) || !nodeIds.contains(from) || !nodeIds.contains(to)) throw error("GRAPH_INVALID", "assistant draft contains dangling or duplicate edge");
+      adjacency.computeIfAbsent(from, ignored -> new ArrayList<>()).add(to);
+    }
+    if (hasCycle(adjacency, nodeIds)) throw error("GRAPH_INVALID", "assistant draft contains a cycle");
+    definition.put("nodes", nodes); definition.put("edges", edges);
+  }
+
+  private boolean hasCycle(Map<String, List<String>> adjacency, Set<String> nodes) {
+    Set<String> visiting = new java.util.HashSet<>(); Set<String> visited = new java.util.HashSet<>();
+    for (String node : nodes) if (cycleFrom(node, adjacency, visiting, visited)) return true;
+    return false;
+  }
+  private boolean cycleFrom(String node, Map<String, List<String>> adjacency, Set<String> visiting, Set<String> visited) {
+    if (visiting.contains(node)) return true; if (visited.contains(node)) return false;
+    visiting.add(node); for (String next : adjacency.getOrDefault(node, List.of())) if (cycleFrom(next, adjacency, visiting, visited)) return true; visiting.remove(node); visited.add(node); return false;
   }
 
   @Transactional(readOnly = true)

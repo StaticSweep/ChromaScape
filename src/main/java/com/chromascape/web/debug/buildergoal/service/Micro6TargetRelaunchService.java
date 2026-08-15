@@ -1972,6 +1972,10 @@ public class Micro6TargetRelaunchService {
       Thread.currentThread().interrupt();
       throw BuilderGoalLaunchCancelledException.fromInterrupted(e);
     } catch (RelaunchException e) {
+      // The compile-only preflight finished (possibly with a nonzero exit) but any descendant
+      // process still holding the log file must be reaped so the log is released and the caller
+      // can clean up its working directory.
+      terminateOwnedProcessTree(process);
       throw e;
     } catch (Exception e) {
       terminateOwnedProcessTree(process);

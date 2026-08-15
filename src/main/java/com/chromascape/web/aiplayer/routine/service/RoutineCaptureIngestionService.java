@@ -6,6 +6,8 @@ import com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator;
 import com.chromascape.web.aiplayer.routine.dto.RoutineApiDtos;
 import com.chromascape.web.aiplayer.routine.entity.RoutineCaptureRecord;
 import com.chromascape.web.aiplayer.routine.repository.RoutineCaptureRecordRepository;
+import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
+import com.chromascape.web.aiplayer.routine.entity.CurrentSliceRun;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshot;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
@@ -35,6 +37,7 @@ public class RoutineCaptureIngestionService {
   private final ObjectMapper mapper;
   private final CurrentSliceIdentityValidator identities;
   private final RoutineCaptureRecordRepository repository;
+  private final CurrentSliceRunRepository runs;
   private final DebugSessionService debugSessions;
   private final RecordingSessionRepository recordingSessions;
   private final TickSnapshotRepository snapshots;
@@ -43,12 +46,14 @@ public class RoutineCaptureIngestionService {
       ObjectMapper mapper,
       CurrentSliceIdentityValidator identities,
       RoutineCaptureRecordRepository repository,
+      CurrentSliceRunRepository runs,
       DebugSessionService debugSessions,
       RecordingSessionRepository recordingSessions,
       TickSnapshotRepository snapshots) {
     this.mapper = mapper;
     this.identities = identities;
     this.repository = repository;
+    this.runs = runs;
     this.debugSessions = debugSessions;
     this.recordingSessions = recordingSessions;
     this.snapshots = snapshots;
@@ -57,7 +62,7 @@ public class RoutineCaptureIngestionService {
   @Transactional
   public synchronized Map<String, Object> start(RoutineApiDtos.CaptureSessionRequest request, String idempotencyKey) {
     requireIdempotency(idempotencyKey);
-    String requestHash = CanonicalJsonHasher.hash(mapper.valueToTree(request), null);
+    String requestHash = CanonicalJsonHasher.hash(mapper.valueToTree(Map.of("endpoint", "/capture/sessions", "request", request)), null);
     RoutineCaptureRecord existing = repository.findByStartIdempotencyKey(idempotencyKey).orElse(null);
     if (existing != null) {
       if (!requestHash.equals(existing.getStartRequestHash())) conflict("DUPLICATE_SEQUENCE_CONFLICT", "idempotency key content differs");
@@ -69,6 +74,7 @@ public class RoutineCaptureIngestionService {
     entity.setStartIdempotencyKey(idempotencyKey);
     entity.setStartRequestHash(requestHash);
     entity.setIdentityJson(write(identity));
+    Map<String, String> startIdempotencies = new LinkedHashMap<>(); startIdempotencies.put(idempotencyKey, requestHash); entity.setRequestIdempotencyJson(writeJson(startIdempotencies));
     entity.setStartedAt(request.startedAt() == null || request.startedAt().isBlank() ? Instant.now() : Instant.parse(request.startedAt()));
     entity.setStartTick(request.startTick());
     if (request.videoCapture() == null || !"CHROMASCAPE_WINDOW".equals(request.videoCapture())) {
@@ -109,7 +115,10 @@ public class RoutineCaptureIngestionService {
     if (entity.isCompleted()) conflict("CAPTURE_BOUNDARY_UNCERTAIN", "session is complete");
     if (values == null) conflict("CAPTURE_SEQUENCE_GAP", "batch values are required");
     int sequence = request.sequence();
-    String content = canonicalValues(values);
+    String content = CanonicalJsonHasher.canonical(mapper.valueToTree(Map.of("method", "POST", "endpoint", "/api/v1/ai-routine/capture/sessions/" + sessionId + (ticks ? "/ticks" : "/actions"), "session_id", sessionId, "sequence", request.sequence(), "values", values)));
+    Map<String, String> allIdempotencies = globalIdempotencies(entity);
+    String globalPrior = allIdempotencies.get(idempotencyKey);
+    if (globalPrior != null) { if (!content.equals(globalPrior)) conflict("DUPLICATE_SEQUENCE_CONFLICT", "idempotency key content differs"); return batchResponse(entity, sequence, values.size(), content); }
     Map<String, String> idempotencies = idempotencies(entity, ticks);
     String priorKey = idempotencies.get(idempotencyKey);
     if (priorKey != null) {
@@ -126,6 +135,8 @@ public class RoutineCaptureIngestionService {
     if (sequence != expected) conflict("CAPTURE_SEQUENCE_GAP", "expected sequence " + expected);
     seen.put(Integer.toString(sequence), content);
     idempotencies.put(idempotencyKey, content);
+    allIdempotencies.put(idempotencyKey, content);
+    entity.setRequestIdempotencyJson(writeJson(allIdempotencies));
     if (ticks) {
       List<JsonNode> all = values(entity.getTicksJson());
       all.addAll(values);
@@ -151,11 +162,17 @@ public class RoutineCaptureIngestionService {
     requireIdempotency(idempotencyKey);
     RoutineCaptureRecord entity = session(sessionId);
     ObjectNode completionRequest = mapper.createObjectNode();
+    completionRequest.put("endpoint", "/capture/sessions/" + sessionId + "/complete");
+    completionRequest.put("session_id", sessionId);
     completionRequest.put("final_tick", request.finalTick());
     completionRequest.put("tick_sequence", request.tickSequence());
     completionRequest.put("action_sequence", request.actionSequence());
     completionRequest.put("video_sha256", request.videoSha256() == null ? "" : request.videoSha256());
     String completionHash = CanonicalJsonHasher.hash(completionRequest, null);
+    Map<String, String> allIdempotencies = globalIdempotencies(entity);
+    String priorCompletion = allIdempotencies.get(idempotencyKey);
+    if (priorCompletion != null) { if (!completionHash.equals(priorCompletion)) conflict("DUPLICATE_SEQUENCE_CONFLICT", "idempotency key content differs"); return response(entity, readIdentity(entity.getIdentityJson())); }
+    allIdempotencies.put(idempotencyKey, completionHash); entity.setRequestIdempotencyJson(writeJson(allIdempotencies));
     if (entity.isCompleted()) {
       if (!completionHash.equals(entity.getCompletionRequestHash())) conflict("DUPLICATE_SEQUENCE_CONFLICT", "completion content differs");
       return response(entity, readIdentity(entity.getIdentityJson()));
@@ -196,6 +213,12 @@ public class RoutineCaptureIngestionService {
     entity.setFinalTick(request.finalTick());
     entity.setCompleted(true);
     repository.save(entity);
+    if (baseIdentity.run() != null && baseIdentity.run().runId() != null) {
+      CurrentSliceRun run = runs.findByRunId(baseIdentity.run().runId()).orElseThrow(() -> notFound("run"));
+      CurrentSliceIdentityValidator identityValidator = identities;
+      identityValidator.requireUnchanged(readIdentity(run.getIdentityJson()), enrichedIdentity);
+      run.setIdentityJson(write(enrichedIdentity)); run.setStage("CAPTURED"); runs.save(run);
+    }
     return response(entity, readIdentity(entity.getIdentityJson()));
   }
 
@@ -231,6 +254,11 @@ public class RoutineCaptureIngestionService {
       snapshot.setInventory(tick.get("inventory")); snapshot.setNpcs(tick.get("nearby_npcs")); snapshot.setSchemaVersion(2);
       snapshots.save(snapshot);
     }
+  }
+
+  private Map<String, String> globalIdempotencies(RoutineCaptureRecord entity) {
+    JsonNode node = readJson(entity.getRequestIdempotencyJson());
+    Map<String, String> result = new LinkedHashMap<>(); node.fields().forEachRemaining(field -> result.put(field.getKey(), field.getValue().asText())); return result;
   }
 
   private Map<String, String> idempotencies(RoutineCaptureRecord entity, boolean ticks) {

@@ -161,11 +161,18 @@ class DebugSessionServiceTest {
     assertTrue(response.getSessionId().startsWith("debug_"));
     assertNotEquals(provisionalId, response.getSessionId());
 
+    // The session is persisted on creation (STARTING) and again when it transitions to RECORDING.
+    // The authoritative id and recording binding must be present on the final persisted state.
     ArgumentCaptor<DebugSession> captor = ArgumentCaptor.forClass(DebugSession.class);
-    verify(sessionRepository).save(captor.capture());
-    DebugSession saved = captor.getValue();
-    assertEquals(response.getSessionId(), saved.getSessionId());
+    verify(sessionRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+    java.util.List<DebugSession> saved = captor.getAllValues();
+    DebugSession last = saved.get(saved.size() - 1);
+    assertEquals(response.getSessionId(), last.getSessionId());
     assertEquals("recording_new_1", response.getRecordingId());
     assertTrue(response.getRecordingEnabled());
+    // The provisional client request id is never persisted as the authoritative session id.
+    assertTrue(
+        saved.stream()
+            .noneMatch(session -> provisionalId.equals(session.getSessionId())));
   }
 }

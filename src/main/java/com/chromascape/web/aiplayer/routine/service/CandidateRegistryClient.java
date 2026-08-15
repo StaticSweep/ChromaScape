@@ -1,6 +1,7 @@
 package com.chromascape.web.aiplayer.routine.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -29,7 +30,9 @@ public class CandidateRegistryClient {
 
   public byte[] download(String candidateId) throws Exception {
     validateId(candidateId);
-    JsonNode manifest = mapper.readTree(lookup(candidateId)).path("manifest");
+    JsonNode responseBody = mapper.readTree(lookup(candidateId));
+    if (!"CERTIFIED_CANDIDATE".equals(responseBody.path("state").asText())) throw new RegistryException("REGISTRY_STATE_INVALID", false);
+    JsonNode manifest = responseBody.path("manifest");
     if (!manifest.has("jar_sha256")) manifest = manifest.path("candidate");
     String expected = manifest.path("jar_sha256").asText();
     HttpResponse<byte[]> response = sendBytes("/api/v1/candidates/" + candidateId + "/download");
@@ -54,7 +57,17 @@ public class CandidateRegistryClient {
     }
     body.write(("--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
     String idempotency = sha256(Files.readAllBytes(manifest));
-    return send("POST", "/api/v1/candidates", body.toByteArray(), "multipart/form-data; boundary=" + boundary, idempotency);
+    String response = send("POST", "/api/v1/candidates", body.toByteArray(), "multipart/form-data; boundary=" + boundary, idempotency);
+    try {
+      JsonNode returned = mapper.readTree(response);
+      if (!"CERTIFIED_CANDIDATE".equals(returned.path("state").asText())) throw new RegistryException("REGISTRY_STATE_INVALID", false);
+      JsonNode local = mapper.readTree(Files.readString(manifest));
+      JsonNode stored = returned.path("manifest");
+      JsonNode comparable = stored.deepCopy();
+      if (comparable.path("identity").isObject()) ((ObjectNode) comparable.path("identity")).remove("candidate");
+      if (!local.path("candidate").path("candidate_id").asText().equals(stored.path("candidate").path("candidate_id").asText()) || !local.path("candidate").path("candidate_hash").asText().equals(stored.path("candidate").path("candidate_hash").asText()) || !com.chromascape.web.aiplayer.contract.CanonicalJsonHasher.canonical(local).equals(com.chromascape.web.aiplayer.contract.CanonicalJsonHasher.canonical(comparable))) throw new RegistryException("REGISTRY_MANIFEST_MISMATCH", false);
+    } catch (RegistryException e) { throw e; } catch (Exception e) { throw new RegistryException("REGISTRY_READBACK_INVALID", false, e); }
+    return response;
   }
 
   private String send(String method, String path, byte[] body, String contentType, String idempotency) {

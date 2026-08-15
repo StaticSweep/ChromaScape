@@ -92,8 +92,7 @@ class SimulatorReplayControlControllerTest {
     @Test
     @DisplayName("start allows missing player and forwards auto-target request")
     void startMissingPlayer() {
-      ReplayFramePageResponse.FrameData frame = new ReplayFramePageResponse.FrameData();
-      frame.setTick(1L);
+      ReplayFramePageResponse.FrameData frame = replayableFrame(1L);
       when(sourceService.frames("rec-1", 0, 1))
           .thenReturn(
               new ReplayFramePageResponse(
@@ -354,8 +353,7 @@ class SimulatorReplayControlControllerTest {
     @Test
     @DisplayName("start passes recordingId and sourceMode to service")
     void startPassesRecordingIdAndSourceMode() {
-      ReplayFramePageResponse.FrameData frame = new ReplayFramePageResponse.FrameData();
-      frame.setTick(1L);
+      ReplayFramePageResponse.FrameData frame = replayableFrame(1L);
       when(sourceService.frames("rec-42", 0, 1))
           .thenReturn(
               new ReplayFramePageResponse(
@@ -419,6 +417,19 @@ class SimulatorReplayControlControllerTest {
 
       assertEquals(HttpStatus.OK, response.getStatusCode());
     }
+  }
+
+  /**
+   * Builds a frame that satisfies the controller's replayability preflight: a strict schemaVersion
+   * and tick-snapshot position telemetry.
+   */
+  private static ReplayFramePageResponse.FrameData replayableFrame(long tick) {
+    ReplayFramePageResponse.FrameData frame = new ReplayFramePageResponse.FrameData();
+    frame.setTick(tick);
+    frame.setSchemaVersion(2);
+    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    frame.setPlayerState(mapper.createObjectNode().put("x", 3087).put("z", 3228));
+    return frame;
   }
 
   private static void assertDisabledBody(Map<String, Object> body) {

@@ -91,6 +91,7 @@ public class AnalysisV2Target {
   }
 
   /** Time-based bounds for the analysis session. */
+  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
   public static class SessionBounds {
 
     /** Start of the session window. */
@@ -130,6 +131,7 @@ public class AnalysisV2Target {
     }
 
     /** Returns the duration of this session in seconds. */
+    @JsonProperty(value = "durationSeconds", access = JsonProperty.Access.READ_ONLY)
     public long getDurationSeconds() {
       if (!isValid()) {
         return 0;

@@ -82,8 +82,17 @@ final class Micro6TestServers {
     final Map<String, String> catalogStateByRef = new ConcurrentHashMap<>();
     final Map<String, String> schemaBundleStateByRef = new ConcurrentHashMap<>();
     final Map<String, String> sessionIdByRef = new ConcurrentHashMap<>();
+    final Map<String, String> machineUuidByRef = new ConcurrentHashMap<>();
     final Map<String, Runnable> beforeCatalogHook = new ConcurrentHashMap<>();
+    final Map<String, Runnable> beforeResolveHook = new ConcurrentHashMap<>();
     final Map<String, String> executorHeaderByRef = new ConcurrentHashMap<>();
+    // Response-header overrides that decouple the stamped headers from the runtime attestation, so
+    // tests can exercise mid-fetch drift (the response carrying a stale identity the runtime no
+    // longer attests). When unset, headers fall back to the runtime attestation / payload.
+    final Map<String, String> catalogHashHeaderByRef = new ConcurrentHashMap<>();
+    final Map<String, String> schemaBundleHashHeaderByRef = new ConcurrentHashMap<>();
+    final Map<String, String> catalogStateHeaderByRef = new ConcurrentHashMap<>();
+    final Map<String, String> schemaBundleStateHeaderByRef = new ConcurrentHashMap<>();
     final ObjectMapper mapper = new ObjectMapper();
     volatile boolean rewriteCatalogIdentity = true;
     volatile boolean omitIdentityHeaders = false;
@@ -140,6 +149,10 @@ final class Micro6TestServers {
     }
 
     private void handleResolve(com.sun.net.httpserver.HttpExchange exchange, String endpointRef) {
+      Runnable resolveHook = beforeResolveHook.get(endpointRef);
+      if (resolveHook != null) {
+        resolveHook.run();
+      }
       FakeMicro6Executor executor = executorsByRef.get(endpointRef);
       if (executor == null) {
         write(
@@ -196,18 +209,32 @@ final class Micro6TestServers {
           }
         }
         // The registry stamps the resolved runtime identity onto the response headers exactly like
-        // the real backend proxy. Hashes are read from the fetched payload when present.
-        String catalogHash = "";
-        String schemaBundleHash = "";
-        String catalogState = catalogStateByRef.get(endpointRef);
-        String schemaBundleState = schemaBundleStateByRef.get(endpointRef);
+        // the real backend proxy. Header overrides (when set) take precedence so tests can decouple
+        // the response from the runtime attestation; otherwise the runtime's attested metadata
+        // (catalogHashByRef / schemaBundleHashByRef) is used first, falling back to the fetched
+        // payload when the runtime has no attestation.
+        String catalogHash =
+            firstNonNull(
+                catalogHashHeaderByRef.get(endpointRef), catalogHashByRef.get(endpointRef));
+        String schemaBundleHash =
+            firstNonNull(
+                schemaBundleHashHeaderByRef.get(endpointRef),
+                schemaBundleHashByRef.get(endpointRef));
+        String catalogState =
+            firstNonNull(
+                catalogStateHeaderByRef.get(endpointRef), catalogStateByRef.get(endpointRef));
+        String schemaBundleState =
+            firstNonNull(
+                schemaBundleStateHeaderByRef.get(endpointRef),
+                schemaBundleStateByRef.get(endpointRef));
         try {
           JsonNode parsed = mapper.readTree(body);
           if (parsed != null && parsed.isObject()) {
-            if (parsed.has("catalog_hash")) {
+            if ((catalogHash == null || catalogHash.isEmpty()) && parsed.has("catalog_hash")) {
               catalogHash = parsed.get("catalog_hash").asText();
             }
-            if (parsed.has("schema_bundle_hash")) {
+            if ((schemaBundleHash == null || schemaBundleHash.isEmpty())
+                && parsed.has("schema_bundle_hash")) {
               schemaBundleHash = parsed.get("schema_bundle_hash").asText();
             }
             if (catalogState == null && parsed.has("catalog_state")) {
@@ -224,28 +251,43 @@ final class Micro6TestServers {
           catalogState = "READY";
         }
         if (schemaBundleState == null) {
-          // Lightweight catalogs carry no bundle: attest NOT_AVAILABLE unless a bundle hash exists.
-          schemaBundleState = schemaBundleHash.isEmpty() ? "NOT_AVAILABLE" : "AVAILABLE";
+          // A GENERATING catalog is always attested with a GENERATING schema bundle (mirroring the
+          // health-generating contract); otherwise the bundle state follows the bundle hash.
+          if ("GENERATING".equals(catalogState)) {
+            schemaBundleState = "GENERATING";
+          } else {
+            schemaBundleState =
+                schemaBundleHash == null || schemaBundleHash.isEmpty()
+                    ? "NOT_AVAILABLE"
+                    : "AVAILABLE";
+          }
+        }
+        // A non-AVAILABLE schema state must never carry a bundle hash (contract matrix).
+        if (!"AVAILABLE".equals(schemaBundleState)) {
+          schemaBundleHash = "";
         }
         exchange.getResponseHeaders().set("X-Micro6-Machine-Uuid", machineUuidFor(endpointRef));
-        exchange.getResponseHeaders()
+        exchange
+            .getResponseHeaders()
             .set(
                 "X-Micro6-Executor-Instance-Id",
                 executorHeaderByRef.getOrDefault(
                     endpointRef, executorInstanceByRef.get(endpointRef)));
-        exchange.getResponseHeaders()
-            .set("X-Micro6-Session-Id", sessionIdFor(endpointRef));
-        exchange.getResponseHeaders()
+        exchange.getResponseHeaders().set("X-Micro6-Session-Id", sessionIdFor(endpointRef));
+        exchange
+            .getResponseHeaders()
             .set("X-Micro6-Catalog-Version", catalogVersionFor(endpointRef));
-        if (!catalogHash.isEmpty()) {
+        if (catalogHash != null && !catalogHash.isEmpty()) {
           exchange.getResponseHeaders().set("X-Micro6-Catalog-Hash", catalogHash);
         }
-        if (!schemaBundleHash.isEmpty()) {
+        if (schemaBundleHash != null && !schemaBundleHash.isEmpty()) {
           exchange.getResponseHeaders().set("X-Micro6-Schema-Bundle-Hash", schemaBundleHash);
         }
         exchange.getResponseHeaders().set("X-Micro6-Catalog-State", catalogState);
         exchange.getResponseHeaders().set("X-Micro6-Schema-Bundle-State", schemaBundleState);
-        exchange.getResponseHeaders().set("X-Micro6-Observed-At", java.time.Instant.now().toString());
+        exchange
+            .getResponseHeaders()
+            .set("X-Micro6-Observed-At", java.time.Instant.now().toString());
         if (omitIdentityHeaders) {
           exchange.getResponseHeaders().remove("X-Micro6-Machine-Uuid");
           exchange.getResponseHeaders().remove("X-Micro6-Executor-Instance-Id");
@@ -267,7 +309,7 @@ final class Micro6TestServers {
     }
 
     private String machineUuidFor(String endpointRef) {
-      return "machine-" + endpointRef.hashCode();
+      return machineUuidByRef.getOrDefault(endpointRef, "machine-" + endpointRef.hashCode());
     }
 
     private String sessionIdFor(String endpointRef) {
@@ -286,23 +328,39 @@ final class Micro6TestServers {
       String catalogState = catalogStateByRef.get(endpointRef);
       String schemaBundleState = schemaBundleStateByRef.get(endpointRef);
       String sessionId = sessionIdFor(endpointRef);
-      // Defaults mirror a healthy runtime whose full catalog has been generated and cached: the
-      // executor serves a READY full catalog whose attested bundle hash is the runtime's bundle.
+      // The launcher heartbeat metadata is stable: once an executor attests a catalog/bundle hash
+      // it
+      // keeps it across subsequent resolves even if a later /catalog response stops carrying it.
       if (catalogHash == null) {
         try {
           JsonNode parsed = mapper.readTree(executor.fullBody);
           if (parsed != null && parsed.isObject() && parsed.has("catalog_hash")) {
-            catalogHash = parsed.get("catalog_hash").asText();
+            catalogHashByRef.putIfAbsent(endpointRef, parsed.get("catalog_hash").asText());
+            catalogHash = catalogHashByRef.get(endpointRef);
           }
         } catch (Exception ignored) {
           // fall through to null
         }
+        if (catalogHash == null) {
+          try {
+            JsonNode parsed = mapper.readTree(executor.lightweightBody);
+            if (parsed != null && parsed.isObject() && parsed.has("catalog_hash")) {
+              catalogHashByRef.putIfAbsent(endpointRef, parsed.get("catalog_hash").asText());
+              catalogHash = catalogHashByRef.get(endpointRef);
+            }
+          } catch (Exception ignored) {
+            // fall through to null
+          }
+        }
       }
-      if (schemaBundleHash == null) {
+      if (schemaBundleHash == null
+          && (schemaBundleState == null || "AVAILABLE".equals(schemaBundleState))) {
         try {
           JsonNode parsed = mapper.readTree(executor.fullBody);
           if (parsed != null && parsed.isObject() && parsed.has("schema_bundle_hash")) {
-            schemaBundleHash = parsed.get("schema_bundle_hash").asText();
+            schemaBundleHashByRef.putIfAbsent(
+                endpointRef, parsed.get("schema_bundle_hash").asText());
+            schemaBundleHash = schemaBundleHashByRef.get(endpointRef);
           }
         } catch (Exception ignored) {
           // fall through to null
@@ -312,7 +370,11 @@ final class Micro6TestServers {
         catalogState = "READY";
       }
       if (schemaBundleState == null) {
-        schemaBundleState = schemaBundleHash == null ? "NOT_AVAILABLE" : "AVAILABLE";
+        if ("GENERATING".equals(catalogState)) {
+          schemaBundleState = "GENERATING";
+        } else {
+          schemaBundleState = schemaBundleHash == null ? "NOT_AVAILABLE" : "AVAILABLE";
+        }
       }
       StringBuilder json =
           new StringBuilder("{")
@@ -354,6 +416,10 @@ final class Micro6TestServers {
           .append("}");
       return json.toString();
     }
+  }
+
+  private static String firstNonNull(String primary, String fallback) {
+    return primary != null ? primary : fallback;
   }
 
   private static void write(com.sun.net.httpserver.HttpExchange exchange, int status, String body) {

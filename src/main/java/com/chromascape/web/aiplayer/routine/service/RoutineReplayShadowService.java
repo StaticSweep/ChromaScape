@@ -6,6 +6,7 @@ import com.chromascape.web.aiplayer.routine.entity.RoutineModel;
 import com.chromascape.web.aiplayer.routine.entity.RoutineReplayTrace;
 import com.chromascape.web.aiplayer.routine.repository.RoutineModelRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineReplayTraceRepository;
+import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -24,18 +25,21 @@ public class RoutineReplayShadowService {
   private final BehaviorGraphService graphs;
   private final RoutineModelRepository models;
   private final RoutineReplayTraceRepository traces;
+  private final CurrentSliceRunRepository runs;
 
   public RoutineReplayShadowService(
       ObjectMapper mapper,
       RoutineCaptureIngestionService captures,
       BehaviorGraphService graphs,
       RoutineModelRepository models,
-      RoutineReplayTraceRepository traces) {
+      RoutineReplayTraceRepository traces,
+      CurrentSliceRunRepository runs) {
     this.mapper = mapper;
     this.captures = captures;
     this.graphs = graphs;
     this.models = models;
     this.traces = traces;
+    this.runs = runs;
   }
 
   @Transactional
@@ -66,6 +70,7 @@ public class RoutineReplayShadowService {
     entity.setIdentityJson(write(modelIdentity));
     entity.setDefinitionJson(write(Map.of("schema", "fishing-model/v1", "graph", graph, "identity", modelIdentity)));
     models.save(entity);
+    if (modelIdentity.run() != null && modelIdentity.run().runId() != null) runs.findByRunId(modelIdentity.run().runId()).ifPresent(run -> { run.setIdentityJson(write(modelIdentity)); run.setStage("MODEL_BOUND"); runs.save(run); });
     return response(entity, modelIdentity);
   }
 

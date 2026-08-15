@@ -1,5 +1,6 @@
 package com.chromascape.web.aiplayer.prototype;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -15,6 +16,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * (a null {@code shadowRunId}) are treated as legacy history and never as the current live run.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record FishingShadowDecision(
     @JsonProperty("schemaVersion") int schemaVersion,
     @JsonProperty("type") String type,
