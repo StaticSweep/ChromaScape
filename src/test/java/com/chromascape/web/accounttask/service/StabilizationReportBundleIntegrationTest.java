@@ -804,12 +804,119 @@ class StabilizationReportBundleIntegrationTest {
         private static String safeName(String name) {
           return name.replaceAll("[^A-Za-z0-9._-]", "_");
         }
-
-        @Override
+    @Override
         public List<StabilizationIngestionService.ArtifactPart> artifacts() {
           return artifacts;
         }
       };
     }
+  }
+
+  @Test
+  @DisplayName("a tampered plan hash is rejected (declared vs recomputed vs manifest)")
+  void tamperedPlanHashRejected() {
+    ObjectNode manifest = manifest();
+    BundleDocuments docs = documents(manifest);
+    ((ObjectNode) docs.nodes().get("plan")).put("planHash", "sha256:" + "0".repeat(64));
+    docs.rechecksum();
+
+    assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("plan_hash");
+  }
+
+  @Test
+  @DisplayName("manifest settings that disagree with the plan are rejected")
+  void settingsParityRejected() {
+    ObjectNode manifest = manifest();
+    BundleDocuments docs = documents(manifest);
+    ((ObjectNode) docs.nodes().get("manifest")).put("settings_hash", "sha256:" + "f".repeat(64));
+    docs.rehashManifest();
+
+    assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("settings_hash");
+  }
+
+  @Test
+  @DisplayName("manifest build identity that disagrees with the plan is rejected")
+  void buildIdentityParityRejected() {
+    ObjectNode manifest = manifest();
+    BundleDocuments docs = documents(manifest);
+    ((ObjectNode) docs.nodes().get("manifest")).put("build_id", "tampered-build");
+    docs.rehashManifest();
+
+    assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("build_id");
+  }
+
+  @Test
+  @DisplayName("manifest catalog identity that disagrees with the plan is rejected")
+  void catalogIdentityParityRejected() {
+    ObjectNode manifest = manifest();
+    BundleDocuments docs = documents(manifest);
+    ((ObjectNode) docs.nodes().get("manifest")).put("catalog_hash", "sha256:" + "9".repeat(64));
+    docs.rehashManifest();
+
+    assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("catalog_hash");
+  }
+
+  @Test
+  @DisplayName("manifest instance identity that disagrees with the plan is rejected")
+  void instanceIdentityParityRejected() {
+    ObjectNode manifest = manifest();
+    BundleDocuments docs = documents(manifest);
+    ((ObjectNode) docs.nodes().get("manifest")).put("micro6_instance_id", "tampered-instance");
+    docs.rehashManifest();
+
+    assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("micro6_instance_id");
+  }
+
+  @Test
+  @DisplayName("an evidence record byte count that differs from the uploaded artifact is rejected")
+  void evidenceByteCountMismatchRejected() {
+    ObjectNode manifest = manifest();
+    BundleDocuments docs = documents(manifest);
+    ((ObjectNode) docs.evidence().get(0)).put("size_bytes", 999);
+    docs.rehashManifest();
+
+    assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("size_bytes");
+  }
+
+  @Test
+  @DisplayName("an evidence record digest that differs from the uploaded artifact is rejected")
+  void evidenceDigestMismatchRejected() {
+    ObjectNode manifest = manifest();
+    BundleDocuments docs = documents(manifest);
+    ((ObjectNode) docs.evidence().get(0)).put("checksum", "sha256:" + "a".repeat(64));
+    docs.rehashManifest();
+
+    assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("checksum");
+  }
+
+  @Test
+  @DisplayName("a reordered evidence reference union is rejected")
+  void evidenceReferenceReorderRejected() {
+    ObjectNode manifest = manifest();
+    BundleDocuments docs = documents(manifest);
+    // Swap the first two evidence records so the ordered union no longer matches.
+    ArrayNode evidence = (ArrayNode) docs.evidence();
+    JsonNode first = evidence.get(0).deepCopy();
+    evidence.set(0, evidence.get(1).deepCopy());
+    evidence.set(1, first);
+    docs.rehashManifest();
+
+    assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("reference");
   }
 }
