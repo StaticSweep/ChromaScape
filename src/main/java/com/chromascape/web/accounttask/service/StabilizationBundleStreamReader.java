@@ -209,10 +209,13 @@ public final class StabilizationBundleStreamReader {
   }
 
   /**
-   * Copies a part body to {@code target} until the multipart delimiter {@code \r\n--boundary}
-   * (or the closing {@code \r\n--boundary--}). A rolling candidate buffer matches the delimiter
-   * across byte boundaries; anything not part of the delimiter is written to the target. The
-   * per-part and total-size bounds are enforced while bytes are read, including chunked requests.
+   * Copies a part body to {@code target} until a REAL multipart delimiter. A candidate
+   * {@code \r\n--boundary} is recognized as a delimiter only when it is followed by either
+   * {@code \r\n} (interior boundary) or {@code --} (closing boundary). A body containing a prefix
+   * such as {@code \r\n--boundary-not-a-delimiter} remains body data and does NOT terminate the
+   * part. A rolling candidate buffer matches the delimiter across byte boundaries; anything not
+   * part of a genuine delimiter is written to the target. The per-part and total-size bounds are
+   * enforced while bytes are read, including chunked requests.
    */
   private CopyOutcome copyBody(java.io.PushbackInputStream input, Path target, String boundary,
       long limit, CountingInputStream counting) throws IOException {
@@ -240,19 +243,32 @@ public final class StabilizationBundleStreamReader {
         window[pos] = value;
         windowLen++;
         if (windowLen >= len && matchesWindow(window, delimiter, (pos + 1) % len)) {
-          // Found the CRLF-boundary. Determine whether it is the closing boundary.
+          // A candidate \r\n--boundary was found. It is a delimiter only when followed by \r\n
+          // (interior) or -- (closing). Anything else (e.g. \r\n--boundaryX) is body data.
           int peek1 = input.read();
           int peek2 = input.read();
           if (peek1 == '-' && peek2 == '-') {
             closed = true;
-          } else if (peek1 != -1 && peek2 != -1) {
-            unread(input, peek1, peek2);
-          } else if (peek1 != -1) {
+            break;
+          }
+          if (peek1 == '\r' && peek2 == '\n') {
+            // Interior delimiter: the part ends before the CRLF that precedes the next boundary.
+            break;
+          }
+          // Not a delimiter: the candidate prefix belongs to the body. Write the full candidate
+          // (it was never written) and continue scanning from the two peeked bytes.
+          out.write(window, 0, len);
+          count += len;
+          if (count > limit) {
+            throw new IOException("report bundle part exceeds its size limit");
+          }
+          if (peek1 != -1) {
             unread(input, peek1);
-          } else if (peek2 != -1) {
+          }
+          if (peek2 != -1) {
             unread(input, peek2);
           }
-          break;
+          windowLen = 0;
         }
       }
     }
@@ -382,22 +398,78 @@ public final class StabilizationBundleStreamReader {
     return line.length() == 0 ? null : line.toString();
   }
 
+  /**
+   * Extracts a Content-Disposition parameter by parsing the disposition tokens one at a time with
+   * exact, case-insensitive parameter-name comparison and proper quoted-string (and escaped
+   * quoted-character) handling. It never uses substring lookup, so a {@code name=} can never match
+   * inside {@code filename=}, and a parameter name like {@code name} only matches a standalone
+   * {@code name=} token.
+   */
   private static String headerParam(String header, String param) {
-    String lower = header.toLowerCase();
-    int idx = lower.indexOf(param.toLowerCase() + "=");
-    if (idx < 0) {
+    if (header == null || param == null) {
       return null;
     }
-    int start = idx + param.length() + 1;
-    while (start < header.length() && (header.charAt(start) == ' ' || header.charAt(start) == '"')) {
-      start++;
+    String needle = param.toLowerCase(java.util.Locale.ENGLISH);
+    int pos = 0;
+    while (pos < header.length()) {
+      pos = skipSpacesAndSemicolons(header, pos);
+      int nameStart = pos;
+      while (pos < header.length() && header.charAt(pos) != '=' && header.charAt(pos) != ';') {
+        pos++;
+      }
+      String name = header.substring(nameStart, pos).trim();
+      if (name.isEmpty() || pos >= header.length() || header.charAt(pos) != '=') {
+        // Not a parameter assignment; continue past the token (if any).
+        if (pos < header.length()) {
+          pos++;
+        }
+        continue;
+      }
+      pos++; // consume '='
+      pos = skipSpacesAndSemicolons(header, pos);
+      String value;
+      if (pos < header.length() && header.charAt(pos) == '"') {
+        pos++; // consume opening quote
+        StringBuilder sb = new StringBuilder();
+        while (pos < header.length()) {
+          char c = header.charAt(pos);
+          if (c == '\\') {
+            if (pos + 1 < header.length()) {
+              sb.append(header.charAt(pos + 1));
+              pos += 2;
+              continue;
+            }
+            pos++;
+            continue;
+          }
+          if (c == '"') {
+            pos++; // consume closing quote
+            break;
+          }
+          sb.append(c);
+          pos++;
+        }
+        value = sb.toString();
+      } else {
+        int valueStart = pos;
+        while (pos < header.length() && header.charAt(pos) != ';' && header.charAt(pos) != '\r') {
+          pos++;
+        }
+        value = header.substring(valueStart, pos).trim();
+      }
+      if (name.toLowerCase(java.util.Locale.ENGLISH).equals(needle)) {
+        return value;
+      }
     }
-    int end = start;
-    while (end < header.length() && header.charAt(end) != '"' && header.charAt(end) != ';'
-        && header.charAt(end) != '\r') {
-      end++;
+    return null;
+  }
+
+  private static int skipSpacesAndSemicolons(String header, int pos) {
+    while (pos < header.length()
+        && (header.charAt(pos) == ' ' || header.charAt(pos) == '\t' || header.charAt(pos) == ';')) {
+      pos++;
     }
-    return header.substring(start, end).trim();
+    return pos;
   }
 
   private record PartHeaders(String name, String filename, String contentType) {}
