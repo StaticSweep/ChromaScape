@@ -224,11 +224,25 @@ public class Micro6ExecutorCatalogService {
           normalizedRef, normalizedMode, "CONTRACT_INVALID", List.of(preContractError));
     }
 
+    // An ONLINE runtime must itself attest a valid lifecycle before any cached catalog may be
+    // served: a missing catalog_state or schema_bundle_state means ChromaScape cannot bind the
+    // catalog to a verifiable lifecycle, and an impossible state pair or a schema-bundle hash
+    // violating the lifecycle matrix is a permanent contract violation. Both fail closed rather
+    // than satisfying a cache hit.
+    RuntimeLifecycleAttestation preLifecycleError = runtimeLifecycleAttestation(runtime);
+    if (preLifecycleError != null) {
+      return unavailablePayload(
+          normalizedRef,
+          normalizedMode,
+          preLifecycleError.reasonCode(),
+          List.of(preLifecycleError.message()));
+    }
+
     // The cache is identity-scoped: only a fresh entry whose identity matches the currently
     // resolved runtime is usable. Full-mode cache entries additionally require the runtime's
     // schema bundle hash to match exactly; a changed bundle invalidates the old full cache while
-    // the lightweight cache is unaffected. The runtime's schema-bundle state also drives how a
-    // same-identity cached full catalog may be exposed (see cacheMatchesRuntime).
+    // the lightweight cache is unaffected. A runtime that is not catalog-ready may expose a
+    // same-identity cached catalog only as STALE, regardless of mode (see cacheMatchesRuntime).
     String key = cacheKey(runtime, normalizedMode);
     CachedCatalog cached = executorCache.get(key);
     if (!forceRefresh
@@ -236,10 +250,11 @@ public class Micro6ExecutorCatalogService {
         && cached.isFresh(config.getExecutorCatalog().getRefreshSeconds())
         && cacheMatchesRuntime(cached, runtime, normalizedMode)) {
       String state = cached.state();
-      if ("full".equals(normalizedMode) && !"AVAILABLE".equals(runtime.schemaBundleState())) {
-        // GENERATING/ERROR/NOT_AVAILABLE: prior same-identity full data may be returned only as
-        // STALE, never as fresh READY. An unknown state was already rejected as CONTRACT_INVALID
-        // by identityHeaderPresenceError.
+      if (!"READY".equals(runtime.catalogState())
+          || ("full".equals(normalizedMode) && !"AVAILABLE".equals(runtime.schemaBundleState()))) {
+        // A catalog lifecycle other than READY means the cache is last-known-good, not current.
+        // Full catalogs are also stale while their schema bundle is not AVAILABLE. Invalid states
+        // were already rejected by runtimeLifecycleAttestation.
         state = "STALE";
       }
       return catalogResponse(
@@ -299,11 +314,12 @@ public class Micro6ExecutorCatalogService {
   }
 
   /**
-   * One bounded fetch-and-verify attempt. Core ownership (machine/executor/session) is re-confirmed
-   * after the fetch; a mid-fetch identity change reports {@code RUNTIME_CHANGED}. Response headers
-   * and payload are always validated against the post-fetch runtime, never the pre-fetch one. A
-   * response whose catalog identity no longer matches the post-fetch runtime is retried once when
-   * the catalog changed during the fetch; a permanent mismatch is rejected.
+   * One bounded fetch-and-verify attempt. Every lifecycle response (200/202/503) is re-resolved and
+   * reconciled against the post-fetch runtime before any header is rejected: core ownership
+   * (machine/executor/session) is re-confirmed, a selectable runtime must still be contract-valid,
+   * then response headers and payload are validated against the post-fetch runtime, never the
+   * pre-fetch one. A response whose catalog identity no longer matches the post-fetch runtime is
+   * retried once when the catalog changed during the fetch; a permanent mismatch is rejected.
    */
   private JsonNode doFetchAttempt(
       Micro6Runtime runtimeBefore, String normalizedRef, String normalizedMode, int attempt) {
@@ -319,22 +335,12 @@ public class Micro6ExecutorCatalogService {
           List.of(e.getMessage()));
     }
 
-    // The backend must stamp identity headers on the executor lifecycle statuses (200/202/503);
-    // missing required headers are a permanent IDENTITY_UNVERIFIED failure. Other statuses are
-    // registry errors and carry no executor identity to verify.
-    String presenceError = identityHeaderPresenceError(fetch);
-    if (presenceError != null) {
-      return unavailablePayload(
-          normalizedRef, normalizedMode, "IDENTITY_UNVERIFIED", List.of(presenceError));
-    }
-
     boolean lifecycleStatus =
         fetch.statusCode() == 200 || fetch.statusCode() == 202 || fetch.statusCode() == 503;
     Micro6Runtime runtimeAfter;
     if (lifecycleStatus) {
-      // Re-resolve after the fetch to guard the heartbeat/process-replacement race. Core ownership
-      // must be unchanged; a mid-fetch change reports RUNTIME_CHANGED before any header/payload
-      // identity check so a transient replacement never surfaces a secondary conflict.
+      // Every lifecycle response is re-resolved after the fetch before any header is rejected, so a
+      // mid-fetch ownership or contract failure is never masked by an unrelated header problem.
       runtimeAfter = reResolve(normalizedRef);
       if (runtimeAfter == null) {
         return unavailablePayload(
@@ -343,6 +349,8 @@ public class Micro6ExecutorCatalogService {
             "RUNTIME_CHANGED",
             List.of("runtime identity could not be re-confirmed after catalog fetch"));
       }
+      // Core ownership (machine/executor/session) is a process/ownership replacement, never a
+      // retryable catalog change.
       if (coreOwnershipChanged(runtimeBefore, runtimeAfter)) {
         return unavailablePayload(
             normalizedRef,
@@ -362,8 +370,39 @@ public class Micro6ExecutorCatalogService {
                 ? List.of("runtime is not selectable after catalog fetch")
                 : runtimeAfter.reasons());
       }
+      // A selectable post-fetch runtime must itself be contract-valid before any lifecycle status,
+      // malformed body, or cache fallback is handled. A missing/invalid attestation is a permanent
+      // contract violation and never satisfies stale-or-unavailable data.
+      String postContractError = postFetchRuntimeContractError(runtimeAfter, normalizedMode);
+      if (postContractError != null) {
+        return unavailablePayload(
+            normalizedRef, normalizedMode, "CONTRACT_INVALID", List.of(postContractError));
+      }
     } else {
       runtimeAfter = runtimeBefore;
+    }
+
+    // A post-fetch runtime must itself attest a valid lifecycle before any response header,
+    // malformed body, or cache fallback is handled. A missing catalog_state or schema_bundle_state
+    // means ChromaScape cannot bind the catalog to a verifiable lifecycle, and an impossible state
+    // pair or a schema-bundle hash violating the lifecycle matrix is a permanent contract
+    // violation. Both fail closed before any header, status, or stale fallback is considered.
+    RuntimeLifecycleAttestation postLifecycleError = runtimeLifecycleAttestation(runtimeAfter);
+    if (postLifecycleError != null) {
+      return unavailablePayload(
+          normalizedRef,
+          normalizedMode,
+          postLifecycleError.reasonCode(),
+          List.of(postLifecycleError.message()));
+    }
+
+    // The backend must stamp identity headers on the executor lifecycle statuses (200/202/503);
+    // missing required headers are a permanent IDENTITY_UNVERIFIED failure. Other statuses are
+    // registry errors and carry no executor identity to verify.
+    String presenceError = identityHeaderPresenceError(fetch);
+    if (presenceError != null) {
+      return unavailablePayload(
+          normalizedRef, normalizedMode, "IDENTITY_UNVERIFIED", List.of(presenceError));
     }
 
     // The backend-attested core identity must agree with the confirmed post-fetch runtime. Non-
@@ -377,20 +416,40 @@ public class Micro6ExecutorCatalogService {
     }
 
     if (fetch.statusCode() == 202) {
-      // Generation active: never touch the cache. A 202 whose generation completed during the fetch
-      // is accepted only against the post-fetch runtime: when the runtime confirms a completed
-      // lifecycle and the catalog identity advanced, re-acquire once.
-      if (catalogLifecycleCompleted(runtimeAfter)
-          && catalogIdentityChanged(runtimeBefore, runtimeAfter)
-          && attempt < MAX_FETCH_ATTEMPTS) {
+      // Generation lifecycle: return GENERATING only when both the post-fetch runtime and the
+      // response headers attest generation. A runtime that crossed from a completed state into
+      // GENERATING during the fetch (while the response still carried the stale completed headers)
+      // is re-acquired once using the confirmed post-fetch runtime; a completed runtimeAfter also
+      // causes exactly one re-fetch even when catalog hashes/versions did not change, and a second
+      // stale 202 is RUNTIME_CHANGED.
+      if (runtimeConfirmsGeneration(runtimeAfter, fetch.identity())) {
+        return catalogResponse(
+            normalizedRef,
+            normalizedMode,
+            "GENERATING",
+            null,
+            List.of("catalog generation is in progress; no data replaced"));
+      }
+      if (shouldRetry202GenerationDrift(runtimeBefore, runtimeAfter, attempt)) {
         return doFetchAttempt(runtimeAfter, normalizedRef, normalizedMode, attempt + 1);
       }
-      return catalogResponse(
+      if (catalogLifecycleCompleted(runtimeAfter)) {
+        if (attempt < MAX_FETCH_ATTEMPTS) {
+          return doFetchAttempt(runtimeAfter, normalizedRef, normalizedMode, attempt + 1);
+        }
+        return unavailablePayload(
+            normalizedRef,
+            normalizedMode,
+            "RUNTIME_CHANGED",
+            List.of(
+                "catalog generation completed but the response was still a stale 202; "
+                    + "the acquisition did not settle"));
+      }
+      return unavailablePayload(
           normalizedRef,
           normalizedMode,
-          "GENERATING",
-          null,
-          List.of("catalog generation is in progress; no data replaced"));
+          "IDENTITY_UNVERIFIED",
+          List.of("202 response while the runtime lifecycle is neither generating nor completed"));
     }
     if (fetch.statusCode() == 503) {
       return staleOrUnavailable(
@@ -431,13 +490,6 @@ public class Micro6ExecutorCatalogService {
           "CONTRACT_INVALID",
           "CONTRACT_INVALID",
           validation.reasons());
-    }
-
-    // The post-fetch runtime must itself remain contract-valid before its identity is trusted.
-    String contractError = runtimeContractError(runtimeAfter, normalizedMode);
-    if (contractError != null) {
-      return unavailablePayload(
-          normalizedRef, normalizedMode, "CONTRACT_INVALID", List.of(contractError));
     }
 
     // The catalog identity attested by the response must match the confirmed post-fetch runtime. A
@@ -533,6 +585,104 @@ public class Micro6ExecutorCatalogService {
   }
 
   /**
+   * A {@code 202} whose post-fetch runtime has just crossed from a completed state into {@code
+   * GENERATING} while the response still carries the stale completed headers is a transient race:
+   * the runtime changed during the fetch, so acquisition is retried once using the confirmed {@code
+   * runtimeAfter}. A runtime that was already stably {@code GENERATING} with only contradictory
+   * headers is a stable bad attestation and is not retried.
+   */
+  private boolean shouldRetry202GenerationDrift(
+      Micro6Runtime runtimeBefore, Micro6Runtime runtimeAfter, int attempt) {
+    return attempt < MAX_FETCH_ATTEMPTS
+        && "GENERATING".equals(runtimeAfter.catalogState())
+        && "GENERATING".equals(runtimeAfter.schemaBundleState())
+        && catalogIdentityChanged(runtimeBefore, runtimeAfter);
+  }
+
+  /**
+   * A {@code 202} is {@code GENERATING} only when both the post-fetch runtime and the response
+   * headers attest generation for the catalog and the schema bundle. The core identity is already
+   * verified against {@code runtimeAfter} before this helper runs.
+   */
+  private boolean runtimeConfirmsGeneration(Micro6Runtime runtime, ResponseIdentity identity) {
+    return "GENERATING".equals(runtime.catalogState())
+        && "GENERATING".equals(runtime.schemaBundleState())
+        && "GENERATING".equals(identity.catalogState())
+        && "GENERATING".equals(identity.schemaBundleState());
+  }
+
+  /**
+   * The post-fetch runtime contract validation applied before any lifecycle status, body, or cache
+   * fallback: a selectable runtime must still attest the identity fields ChromaScape binds a
+   * catalog to.
+   */
+  private String postFetchRuntimeContractError(Micro6Runtime runtime, String mode) {
+    return runtimeContractError(runtime, mode);
+  }
+
+  /**
+   * Binds a payload schema bundle assertion to the response header and the confirmed post-fetch
+   * runtime. A missing, {@code null}, empty, or whitespace-only {@code schema_bundle_hash} carries
+   * no bundle claim; any non-text value (object, array, number, boolean) is a malformed claimed
+   * bundle; and any non-empty text value is a claimed bundle whether valid or malformed. A claim is
+   * accepted only when the header and runtime are both {@code AVAILABLE} and all three hashes are
+   * valid and equal. Returns a conflict description, or {@code null} when the payload carries no
+   * bundle.
+   */
+  private String schemaBundleBindingError(
+      JsonNode payload, Micro6Runtime runtime, ResponseIdentity identity) {
+    JsonNode bundleNode = payload.get("schema_bundle_hash");
+    if (bundleNode == null || bundleNode.isNull() || bundleNode.isMissingNode()) {
+      return null;
+    }
+    if (!bundleNode.isTextual()) {
+      // Any non-text node (object, array, number, boolean) is a malformed claimed bundle and is
+      // rejected before cache/classification, never silently ignored as "no bundle".
+      return "schema bundle hash conflict: payload carries a malformed bundle hash "
+          + bundleNode.toString();
+    }
+    String payloadBundle = bundleNode.textValue();
+    if (payloadBundle == null || payloadBundle.isBlank()) {
+      // An empty or whitespace-only text value carries no bundle claim.
+      return null;
+    }
+    payloadBundle = payloadBundle.trim();
+    if (!isValidSha256(payloadBundle)) {
+      return "schema bundle hash conflict: payload carries a malformed bundle hash "
+          + payloadBundle;
+    }
+    if (!"AVAILABLE".equals(identity.schemaBundleState())) {
+      return "schema bundle state conflict: payload carries a bundle hash while header state is "
+          + identity.schemaBundleState();
+    }
+    if (!"AVAILABLE".equals(runtime.schemaBundleState())) {
+      return "schema bundle state conflict: payload carries a bundle hash while runtime state is "
+          + runtime.schemaBundleState();
+    }
+    if (identity.schemaBundleHash() != null && !payloadBundle.equals(identity.schemaBundleHash())) {
+      return "schema bundle hash conflict: payload="
+          + payloadBundle
+          + " header="
+          + identity.schemaBundleHash();
+    }
+    if (runtime.schemaBundleHash() != null && !payloadBundle.equals(runtime.schemaBundleHash())) {
+      return "schema bundle hash conflict: payload="
+          + payloadBundle
+          + " runtime="
+          + runtime.schemaBundleHash();
+    }
+    if (identity.schemaBundleHash() == null) {
+      return "schema bundle hash conflict: payload carries a bundle hash while the header attests"
+          + " none";
+    }
+    if (runtime.schemaBundleHash() == null) {
+      return "schema bundle hash conflict: payload carries a bundle hash while the runtime attests"
+          + " none";
+    }
+    return null;
+  }
+
+  /**
    * A selectable runtime must attest the identity fields ChromaScape binds a catalog to: an ONLINE
    * runtime requires a valid catalog hash, and a full-mode runtime claiming {@code AVAILABLE}
    * requires a valid schema bundle hash. Returns a human-readable failure description, or {@code
@@ -549,6 +699,40 @@ public class Micro6ExecutorCatalogService {
         && "AVAILABLE".equals(runtime.schemaBundleState())
         && (runtime.schemaBundleHash() == null || !isValidSha256(runtime.schemaBundleHash()))) {
       return "runtime reports schema_bundle_state AVAILABLE without a valid schema bundle hash";
+    }
+    return null;
+  }
+
+  /**
+   * Structured result of validating a runtime's lifecycle attestation. {@code reasonCode} is either
+   * {@code IDENTITY_UNVERIFIED} (missing lifecycle state) or {@code CONTRACT_INVALID}
+   * (unknown/impossible state pair or a schema-bundle hash violating the matrix).
+   */
+  private record RuntimeLifecycleAttestation(String reasonCode, String message) {}
+
+  /**
+   * Validates a runtime's lifecycle attestation against the catalog/schema-bundle matrix. A missing
+   * {@code catalog_state} or {@code schema_bundle_state} means ChromaScape cannot bind the catalog
+   * to a verifiable lifecycle and is reported {@code IDENTITY_UNVERIFIED}; a present but unknown or
+   * impossible state pair, a non-{@code AVAILABLE} state carrying a schema-bundle hash, or an
+   * {@code AVAILABLE} state without a valid lowercase {@code sha256:} hash is a permanent {@code
+   * CONTRACT_INVALID} violation. Returns {@code null} when the attestation is valid. This matrix
+   * applies in both full and lightweight modes.
+   */
+  private RuntimeLifecycleAttestation runtimeLifecycleAttestation(Micro6Runtime runtime) {
+    if (runtime.catalogState() == null) {
+      return new RuntimeLifecycleAttestation(
+          "IDENTITY_UNVERIFIED", "runtime lifecycle attestation missing catalog_state");
+    }
+    if (runtime.schemaBundleState() == null) {
+      return new RuntimeLifecycleAttestation(
+          "IDENTITY_UNVERIFIED", "runtime lifecycle attestation missing schema_bundle_state");
+    }
+    if (!ResponseIdentity.hasValidLifecycleStates(
+        runtime.catalogState(), runtime.schemaBundleState(), runtime.schemaBundleHash())) {
+      return new RuntimeLifecycleAttestation(
+          "CONTRACT_INVALID",
+          "runtime lifecycle attestation violates the catalog/schema-bundle matrix");
     }
     return null;
   }
@@ -575,7 +759,7 @@ public class Micro6ExecutorCatalogService {
     if (fetch.statusCode() == 200) {
       if (!identity.hasFullIdentity()) {
         return "backend response identity headers incomplete for 200"
-                   + " (machine/executor/session/version/catalog hash/observed_at required)";
+            + " (machine/executor/session/version/catalog hash/observed_at required)";
       }
     } else if (!identity.hasCoreIdentity()) {
       return "backend response identity headers incomplete for HTTP "
@@ -629,10 +813,11 @@ public class Micro6ExecutorCatalogService {
 
   /**
    * Verifies the catalog identity attested by a 200 response against the confirmed post-fetch
-   * runtime: the header catalog version, catalog hash, and schema bundle hash must agree exactly
-   * with the runtime's attestation, and a completed catalog response must not contradict a runtime
-   * that is still generating. Returns a human-readable drift description, or {@code null} when the
-   * response is consistent with the post-fetch runtime.
+   * runtime: the header catalog state, schema-bundle state, catalog version, catalog hash, and the
+   * applicable schema bundle hash must agree exactly with the runtime's attestation, and a
+   * completed catalog response must not contradict a runtime that is still generating. Returns a
+   * human-readable drift description, or {@code null} when the response is consistent with the
+   * post-fetch runtime.
    */
   private String catalogIdentityValueError(Micro6Runtime runtime, CatalogFetch fetch) {
     if (fetch.statusCode() != 200) {
@@ -642,6 +827,20 @@ public class Micro6ExecutorCatalogService {
       return "catalog lifecycle conflict: completed catalog while runtime is still generating";
     }
     ResponseIdentity identity = fetch.identity();
+    if (runtime.catalogState() != null
+        && !Objects.equals(identity.catalogState(), runtime.catalogState())) {
+      return "catalog state mismatch: header="
+          + identity.catalogState()
+          + " runtime="
+          + runtime.catalogState();
+    }
+    if (runtime.schemaBundleState() != null
+        && !Objects.equals(identity.schemaBundleState(), runtime.schemaBundleState())) {
+      return "schema bundle state mismatch: header="
+          + identity.schemaBundleState()
+          + " runtime="
+          + runtime.schemaBundleState();
+    }
     if (runtime.catalogVersion() != null
         && !Objects.equals(identity.catalogVersion(), runtime.catalogVersion())) {
       return "catalog version mismatch: header="
@@ -670,8 +869,9 @@ public class Micro6ExecutorCatalogService {
    * Returns a human-readable conflict description when the catalog payload's attested identity or
    * hashes disagree with the resolved runtime or the backend-attested response identity, or {@code
    * null} when the payload is consistent with both. A 200 payload's {@code catalog_state} must bind
-   * to the response catalog-state header, and a payload carrying a schema bundle hash requires the
-   * attested schema-bundle state to be {@code AVAILABLE} with matching header/runtime hashes.
+   * to the response catalog-state header, and any non-empty payload {@code schema_bundle_hash} is a
+   * claimed bundle that requires an {@code AVAILABLE} header and runtime state with matching, valid
+   * header/runtime hashes.
    */
   private String identityConflict(
       JsonNode payload, Micro6Runtime runtime, ResponseIdentity identity) {
@@ -733,29 +933,10 @@ public class Micro6ExecutorCatalogService {
           + identity.catalogState();
     }
 
-    // A payload carrying a schema bundle hash requires an AVAILABLE schema-bundle state, and its
-    // hash must equal both the header and the runtime bundle hashes.
-    String payloadBundle = text(payload.get("schema_bundle_hash"));
-    if (payloadBundle != null && isValidSha256(payloadBundle)) {
-      if (!"AVAILABLE".equals(identity.schemaBundleState())) {
-        return "schema bundle state conflict: payload carries a bundle hash while header state is "
-            + identity.schemaBundleState();
-      }
-      if (identity.schemaBundleHash() != null
-          && !payloadBundle.equals(identity.schemaBundleHash())) {
-        return "schema bundle hash conflict: payload="
-            + payloadBundle
-            + " header="
-            + identity.schemaBundleHash();
-      }
-      if (runtime.schemaBundleHash() != null && !payloadBundle.equals(runtime.schemaBundleHash())) {
-        return "schema bundle hash conflict: payload="
-            + payloadBundle
-            + " runtime="
-            + runtime.schemaBundleHash();
-      }
-    }
-    return null;
+    // A payload carrying a schema bundle hash is a claimed bundle whether the value is valid or
+    // malformed; it is rejected unless the header and runtime are both AVAILABLE and all hashes
+    // match exactly.
+    return schemaBundleBindingError(payload, runtime, identity);
   }
 
   /** The catalog's own version as attested in the payload. */

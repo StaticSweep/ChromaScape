@@ -219,7 +219,16 @@ public class Micro6RuntimeRegistryClient {
      * </pre>
      */
     public boolean hasValidLifecycleStates() {
-      if (!hasLifecycleStates()) {
+      return hasValidLifecycleStates(catalogState, schemaBundleState, schemaBundleHash);
+    }
+
+    /**
+     * Shared catalog/schema-bundle lifecycle matrix used for both backend response headers and
+     * registry runtime attestations.
+     */
+    public static boolean hasValidLifecycleStates(
+        String catalogState, String schemaBundleState, String schemaBundleHash) {
+      if (catalogState == null || schemaBundleState == null) {
         return false;
       }
       switch (catalogState) {
