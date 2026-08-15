@@ -15,6 +15,12 @@ public interface ScriptStabilizationRunRepository
   List<ScriptStabilizationRun> findByScriptKeyAndExecutedAtBetween(
       String scriptKey, LocalDateTime start, LocalDateTime end);
 
+  List<ScriptStabilizationRun> findByVerifiedTrueAndExecutedAtBetween(
+      LocalDateTime start, LocalDateTime end);
+
+  List<ScriptStabilizationRun> findByVerifiedTrueAndScriptKeyAndExecutedAtBetween(
+      String scriptKey, LocalDateTime start, LocalDateTime end);
+
   Optional<ScriptStabilizationRun> findFirstByRunIdOrderByExecutedAtDesc(String runId);
 
   Optional<ScriptStabilizationRun> findFirstByRunIdAndAttemptIdOrderByExecutedAtDesc(
@@ -25,6 +31,11 @@ public interface ScriptStabilizationRunRepository
   boolean existsBySchemaVersionAndRunIdAndAttemptIdAndManifestHash(
       String schemaVersion, String runId, String attemptId, String manifestHash);
 
-  Optional<ScriptStabilizationRun> findFirstByManifestHashOrderByExecutedAtDesc(
-      String manifestHash);
+  boolean existsByRunId(String runId);
+
+  boolean existsByRunIdAndManifestHash(String runId, String manifestHash);
+
+  List<ScriptStabilizationRun> findByRunIdOrderByExecutedAtAsc(String runId);
+
+  Optional<ScriptStabilizationRun> findFirstByManifestHashOrderByExecutedAtDesc(String manifestHash);
 }

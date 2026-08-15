@@ -1,6 +1,7 @@
 package com.chromascape.web.accounttask.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -48,6 +49,34 @@ public final class StabilizationHashUtil {
           "iteration_id",
           "transitions");
 
+  /**
+   * Fields excluded when recomputing an {@code attempt_manifest_hash} from a manifest
+   * {@code attempts[]} entry. Mirrors the Micro6 harness
+   * {@code HarnessRunManifest.AttemptEntry.computeAttemptManifestHash()} contract.
+   */
+  public static final Set<String> ATTEMPT_MANIFEST_EXCLUSIONS =
+      Set.of(
+          "attempt_manifest_hash",
+          "latency_ms",
+          "poll_count",
+          "source_timestamp",
+          "ingest_timestamp",
+          "generated_at");
+
+  /**
+   * Fields excluded when recomputing a harness {@code plan_hash} from the plan document. Mirrors
+   * the Micro6 harness {@code HarnessPlan.computePlanHash()} contract (canonicalize the plan
+   * minus {@code planHash}, excluding volatile identity/timestamp fields).
+   */
+  public static final Set<String> PLAN_EXCLUSIONS =
+      Set.of(
+          "planHash",
+          "generated_at",
+          "source_timestamp",
+          "ingest_timestamp",
+          "run_id",
+          "attempt_id");
+
   private StabilizationHashUtil() {}
 
   public static String sha256(JsonNode node, Set<String> exclusions) {
@@ -80,9 +109,7 @@ public final class StabilizationHashUtil {
           out.append(',');
         }
         first = false;
-        out.append(quote(entry.getKey()))
-            .append(':')
-            .append(canonical(entry.getValue(), exclusions));
+        out.append(quote(entry.getKey())).append(':').append(canonical(entry.getValue(), exclusions));
       }
       return out.append('}').toString();
     }

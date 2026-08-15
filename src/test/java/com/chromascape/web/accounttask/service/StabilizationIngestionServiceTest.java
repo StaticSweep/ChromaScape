@@ -12,6 +12,9 @@ import com.chromascape.web.accounttask.entity.ScriptStabilizationSnapshot;
 import com.chromascape.web.accounttask.repository.ScriptFailureTriageRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationRunRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationSnapshotRepository;
+import com.chromascape.web.accounttask.service.StabilizationArtifactStore;
+import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
+import com.chromascape.web.accounttask.repository.StabilizationRunAggregateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -35,13 +38,17 @@ class StabilizationIngestionServiceTest {
   @Mock private ScriptStabilizationRunRepository runRepository;
   @Mock private ScriptFailureTriageRepository triageRepository;
   @Mock private ScriptStabilizationSnapshotRepository snapshotRepository;
+  @Mock private StabilizationArtifactStore artifactStore;
+  @Mock private StabilizationArtifactRepository artifactRepository;
+  @Mock private StabilizationRunAggregateRepository aggregateRepository;
+  @Mock private jakarta.persistence.EntityManager entityManager;
 
   private StabilizationIngestionService service;
 
   @BeforeEach
   void setUp() {
-    service =
-        new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository);
+    service = new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository,
+            artifactStore, artifactRepository, aggregateRepository, entityManager);
   }
 
   @Test
@@ -110,7 +117,7 @@ class StabilizationIngestionServiceTest {
         run("PROGRESSIVE_WOODCUTTING", "TIMEOUT", now.minusHours(2));
     ScriptStabilizationRun oldPass = run("PROGRESSIVE_WOODCUTTING", "PASS", now.minusDays(2));
 
-    when(runRepository.findByExecutedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
+    when(runRepository.findByVerifiedTrueAndExecutedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
         .thenReturn(List.of(recentPass, recentTimeout))
         .thenReturn(List.of(recentPass, recentTimeout, oldPass));
     when(triageRepository.findByStatusOrderByLastSeenAtDesc("OPEN"))
@@ -184,23 +191,17 @@ class StabilizationIngestionServiceTest {
     manifest.put("primary_failure_code", "task_failed");
     manifest.put("failure_signature", "sig:abc");
     manifest.put("evidence_complete", true);
-    manifest.putArray("evidence").addObject().put("type", "LOG").put("reference", "logs/task.log");
+    manifest.putArray("evidence").addObject()
+        .put("type", "LOG")
+        .put("reference", "logs/task.log");
     manifest.put("latency_ms", 1234);
-    manifest.put(
-        "manifest_hash",
-        "sha256:"
-            + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
-    manifest.put(
-        "deterministic_content_hash",
-        "sha256:"
-            + StabilizationHashUtil.sha256(
-                manifest, StabilizationHashUtil.DETERMINISTIC_EXCLUSIONS));
+    manifest.put("manifest_hash", "sha256:" + StabilizationHashUtil.sha256(
+        manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
+    manifest.put("deterministic_content_hash", "sha256:" + StabilizationHashUtil.sha256(
+        manifest, StabilizationHashUtil.DETERMINISTIC_EXCLUSIONS));
 
     when(runRepository.existsBySchemaVersionAndRunIdAndAttemptIdAndManifestHash(
-            "harness-run-manifest/v1",
-            "run-1",
-            "attempt-1",
-            manifest.path("manifest_hash").asText()))
+        "harness-run-manifest/v1", "run-1", "attempt-1", manifest.path("manifest_hash").asText()))
         .thenReturn(false);
     when(runRepository.save(any(ScriptStabilizationRun.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
@@ -234,8 +235,7 @@ class StabilizationIngestionServiceTest {
   @DisplayName("ingestHarnessManifest rejects unknown schema versions")
   void ingestHarnessManifest_rejectsUnknownSchema() throws Exception {
     JsonNode manifest =
-        objectMapper.readTree(
-            """
+        objectMapper.readTree("""
             {"schema_version": "harness-run-manifest/v999", "run_id": "run-1"}
             """);
 
@@ -280,9 +280,8 @@ class StabilizationIngestionServiceTest {
     group.put("retry_count", 1);
     group.put("comparison_status", "BASELINE");
     matrix.putArray("incomparable");
-    matrix.put(
-        "matrix_hash",
-        "sha256:" + StabilizationHashUtil.sha256(matrix, StabilizationHashUtil.MATRIX_EXCLUSIONS));
+    matrix.put("matrix_hash", "sha256:" + StabilizationHashUtil.sha256(
+        matrix, StabilizationHashUtil.MATRIX_EXCLUSIONS));
 
     when(snapshotRepository.existsByMatrixHashAndGroupKey(anyString(), anyString()))
         .thenReturn(false);
@@ -313,8 +312,7 @@ class StabilizationIngestionServiceTest {
   @DisplayName("ingestReliabilityMatrix rejects unknown schema versions")
   void ingestReliabilityMatrix_rejectsUnknownSchema() throws Exception {
     JsonNode matrix =
-        objectMapper.readTree(
-            """
+        objectMapper.readTree("""
             {"schema_version": "reliability-matrix/v999", "groups": []}
             """);
 
@@ -325,11 +323,12 @@ class StabilizationIngestionServiceTest {
   @Test
   @DisplayName("getRunByRunId returns the stored run")
   void getRunByRunId_returnsRun() {
-    ScriptStabilizationRun run = new ScriptStabilizationRun();
-    run.setRunId("run-1");
-    when(runRepository.findFirstByRunIdOrderByExecutedAtDesc("run-1")).thenReturn(Optional.of(run));
+    com.chromascape.web.accounttask.entity.StabilizationRunAggregate aggregate =
+        new com.chromascape.web.accounttask.entity.StabilizationRunAggregate();
+    aggregate.setRunId("run-1");
+    when(aggregateRepository.findByRunId("run-1")).thenReturn(Optional.of(aggregate));
 
-    assertThat(service.getRunByRunId("run-1")).contains(run);
+    assertThat(service.getRunByRunId("run-1")).contains(aggregate);
   }
 
   private ScriptStabilizationRun run(String scriptKey, String outcome, LocalDateTime executedAt) {

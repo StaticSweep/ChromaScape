@@ -1,14 +1,19 @@
 package com.chromascape.web.accounttask.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.chromascape.web.accounttask.entity.ScriptStabilizationRun;
 import com.chromascape.web.accounttask.repository.ScriptFailureTriageRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationRunRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationSnapshotRepository;
+import com.chromascape.web.accounttask.service.StabilizationArtifactStore;
+import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
+import com.chromascape.web.accounttask.repository.StabilizationRunAggregateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -28,13 +33,17 @@ class StabilizationManifestIntegrityTest {
   @Mock private ScriptStabilizationRunRepository runRepository;
   @Mock private ScriptFailureTriageRepository triageRepository;
   @Mock private ScriptStabilizationSnapshotRepository snapshotRepository;
+  @Mock private StabilizationArtifactStore artifactStore;
+  @Mock private StabilizationArtifactRepository artifactRepository;
+  @Mock private StabilizationRunAggregateRepository aggregateRepository;
+  @Mock private jakarta.persistence.EntityManager entityManager;
 
   private StabilizationIngestionService service;
 
   @BeforeEach
   void setUp() {
-    service =
-        new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository);
+    service = new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository,
+            artifactStore, artifactRepository, aggregateRepository, entityManager);
   }
 
   private JsonNode baseManifest() {
@@ -57,11 +66,11 @@ class StabilizationManifestIntegrityTest {
     manifest.put("primary_failure_code", "none");
     manifest.put("failure_signature", "sig:abc");
     manifest.put("evidence_complete", true);
-    manifest.putArray("evidence").addObject().put("type", "LOG").put("reference", "logs/task.log");
-    manifest.put(
-        "manifest_hash",
-        "sha256:"
-            + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
+    manifest.putArray("evidence").addObject()
+        .put("type", "LOG")
+        .put("reference", "logs/task.log");
+    manifest.put("manifest_hash", "sha256:" + StabilizationHashUtil.sha256(
+        manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
     return manifest;
   }
 
@@ -69,10 +78,7 @@ class StabilizationManifestIntegrityTest {
   @DisplayName("an invalid manifest hash is rejected")
   void invalidManifestHashIsRejected() {
     JsonNode manifest = baseManifest();
-    ((ObjectNode) manifest)
-        .put(
-            "manifest_hash",
-            "sha256:0000000000000000000000000000000000000000000000000000000000000000");
+    ((ObjectNode) manifest).put("manifest_hash", "sha256:0000000000000000000000000000000000000000000000000000000000000000");
 
     assertThatThrownBy(() -> service.ingestHarnessManifest(manifest))
         .isInstanceOf(IllegalArgumentException.class)
@@ -104,12 +110,10 @@ class StabilizationManifestIntegrityTest {
   @Test
   @DisplayName("a PASS manifest that lacks complete evidence is rejected")
   void passWithoutCompleteEvidenceRejected() {
-    JsonNode manifest = baseManifest();
-    ObjectNode node = (ObjectNode) manifest;
-    node.put("evidence_complete", false);
-    node.put(
-        "manifest_hash",
-        "sha256:" + StabilizationHashUtil.sha256(node, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
+    ObjectNode manifest = (ObjectNode) baseManifest();
+    manifest.put("evidence_complete", false);
+    manifest.put("manifest_hash", "sha256:" + StabilizationHashUtil.sha256(
+        manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
 
     assertThatThrownBy(() -> service.ingestHarnessManifest(manifest))
         .isInstanceOf(IllegalArgumentException.class)

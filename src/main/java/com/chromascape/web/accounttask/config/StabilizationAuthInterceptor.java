@@ -10,12 +10,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * Lightweight authorization guard for stabilization endpoints. Requires an {@code
- * X-Stabilization-Auth} header equal to the configured {@code stabilization.auth.token} (read
- * access) or {@code stabilization.auth.write-token} (write access, e.g. triage resolution). When no
- * token is configured (local development), requests are only permitted from loopback sources, so
- * unauthenticated cross-host access to harness manifests, matrices, runs, evidence, KPI, triage and
- * the catalog is never possible. Log/evidence access is never served to unauthenticated callers.
+ * Lightweight authorization guard for stabilization endpoints. Requires an
+ * {@code X-Stabilization-Auth} header equal to the configured {@code stabilization.auth.token}
+ * (read access) or {@code stabilization.auth.write-token} (write access, e.g. triage resolution).
+ * When no token is configured (local development), requests are only permitted from loopback
+ * sources, so unauthenticated cross-host access to harness manifests, matrices, runs, evidence,
+ * KPI, triage and the catalog is never possible. Log/evidence access is never served to
+ * unauthenticated callers.
  *
  * <p>Request bodies beyond {@code stabilization.auth.max-json-bytes} are rejected with 413 before
  * any controller parses them, bounding ingestion memory and parser exposure.
@@ -41,11 +42,13 @@ public class StabilizationAuthInterceptor implements HandlerInterceptor {
     this.authToken = authToken == null ? "" : authToken.trim();
     this.writeToken = writeToken == null ? "" : writeToken.trim();
     this.maxJsonBytes = maxJsonBytes <= 0 ? DEFAULT_MAX_JSON_BYTES : maxJsonBytes;
+    // The tokenless fallback is enabled only when local-development is the SOLE active profile; a
+    // mixed production/local profile set never grants tokenless access.
+    java.util.List<String> activeProfiles = Arrays.asList(environment.getActiveProfiles());
     this.localDevelopment =
-        Arrays.asList(environment.getActiveProfiles()).contains("local-development");
+        activeProfiles.size() == 1 && "local-development".equals(activeProfiles.get(0));
     if (!localDevelopment && (this.authToken.isBlank() || this.writeToken.isBlank())) {
-      throw new IllegalStateException(
-          "stabilization read and write tokens are required outside local-development");
+      throw new IllegalStateException("stabilization read and write tokens are required outside local-development");
     }
   }
 
@@ -115,8 +118,7 @@ public class StabilizationAuthInterceptor implements HandlerInterceptor {
     if (address == null) {
       return false;
     }
-    if ("localhost".equalsIgnoreCase(address)
-        || "::1".equals(address)
+    if ("localhost".equalsIgnoreCase(address) || "::1".equals(address)
         || "0:0:0:0:0:0:0:1".equals(address)) {
       return true;
     }

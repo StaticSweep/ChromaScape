@@ -77,13 +77,17 @@ public class ScriptStabilizationSnapshot {
   @Column(length = 200)
   private String catalogHash;
 
-  @Column private Double firstAttemptPassRate;
+  @Column
+  private Double firstAttemptPassRate;
 
-  @Column private Double eventualPassRate;
+  @Column
+  private Double eventualPassRate;
 
-  @Column private Double evidenceCompleteRate;
+  @Column
+  private Double evidenceCompleteRate;
 
-  @Column private Double cleanupSuccessRate;
+  @Column
+  private Double cleanupSuccessRate;
 
   @Column(length = 50)
   private String comparisonStatus;
@@ -100,7 +104,8 @@ public class ScriptStabilizationSnapshot {
   @Column(length = 200)
   private String sourceSnapshotId;
 
-  @Column private Integer retryCount;
+  @Column
+  private Integer retryCount;
 
   @Column(columnDefinition = "TEXT")
   private String matrixJson;

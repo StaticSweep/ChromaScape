@@ -7,6 +7,9 @@ import com.chromascape.web.accounttask.entity.ScriptStabilizationRun;
 import com.chromascape.web.accounttask.repository.ScriptFailureTriageRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationRunRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationSnapshotRepository;
+import com.chromascape.web.accounttask.service.StabilizationArtifactStore;
+import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
+import com.chromascape.web.accounttask.repository.StabilizationRunAggregateRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,13 +26,17 @@ class StabilizationAttemptLookupTest {
   @Mock private ScriptStabilizationRunRepository runRepository;
   @Mock private ScriptFailureTriageRepository triageRepository;
   @Mock private ScriptStabilizationSnapshotRepository snapshotRepository;
+  @Mock private StabilizationArtifactStore artifactStore;
+  @Mock private StabilizationArtifactRepository artifactRepository;
+  @Mock private StabilizationRunAggregateRepository aggregateRepository;
+  @Mock private jakarta.persistence.EntityManager entityManager;
 
   private StabilizationIngestionService service;
 
   @BeforeEach
   void setUp() {
-    service =
-        new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository);
+    service = new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository,
+            artifactStore, artifactRepository, aggregateRepository, entityManager);
   }
 
   private ScriptStabilizationRun run(String runId, String attemptId, String outcome) {

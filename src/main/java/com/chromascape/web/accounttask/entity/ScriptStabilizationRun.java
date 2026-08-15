@@ -64,7 +64,8 @@ public class ScriptStabilizationRun {
   @Column(length = 100)
   private String primaryFailureCode;
 
-  @Column private Boolean evidenceComplete;
+  @Column
+  private Boolean evidenceComplete;
 
   @Column(length = 200)
   private String manifestHash;
@@ -93,11 +94,40 @@ public class ScriptStabilizationRun {
   @Column(length = 255)
   private String matrixReference;
 
+  @Column(length = 200)
+  private String artifactDigest;
+
+  @Column(length = 200)
+  private String executorInstanceId;
+
+  @Column(length = 100)
+  private String entryId;
+
+  @Column(length = 100)
+  private String iterationId;
+
+  @Column(length = 200)
+  private String debugSessionId;
+
+  @Column(length = 200)
+  private String recordingId;
+
+  /** Verified certified-bundle rows; legacy /ingest-report rows are excluded from KPIs/matrices. */
+  @Column(nullable = false)
+  private Boolean verified;
+
+  @Column(columnDefinition = "TEXT")
+  private String transitionsJson;
+
+  @Column(columnDefinition = "TEXT")
+  private String evidenceJson;
+
   @Column(nullable = false)
   private LocalDateTime executedAt;
 
   public ScriptStabilizationRun() {
     this.executedAt = LocalDateTime.now();
+    this.verified = Boolean.TRUE;
   }
 
   public Long getId() {
@@ -310,6 +340,78 @@ public class ScriptStabilizationRun {
 
   public void setMatrixReference(String matrixReference) {
     this.matrixReference = matrixReference;
+  }
+
+  public String getArtifactDigest() {
+    return artifactDigest;
+  }
+
+  public void setArtifactDigest(String artifactDigest) {
+    this.artifactDigest = artifactDigest;
+  }
+
+  public String getExecutorInstanceId() {
+    return executorInstanceId;
+  }
+
+  public void setExecutorInstanceId(String executorInstanceId) {
+    this.executorInstanceId = executorInstanceId;
+  }
+
+  public String getEntryId() {
+    return entryId;
+  }
+
+  public void setEntryId(String entryId) {
+    this.entryId = entryId;
+  }
+
+  public String getIterationId() {
+    return iterationId;
+  }
+
+  public void setIterationId(String iterationId) {
+    this.iterationId = iterationId;
+  }
+
+  public String getDebugSessionId() {
+    return debugSessionId;
+  }
+
+  public void setDebugSessionId(String debugSessionId) {
+    this.debugSessionId = debugSessionId;
+  }
+
+  public String getRecordingId() {
+    return recordingId;
+  }
+
+  public void setRecordingId(String recordingId) {
+    this.recordingId = recordingId;
+  }
+
+  public Boolean getVerified() {
+    return verified;
+  }
+
+  public void setVerified(Boolean verified) {
+    this.verified = verified;
+  }
+
+  public String getTransitionsJson() {
+    return transitionsJson;
+  }
+
+  public void setTransitionsJson(String transitionsJson) {
+    this.transitionsJson = transitionsJson;
+  }
+
+  public String getEvidenceJson() {
+    return evidenceJson;
+  }
+
+  public void setEvidenceJson(String evidenceJson) {
+    this.evidenceJson = evidenceJson;
   }
 
   public LocalDateTime getExecutedAt() {

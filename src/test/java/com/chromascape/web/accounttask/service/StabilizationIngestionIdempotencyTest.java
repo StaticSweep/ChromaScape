@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,9 @@ import com.chromascape.web.accounttask.entity.ScriptStabilizationSnapshot;
 import com.chromascape.web.accounttask.repository.ScriptFailureTriageRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationRunRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationSnapshotRepository;
+import com.chromascape.web.accounttask.service.StabilizationArtifactStore;
+import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
+import com.chromascape.web.accounttask.repository.StabilizationRunAggregateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -32,13 +36,17 @@ class StabilizationIngestionIdempotencyTest {
   @Mock private ScriptStabilizationRunRepository runRepository;
   @Mock private ScriptFailureTriageRepository triageRepository;
   @Mock private ScriptStabilizationSnapshotRepository snapshotRepository;
+  @Mock private StabilizationArtifactStore artifactStore;
+  @Mock private StabilizationArtifactRepository artifactRepository;
+  @Mock private StabilizationRunAggregateRepository aggregateRepository;
+  @Mock private jakarta.persistence.EntityManager entityManager;
 
   private StabilizationIngestionService service;
 
   @BeforeEach
   void setUp() {
-    service =
-        new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository);
+    service = new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository,
+            artifactStore, artifactRepository, aggregateRepository, entityManager);
   }
 
   private JsonNode manifest() {
@@ -61,11 +69,11 @@ class StabilizationIngestionIdempotencyTest {
     manifest.put("primary_failure_code", "task_failed");
     manifest.put("failure_signature", "sig:abc");
     manifest.put("evidence_complete", true);
-    manifest.putArray("evidence").addObject().put("type", "LOG").put("reference", "logs/task.log");
-    manifest.put(
-        "manifest_hash",
-        "sha256:"
-            + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
+    manifest.putArray("evidence").addObject()
+        .put("type", "LOG")
+        .put("reference", "logs/task.log");
+    manifest.put("manifest_hash", "sha256:" + StabilizationHashUtil.sha256(
+        manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
     return manifest;
   }
 
@@ -74,10 +82,7 @@ class StabilizationIngestionIdempotencyTest {
   void duplicateManifestIsSkipped() {
     JsonNode manifest = manifest();
     when(runRepository.existsBySchemaVersionAndRunIdAndAttemptIdAndManifestHash(
-            "harness-run-manifest/v1",
-            "run-1",
-            "attempt-1",
-            manifest.path("manifest_hash").asText()))
+        "harness-run-manifest/v1", "run-1", "attempt-1", manifest.path("manifest_hash").asText()))
         .thenReturn(true);
 
     Map<String, Object> result = service.ingestHarnessManifest(manifest);
@@ -103,9 +108,8 @@ class StabilizationIngestionIdempotencyTest {
     group.putObject("failure_signatures");
     group.put("comparison_status", "BASELINE");
     matrix.putArray("incomparable");
-    matrix.put(
-        "matrix_hash",
-        "sha256:" + StabilizationHashUtil.sha256(matrix, StabilizationHashUtil.MATRIX_EXCLUSIONS));
+    matrix.put("matrix_hash", "sha256:" + StabilizationHashUtil.sha256(
+        matrix, StabilizationHashUtil.MATRIX_EXCLUSIONS));
 
     when(snapshotRepository.existsByMatrixHashAndGroupKey(anyString(), anyString()))
         .thenReturn(true);
