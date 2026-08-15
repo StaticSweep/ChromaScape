@@ -384,7 +384,7 @@ public class StabilizationIngestionService {
     // promoted id is tracked from the moment it is allocated so cleanup is exact even when a
     // later artifact fails to stage.
     StabilizationIngestionResourceTracker resourceTracker = new StabilizationIngestionResourceTracker();
-    List<StabilizationArtifactStore.StoredArtifact> staged = new ArrayList<>();
+    List<StagedEvidence> staged = new ArrayList<>();
     List<StabilizationArtifact> storedArtifacts = new ArrayList<>();
     try {
       staged = stageEvidenceArtifacts(source.artifacts(), manifest, evidence, resourceTracker);
@@ -417,7 +417,8 @@ public class StabilizationIngestionService {
       // attempts, artifacts, matrix snapshots and triage in one transaction. Each promoted id is
       // tracked immediately after its successful promote, before the next artifact is promoted.
       List<StabilizationArtifactStore.StoredArtifact> promoted = new ArrayList<>();
-      for (StabilizationArtifactStore.StoredArtifact stagedArtifact : staged) {
+      for (StagedEvidence stagedEvidence : staged) {
+        StabilizationArtifactStore.StoredArtifact stagedArtifact = stagedEvidence.stored();
         StabilizationArtifactStore.StoredArtifact promotedArtifact = artifactStore.promote(stagedArtifact);
         resourceTracker.trackPromoted(promotedArtifact.id());
         promoted.add(promotedArtifact);
@@ -427,6 +428,7 @@ public class StabilizationIngestionService {
         entity.setArtifactId(storedArtifact.id().toString());
         entity.setRunId(storedArtifact.runId());
         entity.setAttemptId(storedArtifact.attemptId());
+        entity.setExternalReference(findExternalReference(staged, storedArtifact));
         entity.setEvidenceType(storedArtifact.evidenceType());
         entity.setSha256(storedArtifact.sha256());
         entity.setSizeBytes(storedArtifact.sizeBytes());
@@ -439,15 +441,20 @@ public class StabilizationIngestionService {
       // Flush inside the controlled transaction to surface ordinary database failures (constraint
       // violations, flush errors) early, so the tracked files are cleaned on rollback.
       entityManager.flush();
-      return Map.of(
-          "run_id", runId,
-          "attempt_ids", attemptIds(manifest),
-          "manifest_hash", aggregateManifestHash,
-          "matrix_hash", matrix.path("matrix_hash").asText(),
-          "saved", true,
-          "duplicate", false,
-          "artifacts_verified", true,
-          "matrix_snapshots", matrixResult.get("snapshots"));
+      Map<String, Object> result = new LinkedHashMap<>();
+      result.put("run_id", runId);
+      result.put("attempt_ids", attemptIds(manifest));
+      result.put("manifest_hash", aggregateManifestHash);
+      result.put("matrix_hash", matrix.path("matrix_hash").asText());
+      result.put("saved", true);
+      result.put("duplicate", false);
+      result.put("artifacts_verified", true);
+      result.put("matrix_snapshots", matrixResult.get("snapshots"));
+      // The persisted artifact mappings in evidence order (SC-572): every stored artifact UUID bound
+      // to its durable external evidence reference, returned so the producer can verify the
+      // certification mapping without a separate query.
+      result.put("artifacts", artifactMappings(storedArtifacts));
+      return result;
     } catch (RuntimeException e) {
       // On any artifact, validation, database or commit failure, delete every promoted and
       // staged artifact; no catch path may lose an id created before a later failure.
@@ -470,6 +477,31 @@ public class StabilizationIngestionService {
       ids.add(manifest.path("attempt_id").asText());
     }
     return ids;
+  }
+
+  /** Serializes the persisted artifact mappings in evidence order for the success response
+   *  (SC-572). Each mapping binds the durable external evidence reference to the stored artifact
+   *  UUID and mirrors the submitted evidence identity fields. */
+  private static List<Map<String, Object>> artifactMappings(List<StabilizationArtifact> artifacts) {
+    List<Map<String, Object>> mappings = new ArrayList<>();
+    if (artifacts == null) {
+      return mappings;
+    }
+    for (StabilizationArtifact artifact : artifacts) {
+      if (artifact == null) {
+        continue;
+      }
+      Map<String, Object> mapping = new LinkedHashMap<>();
+      mapping.put("external_reference", artifact.getExternalReference());
+      mapping.put("artifact_id", artifact.getArtifactId());
+      mapping.put("attempt_id", artifact.getAttemptId());
+      mapping.put("type", artifact.getEvidenceType());
+      mapping.put("checksum", artifact.getSha256());
+      mapping.put("size_bytes", artifact.getSizeBytes());
+      mapping.put("media_type", artifact.getMediaType());
+      mappings.add(mapping);
+    }
+    return mappings;
   }
 
   private void validateAggregateManifest(JsonNode manifest, JsonNode plan) {
@@ -764,7 +796,10 @@ public class StabilizationIngestionService {
       if (reference.isBlank()) {
         throw new IllegalArgumentException("evidence record is missing a reference");
       }
-      if (!seenReferences.add(type + "|" + reference)) {
+      // SC-572: the same external reference may never be reused for distinct evidence types within
+      // one run; the durable (run_id, external_reference) mapping must be unambiguous, so the
+      // reference is the sole uniqueness key (never type|reference).
+      if (!seenReferences.add(reference)) {
         throw new IllegalArgumentException("duplicate evidence reference '" + reference + "'");
       }
       if (!seenChecksums.add(checksum)) {
@@ -830,9 +865,14 @@ public class StabilizationIngestionService {
       if (records != null) {
         String expectedSessionId = attempt.path("debug_session_id").asText("");
         String expectedRecordingId = attempt.path("recording_id").asText("");
-        Set<String> presentTypes = new LinkedHashSet<>();
+        // EXACT evidence cardinality (SC-572): an evidence-required attempt owns exactly one record
+        // per plan-required type. A second record for the same required type is rejected even when
+        // its reference and checksum differ, and the record count must equal the plan's required
+        // type count.
+        Map<String, Integer> typeCounts = new LinkedHashMap<>();
         for (JsonNode record : records) {
-          presentTypes.add(record.path("type").asText().toUpperCase());
+          String recordType = record.path("type").asText().toUpperCase();
+          typeCounts.merge(recordType, 1, Integer::sum);
           if (!attemptId.equals(record.path("attempt_id").asText(""))) {
             throw new IllegalArgumentException("evidence record attempt_id does not match its attempt");
           }
@@ -857,11 +897,23 @@ public class StabilizationIngestionService {
                 "evidence record recording_id does not match attempt " + attemptId);
           }
         }
+        if (typeCounts.size() != requiredTypes.size()) {
+          throw new IllegalArgumentException(
+              "evidence-required attempt " + attemptId + " carries " + typeCounts.size()
+                  + " distinct evidence types but the plan requires " + requiredTypes.size());
+        }
         for (String required : requiredTypes) {
-          if (!presentTypes.contains(required)) {
+          Integer count = typeCounts.get(required);
+          if (count == null) {
             throw new IllegalArgumentException(
                 "evidence-required attempt is missing required evidence type '" + required
                     + "' for attempt " + attemptId);
+          }
+          if (count != 1) {
+            throw new IllegalArgumentException(
+                "evidence-required attempt " + attemptId + " owns " + count
+                    + " records of required evidence type '" + required
+                    + "'; exactly one is permitted");
           }
         }
       }
@@ -1051,7 +1103,26 @@ public class StabilizationIngestionService {
    * here: promotion happens only inside the persistence transaction. Any missing/incorrect/
    * mismatched artifact rejects the bundle (HTTP 400).
    */
-  private List<StabilizationArtifactStore.StoredArtifact> stageEvidenceArtifacts(
+  /** One staged evidence artifact paired with its durable external evidence reference. */
+  private record StagedEvidence(
+      StabilizationArtifactStore.StoredArtifact stored, String externalReference) {}
+
+  /** Finds the durable external evidence reference bound to a promoted artifact UUID. */
+  private static String findExternalReference(
+      List<StagedEvidence> staged, StabilizationArtifactStore.StoredArtifact stored) {
+    if (staged == null || stored == null) {
+      return null;
+    }
+    for (StagedEvidence evidence : staged) {
+      if (evidence != null && evidence.stored() != null
+          && evidence.stored().id().equals(stored.id())) {
+        return evidence.externalReference();
+      }
+    }
+    return null;
+  }
+
+  private List<StagedEvidence> stageEvidenceArtifacts(
       List<ArtifactPart> parts, JsonNode manifest, JsonNode evidence,
       StabilizationIngestionResourceTracker resourceTracker) {
     if (parts == null) {
@@ -1087,15 +1158,26 @@ public class StabilizationIngestionService {
       }
     }
 
-    List<StabilizationArtifactStore.StoredArtifact> staged = new ArrayList<>();
+    List<StagedEvidence> staged = new ArrayList<>();
     Set<String> usedHexes = new HashSet<>();
+    Set<String> seenReferences = new HashSet<>();
     for (JsonNode record : evidence) {
+      String reference = record.path("reference").asText("");
+      // The durable (run_id, external_reference) mapping must be unambiguous (SC-572): a blank or
+      // repeated reference is rejected before any artifact is staged.
+      if (reference.isBlank()) {
+        throw new IllegalArgumentException("evidence record is missing a reference");
+      }
+      if (!seenReferences.add(reference)) {
+        throw new IllegalArgumentException("duplicate evidence reference '" + reference + "'");
+      }
       String checksum = record.path("checksum").asText("");
       String hex = checksum.startsWith("sha256:") ? checksum.substring("sha256:".length()) : checksum;
       ArtifactPart part = partsByChecksum.get(hex);
       if (part == null) {
         throw new IllegalArgumentException(
-            "evidence record is missing a matching artifact: " + record.path("reference").asText(""));
+            "evidence record checksum does not match any uploaded artifact: "
+                + record.path("reference").asText(""));
       }
       String recordMediaType = record.path("media_type").asText("application/octet-stream");
       if (!normalizedMediaType(recordMediaType).equals(normalizedMediaType(part.mediaType()))) {
@@ -1103,13 +1185,51 @@ public class StabilizationIngestionService {
             "evidence record media_type '" + recordMediaType + "' does not match the uploaded artifact part "
                 + part.filename() + " media type '" + part.mediaType() + "'");
       }
+      // Exact byte-count verification (SC-572): the evidence record's declared size_bytes and the
+      // staged part's claimed size must both equal the actual uploaded bytes' length. A mismatch is
+      // a tamper, never a warning.
+      long actualSize;
+      try {
+        actualSize = Files.size(part.path());
+      } catch (IOException e) {
+        throw new IllegalArgumentException(
+            "cannot read staged artifact size: " + part.filename());
+      }
+      long declaredSize = record.path("size_bytes").asLong(-1);
+      if (declaredSize < 0) {
+        throw new IllegalArgumentException(
+            "evidence record requires a positive size_bytes: " + record.path("reference").asText(""));
+      }
+      if (declaredSize != actualSize) {
+        throw new IllegalArgumentException(
+            "evidence record size_bytes does not match uploaded artifact: "
+                + record.path("reference").asText("") + " declared " + declaredSize
+                + " but uploaded " + actualSize);
+      }
+      if (part.sizeBytes() != actualSize) {
+        throw new IllegalArgumentException(
+            "staged part size mismatch: " + part.filename() + " declared " + part.sizeBytes()
+                + " but staged " + actualSize);
+      }
       usedHexes.add(hex);
       StabilizationArtifactStore.StoredArtifact stagedArtifact = artifactStore.stage(
           part.path(), part.mediaType(), record.path("type").asText("EVIDENCE"),
           record.path("run_id").asText(""), record.path("attempt_id").asText(""));
+      // The persisted artifact metadata must come from the promoted bytes, never from input
+      // metadata: the staged digest/size must match the uploaded artifact's actual digest/size.
+      if (stagedArtifact.sizeBytes() != actualSize) {
+        throw new IllegalArgumentException(
+            "staged artifact size does not match the uploaded bytes: " + part.filename());
+      }
+      if (!stagedArtifact.sha256().equals(checksum)) {
+        throw new IllegalArgumentException(
+            "staged artifact digest does not match the evidence checksum: " + part.filename());
+      }
       // Track immediately: if any later artifact fails to stage, this id is still cleaned up.
       resourceTracker.trackStaged(stagedArtifact.id());
-      staged.add(stagedArtifact);
+      // The durable external evidence reference is bound to the stored artifact UUID here so the
+      // contract mapping is persisted, never reconstructed by a checksum lookup (SC-572).
+      staged.add(new StagedEvidence(stagedArtifact, record.path("reference").asText("")));
     }
     // Every attached artifact must be consumed by an evidence record; unused artifacts are a
     // supplemental-media smuggling vector and are rejected.
@@ -1463,6 +1583,17 @@ public class StabilizationIngestionService {
       return Optional.empty();
     }
     return artifactRepository.findByArtifactId(artifactId);
+  }
+
+  /** Resolves a stored artifact by its durable external evidence reference within a run, without
+   *  reconstructing a checksum lookup (SC-572). Lookup ALWAYS requires the run id: the global
+   *  reference fallback is forbidden because the same reference can legitimately repeat across
+   *  distinct runs. */
+  public Optional<StabilizationArtifact> getArtifactByExternalReference(String runId, String externalReference) {
+    if (runId == null || runId.isBlank() || externalReference == null || externalReference.isBlank()) {
+      return Optional.empty();
+    }
+    return artifactRepository.findByRunIdAndExternalReference(runId, externalReference);
   }
 
   private Optional<JsonNode> parseJson(String json) {

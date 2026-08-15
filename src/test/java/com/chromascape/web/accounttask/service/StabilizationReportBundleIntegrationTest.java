@@ -62,9 +62,21 @@ class StabilizationReportBundleIntegrationTest {
     service = new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository,
         artifactStore, artifactRepository, aggregateRepository, entityManager);
     lenient().when(artifactStore.stage(any(java.nio.file.Path.class), any(), any(), any(), any()))
-        .thenAnswer(invocation -> new StabilizationArtifactStore.StoredArtifact(
-            UUID.randomUUID(), "sha256:" + "a".repeat(64), 16, "application/x-ndjson",
-            "LOG", "run-1", "attempt-0", "now"));
+        .thenAnswer(invocation -> {
+          // The staged artifact's digest, size, evidence type, media type and identities must be
+          // derived from the ACTUAL uploaded bytes and the real stage arguments so the evidence
+          // size/digest/type verification and the returned artifact mappings are exercised against
+          // real staged metadata.
+          java.nio.file.Path source = invocation.getArgument(0);
+          String mediaType = invocation.getArgument(1);
+          String evidenceType = invocation.getArgument(2);
+          String runId = invocation.getArgument(3);
+          String attemptId = invocation.getArgument(4);
+          byte[] data = java.nio.file.Files.readAllBytes(source);
+          return new StabilizationArtifactStore.StoredArtifact(
+              UUID.randomUUID(), rawDigest(data), data.length, mediaType, evidenceType,
+              runId, attemptId, "now");
+        });
     lenient().when(artifactStore.promote(any()))
         .thenAnswer(invocation -> invocation.getArgument(0));
   }
@@ -112,6 +124,36 @@ class StabilizationReportBundleIntegrationTest {
     assertThat(result.get("duplicate")).isEqualTo(false);
     assertThat(result.get("artifacts_verified")).isEqualTo(true);
     assertThat(result.get("attempt_ids")).isEqualTo(List.of("attempt-0"));
+  }
+
+  @Test
+  @DisplayName("the durable external evidence reference is bound to the stored artifact UUID")
+  void externalReferenceBoundToStoredArtifact() {
+    ObjectNode manifest = manifest();
+    BundleDocuments docs = documents(manifest);
+    when(runRepository.existsByRunIdAndManifestHash("run-1", manifest.path("manifest_hash").asText()))
+        .thenReturn(false);
+    when(runRepository.existsByRunId("run-1")).thenReturn(false);
+    when(snapshotRepository.existsByMatrixHashAndGroupKey(any(), any())).thenReturn(true);
+
+    service.ingestReportBundle(docs.source());
+
+    org.mockito.ArgumentCaptor<List<com.chromascape.web.accounttask.entity.StabilizationArtifact>> captor =
+        org.mockito.ArgumentCaptor.forClass(List.class);
+    verify(artifactRepository).saveAll(captor.capture());
+    List<com.chromascape.web.accounttask.entity.StabilizationArtifact> saved = captor.getValue();
+    assertThat(saved).hasSize(3);
+    // The evidence references (artifact://debug-recorder/...) must be durably bound to the stored
+    // artifact UUIDs so the mapping never needs a reconstructed checksum lookup (SC-572).
+    assertThat(saved)
+        .extracting(com.chromascape.web.accounttask.entity.StabilizationArtifact::getExternalReference)
+        .containsExactlyInAnyOrder(
+            "artifact://debug-recorder/log-1",
+            "artifact://debug-recorder/tick-1",
+            "artifact://debug-recorder/rec-1");
+    assertThat(saved)
+        .extracting(com.chromascape.web.accounttask.entity.StabilizationArtifact::getArtifactId)
+        .allMatch(id -> id != null && !id.isBlank());
   }
 
   @Test
@@ -245,17 +287,111 @@ class StabilizationReportBundleIntegrationTest {
   void evidenceUnionDivergenceRejected() throws Exception {
     ObjectNode manifest = manifest();
     JsonNode attemptEvidence = manifest.get("attempts").get(0).get("evidence");
-    // Add an extra LOG record to the owning attempt that is absent from the aggregate evidence.
-    ObjectNode extraLog = (ObjectNode) mapper.readTree(
-        mapper.writeValueAsString(attemptEvidence.get(0)));
-    extraLog.put("reference", "artifact://debug-recorder/extra-log");
-    extraLog.put("checksum", rawDigest("extra-log-bytes".getBytes(StandardCharsets.UTF_8)));
-    ((ArrayNode) attemptEvidence).add(extraLog);
+    // Divert the owning attempt's first evidence record to a reference absent from the aggregate
+    // evidence (cardinality stays one-of-each, so only the ordered union can catch the divergence).
+    ((ObjectNode) attemptEvidence.get(0)).put("reference", "artifact://debug-recorder/diverged-log");
     BundleDocuments docs = documents(manifest);
+    docs.rehashManifest();
 
     assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("union");
+  }
+
+  @Test
+  @DisplayName("a second record for the same required evidence type in one attempt is rejected")
+  void duplicateRequiredEvidenceTypeRejected() throws Exception {
+    ObjectNode manifest = manifest();
+    // Add a second distinct LOG record (different reference and checksum) to the attempt evidence
+    // AND the top-level evidence so every earlier check passes and only the exact cardinality rule
+    // can reject it.
+    ObjectNode extraLog = (ObjectNode) mapper.readTree(
+        mapper.writeValueAsString(manifest.get("evidence").get(0)));
+    extraLog.put("reference", "artifact://debug-recorder/log-extra");
+    extraLog.put("checksum", rawDigest("extra-log-bytes".getBytes(StandardCharsets.UTF_8)));
+    ((ArrayNode) manifest.get("evidence")).add(extraLog);
+    ((ArrayNode) manifest.get("attempts").get(0).get("evidence")).add(extraLog);
+    BundleDocuments docs = documents(manifest);
+
+    assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("exactly one is permitted");
+  }
+
+  @Test
+  @DisplayName("the same external reference under two evidence types is rejected as ambiguous")
+  void sameReferenceUnderTwoTypesRejected() throws Exception {
+    ObjectNode manifest = manifest();
+    // Reuse the LOG reference for the TICK_LOG record: the (run_id, external_reference) mapping
+    // must be unambiguous, so the reference alone (never type|reference) is the uniqueness key.
+    ((ObjectNode) manifest.get("evidence").get(1)).put("reference",
+        "artifact://debug-recorder/log-1");
+    ((ObjectNode) manifest.get("attempts").get(0).get("evidence").get(1)).put("reference",
+        "artifact://debug-recorder/log-1");
+    BundleDocuments docs = documents(manifest);
+    docs.rehashManifest();
+
+    assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("duplicate evidence reference");
+  }
+
+  @Test
+  @DisplayName("the success response returns every persisted artifact mapping in evidence order")
+  void successResponseReturnsArtifactMappings() {
+    ObjectNode manifest = manifest();
+    BundleDocuments docs = documents(manifest);
+    when(runRepository.existsByRunIdAndManifestHash("run-1", manifest.path("manifest_hash").asText()))
+        .thenReturn(false);
+    when(runRepository.existsByRunId("run-1")).thenReturn(false);
+    when(snapshotRepository.existsByMatrixHashAndGroupKey(any(), any())).thenReturn(true);
+
+    Map<String, Object> result = service.ingestReportBundle(docs.source());
+
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> artifacts = (List<Map<String, Object>>) result.get("artifacts");
+    assertThat(artifacts).hasSize(3);
+    assertThat(artifacts)
+        .extracting(m -> m.get("external_reference"))
+        .containsExactly(
+            "artifact://debug-recorder/log-1",
+            "artifact://debug-recorder/tick-1",
+            "artifact://debug-recorder/rec-1");
+    assertThat(artifacts)
+        .extracting(m -> m.get("type"))
+        .containsExactly("LOG", "TICK_LOG", "RECORDING_SESSION");
+    assertThat(artifacts)
+        .extracting(m -> m.get("checksum"))
+        .allMatch(checksum -> ((String) checksum).matches("^sha256:[0-9a-f]{64}$"));
+    assertThat(artifacts)
+        .extracting(m -> m.get("artifact_id"))
+        .allMatch(id -> id != null && !((String) id).isBlank());
+    assertThat(artifacts).allMatch(m -> m.get("size_bytes").equals(16L));
+  }
+
+  @Test
+  @DisplayName("external-reference lookup always requires the run id (no global fallback)")
+  void externalReferenceLookupRequiresRunId() {
+    com.chromascape.web.accounttask.entity.StabilizationArtifact artifact =
+        new com.chromascape.web.accounttask.entity.StabilizationArtifact();
+    artifact.setArtifactId("uuid-1");
+    artifact.setRunId("run-1");
+    artifact.setExternalReference("artifact://debug-recorder/log-1");
+    artifact.setEvidenceType("LOG");
+    when(artifactRepository.findByRunIdAndExternalReference("run-1",
+        "artifact://debug-recorder/log-1"))
+        .thenReturn(java.util.Optional.of(artifact));
+
+    assertThat(service.getArtifactByExternalReference("run-1", "artifact://debug-recorder/log-1"))
+        .isPresent();
+    // The same reference can legitimately repeat across runs, so a blank run id must never resolve
+    // globally (SC-572): the fallback lookup is forbidden.
+    assertThat(service.getArtifactByExternalReference("", "artifact://debug-recorder/log-1"))
+        .isEmpty();
+    assertThat(service.getArtifactByExternalReference(null, "artifact://debug-recorder/log-1"))
+        .isEmpty();
+    assertThat(service.getArtifactByExternalReference("run-1", ""))
+        .isEmpty();
   }
 
   @Test
@@ -308,9 +444,16 @@ class StabilizationReportBundleIntegrationTest {
     when(runRepository.existsByRunId("run-1")).thenReturn(false);
     when(snapshotRepository.existsByMatrixHashAndGroupKey(any(), any())).thenReturn(true);
     when(artifactStore.stage(any(java.nio.file.Path.class), any(), any(), any(), any()))
-        .thenAnswer(invocation -> new StabilizationArtifactStore.StoredArtifact(
-            UUID.randomUUID(), "sha256:" + "a".repeat(64), 16, "application/x-ndjson",
-            "LOG", "run-1", "attempt-0", "now"))
+        .thenAnswer(invocation -> {
+          // The first artifact must stage with metadata derived from the ACTUAL uploaded bytes so the
+          // evidence digest/size validation passes and the second staging call reaches the failure.
+          java.nio.file.Path source = invocation.getArgument(0);
+          byte[] data = java.nio.file.Files.readAllBytes(source);
+          return new StabilizationArtifactStore.StoredArtifact(
+              UUID.randomUUID(), rawDigest(data), data.length,
+              invocation.getArgument(1), invocation.getArgument(2),
+              invocation.getArgument(3), invocation.getArgument(4), "now");
+        })
         .thenThrow(new IllegalStateException("simulated staging failure"));
 
     assertThatThrownBy(() -> service.ingestReportBundle(docs.source()))

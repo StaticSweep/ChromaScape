@@ -123,6 +123,10 @@ public final class StabilizationBundleStreamReader {
           throw new IOException("malformed multipart: truncated before closing boundary");
         }
         if (firstHeader.equals("--" + boundary + "--")) {
+          // The direct closing-boundary path must enforce the SAME termination rules as the
+          // body-copy path: the closing CRLF (or EOF) has already been consumed by readLine, so any
+          // remaining byte is trailing data and is rejected (SC-572).
+          requireClosingTermination(input);
           break;
         }
         PartHeaders headers = parsePartHeaders(firstHeader, input);
@@ -249,21 +253,51 @@ public final class StabilizationBundleStreamReader {
           int peek2 = input.read();
           if (peek1 == '-' && peek2 == '-') {
             closed = true;
-            break;
+            // A closing boundary is valid only as CRLF "--" boundary "--" followed by CRLF or
+            // EOF. Any other byte (e.g. --boundary--garbage) is a malformed closing form, and any
+            // trailing data after the closing CRLF is rejected so the reader's total-byte
+            // accounting covers the entire request body (SC-572).
+            int after = input.read();
+            if (after == -1) {
+              break; // closing delimiter at EOF is valid
+            }
+            if (after == '\r') {
+              int lf = input.read();
+              if (lf != '\n') {
+                throw new IOException(
+                    "malformed multipart: closing boundary must be followed by CRLF or EOF");
+              }
+              if (input.read() != -1) {
+                throw new IOException(
+                    "malformed multipart: unexpected trailing data after closing boundary");
+              }
+              break;
+            }
+            throw new IOException(
+                "malformed multipart: closing boundary must be followed by CRLF or EOF");
           }
           if (peek1 == '\r' && peek2 == '\n') {
             // Interior delimiter: the part ends before the CRLF that precedes the next boundary.
             break;
           }
           // Not a delimiter: the candidate prefix belongs to the body. The window bytes were
-          // already counted as read but never written; write them now and continue scanning from
-          // the two peeked bytes (which are also part of the body).
-          out.write(window, 0, len);
-          if (peek1 != -1) {
-            unread(input, peek1);
+          // already counted as read but never written; write them now in their ORIGINAL byte order
+          // (the circular window is rotated, so the backing array must not be written from index
+          // zero) and continue scanning from the two peeked bytes (also part of the body).
+          int rotation = (pos + 1) % len;
+          for (int i = 0; i < len; i++) {
+            out.write(window[(rotation + i) % len]);
           }
-          if (peek2 != -1) {
-            unread(input, peek2);
+          // Restore the two peeked bytes in their ORIGINAL order: a single unread(byte[]) with
+          // [peek1, peek2] pushes peek1 back first so the next read returns peek1 then peek2. Pushing
+          // them back with two separate calls (peek1 then peek2) would reverse the order and corrupt
+          // the body (e.g. -not- becoming n-ot-), so a single call is required (SC-572).
+          if (peek1 != -1) {
+            if (peek2 != -1) {
+              unread(input, peek1, peek2);
+            } else {
+              unread(input, peek1);
+            }
           }
           windowLen = 0;
         }
@@ -292,6 +326,18 @@ public final class StabilizationBundleStreamReader {
       buffer[i] = (byte) bytes[i];
     }
     input.unread(buffer);
+  }
+
+  /**
+   * Requires the stream to end immediately after a closing boundary. The closing CRLF (or EOF) has
+   * already been consumed by {@link #readLine}; any remaining byte is trailing data after a valid
+   * closing boundary and is rejected, matching the body-copy path's EOF/CRLF/trailing-data
+   * validation (SC-572).
+   */
+  private static void requireClosingTermination(InputStream input) throws IOException {
+    if (input.read() != -1) {
+      throw new IOException("malformed multipart: unexpected trailing data after closing boundary");
+    }
   }
 
   private Path uniqueTarget(String partName, String originalFilename) {

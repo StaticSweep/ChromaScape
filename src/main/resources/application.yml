@@ -11,8 +11,18 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:chromascape123}
   jpa:
     hibernate:
+      # Hibernate continues to manage the general schema for new tables, but SC-572 external-reference
+      # constraints (NOT NULL + unique on (run_id, external_reference)) are owned by the versioned
+      # Flyway migration V1 and must never be relied on here.
       ddl-auto: update
     show-sql: false
+  # Versioned schema migrations (SC-572). baseline-on-migrate lets an existing database adopt the
+  # migration history without a manual baseline insert; V1 enforces the durable artifact mapping.
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
 
 # LeeuwBot Integration Configuration
 leeuwbot:

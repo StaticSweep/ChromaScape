@@ -41,6 +41,11 @@ dependencies {
 	// Database
 	runtimeOnly("org.postgresql:postgresql")
 
+	// Versioned database migrations (SC-572): schema constraints are enforced by Flyway, never by
+	// Hibernate ddl-auto update.
+	implementation("org.flywaydb:flyway-core")
+	runtimeOnly("org.flywaydb:flyway-database-postgresql")
+
 	// Logging
 	implementation("org.springframework.boot:spring-boot-starter-log4j2")
 	annotationProcessor("org.apache.logging.log4j:log4j-core:2.24.3")

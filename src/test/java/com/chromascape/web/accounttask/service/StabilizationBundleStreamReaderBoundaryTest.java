@@ -184,7 +184,7 @@ class StabilizationBundleStreamReaderBoundaryTest {
   }
 
   @Test
-  @DisplayName("a boundary-prefix that is not a real delimiter stays body data")
+  @DisplayName("a boundary-prefix that is not a real delimiter stays body data byte-for-byte")
   void boundaryPrefixStaysBodyData() {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
@@ -192,7 +192,8 @@ class StabilizationBundleStreamReaderBoundaryTest {
     body.append("Content-Disposition: form-data; name=\"completeMarker\"; filename=\"complete.marker\"\r\n");
     body.append("Content-Type: text/plain\r\n\r\n");
     // The literal \r\n--boundary-extra must remain part of the part body: it is not followed by
-    // \r\n or --, so it is not a delimiter.
+    // \r\n or --, so it is not a delimiter. The body bytes must be preserved EXACTLY (in their
+    // original order), never reordered by a false boundary candidate.
     body.append("COMPLETE\r\n--").append(boundary).append("-not-a-delimiter\r\n");
     body.append("--").append(boundary).append("--\r\n");
     StabilizationBundleStreamReader.StagedBundle bundle = StabilizationBundleStreamReader.read(
@@ -204,7 +205,11 @@ class StabilizationBundleStreamReaderBoundaryTest {
       String content =
           new String(java.nio.file.Files.readAllBytes(bundle.part("completeMarker")),
               StandardCharsets.UTF_8);
-      org.assertj.core.api.Assertions.assertThat(content).contains("--" + boundary + "-not-a-delimiter");
+      // The false-boundary prefix and every surrounding body byte must survive in the EXACT
+      // original order, not merely as a substring somewhere in the output. The leading CRLF of the
+      // closing delimiter belongs to the delimiter, not the body.
+      org.assertj.core.api.Assertions.assertThat(content)
+          .isEqualTo("COMPLETE\r\n--" + boundary + "-not-a-delimiter");
     } catch (java.io.IOException e) {
       throw new AssertionError(e);
     }
@@ -261,5 +266,86 @@ class StabilizationBundleStreamReaderBoundaryTest {
         "multipart/form-data; boundary=" + boundary,
         tempDir.resolve("m"));
     org.assertj.core.api.Assertions.assertThat(bundle.names()).contains("completeMarker");
+  }
+
+  @Test
+  @DisplayName("a closing boundary at EOF (no trailing CRLF) is valid")
+  void closingBoundaryAtEofValid() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    body.append("Content-Disposition: form-data; name=\"completeMarker\"; filename=\"complete.marker\"\r\n");
+    body.append("Content-Type: text/plain\r\n\r\n");
+    body.append("COMPLETE\r\n");
+    body.append("--").append(boundary).append("--");
+    StabilizationBundleStreamReader.StagedBundle bundle = StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("n"));
+    org.assertj.core.api.Assertions.assertThat(bundle.names()).contains("completeMarker");
+  }
+
+  @Test
+  @DisplayName("a closing boundary followed by garbage is rejected")
+  void closingBoundaryGarbageRejected() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    body.append("Content-Disposition: form-data; name=\"completeMarker\"; filename=\"complete.marker\"\r\n");
+    body.append("Content-Type: text/plain\r\n\r\n");
+    body.append("COMPLETE\r\n");
+    body.append("--").append(boundary).append("--garbage\r\n");
+    assertThatThrownBy(() -> StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("o")))
+        .hasMessageContaining("closing boundary");
+  }
+
+  @Test
+  @DisplayName("trailing data after a closing CRLF is rejected")
+  void trailingDataAfterClosingRejected() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    body.append("Content-Disposition: form-data; name=\"completeMarker\"; filename=\"complete.marker\"\r\n");
+    body.append("Content-Type: text/plain\r\n\r\n");
+    body.append("COMPLETE\r\n");
+    body.append("--").append(boundary).append("--\r\n");
+    body.append("trailing-data");
+    assertThatThrownBy(() -> StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("p")))
+        .hasMessageContaining("trailing data");
+  }
+
+  @Test
+  @DisplayName("an initial closing boundary at EOF (empty bundle) is valid")
+  void initialClosingBoundaryAtEofValid() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    body.append("--").append(boundary).append("--");
+    StabilizationBundleStreamReader.StagedBundle bundle = StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("q"));
+    org.assertj.core.api.Assertions.assertThat(bundle.names()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("trailing data after an initial closing boundary is rejected")
+  void initialClosingBoundaryTrailingDataRejected() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    body.append("--").append(boundary).append("--\r\n");
+    body.append("trailing");
+    assertThatThrownBy(() -> StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("r")))
+        .hasMessageContaining("trailing data");
   }
 }
