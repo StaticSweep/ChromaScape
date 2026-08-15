@@ -255,13 +255,10 @@ public final class StabilizationBundleStreamReader {
             // Interior delimiter: the part ends before the CRLF that precedes the next boundary.
             break;
           }
-          // Not a delimiter: the candidate prefix belongs to the body. Write the full candidate
-          // (it was never written) and continue scanning from the two peeked bytes.
+          // Not a delimiter: the candidate prefix belongs to the body. The window bytes were
+          // already counted as read but never written; write them now and continue scanning from
+          // the two peeked bytes (which are also part of the body).
           out.write(window, 0, len);
-          count += len;
-          if (count > limit) {
-            throw new IOException("report bundle part exceeds its size limit");
-          }
           if (peek1 != -1) {
             unread(input, peek1);
           }
