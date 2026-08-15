@@ -163,7 +163,7 @@ final class Micro6CanonicalHash {
       }
       Map<String, Object> entry = new LinkedHashMap<>();
       entry.put("task_key", nodeValue(task.get("task_key")));
-      String state = nodeValue(task.get("settings_schema_state"));
+      String state = sortableValue(task.get("settings_schema_state"));
       entry.put("settings_schema_state", state);
       if (SCHEMA_STATE_AVAILABLE.equals(state)) {
         entry.put("settings_schema_version", nodeValue(task.get("settings_schema_version")));
@@ -178,7 +178,7 @@ final class Micro6CanonicalHash {
         List<String> errors = new ArrayList<>();
         JsonNode validationErrors = task.get("schema_validation_errors");
         if (validationErrors != null && validationErrors.isArray()) {
-          validationErrors.forEach(item -> errors.add(nodeValue(item)));
+          validationErrors.forEach(item -> errors.add(sortableValue(item)));
         }
         errors.sort(String::compareTo);
         entry.put("schema_validation_errors", errors);
