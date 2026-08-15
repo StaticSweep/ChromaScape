@@ -2,12 +2,15 @@ package com.chromascape.web.accounttask.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.LinkOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -51,8 +54,8 @@ public class StabilizationArtifactStore {
   @PostConstruct
   void ensureBaseDir() {
     try {
-      Files.createDirectories(baseDir);
-      Files.createDirectories(stagingDir);
+      ensureRealDirectory(baseDir);
+      ensureRealDirectory(stagingDir);
     } catch (IOException e) {
       throw new IllegalStateException("cannot create stabilization artifact store at " + baseDir, e);
     }
@@ -82,12 +85,23 @@ public class StabilizationArtifactStore {
     if (bytes.length > MAX_ARTIFACT_BYTES) {
       throw new IllegalArgumentException("stabilization artifact exceeds size bound");
     }
+    Path temp = null;
     try {
-      Path temp = Files.createTempFile("stabilization-stage-", ".bin");
-      Files.write(temp, bytes);
+      ensureRealDirectory(stagingDir);
+      temp = Files.createTempFile(stagingDir, "input-", ".bin");
+      Files.write(temp, bytes, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING,
+          LinkOption.NOFOLLOW_LINKS);
       return stage(temp, mediaType, evidenceType, runId, attemptId, true);
     } catch (IOException e) {
       throw new IllegalStateException("failed to stage stabilization artifact", e);
+    } finally {
+      if (temp != null) {
+        try {
+          Files.deleteIfExists(temp);
+        } catch (IOException ignored) {
+          // best-effort temp cleanup; stage(..., true) also removes the source on normal paths
+        }
+      }
     }
   }
 
@@ -103,7 +117,8 @@ public class StabilizationArtifactStore {
 
   private StoredArtifact stage(Path source, String mediaType, String evidenceType, String runId,
       String attemptId, boolean deleteSourceAfter) {
-    if (source == null || !Files.isRegularFile(source) || Files.isSymbolicLink(source)) {
+    if (source == null || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)
+        || Files.isSymbolicLink(source)) {
       throw new IllegalArgumentException("cannot stage a missing or non-regular stabilization artifact");
     }
     long sourceSize;
@@ -119,31 +134,47 @@ public class StabilizationArtifactStore {
       throw new IllegalArgumentException("stabilization artifact exceeds size bound");
     }
     UUID id = UUID.randomUUID();
-    Path target = stagingPath(id);
+    Path tmp = null;
     long stagedBytes = 0;
     try {
-      Files.createDirectories(stagingDir);
-      Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+      ensureStagingDirectory();
+      Path target = stagingPath(id);
+      tmp = target.resolveSibling(target.getFileName() + ".tmp");
       MessageDigest digest;
       try {
         digest = MessageDigest.getInstance("SHA-256");
       } catch (java.security.NoSuchAlgorithmException e) {
         throw new IllegalStateException("SHA-256 unavailable", e);
       }
-      try (InputStream in = Files.newInputStream(source);
-          java.io.OutputStream out = Files.newOutputStream(tmp)) {
+      try (InputStream in = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS);
+          java.io.OutputStream out = Files.newOutputStream(tmp, StandardOpenOption.CREATE_NEW,
+              StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
         byte[] buffer = new byte[64 * 1024];
         int read;
         while ((read = in.read(buffer)) != -1) {
+          if (read > MAX_ARTIFACT_BYTES - stagedBytes) {
+            throw new IllegalArgumentException(
+                "stabilization artifact exceeds size bound while staging");
+          }
           out.write(buffer, 0, read);
           digest.update(buffer, 0, read);
           stagedBytes += read;
         }
       }
+      if (Files.isSymbolicLink(source)
+          || !Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
+        throw new IllegalArgumentException(
+            "stabilization artifact source changed while staging: " + source);
+      }
+      long finalSourceSize = Files.size(source);
+      if (stagedBytes != sourceSize || finalSourceSize != sourceSize) {
+        throw new IllegalArgumentException(
+            "stabilization artifact changed while staging: " + source);
+      }
       try {
-        Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE);
       } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-        Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        Files.move(tmp, target);
       }
       String sha256 = "sha256:" + hex(digest.digest());
       String createdAt = Instant.now().toString();
@@ -152,6 +183,13 @@ public class StabilizationArtifactStore {
     } catch (IOException e) {
       throw new IllegalStateException("failed to stage stabilization artifact " + id, e);
     } finally {
+      if (tmp != null) {
+        try {
+          Files.deleteIfExists(tmp);
+        } catch (IOException ignored) {
+          // best-effort journal cleanup
+        }
+      }
       if (deleteSourceAfter && source != null) {
         try {
           Files.deleteIfExists(source);
@@ -172,18 +210,26 @@ public class StabilizationArtifactStore {
       throw new IllegalArgumentException("cannot promote a null staged artifact");
     }
     UUID id = staged.id();
+    ensureStagingDirectory();
     Path stagedPath = stagingPath(id);
-    if (!Files.isRegularFile(stagedPath) || Files.isSymbolicLink(stagedPath)) {
+    if (!Files.isRegularFile(stagedPath, LinkOption.NOFOLLOW_LINKS)
+        || Files.isSymbolicLink(stagedPath)) {
       throw new IllegalStateException("staged artifact is missing: " + id);
     }
     Path target = resolveArtifactPath(id);
+    Path metadataPath = target.resolveSibling(id + ".meta");
+    boolean moved = false;
     try {
-      Files.createDirectories(baseDir);
-      try {
-        Files.move(stagedPath, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-      } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-        Files.move(stagedPath, target, StandardCopyOption.REPLACE_EXISTING);
+      ensureRealDirectory(baseDir);
+      if (Files.isSymbolicLink(target) || Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+        throw new IllegalStateException("artifact target already exists: " + id);
       }
+      try {
+        Files.move(stagedPath, target, StandardCopyOption.ATOMIC_MOVE);
+      } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+        Files.move(stagedPath, target);
+      }
+      moved = true;
       // Re-hash and re-size the promoted bytes stream-to-stream with bounds; the artifact is never
       // loaded into heap memory, so a full-size certification artifact cannot exhaust the JVM.
       long finalSize;
@@ -191,7 +237,7 @@ public class StabilizationArtifactStore {
       try {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         long size = 0;
-        try (InputStream in = Files.newInputStream(target)) {
+        try (InputStream in = Files.newInputStream(target, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
           byte[] buffer = new byte[64 * 1024];
           int read;
           while ((read = in.read(buffer)) != -1) {
@@ -217,7 +263,20 @@ public class StabilizationArtifactStore {
           staged.runId(), staged.attemptId(), staged.createdAt());
       return new StoredArtifact(id, sha256, finalSize, staged.mediaType(),
           staged.evidenceType(), staged.runId(), staged.attemptId(), staged.createdAt());
-    } catch (IOException e) {
+    } catch (IOException | RuntimeException e) {
+      // Once the staged file is moved, this promotion owns the new target. If hashing or metadata
+      // persistence fails, remove only what this call created; never replace/delete a pre-existing
+      // artifact target or sidecar.
+      if (moved) {
+        try {
+          Files.deleteIfExists(target);
+        } catch (IOException cleanup) {
+          e.addSuppressed(cleanup);
+        }
+      }
+      if (e instanceof IllegalStateException state) {
+        throw state;
+      }
       throw new IllegalStateException("failed to promote stabilization artifact " + id, e);
     }
   }
@@ -228,8 +287,11 @@ public class StabilizationArtifactStore {
       return;
     }
     try {
+      if (!isRealDirectory(stagingDir)) {
+        return;
+      }
       Path staged = stagingPath(id);
-      if (Files.isRegularFile(staged)) {
+      if (Files.isRegularFile(staged, LinkOption.NOFOLLOW_LINKS)) {
         Files.deleteIfExists(staged);
       }
       Files.deleteIfExists(staged.resolveSibling(id + ".tmp"));
@@ -250,11 +312,15 @@ public class StabilizationArtifactStore {
       return Optional.empty();
     }
     try {
+      if (!isRealDirectory(baseDir)) {
+        return Optional.empty();
+      }
       Path resolved = resolveArtifactPath(id);
       if (!resolved.startsWith(baseDir)) {
         return Optional.empty();
       }
-      if (!Files.isRegularFile(resolved) || Files.isSymbolicLink(resolved)) {
+      if (!Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS)
+          || Files.isSymbolicLink(resolved)) {
         return Optional.empty();
       }
       return Optional.of(resolved);
@@ -274,7 +340,21 @@ public class StabilizationArtifactStore {
       if (size > MAX_ARTIFACT_BYTES) {
         return Optional.empty();
       }
-      return Optional.of(Files.readAllBytes(resolved.get()));
+      try (InputStream input = Files.newInputStream(resolved.get(), LinkOption.NOFOLLOW_LINKS)) {
+        ByteArrayOutputStream output =
+            new ByteArrayOutputStream((int) Math.min(size, MAX_ARTIFACT_BYTES));
+        byte[] buffer = new byte[64 * 1024];
+        long count = 0;
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+          if (read > MAX_ARTIFACT_BYTES - count) {
+            return Optional.empty();
+          }
+          output.write(buffer, 0, read);
+          count += read;
+        }
+        return Optional.of(output.toByteArray());
+      }
     } catch (IOException ignored) {
       return Optional.empty();
     }
@@ -286,11 +366,17 @@ public class StabilizationArtifactStore {
       return Optional.empty();
     }
     try {
-      Path meta = resolveArtifactPath(id).resolveSibling(id + ".meta");
-      if (!Files.isRegularFile(meta) || Files.isSymbolicLink(meta)) {
+      if (!isRealDirectory(baseDir)) {
         return Optional.empty();
       }
-      Map<?, ?> node = MAPPER.readValue(Files.readString(meta, StandardCharsets.UTF_8), Map.class);
+      Path meta = resolveArtifactPath(id).resolveSibling(id + ".meta");
+      if (!Files.isRegularFile(meta, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(meta)) {
+        return Optional.empty();
+      }
+      Map<?, ?> node;
+      try (InputStream input = Files.newInputStream(meta, LinkOption.NOFOLLOW_LINKS)) {
+        node = MAPPER.readValue(input, Map.class);
+      }
       return Optional.of(new StoredArtifact(
           id,
           String.valueOf(node.get("sha256")),
@@ -307,6 +393,9 @@ public class StabilizationArtifactStore {
 
   /** Removes the artifact bytes and its sidecar; used for rollback on failed ingestion. */
   public void delete(UUID id) {
+    if (id == null || !isRealDirectory(baseDir)) {
+      return;
+    }
     resolve(id).ifPresent(path -> {
       try {
         Files.deleteIfExists(path);
@@ -333,7 +422,57 @@ public class StabilizationArtifactStore {
     meta.put("attempt_id", attemptId);
     meta.put("created_at", createdAt);
     Path metaPath = resolveArtifactPath(id).resolveSibling(id + ".meta");
-    Files.writeString(metaPath, MAPPER.writeValueAsString(meta), StandardCharsets.UTF_8);
+    // Write the sidecar through a unique temporary file and publish it with a no-replace move.
+    // A direct CREATE_NEW write can leave a partial sidecar on disk; deleting that path from the
+    // promotion catch block is also race-prone because another writer could create it between the
+    // existence check and the failure. The temporary name is owned exclusively by this call.
+    Path temp = metaPath.resolveSibling(
+        metaPath.getFileName() + "." + UUID.randomUUID() + ".tmp");
+    boolean published = false;
+    try {
+      Files.writeString(temp, MAPPER.writeValueAsString(meta), StandardCharsets.UTF_8,
+          StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
+      try {
+        Files.move(temp, metaPath, StandardCopyOption.ATOMIC_MOVE);
+      } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+        Files.move(temp, metaPath);
+      }
+      published = true;
+    } finally {
+      if (!published) {
+        Files.deleteIfExists(temp);
+      }
+    }
+  }
+
+  private void ensureStagingDirectory() {
+    try {
+      ensureRealDirectory(stagingDir);
+    } catch (IOException e) {
+      throw new IllegalStateException("stabilization staging directory is not safe: " + stagingDir, e);
+    }
+  }
+
+  private static boolean isRealDirectory(Path directory) {
+    return directory != null && !Files.isSymbolicLink(directory)
+        && Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS);
+  }
+
+  /** Creates or verifies a directory without accepting a symlink at the directory boundary. */
+  private static void ensureRealDirectory(Path directory) throws IOException {
+    if (directory == null) {
+      throw new IOException("directory is required");
+    }
+    if (Files.isSymbolicLink(directory)) {
+      throw new IOException("directory must not be a symbolic link: " + directory);
+    }
+    if (!Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) {
+      Files.createDirectories(directory);
+    }
+    if (Files.isSymbolicLink(directory)
+        || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+      throw new IOException("path is not a real directory: " + directory);
+    }
   }
 
   private Path resolveArtifactPath(UUID id) {

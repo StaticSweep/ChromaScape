@@ -10,15 +10,19 @@ import com.chromascape.web.accounttask.repository.ScriptStabilizationRunReposito
 import com.chromascape.web.accounttask.repository.ScriptStabilizationSnapshotRepository;
 import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
 import com.chromascape.web.accounttask.repository.StabilizationRunAggregateRepository;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -83,13 +87,15 @@ public class StabilizationIngestionService {
           "attempt_count",
           "first_attempt_pass",
           "attempts",
+          "evidence",
           "manifest_hash",
           "deterministic_content_hash");
 
   private static final Set<String> BUNDLE_REQUIRED =
       Set.of("plan", "manifest", "matrix", "transitions", "evidence", "checksums", "completeMarker");
 
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final ObjectMapper MAPPER = new ObjectMapper()
+      .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   private final ScriptStabilizationRunRepository runRepository;
   private final ScriptFailureTriageRepository triageRepository;
@@ -181,6 +187,9 @@ public class StabilizationIngestionService {
    */
   @Transactional
   public Map<String, Object> ingestHarnessManifest(JsonNode manifest) {
+    if (manifest == null || !manifest.isObject()) {
+      throw new IllegalArgumentException("harness manifest must be a JSON object");
+    }
     String schemaVersion = manifest.path("schema_version").asText("");
     if (!HARNESS_MANIFEST_SCHEMA.equals(schemaVersion)) {
       throw new IllegalArgumentException(
@@ -218,6 +227,10 @@ public class StabilizationIngestionService {
 
     String runId = manifest.path("run_id").asText("");
     String attemptId = manifest.path("attempt_id").asText("");
+    if (runId.isBlank() || attemptId.isBlank()) {
+      throw new IllegalArgumentException(
+          "harness manifest run_id and attempt_id must be nonblank");
+    }
     if (runRepository.existsBySchemaVersionAndRunIdAndAttemptIdAndManifestHash(
         schemaVersion, runId, attemptId, declaredHash)) {
       return Map.of("runId", runId, "attemptId", attemptId, "saved", false, "duplicate", true,
@@ -307,7 +320,7 @@ public class StabilizationIngestionService {
         "transitions.json", "transitions", "evidence.json", "evidence");
     for (Map.Entry<String, String> entry : partNames.entrySet()) {
       String declared = checksums.path(entry.getKey()).asText("");
-      String actual = rawSha256(source.read(entry.getValue()));
+      String actual = rawSha256(source.read(entry.getValue()), StabilizationBundleStreamReader.MAX_JSON_PART_BYTES);
       if (!declared.matches("sha256:[0-9a-f]{64}") || !declared.equals(actual)) {
         throw new IllegalArgumentException("report bundle checksum mismatch for " + entry.getKey());
       }
@@ -399,7 +412,9 @@ public class StabilizationIngestionService {
     // Register the transaction synchronization BEFORE any promotion so a rollback (including a
     // commit-time failure after this method body returns) deletes every promoted and staged
     // artifact, while a commit removes only the staging/journal files.
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+    boolean transactionCleanupRegistered =
+        TransactionSynchronizationManager.isSynchronizationActive();
+    if (transactionCleanupRegistered) {
       TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
         @Override
         public void afterCompletion(int status) {
@@ -454,6 +469,12 @@ public class StabilizationIngestionService {
       // to its durable external evidence reference, returned so the producer can verify the
       // certification mapping without a separate query.
       result.put("artifacts", artifactMappings(storedArtifacts));
+      // In-process callers can invoke this method without a Spring transaction. In that mode no
+      // afterCompletion callback will run, so remove staging journal files directly after the
+      // successful promotion; a real transaction keeps the callback's rollback safety.
+      if (!transactionCleanupRegistered) {
+        resourceTracker.commit(artifactStore);
+      }
       return result;
     } catch (RuntimeException e) {
       // On any artifact, validation, database or commit failure, delete every promoted and
@@ -727,11 +748,16 @@ public class StabilizationIngestionService {
     if (planRequired != null && planRequired.isArray()) {
       for (JsonNode type : planRequired) {
         if (type.isTextual()) {
-          requiredTypes.add(type.asText().toUpperCase());
+          String normalizedType = type.asText().toUpperCase(java.util.Locale.ENGLISH);
+          if (!requiredTypes.add(normalizedType)) {
+            throw new IllegalArgumentException(
+                "plan evidence.required contains duplicate type '" + type.asText() + "'");
+          }
         }
       }
     }
-    String evidenceMode = planEvidence.path("mode").asText("EXTERNAL").toUpperCase();
+    String evidenceMode = planEvidence.path("mode").asText("EXTERNAL")
+        .toUpperCase(java.util.Locale.ENGLISH);
     if ("NOT_APPLICABLE".equals(evidenceMode)) {
       // NOT_APPLICABLE admits only an explicit empty required-evidence plan; any supplied evidence
       // is rejected (never accepted without validation).
@@ -784,7 +810,7 @@ public class StabilizationIngestionService {
       String reference = record.path("reference").asText("");
       String checksum = record.path("checksum").asText("");
       String provenance = record.path("provenance").asText("");
-      if (!requiredTypes.contains(type.toUpperCase())) {
+      if (!requiredTypes.contains(type.toUpperCase(java.util.Locale.ENGLISH))) {
         throw new IllegalArgumentException("evidence record has unknown type '" + type + "'");
       }
       if (provenance.isBlank() || "UNKNOWN".equalsIgnoreCase(provenance)) {
@@ -819,7 +845,7 @@ public class StabilizationIngestionService {
       boolean recorderOwned = "RECORDER".equalsIgnoreCase(provenance)
           || "DEBUG_RECORDER".equalsIgnoreCase(provenance);
       if (recorderOwned) {
-        if (!reference.startsWith("artifact://")) {
+        if (!isOpaqueArtifactReference(reference)) {
           throw new IllegalArgumentException("recorder evidence reference must be an opaque artifact:// reference");
         }
         long sizeBytes = record.path("size_bytes").asLong(0);
@@ -871,7 +897,7 @@ public class StabilizationIngestionService {
         // type count.
         Map<String, Integer> typeCounts = new LinkedHashMap<>();
         for (JsonNode record : records) {
-          String recordType = record.path("type").asText().toUpperCase();
+          String recordType = record.path("type").asText().toUpperCase(java.util.Locale.ENGLISH);
           typeCounts.merge(recordType, 1, Integer::sum);
           if (!attemptId.equals(record.path("attempt_id").asText(""))) {
             throw new IllegalArgumentException("evidence record attempt_id does not match its attempt");
@@ -962,8 +988,7 @@ public class StabilizationIngestionService {
             String reference = record.path("reference").asText("");
             String checksum = record.path("checksum").asText("");
             if (!reference.isBlank()) {
-              String priorRef = referenceOwner.putIfAbsent(
-                  record.path("type").asText("") + "|" + reference, attemptId);
+              String priorRef = referenceOwner.putIfAbsent(reference, attemptId);
               if (priorRef != null && !priorRef.equals(attemptId)) {
                 throw new IllegalArgumentException(
                     "duplicate evidence reference '" + reference + "' across attempts " + priorRef
@@ -1038,7 +1063,8 @@ public class StabilizationIngestionService {
 
   /** True when at least one group matches the aggregate tuple and its counts/outcome metrics. */
   private static boolean matrixHasMatchingGroup(JsonNode matrix, JsonNode manifest) {
-    String aggregateOutcome = manifest.path("outcome").asText("").toUpperCase();
+    String aggregateOutcome = manifest.path("outcome").asText("")
+        .toUpperCase(java.util.Locale.ENGLISH);
     int aggregateAttempts = manifest.path("attempt_count").asInt(1);
     JsonNode groups = matrix.path("groups");
     if (!groups.isArray()) {
@@ -1143,7 +1169,7 @@ public class StabilizationIngestionService {
         throw new IllegalArgumentException("artifact part filename must be checksum-addressed sha256_<64>.<ext>: "
             + part.filename());
       }
-      String actual = rawSha256(part.path());
+      String actual = rawSha256(part.path(), StabilizationBundleStreamReader.MAX_PART_BYTES);
       if (!actual.endsWith(hex)) {
         throw new IllegalArgumentException("artifact part bytes do not match checksum-addressed filename "
             + part.filename());
@@ -1167,6 +1193,10 @@ public class StabilizationIngestionService {
       // repeated reference is rejected before any artifact is staged.
       if (reference.isBlank()) {
         throw new IllegalArgumentException("evidence record is missing a reference");
+      }
+      if (!isOpaqueArtifactReference(reference)) {
+        throw new IllegalArgumentException(
+            "evidence record reference must be a bounded opaque artifact:// reference");
       }
       if (!seenReferences.add(reference)) {
         throw new IllegalArgumentException("duplicate evidence reference '" + reference + "'");
@@ -1196,7 +1226,7 @@ public class StabilizationIngestionService {
             "cannot read staged artifact size: " + part.filename());
       }
       long declaredSize = record.path("size_bytes").asLong(-1);
-      if (declaredSize < 0) {
+      if (declaredSize <= 0) {
         throw new IllegalArgumentException(
             "evidence record requires a positive size_bytes: " + record.path("reference").asText(""));
       }
@@ -1244,15 +1274,28 @@ public class StabilizationIngestionService {
   }
 
   /** Matches the checksum-addressed part filename {@code sha256_<64hex>.<ext>}. */
-  private static String checksumHexFromFilename(String filename) {
-    String name = filename == null ? "" : filename.trim();
+  static String checksumHexFromFilename(String filename) {
+    if (filename == null || !filename.equals(filename.trim())) {
+      return null;
+    }
+    String name = filename;
+    if (name.indexOf('/') >= 0 || name.indexOf('\\') >= 0
+        || name.chars().anyMatch(Character::isISOControl)) {
+      return null;
+    }
     int dot = name.indexOf('.');
+    if (dot < 0 || dot != name.lastIndexOf('.') || dot == name.length() - 1) {
+      return null;
+    }
     String base = dot >= 0 ? name.substring(0, dot) : name;
     if (!base.startsWith("sha256_") || base.length() != "sha256_".length() + 64) {
       return null;
     }
     String hex = base.substring("sha256_".length());
-    return hex.matches("[0-9a-f]{64}") ? hex : null;
+    String extension = name.substring(dot + 1);
+    return hex.matches("[0-9a-f]{64}")
+        && extension.length() <= 16
+        && extension.matches("[A-Za-z0-9]+") ? hex : null;
   }
 
   /**
@@ -1267,6 +1310,23 @@ public class StabilizationIngestionService {
     int semicolon = mediaType.indexOf(';');
     String base = semicolon >= 0 ? mediaType.substring(0, semicolon) : mediaType;
     return base.trim().toLowerCase(java.util.Locale.ENGLISH);
+  }
+
+  private static boolean isOpaqueArtifactReference(String value) {
+    if (value == null || value.length() > 512 || !value.startsWith("artifact://")) {
+      return false;
+    }
+    String opaquePart = value.substring("artifact://".length());
+    if (opaquePart.isBlank() || opaquePart.startsWith("/") || opaquePart.endsWith("/")) {
+      return false;
+    }
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      if (Character.isISOControl(c) || Character.isWhitespace(c) || c == '\\') {
+        return false;
+      }
+    }
+    return true;
   }
 
   private void persistAggregateManifest(JsonNode manifest, JsonNode transitions, JsonNode evidence,
@@ -1434,11 +1494,21 @@ public class StabilizationIngestionService {
       throw new IllegalArgumentException("report bundle " + name + " is missing");
     }
     try {
-      long size = Files.size(path);
-      if (size > StabilizationBundleStreamReader.MAX_JSON_PART_BYTES) {
+      if (Files.isSymbolicLink(path)
+          || !Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+        throw new IllegalArgumentException("report bundle " + name + " is not a regular file");
+      }
+      long declaredSize = Files.size(path);
+      if (declaredSize > StabilizationBundleStreamReader.MAX_JSON_PART_BYTES) {
         throw new IllegalArgumentException("report bundle " + name + " exceeds the 5 MiB bound");
       }
-      return Files.readAllBytes(path);
+      try (InputStream input = Files.newInputStream(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+        byte[] bytes = input.readNBytes((int) StabilizationBundleStreamReader.MAX_JSON_PART_BYTES + 1);
+        if (bytes.length != declaredSize || bytes.length > StabilizationBundleStreamReader.MAX_JSON_PART_BYTES) {
+          throw new IllegalArgumentException("report bundle " + name + " changed while being read");
+        }
+        return bytes;
+      }
     } catch (IllegalArgumentException e) {
       throw e;
     } catch (Exception e) {
@@ -1475,21 +1545,41 @@ public class StabilizationIngestionService {
   }
 
   /** Streams a staged file through SHA-256 without loading it into heap memory. */
-  private static String rawSha256(Path path) {
+  private static String rawSha256(Path path, long maxBytes) {
     try {
+      if (path == null || Files.isSymbolicLink(path)
+          || !Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+        throw new IllegalArgumentException("staged report part is not a regular file");
+      }
+      long declaredSize = Files.size(path);
+      if (declaredSize > maxBytes) {
+        throw new IllegalArgumentException("staged report part exceeds its size bound");
+      }
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      try (InputStream in = Files.newInputStream(path)) {
+      long count = 0;
+      try (InputStream in = Files.newInputStream(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
         byte[] buffer = new byte[64 * 1024];
         int read;
         while ((read = in.read(buffer)) != -1) {
+          if (read > maxBytes - count) {
+            throw new IllegalArgumentException("staged report part exceeds its size bound");
+          }
           digest.update(buffer, 0, read);
+          count += read;
         }
+      }
+      if (count != declaredSize) {
+        throw new IllegalArgumentException("staged report part changed while being read");
       }
       StringBuilder result = new StringBuilder("sha256:");
       for (byte value : digest.digest()) {
         result.append(String.format("%02x", value));
       }
       return result.toString();
+    } catch (IllegalArgumentException e) {
+      // Preserve input-validation failures so the controller can classify malformed, oversized,
+      // symlinked or size-drifting report parts as a client error instead of leaking an HTTP 500.
+      throw e;
     } catch (Exception e) {
       throw new IllegalStateException("SHA-256 is unavailable", e);
     }
