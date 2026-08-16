@@ -236,8 +236,14 @@ public class StabilizationController {
     if (artifact.isEmpty()) {
       return ResponseEntity.notFound().build();
     }
-    Optional<java.nio.file.Path> resolved =
-        artifactStore.resolve(UUID.fromString(artifact.get().getArtifactId()));
+    Optional<java.nio.file.Path> resolved;
+    try {
+      resolved = artifactStore.resolve(UUID.fromString(artifact.get().getArtifactId()));
+    } catch (IllegalArgumentException e) {
+      // The database mapping is expected to contain an opaque UUID. Treat malformed external
+      // input or a corrupt legacy row as a missing artifact rather than leaking a 500 response.
+      return ResponseEntity.notFound().build();
+    }
     if (resolved.isEmpty()) {
       return ResponseEntity.notFound().build();
     }
@@ -250,7 +256,9 @@ public class StabilizationController {
       headers.setContentLength(Files.size(path));
       headers.set("X-Artifact-Checksum", artifact.get().getSha256());
       headers.setContentDispositionFormData("attachment", artifact.get().getArtifactId() + "." + extensionOf(mediaType));
-      return new ResponseEntity<>(new InputStreamResource(Files.newInputStream(path)), headers, HttpStatus.OK);
+      return new ResponseEntity<>(
+          new InputStreamResource(Files.newInputStream(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)),
+          headers, HttpStatus.OK);
     } catch (IOException e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
           .body(Map.of("error", "artifact read failed"));

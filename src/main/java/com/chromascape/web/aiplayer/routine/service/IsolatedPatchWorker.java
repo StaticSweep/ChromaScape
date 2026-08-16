@@ -71,10 +71,14 @@ public class IsolatedPatchWorker {
 
       Path gradleHome = configuredGradleHome(temp);
       Files.createDirectories(gradleHome);
-      runCommand(List.of("bash", "./gradlew", "--offline", "--no-daemon", "--no-watch-fs", "--max-workers=1",
+      // Invoke the native Gradle wrapper directly: gradlew.bat on Windows, ./gradlew on Unix.
+      // Never route Micro6 work through bash.
+      List<String> gradle = new ArrayList<>();
+      gradle.add(isWindows() ? "gradlew.bat" : "./gradlew");
+      gradle.addAll(List.of("--offline", "--no-daemon", "--no-watch-fs", "--max-workers=1",
           ":runelite-client:compileJava", ":runelite-client:checkstyleMain", ":runelite-client:checkstyleTest",
-          ":runelite-client:test", ":runelite-client:shadowJar", ":runelite-client:generateRuntimeSbom"), repo,
-          "BUILD_FAILED", Map.of("GRADLE_USER_HOME", gradleHome.toString()));
+          ":runelite-client:test", ":runelite-client:shadowJar", ":runelite-client:generateRuntimeSbom"));
+      runCommand(gradle, repo, "BUILD_FAILED", Map.of("GRADLE_USER_HOME", gradleHome.toString()));
 
       Path jar = findExpectedShadowJar(repo, request.expectedJarName());
       byte[] jarBytes = Files.readAllBytes(jar);
@@ -125,49 +129,140 @@ public class IsolatedPatchWorker {
   private static void runCommand(List<String> command, Path cwd, String code) throws IOException, InterruptedException { runCommand(command, cwd, code, Map.of()); }
 
   private static void runCommand(List<String> command, Path cwd, String code, Map<String, String> extraEnvironment) throws IOException, InterruptedException {
-    Path output = Files.createTempFile(cwd, ".sc967-output-", ".log");
-    Process process = null;
-    try {
-      ProcessBuilder builder = new ProcessBuilder(command).directory(cwd.toFile());
-      configureEnvironment(builder, extraEnvironment);
-      builder.redirectErrorStream(true).redirectOutput(output.toFile());
-      process = builder.start();
-      if (!process.waitFor(COMMAND_TIMEOUT.toMinutes(), TimeUnit.MINUTES)) {
-        process.destroy();
-        if (!process.waitFor(5, TimeUnit.SECONDS)) process.destroyForcibly();
-        throw new IOException(code + ";TIMEOUT");
-      }
-      if (process.exitValue() != 0) throw new IOException(code + ";OUTPUT=" + boundedOutput(output));
-    } catch (InterruptedException interrupted) {
-      if (process != null) { process.destroy(); if (process.isAlive()) process.destroyForcibly(); }
-      Thread.currentThread().interrupt();
-      throw interrupted;
-    } finally {
-      Files.deleteIfExists(output);
+    CappedOutput output = execute(command, cwd, extraEnvironment, code);
+    if (output.limitExceeded()) {
+      throw new IOException(code + ";OUTPUT_LIMIT_EXCEEDED");
+    }
+    if (output.exitValue() != 0) {
+      throw new IOException(code + ";OUTPUT=" + output.tail());
     }
   }
 
   private static String capture(List<String> command, Path cwd) throws IOException, InterruptedException {
-    Path output = Files.createTempFile(cwd, ".sc967-capture-", ".log");
+    CappedOutput output = execute(command, cwd, Map.of(), "COMMAND_FAILED");
+    if (output.limitExceeded()) {
+      throw new IOException("OUTPUT_LIMIT_EXCEEDED");
+    }
+    if (output.exitValue() != 0) {
+      throw new IOException("COMMAND_FAILED;OUTPUT=" + output.tail());
+    }
+    return output.text();
+  }
+
+  /**
+   * Runs a command with a bounded streaming collector. The collector reads the merged output
+   * through a capped buffer; once output exceeds 256 KiB the full process tree is terminated and
+   * the call fails with {@code OUTPUT_LIMIT_EXCEEDED}. An unlimited log is never read into memory,
+   * and timeout/interruption use the same descendant-tree termination as the output cap.
+   */
+  private static CappedOutput execute(List<String> command, Path cwd, Map<String, String> extraEnvironment, String code)
+      throws IOException, InterruptedException {
     Process process = null;
     try {
       ProcessBuilder builder = new ProcessBuilder(command).directory(cwd.toFile());
-      configureEnvironment(builder, Map.of());
-      builder.redirectErrorStream(true).redirectOutput(output.toFile());
+      configureEnvironment(builder, extraEnvironment);
+      builder.redirectErrorStream(true);
       process = builder.start();
-      if (!process.waitFor(COMMAND_TIMEOUT.toMinutes(), TimeUnit.MINUTES)) {
-        process.destroy();
-        if (!process.waitFor(5, TimeUnit.SECONDS)) process.destroyForcibly();
-        throw new IOException("COMMAND_TIMEOUT");
+      CappedOutput output = CappedOutput.start(process);
+      long deadline = System.nanoTime() + COMMAND_TIMEOUT.toNanos();
+      boolean finished = false;
+      while (System.nanoTime() < deadline) {
+        if (output.limitExceeded()) {
+          // Stop the full process tree as soon as output exceeds the cap; never read an unlimited
+          // log into memory.
+          destroyTree(process);
+          throw new IOException(code + ";OUTPUT_LIMIT_EXCEEDED");
+        }
+        if (!process.isAlive()) {
+          finished = true;
+          break;
+        }
+        Thread.sleep(50);
       }
-      if (process.exitValue() != 0) throw new IOException("COMMAND_FAILED;OUTPUT=" + boundedOutput(output));
-      return Files.readString(output, StandardCharsets.UTF_8);
+      if (!finished) {
+        destroyTree(process);
+        if (!process.waitFor(5, TimeUnit.SECONDS)) process.destroyForcibly();
+        throw new IOException(code + ";TIMEOUT");
+      }
+      output.await();
+      return output.finish(process.exitValue());
     } catch (InterruptedException interrupted) {
-      process.destroy(); if (process.isAlive()) process.destroyForcibly();
+      if (process != null) destroyTree(process);
       Thread.currentThread().interrupt();
       throw interrupted;
     } finally {
-      Files.deleteIfExists(output);
+      if (process != null) process.destroy();
+    }
+  }
+
+  /** Bounded collector over a process's merged output; keeps only the last 256 KiB. */
+  private static final class CappedOutput {
+    private static final int CAPACITY = MAX_OUTPUT_BYTES;
+    private final byte[] buffer = new byte[CAPACITY];
+    private int write;
+    private boolean full;
+    private boolean limitExceeded;
+    private int exitValue;
+    private volatile IOException failure;
+    private final Thread collector;
+
+    private CappedOutput(Process process) {
+      collector = new Thread(() -> {
+        try (var in = process.getInputStream()) {
+          byte[] chunk = new byte[8192];
+          int read;
+          while ((read = in.read(chunk)) >= 0) {
+            if (read > 0) {
+              synchronized (this) {
+                // Ring buffer: overwrite the oldest bytes once full, so the newest CAPACITY bytes
+                // are always retained.
+                for (int i = 0; i < read; i++) {
+                  buffer[write] = chunk[i];
+                  write = (write + 1) % CAPACITY;
+                  if (write == 0) full = true;
+                }
+                if (full) limitExceeded = true;
+              }
+            }
+          }
+        } catch (IOException e) {
+          failure = e;
+        }
+      }, "sc967-output-collector");
+      collector.setDaemon(true);
+      collector.start();
+    }
+
+    static CappedOutput start(Process process) { return new CappedOutput(process); }
+
+    void await() throws IOException {
+      try { collector.join(COMMAND_TIMEOUT.toMillis() + 30_000L); }
+      catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+      if (failure != null) throw failure;
+    }
+
+    CappedOutput finish(int exitValue) {
+      this.exitValue = exitValue;
+      return this;
+    }
+
+    int exitValue() { return exitValue; }
+
+    boolean limitExceeded() { return limitExceeded; }
+
+    /** The final {@code MAX_OUTPUT_BYTES} bytes of the merged output, as UTF-8 text. */
+    String tail() {
+      synchronized (this) {
+        byte[] tail = new byte[full ? CAPACITY : write];
+        for (int i = 0; i < tail.length; i++) {
+          tail[i] = buffer[(write - tail.length + i + CAPACITY) % CAPACITY];
+        }
+        return new String(tail, StandardCharsets.UTF_8).replaceAll("\\s+", " ");
+      }
+    }
+
+    String text() {
+      return tail();
     }
   }
 
@@ -189,12 +284,34 @@ public class IsolatedPatchWorker {
     if (value != null && !value.isBlank()) destination.put(name, value);
   }
 
-  private static String boundedOutput(Path file) {
+  private static boolean isWindows() {
+    String os = System.getProperty("os.name");
+    return os != null && os.toLowerCase(java.util.Locale.ROOT).contains("win");
+  }
+
+  /** Terminates the process and its entire descendant tree. */
+  private static void destroyTree(Process process) {
     try {
-      byte[] bytes = Files.readAllBytes(file);
-      int start = Math.max(0, bytes.length - MAX_OUTPUT_BYTES);
-      return new String(bytes, start, bytes.length - start, StandardCharsets.UTF_8).replaceAll("\\s+", " ");
-    } catch (IOException ignored) { return "unavailable"; }
+      process.toHandle().descendants().forEach(descendant -> {
+        try { descendant.destroy(); } catch (Exception ignored) { }
+      });
+    } catch (Exception ignored) {
+      // best-effort; the parent is destroyed below regardless
+    }
+    process.destroy();
+    try {
+      if (process.isAlive()) {
+        Thread.sleep(200);
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+    try {
+      process.toHandle().descendants().forEach(descendant -> {
+        try { descendant.destroyForcibly(); } catch (Exception ignored) { }
+      });
+    } catch (Exception ignored) {
+    }
   }
 
   private static Path findExpectedShadowJar(Path repo, String expectedName) throws IOException {
@@ -227,7 +344,17 @@ public class IsolatedPatchWorker {
     if (Files.isDirectory(reports)) {
       try (var stream = Files.walk(reports)) {
         for (Path file : stream.filter(path -> path.toString().endsWith(".xml")).sorted().toList()) {
-          var document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file.toFile());
+          // Harden XML parsing: DOCTYPE, external entities, DTD loading, and external schema access
+          // are all disabled so a tampered test report cannot read local files or reach the network.
+          var factory = DocumentBuilderFactory.newInstance();
+          factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+          factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+          factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+          factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+          factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+          factory.setXIncludeAware(false);
+          factory.setExpandEntityReferences(false);
+          var document = factory.newDocumentBuilder().parse(file.toFile());
           var cases = document.getElementsByTagName("testcase");
           for (int i = 0; i < cases.getLength(); i++) {
             Element test = (Element) cases.item(i);

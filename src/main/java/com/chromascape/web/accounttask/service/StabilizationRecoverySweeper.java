@@ -3,6 +3,7 @@ package com.chromascape.web.accounttask.service;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
@@ -34,12 +35,17 @@ public class StabilizationRecoverySweeper {
   @PostConstruct
   void sweep() {
     Path baseDir = artifactStore.baseDir();
-    if (baseDir == null || !Files.isDirectory(baseDir)) {
+    if (!isRealDirectory(baseDir)) {
+      if (baseDir != null && Files.isSymbolicLink(baseDir)) {
+        log.warn("[StabilizationRecovery] refusing to sweep symbolic-link base directory {}", baseDir);
+      }
       return;
     }
     Path stagingDir = artifactStore.stagingDir();
-    if (stagingDir != null && Files.isDirectory(stagingDir)) {
+    if (isRealDirectory(stagingDir)) {
       sweepDirectory(stagingDir, true);
+    } else if (stagingDir != null && Files.isSymbolicLink(stagingDir)) {
+      log.warn("[StabilizationRecovery] refusing to sweep symbolic-link staging directory {}", stagingDir);
     }
     sweepDirectory(baseDir, false);
   }
@@ -48,7 +54,8 @@ public class StabilizationRecoverySweeper {
     try (Stream<Path> entries = Files.list(directory)) {
       entries.forEach(path -> {
         try {
-          if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)) {
+          if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+              || Files.isSymbolicLink(path)) {
             return;
           }
           String fileName = path.getFileName().toString();
@@ -91,5 +98,10 @@ public class StabilizationRecoverySweeper {
     } catch (IllegalArgumentException ignored) {
       return false;
     }
+  }
+
+  private static boolean isRealDirectory(Path path) {
+    return path != null && !Files.isSymbolicLink(path)
+        && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS);
   }
 }

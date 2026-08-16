@@ -52,6 +52,19 @@ class StabilizationIngestionServiceTest {
   }
 
   @Test
+  @DisplayName("direct bundle sources require an exact checksum-addressed extension")
+  void directBundleSourceFilenameRequiresExtension() {
+    String hex = "a".repeat(64);
+    assertThat(StabilizationIngestionService.checksumHexFromFilename(
+        "sha256_" + hex + ".ndjson")).isEqualTo(hex);
+    assertThat(StabilizationIngestionService.checksumHexFromFilename("sha256_" + hex)).isNull();
+    assertThat(StabilizationIngestionService.checksumHexFromFilename(
+        "sha256_" + hex + ".ndjson.exe")).isNull();
+    assertThat(StabilizationIngestionService.checksumHexFromFilename(
+        " sha256_" + hex + ".ndjson")).isNull();
+  }
+
+  @Test
   @DisplayName("ingestReport stores runs and creates triage rows for failures")
   void ingestReport_storesRunsAndCreatesTriageRows() throws Exception {
     JsonNode report =

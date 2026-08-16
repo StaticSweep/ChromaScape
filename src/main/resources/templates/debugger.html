@@ -1120,18 +1120,45 @@
     <label>Client mode<select data-ai-client-kind><option value="MICRO6_MANAGED">Micro6 managed</option><option value="RUNELITE_CAPTURE">RuneLite capture</option></select></label>
     <label>Stabilization attempt (Micro6 only)<input data-ai-attempt /></label>
     <label>Capture token<input data-ai-token type="password" autocomplete="off" /></label>
+    <label>Operator token (candidate workflow; not persisted)<input data-ai-operator-token type="password" autocomplete="off" /></label>
     <label>Current-slice identity JSON<textarea data-ai-identity spellcheck="false"></textarea></label>
     <button type="button" data-ai-start>Bind AI Routine run</button>
     <button type="button" data-ai-capture-start>Start capture</button>
+    <button type="button" data-ai-capture-retry>Retry retained uncertain capture request</button>
     <button type="button" data-ai-capture-status>Reconcile capture status</button>
     <button type="button" data-ai-reconcile>Retry/reconcile uncertain request</button>
+    <label>Tick/action batch JSON (array)<textarea data-ai-batch spellcheck="false"></textarea></label>
+    <button type="button" data-ai-ticks-upload>Upload tick batch</button>
+    <button type="button" data-ai-actions-upload>Upload action batch</button>
+    <label>Final tick<input data-ai-final-tick type="number" value="0" /></label>
+    <label>Video SHA-256 (optional)<input data-ai-video-hash /></label>
+    <button type="button" data-ai-capture-complete>Complete capture</button>
+    <label>Curation include ranges JSON<input data-ai-curation-include /></label>
+    <label>Curation exclude ranges JSON<input data-ai-curation-exclude /></label>
+    <button type="button" data-ai-curate>Persist curation</button>
+    <button type="button" data-ai-graph-generate>Generate graph from recording</button>
+    <label>Graph ID (publish/model)<input data-ai-graph-id /></label>
+    <button type="button" data-ai-graph-publish>Publish graph</button>
+    <button type="button" data-ai-model-create>Create model from graph</button>
+    <label>Model ID (replay/shadow)<input data-ai-model-id /></label>
+    <button type="button" data-ai-replay-run>Run policy replay</button>
+    <button type="button" data-ai-shadow-run>Run shadow session</button>
     <output data-ai-sse-state>DISCONNECTED</output>
     <label>Assistant message<textarea data-ai-text></textarea></label>
     <button type="button" data-ai-message>Send Assistant message</button>
+    <button type="button" data-ai-stop>Stop assistant generation</button>
+    <label>Proposal ID<input data-ai-proposal-id /></label>
+    <button type="button" data-ai-proposal-accept>Accept Assistant proposal</button>
+    <button type="button" data-ai-proposal-reject>Reject Assistant proposal</button>
+    <label>Candidate proposal ID<input data-ai-candidate-proposal /></label>
+    <button type="button" data-ai-candidate-approve>Approve candidate (operator)</button>
+    <button type="button" data-ai-candidate-build>Enqueue candidate build</button>
+    <button type="button" data-ai-candidate-reconcile>Reconcile candidate registration</button>
     <pre data-ai-routine-output aria-live="polite"></pre>
   </section>
   <script src="/js/debugger.js?v=15"></script>
-  <script src="/js/ai-routine.js?v=1"></script>
+  <script src="/js/ai-routine-state.js?v=1"></script>
+  <script src="/js/ai-routine.js?v=3"></script>
   <script src="/js/patchloop.js?v=2"></script>
 <script src="/js/account-task-planner.js?v=39"></script>
 </body>

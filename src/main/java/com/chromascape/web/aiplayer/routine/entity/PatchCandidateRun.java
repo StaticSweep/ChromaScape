@@ -39,6 +39,23 @@ public class PatchCandidateRun {
   @Column(name = "registration_request_hash", length = 71) private String registrationRequestHash;
   @Lob private String registryResponseJson;
   @Column(name = "last_failure_code", length = 160) private String lastFailureCode;
+  @Column(name = "worker_attempt_id", length = 80) private String workerAttemptId;
+  @Column(name = "worker_lease_expires_at") private Instant workerLeaseExpiresAt;
+  @Column(name = "registration_attempt_id", length = 80) private String registrationAttemptId;
+  @Column(name = "registration_prepared_at") private Instant registrationPreparedAt;
+  @Column(name = "registration_lease_expires_at") private Instant registrationLeaseExpiresAt;
+  @Column(name = "registry_reconciled_at") private Instant registryReconciledAt;
+  @Column(name = "manifest_file_hash", length = 71) private String manifestFileHash;
+  @Column(name = "jar_sha256", length = 71) private String jarSha256;
+  @Column(name = "jar_size") private Long jarSize;
+  @Column(name = "sbom_sha256", length = 71) private String sbomSha256;
+  @Column(name = "sbom_size") private Long sbomSize;
+  @Column(name = "certification_document_hash", length = 71) private String certificationDocumentHash;
+  @Column(name = "registry_response_hash", length = 71) private String registryResponseHash;
+  @Lob @Column(name = "registry_response_bytes", columnDefinition = "BYTEA") private byte[] registryResponseBytes;
+  @Column(name = "registry_manifest_hash", length = 71) private String registryManifestHash;
+  @Column(name = "registry_download_hash", length = 71) private String registryDownloadHash;
+  @Column(name = "registry_verified_at") private Instant registryVerifiedAt;
   @Column(nullable = false) private Instant updatedAt = Instant.now();
 
   public Long getId() { return id; }
@@ -104,5 +121,39 @@ public class PatchCandidateRun {
   public void setRegistryResponseJson(String value) { registryResponseJson = value; }
   public String getLastFailureCode() { return lastFailureCode; }
   public void setLastFailureCode(String value) { lastFailureCode = value; }
+  public String getWorkerAttemptId() { return workerAttemptId; }
+  public void setWorkerAttemptId(String value) { workerAttemptId = value; }
+  public Instant getWorkerLeaseExpiresAt() { return workerLeaseExpiresAt; }
+  public void setWorkerLeaseExpiresAt(Instant value) { workerLeaseExpiresAt = value; }
+  public String getRegistrationAttemptId() { return registrationAttemptId; }
+  public void setRegistrationAttemptId(String value) { registrationAttemptId = value; }
+  public Instant getRegistrationPreparedAt() { return registrationPreparedAt; }
+  public void setRegistrationPreparedAt(Instant value) { registrationPreparedAt = value; }
+  public Instant getRegistrationLeaseExpiresAt() { return registrationLeaseExpiresAt; }
+  public void setRegistrationLeaseExpiresAt(Instant value) { registrationLeaseExpiresAt = value; }
+  public Instant getRegistryReconciledAt() { return registryReconciledAt; }
+  public void setRegistryReconciledAt(Instant value) { registryReconciledAt = value; }
+  public String getManifestFileHash() { return manifestFileHash; }
+  public void setManifestFileHash(String value) { manifestFileHash = value; }
+  public String getJarSha256() { return jarSha256; }
+  public void setJarSha256(String value) { jarSha256 = value; }
+  public Long getJarSize() { return jarSize; }
+  public void setJarSize(Long value) { jarSize = value; }
+  public String getSbomSha256() { return sbomSha256; }
+  public void setSbomSha256(String value) { sbomSha256 = value; }
+  public Long getSbomSize() { return sbomSize; }
+  public void setSbomSize(Long value) { sbomSize = value; }
+  public String getCertificationDocumentHash() { return certificationDocumentHash; }
+  public void setCertificationDocumentHash(String value) { certificationDocumentHash = value; }
+  public String getRegistryResponseHash() { return registryResponseHash; }
+  public void setRegistryResponseHash(String value) { registryResponseHash = value; }
+  public byte[] getRegistryResponseBytes() { return registryResponseBytes == null ? null : registryResponseBytes.clone(); }
+  public void setRegistryResponseBytes(byte[] value) { registryResponseBytes = value == null ? null : value.clone(); }
+  public String getRegistryManifestHash() { return registryManifestHash; }
+  public void setRegistryManifestHash(String value) { registryManifestHash = value; }
+  public String getRegistryDownloadHash() { return registryDownloadHash; }
+  public void setRegistryDownloadHash(String value) { registryDownloadHash = value; }
+  public Instant getRegistryVerifiedAt() { return registryVerifiedAt; }
+  public void setRegistryVerifiedAt(Instant value) { registryVerifiedAt = value; }
   public Instant getUpdatedAt() { return updatedAt; }
 }

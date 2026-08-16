@@ -74,10 +74,14 @@ public record CurrentSliceIdentity(
     if (!"current-slice-identity/v1".equals(schema)) fail(CurrentSliceFailureCode.IDENTITY_FIELD_MISSING, "schema must be current-slice-identity/v1");
     if (task == null) fail(CurrentSliceFailureCode.IDENTITY_GROUP_MISSING, "task group is required");
     required(task.taskKey(), "task.task_key"); hash(task.settingsHash(), "task.settings_hash"); required(task.profileId(), "task.profile_id"); hash(task.profileHash(), "task.profile_hash"); hash(task.catalogHash(), "task.catalog_hash");
-    if (run == null) fail(CurrentSliceFailureCode.IDENTITY_GROUP_MISSING, "run group is required");
-    required(run.runId(), "run.run_id");
     if (client == null) fail(CurrentSliceFailureCode.IDENTITY_GROUP_MISSING, "client group is required");
     required(client.clientId(), "client.client_id"); required(client.clientKind(), "client.client_kind"); required(client.clientBuildId(), "client.client_build_id"); hash(client.artifactDigest(), "client.artifact_digest"); required(client.adapterContract(), "client.adapter_contract"); required(client.domain(), "client.domain");
+    // RuneLite capture runs may be created before a run id is allocated.  Micro6-managed
+    // identities are the stricter form and require the executor-bound run group below.
+    if (run == null && !"RUNELITE_CAPTURE".equals(client.clientKind())) {
+      fail(CurrentSliceFailureCode.IDENTITY_GROUP_MISSING, "run group is required");
+    }
+    if (run != null) required(run.runId(), "run.run_id");
     if ("MICRO6_MANAGED".equals(client.clientKind())) {
       if (run == null) fail(CurrentSliceFailureCode.IDENTITY_GROUP_MISSING, "run group is required for Micro6");
       required(run.attemptId(), "run.attempt_id"); if (run.entryId() == null || run.entryId() < 0) fail(CurrentSliceFailureCode.IDENTITY_FIELD_MISSING, "run.entry_id is required"); required(run.executorInstanceId(), "run.executor_instance_id");

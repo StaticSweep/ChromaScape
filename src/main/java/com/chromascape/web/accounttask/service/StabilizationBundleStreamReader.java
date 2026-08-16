@@ -1,15 +1,17 @@
 package com.chromascape.web.accounttask.service;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -93,8 +95,16 @@ public final class StabilizationBundleStreamReader {
     if (tempDir == null) {
       throw new IOException("bundle staging directory is required");
     }
+    if (Files.isSymbolicLink(tempDir)) {
+      throw new IOException("bundle staging directory must not be a symbolic link");
+    }
     Files.createDirectories(tempDir);
-    StabilizationBundleStreamReader reader = new StabilizationBundleStreamReader(tempDir);
+    if (Files.isSymbolicLink(tempDir)
+        || !Files.isDirectory(tempDir, LinkOption.NOFOLLOW_LINKS)) {
+      throw new IOException("bundle staging directory must be a real directory");
+    }
+    StabilizationBundleStreamReader reader =
+        new StabilizationBundleStreamReader(tempDir.toAbsolutePath().normalize());
     reader.readAll(input, boundary);
     return new StagedBundle(reader.stagedByPartName, reader.artifactParts);
   }
@@ -110,9 +120,6 @@ public final class StabilizationBundleStreamReader {
         throw new IOException("malformed multipart: missing opening boundary");
       }
       while (true) {
-        if (partCount >= MAX_PARTS) {
-          throw new IOException("report bundle exceeds the maximum part count");
-        }
         // A new part begins with its first header line (no blank line follows the opening
         // boundary; a blank line may follow an interior boundary).
         String firstHeader = readLine(input);
@@ -128,6 +135,11 @@ public final class StabilizationBundleStreamReader {
           // remaining byte is trailing data and is rejected (SC-572).
           requireClosingTermination(input);
           break;
+        }
+        // Read the closing delimiter before enforcing the part count so exactly MAX_PARTS
+        // ordinary parts remain valid; the next non-closing part is the one that exceeds the cap.
+        if (partCount >= MAX_PARTS) {
+          throw new IOException("report bundle exceeds the maximum part count");
         }
         PartHeaders headers = parsePartHeaders(firstHeader, input);
         PartBodyResult body = readPartBody(headers, input, boundary, counting);
@@ -145,16 +157,27 @@ public final class StabilizationBundleStreamReader {
     String contentType = null;
     String current = firstHeader;
     int headerCount = 0;
+    boolean dispositionSeen = false;
+    boolean contentTypeSeen = false;
     while (current != null && !current.isEmpty()) {
       headerCount++;
       if (headerCount > MAX_HEADERS_PER_PART) {
         throw new IOException("report bundle part exceeds the maximum header count");
       }
-      String lower = current.toLowerCase();
+      String lower = current.toLowerCase(Locale.ENGLISH);
       if (lower.startsWith("content-disposition:")) {
-        name = headerParam(current, "name");
-        filename = headerParam(current, "filename");
+        if (dispositionSeen) {
+          throw new IOException("report bundle part contains duplicate Content-Disposition headers");
+        }
+        dispositionSeen = true;
+        Map<String, String> parameters = parseContentDisposition(current);
+        name = parameters.get("name");
+        filename = parameters.get("filename");
       } else if (lower.startsWith("content-type:")) {
+        if (contentTypeSeen) {
+          throw new IOException("report bundle part contains duplicate Content-Type headers");
+        }
+        contentTypeSeen = true;
         contentType = current.substring("content-type:".length()).trim();
       }
       current = readLine(input);
@@ -230,19 +253,22 @@ public final class StabilizationBundleStreamReader {
     long count = 0;
     boolean closed = false;
     int value = -1;
-    try (java.io.OutputStream out = Files.newOutputStream(target)) {
+    boolean created = false;
+    try (java.io.OutputStream out = Files.newOutputStream(target,
+        StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+      created = true;
       while ((value = input.read()) != -1) {
-        count++;
-        if (count > limit) {
-          throw new IOException("report bundle part exceeds its size limit");
-        }
         if (counting != null && counting.count() > MAX_TOTAL_BYTES) {
           throw new IOException("report bundle total size exceeds the limit");
         }
         int pos = windowLen % len;
         if (windowLen >= len) {
           // Evict the oldest byte (it is part of the body) before it is overwritten.
+          if (count >= limit) {
+            throw new IOException("report bundle part exceeds its size limit");
+          }
           out.write(window[pos]);
+          count++;
         }
         window[pos] = value;
         windowLen++;
@@ -286,7 +312,11 @@ public final class StabilizationBundleStreamReader {
           // zero) and continue scanning from the two peeked bytes (also part of the body).
           int rotation = (pos + 1) % len;
           for (int i = 0; i < len; i++) {
+            if (count >= limit) {
+              throw new IOException("report bundle part exceeds its size limit");
+            }
             out.write(window[(rotation + i) % len]);
+            count++;
           }
           // Restore the two peeked bytes in their ORIGINAL order: a single unread(byte[]) with
           // [peek1, peek2] pushes peek1 back first so the next read returns peek1 then peek2. Pushing
@@ -302,6 +332,18 @@ public final class StabilizationBundleStreamReader {
           windowLen = 0;
         }
       }
+    } catch (IOException | RuntimeException e) {
+      // CREATE_NEW prevents overwriting an attacker-controlled pre-existing target. Only remove
+      // the path after the stream was successfully opened, so an open failure cannot delete
+      // someone else's file or symlink.
+      if (created) {
+        try {
+          Files.deleteIfExists(target);
+        } catch (IOException cleanup) {
+          e.addSuppressed(cleanup);
+        }
+      }
+      throw e;
     }
     if (value == -1 && !closed) {
       throw new IOException("malformed multipart: part '" + target.getFileName()
@@ -385,17 +427,99 @@ public final class StabilizationBundleStreamReader {
   }
 
   private static String extractBoundary(String contentType) {
-    int idx = contentType.toLowerCase().indexOf("boundary=");
-    if (idx < 0) {
+    if (contentType == null) {
       return null;
     }
-    String boundary = contentType.substring(idx + "boundary=".length()).trim();
-    if (boundary.startsWith("\"") && boundary.endsWith("\"") && boundary.length() > 1) {
-      boundary = boundary.substring(1, boundary.length() - 1);
+    int semicolon = contentType.indexOf(';');
+    if (semicolon < 0) {
+      return null;
     }
-    int semicolon = boundary.indexOf(';');
-    if (semicolon >= 0) {
-      boundary = boundary.substring(0, semicolon).trim();
+    String parameters = contentType.substring(semicolon + 1);
+    int pos = 0;
+    String boundary = null;
+    while (pos < parameters.length()) {
+      while (pos < parameters.length() && isHorizontalWhitespace(parameters.charAt(pos))) {
+        pos++;
+      }
+      if (pos >= parameters.length()) {
+        break;
+      }
+      int nameStart = pos;
+      while (pos < parameters.length() && isTokenCharacter(parameters.charAt(pos))) {
+        pos++;
+      }
+      if (nameStart == pos) {
+        return null;
+      }
+      String name = parameters.substring(nameStart, pos).toLowerCase(Locale.ENGLISH);
+      while (pos < parameters.length() && isHorizontalWhitespace(parameters.charAt(pos))) {
+        pos++;
+      }
+      if (pos >= parameters.length() || parameters.charAt(pos) != '=') {
+        return null;
+      }
+      pos++;
+      while (pos < parameters.length() && isHorizontalWhitespace(parameters.charAt(pos))) {
+        pos++;
+      }
+      String value;
+      if (pos < parameters.length() && parameters.charAt(pos) == '"') {
+        pos++;
+        StringBuilder decoded = new StringBuilder();
+        boolean closed = false;
+        while (pos < parameters.length()) {
+          char current = parameters.charAt(pos++);
+          if (current == '\\') {
+            if (pos >= parameters.length()) {
+              return null;
+            }
+            char escaped = parameters.charAt(pos++);
+            if (escaped == '\r' || escaped == '\n' || escaped < 0x20) {
+              return null;
+            }
+            decoded.append(escaped);
+          } else if (current == '"') {
+            closed = true;
+            break;
+          } else {
+            if (current == '\r' || current == '\n' || current < 0x20) {
+              return null;
+            }
+            decoded.append(current);
+          }
+        }
+        if (!closed) {
+          return null;
+        }
+        value = decoded.toString();
+      } else {
+        int valueStart = pos;
+        while (pos < parameters.length() && parameters.charAt(pos) != ';'
+            && !isHorizontalWhitespace(parameters.charAt(pos))) {
+          if (!isTokenCharacter(parameters.charAt(pos))) {
+            return null;
+          }
+          pos++;
+        }
+        value = parameters.substring(valueStart, pos);
+      }
+      if (value.isBlank() || "boundary".equals(name) && boundary != null) {
+        return null;
+      }
+      if ("boundary".equals(name)) {
+        boundary = value;
+      }
+      // Optional horizontal whitespace is valid between an unquoted token value and the next
+      // semicolon. Rejecting it would make otherwise-valid Content-Type headers fail.
+      while (pos < parameters.length() && isHorizontalWhitespace(parameters.charAt(pos))) {
+        pos++;
+      }
+      if (pos < parameters.length()) {
+        if (parameters.charAt(pos) != ';') {
+          return null;
+        }
+        pos++;
+      }
     }
     return boundary;
   }
@@ -421,6 +545,9 @@ public final class StabilizationBundleStreamReader {
     int value;
     while ((value = input.read()) != -1) {
       if (value == '\r') {
+        if (sawCr) {
+          throw new IOException("malformed multipart line ending");
+        }
         sawCr = true;
         continue;
       }
@@ -428,91 +555,142 @@ public final class StabilizationBundleStreamReader {
         if (sawCr) {
           return line.toString();
         }
-        line.append('\n');
-        sawCr = false;
-        continue;
+        throw new IOException("multipart headers and boundaries require CRLF line endings");
       }
-      sawCr = false;
+      if (sawCr) {
+        throw new IOException("multipart headers and boundaries require CRLF line endings");
+      }
       line.append((char) value);
       if (line.length() > HEADER_LINE_LIMIT) {
         throw new IOException("multipart header line exceeds the limit");
       }
     }
+    if (sawCr) {
+      throw new IOException("multipart line ends with a bare CR");
+    }
     return line.length() == 0 ? null : line.toString();
   }
 
   /**
-   * Extracts a Content-Disposition parameter by parsing the disposition tokens one at a time with
-   * exact, case-insensitive parameter-name comparison and proper quoted-string (and escaped
-   * quoted-character) handling. It never uses substring lookup, so a {@code name=} can never match
-   * inside {@code filename=}, and a parameter name like {@code name} only matches a standalone
-   * {@code name=} token.
+   * Parses the complete Content-Disposition field, rejecting malformed quoted strings and
+   * malformed/duplicate parameters. Parsing the complete token sequence is important: looking up
+   * only {@code name=} would allow an unterminated or smuggled parameter after it to be ignored,
+   * and substring matching could confuse {@code name=} with {@code filename=}.
    */
-  private static String headerParam(String header, String param) {
-    if (header == null || param == null) {
-      return null;
+  private static Map<String, String> parseContentDisposition(String header) throws IOException {
+    int colon = header.indexOf(':');
+    if (colon < 0) {
+      throw new IOException("malformed Content-Disposition header");
     }
-    String needle = param.toLowerCase(java.util.Locale.ENGLISH);
+    String value = header.substring(colon + 1).trim();
     int pos = 0;
-    while (pos < header.length()) {
-      pos = skipSpacesAndSemicolons(header, pos);
-      int nameStart = pos;
-      while (pos < header.length() && header.charAt(pos) != '=' && header.charAt(pos) != ';') {
-        pos++;
-      }
-      String name = header.substring(nameStart, pos).trim();
-      if (name.isEmpty() || pos >= header.length() || header.charAt(pos) != '=') {
-        // Not a parameter assignment; continue past the token (if any).
-        if (pos < header.length()) {
-          pos++;
-        }
-        continue;
-      }
-      pos++; // consume '='
-      pos = skipSpacesAndSemicolons(header, pos);
-      String value;
-      if (pos < header.length() && header.charAt(pos) == '"') {
-        pos++; // consume opening quote
-        StringBuilder sb = new StringBuilder();
-        while (pos < header.length()) {
-          char c = header.charAt(pos);
-          if (c == '\\') {
-            if (pos + 1 < header.length()) {
-              sb.append(header.charAt(pos + 1));
-              pos += 2;
-              continue;
-            }
-            pos++;
-            continue;
-          }
-          if (c == '"') {
-            pos++; // consume closing quote
-            break;
-          }
-          sb.append(c);
-          pos++;
-        }
-        value = sb.toString();
-      } else {
-        int valueStart = pos;
-        while (pos < header.length() && header.charAt(pos) != ';' && header.charAt(pos) != '\r') {
-          pos++;
-        }
-        value = header.substring(valueStart, pos).trim();
-      }
-      if (name.toLowerCase(java.util.Locale.ENGLISH).equals(needle)) {
-        return value;
-      }
-    }
-    return null;
-  }
-
-  private static int skipSpacesAndSemicolons(String header, int pos) {
-    while (pos < header.length()
-        && (header.charAt(pos) == ' ' || header.charAt(pos) == '\t' || header.charAt(pos) == ';')) {
+    int tokenStart = pos;
+    while (pos < value.length() && isTokenCharacter(value.charAt(pos))) {
       pos++;
     }
-    return pos;
+    if (tokenStart == pos || !"form-data".equalsIgnoreCase(value.substring(tokenStart, pos))) {
+      throw new IOException("Content-Disposition must be form-data");
+    }
+    Map<String, String> parameters = new LinkedHashMap<>();
+    while (true) {
+      while (pos < value.length() && isHorizontalWhitespace(value.charAt(pos))) {
+        pos++;
+      }
+      if (pos == value.length()) {
+        return parameters;
+      }
+      if (value.charAt(pos) != ';') {
+        throw new IOException("malformed Content-Disposition parameter list");
+      }
+      pos++;
+      while (pos < value.length() && isHorizontalWhitespace(value.charAt(pos))) {
+        pos++;
+      }
+      if (pos == value.length()) {
+        throw new IOException("malformed Content-Disposition parameter list");
+      }
+      int nameStart = pos;
+      while (pos < value.length() && isTokenCharacter(value.charAt(pos))) {
+        pos++;
+      }
+      if (nameStart == pos) {
+        throw new IOException("malformed Content-Disposition parameter name");
+      }
+      String name = value.substring(nameStart, pos).toLowerCase(Locale.ENGLISH);
+      while (pos < value.length() && isHorizontalWhitespace(value.charAt(pos))) {
+        pos++;
+      }
+      if (pos == value.length() || value.charAt(pos) != '=') {
+        throw new IOException("malformed Content-Disposition parameter '" + name + "'");
+      }
+      pos++;
+      while (pos < value.length() && isHorizontalWhitespace(value.charAt(pos))) {
+        pos++;
+      }
+      String parameterValue;
+      if (pos < value.length() && value.charAt(pos) == '"') {
+        pos++;
+        StringBuilder decoded = new StringBuilder();
+        boolean closed = false;
+        while (pos < value.length()) {
+          char c = value.charAt(pos++);
+          if (c == '\\') {
+            if (pos >= value.length()) {
+              throw new IOException("malformed quoted Content-Disposition parameter");
+            }
+            char escaped = value.charAt(pos++);
+            if (escaped == '\r' || escaped == '\n' || escaped < 0x20) {
+              throw new IOException("malformed quoted Content-Disposition parameter");
+            }
+            decoded.append(escaped);
+          } else if (c == '"') {
+            closed = true;
+            break;
+          } else {
+            if (c == '\r' || c == '\n' || c < 0x20) {
+              throw new IOException("malformed quoted Content-Disposition parameter");
+            }
+            decoded.append(c);
+          }
+        }
+        if (!closed) {
+          throw new IOException("malformed quoted Content-Disposition parameter");
+        }
+        parameterValue = decoded.toString();
+      } else {
+        int valueStart = pos;
+        while (pos < value.length() && value.charAt(pos) != ';'
+            && !isHorizontalWhitespace(value.charAt(pos))) {
+          if (!isTokenCharacter(value.charAt(pos))) {
+            throw new IOException("malformed unquoted Content-Disposition parameter");
+          }
+          pos++;
+        }
+        if (valueStart == pos) {
+          throw new IOException("empty Content-Disposition parameter value");
+        }
+        int valueEnd = pos;
+        while (pos < value.length() && isHorizontalWhitespace(value.charAt(pos))) {
+          pos++;
+        }
+        if (pos < value.length() && value.charAt(pos) != ';') {
+          throw new IOException("malformed unquoted Content-Disposition parameter");
+        }
+        parameterValue = value.substring(valueStart, valueEnd);
+      }
+      if (parameters.putIfAbsent(name, parameterValue) != null) {
+        throw new IOException("duplicate Content-Disposition parameter '" + name + "'");
+      }
+    }
+  }
+
+  private static boolean isHorizontalWhitespace(char value) {
+    return value == ' ' || value == '\t';
+  }
+
+  private static boolean isTokenCharacter(char value) {
+    return (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z')
+        || (value >= '0' && value <= '9') || "!#$%&'*+-.^_`|~".indexOf(value) >= 0;
   }
 
   private record PartHeaders(String name, String filename, String contentType) {}
@@ -561,6 +739,11 @@ public final class StabilizationBundleStreamReader {
 
     long count() {
       return count;
+    }
+
+    @Override
+    public void close() throws IOException {
+      delegate.close();
     }
   }
 }

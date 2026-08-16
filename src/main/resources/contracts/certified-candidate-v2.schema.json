@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc967/certified-candidate/v2",
+  "title": "certified-candidate/v2 manifest",
+  "description": "Strict schema for the signed certified-candidate/v2 manifest. Every signed root field is defined below; additionalProperties is false at every level so unknown fields are rejected. The candidate object requires candidate_id, candidate_hash, certification_hash and signature. The vectors file omits the injected candidate fields; consuming implementations inject them before running full verification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "identity",
+    "candidate",
+    "signature_algorithm",
+    "key_id",
+    "base_commit",
+    "source_snapshot_id",
+    "source_manifest_hash",
+    "baseline_fail_manifest_hash",
+    "patch_hash",
+    "proposal_hash",
+    "approval_hash",
+    "post_patch_test_result_hash",
+    "jar_name",
+    "jar_size",
+    "jar_sha256",
+    "sbom_name",
+    "sbom_size",
+    "sbom_sha256",
+    "certification_document_hash",
+    "build_commands",
+    "control_allowed"
+  ],
+  "properties": {
+    "schema": {"const": "certified-candidate/v2"},
+    "identity": {"$ref": "#/$defs/identity"},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_id", "candidate_hash", "certification_hash", "signature"],
+      "properties": {
+        "candidate_id": {"type": "string", "pattern": "^cand_[0-9a-f]{24}$"},
+        "candidate_hash": {"$ref": "#/$defs/hash"},
+        "certification_hash": {"$ref": "#/$defs/hash"},
+        "signature": {"type": "string", "minLength": 1}
+      }
+    },
+    "signature_algorithm": {"const": "Ed25519"},
+    "key_id": {"type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._-]+$"},
+    "base_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_snapshot_id": {"type": "string", "pattern": "^srcsnap_[0-9a-f]{24}$"},
+    "source_manifest_hash": {"$ref": "#/$defs/hash"},
+    "baseline_fail_manifest_hash": {"$ref": "#/$defs/hash"},
+    "patch_hash": {"$ref": "#/$defs/hash"},
+    "proposal_hash": {"$ref": "#/$defs/hash"},
+    "approval_hash": {"$ref": "#/$defs/hash"},
+    "post_patch_test_result_hash": {"$ref": "#/$defs/hash"},
+    "jar_name": {"type": "string", "pattern": "^[^/\\\\]+\\.jar$"},
+    "jar_size": {"type": "integer", "minimum": 1},
+    "jar_sha256": {"$ref": "#/$defs/hash"},
+    "sbom_name": {"type": "string", "minLength": 1},
+    "sbom_size": {"type": "integer", "minimum": 1},
+    "sbom_sha256": {"$ref": "#/$defs/hash"},
+    "certification_document_hash": {"$ref": "#/$defs/hash"},
+    "build_commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string"}
+    },
+    "control_allowed": {"const": false}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "task", "run", "client", "capture", "source", "graph", "model", "control_allowed"],
+      "properties": {
+        "schema": {"const": "current-slice-identity/v1"},
+        "task": {"$ref": "#/$defs/task"},
+        "run": {"$ref": "#/$defs/run"},
+        "client": {"$ref": "#/$defs/client"},
+        "capture": {"$ref": "#/$defs/capture"},
+        "source": {"$ref": "#/$defs/source"},
+        "graph": {"$ref": "#/$defs/graph"},
+        "model": {"$ref": "#/$defs/model"},
+        "candidate": {"$ref": "#/$defs/candidate-identity"},
+        "control_allowed": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"client": {"properties": {"client_kind": {"const": "MICRO6_MANAGED"}}}}},
+          "then": {
+            "required": ["run"],
+            "properties": {
+              "client": {"properties": {"adapter_contract": {"const": "micro6-builder/v2"}, "domain": {"const": "MICRO6"}}},
+              "run": {"required": ["run_id", "attempt_id", "entry_id", "executor_instance_id"]}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"client": {"properties": {"client_kind": {"const": "RUNELITE_CAPTURE"}}}}},
+          "then": {
+            "properties": {
+              "client": {"properties": {"adapter_contract": {"const": "runelite-capture/v1"}, "domain": {"const": "RUNELITE"}}},
+              "run": {"not": {"anyOf": [{"required": ["attempt_id"]}, {"required": ["entry_id"]}, {"required": ["executor_instance_id"]}]}}
+            }
+          }
+        }
+      ]
+    },
+    "task": {"type": "object", "additionalProperties": false, "required": ["task_key", "settings_hash", "profile_id", "profile_hash", "catalog_hash"], "properties": {"task_key": {"const": "FISHING_TRAINING"}, "settings_hash": {"$ref": "#/$defs/hash"}, "profile_id": {"type": "string", "minLength": 1}, "profile_hash": {"$ref": "#/$defs/hash"}, "catalog_hash": {"$ref": "#/$defs/hash"}}},
+    "run": {"type": "object", "additionalProperties": false, "required": ["run_id"], "properties": {"run_id": {"type": "string", "minLength": 1}, "attempt_id": {"type": "string", "minLength": 1}, "entry_id": {"type": "integer", "minimum": 0}, "executor_instance_id": {"type": "string", "minLength": 1}}},
+    "client": {"type": "object", "additionalProperties": false, "required": ["client_id", "client_kind", "client_build_id", "artifact_digest", "adapter_contract", "domain"], "properties": {"client_id": {"type": "string", "minLength": 1}, "client_kind": {"enum": ["MICRO6_MANAGED", "RUNELITE_CAPTURE"]}, "client_build_id": {"type": "string", "minLength": 1}, "artifact_digest": {"$ref": "#/$defs/hash"}, "adapter_contract": {"type": "string", "minLength": 1}, "domain": {"type": "string", "minLength": 1}}},
+    "capture": {"type": "object", "additionalProperties": false, "required": ["session_id", "recording_id", "recording_hash"], "properties": {"session_id": {"type": "string", "minLength": 1}, "recording_id": {"type": "string", "minLength": 1}, "recording_hash": {"$ref": "#/$defs/hash"}}},
+    "source": {"type": "object", "additionalProperties": false, "required": ["source_snapshot_id", "source_manifest_hash"], "properties": {"source_snapshot_id": {"type": "string", "pattern": "^srcsnap_[0-9a-f]{24}$"}, "source_manifest_hash": {"$ref": "#/$defs/hash"}}},
+    "graph": {"type": "object", "additionalProperties": false, "required": ["graph_id", "graph_hash"], "properties": {"graph_id": {"type": "string", "pattern": "^graph_[0-9a-f]{24}$"}, "graph_hash": {"$ref": "#/$defs/hash"}}},
+    "model": {"type": "object", "additionalProperties": false, "required": ["model_id", "model_hash"], "properties": {"model_id": {"type": "string", "pattern": "^model_[0-9a-f]{24}$"}, "model_hash": {"$ref": "#/$defs/hash"}}},
+    "candidate-identity": {"type": "object", "additionalProperties": false, "required": ["candidate_id", "candidate_hash", "certification_hash", "signature"], "properties": {"candidate_id": {"type": "string", "pattern": "^cand_[0-9a-f]{24}$"}, "candidate_hash": {"$ref": "#/$defs/hash"}, "certification_hash": {"$ref": "#/$defs/hash"}, "signature": {"type": "string", "minLength": 1}}}
+  }
+}

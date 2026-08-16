@@ -18,9 +18,14 @@ public class RoutineAssistantController {
   @PostMapping("/assistant/conversations/{id}/messages") public ResponseEntity<Object> message(@PathVariable String id, @RequestBody RoutineApiDtos.AssistantMessageRequest request) { return ResponseEntity.accepted().body(service.message(id, request)); }
   @PostMapping("/assistant/conversations/{id}/stop") public ResponseEntity<Object> stop(@PathVariable String id) { return ResponseEntity.ok(service.stop(id)); }
   @GetMapping(value = "/assistant/conversations/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter events(@PathVariable String id, @RequestHeader(value = "Last-Event-ID", defaultValue = "0") long after) {
+  public SseEmitter events(@PathVariable String id,
+      @RequestHeader(value = "Last-Event-ID", defaultValue = "0") long lastEventId,
+      @RequestParam(value = "after", defaultValue = "0") long after) {
+    // Resume from the greater valid nonnegative cursor. The UI persists its last event id and sends
+    // it both as Last-Event-ID and as the `after` query parameter on reconnect.
+    long cursor = Math.max(0L, Math.max(lastEventId, after));
     SseEmitter emitter = new SseEmitter(0L);
-    service.stream(id, after, emitter);
+    service.stream(id, cursor, emitter);
     return emitter;
   }
   @PostMapping("/assistant/proposals/{id}/accept") public ResponseEntity<Object> accept(@PathVariable String id) { return ResponseEntity.ok(service.accept(id)); }

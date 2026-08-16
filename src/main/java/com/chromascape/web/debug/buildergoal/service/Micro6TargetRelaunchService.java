@@ -121,10 +121,7 @@ public class Micro6TargetRelaunchService {
     this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     this.micro6ProjectDir = micro6ProjectDir;
     this.launchCommandTemplate = normalizeOptionalString(launchCommandTemplate);
-    this.gradleRunTask =
-        useStructuredWindowsLaunch() || this.launchCommandTemplate != null
-            ? (this.launchCommandTemplate != null ? CUSTOM_LAUNCH_COMMAND : DEFAULT_GRADLE_RUN_TASK)
-            : firstNonBlank(normalizeOptionalString(gradleRunTask), DEFAULT_GRADLE_RUN_TASK);
+    this.gradleRunTask = resolveEffectiveGradleTask(gradleRunTask);
     this.extraRunArgs = extraRunArgs;
     this.defaultWorld = defaultWorld;
     this.launchTimeoutMs = launchTimeoutMs;
@@ -2833,6 +2830,25 @@ public class Micro6TargetRelaunchService {
       return LaunchMode.CUSTOM_COMMAND_TEMPLATE;
     }
     return isWindows() ? LaunchMode.WINDOWS_GRADLE : LaunchMode.NON_WINDOWS_GRADLE;
+  }
+
+  /**
+   * Resolves the effective Gradle task reported by progress responses, run summaries, and launch
+   * operation metadata from the resolved launch mode. The structured Windows launch always reports
+   * the canonical run task — a configured legacy custom launch template is ignored on Windows and
+   * must never relabel the metadata as {@code custom_launch_command}. The template label applies
+   * only when the template mode is actually selected (non-Windows); direct Gradle launches report
+   * the configured canonical task.
+   */
+  private String resolveEffectiveGradleTask(String configuredGradleRunTask) {
+    LaunchMode launchMode = resolveLaunchMode();
+    if (launchMode == LaunchMode.STRUCTURED_WINDOWS) {
+      return DEFAULT_GRADLE_RUN_TASK;
+    }
+    if (launchMode == LaunchMode.CUSTOM_COMMAND_TEMPLATE) {
+      return CUSTOM_LAUNCH_COMMAND;
+    }
+    return firstNonBlank(normalizeOptionalString(configuredGradleRunTask), DEFAULT_GRADLE_RUN_TASK);
   }
 
   /**

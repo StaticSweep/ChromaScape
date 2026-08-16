@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc967/candidate-certification/v1",
+  "title": "candidate-certification/v1 document",
+  "description": "Strict schema for the certification evidence bound by a certified-candidate/v2 manifest. Requires the exact root fields, forbids unknown fields, and cross-links the baseline FAIL manifest, source snapshot, proposal, approval, patch, post-patch result, JAR digest and SBOM digest so the certification and candidate manifest agree.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "baseline_fail_manifest_hash",
+    "source_snapshot_id",
+    "source_manifest_hash",
+    "proposal_hash",
+    "approval_hash",
+    "patch_hash",
+    "post_patch_test_result_hash",
+    "client_build_id",
+    "jar_sha256",
+    "sbom_sha256",
+    "model_hash"
+  ],
+  "properties": {
+    "schema": {"const": "candidate-certification/v1"},
+    "baseline_fail_manifest_hash": {"$ref": "#/$defs/hash"},
+    "source_snapshot_id": {"type": "string", "pattern": "^srcsnap_[0-9a-f]{24}$"},
+    "source_manifest_hash": {"$ref": "#/$defs/hash"},
+    "proposal_hash": {"$ref": "#/$defs/hash"},
+    "approval_hash": {"$ref": "#/$defs/hash"},
+    "patch_hash": {"$ref": "#/$defs/hash"},
+    "post_patch_test_result_hash": {"$ref": "#/$defs/hash"},
+    "client_build_id": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "jar_sha256": {"$ref": "#/$defs/hash"},
+    "sbom_sha256": {"$ref": "#/$defs/hash"},
+    "model_hash": {"$ref": "#/$defs/hash"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

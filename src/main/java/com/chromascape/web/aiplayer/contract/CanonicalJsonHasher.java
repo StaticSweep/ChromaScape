@@ -38,6 +38,7 @@ public final class CanonicalJsonHasher {
   public static String canonical(JsonNode node) { return canonical(node, null); }
 
   public static String canonical(JsonNode node, String excludedRootField) {
+    validateNumbers(node);
     JsonNode copy = normalize(node);
     if (excludedRootField != null && copy.isObject()) ((ObjectNode) copy).remove(excludedRootField);
     try {
@@ -66,7 +67,11 @@ public final class CanonicalJsonHasher {
     if (node.isFloatingPointNumber() || (node.isNumber() && !node.canConvertToLong())) {
       throw new IllegalArgumentException("Floating-point or out-of-range identity number is not allowed");
     }
-    if (node.isContainerNode()) node.elements().forEachRemaining(CanonicalJsonHasher::validateNumbers);
+    if (node.isTextual()) validateUnicode(node.textValue());
+    if (node.isContainerNode()) {
+      node.elements().forEachRemaining(CanonicalJsonHasher::validateNumbers);
+      if (node.isObject()) node.fieldNames().forEachRemaining(CanonicalJsonHasher::validateUnicode);
+    }
   }
 
   private static JsonNode normalize(JsonNode node) {
@@ -82,8 +87,35 @@ public final class CanonicalJsonHasher {
     ObjectNode object = JsonNodeFactory.instance.objectNode();
     List<String> keys = new ArrayList<>();
     node.fieldNames().forEachRemaining(keys::add);
-    keys.sort(Comparator.naturalOrder());
+    keys.sort(CanonicalJsonHasher::compareUtf8);
     for (String key : keys) object.set(key, normalize(node.get(key)));
     return object;
+  }
+
+  /** UTF-8 lexicographic order is stable across the Java, Go, and Micro6 implementations. */
+  private static int compareUtf8(String left, String right) {
+    byte[] leftBytes = left.getBytes(StandardCharsets.UTF_8);
+    byte[] rightBytes = right.getBytes(StandardCharsets.UTF_8);
+    int limit = Math.min(leftBytes.length, rightBytes.length);
+    for (int index = 0; index < limit; index++) {
+      int comparison = Integer.compare(Byte.toUnsignedInt(leftBytes[index]),
+          Byte.toUnsignedInt(rightBytes[index]));
+      if (comparison != 0) return comparison;
+    }
+    return Integer.compare(leftBytes.length, rightBytes.length);
+  }
+
+  private static void validateUnicode(String value) {
+    for (int offset = 0; offset < value.length(); offset++) {
+      char current = value.charAt(offset);
+      if (Character.isHighSurrogate(current)) {
+        if (offset + 1 >= value.length() || !Character.isLowSurrogate(value.charAt(offset + 1))) {
+          throw new IllegalArgumentException("Invalid Unicode surrogate sequence");
+        }
+        offset++;
+      } else if (Character.isLowSurrogate(current)) {
+        throw new IllegalArgumentException("Invalid Unicode surrogate sequence");
+      }
+    }
   }
 }

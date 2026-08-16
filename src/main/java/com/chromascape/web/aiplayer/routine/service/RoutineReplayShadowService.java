@@ -25,7 +25,7 @@ public class RoutineReplayShadowService {
   private final BehaviorGraphService graphs;
   private final RoutineModelRepository models;
   private final RoutineReplayTraceRepository traces;
-  private final CurrentSliceRunRepository runs;
+  private final CurrentSliceRunService runService;
 
   public RoutineReplayShadowService(
       ObjectMapper mapper,
@@ -33,13 +33,13 @@ public class RoutineReplayShadowService {
       BehaviorGraphService graphs,
       RoutineModelRepository models,
       RoutineReplayTraceRepository traces,
-      CurrentSliceRunRepository runs) {
+      CurrentSliceRunService runService) {
     this.mapper = mapper;
     this.captures = captures;
     this.graphs = graphs;
     this.models = models;
     this.traces = traces;
-    this.runs = runs;
+    this.runService = runService;
   }
 
   @Transactional
@@ -70,7 +70,9 @@ public class RoutineReplayShadowService {
     entity.setIdentityJson(write(modelIdentity));
     entity.setDefinitionJson(write(Map.of("schema", "fishing-model/v1", "graph", graph, "identity", modelIdentity)));
     models.save(entity);
-    if (modelIdentity.run() != null && modelIdentity.run().runId() != null) runs.findByRunId(modelIdentity.run().runId()).ifPresent(run -> { run.setIdentityJson(write(modelIdentity)); run.setStage("MODEL_BOUND"); runs.save(run); });
+    if (modelIdentity.run() != null && modelIdentity.run().runId() != null) {
+      runService.advanceIdentity(modelIdentity.run().runId(), modelIdentity, "MODEL_BOUND");
+    }
     return response(entity, modelIdentity);
   }
 
@@ -150,7 +152,11 @@ public class RoutineReplayShadowService {
     List<JsonNode> actions = new ArrayList<>();
     JsonNode nodes = mapper.valueToTree(definition.get("graph") instanceof Map ? ((Map<?, ?>) definition.get("graph")).get("nodes") : definition.get("nodes"));
     if (nodes != null && nodes.isArray()) {
-      for (JsonNode node : nodes) if ("ACTION".equals(node.path("type").asText())) actions.add(node.path("semantic_action"));
+      for (JsonNode node : nodes) {
+        if ("ACTION".equals(node.path("type").asText())) {
+          actions.add(node.path("semantics").path("recorded_action"));
+        }
+      }
     }
     return actions;
   }

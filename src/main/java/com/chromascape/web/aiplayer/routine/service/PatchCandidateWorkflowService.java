@@ -3,14 +3,17 @@ package com.chromascape.web.aiplayer.routine.service;
 import com.chromascape.web.aiplayer.contract.CanonicalJsonHasher;
 import com.chromascape.web.aiplayer.routine.entity.PatchCandidateRun;
 import com.chromascape.web.aiplayer.routine.repository.PatchCandidateRunRepository;
-import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
+import com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.annotation.PostConstruct;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,13 +28,38 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+/**
+ * Orchestrates the certified-candidate lifecycle.
+ *
+ * <pre>
+ * PATCH_PROPOSED -authenticated approval-&gt; APPROVED -enqueue-&gt; BUILD_QUEUED -claim-&gt; BUILDING
+ *   -evidence complete-&gt; BUILT | BUILD_FAILED
+ * BUILT -prepare registration-&gt; REGISTERING -verified registry response-&gt; REGISTERED
+ *   -ambiguous transport-&gt; REGISTERING_UNCERTAIN -verified lookup-&gt; REGISTERED -confirmed 404-&gt; re-post
+ * terminal: REGISTERED | BUILD_FAILED | REJECTED | FAILED
+ * </pre>
+ *
+ * <p>External work (build, registry POST) never begins inside the transaction that changes state.
+ * Builds are claimed by a bounded worker with an expiring lease; a periodic scanner requeues
+ * expired leases and abandoned queued records after restart. Registration is staged durably under a
+ * configured persistent root before the registry POST and recovered only from the exact persisted
+ * bundle.
+ */
 @Service
 public class PatchCandidateWorkflowService {
   private static final String SEEDED_FAIL = "sha256:b201629e712be24815e43551a5185a2b45fe3a0b77b2aca8f2a51dd250917956";
   private static final String SOURCE_FILE = "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java";
   private static final String TEST_FILE = "runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java";
   private static final String EXCEPTION_FILE = "runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java";
+  private static final String SCHEMA_V2 = "certified-candidate/v2";
+  private static final java.time.Duration LEASE_DURATION = java.time.Duration.ofMinutes(15);
+  private static final List<String> BUILD_GATES = List.of(
+      ":runelite-client:compileJava", ":runelite-client:checkstyleMain",
+      ":runelite-client:checkstyleTest", ":runelite-client:test",
+      ":runelite-client:shadowJar", ":runelite-client:generateRuntimeSbom");
   private static final String PATCH = """
       diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
       --- a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
@@ -41,16 +69,16 @@ public class PatchCandidateWorkflowService {
       +        if (fishName == null || fishName.isBlank()) {
       +            throw new UnsupportedFishTypeException(fishName);
       +        }
-               // Convert fish name to Fish enum - simple mapping
+              // Convert fish name to Fish enum - simple mapping
       -        switch (fishName.toLowerCase()) {
       +        switch (fishName.trim().toLowerCase()) {
       @@ -122,4 +125,3 @@
-                   default:
+                  default:
       -        System.out.println("[FishingExecutionTask] Warning: Unknown fish name '" + fishName + "', defaulting to SHRIMP");
       -        return Fish.SHRIMP;
       +        throw new UnsupportedFishTypeException(fishName);
-           }
-       }
+          }
+      }
       diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java
       new file mode 100644
       --- /dev/null
@@ -100,18 +128,86 @@ public class PatchCandidateWorkflowService {
   private final ObjectMapper mapper;
   private final IsolatedPatchWorker worker;
   private final PatchCandidateRunRepository repository;
-  private final CurrentSliceRunRepository runs;
+  private final PatchCandidateBuildDispatcher dispatcher;
+  private final CurrentSliceRunService runService;
   private final Micro6SourceManifestClient source;
   private final CurrentSliceIdentityValidator identities;
   private final CandidateRegistryClient registry;
+  private final CertifiedCandidateV2Validator candidateValidator;
+  private final AiRoutineOperatorProperties operator;
+  private final com.chromascape.web.aiplayer.routine.config.Sc967CandidateProperties candidateProperties;
+  private final PatchCandidateRegistrationDispatcher registrationDispatcher;
   @Value("${builder-goal.recovery.micro6-project-dir:../micro6}") private String micro6Root;
   @Value("${leeuwbot.signing.private-key-path:}") private String signingKeyPath;
   @Value("${leeuwbot.signing.key-id:}") private String signingKeyId;
   @Value("${micro6.expected-artifact-name:}") private String expectedArtifactName;
   private final ExecutorService buildExecutor = new ThreadPoolExecutor(0, 1, 30, TimeUnit.SECONDS, new ArrayBlockingQueue<>(4), new ThreadPoolExecutor.AbortPolicy());
 
-  public PatchCandidateWorkflowService(ObjectMapper mapper, IsolatedPatchWorker worker, PatchCandidateRunRepository repository, CurrentSliceRunRepository runs, Micro6SourceManifestClient source, CurrentSliceIdentityValidator identities, CandidateRegistryClient registry) {
-    this.mapper = mapper; this.worker = worker; this.repository = repository; this.runs = runs; this.source = source; this.identities = identities; this.registry = registry;
+  @org.springframework.beans.factory.annotation.Autowired
+  public PatchCandidateWorkflowService(ObjectMapper mapper, IsolatedPatchWorker worker, PatchCandidateRunRepository repository, PatchCandidateBuildDispatcher dispatcher, CurrentSliceRunService runService, Micro6SourceManifestClient source, CurrentSliceIdentityValidator identities, CandidateRegistryClient registry, AiRoutineOperatorProperties operator, com.chromascape.web.aiplayer.routine.config.Sc967CandidateProperties candidateProperties, PatchCandidateRegistrationDispatcher registrationDispatcher, CertifiedCandidateV2Validator candidateValidator) {
+    this.mapper = mapper; this.worker = worker; this.repository = repository; this.dispatcher = dispatcher; this.runService = runService; this.source = source; this.identities = identities; this.registry = registry; this.operator = operator; this.candidateProperties = candidateProperties; this.registrationDispatcher = registrationDispatcher;
+    this.candidateValidator = candidateValidator;
+  }
+
+  /** Compatibility constructor retained for focused unit tests that do not bootstrap Spring. */
+  public PatchCandidateWorkflowService(ObjectMapper mapper, IsolatedPatchWorker worker, PatchCandidateRunRepository repository, PatchCandidateBuildDispatcher dispatcher, CurrentSliceRunService runService, Micro6SourceManifestClient source, CurrentSliceIdentityValidator identities, CandidateRegistryClient registry, AiRoutineOperatorProperties operator, com.chromascape.web.aiplayer.routine.config.Sc967CandidateProperties candidateProperties) {
+    this(mapper, worker, repository, dispatcher, runService, source, identities, registry, operator, candidateProperties, null, new CertifiedCandidateV2Validator());
+  }
+
+  private String stagingRoot() { return candidateProperties == null ? "" : candidateProperties.getStagingRoot(); }
+  private boolean buildsEnabled() { return candidateProperties != null && candidateProperties.isBuildsEnabled(); }
+
+  /**
+   * Fails startup when candidate builds are enabled but any required signing/registry/staging
+   * operator configuration is missing, unreadable, or unusable. This is a real runtime gate, not a
+   * startup hint: build enqueue, worker execution and recovery dispatch are all rejected while the
+   * flag is disabled.
+   */
+  @PostConstruct
+  void validateConfiguration() {
+    if (!buildsEnabled()) {
+      return;
+    }
+    if (operator == null || operator.getToken() == null || operator.getToken().isBlank()) {
+      throw new IllegalStateException("ai-routine.operator.token (AI_ROUTINE_OPERATOR_TOKEN) is required when candidate builds are enabled");
+    }
+    if (operator.getId() == null || operator.getId().isBlank()) {
+      throw new IllegalStateException("ai-routine.operator.id (AI_ROUTINE_OPERATOR_ID) is required when candidate builds are enabled");
+    }
+    if (signingKeyPath == null || signingKeyPath.isBlank()) {
+      throw new IllegalStateException("leeuwbot.signing.private-key-path (CANDIDATE_SIGNING_PRIVATE_KEY_PATH) is required when candidate builds are enabled");
+    }
+    if (signingKeyId == null || signingKeyId.isBlank()) {
+      throw new IllegalStateException("leeuwbot.signing.key-id (CANDIDATE_SIGNING_KEY_ID) is required when candidate builds are enabled");
+    }
+    try {
+      new CandidateSigner(signingKeyId, Path.of(signingKeyPath));
+    } catch (Exception e) {
+      throw new IllegalStateException("signing private key is not readable or not a valid Ed25519 key: " + signingKeyPath, e);
+    }
+    if (registry == null || registry.baseUrl() == null || registry.baseUrl().isBlank()) {
+      throw new IllegalStateException("leeuwbot.candidate-registry.base-url (LEEUWBOT_CANDIDATE_REGISTRY_URL) is required when candidate builds are enabled");
+    }
+    if (registry.token() == null || registry.token().isBlank()) {
+      throw new IllegalStateException("leeuwbot.candidate-registry.token (STATIC_API_TOKEN) is required when candidate builds are enabled");
+    }
+    if (stagingRoot().isBlank()) {
+      throw new IllegalStateException("sc967.candidate.staging-root (SC967_CANDIDATE_STAGING_ROOT) is required when candidate builds are enabled");
+    }
+    try {
+      Files.createDirectories(Path.of(stagingRoot()).toAbsolutePath().normalize());
+    } catch (Exception e) {
+      throw new IllegalStateException("sc967.candidate.staging-root is not usable: " + stagingRoot(), e);
+    }
+    if (expectedArtifactName == null || expectedArtifactName.isBlank()) {
+      throw new IllegalStateException("micro6.expected-artifact-name (MICRO6_EXPECTED_ARTIFACT_NAME) is required when candidate builds are enabled");
+    }
+  }
+
+  private void requireBuildsEnabled() {
+    if (!buildsEnabled()) {
+      throw error(HttpStatus.FORBIDDEN, "CANDIDATE_BUILDS_DISABLED", "candidate builds are disabled (sc967.candidate.builds-enabled=false); nothing can be queued or executed");
+    }
   }
 
   @Transactional
@@ -193,12 +289,12 @@ public class PatchCandidateWorkflowService {
   }
 
   @Transactional
-  public Map<String, Object> approve(String id, String approver) {
-    PatchCandidateRun entity = proposal(id);
-    if (approver == null || approver.isBlank()) throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_FIELD_MISSING", "approver is required");
+  public Map<String, Object> approve(String id, String operatorId) {
+    PatchCandidateRun entity = lockedProposal(id);
+    if (operatorId == null || operatorId.isBlank()) throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_FIELD_MISSING", "operator identity is required");
     if ("APPROVED".equals(entity.getState())) {
-      if (approver.equals(entity.getApproverId())) return response(entity);
-      throw error(HttpStatus.CONFLICT, "PATCH_APPROVAL_STALE", "proposal is already approved by another principal");
+      if (operatorId.equals(entity.getApproverId())) return response(entity);
+      throw error(HttpStatus.CONFLICT, "PATCH_APPROVAL_STALE", "proposal is already approved by another operator");
     }
     if (!"PATCH_PROPOSED".equals(entity.getState())) throw error(HttpStatus.CONFLICT, "PATCH_APPROVAL_STALE", "proposal is no longer approvable");
     Instant approvedAt = Instant.now();
@@ -214,9 +310,10 @@ public class PatchCandidateWorkflowService {
     approval.put("start_line", entity.getStartLine());
     approval.put("end_line", entity.getEndLine());
     approval.put("preimage_hash", entity.getPreimageHash());
-    approval.put("approver_id", approver);
+    approval.put("operator_id", operatorId);
+    approval.put("approver_id", operatorId);
     approval.put("approved_at", approvedAt.toString());
-    entity.setApproverId(approver);
+    entity.setApproverId(operatorId);
     entity.setApprovedAt(approvedAt);
     entity.setApprovalHash(CanonicalJsonHasher.hash(approval, null));
     entity.setState("APPROVED");
@@ -224,160 +321,620 @@ public class PatchCandidateWorkflowService {
     return response(entity);
   }
 
+  /**
+   * Commits {@code BUILD_QUEUED} before any work is offered to the executor. The afterCommit hook
+   * offers the proposal to the bounded executor; a full queue is not a rollback, the periodic
+   * recovery scanner picks up the queued record instead.
+   */
   @Transactional
   public Map<String, Object> enqueueBuild(String id) {
-    PatchCandidateRun entity = proposal(id);
-    if (!"APPROVED".equals(entity.getState())) throw error(HttpStatus.CONFLICT, "PATCH_NOT_APPROVED", "explicit human approval is required");
-    entity.setState("BUILDING");
+    requireBuildsEnabled();
+    PatchCandidateRun entity = lockedProposal(id);
+    if (!"APPROVED".equals(entity.getState())) throw error(HttpStatus.CONFLICT, "PATCH_NOT_APPROVED", "explicit operator approval is required");
+    entity.setState("BUILD_QUEUED");
+    entity.setWorkerAttemptId(null);
+    entity.setWorkerLeaseExpiresAt(null);
     repository.save(entity);
-    try {
-      buildExecutor.execute(() -> build(id));
-    } catch (java.util.concurrent.RejectedExecutionException e) {
-      entity.setState("APPROVED");
-      repository.save(entity);
-      throw error(HttpStatus.CONFLICT, "BUILD_QUEUE_FULL", "approved build queue is full");
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override public void afterCommit() { offerBuild(id); }
+      });
+    } else {
+      offerBuild(id);
     }
     return response(entity);
   }
 
-  public Map<String, Object> build(String id) {
-    PatchCandidateRun entity = proposal(id);
-    if (!"BUILDING".equals(entity.getState()) && !"APPROVED".equals(entity.getState())) throw error(HttpStatus.CONFLICT, "PATCH_NOT_APPROVED", "explicit human approval is required");
-    if ("APPROVED".equals(entity.getState())) { entity.setState("BUILDING"); repository.save(entity); }
-    entity.setWorkerStartedAt(Instant.now()); repository.save(entity);
-    IsolatedPatchWorker.BuildResult result = worker.run(new IsolatedPatchWorker.BuildRequest(
-        Path.of(micro6Root), entity.getBaseCommit(), entity.getPatchText(),
-        Set.of(SOURCE_FILE, EXCEPTION_FILE, TEST_FILE), List.of(), entity.getSourceSnapshotId(),
-        entity.getSourceRelativePath(), entity.getStartLine(), entity.getEndLine(), entity.getPreimageHash(), entity.getFailureManifestHash(),
-        entity.getProposalHash(), entity.getApprovalHash(), entity.getPatchHash(), entity.getSourceManifestHash(), entity.getSourceManifestJson(), modelHash(entity.getIdentityJson()), expectedArtifactName));
-    entity.setWorkerCompletedAt(Instant.now());
-    entity.setState("BUILT".equals(result.status()) ? "BUILT" : "BUILD_FAILED");
-    entity.setLastFailureCode(result.failureCode());
-    Map<String, Object> buildResult = new LinkedHashMap<>();
-    buildResult.put("status", result.status());
-    buildResult.put("changed_files", result.changedFiles());
-    buildResult.put("failure_code", result.failureCode());
-    entity.setResultJson(write(buildResult));
-    if ("BUILT".equals(result.status())) {
-      entity.setState("REGISTERING");
-      repository.save(entity);
-      registerCandidate(entity, result);
+  private void offerBuild(String id) {
+    try {
+      buildExecutor.execute(() -> runBuild(id));
+    } catch (java.util.concurrent.RejectedExecutionException e) {
+      // The recovery scanner will claim the queued record later; never roll back the queue commit.
     }
-    repository.save(entity);
-    return response(entity);
+  }
+
+  /** Runs the isolated build for a claimed record and drives registration on success. */
+  private void runBuild(String id) {
+    if (!buildsEnabled()) {
+      return;
+    }
+    String attemptId = dispatcher.claim(id, Instant.now().plus(LEASE_DURATION));
+    if (attemptId == null) {
+      return;
+    }
+    Thread heartbeat = leaseHeartbeat(id, attemptId);
+    heartbeat.start();
+    try {
+      PatchCandidateRun entity = repository.findByProposalId(id).orElse(null);
+      if (entity == null) {
+        dispatcher.persistFailure(id, attemptId, "PROPOSAL_NOT_FOUND");
+        return;
+      }
+      IsolatedPatchWorker.BuildRequest request = new IsolatedPatchWorker.BuildRequest(
+          Path.of(micro6Root), entity.getBaseCommit(), entity.getPatchText(),
+          Set.of(SOURCE_FILE, EXCEPTION_FILE, TEST_FILE), List.of(), entity.getSourceSnapshotId(),
+          entity.getSourceRelativePath(), entity.getStartLine(), entity.getEndLine(), entity.getPreimageHash(), entity.getFailureManifestHash(),
+          entity.getProposalHash(), entity.getApprovalHash(), entity.getPatchHash(), entity.getSourceManifestHash(), entity.getSourceManifestJson(), modelHash(entity.getIdentityJson()), expectedArtifactName);
+      IsolatedPatchWorker.BuildResult result = worker.run(request);
+      Map<String, Object> buildResult = new LinkedHashMap<>();
+      buildResult.put("status", result.status());
+      buildResult.put("changed_files", result.changedFiles());
+      buildResult.put("failure_code", result.failureCode());
+      dispatcher.persistBuildResult(id, attemptId, result, write(buildResult));
+      if ("BUILT".equals(result.status())) {
+        prepareRegistration(id, result);
+        postPreparedRegistration(id);
+      }
+    } catch (Exception e) {
+      dispatcher.persistFailure(id, attemptId, e.getMessage() == null ? "BUILD_FAILED" : e.getMessage());
+    } finally {
+      heartbeat.interrupt();
+    }
+  }
+
+  private Thread leaseHeartbeat(String id, String attemptId) {
+    Thread thread = new Thread(() -> {
+      while (!Thread.currentThread().isInterrupted()) {
+        try {
+          Thread.sleep(60_000L);
+          dispatcher.heartbeat(id, attemptId, Instant.now().plus(LEASE_DURATION));
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          return;
+        } catch (Exception ignored) {
+          // best-effort; claim ownership is validated on every refresh
+        }
+      }
+    }, "candidate-lease-" + id);
+    thread.setDaemon(true);
+    return thread;
   }
 
   @Transactional(readOnly = true)
   public Map<String, Object> get(String id) { return response(proposal(id)); }
 
-  @Transactional
+  /**
+   * Reconciles an uncertain registration. Lookup first; accept only after exact canonical manifest
+   * comparison, candidate id/hash match, certified state, and download SHA-256 verification.
+   * Re-post only on a confirmed registry 404 using the exact persisted bundle.
+   */
   public Map<String, Object> reconcile(String id) {
-    PatchCandidateRun entity = proposal(id);
-    if (!"REGISTERING_UNCERTAIN".equals(entity.getState()) && !"REGISTERING".equals(entity.getState())) throw error(HttpStatus.CONFLICT, "RECONCILIATION_NOT_REQUIRED", "proposal is not awaiting registry reconciliation");
-    if ("REGISTERING".equals(entity.getState())) return repostPersistedCandidate(entity);
-    if (entity.getCandidateId() == null || entity.getCandidateHash() == null) throw error(HttpStatus.INTERNAL_SERVER_ERROR, "CANDIDATE_EVIDENCE_MISSING", "candidate identity was not persisted");
-    try {
-      JsonNode body = mapper.readTree(registry.lookup(entity.getCandidateId()));
-      JsonNode manifest = body.path("manifest");
-      JsonNode declaration = manifest.path("candidate");
-      String returnedId = declaration.path("candidate_id").asText(manifest.path("candidate_id").asText());
-      String returnedHash = declaration.path("candidate_hash").asText(manifest.path("candidate_hash").asText());
-      if (!entity.getCandidateId().equals(returnedId) || !entity.getCandidateHash().equals(returnedHash)) {
-        entity.setState("REJECTED"); entity.setResultJson(write(Map.of("failure_code", "REGISTRY_IDENTITY_MISMATCH")));
-      } else if (!"CERTIFIED_CANDIDATE".equals(body.path("state").asText())) {
-        entity.setState("REJECTED"); entity.setResultJson(write(Map.of("failure_code", "REGISTRY_STATE_INVALID")));
-      } else {
-        entity.setState("REGISTERED"); entity.setResultJson(write(Map.of("candidate_id", entity.getCandidateId(), "candidate_hash", entity.getCandidateHash(), "reconciled", true)));
-      }
-    } catch (CandidateRegistryClient.RegistryException e) {
-      if (e.isUncertain()) entity.setState("REGISTERING_UNCERTAIN");
-      else if (e.getMessage() != null && e.getMessage().contains("404")) entity.setState("REGISTERING");
-      else entity.setState("REJECTED");
-      entity.setResultJson(write(Map.of("failure_code", e.getMessage() == null ? "REGISTRY_RECONCILIATION_FAILED" : e.getMessage())));
-    } catch (Exception e) {
-      entity.setState("REJECTED"); entity.setResultJson(write(Map.of("failure_code", "REGISTRY_READBACK_INVALID")));
+    PatchCandidateRun entity = repository.findByProposalId(id)
+        .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "patch proposal not found"));
+    if (!"REGISTERING_UNCERTAIN".equals(entity.getState()) && !"REGISTERING".equals(entity.getState())) {
+      throw error(HttpStatus.CONFLICT, "RECONCILIATION_NOT_REQUIRED", "proposal is not awaiting registry reconciliation");
     }
-    repository.save(entity);
-    return response(entity);
+    if ("REGISTERING".equals(entity.getState())) {
+      return repostPersistedCandidate(id);
+    }
+    return lookupUncertain(id);
   }
 
-  private Map<String, Object> repostPersistedCandidate(PatchCandidateRun entity) {
+  private Map<String, Object> lookupUncertain(String id) {
+    PatchCandidateRun entity = repository.findByProposalId(id).orElse(null);
+    if (entity == null) {
+      return Map.of("control_allowed", false);
+    }
+    PatchCandidateRegistrationDispatcher.RegistrationClaim claim = claimRegistration(id);
+    if (registrationDispatcher != null && claim == null) {
+      return response(repository.findByProposalId(id).orElse(entity));
+    }
+    entity = repository.findByProposalId(id).orElse(entity);
+    if (entity.getCandidateId() == null || entity.getCandidateHash() == null) {
+      failClosed(id, "CANDIDATE_EVIDENCE_MISSING", "candidate identity was not persisted", HttpStatus.INTERNAL_SERVER_ERROR);
+      return response(repository.findByProposalId(id).orElse(entity));
+    }
+    CandidateRegistryClient.RegistryEnvelope lookup = null;
+    CandidateRegistryClient.ArtifactDownload downloaded = null;
     try {
-      if (entity.getCandidateStagingDirectory() == null) throw new IllegalStateException("CANDIDATE_STAGING_MISSING");
-      Path bundle = Path.of(entity.getCandidateStagingDirectory()).toAbsolutePath().normalize();
+      revalidatePersistedBundle(entity);
+      lookup = registry.lookupEvidence(entity.getCandidateId(), entity.getManifestFileHash());
+      Map<String, Object> localManifest = read(entity.getCandidateManifestJson());
+      verifyRegistryReadback(localManifest, lookup, entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
+      downloaded = registry.downloadEvidence(entity.getCandidateId());
+      if (!downloaded.sha256().equals(String.valueOf(localManifest.get("jar_sha256")))) {
+        throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
+      }
+      return transitionClaimed(entity, claim, "REGISTERED", Map.of("candidate_id", entity.getCandidateId(),
+          "candidate_hash", entity.getCandidateHash(), "reconciled", true,
+          "download_sha256", downloaded.sha256(), "registration", lookup.body(),
+          "registry_manifest_hash", lookup.manifestHash()), evidence(lookup, downloaded));
+    } catch (CandidateRegistryClient.RegistryException e) {
+      if (e.isUncertain()) return transitionClaimed(entity, claim, "REGISTERING_UNCERTAIN", Map.of("failure_code", String.valueOf(e.getMessage())), evidence(lookup, downloaded));
+      if (e.getMessage() != null && e.getMessage().contains("404")) {
+        transitionClaimed(entity, claim, "REGISTERING", Map.of("failure_code", "REGISTRY_REJECTED_404"), evidence(lookup, downloaded));
+        return repostPersistedCandidate(id);
+      }
+      return transitionClaimed(entity, claim, "REJECTED", Map.of("failure_code", String.valueOf(e.getMessage())), evidence(lookup, downloaded));
+    } catch (Exception e) {
+      return transitionClaimed(entity, claim, "REJECTED", Map.of("failure_code", e.getMessage() == null ? "REGISTRY_READBACK_INVALID" : e.getMessage()), evidence(lookup, downloaded));
+    }
+  }
+
+  private Map<String, Object> repostPersistedCandidate(String id) {
+    PatchCandidateRun entity = repository.findByProposalId(id).orElse(null);
+    if (entity == null) {
+      return Map.of("control_allowed", false);
+    }
+    PatchCandidateRegistrationDispatcher.RegistrationClaim claim = claimRegistration(id);
+    if (registrationDispatcher != null && claim == null) {
+      return response(repository.findByProposalId(id).orElse(entity));
+    }
+    entity = repository.findByProposalId(id).orElse(entity);
+    if (entity.getCandidateStagingDirectory() == null) {
+      // Missing/corrupt staging evidence is terminal; never silently re-create a candidate.
+      return transitionClaimed(entity, claim, "FAILED", Map.of("failure_code", "CANDIDATE_STAGING_MISSING"), null);
+    }
+    CandidateRegistryClient.RegistryEnvelope registration = null;
+    CandidateRegistryClient.ArtifactDownload downloaded = null;
+    try {
+      Path bundle = revalidatePersistedBundle(entity);
       Map<String, Object> manifest = read(entity.getCandidateManifestJson());
-      Path manifestPath = bundle.resolve("manifest.json"); Path jar = bundle.resolve(String.valueOf(manifest.get("jar_name"))); Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name"))); Path cert = bundle.resolve("certification.json");
-      String registration = registry.register(manifestPath, jar, sbom, cert); entity.setRegistryResponseJson(registration); verifyRegistryReadback(manifest, registration, entity.getCandidateId(), entity.getCandidateHash());
-      byte[] downloaded = registry.download(entity.getCandidateId());
-      if (!hash(downloaded).equals(String.valueOf(manifest.get("jar_sha256")))) throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
-      entity.setState("REGISTERED"); persistCandidateRunIdentity(entity, "CANDIDATE_REGISTERED"); entity.setResultJson(write(Map.of("candidate_id", entity.getCandidateId(), "candidate_hash", entity.getCandidateHash(), "reconciled", true, "download_sha256", hash(downloaded))));
-      if (!deleteBundle(bundle)) { entity.setState("FAILED"); entity.setLastFailureCode("CANDIDATE_BUNDLE_CLEANUP_FAILED"); }
-    } catch (CandidateRegistryClient.RegistryException e) { entity.setState(e.isUncertain() ? "REGISTERING_UNCERTAIN" : (e.getMessage() != null && e.getMessage().contains("404") ? "REGISTERING" : "REJECTED")); entity.setLastFailureCode(e.getMessage()); entity.setResultJson(write(Map.of("failure_code", e.getMessage()))); }
-    catch (Exception e) { entity.setState("FAILED"); entity.setLastFailureCode(e.getMessage()); entity.setResultJson(write(Map.of("failure_code", e.getMessage() == null ? "CANDIDATE_RECONCILIATION_FAILED" : e.getMessage()))); }
-    repository.save(entity); return response(entity);
+      Path manifestPath = bundle.resolve("manifest.json");
+      Path jar = bundle.resolve(String.valueOf(manifest.get("jar_name")));
+      Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
+      Path cert = bundle.resolve("certification.json");
+      registration = registry.registerEvidence(manifestPath, jar, sbom, cert);
+      verifyRegistryReadback(manifest, registration, entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
+      downloaded = registry.downloadEvidence(entity.getCandidateId());
+      if (!downloaded.sha256().equals(String.valueOf(manifest.get("jar_sha256")))) {
+        throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
+      }
+      return transitionClaimed(entity, claim, "REGISTERED", Map.of("candidate_id", entity.getCandidateId(),
+          "candidate_hash", entity.getCandidateHash(), "reconciled", true,
+          "download_sha256", downloaded.sha256(), "registration", registration.body(),
+          "registry_manifest_hash", registration.manifestHash()), evidence(registration, downloaded));
+    } catch (CandidateRegistryClient.RegistryException e) {
+      if (e.isUncertain()) return transitionClaimed(entity, claim, "REGISTERING_UNCERTAIN", Map.of("failure_code", String.valueOf(e.getMessage())), evidence(registration, downloaded));
+      if (e.getMessage() != null && e.getMessage().contains("404")) return transitionClaimed(entity, claim, "REGISTERING", Map.of("failure_code", "REGISTRY_REJECTED_404"), evidence(registration, downloaded));
+      return transitionClaimed(entity, claim, "REJECTED", Map.of("failure_code", String.valueOf(e.getMessage())), evidence(registration, downloaded));
+    } catch (Exception e) {
+      return transitionClaimed(entity, claim, "FAILED", Map.of("failure_code", e.getMessage() == null ? "CANDIDATE_RECONCILIATION_FAILED" : String.valueOf(e.getMessage())), evidence(registration, downloaded));
+    }
   }
 
-  private void registerCandidate(PatchCandidateRun entity, IsolatedPatchWorker.BuildResult result) {
+  private Map<String, Object> transition(PatchCandidateRun entity, String state, Map<String, Object> result) {
+    return transition(entity, state, result, null);
+  }
+
+  private Map<String, Object> transition(
+      PatchCandidateRun entity, String state, Map<String, Object> result,
+      PatchCandidateRegistrationDispatcher.RegistryEvidence evidence) {
+    if (entity == null) return Map.of("control_allowed", false);
+    if (registrationDispatcher != null) {
+      PatchCandidateRun current = registrationDispatcher.transition(entity.getProposalId(), state, result, evidence);
+      return current == null ? Map.of("control_allowed", false) : response(current);
+    }
+    // Compatibility fallback for direct unit construction outside Spring. Production always uses
+    // the locked dispatcher above, including the atomic candidate/run registration path.
+    PatchCandidateRun current = repository.findWithLockByProposalId(entity.getProposalId()).orElse(entity);
+    current.setState(state);
+    if ("REGISTERED".equals(state)) {
+      current.setRegistryReconciledAt(Instant.now());
+      if (result.get("registration") != null) current.setRegistryResponseJson(String.valueOf(result.get("registration")));
+      persistCandidateRunIdentity(current, "CANDIDATE_REGISTERED");
+    }
+    current.setResultJson(write(result));
+    repository.save(current);
+    return response(current);
+  }
+
+  private PatchCandidateRegistrationDispatcher.RegistrationClaim claimRegistration(String id) {
+    return registrationDispatcher == null ? null
+        : registrationDispatcher.claimRegistration(id, Instant.now());
+  }
+
+  private Map<String, Object> transitionClaimed(
+      PatchCandidateRun entity,
+      PatchCandidateRegistrationDispatcher.RegistrationClaim claim,
+      String state,
+      Map<String, Object> result,
+      PatchCandidateRegistrationDispatcher.RegistryEvidence evidence) {
+    if (entity == null) return Map.of("control_allowed", false);
+    if (registrationDispatcher != null) {
+      String attemptId = claim == null ? null : claim.attemptId();
+      PatchCandidateRun current = attemptId == null
+          ? registrationDispatcher.transition(entity.getProposalId(), state, result, evidence)
+          : registrationDispatcher.transitionClaimed(entity.getProposalId(), attemptId, state, result, evidence);
+      return current == null ? Map.of("control_allowed", false) : response(current);
+    }
+    return transition(entity, state, result, evidence);
+  }
+
+  private void failClosed(String id, String code, String message, HttpStatus status) {
+    PatchCandidateRun entity = repository.findByProposalId(id).orElse(null);
+    if (entity != null) {
+      transition(entity, "FAILED", Map.of("failure_code", code));
+    }
+    throw error(status, code, message);
+  }
+
+  /**
+   * Durably prepares the registration bundle before any registry I/O. The bundle is assembled in
+   * {@code <staging-root>/.tmp/<uuid>} using exclusive {@code CREATE_NEW} writes, fsynced, re-read
+   * and verified byte-for-byte, then atomically renamed to {@code <staging-root>/<candidate-id>}.
+   * A pre-existing candidate directory is reused only when every persisted byte is identical;
+   * otherwise the preparation fails closed. All evidence (identity, canonical manifest, manifest
+   * file hash, component hashes/sizes, staging directory, registration attempt id, request
+   * fingerprint, {@code REGISTERING}) is committed in one transaction via the dispatcher.
+   */
+  public void prepareRegistration(String id, IsolatedPatchWorker.BuildResult build) {
+    PatchCandidateRun entity = repository.findByProposalId(id).orElse(null);
+    if (entity == null || !"BUILT".equals(entity.getState())) {
+      return;
+    }
     if (signingKeyPath == null || signingKeyPath.isBlank() || signingKeyId == null || signingKeyId.isBlank()) {
-      entity.setState("FAILED"); entity.setResultJson(write(Map.of("failure_code", "SIGNING_KEY_UNAVAILABLE"))); return;
+      transition(entity, "FAILED", Map.of("failure_code", "SIGNING_KEY_UNAVAILABLE"));
+      return;
     }
-    if (result.jarBytes() == null || result.sbomBytes() == null || result.certificationBytes() == null) {
-      entity.setState("FAILED"); entity.setResultJson(write(Map.of("failure_code", "CERTIFICATION_ARTIFACT_MISSING"))); return;
+    if (stagingRoot().isBlank()) {
+      transition(entity, "FAILED", Map.of("failure_code", "STAGING_ROOT_NOT_CONFIGURED"));
+      return;
     }
-    Path bundle = null;
-    boolean retainBundle = false;
+    if (build == null || build.jarBytes() == null || build.sbomBytes() == null || build.certificationBytes() == null) {
+      transition(entity, "FAILED", Map.of("failure_code", "CERTIFICATION_ARTIFACT_MISSING"));
+      return;
+    }
     try {
-      bundle = Files.createTempDirectory("sc967-candidate-");
-      Path jar = bundle.resolve(result.jarName()); Path sbom = bundle.resolve(result.sbomName()); Path cert = bundle.resolve("certification.json"); Path manifestPath = bundle.resolve("manifest.json");
-      Files.write(jar, result.jarBytes()); Files.write(sbom, result.sbomBytes()); Files.write(cert, result.certificationBytes());
-      Map<String, Object> manifest = new LinkedHashMap<>(); manifest.put("schema", "certified-candidate/v1"); manifest.put("identity", read(entity.getIdentityJson())); manifest.put("key_id", signingKeyId); manifest.put("base_commit", entity.getBaseCommit()); manifest.put("baseline_fail_manifest_hash", entity.getFailureManifestHash()); manifest.put("source_snapshot_id", entity.getSourceSnapshotId()); manifest.put("source_manifest_hash", entity.getSourceManifestHash()); manifest.put("patch_hash", entity.getPatchHash()); manifest.put("proposal_hash", entity.getProposalHash()); manifest.put("approval_hash", entity.getApprovalHash()); manifest.put("post_patch_test_result_hash", hash(result.testReportBytes())); manifest.put("build_commands", List.of(":runelite-client:compileJava", ":runelite-client:checkstyleMain", ":runelite-client:checkstyleTest", ":runelite-client:test", ":runelite-client:shadowJar", ":runelite-client:generateRuntimeSbom")); manifest.put("jar_name", result.jarName()); manifest.put("jar_size", (long) result.jarBytes().length); manifest.put("jar_sha256", hash(result.jarBytes())); manifest.put("sbom_name", result.sbomName()); manifest.put("sbom_size", (long) result.sbomBytes().length); manifest.put("sbom_sha256", hash(result.sbomBytes())); manifest.put("certification_document_hash", hash(result.certificationBytes())); manifest.put("control_allowed", false);
-      Map<String, Object> candidate = new LinkedHashMap<>(); candidate.put("certification_hash", hash(result.certificationBytes())); manifest.put("candidate", candidate);
+      Path root = Path.of(stagingRoot()).toAbsolutePath().normalize();
+      Files.createDirectories(root);
+      String jarSha = hash(build.jarBytes());
+      String sbomSha = hash(build.sbomBytes());
+      String certificationSha = hash(build.certificationBytes());
+      Map<String, Object> manifest = new LinkedHashMap<>();
+      manifest.put("schema", SCHEMA_V2);
+      manifest.put("identity", read(entity.getIdentityJson()));
+      manifest.put("key_id", signingKeyId);
+      manifest.put("signature_algorithm", "Ed25519");
+      manifest.put("base_commit", entity.getBaseCommit());
+      manifest.put("baseline_fail_manifest_hash", entity.getFailureManifestHash());
+      manifest.put("source_snapshot_id", entity.getSourceSnapshotId());
+      manifest.put("source_manifest_hash", entity.getSourceManifestHash());
+      manifest.put("patch_hash", entity.getPatchHash());
+      manifest.put("proposal_hash", entity.getProposalHash());
+      manifest.put("approval_hash", entity.getApprovalHash());
+      manifest.put("post_patch_test_result_hash", hash(build.testReportBytes()));
+      manifest.put("build_commands", BUILD_GATES);
+      manifest.put("jar_name", build.jarName());
+      manifest.put("jar_size", (long) build.jarBytes().length);
+      manifest.put("jar_sha256", jarSha);
+      manifest.put("sbom_name", build.sbomName());
+      manifest.put("sbom_size", (long) build.sbomBytes().length);
+      manifest.put("sbom_sha256", sbomSha);
+      manifest.put("certification_document_hash", certificationSha);
+      manifest.put("control_allowed", false);
+      Map<String, Object> candidate = new LinkedHashMap<>();
+      candidate.put("certification_hash", certificationSha);
+      manifest.put("candidate", candidate);
+      // Validate all unsigned fields, nested identity groups, certification bindings, and
+      // artifact evidence before creating any signature bytes.  The final signed document is
+      // validated again below with the real derived candidate identity and signature.
+      candidateValidator.validateBeforeSigning(
+          mapper.valueToTree(manifest), build.certificationBytes(), build.jarBytes(), build.sbomBytes());
       CandidateSigner signer = new CandidateSigner(signingKeyId, Path.of(signingKeyPath));
-      String candidateHash = signer.unsignedHash(mapper.valueToTree(manifest)); candidate.put("candidate_hash", candidateHash); candidate.put("candidate_id", "cand_" + candidateHash.substring(7, 31)); candidate.put("signature", signer.signCandidateHash(candidateHash));
-      entity.setCandidateId(String.valueOf(candidate.get("candidate_id"))); entity.setCandidateHash(candidateHash); entity.setCandidateManifestJson(write(manifest));
+      String candidateHash = signer.unsignedHash(mapper.valueToTree(manifest));
+      candidate.put("candidate_hash", candidateHash);
+      candidate.put("candidate_id", "cand_" + candidateHash.substring(7, 31));
+      candidate.put("signature", signer.signCandidateHash(candidateHash));
+      String candidateId = String.valueOf(candidate.get("candidate_id"));
+      byte[] manifestBytes = write(manifest).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      candidateValidator.validate(
+          manifestBytes, build.certificationBytes(), build.jarBytes(), build.sbomBytes());
+      Path finalBundle = root.resolve(candidateId);
+      if (Files.exists(finalBundle)) {
+        // Reuse only an identical bundle; never overwrite a persisted candidate.
+        verifyBundleContents(finalBundle, build, manifestBytes, candidateId);
+      } else {
+        finalBundle = stageBundle(root, build, manifestBytes, candidateId);
+      }
+      // Registration fingerprint binds the canonical manifest and every artifact evidence field.
+      ObjectNode fingerprint = mapper.createObjectNode();
+      fingerprint.set("manifest", mapper.valueToTree(manifest));
+      fingerprint.put("jar_sha256", jarSha);
+      fingerprint.put("jar_size", (long) build.jarBytes().length);
+      fingerprint.put("sbom_sha256", sbomSha);
+      fingerprint.put("sbom_size", (long) build.sbomBytes().length);
+      fingerprint.put("certification_document_hash", certificationSha);
+      String requestHash = CanonicalJsonHasher.hash(fingerprint, null);
       CurrentSliceIdentity frozen = mapper.convertValue(read(entity.getIdentityJson()), CurrentSliceIdentity.class);
-      CurrentSliceIdentity.Candidate candidateIdentity = new CurrentSliceIdentity.Candidate(entity.getCandidateId(), candidateHash, String.valueOf(candidate.get("certification_hash")), String.valueOf(candidate.get("signature")));
+      CurrentSliceIdentity.Candidate candidateIdentity = new CurrentSliceIdentity.Candidate(candidateId, candidateHash, certificationSha, String.valueOf(candidate.get("signature")));
       CurrentSliceIdentity finalIdentity = new CurrentSliceIdentity(frozen.schema(), frozen.task(), frozen.run(), frozen.client(), frozen.capture(), frozen.source(), frozen.graph(), frozen.model(), candidateIdentity, false);
-      entity.setFinalIdentityJson(write(finalIdentity));
-      if (finalIdentity.run() != null && finalIdentity.run().runId() != null) runs.findByRunId(finalIdentity.run().runId()).ifPresent(run -> { run.setIdentityJson(write(finalIdentity)); run.setStage("CANDIDATE_REGISTERING"); runs.save(run); });
-      entity.setState("REGISTERING"); repository.save(entity);
-      entity.setCandidateStagingDirectory(bundle.toAbsolutePath().normalize().toString());
-      Files.writeString(manifestPath, write(manifest));
-      entity.setRegistrationRequestHash(hash(Files.readAllBytes(manifestPath)));
-      String registration = registry.register(manifestPath, jar, sbom, cert);
-      entity.setRegistryResponseJson(registration);
-      verifyRegistryReadback(manifest, registration, entity.getCandidateId(), entity.getCandidateHash());
-      byte[] downloaded = registry.download(candidate.get("candidate_id").toString());
-      if (!hash(downloaded).equals(candidate.get("jar_sha256"))) throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
-      entity.setState("REGISTERED"); persistCandidateRunIdentity(entity, "CANDIDATE_REGISTERED"); entity.setResultJson(write(Map.of("candidate_id", candidate.get("candidate_id"), "candidate_hash", candidateHash, "registration", registration, "download_sha256", hash(downloaded))));
-    } catch (CandidateRegistryClient.RegistryException e) {
-      retainBundle = e.isUncertain() || (e.getMessage() != null && e.getMessage().contains("404"));
-      boolean notFound = e.getMessage() != null && e.getMessage().contains("404");
-      entity.setState(e.isUncertain() ? "REGISTERING_UNCERTAIN" : (notFound ? "REGISTERING" : "REJECTED")); entity.setLastFailureCode(e.getMessage()); entity.setResultJson(write(Map.of("failure_code", e.getMessage())));
+      boolean committed = dispatcher.commitRegistration(id, candidateId, candidateHash,
+          write(manifest), write(finalIdentity), finalBundle.toAbsolutePath().normalize().toString(),
+          requestHash, UUID.randomUUID().toString(), hash(manifestBytes), jarSha, build.jarBytes().length,
+          sbomSha, build.sbomBytes().length, certificationSha);
+      if (!committed) {
+        transition(entity, "FAILED", Map.of("failure_code", "REGISTRATION_STATE_STALE"));
+      }
     } catch (Exception e) {
-      entity.setState("FAILED"); entity.setLastFailureCode(e.getMessage()); entity.setResultJson(write(Map.of("failure_code", e.getMessage() == null ? "CANDIDATE_REGISTRATION_FAILED" : e.getMessage())));
+      transition(entity, "FAILED", Map.of("failure_code",
+          e.getMessage() == null ? "CANDIDATE_REGISTRATION_PREPARATION_FAILED" : String.valueOf(e.getMessage())));
+    }
+  }
+
+  /** Writes the complete bundle into a private temp directory and atomically renames it into place. */
+  private Path stageBundle(Path root, IsolatedPatchWorker.BuildResult build, byte[] manifestBytes, String candidateId) throws IOException {
+    Path tmp = Files.createDirectories(root.resolve(".tmp").resolve(UUID.randomUUID().toString()));
+    try {
+      writeNew(tmp.resolve(build.jarName()), build.jarBytes());
+      writeNew(tmp.resolve(build.sbomName()), build.sbomBytes());
+      writeNew(tmp.resolve("certification.json"), build.certificationBytes());
+      writeNew(tmp.resolve("manifest.json"), manifestBytes);
+      // Re-read and verify every staged byte before the rename.
+      verifyBundleContents(tmp, build, manifestBytes, candidateId);
+      Path target = root.resolve(candidateId);
+      try {
+        Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE);
+      } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+        throw new IOException("STAGING_ATOMIC_MOVE_UNAVAILABLE", e);
+      }
+      return target;
     } finally {
-      if (!retainBundle && bundle != null && !deleteBundle(bundle)) {
-        entity.setState("FAILED"); entity.setLastFailureCode("CANDIDATE_BUNDLE_CLEANUP_FAILED"); entity.setResultJson(write(Map.of("failure_code", "CANDIDATE_BUNDLE_CLEANUP_FAILED")));
+      deleteBundle(tmp);
+    }
+  }
+
+  /** Exclusive create: the file must not exist; existing bytes are never replaced. */
+  private static void writeNew(Path target, byte[] bytes) throws IOException {
+    try (var channel = java.nio.channels.FileChannel.open(target,
+        java.nio.file.StandardOpenOption.CREATE_NEW, java.nio.file.StandardOpenOption.WRITE)) {
+      java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(bytes);
+      while (buffer.hasRemaining()) channel.write(buffer);
+      channel.force(true);
+    }
+  }
+
+  /** Verifies every persisted bundle byte against the built evidence and the exact manifest bytes. */
+  private void verifyBundleContents(Path bundle, IsolatedPatchWorker.BuildResult build, byte[] manifestBytes, String candidateId) throws IOException {
+    boolean finalBundle = bundle.getFileName().toString().equals(candidateId);
+    boolean privateTemporaryBundle = bundle.getParent() != null
+        && ".tmp".equals(bundle.getParent().getFileName().toString());
+    if ((!finalBundle && !privateTemporaryBundle)
+        || !bundle.toAbsolutePath().normalize().startsWith(Path.of(stagingRoot()).toAbsolutePath().normalize())) {
+      throw new IOException("STAGING_PATH_INVALID");
+    }
+    Path jar = bundle.resolve(build.jarName());
+    Path sbom = bundle.resolve(build.sbomName());
+    Path cert = bundle.resolve("certification.json");
+    Path manifestPath = bundle.resolve("manifest.json");
+    for (Path path : List.of(jar, sbom, cert, manifestPath)) {
+      if (!Files.isRegularFile(path)) throw new IOException("CANDIDATE_STAGING_MISSING");
+      if (Files.isSymbolicLink(path)) throw new IOException("STAGING_PATH_INVALID");
+    }
+    byte[] jarBytes = Files.readAllBytes(jar);
+    byte[] sbomBytes = Files.readAllBytes(sbom);
+    byte[] certificationBytes = Files.readAllBytes(cert);
+    byte[] persistedManifestBytes = Files.readAllBytes(manifestPath);
+    if (!java.util.Arrays.equals(jarBytes, build.jarBytes())
+        || !java.util.Arrays.equals(sbomBytes, build.sbomBytes())
+        || !java.util.Arrays.equals(certificationBytes, build.certificationBytes())
+        || !java.util.Arrays.equals(persistedManifestBytes, manifestBytes)) {
+      throw new IOException("STAGING_BUNDLE_CONFLICT");
+    }
+    try {
+      candidateValidator.validate(persistedManifestBytes, certificationBytes, jarBytes, sbomBytes);
+    } catch (IllegalArgumentException e) {
+      throw new IOException(e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Revalidates the persisted registration bundle before any external registry action: the stored
+   * path must stay under the configured staging root, the final directory name must equal the stored
+   * candidate id, and every byte must still hash to the persisted component digests and manifest
+   * file hash.
+   */
+  private Path revalidatePersistedBundle(PatchCandidateRun entity) throws IOException {
+    if (entity.getCandidateStagingDirectory() == null || entity.getCandidateId() == null
+        || entity.getManifestFileHash() == null || entity.getJarSha256() == null
+        || entity.getSbomSha256() == null || entity.getCertificationDocumentHash() == null) {
+      throw new IOException("CANDIDATE_EVIDENCE_MISSING");
+    }
+    Path root = Path.of(stagingRoot()).toAbsolutePath().normalize();
+    Path bundle = Path.of(entity.getCandidateStagingDirectory()).toAbsolutePath().normalize();
+    if (!bundle.startsWith(root) || !bundle.getFileName().toString().equals(entity.getCandidateId())) {
+      throw new IOException("STAGING_PATH_INVALID");
+    }
+    Map<String, Object> manifest = read(entity.getCandidateManifestJson());
+    Path jar = bundle.resolve(String.valueOf(manifest.get("jar_name")));
+    Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
+    Path cert = bundle.resolve("certification.json");
+    Path manifestPath = bundle.resolve("manifest.json");
+    for (Path path : List.of(jar, sbom, cert, manifestPath)) {
+      if (!Files.isRegularFile(path) || Files.isSymbolicLink(path)) throw new IOException("CANDIDATE_STAGING_MISSING");
+    }
+    byte[] manifestBytes = Files.readAllBytes(manifestPath);
+    byte[] jarBytes = Files.readAllBytes(jar);
+    byte[] sbomBytes = Files.readAllBytes(sbom);
+    byte[] certificationBytes = Files.readAllBytes(cert);
+    if (!entity.getManifestFileHash().equals(hash(manifestBytes))
+        || !entity.getJarSha256().equals(hash(jarBytes))
+        || !entity.getSbomSha256().equals(hash(sbomBytes))
+        || !entity.getCertificationDocumentHash().equals(hash(certificationBytes))) {
+      throw new IOException("STAGING_BUNDLE_TAMPERED");
+    }
+    try {
+      candidateValidator.validate(manifestBytes, certificationBytes, jarBytes, sbomBytes);
+    } catch (IllegalArgumentException e) {
+      throw new IOException(e.getMessage(), e);
+    }
+    return bundle;
+  }
+
+  /** Performs the registry POST using the exact staged bundle; runs outside any database transaction. */
+  public void postPreparedRegistration(String id) {
+    PatchCandidateRun entity = repository.findByProposalId(id).orElse(null);
+    if (entity == null || !"REGISTERING".equals(entity.getState())) {
+      return;
+    }
+    PatchCandidateRegistrationDispatcher.RegistrationClaim claim = claimRegistration(id);
+    if (registrationDispatcher != null && claim == null) {
+      return;
+    }
+    entity = repository.findByProposalId(id).orElse(null);
+    if (entity == null || !"REGISTERING".equals(entity.getState())) {
+      return;
+    }
+    if (entity.getCandidateStagingDirectory() == null || entity.getCandidateId() == null || entity.getCandidateHash() == null) {
+      transitionClaimed(entity, claim, "FAILED", Map.of("failure_code", "CANDIDATE_STAGING_MISSING"), null);
+      return;
+    }
+    CandidateRegistryClient.RegistryEnvelope registration = null;
+    CandidateRegistryClient.ArtifactDownload downloaded = null;
+    try {
+      Path bundle = revalidatePersistedBundle(entity);
+      Map<String, Object> manifest = read(entity.getCandidateManifestJson());
+      Path manifestPath = bundle.resolve("manifest.json");
+      Path jar = bundle.resolve(String.valueOf(manifest.get("jar_name")));
+      Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
+      Path cert = bundle.resolve("certification.json");
+      registration = registry.registerEvidence(manifestPath, jar, sbom, cert);
+      verifyRegistryReadback(manifest, registration, entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
+      downloaded = registry.downloadEvidence(entity.getCandidateId());
+      if (!downloaded.sha256().equals(String.valueOf(manifest.get("jar_sha256")))) {
+        throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
+      }
+      transitionClaimed(entity, claim, "REGISTERED", Map.of("candidate_id", entity.getCandidateId(),
+          "candidate_hash", entity.getCandidateHash(), "registration", registration.body(),
+          "download_sha256", downloaded.sha256(), "registry_manifest_hash", registration.manifestHash()), evidence(registration, downloaded));
+    } catch (CandidateRegistryClient.RegistryException e) {
+      boolean notFound = e.getMessage() != null && e.getMessage().contains("404");
+      transitionClaimed(entity, claim, e.isUncertain() ? "REGISTERING_UNCERTAIN" : (notFound ? "REGISTERING" : "REJECTED"),
+          Map.of("failure_code", String.valueOf(e.getMessage())), evidence(registration, downloaded));
+    } catch (Exception e) {
+      transitionClaimed(entity, claim, "FAILED", Map.of("failure_code", e.getMessage() == null ? "CANDIDATE_REGISTRATION_FAILED" : String.valueOf(e.getMessage())), evidence(registration, downloaded));
+    }
+  }
+
+  /** Recovery scanner: requeues expired worker leases and abandoned queued records after restart. */
+  @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60_000L)
+  @Transactional
+  public void recover() {
+    if (!buildsEnabled()) {
+      // While disabled, no build can ever be queued or recovered; nothing is dispatched.
+      return;
+    }
+    List<String> buildQueue = new java.util.ArrayList<>();
+    List<String> registrations = new java.util.ArrayList<>();
+    Instant now = Instant.now();
+    for (PatchCandidateRun candidate : repository.findByStateIn(List.of("BUILD_QUEUED", "BUILDING", "REGISTERING", "REGISTERING_UNCERTAIN"))) {
+      // The scanner query is only a work list. Never mutate or save that detached/stale instance;
+      // reacquire the row with a database lock before changing a lease or deciding what to run.
+      PatchCandidateRun current = repository.findWithLockByProposalId(candidate.getProposalId()).orElse(null);
+      if (current == null) continue;
+      String state = current.getState();
+      if ("BUILD_QUEUED".equals(state)) {
+        buildQueue.add(current.getProposalId());
+      } else if ("BUILDING".equals(state)
+          && current.getWorkerLeaseExpiresAt() != null
+          && current.getWorkerLeaseExpiresAt().isBefore(now)) {
+        // The locked dispatcher is the compare-and-set owner for lease recovery.
+        if (registrationDispatcher == null
+            ? requeueExpiredBuildFallback(current)
+            : registrationDispatcher.requeueExpiredBuild(current.getProposalId(), now)) {
+          buildQueue.add(current.getProposalId());
+        }
+      } else if ("REGISTERING".equals(state)) {
+        registrations.add(current.getProposalId());
+      } else if ("REGISTERING_UNCERTAIN".equals(state)) {
+        registrations.add(current.getProposalId());
       }
     }
+    Runnable afterCommit = () -> {
+      buildQueue.forEach(this::offerBuild);
+      registrations.forEach(id -> {
+        PatchCandidateRun row = repository.findByProposalId(id).orElse(null);
+        if (row == null) return;
+        if ("REGISTERING".equals(row.getState())) postPreparedRegistration(id);
+        else if ("REGISTERING_UNCERTAIN".equals(row.getState())) lookupUncertain(id);
+      });
+    };
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override public void afterCommit() { afterCommit.run(); }
+      });
+    } else {
+      afterCommit.run();
+    }
   }
 
+  private boolean requeueExpiredBuildFallback(PatchCandidateRun candidate) {
+    if (candidate == null || !"BUILDING".equals(candidate.getState())) return false;
+    candidate.setState("BUILD_QUEUED");
+    candidate.setWorkerAttemptId(null);
+    candidate.setWorkerLeaseExpiresAt(null);
+    repository.save(candidate);
+    return true;
+  }
+
+  @SuppressWarnings("unchecked")
   private void persistCandidateRunIdentity(PatchCandidateRun entity, String stage) {
     if (entity.getFinalIdentityJson() == null) return;
-    try { CurrentSliceIdentity identity = mapper.readValue(entity.getFinalIdentityJson(), CurrentSliceIdentity.class); if (identity.run() != null) runs.findByRunId(identity.run().runId()).ifPresent(run -> { run.setIdentityJson(entity.getFinalIdentityJson()); run.setStage(stage); runs.save(run); }); } catch (Exception e) { throw error(HttpStatus.INTERNAL_SERVER_ERROR, "PERSISTED_JSON_CORRUPT", "final candidate identity is corrupt"); }
+    try {
+      CurrentSliceIdentity identity = mapper.readValue(entity.getFinalIdentityJson(), CurrentSliceIdentity.class);
+      if (identity.run() != null && identity.run().runId() != null) {
+        runService.advanceIdentity(identity.run().runId(), identity, stage);
+      }
+    } catch (Exception e) { throw error(HttpStatus.INTERNAL_SERVER_ERROR, "PERSISTED_JSON_CORRUPT", "final candidate identity is corrupt"); }
   }
 
-  private void verifyRegistryReadback(Map<String, Object> localManifest, String registration, String candidateId, String candidateHash) {
+  private void verifyRegistryReadback(
+      Map<String, Object> localManifest,
+      CandidateRegistryClient.RegistryEnvelope registration,
+      String candidateId,
+      String candidateHash,
+      String expectedManifestFileHash) {
     try {
-      JsonNode response = mapper.readTree(registration);
+      if (registration == null || registration.rawBytes() == null) {
+        throw new IllegalStateException("REGISTRY_READBACK_INVALID");
+      }
+      if (expectedManifestFileHash == null
+          || !expectedManifestFileHash.equals(registration.manifestHash())) {
+        throw new IllegalStateException("REGISTRY_MANIFEST_HASH_HEADER_MISMATCH");
+      }
+      if (!registration.manifestHash().equals(
+          CandidateRegistryClient.hash(CandidateRegistryClient.exactManifestBytes(registration.rawBytes())))) {
+        throw new IllegalStateException("REGISTRY_MANIFEST_HASH_HEADER_MISMATCH");
+      }
+      JsonNode response = candidateValidator.validateRegistryEnvelope(registration.rawBytes());
       if (!"CERTIFIED_CANDIDATE".equals(response.path("state").asText())) throw new IllegalStateException("REGISTRY_STATE_INVALID");
       JsonNode returned = response.path("manifest");
       if (!candidateId.equals(returned.path("candidate").path("candidate_id").asText()) || !candidateHash.equals(returned.path("candidate").path("candidate_hash").asText())) throw new IllegalStateException("REGISTRY_IDENTITY_MISMATCH");
-      JsonNode comparable = returned.deepCopy(); if (comparable.path("identity").isObject()) ((ObjectNode) comparable.path("identity")).remove("candidate");
-      if (!CanonicalJsonHasher.canonical(mapper.valueToTree(localManifest)).equals(CanonicalJsonHasher.canonical(comparable))) throw new IllegalStateException("REGISTRY_MANIFEST_MISMATCH");
+      if (!Sc967CanonicalJson.canonical(mapper.valueToTree(localManifest)).equals(Sc967CanonicalJson.canonical(returned))) throw new IllegalStateException("REGISTRY_MANIFEST_MISMATCH");
     } catch (CandidateRegistryClient.RegistryException e) { throw e; }
     catch (Exception e) { throw new IllegalStateException(e.getMessage() == null ? "REGISTRY_READBACK_INVALID" : e.getMessage(), e); }
+  }
+
+  private PatchCandidateRegistrationDispatcher.RegistryEvidence evidence(
+      CandidateRegistryClient.RegistryEnvelope response,
+      CandidateRegistryClient.ArtifactDownload download) {
+    if (response == null && download == null) return null;
+    return new PatchCandidateRegistrationDispatcher.RegistryEvidence(
+        response == null ? null : response.rawBytes(),
+        response == null ? null : response.body(),
+        response == null ? null : response.manifestHash(),
+        download == null ? null : download.sha256(),
+        Instant.now());
   }
 
   private boolean deleteBundle(Path bundle) {
@@ -390,6 +947,7 @@ public class PatchCandidateWorkflowService {
   private static String hash(byte[] bytes) { try { byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes); StringBuilder value = new StringBuilder("sha256:"); for (byte b : digest) value.append(String.format("%02x", b)); return value.toString(); } catch (Exception e) { throw new IllegalStateException(e); } }
 
   private PatchCandidateRun proposal(String id) { return repository.findByProposalId(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "patch proposal not found")); }
+  private PatchCandidateRun lockedProposal(String id) { return repository.findWithLockByProposalId(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "patch proposal not found")); }
   @SuppressWarnings("unchecked") private String modelHash(String identityJson) {
     Map<String, Object> identity = read(identityJson);
     Object model = identity.get("model");
@@ -407,7 +965,7 @@ public class PatchCandidateWorkflowService {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("proposal_id", entity.getProposalId()); result.put("status", entity.getState()); result.put("failure_binding", read(entity.getBindingJson()));
     result.put("identity", read(entity.getFinalIdentityJson() == null ? entity.getIdentityJson() : entity.getFinalIdentityJson())); result.put("identity_through_model", read(entity.getIdentityJson())); result.put("base_commit", entity.getBaseCommit()); result.put("patch", entity.getPatchText()); result.put("patch_hash", entity.getPatchHash()); result.put("proposal_hash", entity.getProposalHash());
-    result.put("approver_id", entity.getApproverId()); result.put("approved_at", entity.getApprovedAt()); result.put("approval_hash", entity.getApprovalHash()); result.put("candidate_id", entity.getCandidateId()); result.put("candidate_hash", entity.getCandidateHash()); result.put("candidate_manifest", entity.getCandidateManifestJson() == null ? null : read(entity.getCandidateManifestJson())); result.put("result", readOptional(entity.getResultJson())); result.put("control_allowed", false);
+    result.put("approver_id", entity.getApproverId()); result.put("approved_at", entity.getApprovedAt()); result.put("approval_hash", entity.getApprovalHash()); result.put("candidate_id", entity.getCandidateId()); result.put("candidate_hash", entity.getCandidateHash()); result.put("candidate_manifest", entity.getCandidateManifestJson() == null ? null : read(entity.getCandidateManifestJson())); result.put("result", readOptional(entity.getResultJson())); result.put("worker_attempt_id", entity.getWorkerAttemptId()); result.put("worker_lease_expires_at", entity.getWorkerLeaseExpiresAt()); result.put("registration_attempt_id", entity.getRegistrationAttemptId()); result.put("manifest_file_hash", entity.getManifestFileHash()); result.put("registry_response_hash", entity.getRegistryResponseHash()); result.put("registry_manifest_hash", entity.getRegistryManifestHash()); result.put("registry_download_hash", entity.getRegistryDownloadHash()); result.put("registry_verified_at", entity.getRegistryVerifiedAt()); result.put("control_allowed", false);
     return result;
   }
   private static PatchWorkflowException error(HttpStatus status, String code, String message) { return new PatchWorkflowException(status, code, message); }

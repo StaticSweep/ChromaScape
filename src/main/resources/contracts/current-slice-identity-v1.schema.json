@@ -17,8 +17,25 @@
     "control_allowed": {"const": false}
   },
   "allOf": [
-    {"if": {"properties": {"client": {"properties": {"client_kind": {"const": "MICRO6_MANAGED"}}}}}, "then": {"required": ["run"], "properties": {"client": {"properties": {"adapter_contract": {"const": "micro6-builder/v2"}, "domain": {"const": "MICRO6"}}}, "run": {"required": ["run_id", "attempt_id", "entry_id", "executor_instance_id"]}}},
-    {"if": {"properties": {"client": {"properties": {"client_kind": {"const": "RUNELITE_CAPTURE"}}}}}, "then": {"properties": {"client": {"properties": {"adapter_contract": {"const": "runelite-capture/v1"}, "domain": {"const": "RUNELITE"}}}, "run": {"not": {"anyOf": [{"required": ["attempt_id"]}, {"required": ["entry_id"]}, {"required": ["executor_instance_id"]}]}}}}
+    {
+      "if": {"properties": {"client": {"properties": {"client_kind": {"const": "MICRO6_MANAGED"}}}}},
+      "then": {
+        "required": ["run"],
+        "properties": {
+          "client": {"properties": {"adapter_contract": {"const": "micro6-builder/v2"}, "domain": {"const": "MICRO6"}}},
+          "run": {"required": ["run_id", "attempt_id", "entry_id", "executor_instance_id"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"client": {"properties": {"client_kind": {"const": "RUNELITE_CAPTURE"}}}}},
+      "then": {
+        "properties": {
+          "client": {"properties": {"adapter_contract": {"const": "runelite-capture/v1"}, "domain": {"const": "RUNELITE"}}},
+          "run": {"not": {"anyOf": [{"required": ["attempt_id"]}, {"required": ["entry_id"]}, {"required": ["executor_instance_id"]}]}}
+        }
+      }
+    }
   ],
   "$defs": {
     "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},

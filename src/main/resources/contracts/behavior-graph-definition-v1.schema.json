@@ -1,21 +1,82 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "behavior-graph-definition/v1",
+  "$id": "https://contracts.leeuwbot.dev/sc967/behavior-graph-definition/v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "graph_id", "graph_hash", "identity", "nodes", "edges", "trace_modes", "control_allowed"],
+  "required": ["schema", "graph_id", "graph_hash", "recording_id", "identity", "nodes", "edges", "trace_modes", "authority", "control_allowed"],
   "properties": {
     "schema": {"const": "behavior-graph-definition/v1"},
     "graph_id": {"type": "string", "pattern": "^graph_[0-9a-f]{24}$"},
     "graph_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "identity": {"type": "object"},
+    "recording_id": {"type": "string", "minLength": 1},
+    "identity": {"$ref": "#/$defs/identity"},
     "nodes": {"type": "array", "minItems": 2, "maxItems": 256, "items": {"$ref": "#/$defs/node"}},
     "edges": {"type": "array", "maxItems": 255, "items": {"$ref": "#/$defs/edge"}},
-    "trace_modes": {"type": "array", "items": {"enum": ["RECORDED", "POLICY_REPLAY", "SHADOW"]}},
+    "trace_modes": {"type": "array", "minItems": 1, "items": {"enum": ["RECORDED", "POLICY_REPLAY", "SHADOW"]}},
+    "authority": {"$ref": "#/$defs/authority"},
     "control_allowed": {"const": false}
   },
   "$defs": {
-    "node": {"type": "object", "required": ["id", "ordinal", "type"], "properties": {"id": {"type": "string", "pattern": "^node_[0-9]+_[0-9a-f]{12}$"}, "ordinal": {"type": "integer", "minimum": 0}, "type": {"enum": ["START", "ACTION", "GATE", "ABSTAIN", "RECOVERY", "TERMINAL"]}, "source_tick_range": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "integer"}, "end": {"type": "integer"}}}, "evidence_ids": {"type": "array", "items": {"type": "string"}}}},
-    "edge": {"type": "object", "required": ["id", "from", "to"], "properties": {"id": {"type": "string", "pattern": "^edge_[0-9]+_[0-9]+_[0-9a-f]{12}$"}, "from": {"type": "string"}, "to": {"type": "string"}}}
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "task", "run", "client", "control_allowed"],
+      "properties": {
+        "schema": {"const": "current-slice-identity/v1"},
+        "task": {"$ref": "#/$defs/task"}, "run": {"$ref": "#/$defs/run"},
+        "client": {"$ref": "#/$defs/client"}, "capture": {"$ref": "#/$defs/capture"},
+        "source": {"$ref": "#/$defs/source"}, "graph": {"$ref": "#/$defs/graph"},
+        "model": {"$ref": "#/$defs/model"}, "candidate": {"$ref": "#/$defs/candidate"},
+        "control_allowed": {"const": false}
+      }
+    },
+    "task": {
+      "type": "object", "additionalProperties": false,
+      "required": ["task_key", "settings_hash", "profile_id", "profile_hash", "catalog_hash"],
+      "properties": {
+        "task_key": {"const": "FISHING_TRAINING"}, "settings_hash": {"$ref": "#/$defs/hash"},
+        "profile_id": {"type": "string", "minLength": 1}, "profile_hash": {"$ref": "#/$defs/hash"},
+        "catalog_hash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "run": {
+      "type": "object", "additionalProperties": false, "required": ["run_id"],
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1}, "attempt_id": {"type": "string", "minLength": 1},
+        "entry_id": {"type": "integer", "minimum": 0}, "executor_instance_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "client": {
+      "type": "object", "additionalProperties": false,
+      "required": ["client_id", "client_kind", "client_build_id", "artifact_digest", "adapter_contract", "domain"],
+      "properties": {
+        "client_id": {"type": "string", "minLength": 1}, "client_kind": {"enum": ["MICRO6_MANAGED", "RUNELITE_CAPTURE"]},
+        "client_build_id": {"type": "string", "minLength": 1}, "artifact_digest": {"$ref": "#/$defs/hash"},
+        "adapter_contract": {"type": "string", "minLength": 1}, "domain": {"type": "string", "minLength": 1}
+      }
+    },
+    "capture": {"type": "object", "additionalProperties": false, "required": ["session_id", "recording_id", "recording_hash"], "properties": {"session_id": {"type": "string", "minLength": 1}, "recording_id": {"type": "string", "minLength": 1}, "recording_hash": {"$ref": "#/$defs/hash"}}},
+    "source": {"type": "object", "additionalProperties": false, "required": ["source_snapshot_id", "source_manifest_hash"], "properties": {"source_snapshot_id": {"type": "string", "pattern": "^srcsnap_[0-9a-f]{24}$"}, "source_manifest_hash": {"$ref": "#/$defs/hash"}}},
+    "graph": {"type": "object", "additionalProperties": false, "required": ["graph_id", "graph_hash"], "properties": {"graph_id": {"type": "string", "pattern": "^graph_[0-9a-f]{24}$"}, "graph_hash": {"$ref": "#/$defs/hash"}}},
+    "model": {"type": "object", "additionalProperties": false, "required": ["model_id", "model_hash"], "properties": {"model_id": {"type": "string", "pattern": "^model_[0-9a-f]{24}$"}, "model_hash": {"$ref": "#/$defs/hash"}}},
+    "candidate": {"type": "object", "additionalProperties": false, "required": ["candidate_id", "candidate_hash", "certification_hash", "signature"], "properties": {"candidate_id": {"type": "string", "pattern": "^cand_[0-9a-f]{24}$"}, "candidate_hash": {"$ref": "#/$defs/hash"}, "certification_hash": {"$ref": "#/$defs/hash"}, "signature": {"type": "string", "minLength": 1}}},
+    "authority": {"type": "object", "additionalProperties": false, "required": ["can_write_source", "can_approve_patch", "can_publish_graph", "can_activate_model", "can_dispatch_input"], "properties": {"can_write_source": {"const": false}, "can_approve_patch": {"const": false}, "can_publish_graph": {"const": false}, "can_activate_model": {"const": false}, "can_dispatch_input": {"const": false}}},
+    "semantics": {
+      "type": "object", "additionalProperties": false, "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["start", "recorded_action", "terminal", "gate", "abstain", "recovery"]},
+        "parameters": {"type": "object"}, "recorded_action": {"type": "object"}
+      }
+    },
+    "source_tick_range": {"type": "object", "additionalProperties": false, "required": ["start", "end"], "properties": {"start": {"type": "integer"}, "end": {"type": "integer"}}},
+    "node": {
+      "type": "object", "additionalProperties": false, "required": ["id", "ordinal", "type", "semantics"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^node_[0-9]+_[0-9a-f]{12}$"}, "ordinal": {"type": "integer", "minimum": 0},
+        "type": {"enum": ["START", "ACTION", "GATE", "ABSTAIN", "RECOVERY", "TERMINAL"]}, "semantics": {"$ref": "#/$defs/semantics"},
+        "source_tick_range": {"$ref": "#/$defs/source_tick_range"}, "evidence_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "edge": {"type": "object", "additionalProperties": false, "required": ["id", "from", "to"], "properties": {"id": {"type": "string", "pattern": "^edge_[0-9]+_[0-9]+_[0-9a-f]{12}$"}, "from": {"type": "string"}, "to": {"type": "string"}}}
   }
 }

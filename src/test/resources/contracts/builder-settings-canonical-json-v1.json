@@ -1,0 +1,41 @@
+{
+  "contract": "builder-settings-canonical-json/v1",
+  "cases": [
+    {
+      "name": "empty",
+      "settings": {},
+      "canonical": "{}",
+      "sha256": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "reordered",
+      "settings": {"stopConditionValue": 40, "targetFish": "TROUT"},
+      "canonical": "{\"stopConditionValue\":40,\"targetFish\":\"TROUT\"}",
+      "sha256": "sha256:3e5250c23dfc28b3282f998b51fca07261fbc4f9d7ab9ee53a905ba4d0a38091"
+    },
+    {
+      "name": "array",
+      "settings": {"items": [true, null, "x"], "nested": {"b": 2, "a": 1}},
+      "canonical": "{\"items\":[true,null,\"x\"],\"nested\":{\"a\":1,\"b\":2}}",
+      "sha256": "sha256:161998ad99c03f595e5738782a494c39cb65565254cdffbcaf265ecd34ef2019"
+    },
+    {
+      "name": "line_unicode",
+      "settings": {"text": "é\r\n"},
+      "canonical": "{\"text\":\"é\\n\"}",
+      "sha256": "sha256:a690d980384420e151684577e0455739fb74f0bb7065fda9cf6fb2725e3fb2a6"
+    },
+    {
+      "name": "number",
+      "settings": {"integer": 40, "decimal": 40.0},
+      "canonical": "{\"decimal\":40,\"integer\":40}",
+      "sha256": "sha256:4962faa9ac2036dfe7988a61871b7fea3437f7e0f666ffc05f1837b036a9f881"
+    },
+    {
+      "name": "metadata_keys_are_not_excluded",
+      "settings": {"run_id": "r", "attempt_id": "a", "settings": {}},
+      "canonical": "{\"attempt_id\":\"a\",\"run_id\":\"r\",\"settings\":{}}",
+      "sha256": "sha256:695c273495afabae79fc6e7ca249eba70a0567af75f37fbb3973c281ca5a24d0"
+    }
+  ]
+}

@@ -285,6 +285,40 @@ class Micro6TargetRelaunchServiceTest {
     }
   }
 
+  /**
+   * Windows structured-launch service with a legacy custom launch template configured. The platform
+   * overrides return constants rather than fields so constructor-time launch-mode resolution (which
+   * derives the effective Gradle task) observes the pinned platform; {@link
+   * ControlledPlatformService} fields are not yet assigned while its super constructor runs.
+   */
+  static class WindowsStructuredLegacyTemplateService extends Micro6TargetRelaunchService {
+    WindowsStructuredLegacyTemplateService(String projectDir) {
+      super(
+          new ObjectMapper(),
+          projectDir,
+          "",
+          "echo {micro6ProjectDir} {runArgs}",
+          "",
+          360,
+          180_000L,
+          2_000L,
+          "micro6-recovery-launch.log",
+          "http://localhost:8090",
+          "http://127.0.0.1:8098",
+          "http://localhost:8086");
+    }
+
+    @Override
+    protected boolean isWindows() {
+      return true;
+    }
+
+    @Override
+    protected boolean useStructuredWindowsLaunch() {
+      return true;
+    }
+  }
+
   @TempDir Path tempDir;
 
   private ControlledPlatformService newWindowsService(
@@ -578,6 +612,87 @@ class Micro6TargetRelaunchServiceTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("regular required entry point")
         .hasMessageContaining("launch-buildergoal-client.ps1");
+  }
+
+  /** Reads the private effective Gradle task selected at construction time. */
+  private String readEffectiveGradleTask(Micro6TargetRelaunchService service) throws Exception {
+    java.lang.reflect.Field field =
+        Micro6TargetRelaunchService.class.getDeclaredField("gradleRunTask");
+    field.setAccessible(true);
+    return (String) field.get(service);
+  }
+
+  @Test
+  void windowsWithLegacyCustomTemplateReportsStructuredWindowsTaskNotCustomCommand()
+      throws Exception {
+    Path project = createProjectDir("windows-legacy-template-task");
+    WindowsStructuredLegacyTemplateService service =
+        new WindowsStructuredLegacyTemplateService(project.toString());
+
+    // Windows always selects the structured PowerShell launch; a configured legacy custom
+    // launch template is ignored and must never relabel the metadata as custom_launch_command.
+    String effectiveTask = readEffectiveGradleTask(service);
+    assertThat(effectiveTask).isEqualTo(":client:runBuilderGoal");
+    assertThat(effectiveTask).isNotEqualTo("custom_launch_command");
+  }
+
+  @Test
+  @EnabledOnOs(OS.WINDOWS)
+  void windowsWithLegacyCustomTemplateBuildsStructuredLauncherCommand() throws Exception {
+    Path project = createProjectDir("windows-legacy-template-command");
+    Files.writeString(
+        project.resolve("launch-buildergoal-client.ps1"), "param([string]$PayloadFile)");
+    WindowsStructuredLegacyTemplateService service =
+        new WindowsStructuredLegacyTemplateService(project.toString());
+    Method method =
+        Micro6TargetRelaunchService.class.getDeclaredMethod(
+            "buildLaunchCommand",
+            List.class,
+            Path.class,
+            String.class,
+            String.class,
+            String.class,
+            int.class,
+            Integer.class,
+            String.class);
+    method.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    List<String> command =
+        (List<String>)
+            method.invoke(
+                service,
+                List.of("--profile=account", "--world=360"),
+                project,
+                "account",
+                "user@example.com",
+                "secret",
+                360,
+                8098,
+                "http://127.0.0.1:8098");
+    String joined = String.join(" ", command);
+    assertThat(joined).contains("launch-buildergoal-client.ps1");
+    assertThat(joined).contains("-PayloadFile");
+    // The legacy template body must never reach the built command on Windows.
+    assertThat(joined).doesNotContain("echo");
+  }
+
+  @Test
+  void unixCustomTemplateStillReportsCustomLaunchCommand() throws Exception {
+    Path project = createProjectDir("unix-custom-template-task");
+    // Non-Windows custom-template behavior is unchanged: the template mode is selected and the
+    // metadata keeps the custom_launch_command label.
+    ControlledPlatformService service =
+        newUnixService(project.toString(), "echo {micro6ProjectDir} {runArgs}", "");
+
+    assertThat(readEffectiveGradleTask(service)).isEqualTo("custom_launch_command");
+  }
+
+  @Test
+  void directGradleLaunchWithoutTemplateReportsCanonicalTask() throws Exception {
+    Path project = createProjectDir("direct-gradle-task");
+    ControlledPlatformService service = newUnixService(project.toString(), "", "");
+
+    assertThat(readEffectiveGradleTask(service)).isEqualTo(":client:runBuilderGoal");
   }
 
   @Test
@@ -1447,8 +1562,9 @@ class Micro6TargetRelaunchServiceTest {
             new java.net.InetSocketAddress("127.0.0.1", 0), 0);
     try {
       // This is the legacy name-fallback case: the game name is known, but no actual hash has
-      // been resolved. The requested launch hash is diagnostic metadata only and must not be
-      // copied into TargetClient.accountHash.
+      // been resolved. Identity is a readiness field, so a missing resolved hash keeps the
+      // executor in WAITING_FOR_ACCOUNT; the requested launch hash stays diagnostic metadata
+      // and is never promoted into an observed TargetClient identity.
       String body =
           healthPayload(
               null,
@@ -1482,9 +1598,11 @@ class Micro6TargetRelaunchServiceTest {
               null,
               null);
 
-      assertThat(result.targetClient()).isPresent();
-      assertThat(result.targetClient().orElseThrow().accountHash()).isNull();
-      assertThat(result.targetClient().orElseThrow().accountName()).isEqualTo("bigGreenMeat");
+      assertThat(result.targetClient()).isEmpty();
+      assertThat(result.readinessPhase())
+          .isEqualTo(Micro6TargetRelaunchService.PHASE_WAITING_FOR_ACCOUNT);
+      assertThat(result.resolvedAccountHash()).isNull();
+      assertThat(result.requestedAccountHash()).isEqualTo("requested-hash");
     } finally {
       server.stop(0);
     }

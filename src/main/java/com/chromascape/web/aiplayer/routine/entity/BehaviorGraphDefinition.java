@@ -11,7 +11,9 @@ public class BehaviorGraphDefinition {
   @Column(name="graph_hash",nullable=false,length=71) private String graphHash;
   @Lob @Column(name="identity_json",nullable=false) private String identityJson;
   @Lob @Column(name="definition_json",nullable=false) private String definitionJson;
+  @Lob @Column(name="assistant_diff_json") private String assistantDiffJson;
+  @Column(name="supersedes_graph_id", length=160) private String supersedesGraphId;
   @Column(nullable=false,length=20) private String state="DRAFT";
   @Column(nullable=false) private Instant createdAt=Instant.now();
-  public Long getId(){return id;} public String getGraphId(){return graphId;} public void setGraphId(String v){graphId=v;} public String getGraphHash(){return graphHash;} public void setGraphHash(String v){graphHash=v;} public String getIdentityJson(){return identityJson;} public void setIdentityJson(String v){identityJson=v;} public String getDefinitionJson(){return definitionJson;} public void setDefinitionJson(String v){definitionJson=v;} public String getState(){return state;} public void setState(String v){state=v;} public Instant getCreatedAt(){return createdAt;}
+  public Long getId(){return id;} public String getGraphId(){return graphId;} public void setGraphId(String v){graphId=v;} public String getGraphHash(){return graphHash;} public void setGraphHash(String v){graphHash=v;} public String getIdentityJson(){return identityJson;} public void setIdentityJson(String v){identityJson=v;} public String getDefinitionJson(){return definitionJson;} public void setDefinitionJson(String v){definitionJson=v;} public String getAssistantDiffJson(){return assistantDiffJson;} public void setAssistantDiffJson(String v){assistantDiffJson=v;} public String getSupersedesGraphId(){return supersedesGraphId;} public void setSupersedesGraphId(String v){supersedesGraphId=v;} public String getState(){return state;} public void setState(String v){state=v;} public Instant getCreatedAt(){return createdAt;}
 }

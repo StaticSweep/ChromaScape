@@ -365,6 +365,13 @@ public class BuilderGoalLauncherControlService {
         firstNonBlank(
             textValue(item.path("account_hash_scheme")),
             textValue(item.path("accountHashScheme")));
+    if (accountHashScheme == null
+        && AccountIdentityContract.isCanonicalHash(accountHash)) {
+      // Launcher payloads predate the scheme field; their account_hash values are produced by
+      // the same accountconnector identity pipeline and are attested by the canonical 16-hex
+      // form itself. Non-canonical hashes keep a null scheme and stay launch-blocked.
+      accountHashScheme = AccountIdentityContract.HASH_SCHEME;
+    }
     String status =
         firstNonBlank(
             textValue(item.path("status")), textValue(item.path("account_status")), "unknown");

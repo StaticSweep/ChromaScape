@@ -38,6 +38,12 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
+	// Bean Validation for typed configuration and DTO constraints (SC-967).
+	implementation("org.springframework.boot:spring-boot-starter-validation")
+
+	// Draft 2020-12 JSON-schema validation for behavior-graph and assistant-diff contracts (SC-967).
+	implementation("com.networknt:json-schema-validator:1.5.1")
+
 	// Database
 	runtimeOnly("org.postgresql:postgresql")
 

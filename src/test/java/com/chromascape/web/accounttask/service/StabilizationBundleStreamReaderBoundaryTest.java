@@ -1,5 +1,6 @@
 package com.chromascape.web.accounttask.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
@@ -36,6 +37,42 @@ class StabilizationBundleStreamReaderBoundaryTest {
         "multipart/form-data; boundary=\"  ; broken",
         tempDir.resolve("a")))
         .hasMessageContaining("boundary");
+  }
+
+  @Test
+  @DisplayName("a parameter whose name only contains boundary is not accepted")
+  void boundaryParameterNameCollisionRejected() {
+    assertThatThrownBy(() -> StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(minimalBody("ok")),
+        "multipart/form-data; notboundary=ok",
+        tempDir.resolve("boundary-name-collision")))
+        .hasMessageContaining("boundary");
+  }
+
+  @Test
+  @DisplayName("optional whitespace around a boundary parameter is accepted")
+  void boundaryParameterWhitespaceAccepted() throws Exception {
+    StabilizationBundleStreamReader.StagedBundle bundle =
+        StabilizationBundleStreamReader.read(
+            new java.io.ByteArrayInputStream(minimalBody("ok")),
+            "multipart/form-data; boundary = ok ",
+            tempDir.resolve("boundary-ows"));
+    assertThat(bundle.names()).contains("completeMarker");
+  }
+
+  @Test
+  @DisplayName("bare LF header lines are rejected")
+  void bareLfHeaderRejected() {
+    String boundary = "b-" + UUID.randomUUID();
+    String body = "--" + boundary + "\n"
+        + "Content-Disposition: form-data; name=\"completeMarker\"; filename=\"complete.marker\"\n"
+        + "Content-Type: text/plain\n\nCOMPLETE\n"
+        + "--" + boundary + "--";
+    assertThatThrownBy(() -> StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("bare-lf")))
+        .hasMessageContaining("CRLF");
   }
 
   @Test
@@ -164,6 +201,40 @@ class StabilizationBundleStreamReaderBoundaryTest {
   }
 
   @Test
+  @DisplayName("a pre-existing staging target is never overwritten")
+  void preExistingTargetIsRejectedWithoutOverwrite() throws Exception {
+    String boundary = "b-" + UUID.randomUUID();
+    Path staging = tempDir.resolve("pre-existing-target");
+    java.nio.file.Files.createDirectories(staging);
+    Path target = staging.resolve("completeMarker-complete.marker");
+    java.nio.file.Files.writeString(target, "sentinel");
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    body.append("Content-Disposition: form-data; name=\"completeMarker\"; filename=\"complete.marker\"\r\n");
+    body.append("Content-Type: text/plain\r\n\r\n");
+    body.append("COMPLETE\r\n");
+    body.append("--").append(boundary).append("--\r\n");
+
+    assertThatThrownBy(() -> StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary, staging))
+        .isInstanceOf(java.io.IOException.class);
+    assertThat(java.nio.file.Files.readString(target)).isEqualTo("sentinel");
+  }
+
+  @Test
+  @DisplayName("a regular file cannot be used as the staging root")
+  void stagingRootMustBeDirectory() throws Exception {
+    String boundary = "b-" + UUID.randomUUID();
+    Path file = tempDir.resolve("staging-file");
+    java.nio.file.Files.writeString(file, "not a directory");
+    assertThatThrownBy(() -> StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(minimalBody(boundary)),
+        "multipart/form-data; boundary=" + boundary, file))
+        .isInstanceOf(java.io.IOException.class);
+  }
+
+  @Test
   @DisplayName("a part with too many header lines is rejected")
   void tooManyHeadersRejected() {
     String boundary = "b-" + UUID.randomUUID();
@@ -185,7 +256,7 @@ class StabilizationBundleStreamReaderBoundaryTest {
 
   @Test
   @DisplayName("a boundary-prefix that is not a real delimiter stays body data byte-for-byte")
-  void boundaryPrefixStaysBodyData() {
+  void boundaryPrefixStaysBodyData() throws Exception {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
     body.append("--").append(boundary).append("\r\n");
@@ -217,7 +288,7 @@ class StabilizationBundleStreamReaderBoundaryTest {
 
   @Test
   @DisplayName("a closing boundary -- suffix succeeds")
-  void closingBoundarySuffix() {
+  void closingBoundarySuffix() throws Exception {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
     body.append("--").append(boundary).append("\r\n");
@@ -253,7 +324,7 @@ class StabilizationBundleStreamReaderBoundaryTest {
 
   @Test
   @DisplayName("quoted disposition parameters parse with escaped characters")
-  void quotedDispositionParameters() {
+  void quotedDispositionParameters() throws Exception {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
     body.append("--").append(boundary).append("\r\n");
@@ -269,8 +340,25 @@ class StabilizationBundleStreamReaderBoundaryTest {
   }
 
   @Test
+  @DisplayName("an unterminated quoted disposition parameter is rejected")
+  void malformedQuotedDispositionRejected() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder();
+    body.append("--").append(boundary).append("\r\n");
+    body.append("Content-Disposition: form-data; name=\"completeMarker\"; filename=\"complete.marker\r\n");
+    body.append("Content-Type: text/plain\r\n\r\n");
+    body.append("COMPLETE\r\n");
+    body.append("--").append(boundary).append("--\r\n");
+    assertThatThrownBy(() -> StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("malformed-quoted")))
+        .hasMessageContaining("quoted Content-Disposition");
+  }
+
+  @Test
   @DisplayName("a closing boundary at EOF (no trailing CRLF) is valid")
-  void closingBoundaryAtEofValid() {
+  void closingBoundaryAtEofValid() throws Exception {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
     body.append("--").append(boundary).append("\r\n");
@@ -322,7 +410,7 @@ class StabilizationBundleStreamReaderBoundaryTest {
 
   @Test
   @DisplayName("an initial closing boundary at EOF (empty bundle) is valid")
-  void initialClosingBoundaryAtEofValid() {
+  void initialClosingBoundaryAtEofValid() throws Exception {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
     body.append("--").append(boundary).append("\r\n");
@@ -347,5 +435,49 @@ class StabilizationBundleStreamReaderBoundaryTest {
         "multipart/form-data; boundary=" + boundary,
         tempDir.resolve("r")))
         .hasMessageContaining("trailing data");
+  }
+
+  @Test
+  @DisplayName("exactly MAX_PARTS ordinary parts are accepted before the closing boundary")
+  void exactMaximumPartCountAccepted() throws Exception {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder("--").append(boundary).append("\r\n");
+    for (int i = 0; i < StabilizationBundleStreamReader.MAX_PARTS; i++) {
+      body.append("Content-Disposition: form-data; name=\"artifacts\"; filename=\"sha256_")
+          .append(String.format("%064x", i)).append(".log\"\r\n")
+          .append("Content-Type: text/plain\r\n\r\n")
+          .append("x\r\n--").append(boundary).append("\r\n");
+    }
+    // Replace the delimiter after the final part with the closing form.
+    body.setLength(body.length() - (boundary.length() + 4));
+    body.append("--").append(boundary).append("--\r\n");
+
+    StabilizationBundleStreamReader.StagedBundle bundle = StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("maximum-parts"));
+    org.assertj.core.api.Assertions.assertThat(bundle.artifacts()).hasSize(
+        StabilizationBundleStreamReader.MAX_PARTS);
+  }
+
+  @Test
+  @DisplayName("the part after MAX_PARTS is rejected")
+  void partCountAboveMaximumRejected() {
+    String boundary = "b-" + UUID.randomUUID();
+    StringBuilder body = new StringBuilder("--").append(boundary).append("\r\n");
+    for (int i = 0; i < StabilizationBundleStreamReader.MAX_PARTS + 1; i++) {
+      body.append("Content-Disposition: form-data; name=\"artifacts\"; filename=\"sha256_")
+          .append(String.format("%064x", i)).append(".log\"\r\n")
+          .append("Content-Type: text/plain\r\n\r\n")
+          .append("x\r\n--").append(boundary).append("\r\n");
+    }
+    body.setLength(body.length() - (boundary.length() + 4));
+    body.append("--").append(boundary).append("--\r\n");
+
+    assertThatThrownBy(() -> StabilizationBundleStreamReader.read(
+        new java.io.ByteArrayInputStream(body.toString().getBytes(StandardCharsets.UTF_8)),
+        "multipart/form-data; boundary=" + boundary,
+        tempDir.resolve("above-maximum-parts")))
+        .hasMessageContaining("maximum part count");
   }
 }

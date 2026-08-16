@@ -10,6 +10,8 @@ import java.time.Instant;
 })
 public class RoutineCaptureRecord {
   @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
+  /** Optimistic lock: multi-instance capture acceptance no longer relies on JVM synchronized. */
+  @Version private Long version;
   @Column(name = "session_id", nullable = false, unique = true, length = 160) private String sessionId;
   @Column(name = "start_idempotency_key", nullable = false, unique = true, length = 240) private String startIdempotencyKey;
   @Column(name = "start_request_hash", nullable = false, length = 71) private String startRequestHash;
@@ -33,6 +35,13 @@ public class RoutineCaptureRecord {
   @Column(name = "completion_request_hash", length = 71) private String completionRequestHash;
   @Column(name = "debug_session_id", length = 160) private String debugSessionId;
   @Column(name = "video_path", length = 500) private String videoPath;
+  @Column(name = "completion_status", nullable = false, length = 20) private String completionStatus = "STARTING";
+  @Column(name = "completion_error", length = 500) private String completionError;
+  @Column(name = "operation", length = 30) private String operation;
+  @Column(name = "operation_state", length = 20) private String operationState;
+  @Column(name = "operation_request_hash", length = 71) private String operationRequestHash;
+  @Column(name = "operation_correlation_id", length = 160) private String operationCorrelationId;
+  @Column(name = "operation_attempts", nullable = false) private int operationAttempts = 0;
 
   public Long getId() { return id; }
   public String getSessionId() { return sessionId; }
@@ -81,4 +90,18 @@ public class RoutineCaptureRecord {
   public void setDebugSessionId(String value) { debugSessionId = value; }
   public String getVideoPath() { return videoPath; }
   public void setVideoPath(String value) { videoPath = value; }
+  public String getCompletionStatus() { return completionStatus; }
+  public void setCompletionStatus(String value) { completionStatus = value; }
+  public String getCompletionError() { return completionError; }
+  public void setCompletionError(String value) { completionError = value; }
+  public String getOperation() { return operation; }
+  public void setOperation(String value) { operation = value; }
+  public String getOperationState() { return operationState; }
+  public void setOperationState(String value) { operationState = value; }
+  public String getOperationRequestHash() { return operationRequestHash; }
+  public void setOperationRequestHash(String value) { operationRequestHash = value; }
+  public String getOperationCorrelationId() { return operationCorrelationId; }
+  public void setOperationCorrelationId(String value) { operationCorrelationId = value; }
+  public int getOperationAttempts() { return operationAttempts; }
+  public void setOperationAttempts(int value) { operationAttempts = value; }
 }

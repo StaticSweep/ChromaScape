@@ -30,6 +30,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -213,6 +214,23 @@ public class DebugSessionService {
   }
 
   /**
+   * Capture-outbox entry point. The dispatcher has already committed its lease, so capture
+   * recorder I/O must not run inside that transaction. This method deliberately suspends any
+   * ambient transaction and invokes the existing lifecycle implementation directly; repository
+   * writes are committed by their individual Spring Data operations before/after the recorder
+   * call.
+   */
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  public SessionStartResponse startCaptureSession(
+      String accountName,
+      String scriptName,
+      Boolean recordingEnabled,
+      RecordingTriggerSource triggerSource,
+      String preferredSessionId) {
+    return startSession(accountName, scriptName, recordingEnabled, triggerSource, preferredSessionId);
+  }
+
+  /**
    * Stop a debug session.
    *
    * @param sessionId the session ID to stop
@@ -368,6 +386,15 @@ public class DebugSessionService {
             sessionId);
       }
     }
+  }
+
+  /**
+   * Capture-outbox stop entry point. Keep the recorder stop outside a database transaction so an
+   * external success cannot be rolled back together with session metadata.
+   */
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  public void stopCaptureSession(String sessionId, Long endTick, boolean stopRecording) {
+    stopSession(sessionId, endTick, stopRecording);
   }
 
   /**

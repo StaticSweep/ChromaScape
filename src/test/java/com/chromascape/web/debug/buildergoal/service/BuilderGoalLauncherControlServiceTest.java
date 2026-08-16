@@ -194,6 +194,44 @@ class BuilderGoalLauncherControlServiceTest {
   }
 
   @Test
+  void listAccounts_defaultsSchemeForCanonicalHashWhenLauncherOmitsIt() {
+    // The production launcher predates the scheme field; its canonical 16-hex account hashes
+    // must still satisfy the accountconnector/v1 identity contract.
+    serve(
+        "/api/v1/accounts",
+        200,
+        """
+        {
+          "accounts": [
+            {
+              "account_hash": "3720a9a3b5c9f57b",
+              "account_name": "udasuAvuco",
+              "display_name": "udasuAvuco",
+              "email": "udasu@example.com",
+              "enabled": true,
+              "status": "offline"
+            },
+            {
+              "account_hash": "legacy-visible-hash",
+              "account_name": "LegacyAccount",
+              "display_name": "LegacyAccount",
+              "enabled": true,
+              "status": "offline"
+            }
+          ]
+        }
+        """);
+
+    List<BuilderGoalLauncherControlService.LauncherAccount> accounts = service.listAccounts();
+
+    assertThat(accounts).hasSize(2);
+    assertThat(accounts.get(0).accountHash()).isEqualTo("3720a9a3b5c9f57b");
+    assertThat(accounts.get(0).accountHashScheme()).isEqualTo("accountconnector/v1");
+    // A non-canonical hash without an explicit scheme stays unattested and remains blocked.
+    assertThat(accounts.get(1).accountHashScheme()).isNull();
+  }
+
+  @Test
   void getCommandStatus_preservesNullMetadataFields() {
     serve(
         "/api/v1/launcher/commands/cmd-1",

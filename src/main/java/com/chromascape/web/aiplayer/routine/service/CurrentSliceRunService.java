@@ -65,12 +65,18 @@ public class CurrentSliceRunService {
 
     String runId = identity.run().runId();
     String identityJson = write(identity);
-    CurrentSliceRun existing = repository.findByRunId(runId).orElse(null);
+    CurrentSliceRun existing = repository.findWithLockByRunId(runId).orElse(null);
     if (existing != null) {
-      if (!identityJson.equals(existing.getIdentityJson())) {
+      // Semantic idempotency: a retried upstream create succeeds when the submitted identity is a
+      // valid predecessor of the persisted (possibly enriched) identity. Raw serialized JSON is
+      // never compared; a regression (missing or changed group) is rejected.
+      CurrentSliceIdentity persisted = read(existing.getIdentityJson());
+      try {
+        identity.requireSameIdentity(persisted);
+      } catch (RuntimeException e) {
         throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "run identity differs from persisted run");
       }
-      return response(existing, identity);
+      return response(existing, persisted);
     }
     CurrentSliceRun entity = new CurrentSliceRun();
     entity.setRunId(runId.isBlank() ? "run_" + UUID.randomUUID().toString().replace("-", "") : runId);
@@ -78,6 +84,104 @@ public class CurrentSliceRunService {
     entity.setIdentityJson(identityJson);
     entity.setStage("BOUND");
     return response(repository.save(entity), identity);
+  }
+
+  /**
+   * Advances the persisted run identity through the locked path.
+   */
+  @Transactional
+  public CurrentSliceRun advanceIdentity(String runId, CurrentSliceIdentity enriched, String stage) {
+    if (runId == null || runId.isBlank()) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_FIELD_MISSING", "run_id is required");
+    }
+    CurrentSliceRun entity = repository.findWithLockByRunId(runId)
+        .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
+    CurrentSliceIdentity persisted = read(entity.getIdentityJson());
+    try {
+      persisted.requireSameIdentity(enriched);
+    } catch (RuntimeException e) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "identity is not a valid progressive enrichment of the persisted run");
+    }
+    entity.setIdentityJson(write(enriched));
+    entity.setStage(stage);
+    return repository.save(entity);
+  }
+
+  /**
+   * Locked, non-throwing identity advancement for asynchronous result application. Returning false
+   * lets the caller commit durable UNCERTAIN evidence in its own transaction instead of catching a
+   * runtime identity conflict after Spring has already marked the surrounding transaction rollback
+   * only.
+   */
+  @Transactional
+  public boolean tryAdvanceIdentity(String runId, CurrentSliceIdentity enriched, String stage) {
+    if (runId == null || runId.isBlank() || enriched == null) return false;
+    CurrentSliceRun entity = repository.findWithLockByRunId(runId).orElse(null);
+    if (entity == null) return false;
+    try {
+      CurrentSliceIdentity persisted = read(entity.getIdentityJson());
+      persisted.requireSameIdentity(enriched);
+      entity.setIdentityJson(write(enriched));
+      entity.setStage(stage);
+      repository.save(entity);
+      return true;
+    } catch (RuntimeException exception) {
+      return false;
+    }
+  }
+
+  /**
+   * Replaces the run graph group ONLY through an explicit supersession edge: the run must currently
+   * reference {@code supersededGraphId} (or have no graph yet). This is the single sanctioned path
+   * for a published assistant successor to replace the immutable core graph identity; it never
+   * allows an arbitrary graph overwrite.
+   */
+  @Transactional
+  public CurrentSliceRun advanceIdentityGraph(String runId, String supersededGraphId, CurrentSliceIdentity.Graph successor, String stage) {
+    if (runId == null || runId.isBlank() || successor == null) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_FIELD_MISSING", "run_id and successor graph are required");
+    }
+    CurrentSliceRun entity = repository.findWithLockByRunId(runId)
+        .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
+    CurrentSliceIdentity persisted = read(entity.getIdentityJson());
+    CurrentSliceIdentity.Graph current = persisted.graph();
+    if (current != null && !supersededGraphId.equals(current.graphId())) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "run graph is not the superseded graph");
+    }
+    if (current == null && supersededGraphId != null && !supersededGraphId.isBlank()) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "run has no graph to supersede");
+    }
+    CurrentSliceIdentity enriched = new CurrentSliceIdentity(
+        persisted.schema(), persisted.task(), persisted.run(), persisted.client(), persisted.capture(),
+        persisted.source(), successor, persisted.model(), persisted.candidate(), false);
+    entity.setIdentityJson(write(enriched));
+    entity.setStage(stage);
+    return repository.save(entity);
+  }
+
+  /**
+   * Publishes a root (generated) graph identity onto the run. This is the sanctioned path for
+   * publishing a generated graph: it advances the run graph ONLY when the run currently has no
+   * graph, and state update plus run-identity update happen in one transaction. An existing graph
+   * is never overwritten here — assistant successors must go through {@link #advanceIdentityGraph}.
+   */
+  @Transactional
+  public CurrentSliceRun advanceIdentityRootGraph(String runId, CurrentSliceIdentity.Graph rootGraph, String stage) {
+    if (runId == null || runId.isBlank() || rootGraph == null) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_FIELD_MISSING", "run_id and root graph are required");
+    }
+    CurrentSliceRun entity = repository.findWithLockByRunId(runId)
+        .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
+    CurrentSliceIdentity persisted = read(entity.getIdentityJson());
+    if (persisted.graph() != null) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "run already has a graph; use the supersession path");
+    }
+    CurrentSliceIdentity enriched = new CurrentSliceIdentity(
+        persisted.schema(), persisted.task(), persisted.run(), persisted.client(), persisted.capture(),
+        persisted.source(), rootGraph, persisted.model(), persisted.candidate(), false);
+    entity.setIdentityJson(write(enriched));
+    entity.setStage(stage);
+    return repository.save(entity);
   }
 
   @Transactional(readOnly = true)

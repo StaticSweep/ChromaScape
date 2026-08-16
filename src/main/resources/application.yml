@@ -16,12 +16,15 @@ spring:
       # Flyway migration V1 and must never be relied on here.
       ddl-auto: update
     show-sql: false
-  # Versioned schema migrations (SC-572). baseline-on-migrate lets an existing database adopt the
-  # migration history without a manual baseline insert; V1 enforces the durable artifact mapping.
+  # Versioned schema migrations (SC-572/SC-967). baseline-on-migrate lets an existing database adopt
+  # the migration history without a manual baseline insert; V1 enforces the durable artifact mapping.
+  # out-of-order lets the SC-967 baseline (V1_1, a no-op through IF NOT EXISTS on databases where
+  # Hibernate already created the tables) be adopted by histories that already applied V2/V3.
   flyway:
     enabled: true
     baseline-on-migrate: true
     baseline-version: 0
+    out-of-order: true
     locations: classpath:db/migration
 
 # LeeuwBot Integration Configuration
@@ -31,6 +34,7 @@ leeuwbot:
     token: ${STATIC_API_TOKEN:}
   signing:
     private-key-path: ${CANDIDATE_SIGNING_PRIVATE_KEY_PATH:}
+    public-key-path: ${CANDIDATE_SIGNING_PUBLIC_KEY_PATH:}
     key-id: ${CANDIDATE_SIGNING_KEY_ID:}
   integration:
     # Enable/disable integration with LeeuwBot API
@@ -85,6 +89,20 @@ leeuwbot:
 ai-routine:
   capture:
     token: ${AI_ROUTINE_CAPTURE_TOKEN:}
+  operator:
+    # Bearer token required for all candidate workflow endpoints (constant-time compared).
+    token: ${AI_ROUTINE_OPERATOR_TOKEN:}
+    # Auditable operator identity persisted into approval hashes and audit events.
+    id: ${AI_ROUTINE_OPERATOR_ID:operator}
+
+sc967:
+  candidate:
+    # Persistent root for durable candidate registration bundles (required when candidate builds are enabled).
+    staging-root: ${SC967_CANDIDATE_STAGING_ROOT:}
+    # Runtime gate for candidate builds. When false (default), build enqueue, worker execution and
+    # recovery dispatch are all rejected. When true, startup fails unless operator token/ID, signing
+    # key path/key ID, registry URL/token, staging root and the exact expected JAR name are valid.
+    builds-enabled: ${SC967_CANDIDATE_BUILDS_ENABLED:false}
 
 # Server configuration
 server:
