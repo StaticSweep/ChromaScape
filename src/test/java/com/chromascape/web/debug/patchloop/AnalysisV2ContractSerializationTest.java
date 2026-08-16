@@ -221,4 +221,41 @@ class AnalysisV2ContractSerializationTest {
     assertEquals("API_TIMEOUT", deserialized.getError().getCode());
     assertEquals("Request timed out", deserialized.getError().getMessage());
   }
+
+  @Test
+  void sessionBoundsRoundTripsItsOwnSerializedDerivedFields() throws Exception {
+    AnalysisV2Target.SessionBounds bounds =
+        new AnalysisV2Target.SessionBounds(
+            LocalDateTime.of(2026, 2, 28, 10, 30), LocalDateTime.of(2026, 2, 28, 10, 35));
+    String json = objectMapper.writeValueAsString(bounds);
+    assertTrue(json.contains("\"durationSeconds\":300"), "serialized durationSeconds missing");
+    assertTrue(json.contains("\"valid\":true"), "serialized valid missing");
+
+    // The derived read-only fields that the DTO itself serializes must deserialize cleanly.
+    AnalysisV2Target.SessionBounds deserialized =
+        objectMapper.readValue(json, AnalysisV2Target.SessionBounds.class);
+    assertEquals(
+        bounds.getStart(),
+        deserialized.getStart(),
+        "start must survive the round trip");
+    assertEquals(bounds.getEnd(), deserialized.getEnd(), "end must survive the round trip");
+    assertTrue(deserialized.isValid());
+  }
+
+  @Test
+  void sessionBoundsRejectsUnknownOrTypoedFields() {
+    String typo = "{\"start\":\"2026-02-28T10:30:00\",\"end\":\"2026-02-28T10:35:00\","
+        + "\"durationSeonds\":300}";
+    assertThrows(
+        com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException.class,
+        () -> objectMapper.readValue(typo, AnalysisV2Target.SessionBounds.class),
+        "a typoed derived field must be rejected, not silently ignored");
+
+    String unknown = "{\"start\":\"2026-02-28T10:30:00\",\"end\":\"2026-02-28T10:35:00\","
+        + "\"random_field\":42}";
+    assertThrows(
+        com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException.class,
+        () -> objectMapper.readValue(unknown, AnalysisV2Target.SessionBounds.class),
+        "an unknown field must be rejected, not silently ignored");
+  }
 }

@@ -1,7 +1,7 @@
 # ChromaScape–Micro6 Final Gap-Closure Remediation Manifest
 
 Created: 2026-08-14
-Updated: 2026-08-15
+Updated: 2026-08-16
 
 ## Repository scope
 
@@ -135,3 +135,52 @@ reviewed and cherry-picked (not merged) before syncing:
 
 - SC-572, SC-574, SC-189, SC-964 remain open until the real Fishing run and cleanup evidence exist.
 - SC-671 remains blocked.
+
+## 2026-08-16 continuation hardening (static review only)
+
+The following post-verification gaps were corrected without claiming a new build or operational
+result:
+
+- `Micro6OnlineClientRegistryService` now treats `runnable`/`dispatchReady` as generic canonical
+  executor readiness, keeps selected-account hash equality in `selectedAccountEligible` and
+  dispatch lookup, rejects malformed identities even on name fallback, and uses observed
+  requested/current world values rather than a stale `world_matched` heartbeat flag. Registry
+  fixtures now include the fail-closed identity, launch, and process fields.
+- `CatalogV2Publication.validateSettings` and ChromaScape catalog validation now enforce required
+  fields for an actual empty settings envelope, `text`/`enum`/`multi_select` types, non-empty
+  string-only multi-select values, and the active `options_by_dependency` branch. Schema-default
+  validation does not incorrectly reject a required field that has no default.
+- `ScriptExecutionService` accepts `builder_goal_iteration_id` as the conflict identity fallback;
+  Micro6 promotes that field to transport `iteration_id` before idempotency and ownership checks.
+- Micro6 `RunControlHandler` rejects pause/resume for terminal records before mutating the global
+  task manager or dispatch hold, while retaining stop/reconciliation for paused entries.
+- `Micro6TargetRelaunchService` carries the requested hash into the ready `TargetClient`; the
+  checkstyle configuration had merge markers removed and line endings normalized, and the
+  malformed `runelite-gradle-plugin/pmd-ruleset.xml` merge artifact was restored to a valid PMD
+  ruleset.
+
+Only `git diff --check` and exact merge-marker scans were run in this continuation. The native
+Windows Gradle/launcher gates and real-account Fishing acceptance must be rerun after these edits;
+no new evidence is being implied by this section.
+
+## 2026-08-16 local contract continuation
+
+The following additional implementation gaps were closed in the ChromaScape working tree:
+
+- `BuilderGoalRunnerController` no longer injects an empty `settings` object into legacy raw
+  `/run` payloads. Explicit settings objects (including `{}`) remain authoritative, while raw
+  settings reach `BuilderGoalRunnerService.normalizePayload()` for reserved-field stripping.
+- Legacy settings filtering now excludes the remaining controller transport fields, including
+  `displayName`, `allowLaunchFallback`, `forceRelaunch`, `builderPayload`, and evidence-control
+  aliases, so they cannot become task configuration.
+- `ScriptExecutionService.getMicro6RunStatus()` validates persisted canonical `task_key`, exact
+  `entry_id`, and exact iteration identity when supplied. Missing identity returns
+  `RECONCILING`; confirmed identity mismatches are surfaced to duplicate attachment as
+  `DUPLICATE_OR_CONFLICTING_DISPATCH`. Generic callers with no persisted identity remain
+  compatible, and receipt parsing retains the task-name fallback.
+- Regression coverage was added for legacy `/run` forwarding and matching, missing, and
+  mismatched status identities.
+
+Safe local verification for this continuation: `node --test src/test/js/*.test.js` passed 152/152,
+and scoped `git diff --check` passed. No Java/Gradle, launcher, restart, or operational command
+was run in WSL; those gates remain Windows-host requirements.

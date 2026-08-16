@@ -125,15 +125,26 @@ public class Micro6TargetPreparationService {
     Micro6TargetRelaunchService.RelaunchResult relaunchResult;
     try {
       relaunchResult =
-          micro6TargetRelaunchService.restartTarget(
-              accountName,
-              request.accountHash(),
-              request.accountEmail(),
-              request.accountPassword(),
-              request.world(),
-              request.targetBaseUrl(),
-              progressListener,
-              combinedCancellation);
+          request.forceRelaunch()
+              ? micro6TargetRelaunchService.restartTarget(
+                  accountName,
+                  request.accountHash(),
+                  request.accountEmail(),
+                  request.accountPassword(),
+                  request.world(),
+                  request.targetBaseUrl(),
+                  progressListener,
+                  combinedCancellation,
+                  true)
+              : micro6TargetRelaunchService.restartTarget(
+                  accountName,
+                  request.accountHash(),
+                  request.accountEmail(),
+                  request.accountPassword(),
+                  request.world(),
+                  request.targetBaseUrl(),
+                  progressListener,
+                  combinedCancellation);
     } catch (Micro6TargetRelaunchService.RelaunchException e) {
       throw new PreparationException(
           e.getPhase(),
@@ -207,7 +218,29 @@ public class Micro6TargetPreparationService {
       String accountPassword,
       Integer world,
       String launcherMachineUuid,
-      String targetBaseUrl) {}
+      String targetBaseUrl,
+      boolean forceRelaunch) {
+    public PreparationRequest(
+        String accountIdentifier,
+        String accountHash,
+        String accountName,
+        String accountEmail,
+        String accountPassword,
+        Integer world,
+        String launcherMachineUuid,
+        String targetBaseUrl) {
+      this(
+          accountIdentifier,
+          accountHash,
+          accountName,
+          accountEmail,
+          accountPassword,
+          world,
+          launcherMachineUuid,
+          targetBaseUrl,
+          false);
+    }
+  }
 
   public record PreparationResult(
       Micro6OnlineClientRegistryService.TargetClient targetClient,

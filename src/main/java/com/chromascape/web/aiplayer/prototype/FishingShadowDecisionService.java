@@ -591,7 +591,12 @@ public class FishingShadowDecisionService {
         "legacy", legacy);
   }
 
-  /** Parses one run file into tick/time/count stats, tolerating an incomplete trailing line. */
+  /**
+   * Parses one run file into tick/time/count stats. Follows the same corruption rules as history:
+   * a lone incomplete trailing line (e.g. from a crash mid-append) is tolerated, while a malformed
+   * completed/middle line is treated as corruption and fails the read instead of being silently
+   * ignored.
+   */
   private RunFileStats statsOf(Path file) {
     long firstTick = Long.MAX_VALUE;
     long lastTick = -1;
@@ -602,31 +607,29 @@ public class FishingShadowDecisionService {
     readLock.lock();
     try {
       String content = Files.readString(file);
-      for (String line : content.split("\n", -1)) {
-        String cleaned = stripCarriageReturn(line);
-        if (cleaned.isBlank()) {
-          continue;
+      if (content.isEmpty()) {
+        return null;
+      }
+      for (FishingShadowDecision decision : parseHistoryLines(content)) {
+        count++;
+        if (decision.tick() < firstTick) {
+          firstTick = decision.tick();
         }
-        try {
-          FishingShadowDecision decision =
-              objectMapper.readValue(cleaned, FishingShadowDecision.class);
-          count++;
-          if (decision.tick() < firstTick) {
-            firstTick = decision.tick();
-          }
-          if (decision.tick() > lastTick) {
-            lastTick = decision.tick();
-          }
-          if (firstObservedAt == null) {
-            firstObservedAt = decision.observedAt();
-          }
-          lastObservedAt = decision.observedAt();
-        } catch (IOException e) {
-          log.debug("Tolerating unparsable shadow history line in {}: {}", file, e.getMessage());
+        if (decision.tick() > lastTick) {
+          lastTick = decision.tick();
         }
+        if (firstObservedAt == null) {
+          firstObservedAt = decision.observedAt();
+        }
+        lastObservedAt = decision.observedAt();
       }
     } catch (IOException e) {
-      log.warn("Failed to read shadow run file {}: {}", file, e.getMessage());
+      log.error("Failed to read shadow run file {}: {}", file, e.getMessage());
+      throw new PrototypeApiException(
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          "HISTORY_READ_FAILED",
+          "Failed to read shadow run file",
+          Map.of("file", file.getFileName().toString()));
     } finally {
       readLock.unlock();
     }

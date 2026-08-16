@@ -179,10 +179,43 @@ Builder Goal local launch config loaded: projectDir=C:\Dev\IdeaProjects\micro6, 
 Then open `http://localhost:8090/debugger` and confirm:
 
 1. Launch Host selects `CZC8518C27` as the local host.
-2. Select the migrated canonical game-account hash `b01c7f006bace664`; do not select the obsolete profile-derived `3720a9a3b5c9f57b` value. Keep `udasuAvuco` as the display/profile name where shown.
-3. The executor reports `account_hash_scheme=accountconnector/v1`, actual and expected hashes match, and the selected-account eligibility is true.
-4. The executor becomes dispatch-ready on the requested world.
-5. Fishing Training can be published.
+
+## Builder Goal dispatch and relaunch contract
+
+Publish requests must omit `targetBaseUrl`; ChromaScape selects exactly one non-stale, dispatch-ready
+registry client and revalidates that client's `/health` identity immediately before `/execute`.
+Caller-supplied nonblank target overrides return `TARGET_OVERRIDE_NOT_ALLOWED`. Empty settings are
+accepted as `{}`; non-empty settings require the selected executor's usable catalog schema.
+
+To force a replacement launch, submit `/api/debug/builder-goals/launch-account` with
+`forceRelaunch: true`. ChromaScape performs validation and compile/preflight before stopping the
+verified owned process, records the phase history, and starts the replacement with a fresh launch
+attempt. A preflight failure must leave the existing owned process running.
+
+## Real Fishing publication is currently BLOCKED
+
+The authoritative launcher/catalog account record still contains the profile-derived hash
+`3720a9a3b5c9f57b`, while the AccountConnector-derived canonical identity for the selected real
+account is `b01c7f006bace664`. The account-record migration has NOT been performed, so:
+
+- Do NOT select `b01c7f006bace664`; it is absent from the catalog and a catalog lookup with it will
+  fail.
+- Do NOT bypass the identity mismatch with the account name; name matching is only a fallback when
+  no expected hash exists at all.
+- Real Fishing Training publication and launch remain blocked until the account-record migration is
+  executed and recorded with evidence (old hash, new hash, source, timestamp, operator).
+
+While blocked, the executor should still report `account_hash_scheme=accountconnector/v1`, but the
+actual and expected hashes will not match the catalog record and `selectedAccountEligible` will be
+`false`. This is the expected fail-closed state; do not override it.
+
+Only after the migration is complete and recorded may the operator confirm:
+
+1. Select the migrated canonical game-account hash `b01c7f006bace664` (now present in the catalog).
+2. The executor reports `account_hash_scheme=accountconnector/v1`, actual and expected hashes match,
+   and the selected-account eligibility is true.
+3. The executor becomes dispatch-ready on the requested world.
+4. Fishing Training can be published.
 
 Machines endpoint (HTTP 200 with the local machine marked `localMachine: true`):
 

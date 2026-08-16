@@ -32,7 +32,12 @@ public class Micro6OnlineClientRegistryService {
     state.clientId = clientId;
     state.accountName = textValue(payload.path("account_name"));
     state.accountHash = textValue(payload.path("account_hash"));
-    state.expectedAccountHash = textValue(payload.path("expected_account_hash"));
+    // The canonical launch-selected hash is requested_account_hash (producer contract). The legacy
+    // expected_account_hash name is accepted only for compatibility; Micro6 never emits it.
+    state.requestedAccountHash =
+        firstNonBlank(
+            textValue(payload.path(AccountIdentityContract.EXPECTED_ACCOUNT_HASH_FIELD)),
+            textValue(payload.path(AccountIdentityContract.LEGACY_EXPECTED_ACCOUNT_HASH_FIELD)));
     state.accountHashScheme = textValue(payload.path("account_hash_scheme"));
     state.advertisedBaseUrl = normalizeBaseUrl(textValue(payload.path("advertised_base_url")));
     state.executorBindAddr = textValue(payload.path("executor_bind_addr"));
@@ -92,7 +97,7 @@ public class Micro6OnlineClientRegistryService {
     return Optional.of(toTargetClient(state, false));
   }
 
-  /** Canonical selected-account/catalog readiness check; generic online state is not enough. */
+  /** Canonical generic executor readiness check; selected-account identity is checked separately. */
   public boolean isDispatchReady(TargetClient client) {
     if (client == null || client.advertisedBaseUrl() == null || client.advertisedBaseUrl().isBlank()) {
       return false;
@@ -115,13 +120,31 @@ public class Micro6OnlineClientRegistryService {
             Boolean.TRUE.equals(client.pathfinderReady()),
             Boolean.TRUE.equals(client.scriptLoopAlive()),
             client.scriptLifecycleState())
-        .publishReady();
+        .publishReady()
+        // world_matched is retained for diagnostics, but it may have been computed for an older
+        // launch request. The observed requested/current values are the authoritative readiness
+        // evidence for this registry snapshot.
+        && client.requestedWorld() != null
+        && client.currentWorld() != null
+        && client.requestedWorld().equals(client.currentWorld())
+        && client.clientId() != null
+        && !client.clientId().isBlank()
+        && client.advertisedBaseUrl() != null
+        && !client.advertisedBaseUrl().isBlank()
+        && client.launchAttemptId() != null
+        && !client.launchAttemptId().isBlank()
+        && client.processId() != null
+        && client.processId() > 0;
   }
 
   public boolean isSelectedAccountEligible(TargetClient client, String expectedAccountHash) {
     return isDispatchReady(client)
         && AccountIdentityContract.hasRequiredScheme(client.accountHashScheme())
-        && AccountIdentityContract.matchesHash(client.accountHash(), expectedAccountHash)
+        && AccountIdentityContract.isCanonicalHash(client.accountHash())
+        && AccountIdentityContract.isCanonicalHash(expectedAccountHash)
+        && AccountIdentityContract.isCanonicalHash(client.requestedAccountHash())
+        && AccountIdentityContract.matchesCanonicalHash(client.accountHash(), expectedAccountHash)
+        && AccountIdentityContract.matchesCanonicalHash(client.requestedAccountHash(), expectedAccountHash)
         && client.requestedWorld() != null
         && client.currentWorld() != null
         && client.requestedWorld().equals(client.currentWorld());
@@ -161,20 +184,35 @@ public class Micro6OnlineClientRegistryService {
       Integer expectedPort,
       Instant seenAfter,
       Integer expectedWorld) {
+    return findDispatchReadyClientsForRecovery(
+            accountHash, accountName, expectedPort, seenAfter, expectedWorld)
+        .stream()
+        .findFirst();
+  }
+
+  /**
+   * Returns every exact dispatch target. Callers that own a publish operation must reject an
+   * ambiguous result instead of selecting an arbitrary heartbeat.
+   */
+  public List<TargetClient> findDispatchReadyClientsForRecovery(
+      String accountHash,
+      String accountName,
+      Integer expectedPort,
+      Instant seenAfter,
+      Integer expectedWorld) {
     pruneExpired();
     // Identity is mandatory for dispatch selection: hash wins when present, name is a fallback
     // only when no hash is supplied, and unspecified identity is always rejected.
     if ((accountHash == null || accountHash.isBlank())
         && (accountName == null || accountName.isBlank())) {
-      return Optional.empty();
+      return List.of();
     }
     if (expectedWorld == null || expectedWorld <= 0) {
-      return Optional.empty();
+      return List.of();
     }
-    if (accountHash != null && !accountHash.isBlank()) {
-      // Selected-account dispatch requires the explicit shared hash scheme. A legacy heartbeat
-      // without it is diagnostic-only, never a publish target.
-      // The filter below still compares the actual account_hash; this check is applied per state.
+    if (accountHash != null && !accountHash.isBlank()
+        && !AccountIdentityContract.isCanonicalHash(accountHash)) {
+      return List.of();
     }
     Stream<ClientState> stream =
         filterRecoveryStream(
@@ -183,20 +221,42 @@ public class Micro6OnlineClientRegistryService {
             accountName,
             expectedPort,
             seenAfter);
-    stream =
-        stream
-            .filter(state -> expectedWorld.equals(state.currentWorld))
-            .filter(
-                state ->
-                    accountHash == null
-                        || accountHash.isBlank()
-                        || AccountIdentityContract.hasRequiredScheme(state.accountHashScheme));
     return stream
+        .filter(state -> expectedWorld.equals(state.requestedWorld))
+        .filter(state -> expectedWorld.equals(state.currentWorld))
+        .filter(
+            state ->
+                (accountHash != null && !accountHash.isBlank())
+                    || safeForNameFallback(state))
+        .filter(
+            state ->
+                accountHash == null
+                    || accountHash.isBlank()
+                    || (AccountIdentityContract.hasRequiredScheme(state.accountHashScheme)
+                        && AccountIdentityContract.isCanonicalHash(state.accountHash)
+                        && AccountIdentityContract.isCanonicalHash(state.requestedAccountHash)
+                        && AccountIdentityContract.matchesCanonicalHash(
+                            state.accountHash, accountHash)
+                        && AccountIdentityContract.matchesCanonicalHash(
+                            state.requestedAccountHash, accountHash)))
+        .filter(state -> state.clientId != null && !state.clientId.isBlank())
+        .filter(state -> state.advertisedBaseUrl != null && !state.advertisedBaseUrl.isBlank())
+        .filter(state -> state.launchAttemptId != null && !state.launchAttemptId.isBlank())
+        .filter(state -> state.processId != null && state.processId > 0)
         .sorted(
             Comparator.comparing(
                 (ClientState state) -> state.lastSeenAt, Comparator.reverseOrder()))
-        .findFirst()
-        .map(state -> toTargetClient(state, false));
+        .map(state -> toTargetClient(state, false))
+        .toList();
+  }
+
+  private boolean safeForNameFallback(ClientState state) {
+    return isBlankOrCanonicalHash(state.accountHash)
+        && isBlankOrCanonicalHash(state.requestedAccountHash);
+  }
+
+  private boolean isBlankOrCanonicalHash(String value) {
+    return value == null || value.isBlank() || AccountIdentityContract.isCanonicalHash(value);
   }
 
   /**
@@ -273,7 +333,8 @@ public class Micro6OnlineClientRegistryService {
         state.pathfinderReady,
         state.launchAttemptId,
         state.processId,
-        state.accountHashScheme);
+        state.accountHashScheme,
+        state.requestedAccountHash);
   }
 
   private Map<String, Object> toSummary(ClientState state, boolean stale) {
@@ -281,7 +342,8 @@ public class Micro6OnlineClientRegistryService {
     summary.put("clientId", state.clientId);
     summary.put("accountName", state.accountName);
     summary.put("accountHash", state.accountHash);
-    summary.put("expectedAccountHash", state.expectedAccountHash);
+    summary.put("actualAccountHash", state.accountHash);
+    summary.put("requestedAccountHash", state.requestedAccountHash);
     summary.put("accountHashScheme", state.accountHashScheme);
     summary.put("advertisedBaseUrl", state.advertisedBaseUrl);
     summary.put("executorBindAddr", state.executorBindAddr);
@@ -308,9 +370,10 @@ public class Micro6OnlineClientRegistryService {
     boolean selectedAccountEligible =
         dispatchReady
             && AccountIdentityContract.hasRequiredScheme(state.accountHashScheme)
-            && AccountIdentityContract.matchesHash(
-                state.accountHash, state.expectedAccountHash)
-            && state.expectedAccountHash != null
+            && AccountIdentityContract.isCanonicalHash(state.accountHash)
+            && AccountIdentityContract.isCanonicalHash(state.requestedAccountHash)
+            && AccountIdentityContract.matchesCanonicalHash(
+                state.accountHash, state.requestedAccountHash)
             && state.requestedWorld != null
             && state.currentWorld != null
             && state.requestedWorld.equals(state.currentWorld);
@@ -331,14 +394,19 @@ public class Micro6OnlineClientRegistryService {
     if (!dispatchReady) {
       return "Executor is not generically dispatch-ready";
     }
-    if (state.expectedAccountHash == null || state.expectedAccountHash.isBlank()) {
-      return "Expected canonical account hash is missing";
+    if (state.requestedAccountHash == null || state.requestedAccountHash.isBlank()) {
+      return "Requested canonical account hash is missing";
+    }
+    if (!AccountIdentityContract.isCanonicalHash(state.accountHash)
+        || !AccountIdentityContract.isCanonicalHash(state.requestedAccountHash)) {
+      return "Account hash values are not canonical 16-hex identities";
     }
     if (!AccountIdentityContract.hasRequiredScheme(state.accountHashScheme)) {
       return "Account hash scheme is missing or unsupported";
     }
-    if (!AccountIdentityContract.matchesHash(state.accountHash, state.expectedAccountHash)) {
-      return "Actual account hash does not match expected account hash";
+    if (!AccountIdentityContract.matchesCanonicalHash(
+        state.accountHash, state.requestedAccountHash)) {
+      return "Actual account hash does not match requested account hash";
     }
     if (state.requestedWorld == null || state.currentWorld == null
         || !state.requestedWorld.equals(state.currentWorld)) {
@@ -380,7 +448,13 @@ public class Micro6OnlineClientRegistryService {
             Boolean.TRUE.equals(state.pathfinderReady),
             Boolean.TRUE.equals(state.scriptLoopAlive),
             state.scriptLifecycleState)
-        .publishReady();
+        .publishReady()
+        && state.clientId != null
+        && !state.clientId.isBlank()
+        && state.launchAttemptId != null
+        && !state.launchAttemptId.isBlank()
+        && state.processId != null
+        && state.processId > 0;
   }
 
   private boolean isStale(ClientState state) {
@@ -481,7 +555,54 @@ public class Micro6OnlineClientRegistryService {
       Boolean pathfinderReady,
       String launchAttemptId,
       Integer processId,
-      String accountHashScheme) {
+      String accountHashScheme,
+      String requestedAccountHash) {
+    /** Backward-compatible constructor for callers predating readiness fields. */
+    public TargetClient(
+        String clientId,
+        String accountName,
+        String accountHash,
+        String advertisedBaseUrl,
+        String executorBindAddr,
+        String sourceClientType,
+        String executorProfile,
+        String status,
+        String currentTask,
+        Instant lastSeenAt,
+        Integer requestedWorld,
+        Integer currentWorld,
+        Boolean worldMatched,
+        String scriptLifecycleState,
+        Boolean scriptLoopAlive,
+        Boolean dispatchHold,
+        String dispatchHoldReason) {
+      this(
+          clientId,
+          accountName,
+          accountHash,
+          advertisedBaseUrl,
+          executorBindAddr,
+          sourceClientType,
+          executorProfile,
+          status,
+          currentTask,
+          lastSeenAt,
+          requestedWorld,
+          currentWorld,
+          worldMatched,
+          scriptLifecycleState,
+          scriptLoopAlive,
+          dispatchHold,
+          dispatchHoldReason,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null);
+    }
+
     /** Backward-compatible constructor for persisted/test callers predating the hash scheme. */
     public TargetClient(
         String clientId,
@@ -529,6 +650,59 @@ public class Micro6OnlineClientRegistryService {
           pathfinderReady,
           launchAttemptId,
           processId,
+          null,
+          null);
+    }
+
+    /** Backward-compatible full constructor carrying the hash scheme but no requested hash. */
+    public TargetClient(
+        String clientId,
+        String accountName,
+        String accountHash,
+        String advertisedBaseUrl,
+        String executorBindAddr,
+        String sourceClientType,
+        String executorProfile,
+        String status,
+        String currentTask,
+        Instant lastSeenAt,
+        Integer requestedWorld,
+        Integer currentWorld,
+        Boolean worldMatched,
+        String scriptLifecycleState,
+        Boolean scriptLoopAlive,
+        Boolean dispatchHold,
+        String dispatchHoldReason,
+        String startupState,
+        String loginState,
+        Boolean pathfinderReady,
+        String launchAttemptId,
+        Integer processId,
+        String accountHashScheme) {
+      this(
+          clientId,
+          accountName,
+          accountHash,
+          advertisedBaseUrl,
+          executorBindAddr,
+          sourceClientType,
+          executorProfile,
+          status,
+          currentTask,
+          lastSeenAt,
+          requestedWorld,
+          currentWorld,
+          worldMatched,
+          scriptLifecycleState,
+          scriptLoopAlive,
+          dispatchHold,
+          dispatchHoldReason,
+          startupState,
+          loginState,
+          pathfinderReady,
+          launchAttemptId,
+          processId,
+          accountHashScheme,
           null);
     }
 
@@ -575,60 +749,17 @@ public class Micro6OnlineClientRegistryService {
           null,
           launchAttemptId,
           processId,
-          accountHashScheme);
-    }
-
-    /** Backward-compatible constructor for persisted/test callers predating readiness details. */
-    public TargetClient(
-        String clientId,
-        String accountName,
-        String accountHash,
-        String advertisedBaseUrl,
-        String executorBindAddr,
-        String sourceClientType,
-        String executorProfile,
-        String status,
-        String currentTask,
-        Instant lastSeenAt,
-        Integer requestedWorld,
-        Integer currentWorld,
-        Boolean worldMatched,
-        String scriptLifecycleState,
-        Boolean scriptLoopAlive,
-        String launchAttemptId,
-        Integer processId) {
-      this(
-          clientId,
-          accountName,
-          accountHash,
-          advertisedBaseUrl,
-          executorBindAddr,
-          sourceClientType,
-          executorProfile,
-          status,
-          currentTask,
-          lastSeenAt,
-          requestedWorld,
-          currentWorld,
-          worldMatched,
-          scriptLifecycleState,
-          scriptLoopAlive,
-          null,
-          null,
-          null,
-          null,
-          null,
-          launchAttemptId,
-          processId,
+          accountHashScheme,
           null);
     }
+
   }
 
   private static class ClientState {
     private String clientId;
     private String accountName;
     private String accountHash;
-    private String expectedAccountHash;
+    private String requestedAccountHash;
     private String accountHashScheme;
     private String advertisedBaseUrl;
     private String executorBindAddr;

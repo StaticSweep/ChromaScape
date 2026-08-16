@@ -74,7 +74,7 @@ class Micro6ExecutorCatalogServiceTest {
   }
 
   @Test
-  void generating202LeavesCacheUnchanged() throws Exception {
+  void stale202FromReadyRuntimeNeverReplacesCache() throws Exception {
     String ref = "dev-micro6:CCCC";
     start(ref, "executor-3");
     executor.fullBody = TestMicro6Catalog.json(TestMicro6Catalog.full());
@@ -82,12 +82,15 @@ class Micro6ExecutorCatalogServiceTest {
     JsonNode ready = service.getCatalogForExecutor(ref, "full", false);
     assertThat(ready.path("catalog_state").asText()).isEqualTo("READY");
 
+    // A READY runtime returning a 202 is a stale generation attestation: the response is never
+    // accepted as GENERATING, the acquisition does not settle, and the cache is never replaced.
     executor.fullStatus = 202;
     executor.fullBody =
         "{\"status\":\"GENERATING\",\"catalog_mode\":\"FULL\",\"catalog_state\":\"GENERATING\"}";
-    JsonNode generating = service.getCatalogForExecutor(ref, "full", true);
-    assertThat(generating.path("catalog_state").asText()).isEqualTo("GENERATING");
-    assertThat(generating.path("catalog").isMissingNode()).isTrue();
+    JsonNode rejected = service.getCatalogForExecutor(ref, "full", true);
+    assertThat(rejected.path("catalog_state").asText()).isEqualTo("UNAVAILABLE");
+    assertThat(rejected.path("reason_code").asText()).isEqualTo("RUNTIME_CHANGED");
+    assertThat(rejected.path("catalog").isMissingNode()).isTrue();
 
     executor.fullStatus = 200;
     JsonNode cached = service.getCatalogForExecutor(ref, "full", false);
@@ -286,7 +289,9 @@ class Micro6ExecutorCatalogServiceTest {
     registry.schemaBundleHashByRef.put(ref, newBundle);
 
     JsonNode second = service.getCatalogForExecutor(ref, "full", false);
-    assertThat(executor.fullCalls).as("schema-only change must invalidate the full cache").isEqualTo(2);
+    assertThat(executor.fullCalls)
+        .as("schema-only change must invalidate the full cache")
+        .isEqualTo(2);
     assertThat(second.path("catalog_state").asText()).isEqualTo("READY");
     assertThat(second.path("schema_bundle_hash").asText()).isEqualTo(newBundle);
   }
@@ -332,7 +337,8 @@ class Micro6ExecutorCatalogServiceTest {
     executor.lightweightBody = TestMicro6Catalog.json(TestMicro6Catalog.lightweight());
     executor.lightweightDelayMs = 400;
 
-    java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(10);
+    java.util.concurrent.ExecutorService pool =
+        java.util.concurrent.Executors.newFixedThreadPool(10);
     try {
       java.util.List<java.util.concurrent.Future<JsonNode>> futures = new java.util.ArrayList<>();
       for (int i = 0; i < 10; i++) {
@@ -358,7 +364,8 @@ class Micro6ExecutorCatalogServiceTest {
     // exceptional winner, retries acquisition, and coalesces onto a single replacement fetch.
     String key = seedFailedInflight(ref);
 
-    java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(10);
+    java.util.concurrent.ExecutorService pool =
+        java.util.concurrent.Executors.newFixedThreadPool(10);
     try {
       java.util.List<java.util.concurrent.Future<JsonNode>> futures = new java.util.ArrayList<>();
       for (int i = 0; i < 10; i++) {

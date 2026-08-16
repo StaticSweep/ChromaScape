@@ -538,7 +538,11 @@ public class DebugSessionService {
       log.warn("Preferred session {} not active/found, falling back", preferredSessionId);
     }
 
-    String sessionId = "debug_" + System.currentTimeMillis();
+    // Capture outbox bindings reserve a deterministic external session id before recorder I/O.
+    // Reusing that id lets a post-crash lookup find the same debugger session; ordinary callers
+    // retain the legacy timestamp-based allocation.
+    String sessionId = preferredSessionId != null && preferredSessionId.startsWith("capture_debug_")
+        ? preferredSessionId : "debug_" + System.currentTimeMillis();
     DebugSession created =
         new DebugSession(sessionId, accountName, scriptName, LocalDateTime.now(), 0L);
     created = sessionRepository.save(created);

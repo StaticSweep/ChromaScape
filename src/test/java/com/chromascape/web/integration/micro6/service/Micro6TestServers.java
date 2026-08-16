@@ -10,6 +10,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -93,6 +94,11 @@ final class Micro6TestServers {
     final Map<String, String> schemaBundleHashHeaderByRef = new ConcurrentHashMap<>();
     final Map<String, String> catalogStateHeaderByRef = new ConcurrentHashMap<>();
     final Map<String, String> schemaBundleStateHeaderByRef = new ConcurrentHashMap<>();
+    // Per-endpoint controls to omit catalog_state / schema_bundle_state from the runtime resolve
+    // JSON, so tests can model a registry runtime missing lifecycle metadata while the catalog
+    // proxy response headers remain independently valid.
+    final Set<String> omitRuntimeCatalogStateByRef = ConcurrentHashMap.newKeySet();
+    final Set<String> omitRuntimeSchemaBundleStateByRef = ConcurrentHashMap.newKeySet();
     final ObjectMapper mapper = new ObjectMapper();
     volatile boolean rewriteCatalogIdentity = true;
     volatile boolean omitIdentityHeaders = false;
@@ -398,10 +404,10 @@ final class Micro6TestServers {
       if (schemaBundleHash != null) {
         json.append("\"schema_bundle_hash\":\"").append(schemaBundleHash).append("\",");
       }
-      if (catalogState != null) {
+      if (catalogState != null && !omitRuntimeCatalogStateByRef.contains(endpointRef)) {
         json.append("\"catalog_state\":\"").append(catalogState).append("\",");
       }
-      if (schemaBundleState != null) {
+      if (schemaBundleState != null && !omitRuntimeSchemaBundleStateByRef.contains(endpointRef)) {
         json.append("\"schema_bundle_state\":\"").append(schemaBundleState).append("\",");
       }
       json.append("\"runtime_state\":\"")

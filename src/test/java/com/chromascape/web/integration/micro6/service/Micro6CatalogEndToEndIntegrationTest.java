@@ -119,17 +119,20 @@ class Micro6CatalogEndToEndIntegrationTest {
   }
 
   @Test
-  @DisplayName("202 GENERATING never replaces a cached READY catalog")
+  @DisplayName("stale 202 from a READY runtime never replaces a cached READY catalog")
   void generatingDoesNotReplaceCache() {
     JsonNode ready = service.getCatalogForExecutor("dev-micro6:SC584A", "full", false);
     assertThat(ready.path("catalog_state").asText()).isEqualTo("READY");
 
+    // A READY runtime returning a 202 is a stale generation attestation: it is never accepted as
+    // GENERATING, the bounded re-acquisition does not settle, and the cache is never replaced.
     executor.fullStatus = 202;
     executor.fullBody =
         "{\"status\":\"GENERATING\",\"catalog_mode\":\"FULL\",\"catalog_state\":\"GENERATING\"}";
-    JsonNode generating = service.getCatalogForExecutor("dev-micro6:SC584A", "full", true);
-    assertThat(generating.path("catalog_state").asText()).isEqualTo("GENERATING");
-    assertThat(generating.path("catalog").isMissingNode()).isTrue();
+    JsonNode rejected = service.getCatalogForExecutor("dev-micro6:SC584A", "full", true);
+    assertThat(rejected.path("catalog_state").asText()).isEqualTo("UNAVAILABLE");
+    assertThat(rejected.path("reason_code").asText()).isEqualTo("RUNTIME_CHANGED");
+    assertThat(rejected.path("catalog").isMissingNode()).isTrue();
 
     executor.fullStatus = 200;
     executor.fullBody = TestMicro6Catalog.json(TestMicro6Catalog.full());
@@ -211,7 +214,8 @@ class Micro6CatalogEndToEndIntegrationTest {
   }
 
   @Test
-  @DisplayName("assembled bootstrap: NOT_AVAILABLE -> GENERATING -> AVAILABLE with cache invalidation")
+  @DisplayName(
+      "assembled bootstrap: NOT_AVAILABLE -> GENERATING -> AVAILABLE with cache invalidation")
   void assembledBootstrapLifecycle() throws Exception {
     // Bootstrap: the launcher heartbeat reports NOT_AVAILABLE (no bundle hash yet).
     registry.schemaBundleStateByRef.put("dev-micro6:SC584A", "NOT_AVAILABLE");
@@ -234,7 +238,8 @@ class Micro6CatalogEndToEndIntegrationTest {
     // runtime heartbeat catches up to AVAILABLE with the attested bundle hash.
     registry.schemaBundleStateByRef.put("dev-micro6:SC584A", "AVAILABLE");
     registry.catalogStateByRef.put("dev-micro6:SC584A", "READY");
-    registry.schemaBundleHashByRef.put("dev-micro6:SC584A", TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
+    registry.schemaBundleHashByRef.put(
+        "dev-micro6:SC584A", TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
     executor.fullStatus = 200;
     executor.fullBody = TestMicro6Catalog.json(TestMicro6Catalog.full());
     JsonNode ready = service.getCatalogForExecutor("dev-micro6:SC584A", "full", true);
@@ -272,7 +277,8 @@ class Micro6CatalogEndToEndIntegrationTest {
         .isEqualTo(TestMicro6Catalog.GOLDEN_CATALOG_HASH);
 
     // The lightweight catalog still serves from cache without re-fetching.
-    JsonNode lightweightAfter = service.getCatalogForExecutor("dev-micro6:SC584A", "lightweight", false);
+    JsonNode lightweightAfter =
+        service.getCatalogForExecutor("dev-micro6:SC584A", "lightweight", false);
     assertThat(lightweightAfter.path("catalog_state").asText()).isEqualTo("READY");
     assertThat(executor.lightweightCalls).isEqualTo(1);
   }

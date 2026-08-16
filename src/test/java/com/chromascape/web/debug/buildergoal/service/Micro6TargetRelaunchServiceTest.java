@@ -122,7 +122,7 @@ class Micro6TargetRelaunchServiceTest {
                 new TargetClient(
                     "client-1",
                     "bigGreenMeat",
-                    "hash-1",
+                    "1111111111111111",
                     "http://127.0.0.1:18998",
                     "0.0.0.0:18998",
                     "micro6",
@@ -141,9 +141,9 @@ class Micro6TargetRelaunchServiceTest {
             null,
             launchedProcessPid,
             "bigGreenMeat",
-            "hash-1",
+            "1111111111111111",
             "bigGreenMeat",
-            "hash-1",
+            "1111111111111111",
             false,
             null,
             "accountbuilder_ready",
@@ -892,7 +892,7 @@ class Micro6TargetRelaunchServiceTest {
             () ->
                 service.restartTarget(
                     "bigGreenMeat",
-                    "hash-1",
+                    "1111111111111111",
                     "user@example.com",
                     "secret",
                     360,
@@ -986,7 +986,7 @@ class Micro6TargetRelaunchServiceTest {
             () ->
                 service.restartTarget(
                     "cancelAfterCreate",
-                    "hash-1",
+                    "1111111111111111",
                     "user@example.com",
                     "secret",
                     360,
@@ -1015,7 +1015,7 @@ class Micro6TargetRelaunchServiceTest {
                 try {
                   service.restartTarget(
                       "cancelWhileSleep",
-                      "hash-1",
+                      "1111111111111111",
                       "user@example.com",
                       "secret",
                       360,
@@ -1054,7 +1054,7 @@ class Micro6TargetRelaunchServiceTest {
                 try {
                   service.restartTarget(
                       "interruptHealth",
-                      "hash-1",
+                      "1111111111111111",
                       "user@example.com",
                       "secret",
                       360,
@@ -1087,7 +1087,7 @@ class Micro6TargetRelaunchServiceTest {
             () ->
                 service.restartTarget(
                     "cancelBeforeReady",
-                    "hash-1",
+                    "1111111111111111",
                     "user@example.com",
                     "secret",
                     360,
@@ -1110,7 +1110,7 @@ class Micro6TargetRelaunchServiceTest {
       Micro6TargetRelaunchService.RelaunchResult result =
           service.restartTarget(
               "noCancelReady",
-              "hash-1",
+              "1111111111111111",
               "user@example.com",
               "secret",
               360,
@@ -1146,7 +1146,7 @@ class Micro6TargetRelaunchServiceTest {
             () ->
                 service.restartTarget(
                     "readinessTimeout",
-                    "hash-1",
+                    "1111111111111111",
                     "user@example.com",
                     "secret",
                     360,
@@ -1173,7 +1173,7 @@ class Micro6TargetRelaunchServiceTest {
             () ->
                 service.restartTarget(
                     "progressListenerFailure",
-                    "hash-1",
+                    "1111111111111111",
                     "user@example.com",
                     "secret",
                     360,
@@ -1303,9 +1303,9 @@ class Micro6TargetRelaunchServiceTest {
     try {
       String body =
           healthPayload(
-              "hash-1",
+              "1111111111111111",
               "bigGreenMeat",
-              "hash-1",
+              "1111111111111111",
               "bigGreenMeat",
               false,
               "starting_accountbuilder",
@@ -1326,7 +1326,7 @@ class Micro6TargetRelaunchServiceTest {
       Micro6TargetRelaunchService.HealthCheckResult result =
           service.readHealthyExecutorTarget(
               "http://127.0.0.1:" + server.getAddress().getPort(),
-              "hash-1",
+              "1111111111111111",
               "bigGreenMeat",
               360,
               Instant.now().minusSeconds(5),
@@ -1350,9 +1350,9 @@ class Micro6TargetRelaunchServiceTest {
     try {
       String body =
           healthPayload(
-              "hash-1",
+              "1111111111111111",
               "bigGreenMeat",
-              "hash-1",
+              "1111111111111111",
               "bigGreenMeat",
               true,
               "accountbuilder_ready",
@@ -1373,7 +1373,7 @@ class Micro6TargetRelaunchServiceTest {
       Micro6TargetRelaunchService.HealthCheckResult result =
           service.readHealthyExecutorTarget(
               "http://127.0.0.1:" + server.getAddress().getPort(),
-              "hash-1",
+              "1111111111111111",
               "bigGreenMeat",
               360,
               Instant.now().minusSeconds(5),
@@ -1396,9 +1396,9 @@ class Micro6TargetRelaunchServiceTest {
     try {
       String body =
           healthPayload(
-              "hash-1",
+              "1111111111111111",
               "bigGreenMeat",
-              "hash-1",
+              "1111111111111111",
               "bigGreenMeat",
               false,
               "accountbuilder_ready",
@@ -1419,7 +1419,7 @@ class Micro6TargetRelaunchServiceTest {
       Micro6TargetRelaunchService.HealthCheckResult result =
           service.readHealthyExecutorTarget(
               "http://127.0.0.1:" + server.getAddress().getPort(),
-              "hash-1",
+              "1111111111111111",
               "bigGreenMeat",
               360,
               Instant.now().minusSeconds(5),
@@ -1433,6 +1433,7 @@ class Micro6TargetRelaunchServiceTest {
       assertThat(target.startupState()).isEqualTo("accountbuilder_ready");
       assertThat(target.loginState()).isEqualTo("logged_in");
       assertThat(target.pathfinderReady()).isTrue();
+      assertThat(target.requestedAccountHash()).isEqualTo("1111111111111111");
     } finally {
       server.stop(0);
     }
@@ -1497,7 +1498,7 @@ class Micro6TargetRelaunchServiceTest {
       // Resolved identity is missing; only the launch-args requested identity is present.
       String body =
           healthPayload(
-              null, null, "hash-1", "bigGreenMeat", false, "accountbuilder_ready", "logged_in");
+              null, null, "1111111111111111", "bigGreenMeat", false, "accountbuilder_ready", "logged_in");
       server.createContext(
           "/health",
           exchange -> {
@@ -1514,7 +1515,7 @@ class Micro6TargetRelaunchServiceTest {
       Micro6TargetRelaunchService.HealthCheckResult result =
           service.readHealthyExecutorTarget(
               "http://127.0.0.1:" + server.getAddress().getPort(),
-              "hash-1",
+              "1111111111111111",
               "bigGreenMeat",
               360,
               Instant.now().minusSeconds(5),
@@ -1540,7 +1541,53 @@ class Micro6TargetRelaunchServiceTest {
       // match.
       String body =
           healthPayload(
-              "hash-999",
+              "9999999999999999",
+              "bigGreenMeat",
+              "1111111111111111",
+              "bigGreenMeat",
+              false,
+              "accountbuilder_ready",
+              "logged_in");
+      server.createContext(
+          "/health",
+          exchange -> {
+            byte[] payload = body.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, payload.length);
+            exchange.getResponseBody().write(payload);
+            exchange.close();
+          });
+      server.start();
+      HttpAwareService service =
+          new HttpAwareService(
+              tempDir.toString(), "http://127.0.0.1:" + server.getAddress().getPort(), 4242L);
+
+      Micro6TargetRelaunchService.HealthCheckResult result =
+          service.readHealthyExecutorTarget(
+              "http://127.0.0.1:" + server.getAddress().getPort(),
+              "1111111111111111",
+              "bigGreenMeat",
+              360,
+              Instant.now().minusSeconds(5),
+              -1L,
+              null,
+              null);
+
+      assertThat(result.readinessPhase())
+          .isEqualTo(Micro6TargetRelaunchService.PHASE_WAITING_FOR_ACCOUNT);
+      assertThat(result.accountMatched()).isFalse();
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void readHealthyExecutorTarget_matchingMalformedHashesAreNotReady() throws Exception {
+    com.sun.net.httpserver.HttpServer server =
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    try {
+      String body =
+          healthPayload(
+              "hash-1",
               "bigGreenMeat",
               "hash-1",
               "bigGreenMeat",
@@ -1892,7 +1939,7 @@ class Micro6TargetRelaunchServiceTest {
             () ->
                 service.restartTarget(
                     "validateFails",
-                    "hash-1",
+                    "1111111111111111",
                     "user@example.com",
                     "secret",
                     360,
@@ -1918,7 +1965,7 @@ class Micro6TargetRelaunchServiceTest {
             () ->
                 service.restartTarget(
                     "contractFails",
-                    "hash-1",
+                    "1111111111111111",
                     "user@example.com",
                     "secret",
                     360,
@@ -1949,7 +1996,7 @@ class Micro6TargetRelaunchServiceTest {
             () ->
                 service.restartTarget(
                     "compileFails",
-                    "hash-1",
+                    "1111111111111111",
                     "user@example.com",
                     "secret",
                     360,

@@ -91,7 +91,6 @@ public class AnalysisV2Target {
   }
 
   /** Time-based bounds for the analysis session. */
-  @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
   public static class SessionBounds {
 
     /** Start of the session window. */
@@ -126,6 +125,7 @@ public class AnalysisV2Target {
     }
 
     /** Returns true if this session bound is valid (start before end, both non-null). */
+    @JsonProperty(value = "valid", access = JsonProperty.Access.READ_ONLY)
     public boolean isValid() {
       return start != null && end != null && start.isBefore(end);
     }

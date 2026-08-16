@@ -140,13 +140,26 @@ public class BuilderGoalRunnerController {
   @PostMapping("/launch-account")
   public ResponseEntity<Object> launchAccount(@RequestBody JsonNode payload) {
     try {
+      if (payload == null || !payload.isObject()) {
+        return ResponseEntity.badRequest()
+            .body(Map.of("error", "launch payload must be a JSON object"));
+      }
+      ResponseEntity<Object> targetOverride = rejectTargetOverride(payload);
+      if (targetOverride != null) {
+        return targetOverride;
+      }
       String accountId = textValue(payload.path("accountId"));
       String launcherMachineUuid = textValue(payload.path("launcherMachineUuid"));
       Integer world = intValue(payload.path("world"));
+      boolean forceRelaunch = payload.path("forceRelaunch").asBoolean(false);
       // The launch runs on a dedicated executor with a server-side readiness watchdog. The POST
       // returns HTTP 202 immediately; the browser polls the operation via statusUrl.
-      return ResponseEntity.accepted()
-          .body(builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world));
+      Map<String, Object> launchResponse =
+          forceRelaunch
+              ? builderGoalRunnerService.launchAccount(
+                  accountId, launcherMachineUuid, world, true)
+              : builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world);
+      return ResponseEntity.accepted().body(launchResponse);
     } catch (BuilderGoalRunnerService.LaunchSubmissionException e) {
       return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
           .body(
@@ -198,6 +211,34 @@ public class BuilderGoalRunnerController {
   @PostMapping("/run")
   public ResponseEntity<Object> runPayload(@RequestBody JsonNode payload) {
     try {
+      if (payload == null || !payload.isObject()) {
+        return ResponseEntity.badRequest().body(Map.of("error", "run payload must be a JSON object"));
+      }
+      ResponseEntity<Object> targetOverride = rejectTargetOverride(payload);
+      if (targetOverride != null) {
+        return targetOverride;
+      }
+      if (payload.has("forceRelaunch")) {
+        return ResponseEntity.badRequest().body(Map.of("error", "forceRelaunch is only supported by /launch-account"));
+      }
+      JsonNode settingsNode = payload.get("settings");
+      if (settingsNode != null && !settingsNode.isObject()) {
+        return ResponseEntity.badRequest().body(Map.of("error", "settings must be a JSON object"));
+      }
+      JsonNode nestedBuilderPayload = payload.get("builderPayload");
+      if (nestedBuilderPayload != null && nestedBuilderPayload.isObject()) {
+        ResponseEntity<Object> nestedTargetOverride = rejectTargetOverride(nestedBuilderPayload);
+        if (nestedTargetOverride != null) {
+          return nestedTargetOverride;
+        }
+        if (nestedBuilderPayload.has("forceRelaunch")) {
+          return ResponseEntity.badRequest().body(Map.of("error", "forceRelaunch is only supported by /launch-account"));
+        }
+        JsonNode nestedSettings = nestedBuilderPayload.get("settings");
+        if (nestedSettings != null && !nestedSettings.isObject()) {
+          return ResponseEntity.badRequest().body(Map.of("error", "settings must be a JSON object"));
+        }
+      }
       String accountId = textValue(payload.path("accountId"));
       String launcherMachineUuid = textValue(payload.path("launcherMachineUuid"));
       String taskKey = textValue(payload.path("taskKey"));
@@ -206,8 +247,8 @@ public class BuilderGoalRunnerController {
       if (accountId != null && taskKey != null) {
         @SuppressWarnings("unchecked")
         Map<String, Object> settings =
-            payload.path("settings").isObject()
-                ? objectMapper.convertValue(payload.path("settings"), Map.class)
+            payload.has("settings")
+                ? objectMapper.convertValue(payload.get("settings"), Map.class)
                 : Map.of();
         String displayName = textValue(payload.path("displayName"));
         return ResponseEntity.ok(
@@ -234,21 +275,42 @@ public class BuilderGoalRunnerController {
   @PostMapping("/publish")
   public ResponseEntity<Object> publishTask(@RequestBody JsonNode payload) {
     try {
+      if (payload == null || !payload.isObject()) {
+        return ResponseEntity.badRequest().body(Map.of("error", "publish payload must be a JSON object"));
+      }
+      ResponseEntity<Object> targetOverride = rejectTargetOverride(payload);
+      if (targetOverride != null) {
+        return targetOverride;
+      }
       String accountId = textValue(payload.path("accountId"));
       String launcherMachineUuid = textValue(payload.path("launcherMachineUuid"));
       String taskKey = textValue(payload.path("taskKey"));
       Integer world = intValue(payload.path("world"));
-      String targetBaseUrl = textValue(payload.path("targetBaseUrl"));
+      JsonNode targetBaseUrl = payload.get("targetBaseUrl");
+      if (targetBaseUrl != null
+          && !targetBaseUrl.isNull()
+          && (!targetBaseUrl.isTextual() || !targetBaseUrl.asText("").isBlank())) {
+        return ResponseEntity.badRequest()
+            .body(
+                Map.of(
+                    "error", "TARGET_OVERRIDE_NOT_ALLOWED",
+                    "details",
+                        "Dispatch targets are selected only from a matching ready registry client."));
+      }
       boolean allowLaunchFallback = payload.path("allowLaunchFallback").asBoolean(false);
       if (accountId == null || taskKey == null) {
         return ResponseEntity.badRequest()
             .body(Map.of("error", "accountId and taskKey are required"));
       }
+      JsonNode settingsNode = payload.get("settings");
+      if (settingsNode != null && !settingsNode.isObject()) {
+        return ResponseEntity.badRequest().body(Map.of("error", "settings must be a JSON object"));
+      }
       @SuppressWarnings("unchecked")
       Map<String, Object> settings =
-          payload.path("settings").isObject()
-              ? objectMapper.convertValue(payload.path("settings"), Map.class)
-              : Map.of();
+          settingsNode == null
+              ? Map.of()
+              : objectMapper.convertValue(settingsNode, Map.class);
       Map<String, Object> provenance = extractProvenance(payload);
       return ResponseEntity.ok(
           builderGoalRunnerService.publishOnly(
@@ -257,7 +319,6 @@ public class BuilderGoalRunnerController {
               taskKey,
               settings,
               world,
-              targetBaseUrl,
               allowLaunchFallback,
               provenance));
     } catch (IllegalArgumentException e) {
@@ -541,6 +602,36 @@ public class BuilderGoalRunnerController {
     }
   }
 
+  @PostMapping("/runs/{iterationId}/pause")
+  public ResponseEntity<Object> pauseRun(@PathVariable String iterationId) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.pauseRun(iterationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", "Failed to pause builder goal run", "details", sanitizeFailure(e)));
+    }
+  }
+
+  @PostMapping("/runs/{iterationId}/resume")
+  public ResponseEntity<Object> resumeRun(@PathVariable String iterationId) {
+    try {
+      return ResponseEntity.ok(builderGoalRunnerService.resumeRun(iterationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", "Failed to resume builder goal run", "details", sanitizeFailure(e)));
+    }
+  }
+
   @PostMapping("/runs/{iterationId}/stop")
   public ResponseEntity<Object> stopRun(
       @PathVariable String iterationId, @RequestBody(required = false) JsonNode payload) {
@@ -588,6 +679,52 @@ public class BuilderGoalRunnerController {
   /** Sanitizes a message before it is exposed in an HTTP error body. */
   private String sanitizeMessage(String message) {
     return BuilderGoalSensitiveTextSanitizer.sanitize(message);
+  }
+
+  private ResponseEntity<Object> rejectTargetOverride(JsonNode payload) {
+    if (containsNonBlankTargetOverride(payload)) {
+      return ResponseEntity.badRequest()
+          .body(
+              Map.of(
+                  "error", "TARGET_OVERRIDE_NOT_ALLOWED",
+                  "details", "Dispatch targets are selected only from a matching ready registry client."));
+    }
+    return null;
+  }
+
+  /**
+   * Caller-selected executor URLs are forbidden at every nesting level, including task_metadata
+   * and queue preview envelopes.  Checking only the top-level field leaves a bypass for clients
+   * that serialize the old builder_execution shape.
+   */
+  private boolean containsNonBlankTargetOverride(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return false;
+    }
+    if (node.isObject()) {
+      java.util.Iterator<java.util.Map.Entry<String, JsonNode>> fields = node.fields();
+      while (fields.hasNext()) {
+        java.util.Map.Entry<String, JsonNode> field = fields.next();
+        String name = field.getKey();
+        JsonNode value = field.getValue();
+        if (("targetBaseUrl".equals(name) || "target_base_url".equals(name))
+            && value != null
+            && !value.isNull()
+            && (!value.isTextual() || !value.asText("").isBlank())) {
+          return true;
+        }
+        if (containsNonBlankTargetOverride(value)) {
+          return true;
+        }
+      }
+    } else if (node.isArray()) {
+      for (JsonNode child : node) {
+        if (containsNonBlankTargetOverride(child)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private String textValue(JsonNode node) {

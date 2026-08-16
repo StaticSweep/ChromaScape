@@ -21,7 +21,7 @@ class AccountTaskPlanner {
     ASSIGNED: 'Executor assigned the task; waiting for confirmed script start.',
     QUEUED: 'Task accepted and queued by the executor.',
     RUNNING: 'Task started; the executor confirmed the script is running.',
-    PAUSED: 'Task paused; the executor suspended the task.',
+    PAUSED: 'Task paused.',
     STOPPING: 'Stop requested; awaiting executor confirmation.',
     PUBLISH_FAILED: 'Task publish failed.',
     FAILED: 'Task execution failed.',
@@ -165,6 +165,13 @@ class AccountTaskPlanner {
       return null;
     }
     const status = run.status.toUpperCase();
+    const controlAction = String(run.controlAction || '').toUpperCase();
+    if (run.controlRequested && controlAction === 'PAUSE' && status !== 'PAUSED') {
+      return 'Pause requested; awaiting executor confirmation.';
+    }
+    if (run.controlRequested && controlAction === 'RESUME' && status !== 'RUNNING') {
+      return 'Resume requested; awaiting executor confirmation.';
+    }
     if (status === 'RECONCILING') {
       return AccountTaskPlanner.BUILDER_GOAL_STATUS_LABELS.RECONCILING;
     }
@@ -679,6 +686,10 @@ class AccountTaskPlanner {
           this.rerunBuilderGoal(iterationId);
         } else if (action === 'stop') {
           this.stopBuilderGoalRun(iterationId);
+        } else if (action === 'pause') {
+          this.pauseBuilderGoalRun(iterationId);
+        } else if (action === 'resume') {
+          this.resumeBuilderGoalRun(iterationId);
         } else if (action === 'view-logs') {
           this.loadBuilderGoalRunLogs(iterationId);
         }
@@ -2053,6 +2064,9 @@ class AccountTaskPlanner {
       const canRerun = Boolean(run.canRerun);
       const canLoadConfig = Boolean(run.configAvailable);
       const canStop = Boolean(run.canStop);
+      const publishStatus = String(run.publishStatus || run.status || '').toUpperCase();
+      const canPause = publishStatus === 'RUNNING' && !run.stopping;
+      const canResume = publishStatus === 'PAUSED' && !run.stopping;
       const stopLabel = run.stopping ? 'Removing...' : 'Remove Task';
       const stopDisabled = !canStop || Boolean(run.stopping);
       const showingLogs = this.builderGoalLogsIterationId === run.iterationId;
@@ -2135,6 +2149,12 @@ class AccountTaskPlanner {
             </button>
           </div>
           <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-warning flex-fill" data-builder-run-action="pause" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canPause ? '' : 'disabled'}>
+              <i class="bi bi-pause-circle me-1"></i>Pause
+            </button>
+            <button class="btn btn-sm btn-outline-success flex-fill" data-builder-run-action="resume" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${canResume ? '' : 'disabled'}>
+              <i class="bi bi-play-circle me-1"></i>Resume
+            </button>
             <button class="btn btn-sm btn-outline-danger flex-fill" data-builder-run-action="stop" data-iteration-id="${this.escapeAttr(run.iterationId || '')}" ${stopDisabled ? 'disabled' : ''}>
               <i class="bi bi-stop-circle me-1"></i>${this.escapeHtml(stopLabel)}
             </button>
@@ -3924,6 +3944,36 @@ class AccountTaskPlanner {
     }
   }
 
+  async pauseBuilderGoalRun(iterationId) {
+    return this.controlBuilderGoalRun(iterationId, 'pause');
+  }
+
+  async resumeBuilderGoalRun(iterationId) {
+    return this.controlBuilderGoalRun(iterationId, 'resume');
+  }
+
+  async controlBuilderGoalRun(iterationId, action) {
+    if (!iterationId) return;
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(
+        result.message || (action === 'pause' ? 'Task paused.' : 'Task resumed.'),
+        'success'
+      );
+    } catch (error) {
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(`Failed to ${action} task: ${error.message}`, 'danger');
+    }
+  }
+
   async stopBuilderGoalRun(iterationId) {
     if (!iterationId) return;
     const run = Array.isArray(this.builderGoalRuns)
@@ -4178,7 +4228,7 @@ class AccountTaskPlanner {
       return 'Running from Micro6 queue';
     }
     if (runStatus === 'PAUSED') {
-      return 'Task paused; the executor suspended the task';
+      return 'Task paused.';
     }
     if (runStatus === 'COMPLETED') {
       return 'Published run completed';
@@ -6175,7 +6225,9 @@ class AccountTaskPlanner {
   buildCatalogTaskLabel(task) {
     let label = task?.display_name || task?.task_key || 'unknown';
     if (task?.queue_status) {
-      const prefix = task.queue_status === 'RUNNING' ? '[RUNNING' : '[QUEUED';
+      const status = task.queue_status;
+      // PAUSED is an activated-but-suspended state and must never render as QUEUED (or RUNNING).
+      const prefix = status === 'RUNNING' ? '[RUNNING' : status === 'PAUSED' ? '[PAUSED' : '[QUEUED';
       const countSuffix = task.queue_count > 1 ? ` x${task.queue_count}` : '';
       label = `${prefix} #${task.queue_rank}]${countSuffix} ${label}`;
     }

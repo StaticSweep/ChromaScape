@@ -186,7 +186,8 @@ public class Micro6TargetRelaunchService {
         world,
         targetBaseUrl,
         null,
-        cancellation);
+        cancellation,
+        false);
   }
 
   public RelaunchResult restartTarget(
@@ -198,6 +199,29 @@ public class Micro6TargetRelaunchService {
       String targetBaseUrl,
       Consumer<RelaunchProgress> progressListener,
       BuilderGoalLaunchCancellation cancellation)
+      throws Exception {
+    return restartTarget(
+        accountName,
+        accountHash,
+        accountEmail,
+        accountPassword,
+        world,
+        targetBaseUrl,
+        progressListener,
+        cancellation,
+        false);
+  }
+
+  public RelaunchResult restartTarget(
+      String accountName,
+      String accountHash,
+      String accountEmail,
+      String accountPassword,
+      Integer world,
+      String targetBaseUrl,
+      Consumer<RelaunchProgress> progressListener,
+      BuilderGoalLaunchCancellation cancellation,
+      boolean forceRelaunch)
       throws Exception {
     if (accountName == null || accountName.isBlank()) {
       throw new IllegalArgumentException("Target account name is required for Micro6 relaunch");
@@ -223,7 +247,7 @@ public class Micro6TargetRelaunchService {
     Integer targetPort = parsePort(resolvedBaseUrl);
     String localExecutorBaseUrl = resolveLocalExecutorBaseUrl(targetPort);
     File logFile = projectDir.resolve(launchLogFile).toFile();
-    if (AccountIdentityContract.normalizeHash(accountHash) == null) {
+    if (!AccountIdentityContract.isCanonicalHash(accountHash)) {
       throw new IllegalArgumentException(
           "Selected launcher account is missing the canonical game-account hash");
     }
@@ -292,7 +316,7 @@ public class Micro6TargetRelaunchService {
 
     // Step 2: Reuse only when the executor is account-matched and dispatch-ready.
     // Waiting states are never reused; they are stopped and replaced.
-    if (canReuseExistingExecutor(initialHealthCheck)) {
+    if (!forceRelaunch && canReuseExistingExecutor(initialHealthCheck)) {
       reusedExistingExecutor = true;
       if (cancellation != null) {
         cancellation.throwIfCancelled();
@@ -2383,10 +2407,46 @@ public class Micro6TargetRelaunchService {
       // observed identity.
       String accountHash = resolvedAccountHash;
       String accountName = resolvedAccountName;
-      if (AccountIdentityContract.normalizeHash(expectedAccountHash) != null
+      // Identity is a readiness field even for legacy name-fallback callers.  A matching name
+      // must never make a missing/malformed account hash or unsupported scheme publish-ready.
+      if (!AccountIdentityContract.hasRequiredScheme(accountHashScheme)
+          || !AccountIdentityContract.isCanonicalHash(resolvedAccountHash)) {
+        return new HealthCheckResult(
+            Optional.empty(),
+            PHASE_WAITING_FOR_ACCOUNT,
+            "Micro6 local executor did not report a canonical account hash and scheme",
+            portOwnerPid,
+            resolvedAccountName,
+            resolvedAccountHash,
+            requestedAccountName,
+            requestedAccountHash,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            reportedLaunchAttemptId,
+            healthProcessId,
+            requestedWorld,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+      }
+      if (expectedAccountHash != null
           && (!AccountIdentityContract.hasRequiredScheme(accountHashScheme)
+              || !AccountIdentityContract.isCanonicalHash(expectedAccountHash)
+              || !AccountIdentityContract.isCanonicalHash(resolvedAccountHash)
+              || !AccountIdentityContract.matchesCanonicalHash(
+                  resolvedAccountHash, expectedAccountHash)
               || (requestedAccountHash != null
-                  && !AccountIdentityContract.matchesHash(
+                  && !AccountIdentityContract.matchesCanonicalHash(
                       requestedAccountHash, expectedAccountHash)))) {
         return new HealthCheckResult(
             Optional.empty(),
@@ -2642,7 +2702,8 @@ public class Micro6TargetRelaunchService {
                   pathfinderReady,
                   reportedLaunchAttemptId,
                   healthProcessId != null ? healthProcessId.intValue() : null,
-                  AccountIdentityContract.HASH_SCHEME)),
+                  AccountIdentityContract.HASH_SCHEME,
+                  requestedAccountHash)),
           PHASE_READY,
           null,
           portOwnerPid,
@@ -2930,10 +2991,15 @@ public class Micro6TargetRelaunchService {
       String expectedAccountName) {
     // A selected canonical hash is authoritative. Neither the launch profile nor a matching
     // display name may satisfy a different actual game-account hash.
-    if (AccountIdentityContract.normalizeHash(expectedAccountHash) != null) {
-      return AccountIdentityContract.matchesHash(actualAccountHash, expectedAccountHash);
+    if (expectedAccountHash != null) {
+      return AccountIdentityContract.matchesCanonicalHash(actualAccountHash, expectedAccountHash);
     }
-    // Name fallback is retained only for legacy flows that have no expected hash at all.
+    // Name fallback is retained only for legacy flows that have no expected hash at all, but it
+    // still requires a canonical actual hash. A name-only or malformed health response is never
+    // evidence that the selected game account is logged in.
+    if (!AccountIdentityContract.isCanonicalHash(actualAccountHash)) {
+      return false;
+    }
     String normalizedActualName = AccountIdentityContract.normalizeName(actualAccountName);
     String normalizedExpectedName = AccountIdentityContract.normalizeName(expectedAccountName);
     return normalizedActualName != null

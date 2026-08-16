@@ -36,13 +36,23 @@ class BuilderGoalAccountCatalogServiceTest {
   private AccountDefinition account(
       String id, String email, boolean enabled, String status, Map<String, Object> metadata) {
     return new AccountDefinition(
-        id, id, id, email, "launcher", enabled, status, metadata == null ? Map.of() : metadata);
+        id,
+        id,
+        id,
+        id,
+        id,
+        AccountIdentityContract.HASH_SCHEME,
+        email,
+        "launcher",
+        enabled,
+        status,
+        metadata == null ? Map.of() : metadata);
   }
 
   @Test
   void accountDefinition_withCompleteCredentialsIsLaunchReady() {
     AccountDefinition account =
-        account("hash-1", "user@example.test", true, "ready", Map.of("password", "s3cret"));
+        account("1111111111111111", "user@example.test", true, "ready", Map.of("password", "s3cret"));
 
     assertThat(account.isRunnable()).isTrue();
     assertThat(account.hasEmail()).isTrue();
@@ -52,9 +62,31 @@ class BuilderGoalAccountCatalogServiceTest {
   }
 
   @Test
+  void accountDefinition_malformedHashIsNeverLaunchReady() {
+    AccountDefinition account =
+        new AccountDefinition(
+            "account-1",
+            "hash-1",
+            "Test Account",
+            "Test Account",
+            "Test Account",
+            AccountIdentityContract.HASH_SCHEME,
+            "user@example.test",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+
+    assertThat(account.isRunnable()).isTrue();
+    assertThat(account.isLaunchReady()).isFalse();
+    assertThat(account.determineLaunchDisabledReason())
+        .isEqualTo("Launcher control must provide a canonical 16-hex game-account hash");
+  }
+
+  @Test
   void accountDefinition_missingEmailIsNotLaunchReady() {
     AccountDefinition account =
-        account("hash-1", null, true, "ready", Map.of("password", "s3cret"));
+        account("1111111111111111", null, true, "ready", Map.of("password", "s3cret"));
 
     assertThat(account.isRunnable()).isTrue();
     assertThat(account.hasEmail()).isFalse();
@@ -67,7 +99,7 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_blankEmailIsNotLaunchReady() {
     AccountDefinition account =
-        account("hash-1", "   ", true, "ready", Map.of("password", "s3cret"));
+        account("1111111111111111", "   ", true, "ready", Map.of("password", "s3cret"));
 
     assertThat(account.hasEmail()).isFalse();
     assertThat(account.isLaunchReady()).isFalse();
@@ -77,7 +109,7 @@ class BuilderGoalAccountCatalogServiceTest {
 
   @Test
   void accountDefinition_missingPasswordIsNotLaunchReady() {
-    AccountDefinition account = account("hash-1", "user@example.test", true, "ready", Map.of());
+    AccountDefinition account = account("1111111111111111", "user@example.test", true, "ready", Map.of());
 
     assertThat(account.hasEmail()).isTrue();
     assertThat(account.hasPassword()).isFalse();
@@ -89,7 +121,7 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_blankPasswordIsNotLaunchReady() {
     AccountDefinition account =
-        account("hash-1", "user@example.test", true, "ready", Map.of("password", "   "));
+        account("1111111111111111", "user@example.test", true, "ready", Map.of("password", "   "));
 
     assertThat(account.hasPassword()).isFalse();
     assertThat(account.isLaunchReady()).isFalse();
@@ -100,7 +132,7 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_disabledAccountIsNotRunnableAndNotLaunchReady() {
     AccountDefinition account =
-        account("hash-1", "user@example.test", false, "ready", Map.of("password", "s3cret"));
+        account("1111111111111111", "user@example.test", false, "ready", Map.of("password", "s3cret"));
 
     assertThat(account.isRunnable()).isFalse();
     assertThat(account.isLaunchReady()).isFalse();
@@ -111,7 +143,7 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_bannedAccountIsNotRunnableAndNotLaunchReady() {
     AccountDefinition account =
-        account("hash-1", "user@example.test", true, "banned", Map.of("password", "s3cret"));
+        account("1111111111111111", "user@example.test", true, "banned", Map.of("password", "s3cret"));
 
     assertThat(account.isRunnable()).isFalse();
     assertThat(account.isLaunchReady()).isFalse();
@@ -122,7 +154,7 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_tempBannedStatusCountsAsBanned() {
     AccountDefinition account =
-        account("hash-1", "user@example.test", true, "temp_banned", Map.of("password", "s3cret"));
+        account("1111111111111111", "user@example.test", true, "temp_banned", Map.of("password", "s3cret"));
 
     assertThat(account.isRunnable()).isFalse();
     assertThat(account.determineLaunchDisabledReason())
@@ -131,7 +163,7 @@ class BuilderGoalAccountCatalogServiceTest {
 
   @Test
   void accountDefinition_disabledReasonTakesPrecedenceOverMissingCredentials() {
-    AccountDefinition account = account("hash-1", null, false, "banned", Map.of());
+    AccountDefinition account = account("1111111111111111", null, false, "banned", Map.of());
 
     assertThat(account.isLaunchReady()).isFalse();
     assertThat(account.determineLaunchDisabledReason())
@@ -140,7 +172,7 @@ class BuilderGoalAccountCatalogServiceTest {
 
   @Test
   void accountDefinition_missingEmailTakesPrecedenceOverMissingPassword() {
-    AccountDefinition account = account("hash-1", null, true, "ready", Map.of());
+    AccountDefinition account = account("1111111111111111", null, true, "ready", Map.of());
 
     assertThat(account.determineLaunchDisabledReason())
         .isEqualTo("Add an email to this account in launcher control");
@@ -150,8 +182,8 @@ class BuilderGoalAccountCatalogServiceTest {
   void listAccounts_retainsOnlineAliasAndAddsExecutorFields() {
     LauncherAccount launcherAccount =
         new LauncherAccount(
-            "hash-1",
-            "hash-1",
+            "1111111111111111",
+            "1111111111111111",
             "bigGreenMeat",
             "user@example.test",
             "ready",
@@ -161,7 +193,7 @@ class BuilderGoalAccountCatalogServiceTest {
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
             "bigGreenMeat",
-            "hash-1",
+            "1111111111111111",
             "http://127.0.0.1:8098",
             "0.0.0.0:8098",
             "micro6",
@@ -179,12 +211,12 @@ class BuilderGoalAccountCatalogServiceTest {
     when(launcherControlService.listAccounts()).thenReturn(List.of(launcherAccount));
     when(launcherControlService.getBaseUrl()).thenReturn("http://192.168.1.6:8084");
     when(clientRegistryService.findOnlineClientForRecovery(
-            eq("hash-1"), eq("bigGreenMeat"), isNull(), any()))
+            eq("1111111111111111"), eq("bigGreenMeat"), isNull(), any()))
         .thenReturn(Optional.of(targetClient));
 
     Map<String, Object> summary = service.listAccounts().get(0);
 
-    assertThat(summary.get("accountId")).isEqualTo("hash-1");
+    assertThat(summary.get("accountId")).isEqualTo("1111111111111111");
     assertThat(summary.get("online")).isEqualTo(true);
     assertThat(summary.get("executorOnline")).isEqualTo(true);
     assertThat(summary.get("runnable")).isEqualTo(true);
@@ -218,7 +250,7 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_determineDisabledReasonReturnsNullForRunnableAccount() {
     AccountDefinition account =
-        account("hash-1", "user@example.test", true, "ready", Map.of("password", "s3cret"));
+        account("1111111111111111", "user@example.test", true, "ready", Map.of("password", "s3cret"));
 
     assertThat(account.determineDisabledReason()).isNull();
     assertThat(account.isRunnable()).isTrue();
@@ -227,7 +259,7 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_determineDisabledReasonReportsDisabled() {
     AccountDefinition account =
-        account("hash-1", "user@example.test", false, "ready", Map.of("password", "s3cret"));
+        account("1111111111111111", "user@example.test", false, "ready", Map.of("password", "s3cret"));
 
     assertThat(account.determineDisabledReason())
         .isEqualTo("Account is disabled in launcher control");
@@ -237,7 +269,7 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_determineDisabledReasonReportsBanned() {
     AccountDefinition account =
-        account("hash-1", "user@example.test", true, "banned", Map.of("password", "s3cret"));
+        account("1111111111111111", "user@example.test", true, "banned", Map.of("password", "s3cret"));
 
     assertThat(account.determineDisabledReason())
         .isEqualTo("Account is banned in launcher control");
@@ -248,8 +280,8 @@ class BuilderGoalAccountCatalogServiceTest {
   void listAccounts_summaryDisabledReasonUsesDetermineDisabledReason() {
     LauncherAccount launcherAccount =
         new LauncherAccount(
-            "hash-1",
-            "hash-1",
+            "1111111111111111",
+            "1111111111111111",
             "bigGreenMeat",
             "user@example.test",
             "banned",
@@ -271,8 +303,8 @@ class BuilderGoalAccountCatalogServiceTest {
   void listAccounts_onlineAliasAlwaysMatchesExecutorOnline() {
     LauncherAccount launcherAccount =
         new LauncherAccount(
-            "hash-1",
-            "hash-1",
+            "1111111111111111",
+            "1111111111111111",
             "bigGreenMeat",
             "user@example.test",
             "ready",
@@ -291,8 +323,8 @@ class BuilderGoalAccountCatalogServiceTest {
   void listAccounts_neverDisclosesPassword() {
     LauncherAccount launcherAccount =
         new LauncherAccount(
-            "hash-1",
-            "hash-1",
+            "1111111111111111",
+            "1111111111111111",
             "bigGreenMeat",
             "user@example.test",
             "ready",
@@ -314,7 +346,7 @@ class BuilderGoalAccountCatalogServiceTest {
     Map<String, Object> metadata = new java.util.LinkedHashMap<>();
     metadata.put("runtime", null);
     metadata.put("hostname", "CZC8518C27");
-    AccountDefinition account = account("hash-1", "user@example.test", true, "ready", metadata);
+    AccountDefinition account = account("1111111111111111", "user@example.test", true, "ready", metadata);
 
     assertThat(account.metadata()).containsKey("runtime");
     assertThat(account.metadata().get("runtime")).isNull();
@@ -325,7 +357,7 @@ class BuilderGoalAccountCatalogServiceTest {
   void accountDefinition_metadataSnapshotIsImmutable() {
     Map<String, Object> metadata = new java.util.LinkedHashMap<>();
     metadata.put("runtime", null);
-    AccountDefinition account = account("hash-1", "user@example.test", true, "ready", metadata);
+    AccountDefinition account = account("1111111111111111", "user@example.test", true, "ready", metadata);
 
     assertThatThrownBy(() -> account.metadata().put("runtime", "mutated"))
         .isInstanceOf(UnsupportedOperationException.class);
@@ -338,8 +370,8 @@ class BuilderGoalAccountCatalogServiceTest {
   void listAccounts_reportsOfflineWhenNoMatchingExecutorHeartbeat() {
     LauncherAccount launcherAccount =
         new LauncherAccount(
-            "hash-1",
-            "hash-1",
+            "1111111111111111",
+            "1111111111111111",
             "bigGreenMeat",
             "user@example.test",
             "ready",

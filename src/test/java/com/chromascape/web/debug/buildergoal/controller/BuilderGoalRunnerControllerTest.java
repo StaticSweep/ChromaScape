@@ -11,6 +11,7 @@ import com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationS
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService;
 import com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -368,7 +369,6 @@ class BuilderGoalRunnerControllerTest {
             eq("configurable_woodcutting"),
             any(),
             eq(360),
-            eq("http://127.0.0.1:8098"),
             anyBoolean(),
             any()))
         .thenReturn(result);
@@ -382,7 +382,6 @@ class BuilderGoalRunnerControllerTest {
               "taskKey": "configurable_woodcutting",
               "world": 360,
               "settings": {"treeType": "WILLOW"},
-              "targetBaseUrl": "http://127.0.0.1:8098",
               "allowLaunchFallback": false
             }
             """);
@@ -402,9 +401,131 @@ class BuilderGoalRunnerControllerTest {
             eq("configurable_woodcutting"),
             any(),
             eq(360),
-            eq("http://127.0.0.1:8098"),
             anyBoolean(),
             any());
+  }
+
+  @Test
+  void publishTask_rejectsCallerSelectedTarget() throws Exception {
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            "{\"accountId\":\"hash-1\",\"taskKey\":\"FISHING_TRAINING\",\"targetBaseUrl\":\"http://127.0.0.1:8098\"}");
+
+    ResponseEntity<Object> response = controller.publishTask(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body)
+        .containsEntry("error", "TARGET_OVERRIDE_NOT_ALLOWED")
+        .containsEntry(
+            "details",
+            "Dispatch targets are selected only from a matching ready registry client.");
+  }
+
+  @Test
+  void publishTask_rejectsNestedCallerSelectedTarget() throws Exception {
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            "{\"accountId\":\"hash-1\",\"taskKey\":\"FISHING_TRAINING\","
+                + "\"task_metadata\":{\"target_base_url\":\"http://127.0.0.1:8098\"}}" );
+
+    ResponseEntity<Object> response = controller.publishTask(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "TARGET_OVERRIDE_NOT_ALLOWED");
+  }
+
+  @Test
+  void publishTask_rejectsNullSettings() throws Exception {
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            "{\"accountId\":\"hash-1\",\"taskKey\":\"FISHING_TRAINING\",\"settings\":null}");
+
+    ResponseEntity<Object> response = controller.publishTask(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body.get("error")).isEqualTo("settings must be a JSON object");
+  }
+
+  @Test
+  void runPayload_rejectsNonObjectSettings() throws Exception {
+    ResponseEntity<Object> response =
+        controller.runPayload(
+            objectMapper.readTree(
+                "{\"accountId\":\"hash-1\",\"taskKey\":\"FISHING_TRAINING\",\"settings\":null}"));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "settings must be a JSON object");
+  }
+
+  @Test
+  void runPayload_forwardsLegacyRawSettingsWithoutInjectingEmptyEnvelope() throws Exception {
+    when(
+            builderGoalRunnerService.startRun(
+                any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(Map.of("accepted", true));
+
+    JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "world": 360,
+              "builderPayload": {
+                "task_key": "configurable_woodcutting",
+                "title": "Woodcutting",
+                "world": 360,
+                "treeType": "WILLOW"
+              }
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.runPayload(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    org.mockito.ArgumentCaptor<JsonNode> payloadCaptor =
+        org.mockito.ArgumentCaptor.forClass(JsonNode.class);
+    verify(builderGoalRunnerService)
+        .startRun(payloadCaptor.capture(), any(), any(), any(), any(), any(), any(), any());
+    JsonNode forwarded = payloadCaptor.getValue();
+    assertThat(forwarded.has("settings")).isFalse();
+    assertThat(forwarded.path("treeType").asText()).isEqualTo("WILLOW");
+  }
+
+  @Test
+  void runPayload_rejectsCallerSelectedTarget() throws Exception {
+    ResponseEntity<Object> response =
+        controller.runPayload(
+            objectMapper.readTree(
+                "{\"accountId\":\"hash-1\",\"taskKey\":\"FISHING_TRAINING\",\"targetBaseUrl\":\"http://127.0.0.1:8098\"}"));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "TARGET_OVERRIDE_NOT_ALLOWED");
+  }
+
+  @Test
+  void launchAccount_rejectsNestedCallerSelectedTarget() throws Exception {
+    com.fasterxml.jackson.databind.JsonNode payload =
+        objectMapper.readTree(
+            "{\"accountId\":\"hash-1\",\"launcherMachineUuid\":\"machine-1\","
+                + "\"world\":360,\"task_metadata\":{\"targetBaseUrl\":\"http://127.0.0.1:8098\"}}" );
+
+    ResponseEntity<Object> response = controller.launchAccount(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "TARGET_OVERRIDE_NOT_ALLOWED");
   }
 
   @Test
@@ -429,7 +550,7 @@ class BuilderGoalRunnerControllerTest {
     result.put("world", 360);
     result.put("deduplicated", false);
     result.put("statusUrl", "/api/debug/builder-goals/launch-operations/op-123");
-    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360)).thenReturn(result);
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360, false)).thenReturn(result);
 
     com.fasterxml.jackson.databind.JsonNode payload =
         objectMapper.readTree(
@@ -455,7 +576,7 @@ class BuilderGoalRunnerControllerTest {
     assertThat(body.get("deduplicated")).isEqualTo(false);
     assertThat(body.get("statusUrl"))
         .isEqualTo("/api/debug/builder-goals/launch-operations/op-123");
-    verify(builderGoalRunnerService).launchAccount("hash-1", "machine-1", 360);
+    verify(builderGoalRunnerService).launchAccount("hash-1", "machine-1", 360, false);
   }
 
   @Test
@@ -469,7 +590,7 @@ class BuilderGoalRunnerControllerTest {
     result.put("world", 360);
     result.put("deduplicated", true);
     result.put("statusUrl", "/api/debug/builder-goals/launch-operations/op-123");
-    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360)).thenReturn(result);
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360, false)).thenReturn(result);
 
     com.fasterxml.jackson.databind.JsonNode payload =
         objectMapper.readTree(
@@ -490,7 +611,7 @@ class BuilderGoalRunnerControllerTest {
 
   @Test
   void launchAccount_returnsBadRequestWhenAccountMissing() throws Exception {
-    when(builderGoalRunnerService.launchAccount(null, "machine-1", null))
+    when(builderGoalRunnerService.launchAccount(null, "machine-1", null, false))
         .thenThrow(new IllegalArgumentException("accountId is required"));
     com.fasterxml.jackson.databind.JsonNode payload =
         objectMapper.readTree(
@@ -695,7 +816,6 @@ class BuilderGoalRunnerControllerTest {
             eq("configurable_woodcutting"),
             any(),
             eq(360),
-            any(),
             anyBoolean(),
             any()))
         .thenThrow(new IllegalStateException("Selected launcher account is disabled"));
@@ -716,6 +836,21 @@ class BuilderGoalRunnerControllerTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> body = (Map<String, Object>) response.getBody();
     assertThat(body).containsEntry("error", "Selected launcher account is disabled");
+  }
+
+  @Test
+  void launchAccount_passesForceRelaunch() throws Exception {
+    Map<String, Object> result = Map.of("operationId", "op-force");
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360, true))
+        .thenReturn(result);
+
+    ResponseEntity<Object> response =
+        controller.launchAccount(
+            objectMapper.readTree(
+                "{\"accountId\":\"hash-1\",\"launcherMachineUuid\":\"machine-1\",\"world\":360,\"forceRelaunch\":true}"));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+    verify(builderGoalRunnerService).launchAccount("hash-1", "machine-1", 360, true);
   }
 
   @Test

@@ -194,6 +194,18 @@ public class BuilderGoalRunStateMutationService {
     }
     mergedPublish.put("attached_to_existing", result.attachedToExisting());
     mergedPublish.put("micro6_base_url", result.micro6BaseUrl());
+    if (result.published()) {
+      if (result.settingsReceipt() == null && requiresSettingsReceipt(taskMetadata)) {
+        // Never fabricate executor acceptance metadata. A missing receipt is ambiguous and must be
+        // reconciled through the authoritative Micro6 status path.
+        mergedPublish.put("status", "RECONCILING");
+        mergedPublish.put(
+            "last_error", "Micro6 accepted a publish without a verifiable settings receipt");
+      } else if (result.settingsReceipt() != null) {
+        mergedPublish.put("settings_receipt", toSettingsReceiptMap(result.settingsReceipt()));
+        mergedPublish.putIfAbsent("accepted_at", result.settingsReceipt().acceptedAt());
+      }
+    }
     if (result.executorStatus() != null) {
       mergedPublish.put("executor_status", result.executorStatus());
     }
@@ -329,6 +341,39 @@ public class BuilderGoalRunStateMutationService {
     Map<String, Object> metadataSnapshot = deepCopy(taskMetadata);
     return new StopRequestResult(
         iterationId, preservedEntryId, isPrePublish, metadataSnapshot, publishStatus);
+  }
+
+  /** Records a delivered control request without guessing the executor's resulting status. */
+  @Transactional
+  public void applyRequestedControl(String iterationId, int entryId, String action) {
+    recordControlRequested(iterationId, entryId, action);
+  }
+
+  @Transactional
+  public void recordControlRequested(String iterationId, int entryId, String action) {
+    PatchLoopIteration iteration =
+        iterationRepository
+            .findByIterationIdForUpdate(iterationId)
+            .orElseThrow(() -> new IllegalArgumentException("Builder Goal iteration not found: " + iterationId));
+    if (iteration.getStatus() != null && iteration.getStatus().isTerminal()) {
+      throw new IllegalStateException("Run is already in a terminal state: " + iterationId);
+    }
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    Map<String, Object> publishMetadata = readPublishMetadata(taskMetadata);
+    Integer storedEntryId = intValue(publishMetadata.get("entry_id"));
+    if (storedEntryId == null || storedEntryId != entryId) {
+      throw new IllegalStateException("Entry id mismatch for run " + iterationId);
+    }
+    String normalizedAction = action == null ? null : action.toLowerCase(java.util.Locale.ENGLISH);
+    if (!"pause".equals(normalizedAction) && !"resume".equals(normalizedAction)) {
+      throw new IllegalArgumentException("Unsupported control action: " + action);
+    }
+    publishMetadata.put("control_requested", true);
+    publishMetadata.put("control_action", normalizedAction.toUpperCase(java.util.Locale.ENGLISH));
+    publishMetadata.put("control_requested_at", LocalDateTime.now().toString());
+    taskMetadata.put("micro6_publish", publishMetadata);
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    iterationRepository.save(iteration);
   }
 
   /**
@@ -547,6 +592,28 @@ public class BuilderGoalRunStateMutationService {
       }
       taskMetadata.put("micro6_publish", publishMetadata);
 
+      if (!stopRequested
+          && error != null
+          && "SETTINGS_RECEIPT_MISMATCH".equalsIgnoreCase(error)) {
+        publishMetadata.put("status", "SETTINGS_RECEIPT_MISMATCH");
+        publishMetadata.put("last_status_at", observed.toString());
+        publishMetadata.put("last_error", error);
+        taskMetadata.put("micro6_publish", publishMetadata);
+        iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+        iterationRepository.save(iteration);
+        return new StatusApplyResult(
+            iterationId,
+            entryId,
+            false,
+            false,
+            false,
+            false,
+            true,
+            iteration.getRunSuccess(),
+            error,
+            iteration);
+      }
+
       if (!stopRequested && shouldFailForLostTarget(iteration, publishMetadata, observed)) {
         publishMetadata.put("status", "FAILED");
         publishMetadata.put("last_status_at", observed.toString());
@@ -592,6 +659,20 @@ public class BuilderGoalRunStateMutationService {
     }
 
     String executorStatus = firstNonBlank(statusResult.status(), "UNKNOWN");
+    String requestedControl = stringValue(publishMetadata.get("control_action"));
+    if (("PAUSE".equalsIgnoreCase(requestedControl) && "PAUSED".equalsIgnoreCase(executorStatus))
+        || ("RESUME".equalsIgnoreCase(requestedControl)
+            && ("RECEIVED".equalsIgnoreCase(executorStatus)
+                || "QUEUED".equalsIgnoreCase(executorStatus)
+                || "ASSIGNED".equalsIgnoreCase(executorStatus)
+                || "RUNNING".equalsIgnoreCase(executorStatus)))) {
+      publishMetadata.remove("control_requested");
+      publishMetadata.remove("control_action");
+      publishMetadata.remove("control_requested_at");
+    }
+    if (statusResult.settingsReceipt() != null) {
+      publishMetadata.put("settings_receipt", toSettingsReceiptMap(statusResult.settingsReceipt()));
+    }
     boolean metadataChanged = recordSuccessfulPoll(publishMetadata, observed);
     metadataChanged |= applyTaskStartFields(iteration, taskMetadata, publishMetadata, statusResult);
 
@@ -615,6 +696,7 @@ public class BuilderGoalRunStateMutationService {
       }
       if ("CANCELLED".equalsIgnoreCase(executorStatus)) {
         publishMetadata.put("status", "CANCELLED");
+        publishMetadata.put("activation_state", "CANCELLED");
         publishMetadata.put("last_status_at", observed.toString());
         taskMetadata.put("micro6_publish", publishMetadata);
         iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
@@ -762,6 +844,9 @@ public class BuilderGoalRunStateMutationService {
         && !reason.isBlank()) {
       taskMetadata.put("stop_reason", reason);
     }
+    Map<String, Object> publishMetadata = readPublishMetadata(taskMetadata);
+    publishMetadata.put("activation_state", "CANCELLED");
+    taskMetadata.put("micro6_publish", publishMetadata);
     iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
     iteration.setRunEndTime(observedAt != null ? observedAt : LocalDateTime.now());
     iteration.setRunSuccess(null);
@@ -778,6 +863,38 @@ public class BuilderGoalRunStateMutationService {
         null,
         reason,
         iteration);
+  }
+
+  private boolean requiresSettingsReceipt(Map<String, Object> taskMetadata) {
+    if (taskMetadata == null) {
+      return false;
+    }
+    Object explicit = taskMetadata.get("requires_settings_receipt");
+    if (explicit instanceof Boolean && (Boolean) explicit) {
+      return true;
+    }
+    return explicit instanceof String && Boolean.parseBoolean((String) explicit);
+  }
+
+  private Map<String, Object> toSettingsReceiptMap(
+      ScriptExecutionService.Micro6SettingsReceipt receipt) {
+    Map<String, Object> mapped = new LinkedHashMap<>();
+    mapped.put("version", receipt.version());
+    mapped.put("contract", "builder-settings-canonical-json/v1");
+    mapped.put("entry_id", receipt.entryId());
+    mapped.put("iteration_id", receipt.iterationId());
+    mapped.put("task_key", receipt.taskKey());
+    mapped.put("settings", deepCopyJsonValue(receipt.settings()));
+    mapped.put("settings_sha256", receipt.settingsSha256());
+    mapped.put("settings_schema_version", receipt.settingsSchemaVersion());
+    mapped.put("settings_schema_hash", receipt.settingsSchemaHash());
+    mapped.put("accepted_at", receipt.acceptedAt());
+    mapped.put("configuration_state", receipt.configurationState());
+    return mapped;
+  }
+
+  private Object deepCopyJsonValue(JsonNode value) {
+    return value == null ? null : objectMapper.convertValue(value, Object.class);
   }
 
   private boolean recordSuccessfulPoll(
@@ -1136,6 +1253,9 @@ public class BuilderGoalRunStateMutationService {
     }
 
     String executorStatus = result.status();
+    if (result.settingsReceipt() != null) {
+      publishMetadata.put("settings_receipt", toSettingsReceiptMap(result.settingsReceipt()));
+    }
     if (executorStatus == null || executorStatus.isBlank()) {
       return new ReconcileApplyResult(iterationId, false, "empty_executor_status");
     }
@@ -1155,6 +1275,7 @@ public class BuilderGoalRunStateMutationService {
 
     if ("CANCELLED".equalsIgnoreCase(executorStatus)) {
       publishMetadata.put("status", "CANCELLED");
+      publishMetadata.put("activation_state", "CANCELLED");
       iteration.setRunEndTime(LocalDateTime.now());
       iteration.setRunSuccess(false);
       publishStatusUpdate(iteration, taskMetadata, publishMetadata, PatchLoopStatus.CANCELLED);

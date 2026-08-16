@@ -273,6 +273,11 @@ public class BuilderGoalRunnerService {
    */
   public Map<String, Object> launchAccount(
       String accountId, String launcherMachineUuid, Integer world) {
+    return launchAccount(accountId, launcherMachineUuid, world, false);
+  }
+
+  public Map<String, Object> launchAccount(
+      String accountId, String launcherMachineUuid, Integer world, boolean forceRelaunch) {
     if (accountId == null || accountId.isBlank()) {
       throw new IllegalArgumentException("accountId is required");
     }
@@ -346,6 +351,7 @@ public class BuilderGoalRunnerService {
                   selectedAccount,
                   launcherMachineUuid,
                   world,
+                  forceRelaunch,
                   leaseHandle,
                   work);
             } finally {
@@ -376,6 +382,7 @@ public class BuilderGoalRunnerService {
       BuilderGoalAccountCatalogService.AccountDefinition selectedAccount,
       String launcherMachineUuid,
       Integer world,
+      boolean forceRelaunch,
       BuilderGoalLocalLaunchCoordinatorService.LeaseHandle leaseHandle,
       ActiveLaunchWork work) {
     // Check cancellation before touching Micro6
@@ -411,7 +418,8 @@ public class BuilderGoalRunnerService {
                   selectedAccount.password(),
                   world,
                   launcherMachineUuid,
-                  null),
+                  null,
+                  forceRelaunch),
               leaseHandle,
               work,
               progress -> launchOperationService.updateProgress(operationId, progress));
@@ -663,6 +671,7 @@ public class BuilderGoalRunnerService {
       String launcherMachineUuid,
       Integer world,
       Map<String, Object> provenance) {
+    rejectPublicTargetOverride(payload);
     NormalizedPayload normalized = normalizePayload(payload);
     JsonNode canonicalCatalogTask = resolveCatalogTask(normalized.taskKey());
     String canonicalTaskKey = canonicalTaskKey(canonicalCatalogTask, normalized.taskKey());
@@ -692,7 +701,9 @@ public class BuilderGoalRunnerService {
     requireLaunchReadyAccount(selectedAccount);
     requireLaunchableMachine(selectedMachine, selectedMachineUuid);
     CatalogValidationResult catalogValidation =
-        resolvePublishCatalogValidation(normalized.taskKey(), null);
+        canonicalCatalogTask != null
+            ? CatalogValidationResult.validated("VALIDATED_LIVE", canonicalCatalogTask)
+            : CatalogValidationResult.skipped("SKIPPED_CATALOG_MISS");
     if (catalogValidation.rejectPublish()) {
       throw new IllegalArgumentException(catalogValidation.errorMessage());
     }
@@ -762,6 +773,7 @@ public class BuilderGoalRunnerService {
     if (taskKey == null || taskKey.isBlank()) {
       throw new IllegalArgumentException("taskKey is required");
     }
+    Map<String, Object> acceptedSettings = normalizeSettings(settings);
     JsonNode catalogTask = resolveCatalogTask(taskKey);
     String canonicalTaskKey = canonicalTaskKey(catalogTask, taskKey);
     String resolvedDisplayName =
@@ -773,7 +785,7 @@ public class BuilderGoalRunnerService {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("task_key", canonicalTaskKey);
     payload.put("title", resolvedDisplayName);
-    payload.put("settings", settings != null ? settings : Map.of());
+    payload.put("settings", acceptedSettings);
     payload.put("source", "catalog_task");
     payload.put("account_id", accountId);
     if (world != null) {
@@ -799,10 +811,11 @@ public class BuilderGoalRunnerService {
    * is reachable, account-matched, and dispatch-ready before delegating to {@link
    * #publishIteration}.
    *
-   * <p>When the executor is not ready or the account does not match, the publish is deferred: the
-   * run stays in a non-terminal state with a target-preparation phase describing why, and the
-   * caller receives {@code published=false}. If {@code allowLaunchFallback} is true, a normal
-   * launch+publish is queued so the operator gets the full Run-Task behaviour as a fallback.
+   * <p>When exactly one registry client is not ready or the account/world does not match, the
+   * publish is deferred: the run stays in a non-terminal state with a target-preparation phase
+   * describing why, and the caller receives {@code published=false}. If {@code allowLaunchFallback}
+   * is true, a normal server-owned launch+publish is queued; no caller-supplied executor URL is
+   * ever used.
    *
    * <p>This method deliberately does not hold a surrounding database transaction: {@link
    * #publishIteration(PatchLoopIteration)} reserves the entry in a short locked transaction,
@@ -816,7 +829,6 @@ public class BuilderGoalRunnerService {
       String taskKey,
       Map<String, Object> settings,
       Integer world,
-      String targetBaseUrl,
       boolean allowLaunchFallback,
       Map<String, Object> provenance) {
     if (accountId == null || accountId.isBlank()) {
@@ -825,7 +837,7 @@ public class BuilderGoalRunnerService {
     if (taskKey == null || taskKey.isBlank()) {
       throw new IllegalArgumentException("taskKey is required");
     }
-    taskKey = canonicalTaskKey(resolveCatalogTask(taskKey), taskKey);
+    requireValidWorld(world);
     BuilderGoalAccountCatalogService.AccountDefinition selectedAccount =
         resolveSelectedAccount(accountId);
     if (selectedAccount == null) {
@@ -849,22 +861,34 @@ public class BuilderGoalRunnerService {
       requireLaunchReadyAccount(selectedAccount);
       requireLaunchableMachine(selectedMachine, selectedMachineUuid);
     }
-    Optional<Micro6OnlineClientRegistryService.TargetClient> matchingClient =
-        targetBaseUrl == null || targetBaseUrl.isBlank()
-            ? findDispatchReadyClientForAccount(selectedAccount, world)
-            : Optional.empty();
-    String effectiveTargetBaseUrl =
-        firstNonBlank(
-            targetBaseUrl,
-            matchingClient
-                .map(Micro6OnlineClientRegistryService.TargetClient::advertisedBaseUrl)
-                .orElse(null));
-    CatalogValidationResult catalogValidation =
-        resolvePublishCatalogValidation(taskKey, effectiveTargetBaseUrl);
-    if (catalogValidation.rejectPublish()) {
-      throw new IllegalArgumentException(catalogValidation.errorMessage());
+    Map<String, Object> acceptedSettings = normalizeSettings(settings);
+    List<Micro6OnlineClientRegistryService.TargetClient> matchingClients =
+        findDispatchReadyClientsForAccount(selectedAccount, world);
+    Micro6OnlineClientRegistryService.TargetClient matchingClient =
+        matchingClients.size() == 1 ? matchingClients.get(0) : null;
+    // Resolve aliases only after an exact target exists. A deferred publish must not fetch the
+    // executor catalog merely to canonicalize a task key.
+    if (matchingClient != null) {
+      taskKey = canonicalTaskKey(resolveCatalogTask(taskKey), taskKey);
     }
-    JsonNode catalogTask = catalogValidation.catalogTask();
+    String effectiveTargetBaseUrl =
+        matchingClient != null ? matchingClient.advertisedBaseUrl() : null;
+    // A publish without exactly one registry-selected target is deferred before any executor
+    // catalog call. This is deliberately independent of settings contents: no target means no
+    // executor interaction and no caller-selected/default URL fallback.
+    CatalogValidationResult catalogValidation;
+    JsonNode catalogTask;
+    if (matchingClient == null) {
+      catalogValidation = CatalogValidationResult.skipped("SKIPPED_NO_TARGET");
+      catalogTask = null;
+    } else {
+      catalogValidation =
+          resolvePublishCatalogValidation(taskKey, effectiveTargetBaseUrl, acceptedSettings);
+      if (catalogValidation.rejectPublish()) {
+        throw new IllegalArgumentException(catalogValidation.errorMessage());
+      }
+      catalogTask = catalogValidation.catalogTask();
+    }
     String resolvedDisplayName =
         firstNonBlank(
             catalogTask != null ? textValue(catalogTask.path("display_name")) : null,
@@ -873,7 +897,7 @@ public class BuilderGoalRunnerService {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("task_key", taskKey);
     payload.put("title", resolvedDisplayName);
-    payload.put("settings", settings != null ? settings : Map.of());
+    payload.put("settings", acceptedSettings);
     payload.put("source", "catalog_task");
     payload.put("account_id", accountId);
     if (world != null) {
@@ -885,8 +909,8 @@ public class BuilderGoalRunnerService {
     if (effectiveTargetBaseUrl != null && !effectiveTargetBaseUrl.isBlank()) {
       initialTargetMetadata.put("advertised_base_url", effectiveTargetBaseUrl);
     }
-    if (matchingClient.isPresent()) {
-      initialTargetMetadata.putAll(buildTargetMetadata(matchingClient.get()));
+    if (matchingClient != null) {
+      initialTargetMetadata.putAll(buildTargetMetadata(matchingClient));
     }
     PatchLoopIteration iteration =
         createRunIteration(
@@ -906,11 +930,11 @@ public class BuilderGoalRunnerService {
     iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
     persistenceService.saveIteration(iteration);
 
-    updatePreparationState(
-        iteration,
-        taskMetadata,
-        PREPARATION_STATE_READY_TO_PUBLISH,
-        "Publish requested against a running Micro6 executor; verifying executor readiness");
+    String settingsHash = CanonicalSettingsHasher.sha256(objectMapper, acceptedSettings);
+    taskMetadata.put("settings_sha256", settingsHash);
+    taskMetadata.put("settings_validation", catalogValidation.settingsValidation());
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    persistenceService.saveIteration(iteration);
 
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("run", toRunSummary(iteration));
@@ -926,6 +950,25 @@ public class BuilderGoalRunnerService {
     response.put("publishError", null);
     response.put("catalogValidation", catalogValidation.status());
     response.put("catalogValidationSkipped", catalogValidation.skipped());
+    response.put("targetClientId", matchingClient != null ? matchingClient.clientId() : null);
+
+    if (matchingClient == null) {
+      String reason =
+          matchingClients.isEmpty()
+              ? "No single non-stale dispatch-ready registry client matches the selected account and world"
+              : "Multiple dispatch-ready registry clients match the selected account and world";
+      updatePreparationState(iteration, taskMetadata, RECOVERY_WAITING_FOR_EXECUTOR, reason);
+      response.put("published", false);
+      response.put("publishStatus", RECOVERY_WAITING_FOR_EXECUTOR);
+      response.put("publishError", reason);
+      response.put("launchFallback", allowLaunchFallback);
+      if (allowLaunchFallback) {
+        queuePendingLaunch(iteration.getIterationId());
+      }
+      response.put("run", toRunSummary(iteration));
+      response.put("targetPreparation", readTargetPreparationMetadata(readTaskMetadata(iteration)));
+      return response;
+    }
 
     try {
       ScriptExecutionService.Micro6PublishResult publishResult = publishIteration(iteration);
@@ -967,6 +1010,33 @@ public class BuilderGoalRunnerService {
     }
     response.put("targetPreparation", readTargetPreparationMetadata(readTaskMetadata(iteration)));
     return response;
+  }
+
+  /**
+   * Compatibility overload retained for non-controller integrations. Caller-selected URLs are no
+   * longer accepted as dispatch targets.
+   */
+  @Deprecated
+  Map<String, Object> publishOnly(
+      String accountId,
+      String launcherMachineUuid,
+      String taskKey,
+      Map<String, Object> settings,
+      Integer world,
+      String targetBaseUrl,
+      boolean allowLaunchFallback,
+      Map<String, Object> provenance) {
+    if (targetBaseUrl != null && !targetBaseUrl.isBlank()) {
+      throw new IllegalArgumentException("TARGET_OVERRIDE_NOT_ALLOWED");
+    }
+    return publishOnly(
+        accountId,
+        launcherMachineUuid,
+        taskKey,
+        settings,
+        world,
+        allowLaunchFallback,
+        provenance);
   }
 
   private void queuePendingLaunch(String iterationId) {
@@ -1075,7 +1145,8 @@ public class BuilderGoalRunnerService {
                   selectedAccount.password(),
                   intValue(taskMetadata.get("world")),
                   launcherMachineUuid,
-                  null),
+                  null,
+                  false),
               leaseHandle,
               pendingWork,
               progress ->
@@ -1093,8 +1164,42 @@ public class BuilderGoalRunnerService {
       taskMetadata = readTaskMetadata(iteration);
       mergeTargetPreparationMetadata(taskMetadata, preparationResult.metadata());
       taskMetadata.put("micro6_target", buildTargetMetadata(preparationResult.targetClient()));
+      @SuppressWarnings("unchecked")
+      Map<String, Object> storedSettings =
+          taskMetadata.get("settings") instanceof Map<?, ?> settingsMap
+              ? new LinkedHashMap<>(
+                  objectMapper.convertValue(settingsMap, new TypeReference<Map<String, Object>>() {}))
+              : new LinkedHashMap<>();
+      String storedTaskKey = firstNonBlank(stringValue(taskMetadata.get("task_key")), iteration.getScriptName());
+      CatalogValidationResult asyncCatalogValidation =
+          resolvePublishCatalogValidation(
+              storedTaskKey,
+              preparationResult.targetClient().advertisedBaseUrl(),
+              storedSettings);
+      if (asyncCatalogValidation.rejectPublish()) {
+        applyCatalogValidationMetadata(iteration, asyncCatalogValidation);
+        Map<String, Object> invalidPublish = readPublishMetadata(taskMetadata);
+        invalidPublish.put("status", "INVALID_SETTINGS");
+        invalidPublish.put("last_error", asyncCatalogValidation.errorMessage());
+        taskMetadata.put("micro6_publish", invalidPublish);
+        iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+        persistenceService.saveIteration(iteration);
+        persistenceService.markIterationFailed(
+            iteration,
+            PatchLoopFailureCode.INVALID_REQUEST,
+            asyncCatalogValidation.errorMessage(),
+            "catalogValidation=" + asyncCatalogValidation.status());
+        return;
+      }
+      JsonNode asyncCatalogTask = asyncCatalogValidation.catalogTask();
+      String asyncCanonicalTaskKey = canonicalTaskKey(asyncCatalogTask, storedTaskKey);
+      if (!asyncCanonicalTaskKey.equals(iteration.getScriptName())) {
+        iteration.setScriptName(asyncCanonicalTaskKey);
+        taskMetadata.put("task_key", asyncCanonicalTaskKey);
+      }
       iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
       persistenceService.saveIteration(iteration);
+      applyCatalogValidationMetadata(iteration, asyncCatalogValidation);
       updatePreparationState(
           iteration,
           readTaskMetadata(iteration),
@@ -1798,7 +1903,8 @@ public class BuilderGoalRunnerService {
                   resolveAccountPassword(accountMetadata),
                   normalized.world(),
                   stringValue(accountMetadata.get("launcher_machine_uuid")),
-                  resolveTargetBaseUrl(taskMetadata)),
+                  resolveTargetBaseUrl(taskMetadata),
+                  true),
               recoveryLease,
               BuilderGoalLaunchCancellation.NONE,
               null);
@@ -1957,15 +2063,21 @@ public class BuilderGoalRunnerService {
       // Use the metadata snapshot from the locked stop so the network call uses fresh state.
       Map<String, Object> freshTaskMetadata = stopResult.taskMetadataSnapshot();
       // Send /stop to the executor now that stop intent is persisted.
-      boolean stopSent =
-          scriptExecutionService.stopMicro6PublishedRun(freshTaskMetadata, entryId, reason);
-      if (!stopSent) {
+      ScriptExecutionService.Micro6ControlResult controlResult =
+          scriptExecutionService.requestStopMicro6PublishedRun(freshTaskMetadata, entryId, reason);
+      if (controlResult == null || !controlResult.delivered()) {
         // Record stop_send_error through the mutation service (locked transaction).
         mutationService.recordStopDeliveryFailure(
             iterationId, entryId, "Stop request did not reach Micro6 executor");
         throw new IllegalStateException(
             "Failed to deliver stop request to Micro6; the executor may still be running the task."
                 + " Check the target base URL and retry.");
+      }
+      if (controlResult.authoritativeStatus() != null
+          && controlResult.authoritativeStatus().found()
+          && "CANCELLED".equalsIgnoreCase(controlResult.authoritativeStatus().status())) {
+        mutationService.applyExecutorStatus(
+            iterationId, entryId, controlResult.authoritativeStatus(), LocalDateTime.now());
       }
       // A successful delivery supersedes any stale failure recorded by a prior retry.
       mutationService.clearStopDeliveryFailure(iterationId, entryId);
@@ -1981,6 +2093,66 @@ public class BuilderGoalRunnerService {
             ? "Task removed before publish."
             : "Stop requested. Waiting for Micro6 to confirm cancellation.");
     return response;
+  }
+
+  public Map<String, Object> pauseRun(String iterationId) {
+    return controlRun(iterationId, "pause");
+  }
+
+  public Map<String, Object> resumeRun(String iterationId) {
+    return controlRun(iterationId, "resume");
+  }
+
+  private Map<String, Object> controlRun(String iterationId, String action) {
+    PatchLoopIteration iteration = loadBuilderRun(iterationId);
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    Map<String, Object> publishMetadata = readPublishMetadata(taskMetadata);
+    Integer entryId = intValue(publishMetadata.get("entry_id"));
+    if (entryId == null || entryId <= 0) {
+      throw new IllegalStateException("Run has not been published to Micro6 yet");
+    }
+    if (iteration.getStatus() != null && iteration.getStatus().isTerminal()) {
+      throw new IllegalStateException("Run is already in a terminal state");
+    }
+    ScriptExecutionService.Micro6ControlResult controlResult =
+        "pause".equalsIgnoreCase(action)
+            ? scriptExecutionService.requestPauseMicro6PublishedRun(taskMetadata, entryId)
+            : scriptExecutionService.requestResumeMicro6PublishedRun(taskMetadata, entryId);
+    if (controlResult == null || !controlResult.delivered()) {
+      throw new IllegalStateException("Failed to deliver " + action + " request to Micro6");
+    }
+    ScriptExecutionService.Micro6RunStatusResult statusResult = controlResult.authoritativeStatus();
+    boolean authoritativeControlStatus =
+        statusResult != null
+            && statusResult.found()
+            && ("pause".equalsIgnoreCase(action)
+                ? "PAUSED".equalsIgnoreCase(statusResult.status())
+                : isResumeActiveStatus(statusResult.status()));
+    if (authoritativeControlStatus) {
+      mutationService.applyExecutorStatus(iterationId, entryId, statusResult, LocalDateTime.now());
+    } else {
+      mutationService.recordControlRequested(iterationId, entryId, action);
+    }
+    PatchLoopIteration updated = iterationRepository.findByIterationId(iterationId).orElse(iteration);
+    Map<String, Object> response = new LinkedHashMap<>();
+    response.put("success", true);
+    response.put("action", action.toUpperCase(Locale.ENGLISH));
+    response.put("run", toRunSummary(updated));
+    response.put(
+        "message",
+        authoritativeControlStatus
+            ? ("pause".equalsIgnoreCase(action) ? "Task paused." : "Task resumed.")
+            : ("pause".equalsIgnoreCase(action) ? "Pause requested." : "Resume requested."));
+    return response;
+  }
+
+  private boolean isResumeActiveStatus(String status) {
+    return "RECEIVED".equalsIgnoreCase(status)
+        || "PENDING".equalsIgnoreCase(status)
+        || "ACCEPTED".equalsIgnoreCase(status)
+        || "QUEUED".equalsIgnoreCase(status)
+        || "ASSIGNED".equalsIgnoreCase(status)
+        || "RUNNING".equalsIgnoreCase(status);
   }
 
   private boolean isPublishOnlyNoLaunch(Map<String, Object> taskMetadata) {
@@ -2364,6 +2536,14 @@ public class BuilderGoalRunnerService {
               healthResult.readinessReason(),
               "Micro6 local executor health could not be confirmed right before publish"));
     }
+    if (!matchesSelectedTargetHealth(taskMetadata, healthResult)) {
+      String reason =
+          "Micro6 /health no longer matches the selected registry client identity, world, process, or launch attempt";
+      refreshTargetPreparationFromHealth(
+          iteration, taskMetadata, healthResult, Micro6TargetRelaunchService.PHASE_WAITING_FOR_ACCOUNT, reason);
+      throw new PublishDeferredException(
+          Micro6TargetRelaunchService.PHASE_WAITING_FOR_ACCOUNT, reason);
+    }
     if (!accountMatched) {
       String reason = "Micro6 local executor came up but did not identify the selected account yet";
       refreshTargetPreparationFromHealth(
@@ -2461,10 +2641,73 @@ public class BuilderGoalRunnerService {
       updates.put("login_attempt", healthResult.loginAttempt());
       updates.put("login_attempt_max", healthResult.loginAttemptMax());
       updates.put("login_terminal_reason", healthResult.loginTerminalReason());
+      JsonNode rawHealth = healthResult.rawResponse();
+      if (rawHealth != null && rawHealth.isObject()) {
+        updates.put("process_id", intValue(rawHealth.path("process_id")));
+        updates.put("launch_attempt_id", textValue(rawHealth.path("launch_attempt_id")));
+        updates.put("account_hash_scheme", textValue(rawHealth.path("account_hash_scheme")));
+        updates.put("requested_world", intValue(rawHealth.path("requested_world")));
+        updates.put("current_world", intValue(rawHealth.path("current_world")));
+        updates.put("world_matched", rawHealth.path("world_matched").isBoolean() ? rawHealth.path("world_matched").asBoolean() : null);
+        updates.put("pathfinder_ready", rawHealth.path("pathfinder_ready").isBoolean() ? rawHealth.path("pathfinder_ready").asBoolean() : null);
+        updates.put("script_lifecycle_state", textValue(rawHealth.path("script_lifecycle_state")));
+        updates.put("script_loop_alive", rawHealth.path("script_loop_alive").isBoolean() ? rawHealth.path("script_loop_alive").asBoolean() : null);
+      }
     }
     mergeTargetPreparationMetadata(taskMetadata, updates);
     iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
     persistenceService.saveIteration(iteration);
+  }
+
+  private boolean matchesSelectedTargetHealth(
+      Map<String, Object> taskMetadata,
+      ScriptExecutionService.Micro6ExecutorHealthResult healthResult) {
+    Map<String, Object> target = readTargetMetadata(taskMetadata);
+    JsonNode raw = healthResult != null ? healthResult.rawResponse() : null;
+    if (target.isEmpty() || raw == null || !raw.isObject()) {
+      return false;
+    }
+    String expectedHash = stringValue(target.get("account_hash"));
+    String requestedHash = textValue(raw.path("requested_account_hash"));
+    String actualHash = textValue(raw.path("account_hash"));
+    String scheme = textValue(raw.path("account_hash_scheme"));
+    Integer expectedWorld = intValue(taskMetadata.get("world"));
+    Integer requestedWorld = intValue(raw.path("requested_world"));
+    Integer currentWorld = intValue(raw.path("current_world"));
+    // Recompute world identity from the current request and observed world.  The heartbeat's
+    // world_matched flag may have been calculated for an earlier launch request and is diagnostic
+    // only; it must never authorize a publish or reject a current exact match.
+    boolean worldMatched =
+        expectedWorld != null
+            && expectedWorld.equals(requestedWorld)
+            && expectedWorld.equals(currentWorld);
+    String expectedAttempt = firstNonBlank(
+        stringValue(target.get("launch_attempt_id")), stringValue(target.get("attempt_id")));
+    String actualAttempt = textValue(raw.path("launch_attempt_id"));
+    Integer expectedPid = intValue(target.get("process_id"));
+    Integer actualPid = intValue(raw.path("process_id"));
+    return AccountIdentityContract.hasRequiredScheme(scheme)
+        && AccountIdentityContract.matchesCanonicalHash(actualHash, expectedHash)
+        && AccountIdentityContract.matchesCanonicalHash(requestedHash, expectedHash)
+        && expectedWorld != null
+        && expectedWorld.equals(requestedWorld)
+        && expectedWorld.equals(currentWorld)
+        && worldMatched
+        && Boolean.FALSE.equals(raw.path("dispatch_hold").isBoolean()
+            ? raw.path("dispatch_hold").asBoolean()
+            : null)
+        && "accountbuilder_ready".equalsIgnoreCase(textValue(raw.path("startup_state")))
+        && "logged_in".equalsIgnoreCase(textValue(raw.path("login_state")))
+        && raw.path("pathfinder_ready").isBoolean()
+        && raw.path("pathfinder_ready").asBoolean()
+        && raw.path("script_loop_alive").isBoolean()
+        && raw.path("script_loop_alive").asBoolean()
+        && "RUNNING".equalsIgnoreCase(textValue(raw.path("script_lifecycle_state")))
+        && expectedAttempt != null
+        && expectedAttempt.equals(actualAttempt)
+        && expectedPid != null
+        && expectedPid > 0
+        && expectedPid.equals(actualPid);
   }
 
   private boolean matchesExpectedTargetAccount(
@@ -2490,19 +2733,23 @@ public class BuilderGoalRunnerService {
             stringValue(targetMetadata.get("requested_account_name")));
 
     // The actual logged-in hash is authoritative. Requested/compatibility hashes and matching
-    // names never override a present hash mismatch.
+    // names never override a present hash mismatch. Even the legacy name-fallback path requires
+    // a canonical actual hash and accountconnector/v1 scheme; a name-only health response is
+    // diagnostics, never publish authorization.
+    JsonNode rawHealth = healthResult.rawResponse();
+    if (rawHealth == null
+        || !AccountIdentityContract.hasRequiredScheme(
+            textValue(rawHealth.path("account_hash_scheme")))
+        || !AccountIdentityContract.isCanonicalHash(healthResult.resolvedAccountHash())) {
+      return false;
+    }
     if (expectedHash != null) {
-      return AccountIdentityContract.matchesHash(expectedHash, healthResult.resolvedAccountHash());
+      return AccountIdentityContract.matchesCanonicalHash(
+          healthResult.resolvedAccountHash(), expectedHash);
     }
     return AccountIdentityContract.normalizeName(expectedName) != null
         && AccountIdentityContract.normalizeName(expectedName)
             .equals(AccountIdentityContract.normalizeName(healthResult.resolvedAccountName()));
-  }
-
-  private boolean equalsNormalized(String left, String right) {
-    return AccountIdentityContract.normalizeHash(left)
-        != null
-        && AccountIdentityContract.matchesHash(left, right);
   }
 
   private void syncPublishedRunSafely(PatchLoopIteration iteration) {
@@ -3088,6 +3335,9 @@ public class BuilderGoalRunnerService {
     metadata.put("persist_settings", true);
     metadata.put("source", "builder_goal_runner");
     metadata.put("settings", normalized.settings());
+    metadata.put("requires_settings_receipt", true);
+    metadata.put("settings_sha256", CanonicalSettingsHasher.sha256(objectMapper, normalized.settings()));
+    metadata.put("settings_validation", "UNVALIDATED");
     metadata.put("world", normalized.world());
     if (targetMetadata != null && !targetMetadata.isEmpty()) {
       metadata.put("micro6_target", targetMetadata);
@@ -3148,6 +3398,7 @@ public class BuilderGoalRunnerService {
           firstNonBlank(stringValue(taskMetadata.get("panel_display_name")), displayName));
     }
     executionTaskMetadata.put("persist_settings", true);
+    executionTaskMetadata.put("requires_settings_receipt", true);
     executionTaskMetadata.put("source", "builder_goal_recovery_workspace");
     executionTaskMetadata.put("builder_goal_iteration_id", iteration.getIterationId());
     if (taskMetadata.get("settings") instanceof Map<?, ?> settingsMap) {
@@ -3185,14 +3436,22 @@ public class BuilderGoalRunnerService {
   }
 
   private CatalogValidationResult resolvePublishCatalogValidation(
-      String taskKey, String targetBaseUrl) {
+      String taskKey, String targetBaseUrl, Map<String, Object> settings) {
     JsonNode targetCatalog =
         targetBaseUrl != null && !targetBaseUrl.isBlank()
             ? micro6ExecutorCatalogService.getCatalogForBaseUrl(targetBaseUrl, true)
             : null;
+    if (targetBaseUrl == null || targetBaseUrl.isBlank()) {
+      return settings != null && !settings.isEmpty()
+          ? CatalogValidationResult.reject(
+              "SETTINGS_SCHEMA_UNAVAILABLE",
+              "A canonical executor settings schema is required for non-empty settings",
+              null)
+          : CatalogValidationResult.skipped("SKIPPED_NO_TARGET");
+    }
     JsonNode targetTask = findTaskInCatalog(taskKey, targetCatalog);
     if (targetTask != null) {
-      if (!targetTask.path("runnable").asBoolean(true)) {
+      if (!hasExplicitTrueRunnable(targetTask)) {
         return CatalogValidationResult.reject(
             "REJECTED_CACHED_MISS",
             "Task is not runnable in cached Micro6 catalog: "
@@ -3202,23 +3461,8 @@ public class BuilderGoalRunnerService {
                 + ")",
             targetTask);
       }
-      return CatalogValidationResult.validated("VALIDATED_CACHED_TARGET", targetTask);
-    }
-
-    JsonNode liveDefaultCatalog = micro6ExecutorCatalogService.getCatalog(true);
-    JsonNode liveDefaultTask = findTaskInCatalog(taskKey, liveDefaultCatalog);
-    if (liveDefaultTask != null) {
-      if (!liveDefaultTask.path("runnable").asBoolean(true)) {
-        return CatalogValidationResult.reject(
-            "REJECTED_CATALOG_DISABLED",
-            "Task is not runnable in Micro6 catalog: "
-                + taskKey
-                + " ("
-                + liveDefaultTask.path("disabled_reason").asText("unknown")
-                + ")",
-            liveDefaultTask);
-      }
-      return CatalogValidationResult.validated("VALIDATED_LIVE", liveDefaultTask);
+      return validatePublishSettings(
+          CatalogValidationResult.validated("VALIDATED_CACHED_TARGET", targetTask), settings);
     }
 
     JsonNode cachedTargetCatalog =
@@ -3227,7 +3471,7 @@ public class BuilderGoalRunnerService {
             : null;
     JsonNode cachedTargetTask = findTaskInCatalog(taskKey, cachedTargetCatalog);
     if (cachedTargetTask != null) {
-      if (!cachedTargetTask.path("runnable").asBoolean(true)) {
+      if (!hasExplicitTrueRunnable(cachedTargetTask)) {
         return CatalogValidationResult.reject(
             "REJECTED_CACHED_DISABLED",
             "Task is not runnable in cached Micro6 catalog: "
@@ -3237,35 +3481,210 @@ public class BuilderGoalRunnerService {
                 + ")",
             cachedTargetTask);
       }
-      return CatalogValidationResult.validated("VALIDATED_CACHED_TARGET", cachedTargetTask);
-    }
-
-    JsonNode cachedDefaultCatalog = micro6ExecutorCatalogService.peekCatalog();
-    JsonNode cachedDefaultTask = findTaskInCatalog(taskKey, cachedDefaultCatalog);
-    if (cachedDefaultTask != null) {
-      if (!cachedDefaultTask.path("runnable").asBoolean(true)) {
-        return CatalogValidationResult.reject(
-            "REJECTED_CACHED_MISS",
-            "Task is not runnable in cached Micro6 catalog: "
-                + taskKey
-                + " ("
-                + cachedDefaultTask.path("disabled_reason").asText("unknown")
-                + ")",
-            cachedDefaultTask);
-      }
-      return CatalogValidationResult.validated("VALIDATED_CACHED", cachedDefaultTask);
+      return validatePublishSettings(
+          CatalogValidationResult.validated("VALIDATED_CACHED_TARGET", cachedTargetTask), settings);
     }
 
     boolean hadCachedCatalog =
         hasCatalogPayload(targetCatalog)
-            || hasCatalogPayload(liveDefaultCatalog)
-            || hasCatalogPayload(cachedTargetCatalog)
-            || hasCatalogPayload(cachedDefaultCatalog);
+            || hasCatalogPayload(cachedTargetCatalog);
     if (hadCachedCatalog) {
-      return CatalogValidationResult.skipped("SKIPPED_CATALOG_MISS");
+      return CatalogValidationResult.reject(
+          "TASK_NOT_FOUND",
+          "Task is not present in the selected Micro6 catalog: " + taskKey,
+          null);
     }
 
-    return CatalogValidationResult.skipped("SKIPPED_NO_CACHE");
+    return settings != null && !settings.isEmpty()
+        ? CatalogValidationResult.reject(
+            "SETTINGS_SCHEMA_UNAVAILABLE",
+            "A canonical executor settings schema is required for non-empty settings",
+            null)
+        : CatalogValidationResult.skipped("SKIPPED_CATALOG_MISS");
+  }
+
+  private CatalogValidationResult validatePublishSettings(
+      CatalogValidationResult result, Map<String, Object> settings) {
+    if (result == null || result.rejectPublish()) {
+      return result;
+    }
+    JsonNode task = result.catalogTask();
+    if (!hasExplicitTrueRunnable(task)) {
+      return CatalogValidationResult.reject(
+          "CATALOG_INVALID",
+          "The selected executor catalog must explicitly declare runnable=true",
+          task);
+    }
+    if (task == null
+        || !"AVAILABLE".equalsIgnoreCase(task.path("settings_schema_state").asText())
+        || !task.path("args_schema").isObject()
+        || textValue(task.path("settings_schema_version")) == null
+        || textValue(task.path("settings_schema_hash")) == null) {
+      return CatalogValidationResult.reject(
+          "SETTINGS_SCHEMA_UNAVAILABLE",
+          "The selected executor did not provide a usable settings schema",
+          task);
+    }
+    JsonNode fields = task.path("args_schema").path("fields");
+    if (!fields.isArray()) {
+      return CatalogValidationResult.reject(
+          "SETTINGS_SCHEMA_UNAVAILABLE", "The selected task settings schema is malformed", task);
+    }
+    Map<String, JsonNode> definitions = new LinkedHashMap<>();
+    fields.forEach(field -> {
+      String key = textValue(field.path("key"));
+      if (key != null) {
+        definitions.put(key, field);
+      }
+    });
+    Map<String, Object> effectiveSettings = settings == null ? Map.of() : settings;
+    for (Map.Entry<String, JsonNode> definitionEntry : definitions.entrySet()) {
+      if (definitionEntry.getValue().path("required").asBoolean(false)
+          && !definitionEntry.getValue().has("default")
+          && !effectiveSettings.containsKey(definitionEntry.getKey())) {
+        return CatalogValidationResult.reject(
+            "INVALID_SETTINGS:REQUIRED",
+            "Required task setting is missing: " + definitionEntry.getKey(),
+            task);
+      }
+    }
+    for (Map.Entry<String, Object> entry : effectiveSettings.entrySet()) {
+      JsonNode definition = definitions.get(entry.getKey());
+      if (definition == null) {
+        return CatalogValidationResult.reject(
+            "INVALID_SETTINGS:UNKNOWN_KEY", "Unknown task setting: " + entry.getKey(), task);
+      }
+      JsonNode value = objectMapper.valueToTree(entry.getValue());
+      String type = definition.path("type").asText("").toLowerCase(Locale.ENGLISH);
+      if (!Set.of("boolean", "integer", "number", "string", "text", "select", "enum", "multi_select")
+          .contains(type)) {
+        return CatalogValidationResult.reject(
+            "INVALID_SETTINGS:TYPE", "Task setting has an unsupported type: " + entry.getKey(), task);
+      }
+      if (("integer".equals(type) && !value.isIntegralNumber())
+          || ("number".equals(type) && !value.isNumber())) {
+        return CatalogValidationResult.reject(
+            "INVALID_SETTINGS:TYPE", "Task setting has an invalid type: " + entry.getKey(), task);
+      }
+      if (("boolean".equals(type)) && !value.isBoolean()) {
+        return CatalogValidationResult.reject(
+            "INVALID_SETTINGS:TYPE", "Task setting has an invalid type: " + entry.getKey(), task);
+      }
+      if (("string".equals(type)
+              || "text".equals(type)
+              || "select".equals(type)
+              || "enum".equals(type))
+          && !value.isTextual()) {
+        return CatalogValidationResult.reject(
+            "INVALID_SETTINGS:TYPE", "Task setting has an invalid type: " + entry.getKey(), task);
+      }
+      if ("multi_select".equals(type)) {
+        if (!value.isArray() || !value.elements().hasNext()) {
+          return CatalogValidationResult.reject(
+              "INVALID_SETTINGS:TYPE",
+              "Task setting must be a non-empty array: " + entry.getKey(),
+              task);
+        }
+      } else if ("select".equals(type)
+          || "enum".equals(type)
+          || definition.path("options").isArray()
+          || definition.path("options_by_dependency").isObject()) {
+        Set<String> allowedOptions =
+            schemaOptionValues(definition, effectiveSettings, definitions);
+        if (allowedOptions == null
+            || !value.isTextual()
+            || allowedOptions.isEmpty()
+            || !allowedOptions.contains(value.asText())) {
+          return CatalogValidationResult.reject(
+              "INVALID_SETTINGS:ENUM",
+              "Task setting has an invalid enum value: " + entry.getKey(),
+              task);
+        }
+      }
+      if ("multi_select".equals(type)) {
+        Set<String> allowedOptions =
+            schemaOptionValues(definition, effectiveSettings, definitions);
+        if (allowedOptions == null || allowedOptions.isEmpty()) {
+          return CatalogValidationResult.reject(
+              "INVALID_SETTINGS:ENUM",
+              "Task setting has no active enum options: " + entry.getKey(),
+              task);
+        }
+        for (JsonNode selected : value) {
+          if (!selected.isTextual() || !allowedOptions.contains(selected.asText())) {
+            return CatalogValidationResult.reject(
+                "INVALID_SETTINGS:ENUM",
+                "Task setting has an invalid enum value: " + entry.getKey(),
+                task);
+          }
+        }
+      }
+      if (value.isNumber()) {
+        if (definition.has("min") && value.asDouble() < definition.path("min").asDouble()) {
+          return CatalogValidationResult.reject(
+              "INVALID_SETTINGS:BOUNDS", "Task setting is below its minimum: " + entry.getKey(), task);
+        }
+        if (definition.has("max") && value.asDouble() > definition.path("max").asDouble()) {
+          return CatalogValidationResult.reject(
+              "INVALID_SETTINGS:BOUNDS", "Task setting exceeds its maximum: " + entry.getKey(), task);
+        }
+      }
+    }
+    return result.withSettingsValidation("VALID");
+  }
+
+  private Set<String> schemaOptionValues(
+      JsonNode definition,
+      Map<String, Object> effectiveSettings,
+      Map<String, JsonNode> definitions) {
+    Set<String> values = new LinkedHashSet<>();
+    JsonNode options = definition.path("options");
+    JsonNode byDependency = definition.path("options_by_dependency");
+    if (byDependency.isObject()) {
+      String dependencyKey = textValue(definition.path("depends_on"));
+      if (dependencyKey == null) {
+        return null;
+      }
+      Object dependencyValue = effectiveSettings.get(dependencyKey);
+      if (dependencyValue == null) {
+        JsonNode dependencyDefinition = definitions.get(dependencyKey);
+        if (dependencyDefinition != null && dependencyDefinition.has("default")) {
+          dependencyValue = objectMapper.convertValue(dependencyDefinition.get("default"), Object.class);
+        }
+      }
+      if (dependencyValue == null) {
+        return null;
+      }
+      JsonNode activeBranch = byDependency.get(String.valueOf(dependencyValue));
+      if (!activeBranchIsArray(activeBranch)) {
+        return null;
+      }
+      activeBranch.forEach(
+          option -> {
+            if (option.isTextual()) {
+              values.add(option.asText());
+            }
+          });
+      // options_by_dependency is authoritative; the flattened legacy options field must not
+      // widen the branch selected by the dependent setting.
+      return values;
+    }
+    if (options.isArray()) {
+      options.forEach(option -> {
+        if (option.isTextual()) {
+          values.add(option.asText());
+        }
+      });
+    }
+    return values;
+  }
+
+  private boolean activeBranchIsArray(JsonNode branch) {
+    return branch != null && branch.isArray();
+  }
+
+  private boolean hasExplicitTrueRunnable(JsonNode task) {
+    return task != null && task.path("runnable").isBoolean() && task.path("runnable").asBoolean();
   }
 
   private boolean hasCatalogPayload(JsonNode catalog) {
@@ -3282,8 +3701,56 @@ public class BuilderGoalRunnerService {
     } else {
       taskMetadata.remove("catalog_validation_error");
     }
+    JsonNode catalogTask = catalogValidation.catalogTask();
+    if (catalogTask != null && catalogTask.isObject()) {
+      taskMetadata.put("settings_schema_version", textValue(catalogTask.path("settings_schema_version")));
+      taskMetadata.put("settings_schema_hash", textValue(catalogTask.path("settings_schema_hash")));
+    }
     iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
     persistenceService.saveIteration(iteration);
+  }
+
+  private Map<String, Object> normalizeSettings(Map<String, Object> settings) {
+    if (settings == null) {
+      return new LinkedHashMap<>();
+    }
+    return new LinkedHashMap<>(settings);
+  }
+
+  private void rejectPublicTargetOverride(JsonNode payload) {
+    if (containsNonBlankTargetOverride(payload)) {
+      throw new IllegalArgumentException("TARGET_OVERRIDE_NOT_ALLOWED");
+    }
+  }
+
+  private boolean containsNonBlankTargetOverride(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return false;
+    }
+    if (node.isObject()) {
+      java.util.Iterator<java.util.Map.Entry<String, JsonNode>> fields = node.fields();
+      while (fields.hasNext()) {
+        java.util.Map.Entry<String, JsonNode> field = fields.next();
+        String name = field.getKey();
+        JsonNode value = field.getValue();
+        if (("targetBaseUrl".equals(name) || "target_base_url".equals(name))
+            && value != null
+            && !value.isNull()
+            && (!value.isTextual() || !value.asText("").isBlank())) {
+          return true;
+        }
+        if (containsNonBlankTargetOverride(value)) {
+          return true;
+        }
+      }
+    } else if (node.isArray()) {
+      for (JsonNode child : node) {
+        if (containsNonBlankTargetOverride(child)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private NormalizedPayload normalizePayload(JsonNode payload) {
@@ -3305,8 +3772,9 @@ public class BuilderGoalRunnerService {
     JsonNode settingsNode = resolveAuthoritativeSettings(payload, builderExecution, queuePreview);
 
     Map<String, Object> settings =
-        objectMapper.convertValue(
-            settingsNode, new TypeReference<LinkedHashMap<String, Object>>() {});
+        normalizeSettings(
+            objectMapper.convertValue(
+                settingsNode, new TypeReference<LinkedHashMap<String, Object>>() {}));
 
     String displayName =
         firstNonBlank(
@@ -3692,6 +4160,13 @@ public class BuilderGoalRunnerService {
     response.put("failureCode", iteration.getFailureCode());
     response.put("failureReason", iteration.getFailureReason());
     response.put("publishStatus", publishStatus);
+    response.put("publishActivationState", stringValue(publishMetadata.get("activation_state")));
+    response.put("controlRequested", Boolean.TRUE.equals(publishMetadata.get("control_requested")));
+    response.put("controlAction", stringValue(publishMetadata.get("control_action")));
+    response.put("controlRequestedAt", stringValue(publishMetadata.get("control_requested_at")));
+    response.put("settingsSha256", stringValue(taskMetadata.get("settings_sha256")));
+    response.put("settingsValidation", stringValue(taskMetadata.get("settings_validation")));
+    response.put("settingsReceipt", publishMetadata.get("settings_receipt"));
     response.put("publishEntryId", intValue(publishMetadata.get("entry_id")));
     response.put(
         "publishAttachedToExisting",
@@ -4497,6 +4972,7 @@ public class BuilderGoalRunnerService {
           "title",
           "name",
           "display_name",
+          "displayName",
           "world",
           "source",
           "account_id",
@@ -4554,12 +5030,20 @@ public class BuilderGoalRunnerService {
           "recording_id",
           "recordingId",
           "provenance",
+          "allowLaunchFallback",
+          "allow_launch_fallback",
+          "forceRelaunch",
+          "force_relaunch",
+          "builderPayload",
+          "selectedEvidenceIds",
+          "selected_evidence_ids",
           "target_metadata",
           // Builder Goal transport/control fields. These are metadata in legacy flat payloads,
           // never task arguments (an explicitly present settings object bypasses this filter and
           // remains authoritative, including {}).
           "settings",
           "persist_settings",
+          "requires_settings_receipt",
           "execution_mode",
           "executionMode",
           "client_type",
@@ -4693,7 +5177,7 @@ public class BuilderGoalRunnerService {
     if (isBannedStatus(selectedAccount.status())) {
       throw new IllegalStateException("Selected launcher account is banned");
     }
-    if (AccountIdentityContract.normalizeHash(selectedAccount.accountHash()) == null) {
+    if (!AccountIdentityContract.isCanonicalHash(selectedAccount.accountHash())) {
       throw new IllegalStateException(
           "Selected launcher account is missing the canonical game-account hash");
     }
@@ -4786,7 +5270,17 @@ public class BuilderGoalRunnerService {
     target.put("client_id", targetClient.clientId());
     target.put("account_name", targetClient.accountName());
     target.put("account_hash", targetClient.accountHash());
+    // Keep requested and actual identity separate.  Falling back to the actual hash here would
+    // make a heartbeat that omitted requested_account_hash look as if the selected launch
+    // identity had been verified.  Selection already rejects that heartbeat; persisted metadata
+    // must not erase the missing-field evidence.
+    target.put("requested_account_hash", targetClient.requestedAccountHash());
     target.put("account_hash_scheme", targetClient.accountHashScheme());
+    target.put("requested_world", targetClient.requestedWorld());
+    target.put("current_world", targetClient.currentWorld());
+    target.put("world_matched", targetClient.worldMatched());
+    target.put("launch_attempt_id", targetClient.launchAttemptId());
+    target.put("process_id", targetClient.processId());
     target.put("advertised_base_url", targetClient.advertisedBaseUrl());
     target.put("executor_bind_addr", targetClient.executorBindAddr());
     target.put("source_client_type", targetClient.sourceClientType());
@@ -4810,13 +5304,17 @@ public class BuilderGoalRunnerService {
    * published to. Requires the client to be online AND on the requested world with a live
    * AccountBuilder loop; a wrong-world or stopped-script client is never selected.
    */
-  private Optional<Micro6OnlineClientRegistryService.TargetClient>
-      findDispatchReadyClientForAccount(
+  private List<Micro6OnlineClientRegistryService.TargetClient>
+      findDispatchReadyClientsForAccount(
           BuilderGoalAccountCatalogService.AccountDefinition account, Integer expectedWorld) {
     if (account == null) {
-      return Optional.empty();
+      return List.of();
     }
-    return clientRegistryService.findDispatchReadyClientForRecovery(
+    if (!AccountIdentityContract.isCanonicalHash(account.accountHash())
+        || !AccountIdentityContract.hasRequiredScheme(account.accountHashScheme())) {
+      return List.of();
+    }
+    return clientRegistryService.findDispatchReadyClientsForRecovery(
         account.accountHash(),
         account.displayName(),
         null,
@@ -5498,19 +5996,25 @@ public class BuilderGoalRunnerService {
       boolean skipped,
       boolean rejectPublish,
       String errorMessage,
-      JsonNode catalogTask) {
+      JsonNode catalogTask,
+      String settingsValidation) {
 
     private static CatalogValidationResult validated(String status, JsonNode catalogTask) {
-      return new CatalogValidationResult(status, false, false, null, catalogTask);
+      return new CatalogValidationResult(status, false, false, null, catalogTask, "VALID");
     }
 
     private static CatalogValidationResult skipped(String status) {
-      return new CatalogValidationResult(status, true, false, null, null);
+      return new CatalogValidationResult(status, true, false, null, null, "UNVALIDATED");
     }
 
     private static CatalogValidationResult reject(
         String status, String errorMessage, JsonNode catalogTask) {
-      return new CatalogValidationResult(status, false, true, errorMessage, catalogTask);
+      return new CatalogValidationResult(status, false, true, errorMessage, catalogTask, status);
+    }
+
+    private CatalogValidationResult withSettingsValidation(String validation) {
+      return new CatalogValidationResult(
+          status, skipped, rejectPublish, errorMessage, catalogTask, validation);
     }
   }
 

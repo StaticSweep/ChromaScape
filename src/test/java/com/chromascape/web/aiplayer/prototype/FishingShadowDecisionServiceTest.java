@@ -722,6 +722,107 @@ class FishingShadowDecisionServiceTest {
   }
 
   @Test
+  @DisplayName("run discovery tolerates an incomplete trailing line from an interrupted append")
+  void runsToleratesIncompleteTrailingLine() throws Exception {
+    Path file =
+        tempDir.resolve("fishing").resolve("shadow").resolve("debug_1").resolve(RUN + ".jsonl");
+    Files.createDirectories(file.getParent());
+    String line =
+        objectMapper.writeValueAsString(
+            new FishingShadowDecision(
+                2,
+                "AI_PLAYER_SHADOW_DECISION",
+                "PREDICTED",
+                "fishing_ab12cd34",
+                "debug_1",
+                RUN,
+                1,
+                "2026-08-11T05:30:00Z",
+                NET_FISHING_SPOT,
+                null,
+                null,
+                4.0,
+                8201L,
+                450));
+    Files.writeString(file, line + System.lineSeparator() + line.substring(0, line.length() - 6));
+
+    Map<String, Object> runs = service.runs("debug_1");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> runList = (List<Map<String, Object>>) runs.get("runs");
+    assertThat(runList).hasSize(1);
+    assertThat(runList.get(0).get("shadowRunId")).isEqualTo(RUN);
+    assertThat(runList.get(0).get("decisionCount")).isEqualTo(1);
+    assertThat(runList.get(0).get("lastTick")).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("run discovery treats a malformed completed line as corruption")
+  void runsRejectsMalformedMiddleLine() throws Exception {
+    Path file =
+        tempDir.resolve("fishing").resolve("shadow").resolve("debug_1").resolve(RUN + ".jsonl");
+    Files.createDirectories(file.getParent());
+    String line =
+        objectMapper.writeValueAsString(
+            new FishingShadowDecision(
+                2,
+                "AI_PLAYER_SHADOW_DECISION",
+                "PREDICTED",
+                "fishing_ab12cd34",
+                "debug_1",
+                RUN,
+                1,
+                "2026-08-11T05:30:00Z",
+                NET_FISHING_SPOT,
+                null,
+                null,
+                4.0,
+                8201L,
+                450));
+    Files.writeString(
+        file, line + System.lineSeparator() + "not-json{" + System.lineSeparator() + line);
+
+    assertThatThrownBy(() -> service.runs("debug_1"))
+        .isInstanceOf(PrototypeApiException.class)
+        .satisfies(
+            e ->
+                assertThat(((PrototypeApiException) e).getCode()).isEqualTo("HISTORY_READ_FAILED"));
+  }
+
+  @Test
+  @DisplayName("a persisted decision carrying the legacy control_allowed field still parses")
+  void historyAcceptsLegacyControlAllowedField() throws Exception {
+    Path file =
+        tempDir.resolve("fishing").resolve("shadow").resolve("debug_1").resolve(RUN + ".jsonl");
+    Files.createDirectories(file.getParent());
+    String line =
+        objectMapper.writeValueAsString(
+                new FishingShadowDecision(
+                    2,
+                    "AI_PLAYER_SHADOW_DECISION",
+                    "PREDICTED",
+                    "fishing_ab12cd34",
+                    "debug_1",
+                    RUN,
+                    1,
+                    "2026-08-11T05:30:00Z",
+                    NET_FISHING_SPOT,
+                    null,
+                    null,
+                    4.0,
+                    8201L,
+                    450))
+            + System.lineSeparator();
+    // Simulate a legacy producer that wrote control_allowed=true. The field is read-only on the
+    // record: it must parse safely and the decision must never report control allowed.
+    Files.writeString(file, line.replace("\"control_allowed\":false", "\"control_allowed\":true"));
+
+    List<FishingShadowDecision> history = service.history("debug_1", RUN, false, 50);
+    assertThat(history).hasSize(1);
+    assertThat(history.get(0).tick()).isEqualTo(1);
+    assertThat(history.get(0).controlAllowed()).isFalse();
+  }
+
+  @Test
   @DisplayName("history never fails while decisions are being appended concurrently")
   void historyDoesNotFailDuringConcurrentAppend() throws Exception {
     int readers = 4;

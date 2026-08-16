@@ -52,6 +52,7 @@ public class BuilderGoalLaunchOperationService {
   public static final String STATUS_WAITING_FOR_PORT = "WAITING_FOR_PORT";
   public static final String STATUS_WAITING_FOR_HEALTH = "WAITING_FOR_HEALTH";
   public static final String STATUS_WAITING_FOR_ACCOUNT = "WAITING_FOR_ACCOUNT";
+  public static final String STATUS_WAITING_FOR_WORLD = "WAITING_FOR_WORLD";
   public static final String STATUS_WAITING_FOR_LOGIN = "WAITING_FOR_LOGIN";
   public static final String STATUS_WAITING_FOR_DISPATCH = "WAITING_FOR_DISPATCH";
   public static final String STATUS_READY = "READY";
@@ -115,6 +116,7 @@ public class BuilderGoalLaunchOperationService {
     private final String failureDetail;
     private final String attemptId;
     private final Map<String, Object> targetMetadata;
+    private final List<Map<String, Object>> phaseHistory;
 
     private OperationSnapshot(Builder builder) {
       this.updatedAt = builder.updatedAt;
@@ -139,6 +141,11 @@ public class BuilderGoalLaunchOperationService {
               ? Map.of()
               : (Map<String, Object>)
                   BuilderGoalSensitiveTextSanitizer.sanitizeAndFreeze(builder.targetMetadata);
+      this.phaseHistory =
+          builder.phaseHistory == null
+              ? List.of()
+              : (List<Map<String, Object>>)
+                  BuilderGoalSensitiveTextSanitizer.sanitizeAndFreeze(builder.phaseHistory);
     }
 
     static OperationSnapshot initial() {
@@ -148,6 +155,7 @@ public class BuilderGoalLaunchOperationService {
           .message("Launch queued")
           .readinessPhase(STATUS_QUEUED)
           .targetMetadata(Map.of())
+          .phaseHistory(List.of())
           .build();
     }
 
@@ -218,6 +226,10 @@ public class BuilderGoalLaunchOperationService {
     public Map<String, Object> targetMetadata() {
       return targetMetadata;
     }
+
+    public List<Map<String, Object>> phaseHistory() {
+      return phaseHistory;
+    }
   }
 
   /** Mutable builder used internally to produce immutable snapshots. */
@@ -238,6 +250,7 @@ public class BuilderGoalLaunchOperationService {
     private String failureDetail;
     private String attemptId;
     private Map<String, Object> targetMetadata = Map.of();
+    private List<Map<String, Object>> phaseHistory = List.of();
 
     private Builder() {}
 
@@ -258,6 +271,7 @@ public class BuilderGoalLaunchOperationService {
       this.failureDetail = source.failureDetail;
       this.attemptId = source.attemptId;
       this.targetMetadata = source.targetMetadata;
+      this.phaseHistory = source.phaseHistory;
     }
 
     Builder updatedAt(Instant value) {
@@ -337,6 +351,11 @@ public class BuilderGoalLaunchOperationService {
 
     Builder targetMetadata(Map<String, Object> value) {
       this.targetMetadata = value != null ? value : Map.of();
+      return this;
+    }
+
+    Builder phaseHistory(List<Map<String, Object>> value) {
+      this.phaseHistory = value != null ? value : List.of();
       return this;
     }
 
@@ -505,6 +524,7 @@ public class BuilderGoalLaunchOperationService {
             current.toBuilder()
                 .status(status)
                 .message(BuilderGoalSensitiveTextSanitizer.sanitize(message))
+                .phaseHistory(appendPhaseHistory(current.phaseHistory(), status, message))
                 .updatedAt(Instant.now())
                 .build());
   }
@@ -552,6 +572,11 @@ public class BuilderGoalLaunchOperationService {
           builder.attemptId(
               BuilderGoalSensitiveTextSanitizer.sanitize(
                   firstNonBlank(progress.attemptId(), current.attemptId())));
+          builder.phaseHistory(
+              appendPhaseHistory(
+                  current.phaseHistory(),
+                  firstNonBlank(mappedStatus, progress.phase()),
+                  progress.reason()));
           builder.updatedAt(Instant.now());
           return builder.build();
         });
@@ -805,6 +830,7 @@ public class BuilderGoalLaunchOperationService {
     response.put("attemptId", snapshot.attemptId());
     // Defense-in-depth: re-sanitize/freeze the already-immutable snapshot metadata so no caller
     // can ever leak or mutate stored target metadata through the response.
+    response.put("phaseHistory", snapshot.phaseHistory());
     response.put(
         "target",
         snapshot.targetMetadata() != null
@@ -840,7 +866,7 @@ public class BuilderGoalLaunchOperationService {
       case Micro6TargetRelaunchService.PHASE_WAITING_FOR_LOGIN:
         return STATUS_WAITING_FOR_LOGIN;
       case Micro6TargetRelaunchService.PHASE_WAITING_FOR_WORLD:
-        return STATUS_WAITING_FOR_LOGIN;
+        return STATUS_WAITING_FOR_WORLD;
       case Micro6TargetRelaunchService.PHASE_WAITING_FOR_SCRIPT:
         return STATUS_WAITING_FOR_DISPATCH;
       case Micro6TargetRelaunchService.PHASE_WAITING_FOR_DISPATCH:
@@ -850,6 +876,21 @@ public class BuilderGoalLaunchOperationService {
       default:
         return null;
     }
+  }
+
+  private static List<Map<String, Object>> appendPhaseHistory(
+      List<Map<String, Object>> existing, String phase, String reason) {
+    List<Map<String, Object>> history =
+        existing == null ? new ArrayList<>() : new ArrayList<>(existing);
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("at", Instant.now().toString());
+    entry.put("phase", BuilderGoalSensitiveTextSanitizer.sanitize(phase));
+    entry.put("reason", BuilderGoalSensitiveTextSanitizer.sanitize(reason));
+    history.add(entry);
+    if (history.size() > 100) {
+      history = new ArrayList<>(history.subList(history.size() - 100, history.size()));
+    }
+    return history;
   }
 
   /**

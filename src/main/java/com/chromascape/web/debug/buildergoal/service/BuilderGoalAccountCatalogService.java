@@ -143,6 +143,7 @@ public class BuilderGoalAccountCatalogService {
       return false;
     }
     return AccountIdentityContract.hasRequiredScheme(account.accountHashScheme())
+        && AccountIdentityContract.isCanonicalHash(account.accountHash())
         && clientRegistryService.isSelectedAccountEligible(client, account.accountHash());
   }
 
@@ -159,13 +160,16 @@ public class BuilderGoalAccountCatalogService {
     if (!AccountIdentityContract.hasRequiredScheme(account.accountHashScheme())) {
       return "Selected account did not report account hash scheme " + AccountIdentityContract.HASH_SCHEME;
     }
+    if (!AccountIdentityContract.isCanonicalHash(account.accountHash())) {
+      return "Selected account did not report a canonical 16-hex game-account hash";
+    }
     if (!clientRegistryService.isDispatchReady(client)) {
       return "Executor is online but not generically dispatch-ready";
     }
     if (!AccountIdentityContract.hasRequiredScheme(client.accountHashScheme())) {
       return "Executor did not report account hash scheme " + AccountIdentityContract.HASH_SCHEME;
     }
-    if (!AccountIdentityContract.matchesHash(client.accountHash(), account.accountHash())) {
+    if (!AccountIdentityContract.matchesCanonicalHash(client.accountHash(), account.accountHash())) {
       return "Executor actual account hash does not match the selected account";
     }
     if (client.requestedWorld() == null || client.currentWorld() == null
@@ -268,7 +272,11 @@ public class BuilderGoalAccountCatalogService {
     }
 
     public boolean isLaunchReady() {
-      return isRunnable() && hasEmail() && hasPassword();
+      return isRunnable()
+          && AccountIdentityContract.isCanonicalHash(accountHash())
+          && AccountIdentityContract.hasRequiredScheme(accountHashScheme())
+          && hasEmail()
+          && hasPassword();
     }
 
     public String determineLaunchDisabledReason() {
@@ -277,6 +285,13 @@ public class BuilderGoalAccountCatalogService {
       }
       if (isBanned(status())) {
         return "Account is banned in launcher control";
+      }
+      if (!AccountIdentityContract.isCanonicalHash(accountHash())) {
+        return "Launcher control must provide a canonical 16-hex game-account hash";
+      }
+      if (!AccountIdentityContract.hasRequiredScheme(accountHashScheme())) {
+        return "Launcher control must provide account hash scheme "
+            + AccountIdentityContract.HASH_SCHEME;
       }
       if (!hasEmail()) {
         return "Add an email to this account in launcher control";

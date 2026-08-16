@@ -28,4 +28,29 @@ class AccountIdentityContractTest {
     assertThat(AccountIdentityContract.matchesHash("profile-name", "b01c7f006bace664"))
         .isFalse();
   }
+
+  @Test
+  void onlyCanonical16HexHashesQualify() {
+    assertThat(AccountIdentityContract.isCanonicalHash("b01c7f006bace664")).isTrue();
+    assertThat(AccountIdentityContract.isCanonicalHash(" B01C7F006BACE664 ")).isTrue();
+    assertThat(AccountIdentityContract.isCanonicalHash("3720a9a3b5c9f57b")).isTrue();
+    assertThat(AccountIdentityContract.isCanonicalHash(null)).isFalse();
+    assertThat(AccountIdentityContract.isCanonicalHash("")).isFalse();
+    assertThat(AccountIdentityContract.isCanonicalHash("   ")).isFalse();
+    assertThat(AccountIdentityContract.isCanonicalHash("profile-name")).isFalse();
+    assertThat(AccountIdentityContract.isCanonicalHash("abc123")).isFalse();
+    assertThat(AccountIdentityContract.isCanonicalHash("0123456789abcdef0")).isFalse();
+    assertThat(AccountIdentityContract.isCanonicalHash("gggggggggggggggg")).isFalse();
+  }
+
+  @Test
+  void canonicalMatchNeverTreatsEqualMalformedStringsAsIdentity() {
+    assertThat(AccountIdentityContract.matchesHash("hash-1", "hash-1")).isTrue();
+    assertThat(AccountIdentityContract.matchesCanonicalHash("hash-1", "hash-1")).isFalse();
+    assertThat(AccountIdentityContract.matchesCanonicalHash("abc123", "abc123")).isFalse();
+    assertThat(
+            AccountIdentityContract.matchesCanonicalHash(
+                "B01C7F006BACE664", "b01c7f006bace664"))
+        .isTrue();
+  }
 }

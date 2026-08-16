@@ -9,6 +9,7 @@ import com.chromascape.web.instance.WebSocketStateHandler;
 import com.chromascape.web.recording.service.TaskDetectionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.chromascape.web.debug.buildergoal.service.CanonicalSettingsHasher;
 import java.io.ByteArrayOutputStream;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -73,6 +74,50 @@ class ScriptExecutionServiceTest {
         "http://127.0.0.1:8098",
         httpClient,
         probeMs);
+  }
+
+  @Test
+  @DisplayName("Micro6 execute accepts only a matching immutable settings receipt")
+  void publishMicro6Task_parsesVerifiedSettingsReceipt() throws Exception {
+    ObjectMapper mapper = new ObjectMapper();
+    String settingsHash = CanonicalSettingsHasher.sha256(mapper, Map.of());
+    String body =
+        mapper.writeValueAsString(
+            Map.of(
+                "success", true,
+                "status", "ACCEPTED",
+                "entry_id", 1001,
+                "task_key", "FISHING_TRAINING",
+                "settings_receipt",
+                    Map.ofEntries(
+                        Map.entry("version", "builder-settings-receipt/v1"),
+                        Map.entry("contract", "builder-settings-canonical-json/v1"),
+                        Map.entry("entry_id", 1001),
+                        Map.entry("iteration_id", "buildergoal_receipt"),
+                        Map.entry("task_key", "FISHING_TRAINING"),
+                        Map.entry("settings", Map.of()),
+                        Map.entry("settings_sha256", settingsHash),
+                        Map.entry("settings_schema_version", "1"),
+                        Map.entry("settings_schema_hash", "sha256:schema"),
+                        Map.entry("accepted_at", "2026-08-16T00:00:00Z"),
+                        Map.entry("configuration_state", "PENDING"))));
+    when(executeResponse.statusCode()).thenReturn(202);
+    when(executeResponse.body()).thenReturn(body);
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse);
+
+    ScriptExecutionService.Micro6PublishResult result =
+        service.publishMicro6Task(
+            "micro6:FISHING_TRAINING",
+            Map.of(
+                "task_key", "FISHING_TRAINING",
+                "iteration_id", "buildergoal_receipt",
+                "settings", Map.of(),
+                "requires_settings_receipt", true));
+
+    assertThat(result.published()).isTrue();
+    assertThat(result.settingsReceipt()).isNotNull();
+    assertThat(result.settingsReceipt().settingsSha256()).isEqualTo(settingsHash);
   }
 
   @Test
@@ -162,7 +207,10 @@ class ScriptExecutionServiceTest {
     when(executeResponse.statusCode()).thenReturn(200);
     when(executeResponse.body()).thenReturn(acceptedBody(1001, "configurable_woodcutting"));
     when(statusResponse.statusCode()).thenReturn(200);
-    when(statusResponse.body()).thenReturn("{\"status\":\"COMPLETED\"}");
+    when(statusResponse.body())
+        .thenReturn(
+            "{\"status\":\"COMPLETED\",\"entry_id\":1001,"
+                + "\"task_key\":\"configurable_woodcutting\"}");
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(executeResponse, statusResponse);
 
@@ -596,6 +644,77 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("Micro6 status polling requires the exact task and iteration identity")
+  void getMicro6RunStatus_acceptsMatchingTaskAndIterationIdentity() throws Exception {
+    when(statusResponse.statusCode()).thenReturn(200);
+    when(statusResponse.body())
+        .thenReturn(
+            "{\"status\":\"RUNNING\",\"entry_id\":1337,"
+                + "\"task_key\":\"FISHING_TRAINING\",\"iteration_id\":\"iter-1\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(statusResponse);
+
+    ScriptExecutionService.Micro6RunStatusResult result =
+        service.getMicro6RunStatus(
+            Map.of(
+                "task_key", "FISHING_TRAINING",
+                "iteration_id", "iter-1",
+                "micro6_target", Map.of("advertised_base_url", "http://192.168.1.55:8098")),
+            1337);
+
+    assertThat(result.found()).isTrue();
+    assertThat(result.status()).isEqualTo("RUNNING");
+  }
+
+  @Test
+  @DisplayName("Micro6 status polling rejects a confirmed task identity mismatch")
+  void getMicro6RunStatus_rejectsMismatchedTaskIdentity() throws Exception {
+    when(statusResponse.statusCode()).thenReturn(200);
+    when(statusResponse.body())
+        .thenReturn(
+            "{\"status\":\"RUNNING\",\"entry_id\":1337,"
+                + "\"task_key\":\"MINING_TRAINING\",\"iteration_id\":\"iter-1\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(statusResponse);
+
+    ScriptExecutionService.Micro6RunStatusResult result =
+        service.getMicro6RunStatus(
+            Map.of(
+                "task_key", "FISHING_TRAINING",
+                "iteration_id", "iter-1",
+                "micro6_target", Map.of("advertised_base_url", "http://192.168.1.55:8098")),
+            1337);
+
+    assertThat(result.found()).isFalse();
+    assertThat(result.status()).isEqualTo("RECONCILING");
+    assertThat(result.errorMessage()).isEqualTo("STATUS_IDENTITY_MISMATCH");
+  }
+
+  @Test
+  @DisplayName("Micro6 status polling fails closed when iteration identity is missing")
+  void getMicro6RunStatus_rejectsMissingIterationIdentity() throws Exception {
+    when(statusResponse.statusCode()).thenReturn(200);
+    when(statusResponse.body())
+        .thenReturn(
+            "{\"status\":\"RUNNING\",\"entry_id\":1337,"
+                + "\"task_key\":\"FISHING_TRAINING\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(statusResponse);
+
+    ScriptExecutionService.Micro6RunStatusResult result =
+        service.getMicro6RunStatus(
+            Map.of(
+                "task_key", "FISHING_TRAINING",
+                "iteration_id", "iter-1",
+                "micro6_target", Map.of("advertised_base_url", "http://192.168.1.55:8098")),
+            1337);
+
+    assertThat(result.found()).isFalse();
+    assertThat(result.status()).isEqualTo("RECONCILING");
+    assertThat(result.errorMessage()).isEqualTo("STATUS_IDENTITY_MISSING");
+  }
+
+  @Test
   @DisplayName(
       "Micro6 executor health reports publish-ready when logged in and AccountBuilder is ready")
   @SuppressWarnings("unchecked")
@@ -606,7 +725,8 @@ class ScriptExecutionServiceTest {
             """
             {
               "account_name": "bigGreenMeat",
-              "account_hash": "hash-1",
+              "account_hash": "1111111111111111",
+              "account_hash_scheme": "accountconnector/v1",
               "dispatch_hold": false,
               "startup_state": "accountbuilder_ready",
               "login_state": "logged_in",
@@ -647,7 +767,8 @@ class ScriptExecutionServiceTest {
             """
             {
               "account_name": "bigGreenMeat",
-              "account_hash": "hash-1",
+              "account_hash": "1111111111111111",
+              "account_hash_scheme": "accountconnector/v1",
               "dispatch_hold": false,
               "startup_state": "initializing_bot_logic",
               "login_state": "logged_in",
@@ -677,7 +798,7 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
-  @DisplayName("Micro6 health uses account name only when no expected hash is supplied")
+  @DisplayName("Micro6 health uses account name fallback only with canonical actual identity")
   @SuppressWarnings("unchecked")
   void getMicro6ExecutorHealth_nameFallbackRequiresExactSelectedName() throws Exception {
     when(statusResponse.statusCode()).thenReturn(200);
@@ -686,6 +807,8 @@ class ScriptExecutionServiceTest {
             """
             {
               "account_name": "FallbackName",
+              "account_hash": "1111111111111111",
+              "account_hash_scheme": "accountconnector/v1",
               "dispatch_hold": false,
               "startup_state": "accountbuilder_ready",
               "login_state": "logged_in",
@@ -710,7 +833,35 @@ class ScriptExecutionServiceTest {
         .thenReturn(
             """
             {
+              "account_name": "FallbackName",
+              "account_hash": "not-a-canonical-hash",
+              "dispatch_hold": false,
+              "startup_state": "accountbuilder_ready",
+              "login_state": "logged_in",
+              "current_world": 360,
+              "pathfinder_ready": true,
+              "script_lifecycle_state": "RUNNING",
+              "script_loop_alive": true
+            }
+            """);
+
+    ScriptExecutionService.Micro6ExecutorHealthResult malformedHash =
+        service.getMicro6ExecutorHealth(
+            Map.of(
+                "world", 360,
+                "micro6_target",
+                Map.of("advertised_base_url", "http://192.168.1.77:8098", "account_name", "fallbackname")));
+
+    assertThat(malformedHash.publishReady()).isFalse();
+    assertThat(malformedHash.readinessPhase()).isEqualTo("WAITING_FOR_ACCOUNT");
+
+    when(statusResponse.body())
+        .thenReturn(
+            """
+            {
               "account_name": "DifferentName",
+              "account_hash": "1111111111111111",
+              "account_hash_scheme": "accountconnector/v1",
               "dispatch_hold": false,
               "startup_state": "accountbuilder_ready",
               "login_state": "logged_in",

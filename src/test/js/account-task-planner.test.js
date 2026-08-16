@@ -1202,6 +1202,25 @@ test('formatBuilderGoalStatus returns correct labels for all statuses', () => {
   );
 });
 
+test('formatBuilderGoalStatus distinguishes pending pause and resume controls', () => {
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus({
+      status: 'RUNNING',
+      controlRequested: true,
+      controlAction: 'PAUSE'
+    }),
+    'Pause requested; awaiting executor confirmation.'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus({
+      status: 'PAUSED',
+      controlRequested: true,
+      controlAction: 'RESUME'
+    }),
+    'Resume requested; awaiting executor confirmation.'
+  );
+});
+
 test('formatBuilderGoalStatus returns null for unknown status', () => {
   assert.equal(AccountTaskPlanner.formatBuilderGoalStatus(run('UNKNOWN_STATUS')), null);
   assert.equal(AccountTaskPlanner.formatBuilderGoalStatus(run('COMPLETED')), null);
@@ -1291,13 +1310,49 @@ test('PAUSED is active but labelled Task paused without running language', () =>
   );
 });
 
+test('buildCatalogTaskLabel renders PAUSED not QUEUED and preserves rank', () => {
+  const buildLabel = AccountTaskPlanner.prototype.buildCatalogTaskLabel;
+  const paused = buildLabel.call(null, {
+    task_key: 'FISHING_TRAINING',
+    display_name: 'Fishing Training',
+    queue_status: 'PAUSED',
+    queue_rank: 2,
+    queue_count: 3
+  });
+  assert.ok(paused.startsWith('[PAUSED #2] x3 '), `unexpected paused label: ${paused}`);
+  assert.ok(!paused.includes('[QUEUED'), `paused label must not say QUEUED: ${paused}`);
+  assert.ok(!paused.includes('[RUNNING'), `paused label must not say RUNNING: ${paused}`);
+
+  const running = buildLabel.call(null, {
+    task_key: 'FISHING_TRAINING',
+    display_name: 'Fishing Training',
+    queue_status: 'RUNNING',
+    queue_rank: 1
+  });
+  assert.ok(running.startsWith('[RUNNING #1] '), `unexpected running label: ${running}`);
+
+  const queued = buildLabel.call(null, {
+    task_key: 'FISHING_TRAINING',
+    display_name: 'Fishing Training',
+    queue_status: 'QUEUED',
+    queue_rank: 4
+  });
+  assert.ok(queued.startsWith('[QUEUED #4] '), `unexpected queued label: ${queued}`);
+
+  const plain = buildLabel.call(null, {
+    task_key: 'FISHING_TRAINING',
+    display_name: 'Fishing Training'
+  });
+  assert.ok(plain.startsWith('Fishing Training'), `unexpected plain label: ${plain}`);
+});
+
 test('BUILDER_GOAL_STATUS_LABELS contains all required labels', () => {
   const labels = AccountTaskPlanner.BUILDER_GOAL_STATUS_LABELS;
   assert.equal(labels.AWAITING_EXECUTOR_CONFIRMATION, 'Executor request sent; awaiting confirmation.');
   assert.equal(labels.RECONCILING, 'Executor request sent; awaiting confirmation.');
   assert.equal(labels.ASSIGNED, 'Executor assigned the task; waiting for confirmed script start.');
   assert.equal(labels.QUEUED, 'Task accepted and queued by the executor.');
-  assert.equal(labels.PAUSED, 'Task paused; the executor suspended the task.');
+  assert.equal(labels.PAUSED, 'Task paused.');
   assert.equal(labels.STOPPING, 'Stop requested; awaiting executor confirmation.');
   assert.equal(labels.PUBLISH_FAILED, 'Task publish failed.');
   assert.equal(labels.FAILED, 'Task execution failed.');
@@ -2229,7 +2284,7 @@ test('exact-run PAUSED remains active, renders paused phase, and never claims ru
   assert.equal(planner.builderGoalRunTrackerIterationId, 'buildergoal_paused');
   assert.equal(planner._nextDelay, 2000);
   assert.equal(planner._progressOptions.terminal, false);
-  assert.equal(AccountTaskPlanner.formatBuilderGoalStatus({ status: 'PAUSED' }), 'Task paused; the executor suspended the task.');
+  assert.equal(AccountTaskPlanner.formatBuilderGoalStatus({ status: 'PAUSED' }), 'Task paused.');
   assert.ok(!(planner._statusMessage || '').toLowerCase().includes('started'));
   assert.ok(!(planner._statusMessage || '').toLowerCase().includes('running'));
 });
