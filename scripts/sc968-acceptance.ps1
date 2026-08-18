@@ -49,7 +49,9 @@ try {
   $contracts = [ordered]@{ revision=$lock['contracts_revision']; module_version=$lock['module_version']; source_tree_sha256=$lock['source_tree_sha256'] }
 
   $contractModule = Join-Path $ContractsRoot 'java/ai-routine-capture-contract'
-  $null = Invoke-Gate 'contracts_tests' $contractModule { mvn -q test } (Join-Path $logs 'contracts-tests.log') $gates
+  $null = Invoke-Gate 'contracts_tests' $contractModule {
+    mvn -q -Dmaven.repo.local=$env:SC968_MAVEN_REPO clean install
+  } (Join-Path $logs 'contracts-tests.log') $gates
   $null = Invoke-Gate 'leeuwbot_go_vet' (Join-Path $LeeuwBotRoot 'plugin-service') { go vet ./... } (Join-Path $logs 'leeuwbot-go-vet.log') $gates
   $null = Invoke-Gate 'leeuwbot_go_test' (Join-Path $LeeuwBotRoot 'plugin-service') { go test ./... } (Join-Path $logs 'leeuwbot-go-test.log') $gates
   $null = Invoke-Gate 'chromascape_tests' $ChromaScapeRoot { .\gradlew.bat --no-daemon --no-watch-fs test } (Join-Path $logs 'chromascape-test.log') $gates
