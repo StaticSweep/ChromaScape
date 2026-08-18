@@ -9,7 +9,9 @@ import com.chromascape.web.aiplayer.routine.entity.RoutineCaptureOperation;
 import com.chromascape.web.aiplayer.routine.entity.RoutineCaptureRecord;
 import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineCaptureOperationRepository;
+import com.chromascape.web.aiplayer.routine.repository.RoutineCaptureBatchRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineCaptureRecordRepository;
+import com.chromascape.web.aiplayer.routine.event.RoutineCaptureBatchAccepted;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshot;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,25 +36,31 @@ public class RoutineCaptureIngestionService {
   private final CurrentSliceIdentityValidator identities;
   private final RoutineCaptureRecordRepository repository;
   private final RoutineCaptureOperationRepository operations;
+  private final RoutineCaptureBatchRepository batches;
   private final CurrentSliceRunRepository runs;
   private final CaptureOperationDispatcher dispatcher;
   private final TickSnapshotRepository snapshots;
+  private final ApplicationEventPublisher events;
 
   public RoutineCaptureIngestionService(
       ObjectMapper mapper,
       CurrentSliceIdentityValidator identities,
       RoutineCaptureRecordRepository repository,
       RoutineCaptureOperationRepository operations,
+      RoutineCaptureBatchRepository batches,
       CurrentSliceRunRepository runs,
       CaptureOperationDispatcher dispatcher,
-      TickSnapshotRepository snapshots) {
+      TickSnapshotRepository snapshots,
+      ApplicationEventPublisher events) {
     this.mapper = mapper;
     this.identities = identities;
     this.repository = repository;
     this.operations = operations;
+    this.batches = batches;
     this.runs = runs;
     this.dispatcher = dispatcher;
     this.snapshots = snapshots;
+    this.events = events;
   }
 
   /** Commits a capture row and immutable START operation before the dispatcher can call the recorder. */
@@ -293,6 +302,13 @@ public class RoutineCaptureIngestionService {
       entity.setNextActionSequence(expected + 1);
     }
     repository.save(entity);
+    com.chromascape.web.aiplayer.routine.entity.RoutineCaptureBatch accepted = new com.chromascape.web.aiplayer.routine.entity.RoutineCaptureBatch();
+    accepted.setSessionId(entity.getSessionId());
+    accepted.setKind(ticks ? "TICKS" : "ACTIONS");
+    accepted.setSequence(sequence);
+    accepted.setValuesJson(writeJson(incoming));
+    batches.save(accepted);
+    events.publishEvent(new RoutineCaptureBatchAccepted(entity.getSessionId(), ticks ? "TICKS" : "ACTIONS", sequence, incoming));
     return batchResponse(entity, sequence, incoming.size(), content);
   }
 
@@ -336,7 +352,7 @@ public class RoutineCaptureIngestionService {
 
   private Map<String, Object> response(RoutineCaptureRecord entity) {
     CurrentSliceIdentity identity = readIdentity(entity.getIdentityJson());
-    Map<String, Object> result = new LinkedHashMap<>(); result.put("session_id", entity.getSessionId()); result.put("recording_id", entity.getRecordingId()); result.put("recording_hash", entity.getRecordingHash()); result.put("status", statusOf(entity)); result.put("completion_status", entity.getCompletionStatus() == null ? "STARTING" : entity.getCompletionStatus()); result.put("completion_error", entity.getCompletionError()); result.put("next_tick_sequence", entity.getNextTickSequence()); result.put("next_action_sequence", entity.getNextActionSequence()); result.put("final_tick", entity.getFinalTick()); result.put("identity", identity); result.put("operation", operationResponse(entity.getSessionId())); result.put("control_allowed", false); return result;
+    Map<String, Object> result = new LinkedHashMap<>(); result.put("session_id", entity.getSessionId()); result.put("recording_id", entity.getRecordingId()); result.put("recording_hash", entity.getRecordingHash()); result.put("status", statusOf(entity)); result.put("completion_status", entity.getCompletionStatus() == null ? "STARTING" : entity.getCompletionStatus()); result.put("completion_error", entity.getCompletionError()); result.put("next_tick_sequence", entity.getNextTickSequence()); result.put("next_action_sequence", entity.getNextActionSequence()); result.put("tick_count", values(entity.getTicksJson()).size()); result.put("action_count", values(entity.getActionsJson()).size()); result.put("final_tick", entity.getFinalTick()); result.put("identity", identity); result.put("operation", operationResponse(entity.getSessionId())); result.put("control_allowed", false); return result;
   }
 
   private Map<String, Object> operationResponse(String sessionId) {

@@ -6,4 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RoutineReplayTraceRepository extends JpaRepository<RoutineReplayTrace, Long> {
   Optional<RoutineReplayTrace> findByTraceId(String traceId);
+  Optional<RoutineReplayTrace> findFirstByModelIdAndTraceModeOrderByCreatedAtDesc(String modelId, String traceMode);
 }
