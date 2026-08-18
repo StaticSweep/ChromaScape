@@ -1,0 +1,261 @@
+[CmdletBinding()]
+param(
+  [Parameter(Mandatory=$true)][string] $ContractsRoot,
+  [Parameter(Mandatory=$true)][string] $LeeuwBotRoot,
+  [Parameter(Mandatory=$true)][string] $ChromaScapeRoot,
+  [Parameter(Mandatory=$true)][string] $Micro6Root,
+  [Parameter(Mandatory=$true)][string] $OutputRoot
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'Acceptance.Common.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'Acceptance.Http.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'Acceptance.Processes.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'Acceptance.Micro6.psm1') -Force
+
+function EnvOr([string] $Name, [string] $Default = '') {
+  $value = [Environment]::GetEnvironmentVariable($Name)
+  return if ([string]::IsNullOrWhiteSpace($value)) { $Default } else { $value }
+}
+
+function Require([string] $Name) { return Get-Sc968RequiredEnvironment $Name }
+
+function Write-JsonFile([string] $Path, [object] $Value) {
+  $parent = Split-Path -Parent $Path
+  if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+  $utf8 = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false
+  [IO.File]::WriteAllText($Path, ($Value | ConvertTo-Json -Depth 80), $utf8)
+}
+
+function Sha256Bytes([byte[]] $Bytes) {
+  $digest = [Security.Cryptography.SHA256]::Create().ComputeHash($Bytes)
+  return 'sha256:' + (($digest | ForEach-Object { $_.ToString('x2') }) -join '')
+}
+
+function BytesEqual([byte[]] $Left, [byte[]] $Right) {
+  if ($Left.Length -ne $Right.Length) { return $false }
+  for ($index = 0; $index -lt $Left.Length; $index++) { if ($Left[$index] -ne $Right[$index]) { return $false } }
+  return $true
+}
+
+function Api([string] $BaseUrl, [string] $Path, [string] $Token, [string] $Method = 'GET', [object] $Body = $null) {
+  $json = if ($null -eq $Body) { $null } else { $Body | ConvertTo-Json -Depth 80 -Compress }
+  $response = Invoke-Sc968Http -BaseUrl $BaseUrl -Path $Path -Method $Method -BearerToken $Token -Body $json
+  return Assert-Sc968HttpSuccess $response "$Method $Path"
+}
+
+function Wait-Capture([string] $StatusFile, [int] $TimeoutSeconds) {
+  $state = Wait-Sc968CaptureStatus -StatusFile $StatusFile -States @('RECORDING','COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $TimeoutSeconds
+  if ($state.state -in @('FAILED','UNCERTAIN')) { throw "Micro6 capture entered terminal safety state $($state.state)" }
+  return $state
+}
+
+function Wait-LogMarkers([string] $LogPath, [int] $Pid, [string[]] $Markers, [int] $TimeoutSeconds) {
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  do {
+    if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
+      $content = Get-Content -LiteralPath $LogPath -Raw
+      $complete = $true
+      foreach ($marker in $Markers) { if ($content -notmatch [regex]::Escape($marker)) { $complete = $false; break } }
+      if ($complete) { return }
+    }
+    $process = Get-Process -Id $Pid -ErrorAction SilentlyContinue
+    if ($null -eq $process) { break }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTimeOffset]::UtcNow -lt $deadline)
+  throw "Timed out waiting for required Micro6 loader evidence"
+}
+
+function Read-Session([string] $BaseUrl, [string] $Token, [string] $SessionId) {
+  return (Api $BaseUrl "/api/v1/ai-routine/capture/sessions/$SessionId" $Token).Json
+}
+
+function Require-CompletedCapture([object] $Status, [string] $Name, [int] $MinimumTicks) {
+  if ($Status.status -ne 'COMPLETED') { throw "$Name capture did not complete" }
+  if ([int]$Status.tick_count -lt $MinimumTicks) { throw "$Name capture has too few ticks" }
+  if ([int]$Status.action_count -lt 1) { throw "$Name capture has no observed action" }
+  if ([string]::IsNullOrWhiteSpace([string]$Status.recording_id)) { throw "$Name capture has no recording ID" }
+  if ([string]::IsNullOrWhiteSpace([string]$Status.recording_hash) -or [string]$Status.recording_hash -notmatch '^sha256:[0-9a-f]{64}$') { throw "$Name capture has no finalized recording hash" }
+  if ($Status.control_allowed -ne $false) { throw "$Name capture control_allowed is not false" }
+}
+
+$owned = @()
+$savedEnvironment = @{}
+$temporaryEnvironmentNames = @(
+  'SC968_CAPTURE_ENABLED','SC968_CHROMASCAPE_URL','SC968_CAPTURE_TOKEN','SC968_CAPTURE_STATUS_FILE','SC968_CAPTURE_SPOOL',
+  'SC968_TASK_KEY','SC968_SETTINGS_HASH','SC968_PROFILE_ID','SC968_PROFILE_HASH','SC968_CATALOG_HASH','SC968_CLIENT_ID',
+  'MICRO6_REMOTE_ACCOUNTBUILDER_ENABLED','MICRO6_REMOTE_ACCOUNTBUILDER_BASE_URL','MICRO6_REMOTE_ACCOUNTBUILDER_CANDIDATE_ID',
+  'MICRO6_REMOTE_ACCOUNTBUILDER_TOKEN','MICRO6_REMOTE_PUBLIC_KEY_RING','AI_ROUTINE_CAPTURE_TOKEN','AI_ROUTINE_OPERATOR_TOKEN',
+  'AI_ROUTINE_OPERATOR_ID','SC967_CANDIDATE_BUILDS_ENABLED','SC967_CANDIDATE_STAGING_ROOT','LEEUWBOT_CANDIDATE_REGISTRY_URL',
+  'STATIC_API_TOKEN','CANDIDATE_STORAGE_ROOT','CANDIDATE_TRUSTED_KEYS_DIR','CANDIDATE_SIGNING_PRIVATE_KEY_PATH',
+  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','MICRO6_EXPECTED_ARTIFACT_NAME')
+
+try {
+  foreach ($name in $temporaryEnvironmentNames) { $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
+  $captureToken = Require 'SC968_CAPTURE_TOKEN'
+  $operatorToken = Require 'SC968_OPERATOR_TOKEN'
+  $operatorId = Require 'SC968_OPERATOR_ID'
+  $registryToken = Require 'SC968_REGISTRY_TOKEN'
+  $null = Require 'SC968_PUBLIC_KEY_RING'
+  $null = Require 'SC968_REGISTRY_TRUSTED_KEYS_DIR'
+  $microLaunch = Require 'SC968_MICRO6_LAUNCH_SCRIPT'
+  $signingPrivate = Require 'SC968_SIGNING_PRIVATE_KEY_PATH'
+  $signingPublic = Require 'SC968_SIGNING_PUBLIC_KEY_PATH'
+  $signingKeyId = Require 'SC968_SIGNING_KEY_ID'
+  $artifactName = Require 'SC968_EXPECTED_ARTIFACT_NAME'
+
+  $chromaUrl = EnvOr 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:8090'
+  $registryUrl = EnvOr 'SC968_REGISTRY_URL' 'http://127.0.0.1:8081'
+  $minimumTicks = [int](EnvOr 'SC968_MINIMUM_TICKS' '20')
+  $runtimeTimeout = [int](EnvOr 'SC968_RUNTIME_TIMEOUT_SECONDS' '1800')
+  $registryRoot = Join-Path $LeeuwBotRoot 'plugin-service'
+  $output = Join-Path $OutputRoot 'runtime'
+  $logs = Join-Path $OutputRoot 'logs'
+  $registryOutput = Join-Path $OutputRoot 'registry'
+  $stagingRoot = Join-Path $registryOutput 'staging'
+  New-Item -ItemType Directory -Force -Path $output,$logs,$registryOutput,$stagingRoot | Out-Null
+  Remove-Item -LiteralPath (Join-Path $output 'baseline-status.json'),(Join-Path $output 'candidate-status.json') -Force -ErrorAction SilentlyContinue
+
+  # These values are process-scoped and are removed/restored in finally. They are never written to
+  # evidence and are not included in process command lines.
+  [Environment]::SetEnvironmentVariable('AI_ROUTINE_CAPTURE_TOKEN',$captureToken,'Process')
+  [Environment]::SetEnvironmentVariable('AI_ROUTINE_OPERATOR_TOKEN',$operatorToken,'Process')
+  [Environment]::SetEnvironmentVariable('AI_ROUTINE_OPERATOR_ID',$operatorId,'Process')
+  [Environment]::SetEnvironmentVariable('SC967_CANDIDATE_BUILDS_ENABLED','true','Process')
+  [Environment]::SetEnvironmentVariable('LEEUWBOT_CANDIDATE_REGISTRY_URL',$registryUrl,'Process')
+  [Environment]::SetEnvironmentVariable('STATIC_API_TOKEN',$registryToken,'Process')
+  [Environment]::SetEnvironmentVariable('SC967_CANDIDATE_STAGING_ROOT',$stagingRoot,'Process')
+  [Environment]::SetEnvironmentVariable('CANDIDATE_STORAGE_ROOT',(Join-Path $registryOutput 'registry-storage'),'Process')
+  [Environment]::SetEnvironmentVariable('CANDIDATE_TRUSTED_KEYS_DIR',(Require 'SC968_REGISTRY_TRUSTED_KEYS_DIR'),'Process')
+  [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_PRIVATE_KEY_PATH',$signingPrivate,'Process')
+  [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_PUBLIC_KEY_PATH',$signingPublic,'Process')
+  [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_KEY_ID',$signingKeyId,'Process')
+  [Environment]::SetEnvironmentVariable('MICRO6_ROOT',$Micro6Root,'Process')
+  [Environment]::SetEnvironmentVariable('MICRO6_EXPECTED_ARTIFACT_NAME',$artifactName,'Process')
+
+  $registryExecutable = EnvOr 'SC968_REGISTRY_EXECUTABLE' 'go.exe'
+  $registryArguments = EnvOr 'SC968_REGISTRY_ARGUMENTS' 'run .'
+  $registry = Start-Sc968OwnedProcess -Name 'candidate-registry' -FilePath $registryExecutable -WorkingDirectory $registryRoot -ArgumentList $registryArguments -LogPath (Join-Path $logs 'candidate-registry.log')
+  $owned += $registry
+  Wait-Sc968Http -BaseUrl $registryUrl -Path '/api/v1/candidates/cand_000000000000000000000000' -BearerToken $registryToken -AcceptedStatusCodes @(404) -TimeoutSeconds 120 | Out-Null
+
+  $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' (Join-Path $env:SystemRoot 'System32/cmd.exe')
+  $chromaArguments = EnvOr 'SC968_CHROMASCAPE_ARGUMENTS' "/d /c call `"$(Join-Path $ChromaScapeRoot 'gradlew.bat')`" --no-daemon --no-watch-fs bootRun"
+  $chroma = Start-Sc968OwnedProcess -Name 'chromascape' -FilePath $chromaExecutable -WorkingDirectory $ChromaScapeRoot -ArgumentList $chromaArguments -LogPath (Join-Path $logs 'chromascape-runtime.log')
+  $owned += $chroma
+  Wait-Sc968Http -BaseUrl $chromaUrl -Path '/debugger' -AcceptedStatusCodes @(200,301,302) -TimeoutSeconds 900 -PollMilliseconds 1000 | Out-Null
+
+  # Baseline: the status sidecar is produced by the real Micro6 plugin. No run/session or action
+  # data is generated by this harness.
+  $baselineStatusFile = Join-Path $output 'baseline-status.json'
+  Set-Sc968Micro6Environment -BaseUrl $chromaUrl -CaptureToken $captureToken -StatusFile $baselineStatusFile -SpoolDirectory (Join-Path $OutputRoot 'spool/baseline')
+  $microLog = Join-Path $logs 'baseline-micro6.log'
+  $micro = Start-Sc968OwnedProcess -Name 'micro6-baseline' -FilePath $microLaunch -WorkingDirectory $Micro6Root -ArgumentList (EnvOr 'SC968_MICRO6_LAUNCH_ARGUMENTS' '') -LogPath $microLog
+  $owned += $micro
+  $recordingState = Wait-Capture $baselineStatusFile $runtimeTimeout
+  if ($recordingState.state -ne 'RECORDING') { throw 'Baseline Micro6 never reached RECORDING' }
+  $baselineSession = Read-Session $chromaUrl $captureToken ([string]$recordingState.session_id)
+  if ([int]$baselineSession.action_count -ne 0) { throw 'Baseline gameplay began before the capture was observable' }
+  $baselineCompletedState = Wait-Sc968CaptureStatus -StatusFile $baselineStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
+  if ($baselineCompletedState.state -ne 'COMPLETED') { throw "Baseline capture ended in $($baselineCompletedState.state)" }
+  $baselineSession = Read-Session $chromaUrl $captureToken ([string]$baselineCompletedState.session_id)
+  Require-CompletedCapture $baselineSession 'Baseline' $minimumTicks
+  Stop-Sc968OwnedProcess $micro
+  $owned = @($owned | Where-Object { $_.Pid -ne $micro.Pid })
+
+  # Curate, graph, publish, model, and strict deterministic replay from the completed recording.
+  $recordingId = [string]$baselineSession.recording_id
+  Api $chromaUrl "/api/v1/ai-routine/recordings/$recordingId/curation" $operatorToken 'PUT' @{ includeRanges=$null; excludeRanges=$null } | Out-Null
+  $graphResponse = (Api $chromaUrl "/api/v1/ai-routine/recordings/$recordingId/graphs" $operatorToken 'POST').Json
+  $graphId = [string]$graphResponse.definition.graph_id
+  if ([string]::IsNullOrWhiteSpace($graphId)) { throw 'Graph generation returned no graph ID' }
+  $published = (Api $chromaUrl "/api/v1/ai-routine/graphs/$graphId/publish" $operatorToken 'POST').Json
+  if ($published.state -ne 'PUBLISHED') { throw 'Generated graph did not publish' }
+  $modelResponse = (Api $chromaUrl "/api/v1/ai-routine/graphs/$graphId/models" $operatorToken 'POST' @{ identity=$baselineSession.identity }).Json
+  $modelId = [string]$modelResponse.model_id
+  if ([string]::IsNullOrWhiteSpace($modelId)) { throw 'Model build returned no model ID' }
+  $actionNodes = @($graphResponse.definition.nodes | Where-Object { $_.type -eq 'ACTION' })
+  if ($actionNodes.Count -lt 1) { throw 'Live recording produced no graph action' }
+  $recordedAction = $actionNodes[0].semantics.recorded_action
+  if (([string]$recordedAction.option -notmatch '(?i)net|fish') -or ([string]$recordedAction.target -notmatch '(?i)fishing')) { throw 'Recorded action is not a fishing interaction' }
+  $replay = (Api $chromaUrl "/api/v1/ai-routine/models/$modelId/replays" $operatorToken 'POST' @{ recordingId=$recordingId }).Json
+  if ($replay.status -ne 'PASSED' -or $replay.deterministic -ne $true -or $replay.control_allowed -ne $false) { throw 'Baseline policy replay did not PASS deterministically' }
+
+  # Candidate proposal/build/registry flow is driven by real graph/model identity; only the
+  # service's required seeded failure code is fixed by the SC-968 contract.
+  $failure = (Api $chromaUrl '/api/v1/ai-routine/patches/from-failure' $operatorToken 'POST' @{
+      failure_manifest_hash='sha256:b201629e712be24815e43551a5185a2b45fe3a0b77b2aca8f2a51dd250917956'
+      failure_code='UNSUPPORTED_FISH_DEFAULTED'; identity=$modelResponse.identity
+      base_commit=[string]$modelResponse.identity.client.client_build_id }).Json
+  $proposalId = [string]$failure.proposal_id
+  if ([string]::IsNullOrWhiteSpace($proposalId)) { throw 'Candidate proposal was not created' }
+  Api $chromaUrl "/api/v1/ai-routine/patches/$proposalId/approve" $operatorToken 'POST' | Out-Null
+  Api $chromaUrl "/api/v1/ai-routine/patches/$proposalId/build" $operatorToken 'POST' | Out-Null
+  $candidate = $null
+  $candidateDeadline = [DateTimeOffset]::UtcNow.AddSeconds($runtimeTimeout)
+  do {
+    $candidate = (Api $chromaUrl "/api/v1/ai-routine/patches/$proposalId" $operatorToken).Json
+    if ($candidate.status -in @('REGISTERED','BUILD_FAILED','FAILED','REJECTED')) { break }
+    Start-Sleep -Seconds 2
+  } while ([DateTimeOffset]::UtcNow -lt $candidateDeadline)
+  if ($candidate.status -ne 'REGISTERED') { throw "Candidate workflow ended in $($candidate.status)" }
+  $candidateId = [string]$candidate.candidate_id
+  $manifestPath = Join-Path (Join-Path $stagingRoot $candidateId) 'manifest.json'
+  $jarName = [string]$candidate.candidate_manifest.jar_name
+  $jarPath = Join-Path (Join-Path $stagingRoot $candidateId) $jarName
+  if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf) -or -not (Test-Path -LiteralPath $jarPath -PathType Leaf)) { throw 'Candidate staging bundle is incomplete' }
+  $stagedManifest = [IO.File]::ReadAllBytes($manifestPath)
+  $stagedJar = [IO.File]::ReadAllBytes($jarPath)
+  [IO.File]::WriteAllBytes((Join-Path $registryOutput 'staged-manifest.json'),$stagedManifest)
+
+  $lookup = Invoke-Sc968Http -BaseUrl $registryUrl -Path "/api/v1/candidates/$candidateId" -BearerToken $registryToken
+  if ($lookup.StatusCode -ne 200) { throw "Candidate lookup returned HTTP $($lookup.StatusCode)" }
+  $lookupLength = Get-Sc968Header $lookup 'Content-Length'
+  $lookupHash = Get-Sc968Header $lookup 'X-Candidate-Manifest-SHA256'
+  if ([int64]$lookupLength -le 0 -or [int64]$lookupLength -ne $lookup.BodyBytes.Length -or $lookupHash -ne (Sha256Bytes $lookup.BodyBytes) -or -not (BytesEqual $stagedManifest $lookup.BodyBytes)) { throw 'Candidate lookup is not an exact staged-manifest readback' }
+  [IO.File]::WriteAllBytes((Join-Path $registryOutput 'lookup-response.json'),$lookup.BodyBytes)
+  $download = Invoke-Sc968Http -BaseUrl $registryUrl -Path "/api/v1/candidates/$candidateId/download" -BearerToken $registryToken
+  $downloadHash = Get-Sc968Header $download 'X-Artifact-SHA256'
+  if ($download.StatusCode -ne 200 -or (Get-Sc968Header $download 'X-Candidate-ID') -ne $candidateId -or [int64](Get-Sc968Header $download 'Content-Length') -ne $download.BodyBytes.Length -or $downloadHash -ne (Sha256Bytes $download.BodyBytes) -or -not (BytesEqual $stagedJar $download.BodyBytes)) { throw 'Candidate artifact readback failed exact ID/length/hash/byte verification' }
+  [IO.File]::WriteAllBytes((Join-Path $registryOutput 'candidate.jar'),$download.BodyBytes)
+  Write-JsonFile (Join-Path $output 'candidate.json') ([ordered]@{ proposal_id=$proposalId; candidate_id=$candidateId; candidate_hash=$candidate.candidate_hash; manifest_hash=(Sha256Bytes $stagedManifest); registry_manifest_hash=$lookupHash; manifest_byte_equal=$true; artifact_hash=(Sha256Bytes $stagedJar); artifact_byte_equal=$true; control_allowed=$false })
+
+  # Second launch: candidate selection is explicit, loader evidence must appear before capture
+  # reaches RECORDING, and the harness opens shadow while the new session is still live.
+  $candidateStatusFile = Join-Path $output 'candidate-status.json'
+  Set-Sc968Micro6Environment -BaseUrl $chromaUrl -CaptureToken $captureToken -StatusFile $candidateStatusFile -SpoolDirectory (Join-Path $OutputRoot 'spool/candidate') -CandidateId $candidateId
+  $candidateLog = Join-Path $logs 'candidate-micro6.log'
+  $candidateMicro = Start-Sc968OwnedProcess -Name 'micro6-candidate' -FilePath $microLaunch -WorkingDirectory $Micro6Root -ArgumentList (EnvOr 'SC968_MICRO6_LAUNCH_ARGUMENTS' '') -LogPath $candidateLog
+  $owned += $candidateMicro
+  Wait-LogMarkers $candidateLog $candidateMicro.Pid @('verified exact registry manifest','verified candidate artifact','immediate pre-load artifact rehash passed','applied remote AccountBuilder candidate') $runtimeTimeout
+  $secondRecordingState = Wait-Capture $candidateStatusFile $runtimeTimeout
+  if ($secondRecordingState.state -ne 'RECORDING') { throw 'Candidate Micro6 never reached RECORDING' }
+  $secondSession = Read-Session $chromaUrl $captureToken ([string]$secondRecordingState.session_id)
+  if ([int]$secondSession.action_count -ne 0) { throw 'Second gameplay action occurred before the live shadow was opened' }
+  $shadow = (Api $chromaUrl "/api/v1/ai-routine/models/$modelId/shadow-runs" $operatorToken 'POST' @{ schema='routine-shadow-run-request/v1'; session_id=[string]$secondRecordingState.session_id }).Json
+  if ($shadow.state -ne 'ACTIVE' -or $shadow.control_allowed -ne $false) { throw 'Live shadow did not become ACTIVE read-only' }
+  $secondCompletedState = Wait-Sc968CaptureStatus -StatusFile $candidateStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
+  if ($secondCompletedState.state -ne 'COMPLETED') { throw "Candidate capture ended in $($secondCompletedState.state)" }
+  $secondSession = Read-Session $chromaUrl $captureToken ([string]$secondCompletedState.session_id)
+  Require-CompletedCapture $secondSession 'Candidate' $minimumTicks
+  $shadowStatus = $null
+  $shadowDeadline = [DateTimeOffset]::UtcNow.AddSeconds(120)
+  do {
+    $shadowStatus = (Api $chromaUrl "/api/v1/ai-routine/shadow-runs/$($shadow.shadow_run_id)" $operatorToken).Json
+    if ([int]$shadowStatus.decision_count -ge ([int]$secondSession.tick_count + [int]$secondSession.action_count)) { break }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTimeOffset]::UtcNow -lt $shadowDeadline)
+  $completedShadow = (Api $chromaUrl "/api/v1/ai-routine/shadow-runs/$($shadow.shadow_run_id)/complete" $operatorToken 'POST' @{ schema='routine-shadow-complete/v1' }).Json
+  if ($completedShadow.state -ne 'COMPLETED' -or [int]$completedShadow.result.decision_count -lt 1 -or $completedShadow.control_allowed -ne $false) { throw 'Live shadow did not complete with persisted read-only decisions' }
+  $shadowResult = $completedShadow.result
+  Write-JsonFile (Join-Path $output 'baseline.json') ([ordered]@{ run_id=$baselineSession.identity.run.run_id; session_id=$baselineSession.session_id; recording_id=$baselineSession.recording_id; recording_hash=$baselineSession.recording_hash; graph_id=$graphId; model_id=$modelId; replay=$replay; tick_count=$baselineSession.tick_count; action_count=$baselineSession.action_count; identity=$baselineSession.identity; control_allowed=$false })
+  Write-JsonFile (Join-Path $output 'shadow.json') ([ordered]@{ run_id=$secondSession.identity.run.run_id; session_id=$secondSession.session_id; recording_id=$secondSession.recording_id; recording_hash=$secondSession.recording_hash; shadow_run_id=$shadow.shadow_run_id; model_id=$modelId; result=$shadowResult; model_identity=$completedShadow.model_identity; session_identity=$completedShadow.session_identity; result_hash=$completedShadow.result_hash; control_allowed=$false; control_dispatch_count=0 })
+  if ((Get-Content -LiteralPath $candidateLog -Raw) -match '(?i)control dispatch|mouse dispatch|keyboard dispatch|invoke menu') { throw 'Candidate Micro6 log contains control dispatch evidence' }
+} finally {
+  foreach ($process in @($owned | Sort-Object -Property Pid -Descending)) { Stop-Sc968OwnedProcess $process }
+  foreach ($name in $temporaryEnvironmentNames) {
+    $old = $savedEnvironment[$name]
+    [Environment]::SetEnvironmentVariable($name,$old,'Process')
+  }
+}
