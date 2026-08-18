@@ -115,7 +115,14 @@ try {
   $registryOutput = Join-Path $OutputRoot 'registry'
   $stagingRoot = Join-Path $registryOutput 'staging'
   New-Item -ItemType Directory -Force -Path $output,$logs,$registryOutput,$stagingRoot | Out-Null
-  Remove-Item -LiteralPath (Join-Path $output 'baseline-status.json'),(Join-Path $output 'candidate-status.json') -Force -ErrorAction SilentlyContinue
+  $oldEvidence = @(
+    (Join-Path $output 'baseline.json'), (Join-Path $output 'candidate.json'), (Join-Path $output 'shadow.json'),
+    (Join-Path $output 'baseline-status.json'), (Join-Path $output 'candidate-status.json'),
+    (Join-Path $registryOutput 'staged-manifest.json'), (Join-Path $registryOutput 'lookup-response.json'),
+    (Join-Path $registryOutput 'candidate.jar')) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+  if ($oldEvidence.Count -gt 0 -or @(Get-ChildItem -LiteralPath $stagingRoot -Force -ErrorAction SilentlyContinue).Count -gt 0) {
+    throw 'SC-968 runtime output must be fresh; move the previous evidence directory before retrying'
+  }
 
   # These values are process-scoped and are removed/restored in finally. They are never written to
   # evidence and are not included in process command lines.
