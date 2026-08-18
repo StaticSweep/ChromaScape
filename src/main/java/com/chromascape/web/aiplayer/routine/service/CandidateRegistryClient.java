@@ -1,6 +1,5 @@
 package com.chromascape.web.aiplayer.routine.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,7 +23,6 @@ import org.springframework.stereotype.Component;
 public class CandidateRegistryClient {
   private final HttpClient client =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
-  private final ObjectMapper mapper = new ObjectMapper();
   private final CertifiedCandidateV2Validator validator;
 
   @Value("${leeuwbot.candidate-registry.base-url:http://127.0.0.1:8081}")
@@ -53,8 +51,8 @@ public class CandidateRegistryClient {
     throw new RegistryException("REGISTRY_MANIFEST_HASH_REQUIRED", false);
   }
 
-  /** Returns the exact response bytes and the registry's exact-manifest hash header. */
-  public RegistryEnvelope lookupEvidence(String candidateId) {
+  /** Returns the literal manifest response bytes and its integrity header. */
+  public RegistryManifestResponse lookupEvidence(String candidateId) {
     // A lookup without the hash of the persisted manifest cannot be safely reconciled: accepting
     // an arbitrary registry document would break the candidate identity binding. Keep this method
     // only as a source-compatible fail-closed seam for old callers; production callers must use
@@ -67,12 +65,12 @@ public class CandidateRegistryClient {
    * ChromaScape. The registry uses this header to reject a lookup that is not about the persisted
    * candidate document; the response header is checked again by the workflow readback verifier.
    */
-  public RegistryEnvelope lookupEvidence(String candidateId, String expectedManifestHash) {
+  public RegistryManifestResponse lookupEvidence(String candidateId, String expectedManifestHash) {
     validateId(candidateId);
     if (expectedManifestHash == null || !expectedManifestHash.matches("sha256:[0-9a-f]{64}")) {
       throw new RegistryException("REGISTRY_MANIFEST_HASH_REQUIRED", false);
     }
-    return sendEnvelope("GET", "/api/v1/candidates/" + candidateId, null, null, expectedManifestHash);
+    return sendManifest("GET", "/api/v1/candidates/" + candidateId, null, null, expectedManifestHash);
   }
 
   public byte[] download(String candidateId) throws Exception {
@@ -96,11 +94,10 @@ public class CandidateRegistryClient {
       throw new RegistryException("REGISTRY_NETWORK_UNCERTAIN", true, e);
     }
     try (InputStream stream = response.body()) {
-      long length = contentLength(response, CertifiedCandidateV2Validator.MAX_ARTIFACT_BYTES, "REGISTRY_ARTIFACT_LENGTH_REQUIRED");
       if (response.statusCode() / 100 != 2) {
-        drainBounded(stream, length, CertifiedCandidateV2Validator.MAX_ARTIFACT_BYTES);
         throw new RegistryException("REGISTRY_REJECTED_" + response.statusCode(), false);
       }
+      long length = contentLength(response, CertifiedCandidateV2Validator.MAX_ARTIFACT_BYTES, "REGISTRY_ARTIFACT_LENGTH_REQUIRED");
       byte[] bytes = readBounded(stream, length, CertifiedCandidateV2Validator.MAX_ARTIFACT_BYTES, "REGISTRY_ARTIFACT_TOO_LARGE");
       String headerId = response.headers().firstValue("X-Candidate-ID").orElse("");
       String headerHash = response.headers().firstValue("X-Artifact-SHA256").orElse("");
@@ -117,19 +114,19 @@ public class CandidateRegistryClient {
 
   public String register(Path manifest, Path artifact, Path sbom, Path certification)
       throws Exception {
-    return registerEvidence(manifest, artifact, sbom, certification).body();
+    return new String(registerEvidence(manifest, artifact, sbom, certification).rawManifest(), StandardCharsets.UTF_8);
   }
 
   /**
    * Validates the exact staged bytes before posting and retains the exact response bytes. The
-   * response envelope is deliberately limited to 1 MiB and must advertise the exact persisted
+   * response body is deliberately limited to 1 MiB and must advertise the exact persisted
    * manifest hash in {@code X-Candidate-Manifest-SHA256}.
    */
-  public RegistryEnvelope registerEvidence(
+  public RegistryManifestResponse registerEvidence(
       Path manifest, Path artifact, Path sbom, Path certification) throws Exception {
     byte[] manifestBytes = boundedFile(manifest, CertifiedCandidateV2Validator.MAX_MANIFEST_BYTES, "MANIFEST_TOO_LARGE");
     byte[] artifactBytes = boundedFile(artifact, CertifiedCandidateV2Validator.MAX_ARTIFACT_BYTES, "ARTIFACT_TOO_LARGE");
-    byte[] sbomBytes = boundedFile(sbom, CertifiedCandidateV2Validator.MAX_MANIFEST_BYTES, "SBOM_TOO_LARGE");
+    byte[] sbomBytes = boundedFile(sbom, CertifiedCandidateV2Validator.MAX_SBOM_BYTES, "SBOM_TOO_LARGE");
     byte[] certificationBytes = boundedFile(certification, CandidateCertificationV1Validator.MAX_BYTES, "CERTIFICATION_TOO_LARGE");
     validator.validate(manifestBytes, certificationBytes, artifactBytes, sbomBytes);
 
@@ -141,7 +138,7 @@ public class CandidateRegistryClient {
     writePart(body, boundary, "certification", certification, certificationBytes);
     body.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
     String manifestHash = hash(manifestBytes);
-    return sendEnvelope(
+    return sendManifest(
         "POST",
         "/api/v1/candidates",
         body.toByteArray(),
@@ -149,7 +146,7 @@ public class CandidateRegistryClient {
         manifestHash);
   }
 
-  private RegistryEnvelope sendEnvelope(
+  private RegistryManifestResponse sendManifest(
       String method, String path, byte[] body, String contentType, String manifestHash) {
     try {
       HttpRequest.Builder builder =
@@ -168,16 +165,25 @@ public class CandidateRegistryClient {
       }
       HttpResponse<InputStream> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
       try (InputStream stream = response.body()) {
-        long length = contentLength(response, CertifiedCandidateV2Validator.MAX_MANIFEST_BYTES, "REGISTRY_RESPONSE_LENGTH_REQUIRED");
-        byte[] raw = readBounded(stream, length, CertifiedCandidateV2Validator.MAX_MANIFEST_BYTES, "REGISTRY_RESPONSE_TOO_LARGE");
         if (response.statusCode() / 100 != 2) {
           throw new RegistryException("REGISTRY_REJECTED_" + response.statusCode(), false);
         }
+        long length = contentLength(response, CertifiedCandidateV2Validator.MAX_MANIFEST_BYTES, "REGISTRY_RESPONSE_LENGTH_REQUIRED");
+        byte[] raw;
+        try {
+          raw = readBounded(stream, length, CertifiedCandidateV2Validator.MAX_MANIFEST_BYTES, "REGISTRY_RESPONSE_TOO_LARGE");
+        } catch (IOException e) {
+          throw new RegistryException("REGISTRY_RESPONSE_LENGTH_MISMATCH", false, e);
+        }
         String responseManifestHash = response.headers().firstValue("X-Candidate-Manifest-SHA256").orElse("");
-        if (!responseManifestHash.matches("sha256:[0-9a-f]{64}")) {
+        if (!responseManifestHash.matches("sha256:[0-9a-f]{64}")
+            || !responseManifestHash.equals(hash(raw))) {
           throw new RegistryException("REGISTRY_MANIFEST_HASH_HEADER_MISSING", false);
         }
-        return new RegistryEnvelope(raw, new String(raw, StandardCharsets.UTF_8), responseManifestHash);
+        if (manifestHash != null && !manifestHash.equals(responseManifestHash)) {
+          throw new RegistryException("REGISTRY_MANIFEST_HASH_HEADER_MISMATCH", false);
+        }
+        return new RegistryManifestResponse(raw, responseManifestHash, response.statusCode());
       }
     } catch (RegistryException e) {
       throw e;
@@ -194,6 +200,9 @@ public class CandidateRegistryClient {
     try {
       length = Long.parseLong(header);
     } catch (NumberFormatException e) {
+      throw new RegistryException(missingCode, false);
+    }
+    if (length == 0) {
       throw new RegistryException(missingCode, false);
     }
     if (length < 0 || length > limit) {
@@ -216,10 +225,6 @@ public class CandidateRegistryClient {
     }
     if (total != declared) throw new RegistryException("REGISTRY_RESPONSE_LENGTH_MISMATCH", false);
     return output.toByteArray();
-  }
-
-  private static void drainBounded(InputStream stream, long declared, long limit) throws IOException {
-    readBounded(stream, declared, limit, "REGISTRY_ARTIFACT_TOO_LARGE");
   }
 
   private static byte[] boundedFile(Path path, long limit, String code) throws IOException {
@@ -285,103 +290,9 @@ public class CandidateRegistryClient {
     }
   }
 
-  /** Extracts the exact UTF-8 bytes of the top-level manifest value from a registry envelope. */
-  static byte[] exactManifestBytes(byte[] envelopeBytes) {
-    if (envelopeBytes == null) throw new IllegalArgumentException("REGISTRY_MANIFEST_MISSING");
-    try {
-      var decoder = StandardCharsets.UTF_8.newDecoder()
-          .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
-          .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT);
-      String json = decoder.decode(java.nio.ByteBuffer.wrap(envelopeBytes)).toString();
-      return exactTopLevelValue(json, "manifest").getBytes(StandardCharsets.UTF_8);
-    } catch (Exception e) {
-      throw new IllegalArgumentException("REGISTRY_RESPONSE_INVALID", e);
-    }
-  }
-
-  private static String exactTopLevelValue(String json, String field) throws Exception {
-    int index = skipWhitespace(json, 0);
-    if (index >= json.length() || json.charAt(index++) != '{') {
-      throw new IllegalArgumentException("registry envelope is not an object");
-    }
-    while (true) {
-      index = skipWhitespace(json, index);
-      if (index >= json.length() || json.charAt(index) == '}') {
-        throw new IllegalArgumentException("registry envelope field is missing");
-      }
-      int keyEnd = scanString(json, index);
-      String key = com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
-          .readTree(json.substring(index, keyEnd)).asText();
-      index = skipWhitespace(json, keyEnd);
-      if (index >= json.length() || json.charAt(index++) != ':') {
-        throw new IllegalArgumentException("registry envelope is malformed");
-      }
-      index = skipWhitespace(json, index);
-      int valueEnd = scanValue(json, index);
-      if (field.equals(key)) return json.substring(index, valueEnd);
-      index = skipWhitespace(json, valueEnd);
-      if (index >= json.length() || json.charAt(index++) != ',') {
-        throw new IllegalArgumentException("registry envelope field is missing");
-      }
-    }
-  }
-
-  private static int skipWhitespace(String value, int index) {
-    while (index < value.length() && Character.isWhitespace(value.charAt(index))) index++;
-    return index;
-  }
-
-  private static int scanString(String value, int start) {
-    if (start >= value.length() || value.charAt(start) != '"') {
-      throw new IllegalArgumentException("registry envelope key is invalid");
-    }
-    boolean escaped = false;
-    for (int index = start + 1; index < value.length(); index++) {
-      char current = value.charAt(index);
-      if (escaped) escaped = false;
-      else if (current == '\\') escaped = true;
-      else if (current == '"') return index + 1;
-      else if (current < 0x20) throw new IllegalArgumentException("registry envelope string is invalid");
-    }
-    throw new IllegalArgumentException("registry envelope string is unterminated");
-  }
-
-  private static int scanValue(String value, int start) {
-    if (start >= value.length()) throw new IllegalArgumentException("registry envelope value is missing");
-    char first = value.charAt(start);
-    if (first == '"') return scanString(value, start);
-    if (first == '{' || first == '[') {
-      char open = first;
-      char close = first == '{' ? '}' : ']';
-      int depth = 0;
-      boolean inString = false;
-      boolean escaped = false;
-      for (int index = start; index < value.length(); index++) {
-        char current = value.charAt(index);
-        if (inString) {
-          if (escaped) escaped = false;
-          else if (current == '\\') escaped = true;
-          else if (current == '"') inString = false;
-          continue;
-        }
-        if (current == '"') inString = true;
-        else if (current == open) depth++;
-        else if (current == close && --depth == 0) return index + 1;
-      }
-      throw new IllegalArgumentException("registry envelope value is unterminated");
-    }
-    int index = start;
-    while (index < value.length() && ",}] \t\r\n".indexOf(value.charAt(index)) < 0) index++;
-    return index == start ? throwValueMissing() : index;
-  }
-
-  private static int throwValueMissing() {
-    throw new IllegalArgumentException("registry envelope value is missing");
-  }
-
-  public record RegistryEnvelope(byte[] rawBytes, String body, String manifestHash) {
-    public RegistryEnvelope {
-      rawBytes = rawBytes == null ? new byte[0] : rawBytes.clone();
+  public record RegistryManifestResponse(byte[] rawManifest, String manifestHash, int statusCode) {
+    public RegistryManifestResponse {
+      rawManifest = rawManifest == null ? new byte[0] : rawManifest.clone();
     }
   }
 

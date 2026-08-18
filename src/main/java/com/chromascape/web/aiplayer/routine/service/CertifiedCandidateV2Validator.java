@@ -11,7 +11,6 @@ import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.PublicKey;
 import java.security.KeyFactory;
@@ -38,6 +37,7 @@ import org.springframework.stereotype.Component;
 public final class CertifiedCandidateV2Validator {
   public static final long MAX_MANIFEST_BYTES = 1L << 20;
   public static final long MAX_ARTIFACT_BYTES = 128L << 20;
+  public static final long MAX_SBOM_BYTES = 8L << 20;
 
   private static final String MANIFEST_SCHEMA = "contracts/certified-candidate-v2.schema.json";
   private final ObjectMapper mapper = new ObjectMapper();
@@ -65,7 +65,7 @@ public final class CertifiedCandidateV2Validator {
     requireSize(manifestBytes, MAX_MANIFEST_BYTES, "MANIFEST_TOO_LARGE");
     requireSize(certificationBytes, CandidateCertificationV1Validator.MAX_BYTES, "CERTIFICATION_TOO_LARGE");
     requireSize(jarBytes, MAX_ARTIFACT_BYTES, "ARTIFACT_TOO_LARGE");
-    requireSize(sbomBytes, MAX_MANIFEST_BYTES, "SBOM_TOO_LARGE");
+    requireSize(sbomBytes, MAX_SBOM_BYTES, "SBOM_TOO_LARGE");
     JsonNode manifest = parse(manifestBytes, "MANIFEST_INVALID");
     JsonNode certification = certificationValidator.validate(certificationBytes);
     validateSchema(manifestSchema, manifest, "MANIFEST_SCHEMA_INVALID");
@@ -89,7 +89,7 @@ public final class CertifiedCandidateV2Validator {
       JsonNode unsignedManifest, byte[] certificationBytes, byte[] jarBytes, byte[] sbomBytes) {
     requireSize(certificationBytes, CandidateCertificationV1Validator.MAX_BYTES, "CERTIFICATION_TOO_LARGE");
     requireSize(jarBytes, MAX_ARTIFACT_BYTES, "ARTIFACT_TOO_LARGE");
-    requireSize(sbomBytes, MAX_MANIFEST_BYTES, "SBOM_TOO_LARGE");
+    requireSize(sbomBytes, MAX_SBOM_BYTES, "SBOM_TOO_LARGE");
     JsonNode certification = certificationValidator.validate(certificationBytes);
     if (unsignedManifest == null || !unsignedManifest.isObject()) fail("MANIFEST_INVALID");
     ObjectNode candidateCopy = (ObjectNode) unsignedManifest.deepCopy();
@@ -152,18 +152,15 @@ public final class CertifiedCandidateV2Validator {
       fail("CERTIFICATION_CLIENT_BUILD_BINDING_INVALID");
     }
     JsonNode identity = manifest.path("identity");
+    if (identity.has("candidate")) {
+      fail("IDENTITY_CANDIDATE_FORBIDDEN");
+    }
     // The duplicated root bindings are intentional: they make a registry response self-contained
     // while the frozen current-slice identity remains the authority.  Never accept a manifest
     // whose source or client identity silently differs from those root fields.
     compare(identity.path("source"), "source_snapshot_id", manifest, "source_snapshot_id");
     compare(identity.path("source"), "source_manifest_hash", manifest, "source_manifest_hash");
     compare(identity.path("client"), "client_build_id", manifest, "base_commit");
-    if (identity.path("candidate").isObject()) {
-      compare(identity.path("candidate"), "candidate_id", manifest.path("candidate"), "candidate_id");
-      compare(identity.path("candidate"), "candidate_hash", manifest.path("candidate"), "candidate_hash");
-      compare(identity.path("candidate"), "certification_hash", manifest.path("candidate"), "certification_hash");
-      compare(identity.path("candidate"), "signature", manifest.path("candidate"), "signature");
-    }
     String modelHash = text(certification, "model_hash");
     if (!modelHash.equals(text(identity.path("model"), "model_hash"))) {
       fail("CERTIFICATION_MODEL_BINDING_INVALID");
@@ -176,27 +173,17 @@ public final class CertifiedCandidateV2Validator {
     }
   }
 
-  /** Strictly validates a response envelope and its returned manifest. */
-  public JsonNode validateRegistryEnvelope(byte[] responseBytes) {
-    JsonNode response = parse(responseBytes, "REGISTRY_RESPONSE_INVALID");
-    if (!response.isObject() || response.size() != 2
-        || !response.has("state") || !response.has("manifest")
-        || !"CERTIFIED_CANDIDATE".equals(text(response, "state"))) {
-      fail("REGISTRY_STATE_INVALID");
-    }
-    JsonNode manifest = response.get("manifest");
-    if (manifest == null) {
-      fail("REGISTRY_MANIFEST_MISSING");
-    }
-    byte[] manifestJson = Sc967CanonicalJson.canonical(manifest).getBytes(StandardCharsets.UTF_8);
-    // This validates schema, duplicate keys/numbers/unicode and candidate derivation. Registry
-    // enrichment is intentionally not accepted by the comparison performed by the workflow.
-    validateManifest(manifestJson);
-    return response;
+  /** Strictly validates the literal manifest bytes returned by the registry. */
+  public JsonNode validateRegistryManifest(byte[] rawManifest) {
+    return validateManifest(rawManifest);
   }
 
   private void validateCandidateIdentity(JsonNode manifest) {
     if (manifest == null || !manifest.isObject()) fail("MANIFEST_INVALID");
+    JsonNode identity = manifest.get("identity");
+    if (identity != null && identity.isObject() && identity.has("candidate")) {
+      fail("IDENTITY_CANDIDATE_FORBIDDEN");
+    }
     validateKeyId(manifest);
     JsonNode candidate = manifest.get("candidate");
     if (candidate == null || !candidate.isObject()) fail("CANDIDATE_MISSING");
@@ -235,15 +222,12 @@ public final class CertifiedCandidateV2Validator {
       fail("CERTIFICATION_HASH_BINDING_INVALID");
     }
     JsonNode identity = manifest.path("identity");
+    if (identity.has("candidate")) {
+      fail("IDENTITY_CANDIDATE_FORBIDDEN");
+    }
     compare(identity.path("source"), "source_snapshot_id", manifest, "source_snapshot_id");
     compare(identity.path("source"), "source_manifest_hash", manifest, "source_manifest_hash");
     compare(identity.path("client"), "client_build_id", manifest, "base_commit");
-    if (identity.path("candidate").isObject()) {
-      compare(identity.path("candidate"), "candidate_id", manifest.path("candidate"), "candidate_id");
-      compare(identity.path("candidate"), "candidate_hash", manifest.path("candidate"), "candidate_hash");
-      compare(identity.path("candidate"), "certification_hash", manifest.path("candidate"), "certification_hash");
-      compare(identity.path("candidate"), "signature", manifest.path("candidate"), "signature");
-    }
     try {
       mapper.treeToValue(identity, CurrentSliceIdentity.class).validate();
     } catch (RuntimeException | IOException e) {

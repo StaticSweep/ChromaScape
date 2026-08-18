@@ -84,7 +84,7 @@ public record CurrentSliceIdentity(
     if (run != null) required(run.runId(), "run.run_id");
     if ("MICRO6_MANAGED".equals(client.clientKind())) {
       if (run == null) fail(CurrentSliceFailureCode.IDENTITY_GROUP_MISSING, "run group is required for Micro6");
-      required(run.attemptId(), "run.attempt_id"); if (run.entryId() == null || run.entryId() < 0) fail(CurrentSliceFailureCode.IDENTITY_FIELD_MISSING, "run.entry_id is required"); required(run.executorInstanceId(), "run.executor_instance_id");
+      required(run.attemptId(), "run.attempt_id"); if (run.entryId() == null || run.entryId() < 1) fail(CurrentSliceFailureCode.IDENTITY_FIELD_MISSING, "run.entry_id must be in 1..2147483647"); required(run.executorInstanceId(), "run.executor_instance_id");
       exact(client.adapterContract(), "micro6-builder/v2", "client.adapter_contract"); exact(client.domain(), "MICRO6", "client.domain");
     } else if ("RUNELITE_CAPTURE".equals(client.clientKind())) {
       if (run != null && (run.attemptId() != null || run.entryId() != null || run.executorInstanceId() != null)) fail(CurrentSliceFailureCode.CLIENT_CAPABILITY_INVALID, "RuneLite capture cannot carry Micro6 executor fields");

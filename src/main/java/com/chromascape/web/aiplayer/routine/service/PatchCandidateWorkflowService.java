@@ -444,30 +444,35 @@ public class PatchCandidateWorkflowService {
       failClosed(id, "CANDIDATE_EVIDENCE_MISSING", "candidate identity was not persisted", HttpStatus.INTERNAL_SERVER_ERROR);
       return response(repository.findByProposalId(id).orElse(entity));
     }
-    CandidateRegistryClient.RegistryEnvelope lookup = null;
+    CandidateRegistryClient.RegistryManifestResponse lookup = null;
     CandidateRegistryClient.ArtifactDownload downloaded = null;
     try {
-      revalidatePersistedBundle(entity);
+      Path bundle = revalidatePersistedBundle(entity);
       lookup = registry.lookupEvidence(entity.getCandidateId(), entity.getManifestFileHash());
       Map<String, Object> localManifest = read(entity.getCandidateManifestJson());
-      verifyRegistryReadback(localManifest, lookup, entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
+      verifyRegistryReadback(Files.readAllBytes(bundle.resolve("manifest.json")), localManifest, lookup,
+          entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
+      if (entity.getRegistryResponseBytes() != null
+          && !java.util.Arrays.equals(entity.getRegistryResponseBytes(), lookup.rawManifest())) {
+        throw new IllegalStateException("REGISTRY_MANIFEST_MISMATCH");
+      }
       downloaded = registry.downloadEvidence(entity.getCandidateId());
       if (!downloaded.sha256().equals(String.valueOf(localManifest.get("jar_sha256")))) {
         throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
       }
       return transitionClaimed(entity, claim, "REGISTERED", Map.of("candidate_id", entity.getCandidateId(),
           "candidate_hash", entity.getCandidateHash(), "reconciled", true,
-          "download_sha256", downloaded.sha256(), "registration", lookup.body(),
-          "registry_manifest_hash", lookup.manifestHash()), evidence(lookup, downloaded));
+          "download_sha256", downloaded.sha256(), "registration", new String(lookup.rawManifest(), java.nio.charset.StandardCharsets.UTF_8),
+          "registry_manifest_hash", lookup.manifestHash()), evidenceForLookup(entity, lookup, downloaded));
     } catch (CandidateRegistryClient.RegistryException e) {
-      if (e.isUncertain()) return transitionClaimed(entity, claim, "REGISTERING_UNCERTAIN", Map.of("failure_code", String.valueOf(e.getMessage())), evidence(lookup, downloaded));
+      if (e.isUncertain()) return transitionClaimed(entity, claim, "REGISTERING_UNCERTAIN", Map.of("failure_code", String.valueOf(e.getMessage())), evidenceForLookup(entity, lookup, downloaded));
       if (e.getMessage() != null && e.getMessage().contains("404")) {
-        transitionClaimed(entity, claim, "REGISTERING", Map.of("failure_code", "REGISTRY_REJECTED_404"), evidence(lookup, downloaded));
+        transitionClaimed(entity, claim, "REGISTERING", Map.of("failure_code", "REGISTRY_REJECTED_404"), evidenceForLookup(entity, lookup, downloaded));
         return repostPersistedCandidate(id);
       }
-      return transitionClaimed(entity, claim, "REJECTED", Map.of("failure_code", String.valueOf(e.getMessage())), evidence(lookup, downloaded));
+      return transitionClaimed(entity, claim, "REJECTED", Map.of("failure_code", String.valueOf(e.getMessage())), evidenceForLookup(entity, lookup, downloaded));
     } catch (Exception e) {
-      return transitionClaimed(entity, claim, "REJECTED", Map.of("failure_code", e.getMessage() == null ? "REGISTRY_READBACK_INVALID" : e.getMessage()), evidence(lookup, downloaded));
+      return transitionClaimed(entity, claim, "REJECTED", Map.of("failure_code", e.getMessage() == null ? "REGISTRY_READBACK_INVALID" : e.getMessage()), evidenceForLookup(entity, lookup, downloaded));
     }
   }
 
@@ -485,7 +490,8 @@ public class PatchCandidateWorkflowService {
       // Missing/corrupt staging evidence is terminal; never silently re-create a candidate.
       return transitionClaimed(entity, claim, "FAILED", Map.of("failure_code", "CANDIDATE_STAGING_MISSING"), null);
     }
-    CandidateRegistryClient.RegistryEnvelope registration = null;
+    CandidateRegistryClient.RegistryManifestResponse registration = null;
+    CandidateRegistryClient.RegistryManifestResponse lookup = null;
     CandidateRegistryClient.ArtifactDownload downloaded = null;
     try {
       Path bundle = revalidatePersistedBundle(entity);
@@ -495,21 +501,25 @@ public class PatchCandidateWorkflowService {
       Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
       Path cert = bundle.resolve("certification.json");
       registration = registry.registerEvidence(manifestPath, jar, sbom, cert);
-      verifyRegistryReadback(manifest, registration, entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
+      verifyRegistryReadback(Files.readAllBytes(manifestPath), manifest, registration,
+          entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
+      lookup = registry.lookupEvidence(entity.getCandidateId(), registration.manifestHash());
+      verifyRegistryReadback(Files.readAllBytes(manifestPath), manifest, lookup,
+          entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
       downloaded = registry.downloadEvidence(entity.getCandidateId());
       if (!downloaded.sha256().equals(String.valueOf(manifest.get("jar_sha256")))) {
         throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
       }
       return transitionClaimed(entity, claim, "REGISTERED", Map.of("candidate_id", entity.getCandidateId(),
           "candidate_hash", entity.getCandidateHash(), "reconciled", true,
-          "download_sha256", downloaded.sha256(), "registration", registration.body(),
-          "registry_manifest_hash", registration.manifestHash()), evidence(registration, downloaded));
+          "download_sha256", downloaded.sha256(), "registration", new String(registration.rawManifest(), java.nio.charset.StandardCharsets.UTF_8),
+          "registry_manifest_hash", registration.manifestHash(), "lookup_manifest", new String(lookup.rawManifest(), java.nio.charset.StandardCharsets.UTF_8)), evidence(registration, lookup, downloaded));
     } catch (CandidateRegistryClient.RegistryException e) {
-      if (e.isUncertain()) return transitionClaimed(entity, claim, "REGISTERING_UNCERTAIN", Map.of("failure_code", String.valueOf(e.getMessage())), evidence(registration, downloaded));
-      if (e.getMessage() != null && e.getMessage().contains("404")) return transitionClaimed(entity, claim, "REGISTERING", Map.of("failure_code", "REGISTRY_REJECTED_404"), evidence(registration, downloaded));
-      return transitionClaimed(entity, claim, "REJECTED", Map.of("failure_code", String.valueOf(e.getMessage())), evidence(registration, downloaded));
+      if (e.isUncertain()) return transitionClaimed(entity, claim, "REGISTERING_UNCERTAIN", Map.of("failure_code", String.valueOf(e.getMessage())), evidence(registration, lookup, downloaded));
+      if (e.getMessage() != null && e.getMessage().contains("404")) return transitionClaimed(entity, claim, "REGISTERING", Map.of("failure_code", "REGISTRY_REJECTED_404"), evidence(registration, lookup, downloaded));
+      return transitionClaimed(entity, claim, "REJECTED", Map.of("failure_code", String.valueOf(e.getMessage())), evidence(registration, lookup, downloaded));
     } catch (Exception e) {
-      return transitionClaimed(entity, claim, "FAILED", Map.of("failure_code", e.getMessage() == null ? "CANDIDATE_RECONCILIATION_FAILED" : String.valueOf(e.getMessage())), evidence(registration, downloaded));
+      return transitionClaimed(entity, claim, "FAILED", Map.of("failure_code", e.getMessage() == null ? "CANDIDATE_RECONCILIATION_FAILED" : String.valueOf(e.getMessage())), evidence(registration, lookup, downloaded));
     }
   }
 
@@ -799,7 +809,8 @@ public class PatchCandidateWorkflowService {
       transitionClaimed(entity, claim, "FAILED", Map.of("failure_code", "CANDIDATE_STAGING_MISSING"), null);
       return;
     }
-    CandidateRegistryClient.RegistryEnvelope registration = null;
+    CandidateRegistryClient.RegistryManifestResponse registration = null;
+    CandidateRegistryClient.RegistryManifestResponse lookup = null;
     CandidateRegistryClient.ArtifactDownload downloaded = null;
     try {
       Path bundle = revalidatePersistedBundle(entity);
@@ -809,20 +820,24 @@ public class PatchCandidateWorkflowService {
       Path sbom = bundle.resolve(String.valueOf(manifest.get("sbom_name")));
       Path cert = bundle.resolve("certification.json");
       registration = registry.registerEvidence(manifestPath, jar, sbom, cert);
-      verifyRegistryReadback(manifest, registration, entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
+      verifyRegistryReadback(Files.readAllBytes(manifestPath), manifest, registration,
+          entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
+      lookup = registry.lookupEvidence(entity.getCandidateId(), registration.manifestHash());
+      verifyRegistryReadback(Files.readAllBytes(manifestPath), manifest, lookup,
+          entity.getCandidateId(), entity.getCandidateHash(), entity.getManifestFileHash());
       downloaded = registry.downloadEvidence(entity.getCandidateId());
       if (!downloaded.sha256().equals(String.valueOf(manifest.get("jar_sha256")))) {
         throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
       }
       transitionClaimed(entity, claim, "REGISTERED", Map.of("candidate_id", entity.getCandidateId(),
-          "candidate_hash", entity.getCandidateHash(), "registration", registration.body(),
-          "download_sha256", downloaded.sha256(), "registry_manifest_hash", registration.manifestHash()), evidence(registration, downloaded));
+          "candidate_hash", entity.getCandidateHash(), "registration", new String(registration.rawManifest(), java.nio.charset.StandardCharsets.UTF_8),
+          "download_sha256", downloaded.sha256(), "registry_manifest_hash", registration.manifestHash(), "lookup_manifest", new String(lookup.rawManifest(), java.nio.charset.StandardCharsets.UTF_8)), evidence(registration, lookup, downloaded));
     } catch (CandidateRegistryClient.RegistryException e) {
       boolean notFound = e.getMessage() != null && e.getMessage().contains("404");
       transitionClaimed(entity, claim, e.isUncertain() ? "REGISTERING_UNCERTAIN" : (notFound ? "REGISTERING" : "REJECTED"),
-          Map.of("failure_code", String.valueOf(e.getMessage())), evidence(registration, downloaded));
+          Map.of("failure_code", String.valueOf(e.getMessage())), evidence(registration, lookup, downloaded));
     } catch (Exception e) {
-      transitionClaimed(entity, claim, "FAILED", Map.of("failure_code", e.getMessage() == null ? "CANDIDATE_REGISTRATION_FAILED" : String.valueOf(e.getMessage())), evidence(registration, downloaded));
+      transitionClaimed(entity, claim, "FAILED", Map.of("failure_code", e.getMessage() == null ? "CANDIDATE_REGISTRATION_FAILED" : String.valueOf(e.getMessage())), evidence(registration, lookup, downloaded));
     }
   }
 
@@ -899,26 +914,27 @@ public class PatchCandidateWorkflowService {
   }
 
   private void verifyRegistryReadback(
+      byte[] stagedManifest,
       Map<String, Object> localManifest,
-      CandidateRegistryClient.RegistryEnvelope registration,
+      CandidateRegistryClient.RegistryManifestResponse registration,
       String candidateId,
       String candidateHash,
       String expectedManifestFileHash) {
     try {
-      if (registration == null || registration.rawBytes() == null) {
+      if (stagedManifest == null || registration == null || registration.rawManifest() == null) {
         throw new IllegalStateException("REGISTRY_READBACK_INVALID");
+      }
+      if (!java.util.Arrays.equals(stagedManifest, registration.rawManifest())) {
+        throw new IllegalStateException("REGISTRY_MANIFEST_MISMATCH");
       }
       if (expectedManifestFileHash == null
           || !expectedManifestFileHash.equals(registration.manifestHash())) {
         throw new IllegalStateException("REGISTRY_MANIFEST_HASH_HEADER_MISMATCH");
       }
-      if (!registration.manifestHash().equals(
-          CandidateRegistryClient.hash(CandidateRegistryClient.exactManifestBytes(registration.rawBytes())))) {
+      if (!registration.manifestHash().equals(CandidateRegistryClient.hash(registration.rawManifest()))) {
         throw new IllegalStateException("REGISTRY_MANIFEST_HASH_HEADER_MISMATCH");
       }
-      JsonNode response = candidateValidator.validateRegistryEnvelope(registration.rawBytes());
-      if (!"CERTIFIED_CANDIDATE".equals(response.path("state").asText())) throw new IllegalStateException("REGISTRY_STATE_INVALID");
-      JsonNode returned = response.path("manifest");
+      JsonNode returned = candidateValidator.validateRegistryManifest(registration.rawManifest());
       if (!candidateId.equals(returned.path("candidate").path("candidate_id").asText()) || !candidateHash.equals(returned.path("candidate").path("candidate_hash").asText())) throw new IllegalStateException("REGISTRY_IDENTITY_MISMATCH");
       if (!Sc967CanonicalJson.canonical(mapper.valueToTree(localManifest)).equals(Sc967CanonicalJson.canonical(returned))) throw new IllegalStateException("REGISTRY_MANIFEST_MISMATCH");
     } catch (CandidateRegistryClient.RegistryException e) { throw e; }
@@ -926,15 +942,49 @@ public class PatchCandidateWorkflowService {
   }
 
   private PatchCandidateRegistrationDispatcher.RegistryEvidence evidence(
-      CandidateRegistryClient.RegistryEnvelope response,
+      CandidateRegistryClient.RegistryManifestResponse response,
       CandidateRegistryClient.ArtifactDownload download) {
     if (response == null && download == null) return null;
     return new PatchCandidateRegistrationDispatcher.RegistryEvidence(
-        response == null ? null : response.rawBytes(),
-        response == null ? null : response.body(),
+        response == null ? null : response.rawManifest(),
+        response == null ? null : new String(response.rawManifest(), java.nio.charset.StandardCharsets.UTF_8),
         response == null ? null : response.manifestHash(),
         download == null ? null : download.sha256(),
         Instant.now());
+  }
+
+  private PatchCandidateRegistrationDispatcher.RegistryEvidence evidence(
+      CandidateRegistryClient.RegistryManifestResponse registration,
+      CandidateRegistryClient.RegistryManifestResponse lookup,
+      CandidateRegistryClient.ArtifactDownload download) {
+    if (registration == null && lookup == null && download == null) return null;
+    CandidateRegistryClient.RegistryManifestResponse primary = registration == null ? lookup : registration;
+    return new PatchCandidateRegistrationDispatcher.RegistryEvidence(
+        primary == null ? null : primary.rawManifest(),
+        primary == null ? null : new String(primary.rawManifest(), java.nio.charset.StandardCharsets.UTF_8),
+        primary == null ? null : primary.manifestHash(),
+        download == null ? null : download.sha256(),
+        Instant.now(),
+        lookup == null ? null : lookup.rawManifest(),
+        lookup == null ? null : lookup.manifestHash());
+  }
+
+  private PatchCandidateRegistrationDispatcher.RegistryEvidence evidenceForLookup(
+      PatchCandidateRun entity, CandidateRegistryClient.RegistryManifestResponse lookup,
+      CandidateRegistryClient.ArtifactDownload download) {
+    if (lookup == null && download == null && entity.getRegistryResponseBytes() == null) return null;
+    byte[] registrationBytes = entity.getRegistryResponseBytes();
+    String registrationHash = entity.getRegistryManifestHash();
+    if (registrationBytes == null) registrationBytes = lookup == null ? null : lookup.rawManifest();
+    if (registrationHash == null) registrationHash = lookup == null ? null : lookup.manifestHash();
+    return new PatchCandidateRegistrationDispatcher.RegistryEvidence(
+        registrationBytes,
+        registrationBytes == null ? null : new String(registrationBytes, java.nio.charset.StandardCharsets.UTF_8),
+        registrationHash,
+        download == null ? null : download.sha256(),
+        Instant.now(),
+        lookup == null ? null : lookup.rawManifest(),
+        lookup == null ? null : lookup.manifestHash());
   }
 
   private boolean deleteBundle(Path bundle) {

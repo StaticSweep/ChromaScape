@@ -54,6 +54,8 @@ public class PatchCandidateRun {
   @Column(name = "registry_response_hash", length = 71) private String registryResponseHash;
   @Lob @Column(name = "registry_response_bytes", columnDefinition = "BYTEA") private byte[] registryResponseBytes;
   @Column(name = "registry_manifest_hash", length = 71) private String registryManifestHash;
+  @Lob @Column(name = "registry_lookup_bytes", columnDefinition = "BYTEA") private byte[] registryLookupBytes;
+  @Column(name = "registry_lookup_hash", length = 71) private String registryLookupHash;
   @Column(name = "registry_download_hash", length = 71) private String registryDownloadHash;
   @Column(name = "registry_verified_at") private Instant registryVerifiedAt;
   @Column(nullable = false) private Instant updatedAt = Instant.now();
@@ -151,6 +153,10 @@ public class PatchCandidateRun {
   public void setRegistryResponseBytes(byte[] value) { registryResponseBytes = value == null ? null : value.clone(); }
   public String getRegistryManifestHash() { return registryManifestHash; }
   public void setRegistryManifestHash(String value) { registryManifestHash = value; }
+  public byte[] getRegistryLookupBytes() { return registryLookupBytes == null ? null : registryLookupBytes.clone(); }
+  public void setRegistryLookupBytes(byte[] value) { registryLookupBytes = value == null ? null : value.clone(); }
+  public String getRegistryLookupHash() { return registryLookupHash; }
+  public void setRegistryLookupHash(String value) { registryLookupHash = value; }
   public String getRegistryDownloadHash() { return registryDownloadHash; }
   public void setRegistryDownloadHash(String value) { registryDownloadHash = value; }
   public Instant getRegistryVerifiedAt() { return registryVerifiedAt; }

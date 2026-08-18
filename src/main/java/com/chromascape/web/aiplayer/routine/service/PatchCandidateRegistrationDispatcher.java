@@ -167,11 +167,17 @@ public class PatchCandidateRegistrationDispatcher {
         || candidate.getCertificationDocumentHash() == null
         || candidate.getRegistryResponseHash() == null
         || candidate.getRegistryManifestHash() == null
+        || candidate.getRegistryLookupHash() == null
         || candidate.getRegistryDownloadHash() == null) {
       throw new IllegalStateException("CANDIDATE_REGISTRATION_EVIDENCE_MISSING");
     }
     if (!candidate.getManifestFileHash().equals(candidate.getRegistryManifestHash())) {
       throw new IllegalStateException("REGISTRY_MANIFEST_HASH_HEADER_MISMATCH");
+    }
+    if (!candidate.getManifestFileHash().equals(candidate.getRegistryLookupHash())
+        || candidate.getRegistryResponseBytes() == null || candidate.getRegistryLookupBytes() == null
+        || !java.util.Arrays.equals(candidate.getRegistryResponseBytes(), candidate.getRegistryLookupBytes())) {
+      throw new IllegalStateException("REGISTRY_LOOKUP_MANIFEST_MISMATCH");
     }
     if (!candidate.getJarSha256().equals(candidate.getRegistryDownloadHash())) {
       throw new IllegalStateException("REGISTRY_ARTIFACT_HASH_MISMATCH");
@@ -210,6 +216,11 @@ public class PatchCandidateRegistrationDispatcher {
     }
     if (evidence.responseBody() != null) candidate.setRegistryResponseJson(evidence.responseBody());
     if (evidence.manifestHash() != null) candidate.setRegistryManifestHash(evidence.manifestHash());
+    if (evidence.lookupResponseBytes() != null) {
+      candidate.setRegistryLookupBytes(evidence.lookupResponseBytes());
+      candidate.setRegistryLookupHash(evidence.lookupManifestHash() == null
+          ? CandidateRegistryClient.hash(evidence.lookupResponseBytes()) : evidence.lookupManifestHash());
+    }
     if (evidence.downloadHash() != null) candidate.setRegistryDownloadHash(evidence.downloadHash());
     candidate.setRegistryVerifiedAt(evidence.verifiedAt() == null ? Instant.now() : evidence.verifiedAt());
   }
@@ -232,9 +243,16 @@ public class PatchCandidateRegistrationDispatcher {
       String responseBody,
       String manifestHash,
       String downloadHash,
-      Instant verifiedAt) {
+      Instant verifiedAt,
+      byte[] lookupResponseBytes,
+      String lookupManifestHash) {
+    public RegistryEvidence(byte[] rawResponseBytes, String responseBody, String manifestHash,
+        String downloadHash, Instant verifiedAt) {
+      this(rawResponseBytes, responseBody, manifestHash, downloadHash, verifiedAt, rawResponseBytes, manifestHash);
+    }
     public RegistryEvidence {
       rawResponseBytes = rawResponseBytes == null ? null : rawResponseBytes.clone();
+      lookupResponseBytes = lookupResponseBytes == null ? null : lookupResponseBytes.clone();
     }
   }
 }
