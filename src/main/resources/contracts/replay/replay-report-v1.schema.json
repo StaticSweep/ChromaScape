@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/replay-report-v1.schema.json",
+  "title": "Replay Report",
+  "description": "Immutable final report for a replay run.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "reportVersion": { "type": "integer", "const": 1 },
+    "runId": { "type": "string" },
+    "attemptId": { "type": "string" },
+    "mode": {
+      "type": "string",
+      "enum": ["OBSERVED_PLAYBACK", "POLICY_REPLAY", "CAUSAL_SIMULATION"]
+    },
+    "manifestChecksum": { "type": "string" },
+    "runtimeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "xrspsAdapterVersion": { "type": "string" },
+        "xrspsBuildCommit": { "type": "string" },
+        "cacheRevision": { "type": "string" },
+        "contentRevision": { "type": "string" }
+      },
+      "required": ["xrspsAdapterVersion", "xrspsBuildCommit", "cacheRevision", "contentRevision"]
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "terminalAt": { "type": "string", "format": "date-time" },
+    "outcome": {
+      "type": "string",
+      "enum": ["PASSED", "FAILED", "CANCELLED", "TIMED_OUT", "INFRASTRUCTURE_FAILURE"]
+    },
+    "executedActionCount": { "type": "integer", "minimum": 0 },
+    "checkpointCount": { "type": "integer", "minimum": 0 },
+    "firstHardMismatch": { "$ref": "replay-mismatch-v1.schema.json" },
+    "mismatchTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hard": { "type": "integer", "minimum": 0 },
+        "soft": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["hard", "soft", "info"]
+    },
+    "finalStateHash": { "type": "string" },
+    "finalChainHash": { "type": "string" },
+    "artifactRefs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "terminalReason": { "type": "string" },
+    "controlAllowed": { "type": "boolean", "const": false },
+    "reportChecksum": { "type": "string" }
+  },
+  "required": [
+    "reportVersion",
+    "runId",
+    "attemptId",
+    "mode",
+    "manifestChecksum",
+    "runtimeIdentity",
+    "outcome",
+    "executedActionCount",
+    "mismatchTotals",
+    "controlAllowed",
+    "reportChecksum"
+  ]
+}

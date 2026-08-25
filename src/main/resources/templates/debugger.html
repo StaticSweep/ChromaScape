@@ -10,7 +10,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
     integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPgv6ud+Mvd" crossorigin="anonymous" />
   <link rel="stylesheet" href="/css/style.css" />
-  <link rel="stylesheet" href="/css/debugger.css?v=11" />
+  <link rel="stylesheet" href="/css/debugger.css?v=12" />
   <link rel="stylesheet" href="/css/ai-routine.css?v=1" />
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
@@ -1028,10 +1028,94 @@
             <div class="text-muted fst-italic">Scanning for anomalies...</div>
           </div>
         </div>
+        <div class="glass-panel" id="xrspsReplayWorkspace">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0"><i class="bi bi-cpu me-2"></i>xRSPS Replay Workspace</h5>
+            <span class="shadow-feature-badge on" id="replay-mode-selector">
+              <label class="form-label small mb-0 me-1">Mode</label>
+              <select id="replayModeSelect" class="form-select form-select-sm d-inline-block w-auto">
+                <option value="OBSERVED_PLAYBACK">Observed Playback</option>
+                <option value="POLICY_REPLAY">Policy Replay</option>
+                <option value="CAUSAL_SIMULATION" selected>Causal Simulation</option>
+              </select>
+            </span>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-lg-5">
+              <h6>Simulation Catalog</h6>
+              <div class="table-responsive">
+                <table class="table table-dark table-hover table-sm mb-2">
+                  <thead>
+                    <tr><th></th><th>Recording ID</th><th>Account</th><th>Start</th></tr>
+                  </thead>
+                  <tbody id="replay-recording-list">
+                    <tr><td colspan="4" class="text-center">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="col-lg-7">
+              <div id="replay-capability-badge" class="mb-2"></div>
+              <div id="replay-preflight-panel"></div>
+              <div id="replay-compile-panel"></div>
+              <div id="replay-run-panel"></div>
+            </div>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-lg-6"><div id="replay-events-panel"></div></div>
+            <div class="col-lg-6"><div id="replay-report-panel"></div></div>
+          </div>
+        </div>
         <div class="fishing-shadow-panel glass-panel">
           <h5><i class="bi bi-fishing me-2"></i>Fishing Shadow Agent</h5>
           <div id="fishingShadowContent" class="fishing-shadow-content">
             <div class="text-muted fst-italic">Loading shadow agent...</div>
+          </div>
+        </div>
+        <div class="fishing-recording-panel glass-panel">
+          <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <h5 class="mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>Fishing Recording Lab</h5>
+            <span class="shadow-feature-badge on">READ-ONLY &middot; no game control</span>
+          </div>
+          <div id="fishingRecordingLab" class="fishing-recording-lab">
+            <div class="recording-lab-row">
+              <span class="shadow-counter">Current: <strong id="fishingLabCurrentRecording">select a replay</strong></span>
+              <div class="input-group input-group-sm recording-lab-range">
+                <span class="input-group-text">Start tick</span>
+                <input id="fishingLabStartTick" type="number" min="0" class="form-control" placeholder="full" />
+                <button id="fishingLabMarkStart" class="btn btn-outline-secondary" type="button">Mark</button>
+              </div>
+              <div class="input-group input-group-sm recording-lab-range">
+                <span class="input-group-text">End tick</span>
+                <input id="fishingLabEndTick" type="number" min="0" class="form-control" placeholder="full" />
+                <button id="fishingLabMarkEnd" class="btn btn-outline-secondary" type="button">Mark</button>
+              </div>
+              <button id="fishingLabClearRange" class="btn btn-sm btn-outline-secondary" type="button">Full recording</button>
+              <button id="fishingLabPreflight" class="btn btn-sm btn-primary" type="button">Preflight current</button>
+              <button id="fishingLabArchive" class="btn btn-sm btn-outline-warning" type="button">Archive current</button>
+              <label class="form-check form-switch mb-0">
+                <input id="fishingLabShowArchived" class="form-check-input" type="checkbox" />
+                <span class="form-check-label">Show archived</span>
+              </label>
+            </div>
+            <div class="recording-lab-row">
+              <div class="input-group input-group-sm recording-lab-id">
+                <span class="input-group-text">Training</span>
+                <input id="fishingLabTrainingId" class="form-control font-monospace" placeholder="recording_..." />
+                <button id="fishingLabUseTraining" class="btn btn-outline-secondary" type="button">Use current</button>
+                <button id="fishingLabTrain" class="btn btn-outline-success" type="button">Train</button>
+              </div>
+              <div class="input-group input-group-sm recording-lab-id">
+                <span class="input-group-text">Held-out</span>
+                <input id="fishingLabTestId" class="form-control font-monospace" placeholder="recording_..." />
+                <button id="fishingLabUseTest" class="btn btn-outline-secondary" type="button">Use current</button>
+                <button id="fishingLabReplay" class="btn btn-outline-info" type="button">Run replay</button>
+              </div>
+              <span class="shadow-counter">Model: <strong id="fishingLabModelId">--</strong></span>
+            </div>
+            <div id="fishingLabResult" class="recording-lab-result text-muted">
+              Select a finalized replay, optionally mark an inclusive tick range, then run preflight.
+            </div>
           </div>
         </div>
       </section>
@@ -1106,6 +1190,7 @@
   </div>
 
   <script src="/js/fishing-shadow-core.js?v=1"></script>
+  <script src="/js/debugger-session-sync-core.js?v=1"></script>
   <section id="ai-routine-panel" aria-label="AI Routine read-only debugger">
     <h2>AI Routine · capture / graph / replay / shadow</h2>
     <div class="ai-routine-grid">
@@ -1156,7 +1241,8 @@
     <button type="button" data-ai-candidate-reconcile>Reconcile candidate registration</button>
     <pre data-ai-routine-output aria-live="polite"></pre>
   </section>
-  <script src="/js/debugger.js?v=15"></script>
+  <script src="/js/debugger.js?v=16"></script>
+  <script src="/js/replay-debugger.js?v=2"></script>
   <script src="/js/ai-routine-state.js?v=1"></script>
   <script src="/js/ai-routine.js?v=3"></script>
   <script src="/js/patchloop.js?v=2"></script>

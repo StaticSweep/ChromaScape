@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/kernel-event-v1.schema.json",
+  "title": "Kernel Event",
+  "description": "A single deterministic event emitted by the replay kernel during execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "eventVersion": { "type": "integer", "const": 1 },
+    "ordinal": { "type": "integer", "minimum": 0 },
+    "tick": { "type": "integer", "minimum": 0 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "eventType": { "type": "string" },
+    "category": {
+      "type": "string",
+      "enum": ["LIFECYCLE", "ACTION", "GAME", "OBSERVATION", "TRACE", "DIAGNOSTIC"]
+    },
+    "payload": { "type": "object" }
+  },
+  "required": ["eventVersion", "ordinal", "tick", "sequence", "eventType", "category"]
+}

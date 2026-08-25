@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/capability-manifest-v1.schema.json",
+  "title": "Replay Capability Manifest",
+  "description": "Describes the current replay capability of the ChromaScape replay subsystem.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "controlAllowed": {
+      "type": "boolean",
+      "const": false
+    },
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "observedPlayback": { "type": "boolean" },
+        "policyReplay": { "type": "boolean" },
+        "causalSimulation": { "type": "boolean" }
+      },
+      "required": ["observedPlayback", "policyReplay", "causalSimulation"]
+    },
+    "scenarioSchemaVersions": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "semanticActionVersions": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "snapshotVersions": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "projectionVersions": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "hashVersions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "xrsps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapterVersion": { "type": "string" },
+        "buildCommit": { "type": "string" },
+        "cacheRevision": { "type": "string" },
+        "contentRevision": { "type": "string" }
+      },
+      "required": ["adapterVersion", "buildCommit", "cacheRevision", "contentRevision"]
+    },
+    "openRuneAvailable": {
+      "type": "boolean",
+      "const": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "controlAllowed",
+    "modes",
+    "scenarioSchemaVersions",
+    "semanticActionVersions",
+    "snapshotVersions",
+    "projectionVersions",
+    "hashVersions",
+    "xrsps",
+    "openRuneAvailable"
+  ]
+}

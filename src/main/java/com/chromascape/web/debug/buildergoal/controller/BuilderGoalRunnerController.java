@@ -3,11 +3,15 @@ package com.chromascape.web.debug.buildergoal.controller;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizer;
+import com.chromascape.web.debug.buildergoal.service.BuilderGoalStartException;
 import com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/debug/builder-goals")
 public class BuilderGoalRunnerController {
+
+  private static final Logger logger = LoggerFactory.getLogger(BuilderGoalRunnerController.class);
 
   private final BuilderGoalRunnerService builderGoalRunnerService;
   private final BuilderGoalLauncherControlService launcherControlService;
@@ -261,14 +267,47 @@ public class BuilderGoalRunnerController {
       return ResponseEntity.ok(
           builderGoalRunnerService.startRun(
               builderPayload, accountId, null, null, null, launcherMachineUuid, world, provenance));
+    } catch (BuilderGoalStartException e) {
+      return ResponseEntity.status(e.getStatus()).body(e.toResponse());
     } catch (IllegalArgumentException e) {
       return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (IllegalStateException e) {
       return ResponseEntity.status(HttpStatus.CONFLICT)
           .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to start builder goal run", "details", sanitizeFailure(e)));
+      String correlationId = "buildergoal_" + UUID.randomUUID().toString().substring(0, 12);
+      logger.error(
+          "Builder Goal start failed: correlationId={}, type={}, detail={}",
+          correlationId,
+          e.getClass().getName(),
+          sanitizeFailure(e));
+      try {
+        String accountId = textValue(payload != null ? payload.path("accountId") : null);
+        String launcherMachineUuid =
+            textValue(payload != null ? payload.path("launcherMachineUuid") : null);
+        Integer world = intValue(payload != null ? payload.path("world") : null);
+        BuilderGoalStartException recorded =
+            builderGoalRunnerService.recordStartFailure(
+                payload, accountId, launcherMachineUuid, world, e, correlationId);
+        return ResponseEntity.status(recorded.getStatus()).body(recorded.toResponse());
+      } catch (Exception persistenceFailure) {
+        logger.error(
+            "Builder Goal start failure could not be persisted: correlationId={}, type={}, detail={}",
+            correlationId,
+            persistenceFailure.getClass().getName(),
+            sanitizeFailure(persistenceFailure));
+        BuilderGoalStartException fallback =
+            new BuilderGoalStartException(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "INTERNAL_START_FAILURE",
+                "PREPARING",
+                "Unexpected Builder Goal start failure",
+                null,
+                null,
+                correlationId,
+                e);
+        return ResponseEntity.status(fallback.getStatus()).body(fallback.toResponse());
+      }
     }
   }
 
@@ -666,7 +705,12 @@ public class BuilderGoalRunnerController {
    * leak.
    */
   private String sanitizeFailure(Throwable failure) {
-    String detail = launcherControlService.describeSanitizedFailure(failure);
+    String detail;
+    try {
+      detail = launcherControlService.describeSanitizedFailure(failure);
+    } catch (RuntimeException sanitizerFailure) {
+      detail = null;
+    }
     if (detail == null || detail.isBlank()) {
       if (failure == null) {
         return "Unexpected failure";
@@ -678,6 +722,9 @@ public class BuilderGoalRunnerController {
 
   /** Sanitizes a message before it is exposed in an HTTP error body. */
   private String sanitizeMessage(String message) {
+    if (message == null || message.isBlank()) {
+      return "Unexpected failure";
+    }
     return BuilderGoalSensitiveTextSanitizer.sanitize(message);
   }
 

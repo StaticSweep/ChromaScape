@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/kernel-snapshot-v1.schema.json",
+  "title": "Kernel Snapshot",
+  "description": "Complete deterministic kernel state snapshot for save/restore.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "snapshotVersion": { "type": "integer", "const": 1 },
+    "runtimeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapterVersion": { "type": "string" },
+        "buildCommit": { "type": "string" },
+        "cacheRevision": { "type": "string" },
+        "contentRevision": { "type": "string" }
+      },
+      "required": ["adapterVersion", "buildCommit", "cacheRevision", "contentRevision"]
+    },
+    "tick": { "type": "integer", "minimum": 0 },
+    "clock": { "type": "object" },
+    "random": { "type": "object" },
+    "ids": { "type": "object" },
+    "world": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "worldId": { "type": "integer" },
+        "regions": { "type": "array" },
+        "collisionRevision": { "type": "string" }
+      },
+      "required": ["worldId"]
+    },
+    "players": { "type": "array" },
+    "npcs": { "type": "array" },
+    "objects": { "type": "array" },
+    "groundItems": { "type": "array" },
+    "scheduler": { "type": "object" },
+    "timers": { "type": "array" },
+    "pendingActions": { "type": "array" },
+    "pendingMovement": { "type": "array" },
+    "pendingInteractions": { "type": "array" },
+    "contentState": { "type": "array" },
+    "scriptState": { "type": "array" },
+    "eventQueue": { "type": "object" },
+    "canonicalStateHash": { "type": "string" },
+    "checksum": { "type": "string" }
+  },
+  "required": [
+    "snapshotVersion",
+    "runtimeIdentity",
+    "tick",
+    "clock",
+    "random",
+    "ids",
+    "world",
+    "players",
+    "npcs",
+    "objects",
+    "groundItems",
+    "scheduler",
+    "canonicalStateHash",
+    "checksum"
+  ]
+}

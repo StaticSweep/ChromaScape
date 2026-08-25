@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/recording-curation-v1.schema.json",
+  "title": "Recording Curation",
+  "description": "Operator-supplied curation filling gaps in recorded world state.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "curationVersion": { "type": "integer", "const": 1 },
+    "recordingId": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
+    "state": {
+      "type": "string",
+      "enum": ["DRAFT", "PUBLISHED", "RETIRED"]
+    },
+    "role": {
+      "type": "string",
+      "enum": ["TRAIN", "VALIDATION", "HELD_OUT"]
+    },
+    "tickRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["start", "end"]
+    },
+    "initialStateOverrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "world": { "type": "integer" },
+        "npcs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "stableId": { "type": "string" },
+              "npcId": { "type": "integer" },
+              "position": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "x": { "type": "integer" },
+                  "y": { "type": "integer" },
+                  "plane": { "type": "integer" }
+                },
+                "required": ["x", "y", "plane"]
+              },
+              "spawnDirection": { "type": "string" }
+            },
+            "required": ["stableId", "npcId", "position"]
+          }
+        }
+      }
+    },
+    "actionLabels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tick": { "type": "integer", "minimum": 0 },
+          "sequence": { "type": "integer", "minimum": 0 },
+          "status": {
+            "type": "string",
+            "enum": ["ACCEPTED_LABEL", "IGNORED", "UNSUPPORTED"]
+          },
+          "semanticAction": { "$ref": "semantic-action-v1.schema.json" }
+        },
+        "required": ["tick", "sequence", "status"]
+      }
+    }
+  },
+  "required": ["curationVersion", "recordingId", "version", "state", "role"]
+}

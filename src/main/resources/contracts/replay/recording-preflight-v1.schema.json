@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/recording-preflight-v1.schema.json",
+  "title": "Recording Preflight Response",
+  "description": "Eligibility assessment for a recording across all three replay modes.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "recordingId": { "type": "string" },
+    "debugSessionId": { "type": "string" },
+    "playbackEligible": { "type": "boolean" },
+    "policyReplayEligible": { "type": "boolean" },
+    "simulationEligible": { "type": "boolean" },
+    "blockingReasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["OBSERVED_PLAYBACK", "POLICY_REPLAY", "CAUSAL_SIMULATION"]
+          },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "remediation": { "type": "string" }
+        },
+        "required": ["mode", "code", "message"]
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "recordingId",
+    "debugSessionId",
+    "playbackEligible",
+    "policyReplayEligible",
+    "simulationEligible",
+    "blockingReasons"
+  ]
+}

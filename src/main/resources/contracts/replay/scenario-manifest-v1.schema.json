@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/scenario-manifest-v1.schema.json",
+  "title": "Scenario Manifest",
+  "description": "Immutable deterministic scenario manifest compiled from a recording and curation.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "manifestVersion": { "type": "integer", "const": 1 },
+    "manifestId": { "type": "string" },
+    "recording": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recordingId": { "type": "string" },
+        "recordingChecksum": { "type": "string" },
+        "debugSessionId": { "type": "string" },
+        "debugSessionChecksum": { "type": "string" },
+        "startTick": { "type": "integer", "minimum": 0 },
+        "endTick": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["recordingId", "recordingChecksum", "debugSessionId", "debugSessionChecksum", "startTick", "endTick"]
+    },
+    "curation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "curationId": { "type": "string" },
+        "version": { "type": "integer", "minimum": 1 },
+        "checksum": { "type": "string" }
+      },
+      "required": ["curationId", "version", "checksum"]
+    },
+    "compiler": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string" },
+        "schemaVersion": { "type": "integer" }
+      },
+      "required": ["version", "schemaVersion"]
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "xrspsAdapterVersion": { "type": "string" },
+        "xrspsBuildCommit": { "type": "string" },
+        "cacheRevision": { "type": "string" },
+        "contentRevision": { "type": "string" }
+      },
+      "required": ["xrspsAdapterVersion", "xrspsBuildCommit", "cacheRevision", "contentRevision"]
+    },
+    "determinism": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "seed": { "type": "string" },
+        "clockOrigin": { "type": "string", "format": "date-time" },
+        "tickDurationMs": { "type": "integer", "const": 600 },
+        "idNamespace": { "type": "string" }
+      },
+      "required": ["seed", "clockOrigin", "tickDurationMs", "idNamespace"]
+    },
+    "initialState": { "type": "object" },
+    "actions": {
+      "type": "array",
+      "items": { "$ref": "semantic-action-v1.schema.json" }
+    },
+    "expectations": { "type": "array", "items": { "type": "object" } },
+    "tolerances": { "type": "object" },
+    "controlAllowed": { "type": "boolean", "const": false },
+    "manifestChecksum": { "type": "string" }
+  },
+  "required": [
+    "manifestVersion",
+    "manifestId",
+    "recording",
+    "curation",
+    "compiler",
+    "runtime",
+    "determinism",
+    "initialState",
+    "actions",
+    "controlAllowed",
+    "manifestChecksum"
+  ]
+}
