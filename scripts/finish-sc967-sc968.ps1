@@ -90,6 +90,50 @@ function Set-Sc968Maven {
   Write-Output "Using Maven from $mavenPath"
 }
 
+function Set-Sc968Go {
+  $goCommand = Get-Command go.exe -ErrorAction SilentlyContinue
+  $goPath = if ($null -ne $goCommand) { $goCommand.Source } else { $null }
+  $goVersion = '1.24.13'
+  $archiveHash = '40b16bc8f00540a2cb02dff4de72b73e966fdd8d65f95e33d8e4080b48a2459a'
+  $toolRoot = Join-Path 'C:\w\tools' ("go$goVersion")
+  $portableGo = Join-Path $toolRoot 'go\bin\go.exe'
+  if ([string]::IsNullOrWhiteSpace($goPath) -and (Test-Path -LiteralPath $portableGo -PathType Leaf)) {
+    $goPath = $portableGo
+  }
+  if ([string]::IsNullOrWhiteSpace($goPath)) {
+    $downloadRoot = 'C:\w\downloads'
+    $archive = Join-Path $downloadRoot ("go$goVersion.windows-amd64.zip")
+    New-Item -ItemType Directory -Force -Path $downloadRoot, (Split-Path -Parent $toolRoot) | Out-Null
+    if (Test-Path -LiteralPath $archive -PathType Leaf) {
+      $existingHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+      if ($existingHash -ne $archiveHash) { Remove-Item -LiteralPath $archive -Force }
+    }
+    if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
+      Write-Output "Downloading portable Go $goVersion from go.dev"
+      Invoke-WebRequest -UseBasicParsing -Uri ("https://go.dev/dl/go$goVersion.windows-amd64.zip") -OutFile $archive
+    }
+    $downloadHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($downloadHash -ne $archiveHash) { throw "Portable Go archive checksum mismatch: $downloadHash" }
+    $extractRoot = $toolRoot + '-installing-' + [Guid]::NewGuid().ToString('N')
+    try {
+      Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
+      if (-not (Test-Path -LiteralPath (Join-Path $extractRoot 'go\bin\go.exe') -PathType Leaf)) {
+        throw 'Portable Go archive did not contain go\bin\go.exe'
+      }
+      Move-Item -LiteralPath $extractRoot -Destination $toolRoot
+    } finally {
+      if (Test-Path -LiteralPath $extractRoot) {
+        Remove-Item -LiteralPath $extractRoot -Recurse -Force -ErrorAction SilentlyContinue
+      }
+    }
+    $goPath = $portableGo
+  }
+  $goBin = Split-Path -Parent $goPath
+  $env:Path = $goBin + ';' + $env:Path
+  $env:SC968_GO_COMMAND = $goPath
+  Write-Output "Using Go from $goPath"
+}
+
 function New-AcceptanceWorktree([string] $SourceRoot, [string] $Destination) {
   $revision = (& git -C $SourceRoot rev-parse HEAD 2>$null).Trim()
   if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($revision)) {
@@ -174,6 +218,7 @@ foreach ($repository in ([ordered]@{
 
 Set-Sc968Java17
 Set-Sc968Maven
+Set-Sc968Go
 
 if ($PreflightOnly) {
   Write-Output 'SC-967/SC-968 one-command preflight PASS'

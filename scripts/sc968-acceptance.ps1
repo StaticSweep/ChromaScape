@@ -36,6 +36,10 @@ try {
   if ([string]::IsNullOrWhiteSpace($mavenCommand) -or -not (Test-Path -LiteralPath $mavenCommand -PathType Leaf)) {
     throw 'SC968_MAVEN_COMMAND must identify the native Maven executable'
   }
+  $goCommand = $env:SC968_GO_COMMAND
+  if ([string]::IsNullOrWhiteSpace($goCommand) -or -not (Test-Path -LiteralPath $goCommand -PathType Leaf)) {
+    throw 'SC968_GO_COMMAND must identify the native Go executable'
+  }
 
   $roots = [ordered]@{ contracts=$ContractsRoot; leeuwbotapi=$LeeuwBotRoot; chromascape=$ChromaScapeRoot; micro6=$Micro6Root; runelite=$RuneLiteRoot }
   $repositories = [ordered]@{}
@@ -57,8 +61,8 @@ try {
   $null = Invoke-Gate 'contracts_tests' $contractModule {
     & $mavenCommand -q $mavenRepoArgument clean install
   } (Join-Path $logs 'contracts-tests.log') $gates
-  $null = Invoke-Gate 'leeuwbot_go_vet' (Join-Path $LeeuwBotRoot 'plugin-service') { go vet ./... } (Join-Path $logs 'leeuwbot-go-vet.log') $gates
-  $null = Invoke-Gate 'leeuwbot_go_test' (Join-Path $LeeuwBotRoot 'plugin-service') { go test ./... } (Join-Path $logs 'leeuwbot-go-test.log') $gates
+  $null = Invoke-Gate 'leeuwbot_go_vet' (Join-Path $LeeuwBotRoot 'plugin-service') { & $goCommand vet ./... } (Join-Path $logs 'leeuwbot-go-vet.log') $gates
+  $null = Invoke-Gate 'leeuwbot_go_test' (Join-Path $LeeuwBotRoot 'plugin-service') { & $goCommand test ./... } (Join-Path $logs 'leeuwbot-go-test.log') $gates
   $null = Invoke-Gate 'chromascape_tests' $ChromaScapeRoot { .\gradlew.bat --no-daemon --no-watch-fs test } (Join-Path $logs 'chromascape-test.log') $gates
   $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' } (Join-Path $logs 'micro6-test.log') $gates
   $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:shadowJar } (Join-Path $logs 'micro6-shadowjar.log') $gates
