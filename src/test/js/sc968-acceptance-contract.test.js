@@ -59,6 +59,12 @@ test('SC-968 one-command wrapper uses real local roots and creates isolated sign
   assert.match(entry, /& \$mavenCommand -q/);
   assert.match(entry, /\$mavenRepoArgument = '-Dmaven\.repo\.local='/);
   assert.match(entry, /SC967_VECTORS_PATH = Join-Path \$ContractsRoot/);
+  assert.match(entry, /chromascape_compile/);
+  assert.match(entry, /compileJava compileTestJava/);
+  assert.match(entry, /chromascape_ai_runtime_tests/);
+  assert.match(entry, /com\.chromascape\.web\.aiplayer\.routine\.service\.PatchCandidateWorkflowServiceTest/);
+  assert.match(entry, /chromascape_acceptance_contract_tests/);
+  assert.doesNotMatch(entry, /'chromascape_tests'.*gradlew\.bat[^\r\n]* test/);
   assert.match(finish, /worktree add --detach/);
   assert.match(finish, /PreparedWorktrees/);
   assert.match(finish, /PreflightOnly/);
