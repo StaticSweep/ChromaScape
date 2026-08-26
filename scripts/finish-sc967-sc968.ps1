@@ -141,19 +141,37 @@ $secretRoot = Join-Path $outputRoot '.runtime-secrets'
 $trustedRoot = Join-Path $secretRoot 'trusted-candidate-keys'
 New-Item -ItemType Directory -Force -Path $trustedRoot | Out-Null
 
-$openssl = Get-Command openssl.exe -ErrorAction SilentlyContinue
-if ($null -eq $openssl) { $openssl = Get-Command openssl -ErrorAction SilentlyContinue }
-if ($null -eq $openssl) { throw 'OpenSSL is required to create the temporary Ed25519 acceptance key' }
+$opensslCommand = Get-Command openssl.exe -ErrorAction SilentlyContinue
+if ($null -eq $opensslCommand) { $opensslCommand = Get-Command openssl -ErrorAction SilentlyContinue }
+$opensslPath = if ($null -ne $opensslCommand) { $opensslCommand.Source } else { $null }
+if ([string]::IsNullOrWhiteSpace($opensslPath)) {
+  $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+  if ($null -ne $gitCommand) {
+    $gitRoot = Split-Path -Parent (Split-Path -Parent $gitCommand.Source)
+    foreach ($candidate in @(
+        (Join-Path $gitRoot 'mingw64\bin\openssl.exe'),
+        (Join-Path $gitRoot 'usr\bin\openssl.exe')
+      )) {
+      if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        $opensslPath = $candidate
+        break
+      }
+    }
+  }
+}
+if ([string]::IsNullOrWhiteSpace($opensslPath)) {
+  throw 'OpenSSL is required to create the temporary Ed25519 acceptance key (Git for Windows bundled OpenSSL was not found)'
+}
 
 $keyId = 'sc968-local-acceptance'
 $privateKey = Join-Path $secretRoot 'candidate-private-key.pem'
 $publicKey = Join-Path $secretRoot 'candidate-public-key.pem'
 $publicDer = Join-Path $secretRoot 'candidate-public-key.der'
-& $openssl.Source genpkey -algorithm ED25519 -out $privateKey
+& $opensslPath genpkey -algorithm ED25519 -out $privateKey
 if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to generate the Ed25519 private key' }
-& $openssl.Source pkey -in $privateKey -pubout -out $publicKey
+& $opensslPath pkey -in $privateKey -pubout -out $publicKey
 if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to derive the Ed25519 public key' }
-& $openssl.Source pkey -pubin -in $publicKey -outform DER -out $publicDer
+& $opensslPath pkey -pubin -in $publicKey -outform DER -out $publicDer
 if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to encode the Ed25519 public key' }
 Copy-Item -LiteralPath $publicKey -Destination (Join-Path $trustedRoot "$keyId.pem")
 $publicRing = $keyId + '=' + [Convert]::ToBase64String([IO.File]::ReadAllBytes($publicDer))
