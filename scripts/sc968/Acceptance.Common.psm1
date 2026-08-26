@@ -58,14 +58,25 @@ function Assert-NativeJava17 {
 function Invoke-Gate([string] $Name, [string] $WorkingDirectory, [scriptblock] $Command, [string] $LogPath, [hashtable] $GateTable) {
   $started = [DateTimeOffset]::UtcNow
   Push-Location $WorkingDirectory
+  $previousErrorActionPreference = $ErrorActionPreference
   try {
+    # Windows PowerShell 5.1 wraps native stderr as ErrorRecord instances.
+    # Build tools routinely write progress to stderr even when they exit 0,
+    # so gate on the native exit status instead of promoting stderr to a
+    # terminating PowerShell error.
+    $ErrorActionPreference = 'Continue'
+    $global:LASTEXITCODE = $null
     & $Command *>&1 | Tee-Object -FilePath $LogPath
+    $commandSucceeded = $?
     $code = $LASTEXITCODE
-    if ($null -eq $code) { $code = 0 }
+    if ($null -eq $code) { $code = if ($commandSucceeded) { 0 } else { 1 } }
   } catch {
     $_ | Out-File -LiteralPath $LogPath -Encoding utf8
     $code = 1
-  } finally { Pop-Location }
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+    Pop-Location
+  }
   $GateTable[$Name] = [ordered]@{ status = if ($code -eq 0) { 'PASS' } else { 'FAIL' }; exit_code = $code; log = [IO.Path]::GetFileName($LogPath); started_at = $started.ToString('o'); completed_at = [DateTimeOffset]::UtcNow.ToString('o') }
   if ($code -ne 0) { throw "Acceptance gate failed: $Name (exit code $code)" }
   return ($code -eq 0)

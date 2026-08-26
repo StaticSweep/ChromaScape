@@ -59,16 +59,17 @@ try {
 
   $contractModule = Join-Path $ContractsRoot 'java/ai-routine-capture-contract'
   $null = Invoke-Gate 'contracts_tests' $contractModule {
+    $ErrorActionPreference = 'Continue'
     & $mavenCommand -q $mavenRepoArgument clean install
   } (Join-Path $logs 'contracts-tests.log') $gates
-  $null = Invoke-Gate 'leeuwbot_go_vet' (Join-Path $LeeuwBotRoot 'plugin-service') { & $goCommand vet ./... } (Join-Path $logs 'leeuwbot-go-vet.log') $gates
-  $null = Invoke-Gate 'leeuwbot_go_test' (Join-Path $LeeuwBotRoot 'plugin-service') { & $goCommand test ./... } (Join-Path $logs 'leeuwbot-go-test.log') $gates
-  $null = Invoke-Gate 'chromascape_tests' $ChromaScapeRoot { .\gradlew.bat --no-daemon --no-watch-fs test } (Join-Path $logs 'chromascape-test.log') $gates
-  $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' } (Join-Path $logs 'micro6-test.log') $gates
-  $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:shadowJar } (Join-Path $logs 'micro6-shadowjar.log') $gates
-  $null = Invoke-Gate 'micro6_sbom' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:generateRuntimeSbom } (Join-Path $logs 'micro6-sbom.log') $gates
+  $null = Invoke-Gate 'leeuwbot_go_vet' (Join-Path $LeeuwBotRoot 'plugin-service') { $ErrorActionPreference = 'Continue'; & $goCommand vet ./... } (Join-Path $logs 'leeuwbot-go-vet.log') $gates
+  $null = Invoke-Gate 'leeuwbot_go_test' (Join-Path $LeeuwBotRoot 'plugin-service') { $ErrorActionPreference = 'Continue'; & $goCommand test ./... } (Join-Path $logs 'leeuwbot-go-test.log') $gates
+  $null = Invoke-Gate 'chromascape_tests' $ChromaScapeRoot { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs test } (Join-Path $logs 'chromascape-test.log') $gates
+  $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' } (Join-Path $logs 'micro6-test.log') $gates
+  $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs :client:shadowJar } (Join-Path $logs 'micro6-shadowjar.log') $gates
+  $null = Invoke-Gate 'micro6_sbom' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs :client:generateRuntimeSbom } (Join-Path $logs 'micro6-sbom.log') $gates
   $contractVersionArgument = '-Dcapture-contract.version=' + $lock['module_version']
-  $null = Invoke-Gate 'runelite_capture_tests' $RuneLiteRoot { & $mavenCommand -q $mavenRepoArgument -pl runelite-client -am $contractVersionArgument test } (Join-Path $logs 'runelite-test.log') $gates
+  $null = Invoke-Gate 'runelite_capture_tests' $RuneLiteRoot { $ErrorActionPreference = 'Continue'; & $mavenCommand -q $mavenRepoArgument -pl runelite-client -am $contractVersionArgument test } (Join-Path $logs 'runelite-test.log') $gates
 
   if (-not $AllowDirtyDevelopmentTrees) {
     foreach ($item in $roots.GetEnumerator()) { if (Get-GitTrackedState $item.Value) { $gates["$($item.Key)_final_clean"]=[ordered]@{status='FAIL';exit_code=1;log=''} } }
@@ -77,6 +78,7 @@ try {
   # native processes and writes baseline/assistant/RuneLite/candidate/shadow JSON from live IDs; no fixture path is
   # accepted here.
   $null = Invoke-Gate 'live_runtime_driver' $ChromaScapeRoot {
+    $ErrorActionPreference = 'Continue'
     & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $RuntimeDriver `
       -ContractsRoot $ContractsRoot -LeeuwBotRoot $LeeuwBotRoot -ChromaScapeRoot $ChromaScapeRoot `
       -Micro6Root $Micro6Root -RuneLiteRoot $RuneLiteRoot -OutputRoot $OutputRoot
