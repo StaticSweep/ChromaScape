@@ -68,6 +68,28 @@ function Set-Sc968Java17 {
   throw 'Java 17 JDK was not found. Set SC968_JAVA17_HOME to the installed JDK 17 directory.'
 }
 
+function Set-Sc968Maven {
+  $mavenCommand = Get-Command mvn.cmd -ErrorAction SilentlyContinue
+  if ($null -eq $mavenCommand) { $mavenCommand = Get-Command mvn.exe -ErrorAction SilentlyContinue }
+  if ($null -eq $mavenCommand) { $mavenCommand = Get-Command mvn -ErrorAction SilentlyContinue }
+  $mavenPath = if ($null -ne $mavenCommand) { $mavenCommand.Source } else { $null }
+  if ([string]::IsNullOrWhiteSpace($mavenPath)) {
+    $jetBrainsRoot = Join-Path $env:ProgramFiles 'JetBrains'
+    if (Test-Path -LiteralPath $jetBrainsRoot -PathType Container) {
+      $mavenPath = Get-ChildItem -LiteralPath $jetBrainsRoot -Directory -ErrorAction SilentlyContinue |
+        Sort-Object -Property Name -Descending |
+        ForEach-Object { Join-Path $_.FullName 'plugins\maven\lib\maven3\bin\mvn.cmd' } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+        Select-Object -First 1
+    }
+  }
+  if ([string]::IsNullOrWhiteSpace($mavenPath)) {
+    throw 'Maven was not found on PATH or in the IntelliJ installation.'
+  }
+  $env:SC968_MAVEN_COMMAND = $mavenPath
+  Write-Output "Using Maven from $mavenPath"
+}
+
 function New-AcceptanceWorktree([string] $SourceRoot, [string] $Destination) {
   $revision = (& git -C $SourceRoot rev-parse HEAD 2>$null).Trim()
   if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($revision)) {
@@ -151,6 +173,7 @@ foreach ($repository in ([ordered]@{
 }
 
 Set-Sc968Java17
+Set-Sc968Maven
 
 if ($PreflightOnly) {
   Write-Output 'SC-967/SC-968 one-command preflight PASS'
