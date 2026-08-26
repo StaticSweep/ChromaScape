@@ -8,6 +8,7 @@ const runtime = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Runtim
 const entry = fs.readFileSync(path.join(root, 'scripts/sc968-acceptance.ps1'), 'utf8');
 const finish = fs.readFileSync(path.join(root, 'scripts/finish-sc967-sc968.ps1'), 'utf8');
 const evidence = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Evidence.psm1'), 'utf8');
+const common = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Common.psm1'), 'utf8');
 
 test('SC-968 runtime requires Assistant acceptance and a real RuneLite capture', () => {
   assert.match(runtime, /Wait-AssistantProposal/);
@@ -30,6 +31,7 @@ test('SC-968 candidate evidence uses and validates the signed nested manifest id
 
 test('SC-968 entrypoint and manifests require all five runtime evidence documents', () => {
   assert.doesNotMatch(evidence, /Import-Module[^\n]+Acceptance\.Common\.psm1/);
+  assert.match(common, /return '\(detached\)'/);
   assert.match(entry, /SC968_RUNELITE_LAUNCH_SCRIPT/);
   assert.match(entry, /'baseline','assistant','runelite','candidate','shadow'/);
   assert.match(entry, /-RuneLiteRoot \$RuneLiteRoot/);

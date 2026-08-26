@@ -13,7 +13,12 @@ function Get-GitRevision([string] $Root) {
 
 function Get-GitBranch([string] $Root) {
   Push-Location $Root
-  try { return (& git branch --show-current 2>$null).Trim() }
+  try {
+    $branch = & git branch --show-current 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "Cannot resolve Git branch: $Root" }
+    if ($null -eq $branch -or [string]::IsNullOrWhiteSpace([string]$branch)) { return '(detached)' }
+    return ([string]$branch).Trim()
+  }
   finally { Pop-Location }
 }
 

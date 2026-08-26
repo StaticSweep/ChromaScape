@@ -83,8 +83,14 @@ try {
   if (-not $ok -or -not $demoOk) { exit 1 }
 } catch {
   $failure = $_
-  $gates['preflight']=[ordered]@{status='FAIL';exit_code=1;log=$failure.Exception.Message}
-  $envInfo = [ordered]@{ timestamp=[DateTimeOffset]::UtcNow.ToString('o'); error=$failure.Exception.Message }
+  $failureLog = @($failure.Exception.Message, $failure.InvocationInfo.PositionMessage, $failure.ScriptStackTrace) |
+    Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
+  $failureLog = $failureLog -join "`n"
+  $gates['preflight']=[ordered]@{status='FAIL';exit_code=1;log=$failureLog}
+  $envInfo = [ordered]@{
+    timestamp=[DateTimeOffset]::UtcNow.ToString('o'); error=$failure.Exception.Message
+    error_position=$failure.InvocationInfo.PositionMessage; script_stack_trace=$failure.ScriptStackTrace
+  }
   try {
     Write-Sc968Evidence (Join-Path $OutputRoot 'sc-968-acceptance-manifest.json') $envInfo @{} @{} @{} $runtime $gates $dirtyDevelopment | Out-Null
     Write-Sc967DemoEvidence (Join-Path $OutputRoot 'sc-967-demo-manifest.json') @{} @{} $runtime $gates $dirtyDevelopment | Out-Null
