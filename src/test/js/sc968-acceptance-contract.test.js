@@ -6,6 +6,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '../../..');
 const runtime = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Runtime.ps1'), 'utf8');
 const entry = fs.readFileSync(path.join(root, 'scripts/sc968-acceptance.ps1'), 'utf8');
+const finish = fs.readFileSync(path.join(root, 'scripts/finish-sc967-sc968.ps1'), 'utf8');
 const evidence = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Evidence.psm1'), 'utf8');
 
 test('SC-968 runtime requires Assistant acceptance and a real RuneLite capture', () => {
@@ -34,4 +35,17 @@ test('SC-968 entrypoint and manifests require all five runtime evidence document
   assert.match(evidence, /assistant = \$Runtime\.assistant/);
   assert.match(evidence, /runelite = \$Runtime\.runelite/);
   assert.match(evidence, /sc967-demo-manifest\/v1/);
+});
+
+test('SC-968 one-command wrapper uses real local roots and creates isolated signing material', () => {
+  assert.match(finish, /C:\\Dev\\IdeaProjects\\contracts/);
+  assert.match(finish, /launch-sc968-micro6\.ps1/);
+  assert.match(finish, /launch-sc968-runelite\.ps1/);
+  assert.match(finish, /genpkey -algorithm ED25519/);
+  assert.match(finish, /worktree add --detach/);
+  assert.match(finish, /PreparedWorktrees/);
+  assert.match(finish, /PreflightOnly/);
+  assert.match(finish, /one-command preflight PASS/);
+  assert.match(finish, /ACCEPTANCE PASS/);
+  assert.doesNotMatch(finish, /ai-routine-contracts/);
 });

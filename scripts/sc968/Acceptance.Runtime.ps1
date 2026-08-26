@@ -204,6 +204,7 @@ try {
   if ($recordingState.state -ne 'RECORDING') { throw 'Baseline Micro6 never reached RECORDING' }
   $baselineSession = Read-Session $chromaUrl $captureToken ([string]$recordingState.session_id)
   if ([int]$baselineSession.action_count -ne 0) { throw 'Baseline gameplay began before the capture was observable' }
+  Write-Host 'FISH NOW (1/3): in the baseline Micro6 client, use Net on a Fishing spot once.' -ForegroundColor Yellow
   $baselineCompletedState = Wait-Sc968CaptureStatus -StatusFile $baselineStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
   if ($baselineCompletedState.state -ne 'COMPLETED') { throw "Baseline capture ended in $($baselineCompletedState.state)" }
   $baselineSession = Read-Session $chromaUrl $captureToken ([string]$baselineCompletedState.session_id)
@@ -316,7 +317,8 @@ try {
   $secondRecordingState = Wait-Capture $candidateStatusFile $runtimeTimeout
   if ($secondRecordingState.state -ne 'RECORDING') { throw 'Candidate Micro6 never reached RECORDING' }
   $secondSession = Read-Session $chromaUrl $captureToken ([string]$secondRecordingState.session_id)
-  if ([int]$secondSession.action_count -ne 0) { throw 'Second gameplay action occurred before the live shadow was opened' }
+  if ([int]$secondSession.action_count -ne 0) { throw 'Candidate gameplay began before the capture was observable' }
+  Write-Host 'FISH NOW (2/3): in the candidate Micro6 client, use Net on a Fishing spot once.' -ForegroundColor Yellow
   $secondCompletedState = Wait-Sc968CaptureStatus -StatusFile $candidateStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
   if ($secondCompletedState.state -ne 'COMPLETED') { throw "Candidate capture ended in $($secondCompletedState.state)" }
   $secondSession = Read-Session $chromaUrl $captureToken ([string]$secondCompletedState.session_id)
@@ -344,6 +346,7 @@ try {
   if ([int]$runeliteLiveSession.action_count -ne 0) { throw 'RuneLite gameplay began before the shadow was observable' }
   $shadow = (Api $chromaUrl "/api/v1/ai-routine/models/$modelId/shadow-runs" $operatorToken 'POST' @{ schema='routine-shadow-run-request/v1'; session_id=[string]$runeliteRecordingState.session_id }).Json
   if ($shadow.state -ne 'ACTIVE' -or $shadow.control_allowed -ne $false) { throw 'RuneLite live shadow did not become ACTIVE read-only' }
+  Write-Host 'FISH NOW (3/3): in standard RuneLite, use Net on a Fishing spot once.' -ForegroundColor Yellow
   $runeliteCompletedState = Wait-Sc968CaptureStatus -StatusFile $runeliteStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
   if ($runeliteCompletedState.state -ne 'COMPLETED') { throw "RuneLite capture ended in $($runeliteCompletedState.state)" }
   $runeliteSession = Read-Session $chromaUrl $captureToken ([string]$runeliteCompletedState.session_id)

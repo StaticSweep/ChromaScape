@@ -3,10 +3,21 @@
 This is the story-closing acceptance path. Run it from native Windows PowerShell, never WSL. It
 uses clean checkouts, launches only processes it owns, and refuses stale runtime evidence.
 
+Preferred one-command path:
+
+```powershell
+Set-Location C:\Dev\IdeaProjects\ChromaScape
+.\scripts\finish-sc967-sc968.ps1
+```
+
+The wrapper generates process-local tokens and an ephemeral acceptance signing key, uses the
+tracked Micro6/RuneLite launchers, and invokes the lower-level acceptance command below.
+
 ## Preconditions
 
 - Native Java 17, Maven, Go, and the repository Gradle wrappers are available.
-- Clean checkouts exist for Contracts, LeeuwBotAPI, ChromaScape, Micro6, and standard RuneLite.
+- Clean checkouts exist at `C:\Dev\IdeaProjects\contracts`, LeeuwBotAPI, ChromaScape, Micro6,
+  and standard RuneLite.
 - Micro6 `capture-contract.lock` points at the exact Contracts revision.
 - The candidate signing key and registry trust directory represent the same configured key ID.
 - ChromaScape port 8090 and the configured candidate-registry port are free.
@@ -25,8 +36,8 @@ $env:SC968_SIGNING_PRIVATE_KEY_PATH = 'C:\secure\candidate-private-key.pem'
 $env:SC968_SIGNING_PUBLIC_KEY_PATH = 'C:\secure\candidate-public-key.pem'
 $env:SC968_SIGNING_KEY_ID = '<configured key id>'
 $env:SC968_EXPECTED_ARTIFACT_NAME = '<exact Micro6 shadow JAR name>'
-$env:SC968_MICRO6_LAUNCH_SCRIPT = 'C:\secure\launch-sc968-micro6.ps1'
-$env:SC968_RUNELITE_LAUNCH_SCRIPT = 'C:\secure\launch-sc968-runelite.ps1'
+$env:SC968_MICRO6_LAUNCH_SCRIPT = 'C:\Dev\IdeaProjects\micro6\scripts\launch-sc968-micro6.ps1'
+$env:SC968_RUNELITE_LAUNCH_SCRIPT = 'C:\Dev\IdeaProjects\runelite\scripts\launch-sc968-runelite.ps1'
 $env:SC968_REGISTRY_URL = 'http://127.0.0.1:8081'
 $env:SC968_TASK_KEY = 'FISHING_TRAINING'
 $env:SC968_SETTINGS_HASH = 'sha256:<64 lowercase hex>'
@@ -48,7 +59,7 @@ identity, failed/uncertain capture, and gameplay that begins before shadow obser
 ```powershell
 Set-Location C:\Dev\IdeaProjects\ChromaScape
 .\scripts\sc968-acceptance.ps1 `
-  -ContractsRoot 'C:\Dev\IdeaProjects\ai-routine-contracts' `
+  -ContractsRoot 'C:\Dev\IdeaProjects\contracts' `
   -LeeuwBotRoot 'C:\Dev\IdeaProjects\leeuwbotbackend\leeuwbot-api\leeuwbotapi' `
   -ChromaScapeRoot 'C:\Dev\IdeaProjects\ChromaScape' `
   -Micro6Root 'C:\Dev\IdeaProjects\micro6' `

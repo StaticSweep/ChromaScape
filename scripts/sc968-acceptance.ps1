@@ -58,7 +58,7 @@ try {
   $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' } (Join-Path $logs 'micro6-test.log') $gates
   $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:shadowJar } (Join-Path $logs 'micro6-shadowjar.log') $gates
   $null = Invoke-Gate 'micro6_sbom' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:generateRuntimeSbom } (Join-Path $logs 'micro6-sbom.log') $gates
-  $null = Invoke-Gate 'runelite_capture_tests' $RuneLiteRoot { mvn -q -pl runelite-client -am -Dcapture-contract.version=$lock['module_version'] test } (Join-Path $logs 'runelite-test.log') $gates
+  $null = Invoke-Gate 'runelite_capture_tests' $RuneLiteRoot { mvn -q -Dmaven.repo.local=$env:SC968_MAVEN_REPO -pl runelite-client -am -Dcapture-contract.version=$lock['module_version'] test } (Join-Path $logs 'runelite-test.log') $gates
 
   if (-not $AllowDirtyDevelopmentTrees) {
     foreach ($item in $roots.GetEnumerator()) { if (Get-GitTrackedState $item.Value) { $gates["$($item.Key)_final_clean"]=[ordered]@{status='FAIL';exit_code=1;log=''} } }
