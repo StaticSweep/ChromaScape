@@ -31,6 +31,7 @@ try {
   if (-not (Test-Path -LiteralPath $RuntimeDriver -PathType Leaf)) { throw "SC-968 runtime driver is missing: $RuntimeDriver" }
   $env:FEATURES_AI_PLAYER_CONTROL = 'false'
   $env:SC968_MAVEN_REPO = Join-Path $OutputRoot 'm2'
+  $mavenRepoArgument = '-Dmaven.repo.local=' + $env:SC968_MAVEN_REPO
   $mavenCommand = $env:SC968_MAVEN_COMMAND
   if ([string]::IsNullOrWhiteSpace($mavenCommand) -or -not (Test-Path -LiteralPath $mavenCommand -PathType Leaf)) {
     throw 'SC968_MAVEN_COMMAND must identify the native Maven executable'
@@ -54,7 +55,7 @@ try {
 
   $contractModule = Join-Path $ContractsRoot 'java/ai-routine-capture-contract'
   $null = Invoke-Gate 'contracts_tests' $contractModule {
-    & $mavenCommand -q -Dmaven.repo.local=$env:SC968_MAVEN_REPO clean install
+    & $mavenCommand -q $mavenRepoArgument clean install
   } (Join-Path $logs 'contracts-tests.log') $gates
   $null = Invoke-Gate 'leeuwbot_go_vet' (Join-Path $LeeuwBotRoot 'plugin-service') { go vet ./... } (Join-Path $logs 'leeuwbot-go-vet.log') $gates
   $null = Invoke-Gate 'leeuwbot_go_test' (Join-Path $LeeuwBotRoot 'plugin-service') { go test ./... } (Join-Path $logs 'leeuwbot-go-test.log') $gates
@@ -62,7 +63,8 @@ try {
   $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' } (Join-Path $logs 'micro6-test.log') $gates
   $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:shadowJar } (Join-Path $logs 'micro6-shadowjar.log') $gates
   $null = Invoke-Gate 'micro6_sbom' $Micro6Root { .\gradlew.bat --no-daemon --no-watch-fs :client:generateRuntimeSbom } (Join-Path $logs 'micro6-sbom.log') $gates
-  $null = Invoke-Gate 'runelite_capture_tests' $RuneLiteRoot { & $mavenCommand -q -Dmaven.repo.local=$env:SC968_MAVEN_REPO -pl runelite-client -am -Dcapture-contract.version=$lock['module_version'] test } (Join-Path $logs 'runelite-test.log') $gates
+  $contractVersionArgument = '-Dcapture-contract.version=' + $lock['module_version']
+  $null = Invoke-Gate 'runelite_capture_tests' $RuneLiteRoot { & $mavenCommand -q $mavenRepoArgument -pl runelite-client -am $contractVersionArgument test } (Join-Path $logs 'runelite-test.log') $gates
 
   if (-not $AllowDirtyDevelopmentTrees) {
     foreach ($item in $roots.GetEnumerator()) { if (Get-GitTrackedState $item.Value) { $gates["$($item.Key)_final_clean"]=[ordered]@{status='FAIL';exit_code=1;log=''} } }

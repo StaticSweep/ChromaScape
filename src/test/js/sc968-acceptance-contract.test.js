@@ -48,6 +48,7 @@ test('SC-968 one-command wrapper uses real local roots and creates isolated sign
   assert.match(finish, /genpkey -algorithm ED25519/);
   assert.match(finish, /SC968_MAVEN_COMMAND/);
   assert.match(entry, /& \$mavenCommand -q/);
+  assert.match(entry, /\$mavenRepoArgument = '-Dmaven\.repo\.local='/);
   assert.match(finish, /worktree add --detach/);
   assert.match(finish, /PreparedWorktrees/);
   assert.match(finish, /PreflightOnly/);
