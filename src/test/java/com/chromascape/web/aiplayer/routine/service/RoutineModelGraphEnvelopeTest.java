@@ -54,8 +54,10 @@ class RoutineModelGraphEnvelopeTest {
     RoutineModel saved = captor.getValue();
     Map<?, ?> stored = mapper.readValue(saved.getDefinitionJson(), Map.class);
     Map<?, ?> storedGraph = (Map<?, ?>) stored.get("graph");
-    assertThat(storedGraph).containsKeys("identity", "nodes", "edges");
-    assertThat(storedGraph).doesNotContainKey("definition");
+    assertThat(storedGraph.containsKey("identity")).isTrue();
+    assertThat(storedGraph.containsKey("nodes")).isTrue();
+    assertThat(storedGraph.containsKey("edges")).isTrue();
+    assertThat(storedGraph.containsKey("definition")).isFalse();
   }
 
   private CurrentSliceIdentity identity(CurrentSliceIdentity.Graph graph) {
