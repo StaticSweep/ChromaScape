@@ -82,10 +82,15 @@ try {
   $demoOk = Write-Sc967DemoEvidence (Join-Path $OutputRoot 'sc-967-demo-manifest.json') $repositories $contracts $runtime $gates $dirtyDevelopment
   if (-not $ok -or -not $demoOk) { exit 1 }
 } catch {
-  $gates['preflight']=[ordered]@{status='FAIL';exit_code=1;log=$_.Exception.Message}
-  $envInfo = [ordered]@{ timestamp=[DateTimeOffset]::UtcNow.ToString('o'); error=$_.Exception.Message }
-  Write-Sc968Evidence (Join-Path $OutputRoot 'sc-968-acceptance-manifest.json') $envInfo @{} @{} @{} $runtime $gates $dirtyDevelopment | Out-Null
-  Write-Sc967DemoEvidence (Join-Path $OutputRoot 'sc-967-demo-manifest.json') @{} @{} $runtime $gates $dirtyDevelopment | Out-Null
-  Write-Error $_
+  $failure = $_
+  $gates['preflight']=[ordered]@{status='FAIL';exit_code=1;log=$failure.Exception.Message}
+  $envInfo = [ordered]@{ timestamp=[DateTimeOffset]::UtcNow.ToString('o'); error=$failure.Exception.Message }
+  try {
+    Write-Sc968Evidence (Join-Path $OutputRoot 'sc-968-acceptance-manifest.json') $envInfo @{} @{} @{} $runtime $gates $dirtyDevelopment | Out-Null
+    Write-Sc967DemoEvidence (Join-Path $OutputRoot 'sc-967-demo-manifest.json') @{} @{} $runtime $gates $dirtyDevelopment | Out-Null
+  } catch {
+    Write-Warning "Could not write failure evidence: $($_.Exception.Message)"
+  }
+  Write-Error $failure
   exit 1
 }

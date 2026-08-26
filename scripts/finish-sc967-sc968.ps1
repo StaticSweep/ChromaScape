@@ -39,6 +39,35 @@ function Require-CleanRepository([string] $Name, [string] $Path) {
   } finally { Pop-Location }
 }
 
+function Set-Sc968Java17 {
+  $homes = @()
+  if (-not [string]::IsNullOrWhiteSpace($env:SC968_JAVA17_HOME)) {
+    $homes += $env:SC968_JAVA17_HOME
+  }
+  foreach ($spec in @(
+      @{ Root=(Join-Path $env:ProgramFiles 'Eclipse Adoptium'); Pattern='jdk-17*' },
+      @{ Root=(Join-Path $env:ProgramFiles 'Amazon Corretto'); Pattern='jdk17*' },
+      @{ Root=(Join-Path $env:ProgramFiles 'Amazon Corretto'); Pattern='jdk-17*' },
+      @{ Root=(Join-Path $env:ProgramFiles 'Microsoft'); Pattern='jdk-17*' },
+      @{ Root=(Join-Path $env:USERPROFILE '.jdks'); Pattern='*17*' }
+    )) {
+    if (Test-Path -LiteralPath $spec.Root -PathType Container) {
+      $homes += Get-ChildItem -LiteralPath $spec.Root -Directory -Filter $spec.Pattern -ErrorAction SilentlyContinue |
+        Sort-Object -Property Name -Descending | Select-Object -ExpandProperty FullName
+    }
+  }
+  foreach ($javaHome in @($homes | Select-Object -Unique)) {
+    $java = Join-Path $javaHome 'bin\java.exe'
+    if (Test-Path -LiteralPath $java -PathType Leaf) {
+      $env:JAVA_HOME = $javaHome
+      $env:Path = (Join-Path $javaHome 'bin') + ';' + $env:Path
+      Write-Output "Using Java 17 from $javaHome"
+      return
+    }
+  }
+  throw 'Java 17 JDK was not found. Set SC968_JAVA17_HOME to the installed JDK 17 directory.'
+}
+
 function New-AcceptanceWorktree([string] $SourceRoot, [string] $Destination) {
   $revision = (& git -C $SourceRoot rev-parse HEAD 2>$null).Trim()
   if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($revision)) {
@@ -120,6 +149,8 @@ foreach ($repository in ([ordered]@{
   }).GetEnumerator()) {
   Require-CleanRepository $repository.Key $repository.Value
 }
+
+Set-Sc968Java17
 
 if ($PreflightOnly) {
   Write-Output 'SC-967/SC-968 one-command preflight PASS'
