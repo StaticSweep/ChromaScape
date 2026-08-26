@@ -20,13 +20,13 @@ New-Item -ItemType Directory -Force -Path $OutputRoot, (Join-Path $OutputRoot 'l
 $logs = Join-Path $OutputRoot 'logs'
 $gates = @{}
 $tests = $gates
-$runtime = [ordered]@{ baseline = $null; candidate = $null; shadow = $null }
+$runtime = [ordered]@{ baseline = $null; assistant = $null; runelite = $null; candidate = $null; shadow = $null }
 $dirtyDevelopment = [bool]$AllowDirtyDevelopmentTrees
 
 try {
   Assert-NativeJava17
-  foreach ($secretName in @('SC968_CAPTURE_TOKEN','SC968_OPERATOR_TOKEN','SC968_OPERATOR_ID','SC968_REGISTRY_TOKEN','SC968_PUBLIC_KEY_RING','SC968_REGISTRY_TRUSTED_KEYS_DIR','SC968_MICRO6_LAUNCH_SCRIPT','SC968_SIGNING_PRIVATE_KEY_PATH','SC968_SIGNING_PUBLIC_KEY_PATH','SC968_SIGNING_KEY_ID','SC968_EXPECTED_ARTIFACT_NAME')) {
-    if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($secretName))) { throw "$secretName is required for native SC-968 acceptance" }
+  foreach ($requiredName in @('SC968_CAPTURE_TOKEN','SC968_OPERATOR_TOKEN','SC968_OPERATOR_ID','SC968_REGISTRY_TOKEN','SC968_PUBLIC_KEY_RING','SC968_REGISTRY_TRUSTED_KEYS_DIR','SC968_MICRO6_LAUNCH_SCRIPT','SC968_RUNELITE_LAUNCH_SCRIPT','SC968_SIGNING_PRIVATE_KEY_PATH','SC968_SIGNING_PUBLIC_KEY_PATH','SC968_SIGNING_KEY_ID','SC968_EXPECTED_ARTIFACT_NAME')) {
+    if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($requiredName))) { throw "$requiredName is required for native SC-968 acceptance" }
   }
   if (-not (Test-Path -LiteralPath $RuntimeDriver -PathType Leaf)) { throw "SC-968 runtime driver is missing: $RuntimeDriver" }
   $env:FEATURES_AI_PLAYER_CONTROL = 'false'
@@ -64,14 +64,14 @@ try {
     foreach ($item in $roots.GetEnumerator()) { if (Get-GitTrackedState $item.Value) { $gates["$($item.Key)_final_clean"]=[ordered]@{status='FAIL';exit_code=1;log=''} } }
   }
   # Runtime acceptance is intentionally a hard gate. The tracked driver launches only owned
-  # native processes and writes baseline/candidate/shadow JSON from live IDs; no fixture path is
+  # native processes and writes baseline/assistant/RuneLite/candidate/shadow JSON from live IDs; no fixture path is
   # accepted here.
   $null = Invoke-Gate 'live_runtime_driver' $ChromaScapeRoot {
     & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $RuntimeDriver `
       -ContractsRoot $ContractsRoot -LeeuwBotRoot $LeeuwBotRoot -ChromaScapeRoot $ChromaScapeRoot `
-      -Micro6Root $Micro6Root -OutputRoot $OutputRoot
+      -Micro6Root $Micro6Root -RuneLiteRoot $RuneLiteRoot -OutputRoot $OutputRoot
   } (Join-Path $logs 'runtime-acceptance.log') $gates
-  foreach ($name in @('baseline','candidate','shadow')) {
+  foreach ($name in @('baseline','assistant','runelite','candidate','shadow')) {
     $path = Join-Path $OutputRoot ("runtime/$name.json")
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Runtime driver did not produce required evidence: $path" }
     $runtime[$name] = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -Depth 40
@@ -79,11 +79,13 @@ try {
   if (-not $AllowDirtyDevelopmentTrees) { foreach ($gate in $gates.Values) { if ($gate.status -ne 'PASS') { break } } }
   $envInfo = [ordered]@{ windows_version=[Environment]::OSVersion.VersionString; java_version=((& java -version 2>&1) -join ' '); timestamp=[DateTimeOffset]::UtcNow.ToString('o'); timezone=[TimeZoneInfo]::Local.Id }
   $ok = Write-Sc968Evidence (Join-Path $OutputRoot 'sc-968-acceptance-manifest.json') $envInfo $repositories $contracts $tests $runtime $gates $dirtyDevelopment
-  if (-not $ok) { exit 1 }
+  $demoOk = Write-Sc967DemoEvidence (Join-Path $OutputRoot 'sc-967-demo-manifest.json') $repositories $contracts $runtime $gates $dirtyDevelopment
+  if (-not $ok -or -not $demoOk) { exit 1 }
 } catch {
   $gates['preflight']=[ordered]@{status='FAIL';exit_code=1;log=$_.Exception.Message}
   $envInfo = [ordered]@{ timestamp=[DateTimeOffset]::UtcNow.ToString('o'); error=$_.Exception.Message }
   Write-Sc968Evidence (Join-Path $OutputRoot 'sc-968-acceptance-manifest.json') $envInfo @{} @{} @{} $runtime $gates $dirtyDevelopment | Out-Null
+  Write-Sc967DemoEvidence (Join-Path $OutputRoot 'sc-967-demo-manifest.json') @{} @{} $runtime $gates $dirtyDevelopment | Out-Null
   Write-Error $_
   exit 1
 }

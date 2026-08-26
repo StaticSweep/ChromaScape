@@ -48,13 +48,18 @@ public class RoutineReplayShadowService {
     if (!"PUBLISHED".equals(graph.get("state"))) {
       throw error("GRAPH_NOT_PUBLISHED", "model creation requires a published graph");
     }
-    CurrentSliceIdentity graphIdentity = mapper.convertValue(graph.get("identity"), CurrentSliceIdentity.class);
+    Object definitionValue = graph.get("definition");
+    if (!(definitionValue instanceof Map<?, ?> definition) || definition.get("identity") == null) {
+      throw error("GRAPH_INVALID", "published graph definition has no identity");
+    }
+    CurrentSliceIdentity graphIdentity =
+        mapper.convertValue(definition.get("identity"), CurrentSliceIdentity.class);
     requestedIdentity.requireSameIdentity(graphIdentity);
 
     ObjectNode modelContent = mapper.createObjectNode();
     modelContent.put("schema", "fishing-model/v1");
     modelContent.put("graph_id", graphId);
-    modelContent.set("graph", mapper.valueToTree(graph));
+    modelContent.set("graph", mapper.valueToTree(definition));
     modelContent.set("identity", mapper.valueToTree(graphIdentity));
     String modelHash = CanonicalJsonHasher.hash(modelContent, null);
     String modelId = "model_" + modelHash.substring(7, 31);
@@ -68,7 +73,8 @@ public class RoutineReplayShadowService {
     entity.setGraphId(graphId);
     entity.setModelHash(modelHash);
     entity.setIdentityJson(write(modelIdentity));
-    entity.setDefinitionJson(write(Map.of("schema", "fishing-model/v1", "graph", graph, "identity", modelIdentity)));
+    entity.setDefinitionJson(
+        write(Map.of("schema", "fishing-model/v1", "graph", definition, "identity", modelIdentity)));
     models.save(entity);
     if (modelIdentity.run() != null && modelIdentity.run().runId() != null) {
       runService.advanceIdentity(modelIdentity.run().runId(), modelIdentity, "MODEL_BOUND");

@@ -32,6 +32,30 @@ function Set-Sc968Micro6Environment {
   $env:MICRO6_REMOTE_PUBLIC_KEY_RING = Get-Sc968RequiredEnvironment 'SC968_PUBLIC_KEY_RING'
 }
 
+function Set-Sc968RuneLiteEnvironment {
+  param(
+    [Parameter(Mandatory=$true)][string] $BaseUrl,
+    [Parameter(Mandatory=$true)][string] $CaptureToken,
+    [Parameter(Mandatory=$true)][string] $StatusFile,
+    [Parameter(Mandatory=$true)][string] $SpoolDirectory
+  )
+  $env:SC968_CAPTURE_ENABLED = 'true'
+  $env:SC968_CHROMASCAPE_URL = $BaseUrl
+  $env:SC968_CAPTURE_TOKEN = $CaptureToken
+  $env:SC968_CAPTURE_STATUS_FILE = $StatusFile
+  $env:SC968_CAPTURE_SPOOL = $SpoolDirectory
+  $env:SC968_TASK_KEY = Get-Sc968RequiredEnvironment 'SC968_TASK_KEY'
+  $env:SC968_SETTINGS_HASH = Get-Sc968RequiredEnvironment 'SC968_SETTINGS_HASH'
+  $env:SC968_PROFILE_ID = Get-Sc968RequiredEnvironment 'SC968_PROFILE_ID'
+  $env:SC968_PROFILE_HASH = Get-Sc968RequiredEnvironment 'SC968_PROFILE_HASH'
+  $env:SC968_CATALOG_HASH = Get-Sc968RequiredEnvironment 'SC968_CATALOG_HASH'
+  $env:SC968_CLIENT_ID = 'runelite-human-capture'
+  # A standard RuneLite capture must never inherit Micro6 executor/candidate capabilities from the
+  # baseline or candidate launch that preceded it in the same acceptance process.
+  $env:MICRO6_REMOTE_ACCOUNTBUILDER_ENABLED = 'false'
+  $env:MICRO6_REMOTE_ACCOUNTBUILDER_CANDIDATE_ID = ''
+}
+
 function Read-Sc968CaptureStatus([string] $StatusFile) {
   if (-not (Test-Path -LiteralPath $StatusFile -PathType Leaf)) { return $null }
   try {
@@ -65,4 +89,4 @@ function Assert-Sc968LogMarkers([string] $LogPath, [string[]] $Markers) {
   }
 }
 
-Export-ModuleMember -Function Get-Sc968RequiredEnvironment,Set-Sc968Micro6Environment,Read-Sc968CaptureStatus,Wait-Sc968CaptureStatus,Assert-Sc968LogMarkers
+Export-ModuleMember -Function Get-Sc968RequiredEnvironment,Set-Sc968Micro6Environment,Set-Sc968RuneLiteEnvironment,Read-Sc968CaptureStatus,Wait-Sc968CaptureStatus,Assert-Sc968LogMarkers

@@ -15,6 +15,7 @@ public class RoutineAssistantController {
   private final RoutineAssistantService service;
   public RoutineAssistantController(RoutineAssistantService service) { this.service = service; }
   @PostMapping("/runs/{runId}/assistant/conversations") public ResponseEntity<Object> create(@PathVariable String runId) { return ResponseEntity.ok(service.create(runId)); }
+  @GetMapping("/assistant/conversations/{id}") public ResponseEntity<Object> status(@PathVariable String id) { return ResponseEntity.ok(service.status(id)); }
   @PostMapping("/assistant/conversations/{id}/messages") public ResponseEntity<Object> message(@PathVariable String id, @RequestBody RoutineApiDtos.AssistantMessageRequest request) { return ResponseEntity.accepted().body(service.message(id, request)); }
   @PostMapping("/assistant/conversations/{id}/stop") public ResponseEntity<Object> stop(@PathVariable String id) { return ResponseEntity.ok(service.stop(id)); }
   @GetMapping(value = "/assistant/conversations/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

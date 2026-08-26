@@ -73,6 +73,20 @@ public class RoutineAssistantService {
   }
 
   /**
+   * Returns a bounded, polling-friendly view of a conversation. The acceptance harness uses this
+   * instead of scraping the resumable SSE stream, while the browser continues to use SSE for live
+   * deltas. No token, unbounded event history, or mutable authority is exposed.
+   */
+  @Transactional(readOnly = true)
+  public Map<String, Object> status(String id) {
+    RoutineAssistantConversation conversation = conversation(id);
+    Map<String, Object> result = new LinkedHashMap<>(response(conversation));
+    proposals.findFirstByConversationIdOrderByIdDesc(id)
+        .ifPresent(proposal -> result.put("latest_proposal", proposalResponse(proposal)));
+    return result;
+  }
+
+  /**
    * Queues generation only after the accepted-message transaction commits. One active generation per
    * conversation is enforced by the locked store; the generation token is created and
    * {@code message.accepted} is appended inside the transaction, then the async generation is
@@ -249,6 +263,15 @@ public class RoutineAssistantService {
   }
   private RoutineAssistantConversation conversation(String id) { return conversations.findByConversationId(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "conversation not found")); }
   private Map<String, Object> response(RoutineAssistantConversation c) { long next = (c.getNextEventId() == null ? 0L : c.getNextEventId()) + 1L; return Map.of("conversation_id", c.getConversationId(), "run_id", c.getRunId(), "state", c.getState(), "next_event_id", next, "control_allowed", false); }
+  private Map<String, Object> proposalResponse(RoutineAssistantProposal proposal) {
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("proposal_id", proposal.getProposalId());
+    result.put("state", proposal.getState());
+    result.put("draft_graph_id", proposal.getDraftGraphId());
+    result.put("diff", read(proposal.getDiffJson()));
+    result.put("control_allowed", false);
+    return result;
+  }
   private Optional<BehaviorGraphDefinition> latestGraphForRun(String runId) { return graphs.findFirstByStateAndIdentityJsonContainingOrderByCreatedAtDesc("PUBLISHED", "\"run_id\":\"" + runId + "\""); }
   @SuppressWarnings("unchecked") private Map<String, Object> read(String json) { try { return mapper.readValue(json, Map.class); } catch (Exception e) { throw error(HttpStatus.INTERNAL_SERVER_ERROR, "PERSISTED_JSON_CORRUPT", "persisted assistant diff is corrupt"); } }
   @SuppressWarnings("unchecked") private static Map<String, Object> cast(Object value) { return (Map<String, Object>) value; }
