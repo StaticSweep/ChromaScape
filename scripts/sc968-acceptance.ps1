@@ -31,6 +31,10 @@ try {
   if (-not (Test-Path -LiteralPath $RuntimeDriver -PathType Leaf)) { throw "SC-968 runtime driver is missing: $RuntimeDriver" }
   $env:FEATURES_AI_PLAYER_CONTROL = 'false'
   $env:SC968_MAVEN_REPO = Join-Path $OutputRoot 'm2'
+  $env:SC967_VECTORS_PATH = Join-Path $ContractsRoot 'sc967\ed25519-vectors.json'
+  if (-not (Test-Path -LiteralPath $env:SC967_VECTORS_PATH -PathType Leaf)) {
+    throw "SC-967 shared vectors are missing: $env:SC967_VECTORS_PATH"
+  }
   $mavenRepoArgument = '-Dmaven.repo.local=' + $env:SC968_MAVEN_REPO
   $mavenCommand = $env:SC968_MAVEN_COMMAND
   if ([string]::IsNullOrWhiteSpace($mavenCommand) -or -not (Test-Path -LiteralPath $mavenCommand -PathType Leaf)) {

@@ -133,7 +133,15 @@ function Set-Sc968Go {
     $goPath = $portableGo
   }
   $goBin = Split-Path -Parent $goPath
+  $goStateRoot = 'C:\w\go'
+  $goCache = Join-Path $goStateRoot 'cache'
+  $goModuleCache = Join-Path $goStateRoot 'mod'
+  $goTemp = Join-Path $goStateRoot 'tmp'
+  New-Item -ItemType Directory -Force -Path $goCache, $goModuleCache, $goTemp | Out-Null
   $env:Path = $goBin + ';' + $env:Path
+  $env:GOCACHE = $goCache
+  $env:GOMODCACHE = $goModuleCache
+  $env:GOTMPDIR = $goTemp
   $env:SC968_GO_COMMAND = $goPath
   Write-Output "Using Go from $goPath"
 }
