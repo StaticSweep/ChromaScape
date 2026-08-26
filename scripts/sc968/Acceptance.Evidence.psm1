@@ -1,5 +1,4 @@
 Set-StrictMode -Version Latest
-Import-Module (Join-Path $PSScriptRoot 'Acceptance.Common.psm1') -Force
 
 function Write-Sc968Evidence([string] $OutputPath, [System.Collections.IDictionary] $Environment, [System.Collections.IDictionary] $Repositories, [System.Collections.IDictionary] $Contracts, [System.Collections.IDictionary] $Tests, [System.Collections.IDictionary] $Runtime, [System.Collections.IDictionary] $Gates, [bool] $DirtyDevelopment) {
   $overall = (-not $DirtyDevelopment) -and (@($Gates.Values | Where-Object { $_.status -ne 'PASS' }).Count -eq 0)

@@ -29,6 +29,7 @@ test('SC-968 candidate evidence uses and validates the signed nested manifest id
 });
 
 test('SC-968 entrypoint and manifests require all five runtime evidence documents', () => {
+  assert.doesNotMatch(evidence, /Import-Module[^\n]+Acceptance\.Common\.psm1/);
   assert.match(entry, /SC968_RUNELITE_LAUNCH_SCRIPT/);
   assert.match(entry, /'baseline','assistant','runelite','candidate','shadow'/);
   assert.match(entry, /-RuneLiteRoot \$RuneLiteRoot/);
