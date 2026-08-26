@@ -803,6 +803,39 @@ public class BuilderGoalRunnerService {
   }
 
   /**
+   * Converts an unexpected controller-bound start failure into the stable, credential-free
+   * response contract. The richer persisted recovery path can replace this compatibility method
+   * without changing the controller API.
+   */
+  public BuilderGoalStartException recordStartFailure(
+      JsonNode payload,
+      String accountId,
+      String launcherMachineUuid,
+      Integer world,
+      Throwable failure,
+      String correlationId) {
+    String message = failure != null ? failure.getMessage() : null;
+    String safeDetail =
+        message == null || message.isBlank()
+            ? "Unexpected Builder Goal start failure"
+            : BuilderGoalSensitiveTextSanitizer.sanitize(message);
+    org.springframework.http.HttpStatus status =
+        failure instanceof IllegalArgumentException
+            ? org.springframework.http.HttpStatus.BAD_REQUEST
+            : failure instanceof IllegalStateException
+                ? org.springframework.http.HttpStatus.CONFLICT
+                : org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
+    String code =
+        failure instanceof IllegalArgumentException
+            ? "INVALID_START_REQUEST"
+            : failure instanceof IllegalStateException
+                ? "START_CONFLICT"
+                : "INTERNAL_START_FAILURE";
+    return new BuilderGoalStartException(
+        status, code, "PREPARING", safeDetail, null, null, correlationId, failure);
+  }
+
+  /**
    * Publishes a task to an already-running local Micro6 executor without (re)launching a client.
    *
    * <p>Unlike {@link #startRun}, this path does not call {@link #queuePendingLaunch} and therefore
