@@ -31,8 +31,28 @@ function Get-GitTrackedState([string] $Root) {
 function Assert-NativeJava17 {
   $platform = [Environment]::OSVersion.Platform.ToString()
   if ($platform -notmatch 'Win') { throw 'SC-968 runtime acceptance must run in native Windows PowerShell, never WSL.' }
-  $versionLines = (& java -version 2>&1 | Out-String)
-  if ($LASTEXITCODE -ne 0 -or $versionLines -notmatch 'version "17\.') { throw "Java 17 is required; detected: $versionLines" }
+  $javaCommand = Get-Command java.exe -ErrorAction Stop
+  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $startInfo.FileName = $javaCommand.Source
+  $startInfo.Arguments = '-version'
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  $javaProcess = New-Object System.Diagnostics.Process
+  $javaProcess.StartInfo = $startInfo
+  try {
+    if (-not $javaProcess.Start()) { throw 'Java version process did not start' }
+    $standardOutput = $javaProcess.StandardOutput.ReadToEnd()
+    $standardError = $javaProcess.StandardError.ReadToEnd()
+    $javaProcess.WaitForExit()
+    $versionLines = ($standardOutput + "`n" + $standardError).Trim()
+    if ($javaProcess.ExitCode -ne 0 -or $versionLines -notmatch 'version "17\.') {
+      throw "Java 17 is required; detected: $versionLines"
+    }
+  } finally {
+    $javaProcess.Dispose()
+  }
 }
 
 function Invoke-Gate([string] $Name, [string] $WorkingDirectory, [scriptblock] $Command, [string] $LogPath, [hashtable] $GateTable) {
