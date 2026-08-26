@@ -51,6 +51,7 @@ test('SC-968 one-command wrapper uses real local roots and creates isolated sign
   assert.match(finish, /genpkey -algorithm ED25519/);
   assert.match(finish, /SC968_MAVEN_COMMAND/);
   assert.match(finish, /\$goVersion = '1\.24\.13'/);
+  assert.match(finish, /Go\\bin\\go\.exe/);
   assert.match(finish, /go\.dev\/dl\/go\$goVersion\.windows-amd64\.zip/);
   assert.match(finish, /40b16bc8f00540a2cb02dff4de72b73e966fdd8d65f95e33d8e4080b48a2459a/);
   assert.match(entry, /& \$goCommand vet/);

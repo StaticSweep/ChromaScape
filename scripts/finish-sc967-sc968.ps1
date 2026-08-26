@@ -93,6 +93,10 @@ function Set-Sc968Maven {
 function Set-Sc968Go {
   $goCommand = Get-Command go.exe -ErrorAction SilentlyContinue
   $goPath = if ($null -ne $goCommand) { $goCommand.Source } else { $null }
+  $installedGo = Join-Path $env:ProgramFiles 'Go\bin\go.exe'
+  if ([string]::IsNullOrWhiteSpace($goPath) -and (Test-Path -LiteralPath $installedGo -PathType Leaf)) {
+    $goPath = $installedGo
+  }
   $goVersion = '1.24.13'
   $archiveHash = '40b16bc8f00540a2cb02dff4de72b73e966fdd8d65f95e33d8e4080b48a2459a'
   $toolRoot = Join-Path 'C:\w\tools' ("go$goVersion")
