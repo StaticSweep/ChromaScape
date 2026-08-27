@@ -215,7 +215,7 @@ try {
     & $dockerCommand.Source exec $postgresContainer psql -U $databaseUser -d postgres -c "CREATE DATABASE $databaseName" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not create the SC-968 acceptance database '$databaseName' in container '$postgresContainer'" }
   }
-  [Environment]::SetEnvironmentVariable('SPRING_DATASOURCE_URL',(EnvOr 'SC968_DATASOURCE_URL' "jdbc:postgresql://localhost:5433/$databaseName?sslmode=disable"),'Process')
+  [Environment]::SetEnvironmentVariable('SPRING_DATASOURCE_URL',(EnvOr 'SC968_DATASOURCE_URL' "jdbc:postgresql://localhost:5433/${databaseName}?sslmode=disable"),'Process')
 
   $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' (Join-Path $env:SystemRoot 'System32/cmd.exe')
   $chromaArguments = EnvOr 'SC968_CHROMASCAPE_ARGUMENTS' "/d /c call `"$(Join-Path $ChromaScapeRoot 'gradlew.bat')`" --no-daemon --no-watch-fs bootRun"
