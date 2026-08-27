@@ -17,7 +17,8 @@ Import-Module (Join-Path $PSScriptRoot 'Acceptance.Micro6.psm1') -Force
 
 function EnvOr([string] $Name, [string] $Default = '') {
   $value = [Environment]::GetEnvironmentVariable($Name)
-  return if ([string]::IsNullOrWhiteSpace($value)) { $Default } else { $value }
+  if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
+  return $value
 }
 
 function Require([string] $Name) { return Get-Sc968RequiredEnvironment $Name }
@@ -25,7 +26,8 @@ function Require([string] $Name) { return Get-Sc968RequiredEnvironment $Name }
 function Field([object] $Value, [string] $Name) {
   if ($null -eq $Value) { return $null }
   $property = $Value.PSObject.Properties[$Name]
-  return if ($null -eq $property) { $null } else { $property.Value }
+  if ($null -eq $property) { return $null }
+  return $property.Value
 }
 
 function Write-JsonFile([string] $Path, [object] $Value) {
