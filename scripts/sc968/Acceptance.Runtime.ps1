@@ -233,7 +233,7 @@ try {
   # an interactive client. An empty request passes capture authentication and then fails identity
   # validation with 422. A 401 catches either token propagation failure or accidental application
   # of the distinct operator credential to this capture-owned route.
-  $captureAuthProbe = Invoke-Sc968Http -BaseUrl $chromaUrl -Path '/api/v1/ai-routine/runs/from-runelite-capture' -Method 'POST' -BearerToken $captureToken -Body '{}'
+  $captureAuthProbe = Invoke-Sc968Http -BaseUrl $chromaUrl -Path '/api/v1/ai-routine/runs/from-runelite-capture' -Method 'POST' -BearerToken $captureToken -Body '{"schema":"current-slice-run-request/v1"}'
   if ($captureAuthProbe.StatusCode -eq 401) { throw 'ChromaScape did not receive the SC-968 capture token' }
   if ($captureAuthProbe.StatusCode -ne 422) { throw "Capture authentication probe returned unexpected HTTP $($captureAuthProbe.StatusCode)" }
 
