@@ -290,6 +290,14 @@ $publicRing = $keyId + '=' + [Convert]::ToBase64String([IO.File]::ReadAllBytes($
 Set-DefaultEnvironment 'SC968_CAPTURE_TOKEN' ([Guid]::NewGuid().ToString('N'))
 Set-DefaultEnvironment 'SC968_OPERATOR_TOKEN' ([Guid]::NewGuid().ToString('N'))
 Set-DefaultEnvironment 'SC968_OPERATOR_ID' 'sc968-local-operator'
+# Materialize the server-facing names in the top-level orchestrator before it launches the
+# acceptance PowerShell. Setting them for the first time in the nested runtime driver proved too
+# late for bootRun on Windows: ChromaScape received other runtime variables but started with an
+# empty capture token. Keeping the mapping process-scoped avoids command-line/log disclosure and
+# makes the one-command run behave the same as a shell that already exported these values.
+$env:AI_ROUTINE_CAPTURE_TOKEN = $env:SC968_CAPTURE_TOKEN
+$env:AI_ROUTINE_OPERATOR_TOKEN = $env:SC968_OPERATOR_TOKEN
+$env:AI_ROUTINE_OPERATOR_ID = $env:SC968_OPERATOR_ID
 Set-DefaultEnvironment 'SC968_REGISTRY_TOKEN' ([Guid]::NewGuid().ToString('N'))
 Set-DefaultEnvironment 'SC968_PUBLIC_KEY_RING' $publicRing
 Set-DefaultEnvironment 'SC968_REGISTRY_TRUSTED_KEYS_DIR' $trustedRoot

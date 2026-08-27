@@ -50,6 +50,10 @@ test('SC-968 one-command wrapper uses real local roots and creates isolated sign
   assert.match(finish, /launch-sc968-runelite\.ps1/);
   assert.match(finish, /genpkey -algorithm ED25519/);
   assert.match(finish, /SC968_MAVEN_COMMAND/);
+  assert.match(finish, /\$env:AI_ROUTINE_CAPTURE_TOKEN = \$env:SC968_CAPTURE_TOKEN/);
+  assert.match(finish, /\$env:AI_ROUTINE_OPERATOR_TOKEN = \$env:SC968_OPERATOR_TOKEN/);
+  assert.match(runtime, /capture\/sessions\/sc968-auth-probe/);
+  assert.match(runtime, /ChromaScape did not receive the SC-968 capture token/);
   assert.match(finish, /\$goVersion = '1\.24\.13'/);
   assert.match(finish, /Go\\bin\\go\.exe/);
   assert.match(finish, /\$env:GOTMPDIR = \$goTemp/);
