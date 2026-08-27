@@ -129,7 +129,8 @@ $temporaryEnvironmentNames = @(
   'MICRO6_REMOTE_ACCOUNTBUILDER_TOKEN','MICRO6_REMOTE_PUBLIC_KEY_RING','AI_ROUTINE_CAPTURE_TOKEN','AI_ROUTINE_OPERATOR_TOKEN',
   'AI_ROUTINE_OPERATOR_ID','SC967_CANDIDATE_BUILDS_ENABLED','SC967_CANDIDATE_STAGING_ROOT','LEEUWBOT_CANDIDATE_REGISTRY_URL',
   'STATIC_API_TOKEN','CANDIDATE_STORAGE_ROOT','CANDIDATE_TRUSTED_KEYS_DIR','CANDIDATE_SIGNING_PRIVATE_KEY_PATH',
-  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','MICRO6_EXPECTED_ARTIFACT_NAME')
+  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','MICRO6_EXPECTED_ARTIFACT_NAME',
+  'STABILIZATION_AUTH_TOKEN','STABILIZATION_AUTH_WRITE_TOKEN','SPRING_DATASOURCE_URL')
 
 try {
   foreach ($name in $temporaryEnvironmentNames) { $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
@@ -185,12 +186,36 @@ try {
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_KEY_ID',$signingKeyId,'Process')
   [Environment]::SetEnvironmentVariable('MICRO6_ROOT',$Micro6Root,'Process')
   [Environment]::SetEnvironmentVariable('MICRO6_EXPECTED_ARTIFACT_NAME',$artifactName,'Process')
+  # ChromaScape's StabilizationAuthFilter fails startup when either stabilization token is blank and
+  # local-development is not the sole active profile, so bootRun cannot start without them. Supply
+  # run-scoped tokens rather than activating local-development, which would switch the filter to its
+  # tokenless loopback fallback and stop exercising the guard this runtime acceptance runs against.
+  [Environment]::SetEnvironmentVariable('STABILIZATION_AUTH_TOKEN',(EnvOr 'SC968_STABILIZATION_AUTH_TOKEN' ([Guid]::NewGuid().ToString('N'))),'Process')
+  [Environment]::SetEnvironmentVariable('STABILIZATION_AUTH_WRITE_TOKEN',(EnvOr 'SC968_STABILIZATION_WRITE_TOKEN' ([Guid]::NewGuid().ToString('N'))),'Process')
 
   $registryExecutable = EnvOr 'SC968_REGISTRY_EXECUTABLE' 'go.exe'
   $registryArguments = EnvOr 'SC968_REGISTRY_ARGUMENTS' 'run .'
   $registry = Start-Sc968OwnedProcess -Name 'candidate-registry' -FilePath $registryExecutable -WorkingDirectory $registryRoot -ArgumentList $registryArguments -LogPath (Join-Path $logs 'candidate-registry.log')
   $owned += $registry
   Wait-Sc968Http -BaseUrl $registryUrl -Path '/api/v1/candidates/cand_000000000000000000000000' -BearerToken $registryToken -AcceptedStatusCodes @(404) -TimeoutSeconds 120 | Out-Null
+
+  # Run against a database owned by the acceptance rather than the developer database on 5433. That
+  # one's Flyway history is written by the working tree, so it drifts from the committed migrations
+  # this run builds from (applied versions that no longer resolve, changed checksums) and validation
+  # fails before Tomcat starts. A dedicated database keeps the run reproducible and leaves the
+  # developer's data untouched.
+  $databaseName = EnvOr 'SC968_DATABASE_NAME' 'chromascape_sc968'
+  $databaseUser = EnvOr 'SC968_DATABASE_USER' 'chromascape'
+  $postgresContainer = EnvOr 'SC968_POSTGRES_CONTAINER' 'chromascape-postgres'
+  $dockerCommand = Get-Command docker.exe -ErrorAction SilentlyContinue
+  if ($null -eq $dockerCommand) { $dockerCommand = Get-Command docker -ErrorAction SilentlyContinue }
+  if ($null -eq $dockerCommand) { throw "Docker is required to provision the SC-968 acceptance database '$databaseName'" }
+  $databaseProbe = (& $dockerCommand.Source exec $postgresContainer psql -U $databaseUser -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$databaseName'" 2>&1) -join ''
+  if ($databaseProbe -notmatch '1') {
+    & $dockerCommand.Source exec $postgresContainer psql -U $databaseUser -d postgres -c "CREATE DATABASE $databaseName" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not create the SC-968 acceptance database '$databaseName' in container '$postgresContainer'" }
+  }
+  [Environment]::SetEnvironmentVariable('SPRING_DATASOURCE_URL',(EnvOr 'SC968_DATASOURCE_URL' "jdbc:postgresql://localhost:5433/$databaseName?sslmode=disable"),'Process')
 
   $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' (Join-Path $env:SystemRoot 'System32/cmd.exe')
   $chromaArguments = EnvOr 'SC968_CHROMASCAPE_ARGUMENTS' "/d /c call `"$(Join-Path $ChromaScapeRoot 'gradlew.bat')`" --no-daemon --no-watch-fs bootRun"
