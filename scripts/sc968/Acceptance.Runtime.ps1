@@ -130,7 +130,8 @@ $temporaryEnvironmentNames = @(
   'AI_ROUTINE_OPERATOR_ID','SC967_CANDIDATE_BUILDS_ENABLED','SC967_CANDIDATE_STAGING_ROOT','LEEUWBOT_CANDIDATE_REGISTRY_URL',
   'STATIC_API_TOKEN','CANDIDATE_STORAGE_ROOT','CANDIDATE_TRUSTED_KEYS_DIR','CANDIDATE_SIGNING_PRIVATE_KEY_PATH',
   'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','MICRO6_EXPECTED_ARTIFACT_NAME',
-  'STABILIZATION_AUTH_TOKEN','STABILIZATION_AUTH_WRITE_TOKEN','SPRING_DATASOURCE_URL','MCP_AUTO_START')
+  'STABILIZATION_AUTH_TOKEN','STABILIZATION_AUTH_WRITE_TOKEN','SPRING_DATASOURCE_URL','MCP_AUTO_START',
+  'LOGGING_LEVEL_ROOT','CHROMASCAPE_LOG_LEVEL')
 
 try {
   foreach ($name in $temporaryEnvironmentNames) { $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
@@ -230,6 +231,14 @@ try {
   # fatal because BridgeConfigException skips the handleStartupFailure path that tolerates a missing
   # provider. Nothing in SC-967/SC-968 asserts on MCP, so switch auto-start off rather than point the
   # bridge at untracked content outside the worktree.
+  # log4j2.xml sets <Root level="debug">, which is unusable for a real-time capture: a single run
+  # wrote 474 MB in 15 minutes (Hibernate SQL, jdk.internal.httpclient.debug, per-frame screen
+  # capture). Each tick POST then costs seconds, so the plugin -- which sends one request per game
+  # tick, every 600ms -- can never drain its queue. complete() calls flush() first and throws
+  # CAPTURE_BATCHES_NOT_ACKNOWLEDGED, which stopCapture swallows, so the capture never completes.
+  # Override for the run only; the developer's log level is untouched.
+  [Environment]::SetEnvironmentVariable('LOGGING_LEVEL_ROOT',(EnvOr 'SC968_LOG_LEVEL' 'INFO'),'Process')
+  [Environment]::SetEnvironmentVariable('CHROMASCAPE_LOG_LEVEL',(EnvOr 'SC968_LOG_LEVEL' 'INFO'),'Process')
   [Environment]::SetEnvironmentVariable('MCP_AUTO_START',(EnvOr 'SC968_MCP_AUTO_START' 'false'),'Process')
   [Environment]::SetEnvironmentVariable('SPRING_DATASOURCE_URL',(EnvOr 'SC968_DATASOURCE_URL' "jdbc:postgresql://localhost:5433/${databaseName}?sslmode=disable"),'Process')
 
