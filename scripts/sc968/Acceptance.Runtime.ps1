@@ -130,7 +130,7 @@ $temporaryEnvironmentNames = @(
   'AI_ROUTINE_OPERATOR_ID','SC967_CANDIDATE_BUILDS_ENABLED','SC967_CANDIDATE_STAGING_ROOT','LEEUWBOT_CANDIDATE_REGISTRY_URL',
   'STATIC_API_TOKEN','CANDIDATE_STORAGE_ROOT','CANDIDATE_TRUSTED_KEYS_DIR','CANDIDATE_SIGNING_PRIVATE_KEY_PATH',
   'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','MICRO6_EXPECTED_ARTIFACT_NAME',
-  'STABILIZATION_AUTH_TOKEN','STABILIZATION_AUTH_WRITE_TOKEN','SPRING_DATASOURCE_URL')
+  'STABILIZATION_AUTH_TOKEN','STABILIZATION_AUTH_WRITE_TOKEN','SPRING_DATASOURCE_URL','MCP_AUTO_START')
 
 try {
   foreach ($name in $temporaryEnvironmentNames) { $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
@@ -215,6 +215,12 @@ try {
     & $dockerCommand.Source exec $postgresContainer psql -U $databaseUser -d postgres -c "CREATE DATABASE $databaseName" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not create the SC-968 acceptance database '$databaseName' in container '$postgresContainer'" }
   }
+  # .gitignore excludes /scripts/*/, so scripts/mcp-bridge is untracked and can never exist in the
+  # clean worktree this run builds from. The bridge then fails configuration, and that failure is
+  # fatal because BridgeConfigException skips the handleStartupFailure path that tolerates a missing
+  # provider. Nothing in SC-967/SC-968 asserts on MCP, so switch auto-start off rather than point the
+  # bridge at untracked content outside the worktree.
+  [Environment]::SetEnvironmentVariable('MCP_AUTO_START',(EnvOr 'SC968_MCP_AUTO_START' 'false'),'Process')
   [Environment]::SetEnvironmentVariable('SPRING_DATASOURCE_URL',(EnvOr 'SC968_DATASOURCE_URL' "jdbc:postgresql://localhost:5433/${databaseName}?sslmode=disable"),'Process')
 
   $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' (Join-Path $env:SystemRoot 'System32/cmd.exe')
