@@ -210,11 +210,21 @@ try {
   $dockerCommand = Get-Command docker.exe -ErrorAction SilentlyContinue
   if ($null -eq $dockerCommand) { $dockerCommand = Get-Command docker -ErrorAction SilentlyContinue }
   if ($null -eq $dockerCommand) { throw "Docker is required to provision the SC-968 acceptance database '$databaseName'" }
-  $databaseProbe = (& $dockerCommand.Source exec $postgresContainer psql -U $databaseUser -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$databaseName'" 2>&1) -join ''
-  if ($databaseProbe -notmatch '1') {
-    & $dockerCommand.Source exec $postgresContainer psql -U $databaseUser -d postgres -c "CREATE DATABASE $databaseName" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Could not create the SC-968 acceptance database '$databaseName' in container '$postgresContainer'" }
+  # Recreate rather than reuse. routine_capture_operations is a durable outbox: a run that is
+  # killed or times out leaves its START operation PENDING/UNCERTAIN, and the next run's
+  # ChromaScape leases and replays it on startup. That resurrected operation binds the single
+  # global recorder to the dead run's debug session, so the live capture is then refused with
+  # "Recording already in progress" and never leaves STARTING. Observed directly: run 4 started
+  # recording_ebedaf23 for run 3's capture_debug_e4339cc2... 90s before its own capture asked.
+  & $dockerCommand.Source exec $postgresContainer psql -U $databaseUser -d postgres -c "DROP DATABASE IF EXISTS $databaseName WITH (FORCE)" | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    # WITH (FORCE) needs PostgreSQL 13+. Fall back to evicting sessions, then dropping.
+    & $dockerCommand.Source exec $postgresContainer psql -U $databaseUser -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$databaseName'" | Out-Null
+    & $dockerCommand.Source exec $postgresContainer psql -U $databaseUser -d postgres -c "DROP DATABASE IF EXISTS $databaseName" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not drop the stale SC-968 acceptance database '$databaseName' in container '$postgresContainer'" }
   }
+  & $dockerCommand.Source exec $postgresContainer psql -U $databaseUser -d postgres -c "CREATE DATABASE $databaseName" | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "Could not create the SC-968 acceptance database '$databaseName' in container '$postgresContainer'" }
   # .gitignore excludes /scripts/*/, so scripts/mcp-bridge is untracked and can never exist in the
   # clean worktree this run builds from. The bridge then fails configuration, and that failure is
   # fatal because BridgeConfigException skips the handleStartupFailure path that tolerates a missing
