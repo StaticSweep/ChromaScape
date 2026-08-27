@@ -79,3 +79,22 @@ test('SC-968 one-command wrapper uses real local roots and creates isolated sign
   assert.match(finish, /ACCEPTANCE PASS/);
   assert.doesNotMatch(finish, /ai-routine-contracts/);
 });
+
+test('acceptance scripts stay parseable by Windows PowerShell 5.1', () => {
+  // ConvertFrom-Json gained -Depth in PowerShell 6.2. The acceptance runs under Windows
+  // PowerShell 5.1, where the parameter does not exist, so every such call throws. Each call site
+  // sat inside a catch that returned null, so the failure was invisible: Wait-Sc968CaptureStatus
+  // could never match a state and timed out after the full 1800s having never printed FISH NOW.
+  const files = [
+    'scripts/sc968-acceptance.ps1',
+    'scripts/finish-sc967-sc968.ps1',
+    'scripts/sc968/Acceptance.Micro6.psm1',
+    'scripts/sc968/Acceptance.Http.psm1',
+  ];
+  for (const file of files) {
+    const body = fs.readFileSync(path.join(root, file), 'utf8');
+    assert.ok(
+      !/ConvertFrom-Json\s+-Depth/.test(body),
+      `${file} uses ConvertFrom-Json -Depth, which throws on Windows PowerShell 5.1`);
+  }
+});

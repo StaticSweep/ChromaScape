@@ -136,7 +136,7 @@ try {
   foreach ($name in @('baseline','assistant','runelite','candidate','shadow')) {
     $path = Join-Path $OutputRoot ("runtime/$name.json")
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Runtime driver did not produce required evidence: $path" }
-    $runtime[$name] = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -Depth 40
+    $runtime[$name] = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
   }
   if (-not $AllowDirtyDevelopmentTrees) { foreach ($gate in $gates.Values) { if ($gate.status -ne 'PASS') { break } } }
   $envInfo = [ordered]@{ windows_version=[Environment]::OSVersion.VersionString; java_version=((& java -version 2>&1) -join ' '); timestamp=[DateTimeOffset]::UtcNow.ToString('o'); timezone=[TimeZoneInfo]::Local.Id }

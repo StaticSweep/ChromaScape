@@ -358,7 +358,7 @@ if ($LASTEXITCODE -ne 0) { throw "SC-967/SC-968 acceptance failed. Inspect $outp
 $sc967 = Join-Path $outputRoot 'sc-967-demo-manifest.json'
 $sc968 = Join-Path $outputRoot 'sc-968-acceptance-manifest.json'
 foreach ($manifest in @($sc967, $sc968)) {
-  $value = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json -Depth 80
+  $value = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
   if ($value.overall -ne 'PASS') { throw "Acceptance manifest is not PASS: $manifest" }
   Write-Output ("PASS {0} sha256:{1}" -f $manifest, (Get-FileHash -LiteralPath $manifest -Algorithm SHA256).Hash.ToLowerInvariant())
 }

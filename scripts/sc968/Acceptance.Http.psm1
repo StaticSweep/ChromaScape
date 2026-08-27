@@ -43,7 +43,7 @@ function Invoke-Sc968Http {
     foreach ($header in $response.Content.Headers) { $headers[$header.Key] = ($header.Value -join ',') }
     $text = [Text.Encoding]::UTF8.GetString($bytes)
     $json = $null
-    if ($bytes.Length -gt 0) { try { $json = $text | ConvertFrom-Json -Depth 80 } catch { $json = $null } }
+    if ($bytes.Length -gt 0) { try { $json = $text | ConvertFrom-Json } catch { $json = $null } }
     return [pscustomobject]@{ StatusCode = [int]$response.StatusCode; BodyBytes = $bytes; BodyText = $text; Json = $json; Headers = $headers }
   } finally {
     if ($response) { $response.Dispose() }

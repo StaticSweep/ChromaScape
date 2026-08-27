@@ -59,7 +59,7 @@ function Set-Sc968RuneLiteEnvironment {
 function Read-Sc968CaptureStatus([string] $StatusFile) {
   if (-not (Test-Path -LiteralPath $StatusFile -PathType Leaf)) { return $null }
   try {
-    $value = Get-Content -LiteralPath $StatusFile -Raw | ConvertFrom-Json -Depth 20
+    $value = Get-Content -LiteralPath $StatusFile -Raw | ConvertFrom-Json
     if ($value.schema -ne 'sc968-capture-status/v1') { return $null }
     return $value
   } catch { return $null }
