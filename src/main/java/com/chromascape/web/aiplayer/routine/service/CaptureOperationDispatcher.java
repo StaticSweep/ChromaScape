@@ -2,6 +2,8 @@ package com.chromascape.web.aiplayer.routine.service;
 
 import com.chromascape.web.aiplayer.routine.entity.RoutineCaptureOperation;
 import com.chromascape.web.aiplayer.routine.repository.RoutineCaptureOperationRepository;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -20,6 +22,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class CaptureOperationDispatcher {
   private static final Duration LEASE = Duration.ofMinutes(2);
+  // request_json stores the whole operation payload (endpoint, idempotency_key, identity,
+  // session_id, start_tick, started_at, video_capture ...) while these records deliberately read
+  // only the few fields the recorder needs. A default mapper treats every other property as an
+  // error, so parsing threw CAPTURE_START_REQUEST_INVALID and the capture never left STARTING.
+  private static final ObjectMapper OPERATION_MAPPER =
+      new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
   private final RoutineCaptureOperationRepository operations;
   private final CaptureRecordingGateway gateway;
   private final CaptureOperationResultService results;
@@ -124,18 +132,18 @@ public class CaptureOperationDispatcher {
             && operation.getLeaseExpiresAt().isBefore(now);
   }
 
-  private StartRequest parseStart(String json) {
-    try { return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, StartRequest.class); }
+  StartRequest parseStart(String json) {
+    try { return OPERATION_MAPPER.readValue(json, StartRequest.class); }
     catch (Exception e) { throw new IllegalStateException("CAPTURE_START_REQUEST_INVALID", e); }
   }
 
-  private CompleteRequest parseComplete(String json) {
-    try { return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, CompleteRequest.class); }
+  CompleteRequest parseComplete(String json) {
+    try { return OPERATION_MAPPER.readValue(json, CompleteRequest.class); }
     catch (Exception e) { throw new IllegalStateException("CAPTURE_COMPLETE_REQUEST_INVALID", e); }
   }
 
-  private record StartRequest(String task_key) { String taskKey() { return task_key; } }
-  private record CompleteRequest(String recording_id, String debug_session_id, int final_tick) {
+  record StartRequest(String task_key) { String taskKey() { return task_key; } }
+  record CompleteRequest(String recording_id, String debug_session_id, int final_tick) {
     String recordingId() { return recording_id; }
     String debugSessionId() { return debug_session_id; }
     int finalTick() { return final_tick; }
