@@ -23,6 +23,12 @@ public class AiRoutineOperatorWebConfig implements WebMvcConfigurer {
   public void addInterceptors(InterceptorRegistry registry) {
     registry.addInterceptor(interceptor)
         .addPathPatterns("/api/v1/ai-routine/**")
-        .excludePathPatterns("/api/v1/ai-routine/capture/**");
+        .excludePathPatterns(
+            "/api/v1/ai-routine/capture/**",
+            // CaptureSessionClient creates its server-owned run with the capture bearer. Applying
+            // operator auth here as well makes the request impossible when the two credentials are
+            // correctly distinct; RoutineController performs capture-token auth on both aliases.
+            "/api/v1/ai-routine/runs/runelite",
+            "/api/v1/ai-routine/runs/from-runelite-capture");
   }
 }
