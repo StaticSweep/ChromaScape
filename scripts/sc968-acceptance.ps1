@@ -91,6 +91,7 @@ try {
       --tests 'com.chromascape.web.aiplayer.prototype.*' `
       --tests 'com.chromascape.web.aiplayer.routine.RoutineArchitectureTest' `
       --tests 'com.chromascape.web.aiplayer.routine.config.*' `
+      --tests 'com.chromascape.web.aiplayer.routine.dto.*' `
       --tests 'com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest' `
       --tests 'com.chromascape.web.aiplayer.routine.service.PatchCandidateManifestV2Test' `
       --tests 'com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest' `
