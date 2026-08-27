@@ -156,12 +156,15 @@ try {
   $registryOutput = Join-Path $OutputRoot 'registry'
   $stagingRoot = Join-Path $registryOutput 'staging'
   New-Item -ItemType Directory -Force -Path $output,$logs,$registryOutput,$stagingRoot | Out-Null
-  $oldEvidence = @(
+  # Wrap the pipeline, not just the array literal: Where-Object yields $null when nothing matches,
+  # and under Set-StrictMode -Version Latest $null.Count throws PropertyNotFoundStrict. That is the
+  # fresh-output case this check exists to allow, so the unwrapped form could never succeed.
+  $oldEvidence = @(@(
     (Join-Path $output 'baseline.json'), (Join-Path $output 'assistant.json'), (Join-Path $output 'runelite.json'),
     (Join-Path $output 'candidate.json'), (Join-Path $output 'shadow.json'),
     (Join-Path $output 'baseline-status.json'), (Join-Path $output 'candidate-status.json'), (Join-Path $output 'runelite-status.json'),
     (Join-Path $registryOutput 'staged-manifest.json'), (Join-Path $registryOutput 'lookup-response.json'),
-    (Join-Path $registryOutput 'candidate.jar')) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+    (Join-Path $registryOutput 'candidate.jar')) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
   if ($oldEvidence.Count -gt 0 -or @(Get-ChildItem -LiteralPath $stagingRoot -Force -ErrorAction SilentlyContinue).Count -gt 0) {
     throw 'SC-968 runtime output must be fresh; move the previous evidence directory before retrying'
   }
