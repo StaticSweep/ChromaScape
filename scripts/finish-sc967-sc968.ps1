@@ -324,6 +324,18 @@ if ($null -ne $listener) {
   Start-Sleep -Seconds 2
 }
 
+# The acceptance starts its own candidate registry, and plugin-service hard-codes its listener
+# (plugin-service/main.go: router.Run(":8081")), so the port cannot be redirected. If anything else
+# already holds it the registry silently fails to bind and the readiness probe is answered by the
+# wrong service, which strands the run for the full probe timeout before any client is launched.
+# Fail here instead, with the remedy, because the gates ahead of that point take many minutes.
+$registryListener = Get-NetTCPConnection -State Listen -LocalPort 8081 -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($null -ne $registryListener) {
+  $registryOwner = Get-CimInstance Win32_Process -Filter "ProcessId=$($registryListener.OwningProcess)" -ErrorAction SilentlyContinue
+  $registryOwnerName = if ($null -eq $registryOwner) { 'an unknown process' } else { $registryOwner.Name }
+  throw ("Port 8081 is held by {0} (PID {1}); the SC-968 candidate registry cannot bind it. If this is the leeuwbot-plugin container, run 'docker stop leeuwbot-plugin', then rerun." -f $registryOwnerName, $registryListener.OwningProcess)
+}
+
 Write-Output ''
 Write-Output 'SC-967/SC-968 native acceptance is starting.'
 Write-Output 'Three clients will appear. In each client, log in if needed and use Net on a Fishing spot once when prompted.'
