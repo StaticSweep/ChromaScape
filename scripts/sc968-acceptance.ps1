@@ -30,7 +30,12 @@ try {
   }
   if (-not (Test-Path -LiteralPath $RuntimeDriver -PathType Leaf)) { throw "SC-968 runtime driver is missing: $RuntimeDriver" }
   $env:FEATURES_AI_PLAYER_CONTROL = 'false'
-  $env:SC968_MAVEN_REPO = Join-Path $OutputRoot 'm2'
+  # $OutputRoot is archived wholesale at the start of every run, so a repository inside it is
+  # discarded and ~250 MB of dependencies are re-resolved every cycle. Keep it beside the run
+  # directory instead: still isolated from the developer's ~/.m2, but reused across runs.
+  if ([string]::IsNullOrWhiteSpace($env:SC968_MAVEN_REPO)) {
+    $env:SC968_MAVEN_REPO = Join-Path (Split-Path -Parent $OutputRoot) 'sc968-m2'
+  }
   $env:SC967_VECTORS_PATH = Join-Path $ContractsRoot 'sc967\ed25519-vectors.json'
   if (-not (Test-Path -LiteralPath $env:SC967_VECTORS_PATH -PathType Leaf)) {
     throw "SC-967 shared vectors are missing: $env:SC967_VECTORS_PATH"
