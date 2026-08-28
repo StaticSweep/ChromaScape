@@ -66,6 +66,13 @@ function Wait-AssistantProposal([string] $BaseUrl, [string] $Token, [string] $Co
     $status = (Api $BaseUrl "/api/v1/ai-routine/assistant/conversations/$ConversationId" $Token).Json
     $proposal = Field $status 'latest_proposal'
     if ($proposal -and (Field $proposal 'state') -eq 'PROPOSED') { return $proposal }
+    # Generation fails in milliseconds when it fails at all, and clears its own state afterwards.
+    # Without this the driver polled a dead conversation for the full timeout and reported the
+    # symptom rather than the cause; report what the server actually recorded instead.
+    $failure = Field $status 'last_generation_failure'
+    if ($failure -and (Field $status 'generation_state') -ne 'GENERATING') {
+      throw ("Assistant generation failed: {0} ({1})" -f (Field $failure 'message'), (Field $failure 'code'))
+    }
     Start-Sleep -Milliseconds 250
   } while ([DateTimeOffset]::UtcNow -lt $deadline)
   throw 'Timed out waiting for the Assistant graph proposal'

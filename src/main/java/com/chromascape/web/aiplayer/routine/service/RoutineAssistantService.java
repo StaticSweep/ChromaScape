@@ -1,7 +1,6 @@
 package com.chromascape.web.aiplayer.routine.service;
 
 import com.chromascape.web.aiplayer.routine.dto.RoutineApiDtos;
-import com.chromascape.web.aiplayer.routine.entity.BehaviorGraphDefinition;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantEvent;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantProposal;
@@ -81,6 +80,12 @@ public class RoutineAssistantService {
   public Map<String, Object> status(String id) {
     RoutineAssistantConversation conversation = conversation(id);
     Map<String, Object> result = new LinkedHashMap<>(response(conversation));
+    // A generation that fails does so in milliseconds, but the failure was only ever visible as an
+    // event on the SSE stream. A poller watching for latest_proposal could not tell "still working"
+    // from "already dead" and had to burn its whole timeout. Surface the terminal state.
+    result.put("generation_state", conversation.getGenerationState() == null ? "IDLE" : conversation.getGenerationState());
+    events.findFirstByConversationIdAndTypeOrderByEventIdDesc(id, "generation.failed")
+        .ifPresent(event -> result.put("last_generation_failure", read(event.getDataJson())));
     proposals.findFirstByConversationIdOrderByIdDesc(id)
         .ifPresent(proposal -> result.put("latest_proposal", proposalResponse(proposal)));
     return result;
@@ -139,11 +144,21 @@ public class RoutineAssistantService {
 
   private void generateProposal(String id, String token, String message) {
     try {
-      RoutineAssistantConversation conversation = conversation(id);
-      Map<String, Object> context = new LinkedHashMap<>(); context.put("run_id", conversation.getRunId());
-      latestGraphForRun(conversation.getRunId()).ifPresent(graph -> {
-        context.put("graph_id", graph.getGraphId()); context.put("graph_hash", graph.getGraphHash());
-      });
+      // This runs on generationExecutor, with no transaction and no open session. Both
+      // RoutineAssistantConversation.generationMessage and every BehaviorGraphDefinition JSON column
+      // are mapped @Lob, and Hibernate materializes a Lob through the JDBC connection that loaded
+      // the row. Loading either entity here therefore throws "Unable to access lob stream" the
+      // moment a generation message exists, which the catch below turned into a silent
+      // ASSISTANT_GENERATION_FAILED event while the caller polled for a proposal that could never
+      // arrive. Read scalars only.
+      String runId = conversations.findRunIdByConversationId(id)
+          .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "conversation not found"));
+      Map<String, Object> context = new LinkedHashMap<>(); context.put("run_id", runId);
+      List<Object[]> graphReferences = graphs.findGraphReferences("PUBLISHED", "\"run_id\":\"" + runId + "\"");
+      if (!graphReferences.isEmpty()) {
+        Object[] reference = graphReferences.get(0);
+        context.put("graph_id", reference[0]); context.put("graph_hash", reference[1]);
+      }
       long delta = store.appendGenerationEvent(id, token, "analysis.delta",
           write(Map.of("text", "Reviewing immutable capture evidence and graph semantics.", "control_allowed", false)));
       if (delta < 0) return;
@@ -272,7 +287,6 @@ public class RoutineAssistantService {
     result.put("control_allowed", false);
     return result;
   }
-  private Optional<BehaviorGraphDefinition> latestGraphForRun(String runId) { return graphs.findFirstByStateAndIdentityJsonContainingOrderByCreatedAtDesc("PUBLISHED", "\"run_id\":\"" + runId + "\""); }
   @SuppressWarnings("unchecked") private Map<String, Object> read(String json) { try { return mapper.readValue(json, Map.class); } catch (Exception e) { throw error(HttpStatus.INTERNAL_SERVER_ERROR, "PERSISTED_JSON_CORRUPT", "persisted assistant diff is corrupt"); } }
   @SuppressWarnings("unchecked") private static Map<String, Object> cast(Object value) { return (Map<String, Object>) value; }
   private String write(Object value) { try { return mapper.writeValueAsString(value); } catch (Exception e) { throw error(HttpStatus.UNPROCESSABLE_ENTITY, "ASSISTANT_DIFF_INVALID", "assistant payload is invalid"); } }

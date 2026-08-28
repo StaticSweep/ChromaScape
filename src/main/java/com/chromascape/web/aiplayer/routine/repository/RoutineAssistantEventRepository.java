@@ -8,4 +8,5 @@ public interface RoutineAssistantEventRepository extends JpaRepository<RoutineAs
   List<RoutineAssistantEvent> findByConversationIdAndEventIdGreaterThanOrderByEventIdAsc(String conversationId,Long eventId);
   Optional<RoutineAssistantEvent> findTopByConversationIdOrderByEventIdDesc(String conversationId);
   List<RoutineAssistantEvent> findByConversationIdAndEventIdGreaterThanOrderByEventIdAsc(String conversationId, Long eventId, Pageable pageable);
+  Optional<RoutineAssistantEvent> findFirstByConversationIdAndTypeOrderByEventIdDesc(String conversationId, String type);
 }
