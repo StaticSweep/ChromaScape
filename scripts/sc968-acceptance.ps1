@@ -122,7 +122,14 @@ try {
   } (Join-Path $logs 'runelite-test.log') $gates
 
   if (-not $AllowDirtyDevelopmentTrees) {
-    foreach ($item in $roots.GetEnumerator()) { if (Get-GitTrackedState $item.Value) { $gates["$($item.Key)_final_clean"]=[ordered]@{status='FAIL';exit_code=1;log=''} } }
+    # Build output is excluded here, not source: micro6 tracks compiled .class files under
+    # runelite-api/build, so the gates above rewrite them on every run and a literal git status can
+    # never be empty. Any change outside a build directory still fails this gate, and the drift is
+    # recorded so a real regression is diagnosable from the manifest alone.
+    foreach ($item in $roots.GetEnumerator()) {
+      $drift = Get-Sc968SourceDrift $item.Value
+      if ($drift) { $gates["$($item.Key)_final_clean"]=[ordered]@{status='FAIL';exit_code=1;log=$drift} }
+    }
   }
   # Runtime acceptance is intentionally a hard gate. The tracked driver launches only owned
   # native processes and writes baseline/assistant/RuneLite/candidate/shadow JSON from live IDs; no fixture path is

@@ -271,6 +271,10 @@ try {
   $microLog = Join-Path $logs 'baseline-micro6.log'
   $micro = Start-Sc968OwnedProcess -Name 'micro6-baseline' -FilePath $microLaunch -WorkingDirectory $Micro6Root -ArgumentList (EnvOr 'SC968_MICRO6_LAUNCH_ARGUMENTS' '') -LogPath $microLog
   $owned += $micro
+  # The operator has to log in before the plugin can start a capture, and the only prompts used to
+  # come after RECORDING was already reached. The 2026-08-28 09:45 run failed exactly here: the
+  # client sat on LOGIN_SCREEN for the whole 1800 s wait with nothing on screen asking for a login.
+  Write-Host 'LOG IN NOW (1/3): log into the baseline Micro6 client. Capture starts on its own; wait for the FISH prompt.' -ForegroundColor Cyan
   $recordingState = Wait-Capture $baselineStatusFile $runtimeTimeout
   if ($recordingState.state -ne 'RECORDING') { throw 'Baseline Micro6 never reached RECORDING' }
   $baselineSession = Read-Session $chromaUrl $captureToken ([string]$recordingState.session_id)
@@ -386,6 +390,7 @@ try {
   $candidateMicro = Start-Sc968OwnedProcess -Name 'micro6-candidate' -FilePath $microLaunch -WorkingDirectory $Micro6Root -ArgumentList (EnvOr 'SC968_MICRO6_LAUNCH_ARGUMENTS' '') -LogPath $candidateLog
   $owned += $candidateMicro
   Wait-LogMarkers $candidateLog $candidateMicro.Pid @('verified exact registry manifest','verified candidate artifact','immediate pre-load artifact rehash passed','applied remote AccountBuilder candidate') $runtimeTimeout
+  Write-Host 'LOG IN NOW (2/3): log into the candidate Micro6 client. Capture starts on its own; wait for the FISH prompt.' -ForegroundColor Cyan
   $secondRecordingState = Wait-Capture $candidateStatusFile $runtimeTimeout
   if ($secondRecordingState.state -ne 'RECORDING') { throw 'Candidate Micro6 never reached RECORDING' }
   $secondSession = Read-Session $chromaUrl $captureToken ([string]$secondRecordingState.session_id)
@@ -411,6 +416,7 @@ try {
   $runeliteLog = Join-Path $logs 'runelite-human.log'
   $runelite = Start-Sc968OwnedProcess -Name 'runelite-human' -FilePath $runeliteLaunch -WorkingDirectory $RuneLiteRoot -ArgumentList (EnvOr 'SC968_RUNELITE_LAUNCH_ARGUMENTS' '') -LogPath $runeliteLog
   $owned += $runelite
+  Write-Host 'LOG IN NOW (3/3): log into the standard RuneLite client. Capture starts on its own; wait for the FISH prompt.' -ForegroundColor Cyan
   $runeliteRecordingState = Wait-Capture $runeliteStatusFile $runtimeTimeout
   if ($runeliteRecordingState.state -ne 'RECORDING') { throw 'RuneLite capture never reached RECORDING' }
   $runeliteLiveSession = Read-Session $chromaUrl $captureToken ([string]$runeliteRecordingState.session_id)
