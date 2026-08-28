@@ -9,6 +9,7 @@ const entry = fs.readFileSync(path.join(root, 'scripts/sc968-acceptance.ps1'), '
 const finish = fs.readFileSync(path.join(root, 'scripts/finish-sc967-sc968.ps1'), 'utf8');
 const evidence = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Evidence.psm1'), 'utf8');
 const common = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Common.psm1'), 'utf8');
+const micro6 = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Micro6.psm1'), 'utf8');
 
 test('SC-968 runtime requires Assistant acceptance and a real RuneLite capture', () => {
   assert.match(runtime, /Wait-AssistantProposal/);
@@ -27,6 +28,21 @@ test('SC-968 candidate evidence uses and validates the signed nested manifest id
   assert.match(runtime, /Registered candidate signature is not valid base64/);
   assert.doesNotMatch(runtime, /\$candidate\.certification_hash/);
   assert.doesNotMatch(runtime, /\$candidate\.signature/);
+});
+
+test('SC-968 Micro6 captures bind certified stabilization and source provenance', () => {
+  assert.match(runtime, /Initialize-Sc968ManagedCaptureIdentity/);
+  assert.match(runtime, /-ManagedIdentity \$baselineManagedIdentity/);
+  assert.match(runtime, /-ManagedIdentity \$candidateManagedIdentity/);
+  assert.match(runtime, /-Name 'baseline' -RunIndex 0/);
+  assert.match(runtime, /-Name 'candidate' -RunIndex 1/);
+  assert.match(runtime, /micro6-builder\/v2/);
+  assert.match(runtime, /SC968_SOURCE_MANIFEST_HASH/);
+  assert.match(micro6, /:client:micro6StabilizationHarness/);
+  assert.match(micro6, /certification_status -ne 'CERTIFIED'/);
+  assert.match(micro6, /SC968_EXECUTOR_INSTANCE_ID/);
+  assert.match(micro6, /srcsnap_/);
+  assert.doesNotMatch(runtime, /stabilization\/ingest-report/);
 });
 
 test('SC-968 entrypoint and manifests require all five runtime evidence documents', () => {
