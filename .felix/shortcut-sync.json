@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "workflow": "shortcut_delivery",
+  "provider": "shortcut",
+  "workflow_state_ids": {
+    "planned": 500000007,
+    "started": 500000008,
+    "review": 500000009,
+    "done": 500000010,
+    "blocked": null,
+    "cancelled": null
+  },
+  "comment_marker_template": "[felix-sync:<felix-task-id>:<planned|started|review|done>]",
+  "credential_source": "Shortcut MCP environment/config; never this file"
+}
