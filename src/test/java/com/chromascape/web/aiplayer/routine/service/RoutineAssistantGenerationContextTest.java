@@ -13,7 +13,6 @@ import static org.mockito.Mockito.when;
 import com.chromascape.web.aiplayer.routine.dto.RoutineApiDtos;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantEvent;
-import com.chromascape.web.aiplayer.routine.repository.BehaviorGraphDefinitionRepository;
 import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantConversationRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantEventRepository;
@@ -28,12 +27,13 @@ import org.junit.jupiter.api.Test;
 /**
  * Pins the asynchronous proposal generator away from {@code @Lob} entities.
  *
- * <p>The generator runs on its own executor with no transaction and no open session.
- * {@code RoutineAssistantConversation.generationMessage} and every {@code BehaviorGraphDefinition}
- * JSON column are mapped {@code @Lob}, and Hibernate materializes a Lob through the connection that
- * loaded the row. Loading either entity there threw "Unable to access lob stream" as soon as a
- * generation message existed. The generator caught it, wrote a silent {@code generation.failed}
- * event, and the acceptance driver then polled a dead conversation for its full 1800 s timeout.
+ * <p>The generator runs on its own executor: no transaction, no open session, connection in
+ * auto-commit. {@code RoutineAssistantConversation.generationMessage} and
+ * {@code BehaviorGraphDefinition.identityJson} are both mapped {@code @Lob}, which failed twice
+ * over -- loading the conversation threw "Unable to access lob stream", and the graph lookup's
+ * {@code like} predicate threw "Large Objects may not be used in auto-commit mode". Each was caught
+ * and written as a silent {@code generation.failed}, leaving the acceptance driver to poll a dead
+ * conversation for its full 1800 s timeout.
  */
 class RoutineAssistantGenerationContextTest {
 
@@ -65,25 +65,25 @@ class RoutineAssistantGenerationContextTest {
   void generatesProposalWithoutLoadingLobBackedEntities() {
     RoutineAssistantConversationRepository conversations =
         mock(RoutineAssistantConversationRepository.class);
-    BehaviorGraphDefinitionRepository graphs = mock(BehaviorGraphDefinitionRepository.class);
     RoutineAssistantConversationStore store = mock(RoutineAssistantConversationStore.class);
     RoutineAssistantProvider provider = mock(RoutineAssistantProvider.class);
 
-    // Any load of the whole entity is the defect, so make it fail exactly the way Hibernate does.
+    // Reading the conversation straight from the executor thread is the defect. Make both shapes
+    // fail the way the database did, so a regression to a direct read fails this test. The graph
+    // lookup cannot regress the same way any more: the service no longer holds that repository.
     when(conversations.findByConversationId(anyString()))
         .thenThrow(new IllegalStateException("Unable to access lob stream"));
-    when(graphs.findFirstByStateAndIdentityJsonContainingOrderByCreatedAtDesc(
-            anyString(), anyString()))
-        .thenThrow(new IllegalStateException("Unable to access lob stream"));
+    when(conversations.findRunIdByConversationId(anyString()))
+        .thenThrow(new IllegalStateException("Large Objects may not be used in auto-commit mode."));
 
-    when(conversations.findRunIdByConversationId("conv_1")).thenReturn(Optional.of("run_1"));
-    when(graphs.findGraphReferences(eq("PUBLISHED"), anyString()))
-        .thenReturn(
-            List.<Object[]>of(
-                new Object[] {
-                  "graph_0123456789abcdef01234567",
-                  "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-                }));
+    // The transactional store is the only sanctioned reader.
+    Map<String, Object> context = new LinkedHashMap<>();
+    context.put("run_id", "run_1");
+    context.put("graph_id", "graph_0123456789abcdef01234567");
+    context.put(
+        "graph_hash",
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000");
+    when(store.generationContext("conv_1")).thenReturn(context);
     when(store.beginGeneration(anyString(), anyString(), anyString())).thenReturn("token_1");
     when(store.appendGenerationEvent(anyString(), anyString(), anyString(), anyString()))
         .thenReturn(1L);
@@ -98,7 +98,6 @@ class RoutineAssistantGenerationContextTest {
             conversations,
             mock(RoutineAssistantEventRepository.class),
             mock(RoutineAssistantProposalRepository.class),
-            graphs,
             mock(CurrentSliceRunRepository.class),
             mock(BehaviorGraphService.class),
             new GraphSchemaValidator(),
@@ -110,6 +109,7 @@ class RoutineAssistantGenerationContextTest {
         .commitProposalIfCurrentToken(eq("conv_1"), eq("token_1"), any(), anyString());
     verify(store, never()).failGenerationIfCurrentToken(anyString(), anyString(), anyString());
     verify(conversations, never()).findByConversationId(anyString());
+    verify(conversations, never()).findRunIdByConversationId(anyString());
   }
 
   @Test
@@ -138,7 +138,6 @@ class RoutineAssistantGenerationContextTest {
             conversations,
             events,
             mock(RoutineAssistantProposalRepository.class),
-            mock(BehaviorGraphDefinitionRepository.class),
             mock(CurrentSliceRunRepository.class),
             mock(BehaviorGraphService.class),
             mock(GraphSchemaValidator.class),

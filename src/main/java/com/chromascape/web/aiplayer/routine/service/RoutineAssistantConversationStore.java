@@ -3,6 +3,7 @@ package com.chromascape.web.aiplayer.routine.service;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantEvent;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantProposal;
+import com.chromascape.web.aiplayer.routine.repository.BehaviorGraphDefinitionRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantConversationRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantEventRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantProposalRepository;
@@ -20,14 +21,17 @@ public class RoutineAssistantConversationStore {
   private final RoutineAssistantConversationRepository conversations;
   private final RoutineAssistantEventRepository events;
   private final RoutineAssistantProposalRepository proposals;
+  private final BehaviorGraphDefinitionRepository graphs;
 
   public RoutineAssistantConversationStore(
       RoutineAssistantConversationRepository conversations,
       RoutineAssistantEventRepository events,
-      RoutineAssistantProposalRepository proposals) {
+      RoutineAssistantProposalRepository proposals,
+      BehaviorGraphDefinitionRepository graphs) {
     this.conversations = conversations;
     this.events = events;
     this.proposals = proposals;
+    this.graphs = graphs;
   }
 
   @Transactional
@@ -154,6 +158,31 @@ public class RoutineAssistantConversationStore {
     long next = conversation.getNextEventId() == null ? 1L : conversation.getNextEventId() + 1L;
     conversation.setNextEventId(next); conversations.save(conversation);
     RoutineAssistantEvent event = new RoutineAssistantEvent(); event.setConversationId(conversation.getConversationId()); event.setEventId(next); event.setType(type); event.setDataJson(dataJson); events.save(event); return next;
+  }
+
+  /**
+   * Assembles the provider context for one generation.
+   *
+   * <p>The generator itself runs on a plain executor thread, where the connection is in auto-commit
+   * mode. {@code BehaviorGraphDefinition.identityJson} is mapped {@code @Lob}, so even the
+   * {@code like} predicate that finds a run's graph binds through PostgreSQL's large-object API and
+   * fails with "Large Objects may not be used in auto-commit mode", exactly as loading a whole
+   * conversation fails with "Unable to access lob stream". Both reads therefore belong here, behind
+   * a transaction, and both use scalar projections so no JSON column is materialized to answer them.
+   */
+  @Transactional(readOnly = true)
+  public java.util.Map<String, Object> generationContext(String conversationId) {
+    String runId = conversations.findRunIdByConversationId(conversationId)
+        .orElseThrow(() -> conflict("NOT_FOUND", "conversation not found"));
+    java.util.Map<String, Object> context = new java.util.LinkedHashMap<>();
+    context.put("run_id", runId);
+    java.util.List<Object[]> references =
+        graphs.findGraphReferences("PUBLISHED", "\"run_id\":\"" + runId + "\"");
+    if (!references.isEmpty()) {
+      context.put("graph_id", references.get(0)[0]);
+      context.put("graph_hash", references.get(0)[1]);
+    }
+    return context;
   }
 
   private RoutineAssistantConversation locked(String id) { return conversations.findWithLockByConversationId(id).orElseThrow(() -> conflict("NOT_FOUND", "conversation not found")); }

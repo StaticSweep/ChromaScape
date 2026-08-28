@@ -6,7 +6,6 @@ import static org.mockito.Mockito.when;
 
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantProposal;
-import com.chromascape.web.aiplayer.routine.repository.BehaviorGraphDefinitionRepository;
 import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantConversationRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantEventRepository;
@@ -43,7 +42,6 @@ class RoutineAssistantStatusTest {
             conversations,
             mock(RoutineAssistantEventRepository.class),
             proposals,
-            mock(BehaviorGraphDefinitionRepository.class),
             mock(CurrentSliceRunRepository.class),
             mock(BehaviorGraphService.class),
             mock(GraphSchemaValidator.class),

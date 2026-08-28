@@ -4,7 +4,6 @@ import com.chromascape.web.aiplayer.routine.dto.RoutineApiDtos;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantEvent;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantProposal;
-import com.chromascape.web.aiplayer.routine.repository.BehaviorGraphDefinitionRepository;
 import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantConversationRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantEventRepository;
@@ -42,7 +41,6 @@ public class RoutineAssistantService {
   private final RoutineAssistantConversationRepository conversations;
   private final RoutineAssistantEventRepository events;
   private final RoutineAssistantProposalRepository proposals;
-  private final BehaviorGraphDefinitionRepository graphs;
   private final CurrentSliceRunRepository runs;
   private final BehaviorGraphService graphService;
   private final GraphSchemaValidator schemaValidator;
@@ -55,10 +53,10 @@ public class RoutineAssistantService {
 
   public RoutineAssistantService(RoutineAssistantProvider provider, ObjectMapper mapper,
       RoutineAssistantConversationRepository conversations, RoutineAssistantEventRepository events,
-      RoutineAssistantProposalRepository proposals, BehaviorGraphDefinitionRepository graphs,
+      RoutineAssistantProposalRepository proposals,
       CurrentSliceRunRepository runs, BehaviorGraphService graphService,
       GraphSchemaValidator schemaValidator, RoutineAssistantConversationStore store) {
-    this.provider = provider; this.mapper = mapper; this.conversations = conversations; this.events = events; this.proposals = proposals; this.graphs = graphs; this.runs = runs; this.graphService = graphService; this.schemaValidator = schemaValidator; this.store = store;
+    this.provider = provider; this.mapper = mapper; this.conversations = conversations; this.events = events; this.proposals = proposals; this.runs = runs; this.graphService = graphService; this.schemaValidator = schemaValidator; this.store = store;
   }
 
   @Transactional
@@ -144,21 +142,13 @@ public class RoutineAssistantService {
 
   private void generateProposal(String id, String token, String message) {
     try {
-      // This runs on generationExecutor, with no transaction and no open session. Both
-      // RoutineAssistantConversation.generationMessage and every BehaviorGraphDefinition JSON column
-      // are mapped @Lob, and Hibernate materializes a Lob through the JDBC connection that loaded
-      // the row. Loading either entity here therefore throws "Unable to access lob stream" the
-      // moment a generation message exists, which the catch below turned into a silent
-      // ASSISTANT_GENERATION_FAILED event while the caller polled for a proposal that could never
-      // arrive. Read scalars only.
-      String runId = conversations.findRunIdByConversationId(id)
-          .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "conversation not found"));
-      Map<String, Object> context = new LinkedHashMap<>(); context.put("run_id", runId);
-      List<Object[]> graphReferences = graphs.findGraphReferences("PUBLISHED", "\"run_id\":\"" + runId + "\"");
-      if (!graphReferences.isEmpty()) {
-        Object[] reference = graphReferences.get(0);
-        context.put("graph_id", reference[0]); context.put("graph_hash", reference[1]);
-      }
+      // This runs on generationExecutor: no transaction, no open session, connection in auto-commit.
+      // RoutineAssistantConversation.generationMessage and BehaviorGraphDefinition.identityJson are
+      // both mapped @Lob, so reading either here fails -- loading the conversation with "Unable to
+      // access lob stream", and even the graph lookup's like predicate with "Large Objects may not
+      // be used in auto-commit mode". The catch below then recorded a silent generation.failed that
+      // no poller could see. The store owns that read, behind a transaction.
+      Map<String, Object> context = store.generationContext(id);
       long delta = store.appendGenerationEvent(id, token, "analysis.delta",
           write(Map.of("text", "Reviewing immutable capture evidence and graph semantics.", "control_allowed", false)));
       if (delta < 0) return;
