@@ -183,6 +183,9 @@ public class RoutineAssistantConversationStore {
       if (identity != null && identity.contains(token)) {
         context.put("graph_id", graph.getGraphId());
         context.put("graph_hash", graph.getGraphHash());
+        // The provider has to see the graph to propose a diff against it. Read the definition here,
+        // where the transaction makes the @Lob accessible; the caller parses it off-thread.
+        context.put("graph_definition_json", graph.getDefinitionJson());
         break;
       }
     }

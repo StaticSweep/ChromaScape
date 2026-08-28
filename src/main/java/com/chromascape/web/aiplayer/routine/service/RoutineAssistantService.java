@@ -149,6 +149,11 @@ public class RoutineAssistantService {
       // be used in auto-commit mode". The catch below then recorded a silent generation.failed that
       // no poller could see. The store owns that read, behind a transaction.
       Map<String, Object> context = store.generationContext(id);
+      // Parsing is safe off-thread; the store already materialized the JSON inside its transaction.
+      Object definitionJson = context.remove("graph_definition_json");
+      if (definitionJson instanceof String raw && !raw.isBlank()) {
+        context.put("graph_definition", read(raw));
+      }
       long delta = store.appendGenerationEvent(id, token, "analysis.delta",
           write(Map.of("text", "Reviewing immutable capture evidence and graph semantics.", "control_allowed", false)));
       if (delta < 0) return;
