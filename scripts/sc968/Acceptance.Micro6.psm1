@@ -86,8 +86,15 @@ function Initialize-Sc968ManagedCaptureIdentity {
   New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
   $arguments = "--plan=$PlanPath --output=$OutputDirectory --fixture=pass --run-index=$RunIndex --certify-url=$BaseUrl --certification-mode=required"
-  & $gradle --no-daemon --no-watch-fs ":client:micro6StabilizationHarness" "-Pmicro6.stabilization.plan=$PlanPath" "--args=$arguments"
-  if ($LASTEXITCODE -ne 0) { throw "Micro6 stabilization seed '$Name' failed with exit code $LASTEXITCODE" }
+  $seedExitCode = 1
+  Push-Location $Micro6Root
+  try {
+    & $gradle --no-daemon --no-watch-fs ":client:micro6StabilizationHarness" "-Pmicro6.stabilization.plan=$PlanPath" "--args=$arguments"
+    $seedExitCode = $LASTEXITCODE
+  } finally {
+    Pop-Location
+  }
+  if ($seedExitCode -ne 0) { throw "Micro6 stabilization seed '$Name' failed with exit code $seedExitCode" }
 
   $manifests = @(Get-ChildItem -LiteralPath $OutputDirectory -Recurse -Filter 'run-manifest.json' -File)
   $receipts = @(Get-ChildItem -LiteralPath $OutputDirectory -Recurse -Filter 'certification-receipt.json' -File)

@@ -46,6 +46,8 @@ test('SC-968 Micro6 captures bind certified stabilization and source provenance'
   assert.match(runtime, /micro6-builder\/v2/);
   assert.match(runtime, /SC968_SOURCE_MANIFEST_HASH/);
   assert.match(micro6, /:client:micro6StabilizationHarness/);
+  assert.match(micro6, /Push-Location \$Micro6Root/);
+  assert.match(micro6, /\$seedExitCode = \$LASTEXITCODE/);
   assert.match(micro6, /certification_status -ne 'CERTIFIED'/);
   assert.match(micro6, /SC968_EXECUTOR_INSTANCE_ID/);
   assert.match(micro6, /srcsnap_/);
