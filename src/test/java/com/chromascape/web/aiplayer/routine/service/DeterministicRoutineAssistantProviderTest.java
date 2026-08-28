@@ -1,6 +1,9 @@
 package com.chromascape.web.aiplayer.routine.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -17,6 +20,22 @@ class DeterministicRoutineAssistantProviderTest {
 
   private final DeterministicRoutineAssistantProvider provider =
       new DeterministicRoutineAssistantProvider();
+  private final GraphSchemaValidator schemaValidator = new GraphSchemaValidator();
+  private final ObjectMapper mapper = new ObjectMapper();
+
+  /**
+   * Every proposal is validated against behavior-graph-diff/v1 before it can be persisted, so
+   * assert it here too. Omitting the schema-required edge id is exactly how an invalid add_edge
+   * reached a live acceptance run once already.
+   */
+  private Map<String, Object> propose(List<Map<String, Object>> nodes) {
+    Map<String, Object> proposal = provider.propose("conv_1", "review", contextWith(nodes));
+    @SuppressWarnings("unchecked")
+    Map<String, Object> diff = (Map<String, Object>) proposal.get("diff");
+    assertThatCode(() -> schemaValidator.validateDiff(mapper.valueToTree(diff)))
+        .doesNotThrowAnyException();
+    return proposal;
+  }
 
   private static Map<String, Object> node(String id, String type, long ordinal, Map<String, Object> semantics) {
     Map<String, Object> node = new LinkedHashMap<>();
@@ -60,7 +79,7 @@ class DeterministicRoutineAssistantProviderTest {
     nodes.add(node("node_1_bbbbbbbbbbbb", "ACTION", 1, action("Net", "Fishing spot")));
     nodes.add(node("node_2_cccccccccccc", "TERMINAL", 2, Map.of("kind", "terminal")));
 
-    List<Map<String, Object>> operations = operationsOf(provider.propose("conv_1", "review", contextWith(nodes)));
+    List<Map<String, Object>> operations = operationsOf(propose(nodes));
 
     assertThat(operations).hasSize(1);
     Map<String, Object> bind = operations.get(0);
@@ -88,7 +107,7 @@ class DeterministicRoutineAssistantProviderTest {
     nodes.add(node("node_2_cccccccccccc", "ACTION", 2, action("Net", "Fishing spot")));
     nodes.add(node("node_3_dddddddddddd", "TERMINAL", 3, Map.of("kind", "terminal")));
 
-    List<Map<String, Object>> operations = operationsOf(provider.propose("conv_1", "review", contextWith(nodes)));
+    List<Map<String, Object>> operations = operationsOf(propose(nodes));
 
     assertThat(operations).hasSize(3);
     assertThat(operations.get(0))
@@ -96,8 +115,13 @@ class DeterministicRoutineAssistantProviderTest {
         .containsEntry("node_id", "node_1_bbbbbbbbbbbb");
     // START and the surviving action are no longer adjacent, so the chain needs rejoining.
     assertThat(operations.get(1)).containsEntry("op", "add_edge");
-    assertThat(operations.get(1).get("edge"))
-        .isEqualTo(Map.of("from", "node_0_aaaaaaaaaaaa", "to", "node_2_cccccccccccc"));
+    @SuppressWarnings("unchecked")
+    Map<String, Object> edge = (Map<String, Object>) operations.get(1).get("edge");
+    assertThat(edge)
+        .containsEntry("from", "node_0_aaaaaaaaaaaa")
+        .containsEntry("to", "node_2_cccccccccccc");
+    // BehaviorGraphService recomputes this, but the diff schema still demands a well-formed id.
+    assertThat(String.valueOf(edge.get("id"))).matches("^edge_[0-9]+_[0-9]+_[0-9a-f]{12}$");
     assertThat(operations.get(2))
         .containsEntry("op", "replace_semantics")
         .containsEntry("node_id", "node_2_cccccccccccc");
@@ -111,12 +135,12 @@ class DeterministicRoutineAssistantProviderTest {
     nodes.add(node("node_2_cccccccccccc", "TERMINAL", 2, Map.of("kind", "terminal")));
 
     // Inventing a routine the evidence does not support would be worse than failing.
-    assertThat(operationsOf(provider.propose("conv_1", "review", contextWith(nodes)))).isEmpty();
+    assertThat(operationsOf(propose(nodes))).isEmpty();
   }
 
   @Test
   void keepsTheDiffEnvelopeReadOnly() {
-    Map<String, Object> proposal = provider.propose("conv_1", "review", contextWith(List.of()));
+    Map<String, Object> proposal = propose(List.of());
     @SuppressWarnings("unchecked")
     Map<String, Object> diff = (Map<String, Object>) proposal.get("diff");
     assertThat(diff).containsEntry("schema", "behavior-graph-diff/v1");

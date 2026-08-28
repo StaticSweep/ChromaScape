@@ -104,6 +104,11 @@ public class DeterministicRoutineAssistantProvider implements RoutineAssistantPr
         continue;
       }
       Map<String, Object> edge = new LinkedHashMap<>();
+      // An edge id is the hash of its own content, which BehaviorGraphService recomputes for every
+      // edge once the operations have been applied. The diff schema still requires a well-formed id
+      // here, so carry the real ordinals and zero the hash, the same placeholder idiom the graph
+      // itself uses for graph_id and graph_hash before it knows them.
+      edge.put("id", "edge_" + ordinal(from) + "_" + ordinal(to) + "_" + "0".repeat(12));
       edge.put("from", String.valueOf(from.get("id")));
       edge.put("to", String.valueOf(to.get("id")));
       Map<String, Object> operation = new LinkedHashMap<>();
