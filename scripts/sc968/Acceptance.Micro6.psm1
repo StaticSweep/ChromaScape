@@ -89,7 +89,7 @@ function Initialize-Sc968ManagedCaptureIdentity {
   $seedExitCode = 1
   Push-Location $Micro6Root
   try {
-    & $gradle --no-daemon --no-watch-fs ":client:micro6StabilizationHarness" "-Pmicro6.stabilization.plan=$PlanPath" "--args=$arguments"
+    & $gradle --no-daemon --no-watch-fs ":client:micro6StabilizationHarness" "-Pmicro6.stabilization.plan=$PlanPath" "--args=$arguments" 2>&1 | Out-Host
     $seedExitCode = $LASTEXITCODE
   } finally {
     Pop-Location
