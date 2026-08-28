@@ -27,8 +27,9 @@ public class AiRoutineOperatorWebConfig implements WebMvcConfigurer {
             "/api/v1/ai-routine/capture/**",
             // CaptureSessionClient creates its server-owned run with the capture bearer. Applying
             // operator auth here as well makes the request impossible when the two credentials are
-            // correctly distinct; RoutineController performs capture-token auth on both aliases.
+            // correctly distinct; RoutineController performs capture-token auth on every route.
             "/api/v1/ai-routine/runs/runelite",
-            "/api/v1/ai-routine/runs/from-runelite-capture");
+            "/api/v1/ai-routine/runs/from-runelite-capture",
+            "/api/v1/ai-routine/runs/from-stabilization/**");
   }
 }

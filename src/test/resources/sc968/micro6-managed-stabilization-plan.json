@@ -5,7 +5,7 @@
   "environment": "sc968-acceptance",
   "executorRef": "fixture:sc968-managed-capture-v1",
   "micro6InstanceId": "micro6-fixture-instance-1",
-  "buildId": "sc1452-managed-capture-seed-v1",
+  "buildId": "fixture-build-fishing-v1",
   "task": {
     "taskKey": "FISHING_TRAINING",
     "catalogVersion": "catalog-v2",
@@ -40,5 +40,5 @@
     "requireTerminalConfirmation": true
   },
   "tags": ["ai-player", "fishing", "sc968", "managed-capture"],
-  "planHash": "sha256:15c07fe5179dd756c6c9b7725bd83ebbf6d8880fed3e75a418e6f914a574a08a"
+  "planHash": "sha256:d36eaf87451fb265a5f6e36091a4f3ea5ea83f0cde70026a0619b16125b0e3d4"
 }

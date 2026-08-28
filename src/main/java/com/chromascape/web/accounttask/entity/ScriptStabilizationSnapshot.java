@@ -92,7 +92,9 @@ public class ScriptStabilizationSnapshot {
   @Column(length = 50)
   private String comparisonStatus;
 
-  @Column(length = 255)
+  // Comparability keys concatenate plan/settings/catalog/artifact hashes and runtime dimensions;
+  // a valid key is already over 350 characters before optional dimensions grow.
+  @Column(length = 1024)
   private String groupKey;
 
   @Column(length = 200)

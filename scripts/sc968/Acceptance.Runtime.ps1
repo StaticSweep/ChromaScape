@@ -257,6 +257,9 @@ try {
   $captureAuthProbe = Invoke-Sc968Http -BaseUrl $chromaUrl -Path '/api/v1/ai-routine/runs/from-runelite-capture' -Method 'POST' -BearerToken $captureToken -Body '{"schema":"current-slice-run-request/v1"}'
   if ($captureAuthProbe.StatusCode -eq 401) { throw 'ChromaScape did not receive the SC-968 capture token' }
   if ($captureAuthProbe.StatusCode -ne 422) { throw "Capture authentication probe returned unexpected HTTP $($captureAuthProbe.StatusCode)" }
+  $managedCaptureAuthProbe = Invoke-Sc968Http -BaseUrl $chromaUrl -Path '/api/v1/ai-routine/runs/from-stabilization/sc968-auth-probe' -Method 'POST' -BearerToken $captureToken -Body '{"schema":"current-slice-run-request/v1"}'
+  if ($managedCaptureAuthProbe.StatusCode -eq 401) { throw 'ChromaScape did not receive the SC-968 capture token on managed run creation' }
+  if ($managedCaptureAuthProbe.StatusCode -ne 422) { throw "Managed capture authentication probe returned unexpected HTTP $($managedCaptureAuthProbe.StatusCode)" }
 
   $managedSeedPlan = Join-Path $ChromaScapeRoot 'src/test/resources/sc968/micro6-managed-stabilization-plan.json'
   $baselineManagedIdentity = Initialize-Sc968ManagedCaptureIdentity -Micro6Root $Micro6Root -ContractsRoot $ContractsRoot -BaseUrl $chromaUrl -PlanPath $managedSeedPlan -OutputDirectory (Join-Path $output 'stabilization-baseline') -Name 'baseline' -RunIndex 0

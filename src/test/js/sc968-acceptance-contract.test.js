@@ -10,6 +10,13 @@ const finish = fs.readFileSync(path.join(root, 'scripts/finish-sc967-sc968.ps1')
 const evidence = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Evidence.psm1'), 'utf8');
 const common = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Common.psm1'), 'utf8');
 const micro6 = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Micro6.psm1'), 'utf8');
+const application = fs.readFileSync(path.join(root, 'src/main/resources/application.yml'), 'utf8');
+const routineController = fs.readFileSync(path.join(root,
+  'src/main/java/com/chromascape/web/aiplayer/routine/controller/RoutineController.java'), 'utf8');
+const operatorWebConfig = fs.readFileSync(path.join(root,
+  'src/main/java/com/chromascape/web/aiplayer/routine/config/AiRoutineOperatorWebConfig.java'), 'utf8');
+const managedSeedPlan = JSON.parse(fs.readFileSync(
+  path.join(root, 'src/test/resources/sc968/micro6-managed-stabilization-plan.json'), 'utf8'));
 
 test('SC-968 runtime requires Assistant acceptance and a real RuneLite capture', () => {
   assert.match(runtime, /Wait-AssistantProposal/);
@@ -45,6 +52,23 @@ test('SC-968 Micro6 captures bind certified stabilization and source provenance'
   assert.doesNotMatch(runtime, /stabilization\/ingest-report/);
 });
 
+test('SC-968 certified fixture identity matches the pass executor contract', () => {
+  assert.equal(managedSeedPlan.executorRef, 'fixture:sc968-managed-capture-v1');
+  assert.equal(managedSeedPlan.buildId, 'fixture-build-fishing-v1');
+  assert.equal(managedSeedPlan.evidence.mode, 'NOT_APPLICABLE');
+  assert.deepEqual(managedSeedPlan.evidence.required, []);
+});
+
+test('certified report bundles retain the raw servlet stream for bounded parsing', () => {
+  assert.match(application, /servlet:\s*\r?\n\s+multipart:\s*\r?\n\s+enabled:\s*false/);
+});
+
+test('managed run creation uses capture authentication, not the operator credential', () => {
+  assert.match(operatorWebConfig, /\/api\/v1\/ai-routine\/runs\/from-stabilization\/\*\*/);
+  assert.match(routineController,
+    /@PostMapping\("\/runs\/from-stabilization\/\{attemptId\}"\)[^\n]+@RequestHeader\(value="Authorization",required=false\)[^\n]+authorize\(authorization\)/);
+});
+
 test('SC-968 entrypoint and manifests require all five runtime evidence documents', () => {
   assert.doesNotMatch(evidence, /Import-Module[^\n]+Acceptance\.Common\.psm1/);
   assert.match(common, /return '\(detached\)'/);
@@ -70,6 +94,8 @@ test('SC-968 one-command wrapper uses real local roots and creates isolated sign
   assert.match(finish, /\$env:AI_ROUTINE_OPERATOR_TOKEN = \$env:SC968_OPERATOR_TOKEN/);
   assert.match(runtime, /ai-routine\/runs\/from-runelite-capture' -Method 'POST'/);
   assert.match(runtime, /\$captureAuthProbe\.StatusCode -ne 422/);
+  assert.match(runtime, /ai-routine\/runs\/from-stabilization\/sc968-auth-probe' -Method 'POST'/);
+  assert.match(runtime, /\$managedCaptureAuthProbe\.StatusCode -ne 422/);
   assert.match(runtime, /ChromaScape did not receive the SC-968 capture token/);
   assert.match(finish, /\$goVersion = '1\.24\.13'/);
   assert.match(finish, /Go\\bin\\go\.exe/);
