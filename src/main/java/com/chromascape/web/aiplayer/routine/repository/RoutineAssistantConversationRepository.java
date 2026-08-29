@@ -16,10 +16,8 @@ public interface RoutineAssistantConversationRepository extends JpaRepository<Ro
   List<RoutineAssistantConversation> findExpiredGenerations(@Param("cutoff") Instant cutoff);
 
   /**
-   * Reads only the run identifier, without materializing the entity. {@code generationMessage} is
-   * mapped {@code @Lob}, so loading the whole conversation off a transaction — as the asynchronous
-   * proposal generator does — fails with "Unable to access lob stream" once a message has been
-   * stored.
+   * Reads only the run identifier, without materializing the entity — all the generator needs, and
+   * cheap regardless of how large {@code generationMessage} grows.
    */
   @Query("select c.runId from RoutineAssistantConversation c where c.conversationId = :conversationId")
   Optional<String> findRunIdByConversationId(@Param("conversationId") String conversationId);

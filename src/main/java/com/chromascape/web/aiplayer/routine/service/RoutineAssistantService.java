@@ -142,12 +142,9 @@ public class RoutineAssistantService {
 
   private void generateProposal(String id, String token, String message) {
     try {
-      // This runs on generationExecutor: no transaction, no open session, connection in auto-commit.
-      // RoutineAssistantConversation.generationMessage and BehaviorGraphDefinition.identityJson are
-      // both mapped @Lob, so reading either here fails -- loading the conversation with "Unable to
-      // access lob stream", and even the graph lookup's like predicate with "Large Objects may not
-      // be used in auto-commit mode". The catch below then recorded a silent generation.failed that
-      // no poller could see. The store owns that read, behind a transaction.
+      // This runs on generationExecutor: no transaction and no open session. The store owns every
+      // read the generator needs and performs them behind one, so a lazy load can never surface
+      // here as the silent generation.failed the catch below used to record.
       Map<String, Object> context = store.generationContext(id);
       // Parsing is safe off-thread; the store already materialized the JSON inside its transaction.
       Object definitionJson = context.remove("graph_definition_json");

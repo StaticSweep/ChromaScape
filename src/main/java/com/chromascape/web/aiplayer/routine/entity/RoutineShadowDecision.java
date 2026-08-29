@@ -2,6 +2,8 @@ package com.chromascape.web.aiplayer.routine.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "routine_shadow_decisions", indexes = {
@@ -17,8 +19,8 @@ public class RoutineShadowDecision {
   @Column(name = "source_event_index", nullable = false) private int sourceEventIndex;
   @Column(nullable = false) private long tick;
   @Column(nullable = false, length = 20) private String status;
-  @Lob @Column(name = "recommendation_json") private String recommendationJson;
-  @Lob @Column(name = "observed_action_json") private String observedActionJson;
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "recommendation_json") private String recommendationJson;
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "observed_action_json") private String observedActionJson;
   @Column(nullable = false, length = 20) private String outcome;
   @Column(name = "model_identity_hash", nullable = false, length = 71) private String modelIdentityHash;
   @Column(name = "session_identity_hash", nullable = false, length = 71) private String sessionIdentityHash;

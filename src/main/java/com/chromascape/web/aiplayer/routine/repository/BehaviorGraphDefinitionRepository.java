@@ -16,16 +16,18 @@ public interface BehaviorGraphDefinitionRepository extends JpaRepository<Behavio
   @Query("select g from BehaviorGraphDefinition g where g.graphId = :graphId")
   Optional<BehaviorGraphDefinition> findWithLockByGraphId(@Param("graphId") String graphId);
 
-  /**
-   * Newest definitions in one state, for callers that must match on identity content.
-   *
-   * <p>There is deliberately no {@code identityJson like ...} query here, in any dialect. The
-   * attribute is mapped {@code @Lob}, so PostgreSQL stores the JSON in {@code pg_largeobject} and
-   * keeps only the object id in the column: a row whose identity is a 4 KB document literally holds
-   * the text {@code "95342"}. Every {@code like} against it therefore matches nothing, whether
-   * written in JPQL or native SQL — and the JPQL form fails outright off a transaction, because
-   * binding its parameter creates a large object. Read the rows and let Hibernate resolve each
-   * {@code identityJson} through the same large-object API that wrote it.
-   */
+  /** Newest definitions in one state. */
   List<BehaviorGraphDefinition> findByStateOrderByCreatedAtDesc(String state);
+
+  /**
+   * Newest definition in one state whose identity contains the given fragment.
+   *
+   * <p>This query was impossible while {@code identityJson} was mapped {@code @Lob}: PostgreSQL
+   * kept the JSON in {@code pg_largeobject} and only the object id in the column, so every
+   * {@code like} matched nothing and binding one off a transaction created a large object instead.
+   * The attribute now maps to {@code text}, as its Flyway declaration always said, so identity
+   * content is ordinary SQL again.
+   */
+  Optional<BehaviorGraphDefinition> findFirstByStateAndIdentityJsonContainingOrderByCreatedAtDesc(
+      String state, String identityFragment);
 }

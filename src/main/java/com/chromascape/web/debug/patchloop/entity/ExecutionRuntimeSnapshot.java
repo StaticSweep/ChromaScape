@@ -3,6 +3,8 @@ package com.chromascape.web.debug.patchloop.entity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Entity representing a runtime snapshot for execution resume.
@@ -22,12 +24,12 @@ public class ExecutionRuntimeSnapshot {
   private String executionId;
 
   /** Runtime data as JSON */
-  @Lob
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR)
   @Column(name = "runtime_data_json", columnDefinition = "TEXT")
   private String runtimeDataJson;
 
   /** Context data as JSON */
-  @Lob
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR)
   @Column(name = "context_data_json", columnDefinition = "TEXT")
   private String contextDataJson;
 

@@ -5,10 +5,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "routine_assistant_proposals")
@@ -17,7 +18,7 @@ public class RoutineAssistantProposal {
   @Version private Long version;
   @Column(name = "proposal_id", nullable = false, unique = true, length = 160) private String proposalId;
   @Column(name = "conversation_id", nullable = false, length = 160) private String conversationId;
-  @Lob private String diffJson;
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) private String diffJson;
   @Column(nullable = false, length = 30) private String state = "PROPOSED";
   @Column(name = "draft_graph_id", length = 160, unique = true) private String draftGraphId;
   @Column(name = "accepted_event_id") private Long acceptedEventId;

@@ -1,7 +1,6 @@
 package com.chromascape.web.aiplayer.routine.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.chromascape.web.aiplayer.routine.entity.BehaviorGraphDefinition;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
@@ -23,22 +22,20 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Proves the Assistant generation context against a real PostgreSQL, which is the only place this
- * defect exists.
+ * Proves the routine JSON columns hold their JSON, against a real PostgreSQL.
  *
- * <p>A mocked repository cannot express it. {@code BehaviorGraphDefinition.identityJson} is declared
- * {@code text} in the schema but mapped {@code @Lob}, so Hibernate writes the JSON into
- * {@code pg_largeobject} and stores only the object id in the column — a row whose identity is a
- * multi-kilobyte document literally holds the text {@code "95342"}. Three consequences, each of
- * which broke an SC-968 acceptance run on 2026-08-28:
+ * <p>They did not. Every one of them was mapped {@code @Lob} on a {@code String} field, which on
+ * PostgreSQL makes Hibernate write the document into {@code pg_largeobject} and store only the
+ * object id — a row whose identity is a multi-kilobyte document literally held the text
+ * {@code "95342"}. Three SC-968 acceptance runs on 2026-08-28 failed on the consequences: "Unable
+ * to access lob stream" reading one off a transaction, then "Large Objects may not be used in
+ * auto-commit mode" and "cannot execute lo_creat() in a read-only transaction" from a {@code like}
+ * predicate, which matched nothing in any case because it compared against the object id. SQL over
+ * these columns was silently wrong wherever it existed, and no large object was ever unlinked.
  *
- * <ul>
- *   <li>loading the conversation off a transaction throws "Unable to access lob stream";
- *   <li>an {@code identityJson like ...} JPQL predicate binds through the large-object API and
- *       throws "Large Objects may not be used in auto-commit mode" off a transaction, then "cannot
- *       execute lo_creat() in a read-only transaction" inside a read-only one;
- *   <li>and even where it executes, it matches nothing, because it compares against the object id.
- * </ul>
+ * <p>The entities now declare {@code @JdbcTypeCode(SqlTypes.LONGVARCHAR)}, which is what every
+ * Flyway declaration always said, and {@code V17__sc968_inline_json_large_objects.sql} brings
+ * existing rows over. A mocked repository cannot express any of this, so these run for real.
  *
  * <p>Requires the local test PostgreSQL at {@code localhost:5433/chromascape_test}, matching
  * {@code application-test.yml} and the existing {@link Sc967FlywaySchemaTest} setup.
@@ -62,28 +59,35 @@ class RoutineAssistantGenerationContextIT {
         + "\"},\"task\":{\"task_key\":\"FISHING_TRAINING\"}}";
   }
 
+  private static String randomId(String prefix, int length) {
+    return prefix + UUID.randomUUID().toString().replace("-", "").substring(0, length);
+  }
+
+  private BehaviorGraphDefinition publishedGraph(String graphId, String runId, String hashSeed) {
+    BehaviorGraphDefinition graph = new BehaviorGraphDefinition();
+    graph.setGraphId(graphId);
+    graph.setGraphHash("sha256:" + hashSeed.repeat(64));
+    graph.setIdentityJson(identityFor(runId));
+    graph.setDefinitionJson("{\"schema\":\"behavior-graph-definition/v1\",\"nodes\":[]}");
+    graph.setState("PUBLISHED");
+    return graphs.save(graph);
+  }
+
   @Test
   void resolvesTheRunsPublishedGraphFromOffRequestThread() throws Exception {
-    String runId = "run-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-    String conversationId = "conv_" + UUID.randomUUID().toString().replace("-", "");
-    String graphId = "graph_" + UUID.randomUUID().toString().replace("-", "").substring(0, 24);
-    String graphHash = "sha256:" + "a".repeat(64);
+    String runId = randomId("run-", 16);
+    String conversationId = randomId("conv_", 32);
+    String graphId = randomId("graph_", 24);
 
     RoutineAssistantConversation conversation = new RoutineAssistantConversation();
     conversation.setConversationId(conversationId);
     conversation.setRunId(runId);
     conversation.setState("OPEN");
-    // The generation message is the @Lob whose presence made loading the entity fail.
+    // The generation message is the column whose presence made loading the entity fail.
     conversation.setGenerationMessage("propose the minimal deterministic graph draft");
     conversations.save(conversation);
 
-    BehaviorGraphDefinition graph = new BehaviorGraphDefinition();
-    graph.setGraphId(graphId);
-    graph.setGraphHash(graphHash);
-    graph.setIdentityJson(identityFor(runId));
-    graph.setDefinitionJson("{\"schema\":\"behavior-graph-definition/v1\",\"nodes\":[]}");
-    graph.setState("PUBLISHED");
-    graphs.save(graph);
+    BehaviorGraphDefinition graph = publishedGraph(graphId, runId, "a");
 
     // The real generator runs on its own executor, not a request thread: no inherited transaction,
     // no open session, connection in auto-commit. Reproduce that exactly.
@@ -95,32 +99,29 @@ class RoutineAssistantGenerationContextIT {
 
       assertThat(context).containsEntry("run_id", runId);
       assertThat(context).containsEntry("graph_id", graphId);
-      assertThat(context).containsEntry("graph_hash", graphHash);
+      assertThat(context).containsEntry("graph_hash", graph.getGraphHash());
     } finally {
       executor.shutdownNow();
     }
   }
 
   @Test
-  void identityJsonColumnHoldsALargeObjectIdSoSqlMatchingCannotWork() throws Exception {
-    String runId = "run-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-    String graphId = "graph_" + UUID.randomUUID().toString().replace("-", "").substring(0, 24);
+  void jsonColumnsAreReadableOutsideATransaction() {
+    String runId = randomId("run-", 16);
+    String graphId = randomId("graph_", 24);
+    publishedGraph(graphId, runId, "b");
 
-    BehaviorGraphDefinition graph = new BehaviorGraphDefinition();
-    graph.setGraphId(graphId);
-    graph.setGraphHash("sha256:" + "b".repeat(64));
-    graph.setIdentityJson(identityFor(runId));
-    graph.setDefinitionJson("{\"schema\":\"behavior-graph-definition/v1\",\"nodes\":[]}");
-    graph.setState("PUBLISHED");
-    graphs.save(graph);
+    // This threw "Large Objects may not be used in auto-commit mode" for as long as the column was
+    // a large-object pointer, which is what forced every read behind a transaction.
+    assertThat(graphs.findByGraphId(graphId).orElseThrow().getIdentityJson()).contains(runId);
+  }
 
-    // Reading the @Lob back outside a transaction is itself the production failure. Assert it, so
-    // the reason RoutineAssistantConversationStore.generationContext must be @Transactional is
-    // recorded rather than remembered.
-    assertThatThrownBy(() -> graphs.findByGraphId(graphId).orElseThrow().getIdentityJson())
-        .hasRootCauseMessage("Large Objects may not be used in auto-commit mode.");
+  @Test
+  void theColumnHoldsTheJsonSoSqlOverItWorks() throws Exception {
+    String runId = randomId("run-", 16);
+    String graphId = randomId("graph_", 24);
+    publishedGraph(graphId, runId, "c");
 
-    // The column does not contain the JSON, which is why no SQL predicate can ever find it.
     String url =
         System.getenv("SPRING_DATASOURCE_URL") == null
             ? "jdbc:postgresql://localhost:5433/chromascape_test?sslmode=disable"
@@ -133,28 +134,28 @@ class RoutineAssistantGenerationContextIT {
                   + graphId
                   + "'")) {
         assertThat(stored.next()).isTrue();
-        assertThat(stored.getString(1)).doesNotContain(runId).matches("\\d+");
+        // It used to be a bare integer here: the id of a row in pg_largeobject.
+        assertThat(stored.getString(1)).contains(runId).startsWith("{");
       }
       try (ResultSet matched =
           statement.executeQuery(
-              // Cast because the column's own type varies: Flyway declares text, Hibernate's
-              // create-drop declares oid. Either way it holds an object id, never the JSON.
               "select count(*) from behavior_graph_definitions"
-                  + " where identity_json::text like '%"
+                  + " where identity_json like '%"
                   + runId
                   + "%'")) {
         assertThat(matched.next()).isTrue();
-        assertThat(matched.getInt(1)).isZero();
+        assertThat(matched.getInt(1)).isOne();
       }
-      // The JSON is intact -- it simply lives in pg_largeobject, reachable only through the id.
-      try (ResultSet resolved =
+      // The same shape V6's outbox backfill uses. It silently returned NULL for every row while the
+      // column held a pointer, falling through to the hardcoded task key.
+      try (ResultSet parsed =
           statement.executeQuery(
-              "select convert_from(lo_get(identity_json::oid), 'UTF8')"
+              "select identity_json::jsonb #>> '{task,task_key}'"
                   + " from behavior_graph_definitions where graph_id = '"
                   + graphId
                   + "'")) {
-        assertThat(resolved.next()).isTrue();
-        assertThat(resolved.getString(1)).contains(runId);
+        assertThat(parsed.next()).isTrue();
+        assertThat(parsed.getString(1)).isEqualTo("FISHING_TRAINING");
       }
     }
   }

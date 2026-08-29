@@ -2,6 +2,8 @@ package com.chromascape.web.aiplayer.routine.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "routine_capture_records", indexes = {
@@ -15,16 +17,16 @@ public class RoutineCaptureRecord {
   @Column(name = "session_id", nullable = false, unique = true, length = 160) private String sessionId;
   @Column(name = "start_idempotency_key", nullable = false, unique = true, length = 240) private String startIdempotencyKey;
   @Column(name = "start_request_hash", nullable = false, length = 71) private String startRequestHash;
-  @Lob @Column(name = "identity_json", nullable = false) private String identityJson;
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "identity_json", nullable = false) private String identityJson;
   @Column(nullable = false) private Instant startedAt;
   @Column(nullable = false) private long startTick;
-  @Lob @Column(nullable = false) private String ticksJson = "[]";
-  @Lob @Column(nullable = false) private String actionsJson = "[]";
-  @Lob @Column(nullable = false) private String tickSequencesJson = "{}";
-  @Lob @Column(nullable = false) private String actionSequencesJson = "{}";
-  @Lob @Column(nullable = false) private String tickIdempotencyJson = "{}";
-  @Lob @Column(nullable = false) private String actionIdempotencyJson = "{}";
-  @Lob @Column(nullable = false) private String requestIdempotencyJson = "{}";
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(nullable = false) private String ticksJson = "[]";
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(nullable = false) private String actionsJson = "[]";
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(nullable = false) private String tickSequencesJson = "{}";
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(nullable = false) private String actionSequencesJson = "{}";
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(nullable = false) private String tickIdempotencyJson = "{}";
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(nullable = false) private String actionIdempotencyJson = "{}";
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(nullable = false) private String requestIdempotencyJson = "{}";
   @Column(nullable = false) private int nextTickSequence = 1;
   @Column(nullable = false) private int nextActionSequence = 1;
   @Column(nullable = false) private boolean completed;

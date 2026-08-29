@@ -1,6 +1,5 @@
 package com.chromascape.web.aiplayer.routine.service;
 
-import com.chromascape.web.aiplayer.routine.entity.BehaviorGraphDefinition;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantEvent;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantProposal;
@@ -164,12 +163,10 @@ public class RoutineAssistantConversationStore {
   /**
    * Assembles the provider context for one generation.
    *
-   * <p>The generator itself runs on a plain executor thread with no transaction and no open
-   * session, so a whole {@code RoutineAssistantConversation} cannot be loaded there: its
-   * {@code generationMessage} is mapped {@code @Lob} and materializing it throws "Unable to access
-   * lob stream". Both reads therefore belong here, behind a transaction, and both use scalar
-   * projection so no JSON column is materialized to answer it. The graph is matched in memory
-   * rather than by a {@code like} -- see {@code findByStateOrderByCreatedAtDesc}.
+   * <p>The generator runs on a plain executor thread with no transaction and no open session, so
+   * every read it depends on belongs here instead, behind one. The conversation is read by scalar
+   * projection because the run id is all the generator needs, and the run's published graph is
+   * matched on its identity content in SQL.
    */
   @Transactional(readOnly = true)
   public java.util.Map<String, Object> generationContext(String conversationId) {
@@ -177,18 +174,15 @@ public class RoutineAssistantConversationStore {
         .orElseThrow(() -> conflict("NOT_FOUND", "conversation not found"));
     java.util.Map<String, Object> context = new java.util.LinkedHashMap<>();
     context.put("run_id", runId);
-    String token = "\"run_id\":\"" + runId + "\"";
-    for (BehaviorGraphDefinition graph : graphs.findByStateOrderByCreatedAtDesc("PUBLISHED")) {
-      String identity = graph.getIdentityJson();
-      if (identity != null && identity.contains(token)) {
-        context.put("graph_id", graph.getGraphId());
-        context.put("graph_hash", graph.getGraphHash());
-        // The provider has to see the graph to propose a diff against it. Read the definition here,
-        // where the transaction makes the @Lob accessible; the caller parses it off-thread.
-        context.put("graph_definition_json", graph.getDefinitionJson());
-        break;
-      }
-    }
+    graphs.findFirstByStateAndIdentityJsonContainingOrderByCreatedAtDesc(
+            "PUBLISHED", "\"run_id\":\"" + runId + "\"")
+        .ifPresent(graph -> {
+          context.put("graph_id", graph.getGraphId());
+          context.put("graph_hash", graph.getGraphHash());
+          // The provider has to see the graph to propose a diff against it. The caller parses this
+          // off-thread, so read it here while the session is open.
+          context.put("graph_definition_json", graph.getDefinitionJson());
+        });
     return context;
   }
 

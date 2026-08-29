@@ -1,6 +1,8 @@
 package com.chromascape.web.aiplayer.routine.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 
 @Entity
@@ -9,9 +11,9 @@ public class BehaviorGraphDefinition {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private Long id;
   @Column(name="graph_id",nullable=false,unique=true,length=160) private String graphId;
   @Column(name="graph_hash",nullable=false,length=71) private String graphHash;
-  @Lob @Column(name="identity_json",nullable=false) private String identityJson;
-  @Lob @Column(name="definition_json",nullable=false) private String definitionJson;
-  @Lob @Column(name="assistant_diff_json") private String assistantDiffJson;
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name="identity_json",nullable=false) private String identityJson;
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name="definition_json",nullable=false) private String definitionJson;
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name="assistant_diff_json") private String assistantDiffJson;
   @Column(name="supersedes_graph_id", length=160) private String supersedesGraphId;
   @Column(nullable=false,length=20) private String state="DRAFT";
   @Column(nullable=false) private Instant createdAt=Instant.now();

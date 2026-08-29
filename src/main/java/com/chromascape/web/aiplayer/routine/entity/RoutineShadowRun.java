@@ -2,6 +2,8 @@ package com.chromascape.web.aiplayer.routine.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "routine_shadow_runs", indexes = {
@@ -13,8 +15,8 @@ public class RoutineShadowRun {
   @Column(name = "shadow_run_id", nullable = false, unique = true, length = 180) private String shadowRunId;
   @Column(name = "model_id", nullable = false, length = 160) private String modelId;
   @Column(name = "session_id", nullable = false, length = 160) private String sessionId;
-  @Lob @Column(name = "model_identity_json", nullable = false) private String modelIdentityJson;
-  @Lob @Column(name = "session_identity_json", nullable = false) private String sessionIdentityJson;
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "model_identity_json", nullable = false) private String modelIdentityJson;
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "session_identity_json", nullable = false) private String sessionIdentityJson;
   @Column(nullable = false, length = 20) private String state;
   @Column(name = "next_decision_ordinal", nullable = false) private int nextDecisionOrdinal = 1;
   @Column(name = "graph_cursor", nullable = false) private int graphCursor;
@@ -22,7 +24,7 @@ public class RoutineShadowRun {
   @Version @Column(name = "optimistic_version", nullable = false) private Long optimisticVersion;
   @Column(nullable = false) private Instant startedAt = Instant.now();
   private Instant completedAt;
-  @Lob @Column(name = "result_json") private String resultJson;
+  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "result_json") private String resultJson;
   @Column(name = "result_hash", length = 71) private String resultHash;
   @Column(name = "failure_code", length = 120) private String failureCode;
   @Column(name = "failure_message", length = 500) private String failureMessage;
