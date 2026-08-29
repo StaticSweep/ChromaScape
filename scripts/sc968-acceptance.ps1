@@ -95,7 +95,10 @@ try {
       --tests 'com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest' `
       --tests 'com.chromascape.web.aiplayer.routine.service.PatchCandidateManifestV2Test' `
       --tests 'com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest' `
+      --tests 'com.chromascape.web.aiplayer.routine.service.DeterministicRoutineAssistantProviderTest' `
+      --tests 'com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextTest' `
       --tests 'com.chromascape.web.aiplayer.routine.service.RoutineAssistantStatusTest' `
+      --tests 'com.chromascape.web.aiplayer.routine.service.RoutineReplayShadowServiceTest' `
       --tests 'com.chromascape.web.aiplayer.routine.service.RoutineModelGraphEnvelopeTest'
   } (Join-Path $logs 'chromascape-ai-runtime-test.log') $gates
   $null = Invoke-Gate 'chromascape_acceptance_contract_tests' $ChromaScapeRoot {
