@@ -314,7 +314,7 @@ if (-not $microVersionMatch.Success) { throw 'Micro6 project.build.version is ma
 Set-DefaultEnvironment 'SC968_EXPECTED_ARTIFACT_NAME' ("client-{0}-shaded.jar" -f $microVersionMatch.Groups[1].Value.Trim())
 Set-DefaultEnvironment 'SC968_MICRO6_LAUNCH_SCRIPT' $microLauncher
 Set-DefaultEnvironment 'SC968_RUNELITE_LAUNCH_SCRIPT' $runeliteLauncher
-Set-DefaultEnvironment 'SC968_REGISTRY_URL' 'http://127.0.0.1:8081'
+Set-DefaultEnvironment 'SC968_REGISTRY_URL' 'http://127.0.0.1:8181'
 Set-DefaultEnvironment 'SC968_TASK_KEY' 'FISHING_TRAINING'
 Set-DefaultEnvironment 'SC968_SETTINGS_HASH' (Get-TextSha256 '{}')
 Set-DefaultEnvironment 'SC968_PROFILE_ID' 'sc968-fishing-acceptance-v1'
@@ -332,16 +332,18 @@ if ($null -ne $listener) {
   Start-Sleep -Seconds 2
 }
 
-# The acceptance starts its own candidate registry, and plugin-service hard-codes its listener
-# (plugin-service/main.go: router.Run(":8081")), so the port cannot be redirected. If anything else
-# already holds it the registry silently fails to bind and the readiness probe is answered by the
-# wrong service, which strands the run for the full probe timeout before any client is launched.
-# Fail here instead, with the remedy, because the gates ahead of that point take many minutes.
-$registryListener = Get-NetTCPConnection -State Listen -LocalPort 8081 -ErrorAction SilentlyContinue | Select-Object -First 1
+# The acceptance starts its own candidate registry on the port named by SC968_REGISTRY_URL, which
+# plugin-service honours through PLUGIN_SERVICE_PORT. It deliberately avoids 8081 so the run does
+# not contend with a leeuwbot-plugin instance the machine is using for other work. If something
+# already holds the chosen port the registry silently fails to bind and the readiness probe is
+# answered by the wrong service, which strands the run for the full probe timeout before any client
+# is launched. Fail here instead, with the remedy, because the gates ahead of it take many minutes.
+$registryPort = ([Uri]$env:SC968_REGISTRY_URL).Port
+$registryListener = Get-NetTCPConnection -State Listen -LocalPort $registryPort -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($null -ne $registryListener) {
   $registryOwner = Get-CimInstance Win32_Process -Filter "ProcessId=$($registryListener.OwningProcess)" -ErrorAction SilentlyContinue
   $registryOwnerName = if ($null -eq $registryOwner) { 'an unknown process' } else { $registryOwner.Name }
-  throw ("Port 8081 is held by {0} (PID {1}); the SC-968 candidate registry cannot bind it. If this is the leeuwbot-plugin container, run 'docker stop leeuwbot-plugin', then rerun." -f $registryOwnerName, $registryListener.OwningProcess)
+  throw ("Port {0} is held by {1} (PID {2}); the SC-968 candidate registry cannot bind it. Stop that process, or set SC968_REGISTRY_URL to a free port, then rerun." -f $registryPort, $registryOwnerName, $registryListener.OwningProcess)
 }
 
 Write-Output ''

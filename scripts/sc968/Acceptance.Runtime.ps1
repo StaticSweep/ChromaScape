@@ -198,7 +198,7 @@ try {
   $artifactName = Require 'SC968_EXPECTED_ARTIFACT_NAME'
 
   $chromaUrl = EnvOr 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:8090'
-  $registryUrl = EnvOr 'SC968_REGISTRY_URL' 'http://127.0.0.1:8081'
+  $registryUrl = EnvOr 'SC968_REGISTRY_URL' 'http://127.0.0.1:8181'
   $minimumTicks = [int](EnvOr 'SC968_MINIMUM_TICKS' '20')
   $runtimeTimeout = [int](EnvOr 'SC968_RUNTIME_TIMEOUT_SECONDS' '1800')
   $registryRoot = Join-Path $LeeuwBotRoot 'plugin-service'
@@ -229,6 +229,9 @@ try {
   [Environment]::SetEnvironmentVariable('LEEUWBOT_CANDIDATE_REGISTRY_URL',$registryUrl,'Process')
   [Environment]::SetEnvironmentVariable('STATIC_API_TOKEN',$registryToken,'Process')
   [Environment]::SetEnvironmentVariable('SC967_CANDIDATE_STAGING_ROOT',$stagingRoot,'Process')
+  # plugin-service defaults to 8081; tell it to bind the port the driver will probe, so the
+  # acceptance never contends with another registry instance already running on this machine.
+  [Environment]::SetEnvironmentVariable('PLUGIN_SERVICE_PORT',([string]([Uri]$registryUrl).Port),'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_STORAGE_ROOT',(Join-Path $registryOutput 'registry-storage'),'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_TRUSTED_KEYS_DIR',(Require 'SC968_REGISTRY_TRUSTED_KEYS_DIR'),'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_PRIVATE_KEY_PATH',$signingPrivate,'Process')
