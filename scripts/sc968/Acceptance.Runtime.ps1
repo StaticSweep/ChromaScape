@@ -339,8 +339,6 @@ try {
   $baselineSession = Read-Session $chromaUrl $captureToken ([string]$baselineCompletedState.session_id)
   Require-CompletedCapture $baselineSession 'Baseline' $minimumTicks
   Require-CaptureIdentity $baselineSession 'MICRO6_MANAGED'
-  Stop-Sc968OwnedProcess $micro
-  $owned = @($owned | Where-Object { $_.Pid -ne $micro.Pid })
 
   # Curate and publish the evidence graph that gives the deterministic Assistant an immutable base.
   $recordingId = [string]$baselineSession.recording_id
@@ -434,6 +432,14 @@ try {
   if ($download.StatusCode -ne 200 -or (Get-Sc968Header $download 'X-Candidate-ID') -ne $candidateId -or [int64](Get-Sc968Header $download 'Content-Length') -ne $download.BodyBytes.Length -or $downloadHash -ne (Sha256Bytes $download.BodyBytes) -or -not (BytesEqual $stagedJar $download.BodyBytes)) { throw 'Candidate artifact readback failed exact ID/length/hash/byte verification' }
   [IO.File]::WriteAllBytes((Join-Path $registryOutput 'candidate.jar'),$download.BodyBytes)
   $candidateEvidence = [ordered]@{ proposal_id=$patchProposalId; candidate_id=$candidateId; candidate_hash=$candidateHash; certification_hash=$certificationHash; signature=$candidateSignature; manifest_hash=(Sha256Bytes $stagedManifest); registry_manifest_hash=$lookupHash; manifest_byte_equal=$true; artifact_hash=(Sha256Bytes $stagedJar); artifact_byte_equal=$true; control_allowed=$false }
+
+  # The baseline client hosts the patch-loop executor on 8098, and that executor is the only source
+  # of the Micro6 source manifest the patch flow above resolves its span from. Stopping the client
+  # right after its capture -- as this driver used to -- left from-failure connecting to a dead port
+  # and failing SOURCE_SNAPSHOT_NOT_FOUND. Keep it up until the candidate is registered, then stop it
+  # here: the candidate client binds the same port, so the two can never overlap.
+  Stop-Sc968OwnedProcess $micro
+  $owned = @($owned | Where-Object { $_.Pid -ne $micro.Pid })
 
   # Second Micro6 launch proves exact candidate retrieval and AccountBuilder loading. Shadow is not
   # opened here: the cross-runner compatibility contract intentionally requires RuneLite capture.
