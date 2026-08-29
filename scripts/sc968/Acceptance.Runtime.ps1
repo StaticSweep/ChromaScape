@@ -118,6 +118,21 @@ function Read-Session([string] $BaseUrl, [string] $Token, [string] $SessionId) {
   return (Api $BaseUrl "/api/v1/ai-routine/capture/sessions/$SessionId" $Token).Json
 }
 
+# Recording no longer starts at login, so the window is only seconds old when the operator is
+# prompted. Ticks arrive in batches of ten, and a capture completes five ticks after the fishing
+# action, so prompting immediately produced a 17-tick recording against a 20-tick floor. Let the
+# recording reach the floor before asking for the demonstration.
+function Wait-CaptureTicks([string] $BaseUrl, [string] $Token, [string] $SessionId, [int] $MinimumTicks, [int] $TimeoutSeconds) {
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  do {
+    $session = Read-Session $BaseUrl $Token $SessionId
+    if ([int]$session.tick_count -ge $MinimumTicks) { return $session }
+    if ([int]$session.action_count -ne 0) { throw 'Gameplay began before the capture reached its minimum length' }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTimeOffset]::UtcNow -lt $deadline)
+  throw "Capture never reached $MinimumTicks ticks"
+}
+
 function Require-CompletedCapture([object] $Status, [string] $Name, [int] $MinimumTicks) {
   if ($Status.status -ne 'COMPLETED') { throw "$Name capture did not complete" }
   if ([int]$Status.tick_count -lt $MinimumTicks) { throw "$Name capture has too few ticks" }
@@ -310,6 +325,7 @@ try {
   if ($recordingState.state -ne 'RECORDING') { throw 'Baseline Micro6 never reached RECORDING' }
   $baselineSession = Read-Session $chromaUrl $captureToken ([string]$recordingState.session_id)
   if ([int]$baselineSession.action_count -ne 0) { throw 'Baseline gameplay began before the capture was observable' }
+  $null = Wait-CaptureTicks $chromaUrl $captureToken ([string]$recordingState.session_id) $minimumTicks $runtimeTimeout
   Write-Host 'FISH NOW (1/3): in the baseline Micro6 client, use Net on a Fishing spot once.' -ForegroundColor Yellow
   $baselineCompletedState = Wait-Sc968CaptureStatus -StatusFile $baselineStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
   if ($baselineCompletedState.state -ne 'COMPLETED') { throw "Baseline capture ended in $($baselineCompletedState.state)" }
@@ -429,6 +445,7 @@ try {
   if ($secondRecordingState.state -ne 'RECORDING') { throw 'Candidate Micro6 never reached RECORDING' }
   $secondSession = Read-Session $chromaUrl $captureToken ([string]$secondRecordingState.session_id)
   if ([int]$secondSession.action_count -ne 0) { throw 'Candidate gameplay began before the capture was observable' }
+  $null = Wait-CaptureTicks $chromaUrl $captureToken ([string]$secondRecordingState.session_id) $minimumTicks $runtimeTimeout
   Write-Host 'FISH NOW (2/3): in the candidate Micro6 client, use Net on a Fishing spot once.' -ForegroundColor Yellow
   $secondCompletedState = Wait-Sc968CaptureStatus -StatusFile $candidateStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
   if ($secondCompletedState.state -ne 'COMPLETED') { throw "Candidate capture ended in $($secondCompletedState.state)" }
@@ -461,6 +478,7 @@ try {
   if ([int]$runeliteLiveSession.action_count -ne 0) { throw 'RuneLite gameplay began before the shadow was observable' }
   $shadow = (Api $chromaUrl "/api/v1/ai-routine/models/$modelId/shadow-runs" $operatorToken 'POST' @{ schema='routine-shadow-run-request/v1'; session_id=[string]$runeliteRecordingState.session_id }).Json
   if ($shadow.state -ne 'ACTIVE' -or $shadow.control_allowed -ne $false) { throw 'RuneLite live shadow did not become ACTIVE read-only' }
+  $null = Wait-CaptureTicks $chromaUrl $captureToken ([string]$runeliteRecordingState.session_id) $minimumTicks $runtimeTimeout
   Write-Host 'FISH NOW (3/3): in standard RuneLite, use Net on a Fishing spot once.' -ForegroundColor Yellow
   $runeliteCompletedState = Wait-Sc968CaptureStatus -StatusFile $runeliteStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
   if ($runeliteCompletedState.state -ne 'COMPLETED') { throw "RuneLite capture ended in $($runeliteCompletedState.state)" }
