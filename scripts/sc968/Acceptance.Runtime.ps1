@@ -127,7 +127,11 @@ function Wait-CaptureTicks([string] $BaseUrl, [string] $Token, [string] $Session
   do {
     $session = Read-Session $BaseUrl $Token $SessionId
     if ([int]$session.tick_count -ge $MinimumTicks) { return $session }
-    if ([int]$session.action_count -ne 0) { throw 'Gameplay began before the capture reached its minimum length' }
+    # An operator who acts before the prompt is not an error. The capture completes five ticks after
+    # the action and Require-CompletedCapture judges the finished length; aborting here instead
+    # discarded a 24-tick recording that satisfied the floor. The guarantee that gameplay had not
+    # begun before the capture was observable is already asserted above, on entry to RECORDING.
+    if ([int]$session.action_count -ne 0) { return $session }
     Start-Sleep -Milliseconds 500
   } while ([DateTimeOffset]::UtcNow -lt $deadline)
   throw "Capture never reached $MinimumTicks ticks"
