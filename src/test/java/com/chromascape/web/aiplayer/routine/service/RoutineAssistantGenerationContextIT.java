@@ -159,4 +159,27 @@ class RoutineAssistantGenerationContextIT {
       }
     }
   }
+  @Test
+  void aDocumentLargerThanAnyVarcharBoundRoundTrips() {
+    // The first attempt at removing @Lob used @JdbcTypeCode(SqlTypes.LONGVARCHAR), which the
+    // PostgreSQL dialect renders as varchar(32600); with ddl-auto: update Hibernate then narrowed
+    // every one of these columns from text. The next capture tick batch over that bound failed with
+    // SQLSTATE 22001, the server answered 422, and the run's capture died as CAPTURE_WRITE_REJECTED.
+    // A tick batch is routinely larger than 32600 characters, so size is part of the contract.
+    String runId = randomId("run-", 16);
+    String graphId = randomId("graph_", 24);
+    String padding = "x".repeat(64 * 1024);
+
+    BehaviorGraphDefinition graph = new BehaviorGraphDefinition();
+    graph.setGraphId(graphId);
+    graph.setGraphHash("sha256:" + "d".repeat(64));
+    graph.setIdentityJson(identityFor(runId));
+    graph.setDefinitionJson(
+        "{\"schema\":\"behavior-graph-definition/v1\",\"nodes\":[],\"padding\":\"" + padding + "\"}");
+    graph.setState("PUBLISHED");
+    graphs.save(graph);
+
+    String stored = graphs.findByGraphId(graphId).orElseThrow().getDefinitionJson();
+    assertThat(stored).hasSize(graph.getDefinitionJson().length()).contains(padding);
+  }
 }

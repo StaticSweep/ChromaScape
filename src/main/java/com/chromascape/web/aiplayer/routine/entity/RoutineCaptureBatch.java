@@ -8,8 +8,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 /** Durable copy of an accepted capture batch used to recover post-commit shadow delivery. */
 @Entity
@@ -22,7 +20,7 @@ public class RoutineCaptureBatch {
   @Column(name = "session_id", nullable = false, length = 160) private String sessionId;
   @Column(nullable = false, length = 20) private String kind;
   @Column(nullable = false) private int sequence;
-  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "values_json", nullable = false) private String valuesJson;
+  @Column(name = "values_json", nullable = false, columnDefinition = "text") private String valuesJson;
   @Column(name = "accepted_at", nullable = false) private Instant acceptedAt = Instant.now();
 
   public Long getId() { return id; }

@@ -1,8 +1,6 @@
 package com.chromascape.web.aiplayer.routine.entity;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 
 @Entity
@@ -15,16 +13,16 @@ public class PatchCandidateRun {
   @Column(name = "failure_manifest_hash", nullable = false, length = 71) private String failureManifestHash;
   @Column(name = "source_snapshot_id", nullable = false, length = 40) private String sourceSnapshotId;
   @Column(name = "source_manifest_hash", nullable = false, length = 71) private String sourceManifestHash;
-  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "source_manifest_json", nullable = false) private String sourceManifestJson;
+  @Column(name = "source_manifest_json", nullable = false, columnDefinition = "text") private String sourceManifestJson;
   @Column(name = "source_file_id", nullable = false, length = 80) private String sourceFileId;
   @Column(name = "source_relative_path", nullable = false, length = 500) private String sourceRelativePath;
   @Column(name = "start_line", nullable = false) private int startLine;
   @Column(name = "end_line", nullable = false) private int endLine;
   @Column(name = "preimage_hash", nullable = false, length = 71) private String preimageHash;
   @Column(name = "base_commit", nullable = false, length = 160) private String baseCommit;
-  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "patch_text", nullable = false) private String patchText;
-  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "binding_json", nullable = false) private String bindingJson;
-  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "identity_json") private String identityJson;
+  @Column(name = "patch_text", nullable = false, columnDefinition = "text") private String patchText;
+  @Column(name = "binding_json", nullable = false, columnDefinition = "text") private String bindingJson;
+  @Column(name = "identity_json", columnDefinition = "text") private String identityJson;
   @Column(name = "patch_hash", nullable = false, length = 71) private String patchHash;
   @Column(name = "proposal_hash", nullable = false, length = 71) private String proposalHash;
   private String approverId;
@@ -32,14 +30,14 @@ public class PatchCandidateRun {
   @Column(name = "approval_hash", length = 71) private String approvalHash;
   @Column(name = "candidate_id", length = 40) private String candidateId;
   @Column(name = "candidate_hash", length = 71) private String candidateHash;
-  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "candidate_manifest_json") private String candidateManifestJson;
-  @JdbcTypeCode(SqlTypes.LONGVARCHAR) @Column(name = "final_identity_json") private String finalIdentityJson;
-  @JdbcTypeCode(SqlTypes.LONGVARCHAR) private String resultJson;
+  @Column(name = "candidate_manifest_json", columnDefinition = "text") private String candidateManifestJson;
+  @Column(name = "final_identity_json", columnDefinition = "text") private String finalIdentityJson;
+  @Column(columnDefinition = "text") private String resultJson;
   @Column(name = "worker_started_at") private Instant workerStartedAt;
   @Column(name = "worker_completed_at") private Instant workerCompletedAt;
   @Column(name = "candidate_staging_directory", length = 500) private String candidateStagingDirectory;
   @Column(name = "registration_request_hash", length = 71) private String registrationRequestHash;
-  @JdbcTypeCode(SqlTypes.LONGVARCHAR) private String registryResponseJson;
+  @Column(columnDefinition = "text") private String registryResponseJson;
   @Column(name = "last_failure_code", length = 160) private String lastFailureCode;
   @Column(name = "worker_attempt_id", length = 80) private String workerAttemptId;
   @Column(name = "worker_lease_expires_at") private Instant workerLeaseExpiresAt;
@@ -54,9 +52,9 @@ public class PatchCandidateRun {
   @Column(name = "sbom_size") private Long sbomSize;
   @Column(name = "certification_document_hash", length = 71) private String certificationDocumentHash;
   @Column(name = "registry_response_hash", length = 71) private String registryResponseHash;
-  @JdbcTypeCode(SqlTypes.VARBINARY) @Column(name = "registry_response_bytes", columnDefinition = "BYTEA") private byte[] registryResponseBytes;
+  @Column(name = "registry_response_bytes", columnDefinition = "BYTEA") private byte[] registryResponseBytes;
   @Column(name = "registry_manifest_hash", length = 71) private String registryManifestHash;
-  @JdbcTypeCode(SqlTypes.VARBINARY) @Column(name = "registry_lookup_bytes", columnDefinition = "BYTEA") private byte[] registryLookupBytes;
+  @Column(name = "registry_lookup_bytes", columnDefinition = "BYTEA") private byte[] registryLookupBytes;
   @Column(name = "registry_lookup_hash", length = 71) private String registryLookupHash;
   @Column(name = "registry_download_hash", length = 71) private String registryDownloadHash;
   @Column(name = "registry_verified_at") private Instant registryVerifiedAt;
