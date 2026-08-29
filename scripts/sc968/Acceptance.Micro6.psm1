@@ -13,12 +13,16 @@ function Set-Sc968Micro6Environment {
     [Parameter(Mandatory=$true)][string] $StatusFile,
     [Parameter(Mandatory=$true)][string] $SpoolDirectory,
     [Parameter(Mandatory=$true)][object] $ManagedIdentity,
+    [Parameter(Mandatory=$true)][string] $StartTriggerFile,
     [string] $CandidateId
   )
   $env:SC968_CAPTURE_ENABLED = 'true'
   $env:SC968_CHROMASCAPE_URL = $BaseUrl
   $env:SC968_CAPTURE_TOKEN = $CaptureToken
   $env:SC968_CAPTURE_STATUS_FILE = $StatusFile
+  # The client waits for this file before it opens the recording window, so the operator's login
+  # and any pre-routine clicking stay outside the capture entirely.
+  $env:SC968_CAPTURE_START_FILE = $StartTriggerFile
   $env:SC968_CAPTURE_SPOOL = $SpoolDirectory
   $env:SC968_TASK_KEY = Get-Sc968RequiredEnvironment 'SC968_TASK_KEY'
   $env:SC968_SETTINGS_HASH = Get-Sc968RequiredEnvironment 'SC968_SETTINGS_HASH'
@@ -45,12 +49,14 @@ function Set-Sc968RuneLiteEnvironment {
     [Parameter(Mandatory=$true)][string] $CaptureToken,
     [Parameter(Mandatory=$true)][string] $StatusFile,
     [Parameter(Mandatory=$true)][string] $SpoolDirectory,
-    [Parameter(Mandatory=$true)][object] $SourceIdentity
+    [Parameter(Mandatory=$true)][object] $SourceIdentity,
+    [Parameter(Mandatory=$true)][string] $StartTriggerFile
   )
   $env:SC968_CAPTURE_ENABLED = 'true'
   $env:SC968_CHROMASCAPE_URL = $BaseUrl
   $env:SC968_CAPTURE_TOKEN = $CaptureToken
   $env:SC968_CAPTURE_STATUS_FILE = $StatusFile
+  $env:SC968_CAPTURE_START_FILE = $StartTriggerFile
   $env:SC968_CAPTURE_SPOOL = $SpoolDirectory
   $env:SC968_TASK_KEY = Get-Sc968RequiredEnvironment 'SC968_TASK_KEY'
   $env:SC968_SETTINGS_HASH = Get-Sc968RequiredEnvironment 'SC968_SETTINGS_HASH'
