@@ -33,6 +33,14 @@ try {
   # $OutputRoot is archived wholesale at the start of every run, so a repository inside it is
   # discarded and ~250 MB of dependencies are re-resolved every cycle. Keep it beside the run
   # directory instead: still isolated from the developer's ~/.m2, but reused across runs.
+  # Every run builds in a throwaway worktree, so Gradle would otherwise recompile the whole
+  # RuneLite client from zero even when one file changed -- the bulk of a ~15 minute run. The
+  # --build-cache flag on the gradle gates below is keyed on task inputs rather than paths, so an
+  # unchanged module hits across worktrees. It does not weaken the gates: identical inputs produce
+  # identical outputs, they are simply not recomputed. GRADLE_USER_HOME is deliberately left alone
+  # -- the cache lives inside it, and repointing it would re-download every dependency once, which
+  # costs more than the compile time this saves. Maven needs its own repository below only because
+  # the default would otherwise be the developer's ~/.m2.
   if ([string]::IsNullOrWhiteSpace($env:SC968_MAVEN_REPO)) {
     $env:SC968_MAVEN_REPO = Join-Path (Split-Path -Parent $OutputRoot) 'sc968-m2'
   }
@@ -79,11 +87,11 @@ try {
   # live driver below remains the final cross-process integration gate.
   $null = Invoke-Gate 'chromascape_compile' $ChromaScapeRoot {
     $ErrorActionPreference = 'Continue'
-    .\gradlew.bat --no-daemon --no-watch-fs compileJava compileTestJava
+    .\gradlew.bat --no-daemon --no-watch-fs --build-cache compileJava compileTestJava
   } (Join-Path $logs 'chromascape-compile.log') $gates
   $null = Invoke-Gate 'chromascape_ai_runtime_tests' $ChromaScapeRoot {
     $ErrorActionPreference = 'Continue'
-    .\gradlew.bat --no-daemon --no-watch-fs test `
+    .\gradlew.bat --no-daemon --no-watch-fs --build-cache test `
       --tests 'com.chromascape.web.aiplayer.AiPlayer*' `
       --tests 'com.chromascape.web.aiplayer.ImitationDatasetBuilderServiceTest' `
       --tests 'com.chromascape.web.aiplayer.PatchOutcomeEvaluationServiceTest' `
@@ -105,9 +113,9 @@ try {
     $ErrorActionPreference = 'Continue'
     & node --test src/test/js/sc968-acceptance-contract.test.js
   } (Join-Path $logs 'chromascape-acceptance-contract-test.log') $gates
-  $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' } (Join-Path $logs 'micro6-test.log') $gates
-  $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs :client:shadowJar } (Join-Path $logs 'micro6-shadowjar.log') $gates
-  $null = Invoke-Gate 'micro6_sbom' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs :client:generateRuntimeSbom } (Join-Path $logs 'micro6-sbom.log') $gates
+  $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' } (Join-Path $logs 'micro6-test.log') $gates
+  $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:shadowJar } (Join-Path $logs 'micro6-shadowjar.log') $gates
+  $null = Invoke-Gate 'micro6_sbom' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:generateRuntimeSbom } (Join-Path $logs 'micro6-sbom.log') $gates
   $contractVersionArgument = '-Dcapture-contract.version=' + $lock['module_version']
   $runeliteCaptureTestsArgument = '-Dtest=Sc968CaptureCompletionPolicyTest,RuneLiteCaptureSafetyTest'
   $null = Invoke-Gate 'runelite_capture_tests' $RuneLiteRoot {
