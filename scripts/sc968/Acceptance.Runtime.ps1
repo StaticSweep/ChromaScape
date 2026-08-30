@@ -178,7 +178,7 @@ $temporaryEnvironmentNames = @(
   'MICRO6_REMOTE_ACCOUNTBUILDER_TOKEN','MICRO6_REMOTE_PUBLIC_KEY_RING','AI_ROUTINE_CAPTURE_TOKEN','AI_ROUTINE_OPERATOR_TOKEN',
   'AI_ROUTINE_OPERATOR_ID','SC967_CANDIDATE_BUILDS_ENABLED','SC967_CANDIDATE_STAGING_ROOT','LEEUWBOT_CANDIDATE_REGISTRY_URL',
   'STATIC_API_TOKEN','CANDIDATE_STORAGE_ROOT','CANDIDATE_TRUSTED_KEYS_DIR','CANDIDATE_SIGNING_PRIVATE_KEY_PATH',
-  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','MICRO6_EXPECTED_ARTIFACT_NAME',
+  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','BUILDER_GOAL_MICRO6_PROJECT_DIR','MICRO6_EXPECTED_ARTIFACT_NAME',
   'STABILIZATION_AUTH_TOKEN','STABILIZATION_AUTH_WRITE_TOKEN','SPRING_DATASOURCE_URL','MCP_AUTO_START',
   'LOGGING_LEVEL_ROOT','CHROMASCAPE_LOG_LEVEL')
 
@@ -238,6 +238,10 @@ try {
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_PUBLIC_KEY_PATH',$signingPublic,'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_KEY_ID',$signingKeyId,'Process')
   [Environment]::SetEnvironmentVariable('MICRO6_ROOT',$Micro6Root,'Process')
+  # PatchCandidateWorkflowService reads the builder-goal recovery property. Pass the absolute
+  # acceptance worktree path explicitly: its isolated clone runs from a temporary directory, where
+  # the application's relative ../micro6 default cannot resolve to this run's clean worktree.
+  [Environment]::SetEnvironmentVariable('BUILDER_GOAL_MICRO6_PROJECT_DIR',$Micro6Root,'Process')
   [Environment]::SetEnvironmentVariable('MICRO6_EXPECTED_ARTIFACT_NAME',$artifactName,'Process')
   # ChromaScape's StabilizationAuthFilter fails startup when either stabilization token is blank and
   # local-development is not the sole active profile, so bootRun cannot start without them. Supply
