@@ -8,8 +8,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.DosFileAttributeView;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -56,13 +58,18 @@ public class IsolatedPatchWorker {
       Path patch = temp.resolve("candidate.patch");
       Path source = request.micro6Root().toAbsolutePath().normalize();
       if (!Files.isDirectory(source)) throw new IOException("ISOLATED_SOURCE_NOT_FOUND");
+      String commonGitDirectory = capture(List.of("git", "-C", source.toString(), "rev-parse",
+          "--path-format=absolute", "--git-common-dir"), temp).trim();
+      Path repository = commonGitDirectory.isBlank() ? null : Path.of(commonGitDirectory).toAbsolutePath().normalize();
+      if (repository == null || !Files.isDirectory(repository)) throw new IOException("ISOLATED_SOURCE_REPOSITORY_NOT_FOUND");
       // Micro6 contains tracked paths that exceed Win32's legacy 260-character checkout limit once
       // nested under the isolated temp directory. Enable Git's supported long-path handling for
       // this private clone only; the source repository and global Git configuration stay intact.
-      // Resolve the source before changing cwd to the temp sandbox so a configured ../micro6 path
-      // cannot accidentally become relative to that sandbox.
+      // Resolve the source worktree's common repository before changing cwd to the temp sandbox.
+      // This avoids treating a live linked worktree as the clone transport while the acceptance
+      // client and Gradle gates still have files open there.
       runCommand(List.of("git", "clone", "--no-checkout", "--config", "core.longpaths=true", "--no-hardlinks",
-          source.toString(), repo.toString()), temp, "ISOLATED_CLONE_FAILED");
+          repository.toString(), repo.toString()), temp, "ISOLATED_CLONE_FAILED");
       runCommand(List.of("git", "-C", repo.toString(), "checkout", "--detach", request.baseCommit()), temp, "ISOLATED_CHECKOUT_FAILED");
       if (!capture(List.of("git", "-C", repo.toString(), "status", "--porcelain"), temp).isBlank()) {
         return failed(request, changed, "ISOLATED_TREE_DIRTY");
@@ -456,7 +463,17 @@ public class IsolatedPatchWorker {
   private static void deleteRecursively(Path root) throws IOException {
     if (!Files.exists(root)) return;
     IOException[] failure = new IOException[1];
-    try (var stream = Files.walk(root)) { stream.sorted(Comparator.reverseOrder()).forEach(path -> { try { Files.deleteIfExists(path); } catch (IOException e) { failure[0] = e; } }); }
+    try (var stream = Files.walk(root)) {
+      stream.sorted(Comparator.reverseOrder()).forEach(path -> {
+        try {
+          DosFileAttributeView dos = Files.getFileAttributeView(path, DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+          if (dos != null && dos.readAttributes().isReadOnly()) dos.setReadOnly(false);
+          Files.deleteIfExists(path);
+        } catch (IOException e) {
+          failure[0] = e;
+        }
+      });
+    }
     if (failure[0] != null) throw failure[0];
   }
 }
