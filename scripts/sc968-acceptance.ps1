@@ -113,7 +113,7 @@ try {
     $ErrorActionPreference = 'Continue'
     & node --test src/test/js/sc968-acceptance-contract.test.js
   } (Join-Path $logs 'chromascape-acceptance-contract-test.log') $gates
-  $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' } (Join-Path $logs 'micro6-test.log') $gates
+  $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' --tests 'net.runelite.client.plugins.microbot.accountbuilder.integration.builder.SourceManifestCatalogTest' } (Join-Path $logs 'micro6-test.log') $gates
   $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:shadowJar } (Join-Path $logs 'micro6-shadowjar.log') $gates
   $null = Invoke-Gate 'micro6_sbom' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:generateRuntimeSbom } (Join-Path $logs 'micro6-sbom.log') $gates
   $contractVersionArgument = '-Dcapture-contract.version=' + $lock['module_version']
