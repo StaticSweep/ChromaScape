@@ -41,7 +41,11 @@ test('SC-968 candidate evidence uses and validates the signed nested manifest id
 
 test('SC-967 isolated candidate clones support tracked Windows long paths', () => {
   assert.match(isolatedPatchWorker,
-    /List\.of\("git", "-c", "core\.longpaths=true", "clone", "--no-hardlinks"/);
+    /request\.micro6Root\(\)\.toAbsolutePath\(\)\.normalize\(\)/);
+  assert.match(isolatedPatchWorker, /ISOLATED_SOURCE_NOT_FOUND/);
+  assert.match(isolatedPatchWorker,
+    /List\.of\("git", "clone", "--config", "core\.longpaths=true", "--no-hardlinks"/);
+  assert.match(isolatedPatchWorker, /ISOLATED_CHECKOUT_FAILED/);
 });
 
 test('SC-968 Micro6 captures bind certified stabilization and source provenance', () => {

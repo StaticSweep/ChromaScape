@@ -54,12 +54,16 @@ public class IsolatedPatchWorker {
       temp = Files.createTempDirectory("sc967-micro6-");
       Path repo = temp.resolve("repo");
       Path patch = temp.resolve("candidate.patch");
+      Path source = request.micro6Root().toAbsolutePath().normalize();
+      if (!Files.isDirectory(source)) throw new IOException("ISOLATED_SOURCE_NOT_FOUND");
       // Micro6 contains tracked paths that exceed Win32's legacy 260-character checkout limit once
       // nested under the isolated temp directory. Enable Git's supported long-path handling for
-      // this clone only; the source repository and the user's global Git configuration stay intact.
-      runCommand(List.of("git", "-c", "core.longpaths=true", "clone", "--no-hardlinks",
-          request.micro6Root().toString(), repo.toString()), temp, "ISOLATED_CLONE_FAILED");
-      runCommand(List.of("git", "-C", repo.toString(), "checkout", "--detach", request.baseCommit()), temp, "ISOLATED_CLONE_FAILED");
+      // this private clone only; the source repository and global Git configuration stay intact.
+      // Resolve the source before changing cwd to the temp sandbox so a configured ../micro6 path
+      // cannot accidentally become relative to that sandbox.
+      runCommand(List.of("git", "clone", "--config", "core.longpaths=true", "--no-hardlinks",
+          source.toString(), repo.toString()), temp, "ISOLATED_CLONE_FAILED");
+      runCommand(List.of("git", "-C", repo.toString(), "checkout", "--detach", request.baseCommit()), temp, "ISOLATED_CHECKOUT_FAILED");
       if (!capture(List.of("git", "-C", repo.toString(), "status", "--porcelain"), temp).isBlank()) {
         return failed(request, changed, "ISOLATED_TREE_DIRTY");
       }
