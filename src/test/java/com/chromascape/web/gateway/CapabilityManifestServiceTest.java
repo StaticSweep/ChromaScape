@@ -23,6 +23,7 @@ class CapabilityManifestServiceTest {
 
     assertEquals("chromascape-service/v1", capabilities.schemaVersion());
     assertEquals("cs-test", capabilities.serviceBuildId());
+    assertTrue(capabilities.restCapabilities().contains("context"));
     assertTrue(capabilities.restCapabilities().contains("sessions"));
     assertTrue(capabilities.streamKinds().contains("viewport"));
     assertEquals("chromascape-legacy/v1", capabilities.streamSchemaVersions().get("viewport"));
@@ -57,12 +58,10 @@ class CapabilityManifestServiceTest {
 
     assertThrows(IllegalArgumentException.class, () -> properties.setMaxRestBodyBytes(0));
     assertThrows(
-        IllegalArgumentException.class,
-        () -> properties.setMaxRestBodyBytes(16 * 1024 * 1024 + 1));
+        IllegalArgumentException.class, () -> properties.setMaxRestBodyBytes(16 * 1024 * 1024 + 1));
     assertThrows(IllegalArgumentException.class, () -> properties.setMaxFrameBytes(1_048_575));
     assertThrows(
-        IllegalArgumentException.class,
-        () -> properties.setMaxFrameBytes(16 * 1024 * 1024 + 1));
+        IllegalArgumentException.class, () -> properties.setMaxFrameBytes(16 * 1024 * 1024 + 1));
   }
 
   private static CapabilityManifestService service(

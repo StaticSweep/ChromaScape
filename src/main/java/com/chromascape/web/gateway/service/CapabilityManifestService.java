@@ -78,7 +78,8 @@ public class CapabilityManifestService {
     if (!patch) reasons.add("PATCH_DISABLED");
     if (!replayEnabled) reasons.add("REPLAY_DISABLED");
 
-    List<String> restCapabilities = new ArrayList<>(List.of("capabilities", "logs", "viewport"));
+    List<String> restCapabilities =
+        new ArrayList<>(List.of("capabilities", "context", "logs", "viewport"));
     if (sessions) restCapabilities.add("sessions");
     if (recordings) restCapabilities.add("recordings");
     if (replayEnabled) restCapabilities.add("replay");

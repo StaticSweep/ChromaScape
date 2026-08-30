@@ -10,12 +10,17 @@ import org.springframework.data.repository.query.Param;
 
 public interface RoutineCaptureRecordRepository extends JpaRepository<RoutineCaptureRecord, Long> {
   Optional<RoutineCaptureRecord> findBySessionId(String sessionId);
+
+  Optional<RoutineCaptureRecord> findByDebugSessionId(String debugSessionId);
+
   Optional<RoutineCaptureRecord> findByRecordingId(String recordingId);
+
   Optional<RoutineCaptureRecord> findByStartIdempotencyKey(String idempotencyKey);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select c from RoutineCaptureRecord c where c.startIdempotencyKey = :idempotencyKey")
-  Optional<RoutineCaptureRecord> findWithLockByStartIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
+  Optional<RoutineCaptureRecord> findWithLockByStartIdempotencyKey(
+      @Param("idempotencyKey") String idempotencyKey);
 
   /** Pessimistic write lock so concurrent start/ingest/complete reconcile the same row. */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
