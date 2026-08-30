@@ -44,7 +44,7 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
     /request\.micro6Root\(\)\.toAbsolutePath\(\)\.normalize\(\)/);
   assert.match(isolatedPatchWorker, /ISOLATED_SOURCE_NOT_FOUND/);
   assert.match(isolatedPatchWorker,
-    /List\.of\("git", "clone", "--config", "core\.longpaths=true", "--no-hardlinks"/);
+    /List\.of\("git", "clone", "--no-checkout", "--config", "core\.longpaths=true", "--no-hardlinks"/);
   assert.match(isolatedPatchWorker, /ISOLATED_CHECKOUT_FAILED/);
 });
 

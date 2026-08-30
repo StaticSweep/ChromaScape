@@ -61,7 +61,7 @@ public class IsolatedPatchWorker {
       // this private clone only; the source repository and global Git configuration stay intact.
       // Resolve the source before changing cwd to the temp sandbox so a configured ../micro6 path
       // cannot accidentally become relative to that sandbox.
-      runCommand(List.of("git", "clone", "--config", "core.longpaths=true", "--no-hardlinks",
+      runCommand(List.of("git", "clone", "--no-checkout", "--config", "core.longpaths=true", "--no-hardlinks",
           source.toString(), repo.toString()), temp, "ISOLATED_CLONE_FAILED");
       runCommand(List.of("git", "-C", repo.toString(), "checkout", "--detach", request.baseCommit()), temp, "ISOLATED_CHECKOUT_FAILED");
       if (!capture(List.of("git", "-C", repo.toString(), "status", "--porcelain"), temp).isBlank()) {
