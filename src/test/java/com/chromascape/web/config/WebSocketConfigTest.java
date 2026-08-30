@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
+import com.chromascape.web.gateway.config.GatewayCapabilitiesProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +40,8 @@ class WebSocketConfigTest {
             null, // botStateWebSocketHandler
             null, // tickStreamWebSocketHandler
             null, // debuggerTickWebSocketHandler
-            patchLoopWebSocketHandler);
+            patchLoopWebSocketHandler,
+            new GatewayCapabilitiesProperties());
   }
 
   @Test

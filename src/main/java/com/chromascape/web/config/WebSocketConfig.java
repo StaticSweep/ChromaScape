@@ -1,5 +1,6 @@
 package com.chromascape.web.config;
 
+import com.chromascape.web.gateway.config.GatewayCapabilitiesProperties;
 import com.chromascape.web.debug.BotStateWebSocketHandler;
 import com.chromascape.web.debug.OverlayWebSocketHandler;
 import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
@@ -66,6 +67,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
   /** The shared handler for broadcasting patch loop execution updates. */
   private final PatchLoopWebSocketHandler patchLoopWebSocketHandler;
 
+  /** Server-configured frame ceiling shared by capability discovery and the WebSocket container. */
+  private final GatewayCapabilitiesProperties gatewayCapabilitiesProperties;
+
   /**
    * Constructs the configuration with the injected handlers.
    *
@@ -87,7 +91,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
       BotStateWebSocketHandler botStateWebSocketHandler,
       TickStreamWebSocketHandler tickStreamWebSocketHandler,
       DebuggerTickWebSocketHandler debuggerTickWebSocketHandler,
-      PatchLoopWebSocketHandler patchLoopWebSocketHandler) {
+      PatchLoopWebSocketHandler patchLoopWebSocketHandler,
+      GatewayCapabilitiesProperties gatewayCapabilitiesProperties) {
     this.logWebSocketHandler = logWebSocketHandler;
     this.stateWebSocketHandler = stateWebSocketHandler;
     this.viewportWebSocketHandler = viewportWebSocketHandler;
@@ -98,21 +103,24 @@ public class WebSocketConfig implements WebSocketConfigurer {
     this.tickStreamWebSocketHandler = tickStreamWebSocketHandler;
     this.debuggerTickWebSocketHandler = debuggerTickWebSocketHandler;
     this.patchLoopWebSocketHandler = patchLoopWebSocketHandler;
+    this.gatewayCapabilitiesProperties = gatewayCapabilitiesProperties;
   }
 
   /**
    * Configures the WebSocket container with larger message buffer sizes.
    *
    * <p>The default Spring WebSocket message size limit is 64KB, which is too small for viewport
-   * image data. This bean increases the limit to 1MB to support larger image transfers.
+   * image data. This bean applies the bounded server-side gateway setting so the capability
+   * manifest and effective container ceiling remain consistent.
    *
    * @return configured container factory bean
    */
   @Bean
   public ServletServerContainerFactoryBean createWebSocketContainer() {
     ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
-    container.setMaxTextMessageBufferSize(1024 * 1024); // 1MB for Base64 image data
-    container.setMaxBinaryMessageBufferSize(1024 * 1024); // 1MB
+    int maxFrameBytes = gatewayCapabilitiesProperties.getMaxFrameBytes();
+    container.setMaxTextMessageBufferSize(maxFrameBytes);
+    container.setMaxBinaryMessageBufferSize(maxFrameBytes);
     return container;
   }
 
