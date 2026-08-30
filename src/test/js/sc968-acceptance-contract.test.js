@@ -13,6 +13,8 @@ const micro6 = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Micro6.
 const application = fs.readFileSync(path.join(root, 'src/main/resources/application.yml'), 'utf8');
 const routineController = fs.readFileSync(path.join(root,
   'src/main/java/com/chromascape/web/aiplayer/routine/controller/RoutineController.java'), 'utf8');
+const isolatedPatchWorker = fs.readFileSync(path.join(root,
+  'src/main/java/com/chromascape/web/aiplayer/routine/service/IsolatedPatchWorker.java'), 'utf8');
 const operatorWebConfig = fs.readFileSync(path.join(root,
   'src/main/java/com/chromascape/web/aiplayer/routine/config/AiRoutineOperatorWebConfig.java'), 'utf8');
 const managedSeedPlan = JSON.parse(fs.readFileSync(
@@ -35,6 +37,11 @@ test('SC-968 candidate evidence uses and validates the signed nested manifest id
   assert.match(runtime, /Registered candidate signature is not valid base64/);
   assert.doesNotMatch(runtime, /\$candidate\.certification_hash/);
   assert.doesNotMatch(runtime, /\$candidate\.signature/);
+});
+
+test('SC-967 isolated candidate clones support tracked Windows long paths', () => {
+  assert.match(isolatedPatchWorker,
+    /List\.of\("git", "-c", "core\.longpaths=true", "clone", "--no-hardlinks"/);
 });
 
 test('SC-968 Micro6 captures bind certified stabilization and source provenance', () => {
