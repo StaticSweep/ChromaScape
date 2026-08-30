@@ -108,6 +108,15 @@ sc967:
 server:
   port: ${SERVER_PORT:8090}  # Changed from 8080 to avoid conflict with leeuwbot-api
 
+# Same-origin debugger gateway capability facts. These values are server-only; the browser cannot
+# override the service identity or transport ceilings.
+gateway:
+  capabilities:
+    service-build-id: ${CHROMASCAPE_BUILD_ID:chromascape-dev}
+    max-rest-body-bytes: ${CHROMASCAPE_GATEWAY_MAX_REST_BODY_BYTES:1048576}
+    # Includes the transport envelope overhead while admitting the current 1 MiB viewport frame.
+    max-frame-bytes: ${CHROMASCAPE_GATEWAY_MAX_FRAME_BYTES:2097152}
+
 # ChromaScape runtime configuration
 chromascape:
   patchloop:
