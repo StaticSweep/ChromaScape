@@ -50,6 +50,10 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
   assert.match(isolatedPatchWorker, /ISOLATED_CHECKOUT_FAILED/);
   assert.match(isolatedPatchWorker, /DosFileAttributeView/);
   assert.match(isolatedPatchWorker, /dos\.setReadOnly\(false\)/);
+  assert.match(runtime, /\$workerTemp = Join-Path \$OutputRoot '\.worker-temp'/);
+  assert.match(runtime, /SetEnvironmentVariable\('TEMP',\$workerTemp,'Process'\)/);
+  assert.match(runtime, /SetEnvironmentVariable\('TMP',\$workerTemp,'Process'\)/);
+  assert.match(runtime, /'CHROMASCAPE_LOG_LEVEL','TEMP','TMP'/);
 });
 
 test('SC-968 Micro6 captures bind certified stabilization and source provenance', () => {

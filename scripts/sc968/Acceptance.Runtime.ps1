@@ -180,7 +180,7 @@ $temporaryEnvironmentNames = @(
   'STATIC_API_TOKEN','CANDIDATE_STORAGE_ROOT','CANDIDATE_TRUSTED_KEYS_DIR','CANDIDATE_SIGNING_PRIVATE_KEY_PATH',
   'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','BUILDER_GOAL_MICRO6_PROJECT_DIR','MICRO6_EXPECTED_ARTIFACT_NAME',
   'STABILIZATION_AUTH_TOKEN','STABILIZATION_AUTH_WRITE_TOKEN','SPRING_DATASOURCE_URL','MCP_AUTO_START',
-  'LOGGING_LEVEL_ROOT','CHROMASCAPE_LOG_LEVEL')
+  'LOGGING_LEVEL_ROOT','CHROMASCAPE_LOG_LEVEL','TEMP','TMP')
 
 try {
   foreach ($name in $temporaryEnvironmentNames) { $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
@@ -206,7 +206,14 @@ try {
   $logs = Join-Path $OutputRoot 'logs'
   $registryOutput = Join-Path $OutputRoot 'registry'
   $stagingRoot = Join-Path $registryOutput 'staging'
-  New-Item -ItemType Directory -Force -Path $output,$logs,$registryOutput,$stagingRoot | Out-Null
+  # Keep candidate-worker sandboxes under the acceptance-owned output root. Some Windows machines
+  # force every executable launched beneath the user TEMP directory into Sandboxie; Git then exits
+  # before repository discovery without producing output. A run-owned TEMP/TMP also prevents the
+  # worker from touching or depending on unrelated per-user temporary state.
+  $workerTemp = Join-Path $OutputRoot '.worker-temp'
+  New-Item -ItemType Directory -Force -Path $output,$logs,$registryOutput,$stagingRoot,$workerTemp | Out-Null
+  [Environment]::SetEnvironmentVariable('TEMP',$workerTemp,'Process')
+  [Environment]::SetEnvironmentVariable('TMP',$workerTemp,'Process')
   # Wrap the pipeline, not just the array literal: Where-Object yields $null when nothing matches,
   # and under Set-StrictMode -Version Latest $null.Count throws PropertyNotFoundStrict. That is the
   # fresh-output case this check exists to allow, so the unwrapped form could never succeed.
