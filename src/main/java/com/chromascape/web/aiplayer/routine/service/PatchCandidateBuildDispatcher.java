@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PatchCandidateBuildDispatcher {
 
+  private static final int MAX_FAILURE_CODE_LENGTH = 160;
+
   private final PatchCandidateRunRepository repository;
 
   public PatchCandidateBuildDispatcher(PatchCandidateRunRepository repository) {
@@ -65,7 +67,8 @@ public class PatchCandidateBuildDispatcher {
     }
     entity.setWorkerCompletedAt(Instant.now());
     entity.setWorkerLeaseExpiresAt(null);
-    entity.setLastFailureCode(result == null ? "BUILD_FAILED" : result.failureCode());
+    entity.setLastFailureCode(boundedFailureCode(
+        result == null ? "BUILD_FAILED" : result.failureCode()));
     entity.setResultJson(resultJson);
     entity.setState(result != null && "BUILT".equals(result.status()) ? "BUILT" : "BUILD_FAILED");
     repository.save(entity);
@@ -82,10 +85,11 @@ public class PatchCandidateBuildDispatcher {
     }
     entity.setWorkerCompletedAt(Instant.now());
     entity.setWorkerLeaseExpiresAt(null);
-    entity.setLastFailureCode(code == null ? "BUILD_FAILED" : code);
+    String failureCode = code == null ? "BUILD_FAILED" : code;
+    entity.setLastFailureCode(boundedFailureCode(failureCode));
     entity.setState("BUILD_FAILED");
     entity.setResultJson("{\"status\":\"FAILED\",\"failure_code\":\""
-        + (code == null ? "BUILD_FAILED" : code) + "\"}");
+        + failureCode + "\"}");
     repository.save(entity);
     return true;
   }
@@ -127,5 +131,12 @@ public class PatchCandidateBuildDispatcher {
 
   private PatchCandidateRun locked(String id) {
     return repository.findWithLockByProposalId(id).orElse(null);
+  }
+
+  private static String boundedFailureCode(String code) {
+    if (code == null || code.length() <= MAX_FAILURE_CODE_LENGTH) {
+      return code;
+    }
+    return code.substring(0, MAX_FAILURE_CODE_LENGTH);
   }
 }
