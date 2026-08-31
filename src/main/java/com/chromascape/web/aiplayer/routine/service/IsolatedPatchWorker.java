@@ -272,17 +272,22 @@ public class IsolatedPatchWorker {
 
     /** The final {@code MAX_OUTPUT_BYTES} bytes of the merged output, as UTF-8 text. */
     String tail() {
+      return new String(snapshot(), StandardCharsets.UTF_8).replaceAll("\\s+", " ");
+    }
+
+    /** Raw bounded output for commands whose line structure is part of the result. */
+    String text() {
+      return new String(snapshot(), StandardCharsets.UTF_8);
+    }
+
+    private byte[] snapshot() {
       synchronized (this) {
         byte[] tail = new byte[full ? CAPACITY : write];
         for (int i = 0; i < tail.length; i++) {
           tail[i] = buffer[(write - tail.length + i + CAPACITY) % CAPACITY];
         }
-        return new String(tail, StandardCharsets.UTF_8).replaceAll("\\s+", " ");
+        return tail;
       }
-    }
-
-    String text() {
-      return tail();
     }
   }
 

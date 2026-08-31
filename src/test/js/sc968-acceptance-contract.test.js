@@ -84,6 +84,10 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
     /":client:sc967CandidateCheckstyleTest"/);
   assert.match(isolatedPatchWorker, /":client:sc967CandidateTest"/);
   assert.match(isolatedPatchWorker, /"diff", "--check"/);
+  assert.match(isolatedPatchWorker,
+    /String text\(\) \{\s*return new String\(snapshot\(\), StandardCharsets\.UTF_8\);/);
+  assert.match(isolatedPatchWorker,
+    /String tail\(\) \{\s*return new String\(snapshot\(\), StandardCharsets\.UTF_8\)\.replaceAll/);
   assert.doesNotMatch(isolatedPatchWorker, /:runelite-client:/);
   assert.match(isolatedPatchWorker, /DosFileAttributeView/);
   assert.match(isolatedPatchWorker, /dos\.setReadOnly\(false\)/);
