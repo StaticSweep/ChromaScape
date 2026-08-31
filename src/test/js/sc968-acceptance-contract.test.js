@@ -89,7 +89,10 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
   assert.match(isolatedPatchWorker,
     /String tail\(\) \{\s*return new String\(snapshot\(\), StandardCharsets\.UTF_8\)\.replaceAll/);
   assert.match(isolatedPatchWorker, /isGradleCoordinationFile\(relative\)/);
-  assert.match(isolatedPatchWorker, /endsWith\("\.lock"\)/);
+  assert.match(isolatedPatchWorker, /isGradleRuntimePath\(relative\)/);
+  assert.match(isolatedPatchWorker, /"GRADLE_RO_DEP_CACHE"/);
+  assert.match(isolatedPatchWorker, /resolve\("caches"\)/);
+  assert.match(isolatedPatchWorker, /endsWith\("\.lock"\) \|\| value\.endsWith\("\.lck"\)/);
   assert.doesNotMatch(isolatedPatchWorker, /:runelite-client:/);
   assert.match(isolatedPatchWorker, /DosFileAttributeView/);
   assert.match(isolatedPatchWorker, /dos\.setReadOnly\(false\)/);

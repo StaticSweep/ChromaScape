@@ -32,6 +32,7 @@ public class IsolatedPatchWorker {
   private static final Duration COMMAND_TIMEOUT = Duration.ofMinutes(10);
   private static final int MAX_OUTPUT_BYTES = 256 * 1024;
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private record GradleCache(Path userHome, Path readOnlyDependencies) { }
 
   /** commands is retained for source compatibility but must always be empty; the worker owns gates. */
   public record BuildRequest(Path micro6Root, String baseCommit, String unifiedDiff, Set<String> allowlistedPaths, List<String> commands,
@@ -87,8 +88,7 @@ public class IsolatedPatchWorker {
       Set<String> allowlist = request.allowlistedPaths() == null ? Set.of() : request.allowlistedPaths();
       if (!allowlist.equals(new HashSet<>(changed))) return failed(request, changed, "PATCH_ALLOWLIST_VIOLATION");
 
-      Path gradleHome = configuredGradleHome(temp);
-      Files.createDirectories(gradleHome);
+      GradleCache gradleCache = configuredGradleCache(temp, repo);
       // Invoke the native Gradle wrapper directly: gradlew.bat on Windows, ./gradlew on Unix.
       // Never route Micro6 work through bash.
       List<String> gradle = new ArrayList<>();
@@ -98,7 +98,9 @@ public class IsolatedPatchWorker {
           ":client:compileJava", ":client:sc967CandidateCheckstyleMain",
           ":client:sc967CandidateCheckstyleTest", ":client:sc967CandidateTest",
           ":client:shadowJar", ":client:generateRuntimeSbom"));
-      runCommand(gradle, repo, "BUILD_FAILED", Map.of("GRADLE_USER_HOME", gradleHome.toString()));
+      runCommand(gradle, repo, "BUILD_FAILED", Map.of(
+          "GRADLE_USER_HOME", gradleCache.userHome().toString(),
+          "GRADLE_RO_DEP_CACHE", gradleCache.readOnlyDependencies().toString()));
 
       Path jar = findExpectedShadowJar(repo, request.expectedJarName());
       byte[] jarBytes = Files.readAllBytes(jar);
@@ -455,16 +457,43 @@ public class IsolatedPatchWorker {
   private static String hash(byte[] data) { try { return "sha256:" + toHex(MessageDigest.getInstance("SHA-256").digest(data)); } catch (Exception e) { throw new IllegalStateException(e); } }
   private static String toHex(byte[] bytes) { StringBuilder value = new StringBuilder(); for (byte b : bytes) value.append(String.format("%02x", b)); return value.toString(); }
 
-  private static Path configuredGradleHome(Path temp) throws IOException {
+  private static GradleCache configuredGradleCache(Path temp, Path repo) throws IOException {
     String configured = System.getenv("SC967_GRADLE_USER_HOME");
     if (configured == null || configured.isBlank()) throw new IOException("GRADLE_CACHE_NOT_CONFIGURED");
     Path source = Path.of(configured).toAbsolutePath().normalize();
     if (!Files.isDirectory(source)) throw new IOException("GRADLE_CACHE_NOT_CONFIGURED");
+    Path readOnlyDependencies = source.resolve("caches").normalize();
+    if (!Files.isDirectory(readOnlyDependencies.resolve("modules-2"))) {
+      throw new IOException("GRADLE_DEPENDENCY_CACHE_NOT_FOUND");
+    }
     Path target = temp.resolve("gradle-user-home");
+    Files.createDirectories(target);
+
+    Path wrapperProperties = repo.resolve("gradle/wrapper/gradle-wrapper.properties");
+    String distributionLine = Files.readAllLines(wrapperProperties, StandardCharsets.UTF_8).stream()
+        .filter(line -> line.startsWith("distributionUrl="))
+        .findFirst().orElseThrow(() -> new IOException("GRADLE_DISTRIBUTION_NOT_CONFIGURED"));
+    String distribution = distributionLine.substring(distributionLine.lastIndexOf('/') + 1);
+    if (!distribution.endsWith(".zip")) throw new IOException("GRADLE_DISTRIBUTION_NOT_CONFIGURED");
+    distribution = distribution.substring(0, distribution.length() - 4);
+    if (!distribution.matches("[A-Za-z0-9._-]+")) {
+      throw new IOException("GRADLE_DISTRIBUTION_NOT_CONFIGURED");
+    }
+    Path wrapperSource = source.resolve("wrapper/dists").resolve(distribution).normalize();
+    if (!wrapperSource.startsWith(source) || !Files.isDirectory(wrapperSource)) {
+      throw new IOException("GRADLE_DISTRIBUTION_NOT_FOUND");
+    }
+    Path wrapperTarget = target.resolve("wrapper/dists").resolve(distribution);
+    copyGradleTree(wrapperSource, wrapperTarget);
+    return new GradleCache(target, readOnlyDependencies);
+  }
+
+  private static void copyGradleTree(Path source, Path target) throws IOException {
     try (var stream = Files.walk(source)) {
       stream.forEach(path -> {
         try {
           Path relative = source.relativize(path);
+          if (!isGradleRuntimePath(relative)) return;
           Path destination = target.resolve(relative);
           if (Files.isDirectory(path)) {
             Files.createDirectories(destination);
@@ -475,12 +504,19 @@ public class IsolatedPatchWorker {
         catch (IOException e) { throw new java.io.UncheckedIOException(e); }
       });
     } catch (java.io.UncheckedIOException e) { throw e.getCause(); }
-    return target;
   }
 
   static boolean isGradleCoordinationFile(Path relative) {
     Path name = relative == null ? null : relative.getFileName();
-    return name != null && name.toString().toLowerCase(java.util.Locale.ROOT).endsWith(".lock");
+    if (name == null) return false;
+    String value = name.toString().toLowerCase(java.util.Locale.ROOT);
+    return value.endsWith(".lock") || value.endsWith(".lck");
+  }
+
+  static boolean isGradleRuntimePath(Path relative) {
+    if (relative == null || relative.getNameCount() <= 2) return true;
+    String distributionChild = relative.getName(2).toString();
+    return distributionChild.equals("bin") || distributionChild.equals("lib");
   }
 
   private static void deleteRecursively(Path root) throws IOException {
