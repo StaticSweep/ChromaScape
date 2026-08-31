@@ -32,4 +32,15 @@ class IsolatedPatchWorkerTest {
     assertFalse(IsolatedPatchWorker.isGradleRuntimePath(
         Path.of("hash", "gradle-8.8", "src", "core", "Source.java")));
   }
+
+  @Test
+  void acceptsOnlyCanonicalMavenPurlsWithAnOptionalClassifier() {
+    assertTrue(IsolatedPatchWorker.isValidSbomPurl("pkg:maven/org.lwjgl/lwjgl@3.3.2"));
+    assertTrue(IsolatedPatchWorker.isValidSbomPurl(
+        "pkg:maven/org.lwjgl/lwjgl@3.3.2?classifier=natives-windows-x86_64"));
+    assertFalse(IsolatedPatchWorker.isValidSbomPurl(
+        "pkg:maven/org.lwjgl/lwjgl@3.3.2?type=jar"));
+    assertFalse(IsolatedPatchWorker.isValidSbomPurl(
+        "pkg:maven/org.lwjgl/lwjgl@3.3.2?classifier="));
+  }
 }

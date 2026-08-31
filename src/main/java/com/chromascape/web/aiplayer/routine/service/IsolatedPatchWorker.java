@@ -360,9 +360,13 @@ public class IsolatedPatchWorker {
     for (JsonNode component : bom.path("components")) {
       String group = component.path("group").asText(); String name = component.path("name").asText(); String version = component.path("version").asText();
       String purl = component.path("purl").asText(); String hash = component.path("sha256").asText();
-      if (group.isBlank() || name.isBlank() || version.isBlank() || !purl.matches("pkg:maven/[^/]+/[^@]+@[^?]+") || !purls.add(purl) || !hash.matches("sha256:[0-9a-f]{64}")) throw new IOException("SBOM_COMPONENT_INVALID");
+      if (group.isBlank() || name.isBlank() || version.isBlank() || !isValidSbomPurl(purl) || !purls.add(purl) || !hash.matches("sha256:[0-9a-f]{64}")) throw new IOException("SBOM_COMPONENT_INVALID");
     }
     return CanonicalJsonHasher.canonical(bom).getBytes(StandardCharsets.UTF_8);
+  }
+
+  static boolean isValidSbomPurl(String purl) {
+    return purl.matches("pkg:maven/[^/]+/[^@]+@[^?]+(?:\\?classifier=[A-Za-z0-9._~-]+)?");
   }
 
   private static byte[] deterministicTestReport(Path repo) throws Exception {
