@@ -30,6 +30,20 @@ test('SC-968 runtime requires Assistant acceptance and a real RuneLite capture',
   assert.doesNotMatch(runtime, /session_id=\[string\]\$secondRecordingState\.session_id/);
 });
 
+test('SC-968 login prompts wait until each native client has initialized', () => {
+  assert.match(runtime, /function Wait-CaptureClientReady/);
+  for (const [statusFile, phase] of [
+    ['baselineStatusFile', '1/3'],
+    ['candidateStatusFile', '2/3'],
+    ['runeliteStatusFile', '3/3'],
+  ]) {
+    const ready = runtime.indexOf(`Wait-CaptureClientReady $${statusFile}`);
+    const prompt = runtime.indexOf(`LOG IN NOW (${phase})`);
+    assert.ok(ready >= 0, `${statusFile} readiness wait is missing`);
+    assert.ok(prompt > ready, `phase ${phase} prompt precedes native client readiness`);
+  }
+});
+
 test('SC-968 candidate evidence uses and validates the signed nested manifest identity', () => {
   assert.match(runtime, /Field \$candidateManifest 'candidate'/);
   assert.match(runtime, /Field \$candidateIdentity 'certification_hash'/);

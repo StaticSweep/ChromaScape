@@ -72,6 +72,19 @@ function Wait-CaptureLogin([string] $StatusFile, [int] $TimeoutSeconds) {
   throw 'Client never reported a logged-in session'
 }
 
+# Gradle can spend several minutes assembling a client before its capture plugin publishes the
+# first sidecar. Do not ask the operator to log in while only the launcher console exists: the
+# prompt must mean that the native client has actually initialized and is ready to be found.
+function Wait-CaptureClientReady([string] $StatusFile, [int] $TimeoutSeconds) {
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  do {
+    $status = Read-Sc968CaptureStatus -StatusFile $StatusFile
+    if ($status) { return $status }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTimeOffset]::UtcNow -lt $deadline)
+  throw 'Client never published its capture status sidecar'
+}
+
 # Opening the window is the harness's decision, so everything the operator did to get in game --
 # the welcome screen, a right-click dismissed, a step toward the spot -- is outside the recording.
 function Start-CaptureWindow([string] $TriggerFile) {
@@ -336,6 +349,7 @@ try {
   # The operator has to log in before the plugin can start a capture, and the only prompts used to
   # come after RECORDING was already reached. The 2026-08-28 09:45 run failed exactly here: the
   # client sat on LOGIN_SCREEN for the whole 1800 s wait with nothing on screen asking for a login.
+  $null = Wait-CaptureClientReady $baselineStatusFile $runtimeTimeout
   Write-Host 'LOG IN NOW (1/3): log into the baseline Micro6 client, then do nothing until the FISH prompt.' -ForegroundColor Cyan
   $null = Wait-CaptureLogin $baselineStatusFile $runtimeTimeout
   Start-CaptureWindow $baselineStartTrigger
@@ -462,6 +476,7 @@ try {
   $candidateMicro = Start-Sc968OwnedProcess -Name 'micro6-candidate' -FilePath $microLaunch -WorkingDirectory $Micro6Root -ArgumentList (EnvOr 'SC968_MICRO6_LAUNCH_ARGUMENTS' '') -LogPath $candidateLog
   $owned += $candidateMicro
   Wait-LogMarkers $candidateLog $candidateMicro.Pid @('verified exact registry manifest','verified candidate artifact','immediate pre-load artifact rehash passed','applied remote AccountBuilder candidate') $runtimeTimeout
+  $null = Wait-CaptureClientReady $candidateStatusFile $runtimeTimeout
   Write-Host 'LOG IN NOW (2/3): log into the candidate Micro6 client, then do nothing until the FISH prompt.' -ForegroundColor Cyan
   $null = Wait-CaptureLogin $candidateStatusFile $runtimeTimeout
   Start-CaptureWindow $candidateStartTrigger
@@ -492,6 +507,7 @@ try {
   $runeliteLog = Join-Path $logs 'runelite-human.log'
   $runelite = Start-Sc968OwnedProcess -Name 'runelite-human' -FilePath $runeliteLaunch -WorkingDirectory $RuneLiteRoot -ArgumentList (EnvOr 'SC968_RUNELITE_LAUNCH_ARGUMENTS' '') -LogPath $runeliteLog
   $owned += $runelite
+  $null = Wait-CaptureClientReady $runeliteStatusFile $runtimeTimeout
   Write-Host 'LOG IN NOW (3/3): log into the standard RuneLite client, then do nothing until the FISH prompt.' -ForegroundColor Cyan
   $null = Wait-CaptureLogin $runeliteStatusFile $runtimeTimeout
   Start-CaptureWindow $runeliteStartTrigger
