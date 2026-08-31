@@ -214,6 +214,7 @@ try {
   $registryUrl = EnvOr 'SC968_REGISTRY_URL' 'http://127.0.0.1:8181'
   $minimumTicks = [int](EnvOr 'SC968_MINIMUM_TICKS' '20')
   $runtimeTimeout = [int](EnvOr 'SC968_RUNTIME_TIMEOUT_SECONDS' '1800')
+  $registryStartupTimeout = [int](EnvOr 'SC968_REGISTRY_STARTUP_TIMEOUT_SECONDS' '600')
   $registryRoot = Join-Path $LeeuwBotRoot 'plugin-service'
   $output = Join-Path $OutputRoot 'runtime'
   $logs = Join-Path $OutputRoot 'logs'
@@ -274,7 +275,7 @@ try {
   $registryArguments = EnvOr 'SC968_REGISTRY_ARGUMENTS' 'run .'
   $registry = Start-Sc968OwnedProcess -Name 'candidate-registry' -FilePath $registryExecutable -WorkingDirectory $registryRoot -ArgumentList $registryArguments -LogPath (Join-Path $logs 'candidate-registry.log')
   $owned += $registry
-  Wait-Sc968Http -BaseUrl $registryUrl -Path '/api/v1/candidates/cand_000000000000000000000000' -BearerToken $registryToken -AcceptedStatusCodes @(404) -TimeoutSeconds 120 | Out-Null
+  Wait-Sc968Http -BaseUrl $registryUrl -Path '/api/v1/candidates/cand_000000000000000000000000' -BearerToken $registryToken -AcceptedStatusCodes @(404) -TimeoutSeconds $registryStartupTimeout | Out-Null
 
   # Run against a database owned by the acceptance rather than the developer database on 5433. That
   # one's Flyway history is written by the working tree, so it drifts from the committed migrations

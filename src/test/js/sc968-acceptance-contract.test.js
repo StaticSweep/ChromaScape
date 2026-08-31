@@ -44,6 +44,13 @@ test('SC-968 login prompts wait until each native client has initialized', () =>
   }
 });
 
+test('SC-968 allows its owned candidate registry to compile before probing it', () => {
+  assert.match(runtime,
+    /\$registryStartupTimeout = \[int\]\(EnvOr 'SC968_REGISTRY_STARTUP_TIMEOUT_SECONDS' '600'\)/);
+  assert.match(runtime,
+    /-AcceptedStatusCodes @\(404\) -TimeoutSeconds \$registryStartupTimeout/);
+});
+
 test('SC-968 candidate evidence uses and validates the signed nested manifest identity', () => {
   assert.match(runtime, /Field \$candidateManifest 'candidate'/);
   assert.match(runtime, /Field \$candidateIdentity 'certification_hash'/);
