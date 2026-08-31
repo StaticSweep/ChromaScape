@@ -60,18 +60,58 @@ function Wait-Capture([string] $StatusFile, [int] $TimeoutSeconds) {
   return $state
 }
 
+# The client publishes logged_in before it has a session, so the harness can tell the difference
+# between "not logged in yet" and "logged in, waiting to be told to record".
+function Wait-CaptureLogin([string] $StatusFile, [int] $TimeoutSeconds) {
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  do {
+    $status = Read-Sc968CaptureStatus -StatusFile $StatusFile
+    if ($status -and $status.PSObject.Properties.Name -contains 'logged_in' -and $status.logged_in) { return $status }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTimeOffset]::UtcNow -lt $deadline)
+  throw 'Client never reported a logged-in session'
+}
+
+# Gradle can spend several minutes assembling a client before its capture plugin publishes the
+# first sidecar. Do not ask the operator to log in while only the launcher console exists: the
+# prompt must mean that the native client has actually initialized and is ready to be found.
+function Wait-CaptureClientReady([string] $StatusFile, [int] $TimeoutSeconds) {
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  do {
+    $status = Read-Sc968CaptureStatus -StatusFile $StatusFile
+    if ($status) { return $status }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTimeOffset]::UtcNow -lt $deadline)
+  throw 'Client never published its capture status sidecar'
+}
+
+# Opening the window is the harness's decision, so everything the operator did to get in game --
+# the welcome screen, a right-click dismissed, a step toward the spot -- is outside the recording.
+function Start-CaptureWindow([string] $TriggerFile) {
+  $parent = Split-Path -Parent $TriggerFile
+  if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+  Set-Content -LiteralPath $TriggerFile -Value 'sc968-capture-start' -Encoding ascii
+}
+
 function Wait-AssistantProposal([string] $BaseUrl, [string] $Token, [string] $ConversationId, [int] $TimeoutSeconds) {
   $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
   do {
     $status = (Api $BaseUrl "/api/v1/ai-routine/assistant/conversations/$ConversationId" $Token).Json
     $proposal = Field $status 'latest_proposal'
     if ($proposal -and (Field $proposal 'state') -eq 'PROPOSED') { return $proposal }
+    # Generation fails in milliseconds when it fails at all, and clears its own state afterwards.
+    # Without this the driver polled a dead conversation for the full timeout and reported the
+    # symptom rather than the cause; report what the server actually recorded instead.
+    $failure = Field $status 'last_generation_failure'
+    if ($failure -and (Field $status 'generation_state') -ne 'GENERATING') {
+      throw ("Assistant generation failed: {0} ({1})" -f (Field $failure 'message'), (Field $failure 'code'))
+    }
     Start-Sleep -Milliseconds 250
   } while ([DateTimeOffset]::UtcNow -lt $deadline)
   throw 'Timed out waiting for the Assistant graph proposal'
 }
 
-function Wait-LogMarkers([string] $LogPath, [int] $Pid, [string[]] $Markers, [int] $TimeoutSeconds) {
+function Wait-LogMarkers([string] $LogPath, [int] $ProcessId, [string[]] $Markers, [int] $TimeoutSeconds) {
   $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
   do {
     if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
@@ -80,7 +120,7 @@ function Wait-LogMarkers([string] $LogPath, [int] $Pid, [string[]] $Markers, [in
       foreach ($marker in $Markers) { if ($content -notmatch [regex]::Escape($marker)) { $complete = $false; break } }
       if ($complete) { return }
     }
-    $process = Get-Process -Id $Pid -ErrorAction SilentlyContinue
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
     if ($null -eq $process) { break }
     Start-Sleep -Milliseconds 500
   } while ([DateTimeOffset]::UtcNow -lt $deadline)
@@ -89,6 +129,25 @@ function Wait-LogMarkers([string] $LogPath, [int] $Pid, [string[]] $Markers, [in
 
 function Read-Session([string] $BaseUrl, [string] $Token, [string] $SessionId) {
   return (Api $BaseUrl "/api/v1/ai-routine/capture/sessions/$SessionId" $Token).Json
+}
+
+# Recording no longer starts at login, so the window is only seconds old when the operator is
+# prompted. Ticks arrive in batches of ten, and a capture completes five ticks after the fishing
+# action, so prompting immediately produced a 17-tick recording against a 20-tick floor. Let the
+# recording reach the floor before asking for the demonstration.
+function Wait-CaptureTicks([string] $BaseUrl, [string] $Token, [string] $SessionId, [int] $MinimumTicks, [int] $TimeoutSeconds) {
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  do {
+    $session = Read-Session $BaseUrl $Token $SessionId
+    if ([int]$session.tick_count -ge $MinimumTicks) { return $session }
+    # An operator who acts before the prompt is not an error. The capture completes five ticks after
+    # the action and Require-CompletedCapture judges the finished length; aborting here instead
+    # discarded a 24-tick recording that satisfied the floor. The guarantee that gameplay had not
+    # begun before the capture was observable is already asserted above, on entry to RECORDING.
+    if ([int]$session.action_count -ne 0) { return $session }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTimeOffset]::UtcNow -lt $deadline)
+  throw "Capture never reached $MinimumTicks ticks"
 }
 
 function Require-CompletedCapture([object] $Status, [string] $Name, [int] $MinimumTicks) {
@@ -113,6 +172,7 @@ function Require-CaptureIdentity([object] $Status, [string] $ExpectedClientKind)
   $run = Field $identity 'run'
   if ($ExpectedClientKind -eq 'MICRO6_MANAGED') {
     if ([string]::IsNullOrWhiteSpace([string](Field $run 'attempt_id')) -or $null -eq (Field $run 'entry_id') -or [string]::IsNullOrWhiteSpace([string](Field $run 'executor_instance_id'))) { throw 'Micro6 capture is missing executor-bound run identity' }
+    if ((Field $client 'adapter_contract') -ne 'micro6-builder/v2' -or (Field $client 'domain') -ne 'MICRO6') { throw 'Micro6 capture capability identity is invalid' }
   } else {
     if ($null -ne (Field $run 'attempt_id') -or $null -ne (Field $run 'entry_id') -or $null -ne (Field $run 'executor_instance_id')) { throw 'RuneLite capture fabricated Micro6 executor identity' }
     if ((Field $client 'adapter_contract') -ne 'runelite-capture/v1' -or (Field $client 'domain') -ne 'RUNELITE') { throw 'RuneLite capture capability identity is invalid' }
@@ -124,14 +184,16 @@ $owned = @()
 $savedEnvironment = @{}
 $temporaryEnvironmentNames = @(
   'SC968_CAPTURE_ENABLED','SC968_CHROMASCAPE_URL','SC968_CAPTURE_TOKEN','SC968_CAPTURE_STATUS_FILE','SC968_CAPTURE_SPOOL',
+  'SC968_CAPTURE_START_FILE',
   'SC968_TASK_KEY','SC968_SETTINGS_HASH','SC968_PROFILE_ID','SC968_PROFILE_HASH','SC968_CATALOG_HASH','SC968_CLIENT_ID',
+  'SC968_RUN_ID','SC968_ATTEMPT_ID','SC968_ENTRY_ID','SC968_EXECUTOR_INSTANCE_ID','SC968_SOURCE_SNAPSHOT_ID','SC968_SOURCE_MANIFEST_HASH',
   'MICRO6_REMOTE_ACCOUNTBUILDER_ENABLED','MICRO6_REMOTE_ACCOUNTBUILDER_BASE_URL','MICRO6_REMOTE_ACCOUNTBUILDER_CANDIDATE_ID',
   'MICRO6_REMOTE_ACCOUNTBUILDER_TOKEN','MICRO6_REMOTE_PUBLIC_KEY_RING','AI_ROUTINE_CAPTURE_TOKEN','AI_ROUTINE_OPERATOR_TOKEN',
   'AI_ROUTINE_OPERATOR_ID','SC967_CANDIDATE_BUILDS_ENABLED','SC967_CANDIDATE_STAGING_ROOT','LEEUWBOT_CANDIDATE_REGISTRY_URL',
   'STATIC_API_TOKEN','CANDIDATE_STORAGE_ROOT','CANDIDATE_TRUSTED_KEYS_DIR','CANDIDATE_SIGNING_PRIVATE_KEY_PATH',
-  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','MICRO6_EXPECTED_ARTIFACT_NAME',
+  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','BUILDER_GOAL_MICRO6_PROJECT_DIR','MICRO6_EXPECTED_ARTIFACT_NAME',
   'STABILIZATION_AUTH_TOKEN','STABILIZATION_AUTH_WRITE_TOKEN','SPRING_DATASOURCE_URL','MCP_AUTO_START',
-  'LOGGING_LEVEL_ROOT','CHROMASCAPE_LOG_LEVEL')
+  'LOGGING_LEVEL_ROOT','CHROMASCAPE_LOG_LEVEL','TEMP','TMP')
 
 try {
   foreach ($name in $temporaryEnvironmentNames) { $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
@@ -149,15 +211,36 @@ try {
   $artifactName = Require 'SC968_EXPECTED_ARTIFACT_NAME'
 
   $chromaUrl = EnvOr 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:8090'
-  $registryUrl = EnvOr 'SC968_REGISTRY_URL' 'http://127.0.0.1:8081'
+  $chromaUri = $null
+  if (-not [Uri]::TryCreate($chromaUrl, [UriKind]::Absolute, [ref]$chromaUri) -or
+      $chromaUri.Scheme -ne 'http' -or -not $chromaUri.IsLoopback -or $chromaUri.Port -lt 1 -or
+      $chromaUri.AbsolutePath -ne '/' -or -not [string]::IsNullOrWhiteSpace($chromaUri.Query) -or
+      -not [string]::IsNullOrWhiteSpace($chromaUri.Fragment)) {
+    throw 'SC968_CHROMASCAPE_URL must be a loopback HTTP origin with an explicit port and no path, query, or fragment'
+  }
+  # Keep the server bind and every native-client callback on the same configured origin. Previously
+  # the clients honored SC968_CHROMASCAPE_URL while Spring silently retained its 8090 default.
+  $env:SERVER_PORT = [string]$chromaUri.Port
+  $registryUrl = EnvOr 'SC968_REGISTRY_URL' 'http://127.0.0.1:8181'
   $minimumTicks = [int](EnvOr 'SC968_MINIMUM_TICKS' '20')
-  $runtimeTimeout = [int](EnvOr 'SC968_RUNTIME_TIMEOUT_SECONDS' '1800')
+  # Interactive acceptance spans three real clients and may wait on an operator who is not
+  # continuously watching the console. Keep owned clients available for two hours; this changes
+  # only the wait budget and does not relax capture, identity, safety, or evidence checks.
+  $runtimeTimeout = [int](EnvOr 'SC968_RUNTIME_TIMEOUT_SECONDS' '7200')
+  $registryStartupTimeout = [int](EnvOr 'SC968_REGISTRY_STARTUP_TIMEOUT_SECONDS' '600')
   $registryRoot = Join-Path $LeeuwBotRoot 'plugin-service'
   $output = Join-Path $OutputRoot 'runtime'
   $logs = Join-Path $OutputRoot 'logs'
   $registryOutput = Join-Path $OutputRoot 'registry'
   $stagingRoot = Join-Path $registryOutput 'staging'
-  New-Item -ItemType Directory -Force -Path $output,$logs,$registryOutput,$stagingRoot | Out-Null
+  # Keep candidate-worker sandboxes under the acceptance-owned output root. Some Windows machines
+  # force every executable launched beneath the user TEMP directory into Sandboxie; Git then exits
+  # before repository discovery without producing output. A run-owned TEMP/TMP also prevents the
+  # worker from touching or depending on unrelated per-user temporary state.
+  $workerTemp = Join-Path $OutputRoot '.worker-temp'
+  New-Item -ItemType Directory -Force -Path $output,$logs,$registryOutput,$stagingRoot,$workerTemp | Out-Null
+  [Environment]::SetEnvironmentVariable('TEMP',$workerTemp,'Process')
+  [Environment]::SetEnvironmentVariable('TMP',$workerTemp,'Process')
   # Wrap the pipeline, not just the array literal: Where-Object yields $null when nothing matches,
   # and under Set-StrictMode -Version Latest $null.Count throws PropertyNotFoundStrict. That is the
   # fresh-output case this check exists to allow, so the unwrapped form could never succeed.
@@ -180,12 +263,19 @@ try {
   [Environment]::SetEnvironmentVariable('LEEUWBOT_CANDIDATE_REGISTRY_URL',$registryUrl,'Process')
   [Environment]::SetEnvironmentVariable('STATIC_API_TOKEN',$registryToken,'Process')
   [Environment]::SetEnvironmentVariable('SC967_CANDIDATE_STAGING_ROOT',$stagingRoot,'Process')
+  # plugin-service defaults to 8081; tell it to bind the port the driver will probe, so the
+  # acceptance never contends with another registry instance already running on this machine.
+  [Environment]::SetEnvironmentVariable('PLUGIN_SERVICE_PORT',([string]([Uri]$registryUrl).Port),'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_STORAGE_ROOT',(Join-Path $registryOutput 'registry-storage'),'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_TRUSTED_KEYS_DIR',(Require 'SC968_REGISTRY_TRUSTED_KEYS_DIR'),'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_PRIVATE_KEY_PATH',$signingPrivate,'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_PUBLIC_KEY_PATH',$signingPublic,'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_KEY_ID',$signingKeyId,'Process')
   [Environment]::SetEnvironmentVariable('MICRO6_ROOT',$Micro6Root,'Process')
+  # PatchCandidateWorkflowService reads the builder-goal recovery property. Pass the absolute
+  # acceptance worktree path explicitly: its isolated clone runs from a temporary directory, where
+  # the application's relative ../micro6 default cannot resolve to this run's clean worktree.
+  [Environment]::SetEnvironmentVariable('BUILDER_GOAL_MICRO6_PROJECT_DIR',$Micro6Root,'Process')
   [Environment]::SetEnvironmentVariable('MICRO6_EXPECTED_ARTIFACT_NAME',$artifactName,'Process')
   # ChromaScape's StabilizationAuthFilter fails startup when either stabilization token is blank and
   # local-development is not the sole active profile, so bootRun cannot start without them. Supply
@@ -198,7 +288,7 @@ try {
   $registryArguments = EnvOr 'SC968_REGISTRY_ARGUMENTS' 'run .'
   $registry = Start-Sc968OwnedProcess -Name 'candidate-registry' -FilePath $registryExecutable -WorkingDirectory $registryRoot -ArgumentList $registryArguments -LogPath (Join-Path $logs 'candidate-registry.log')
   $owned += $registry
-  Wait-Sc968Http -BaseUrl $registryUrl -Path '/api/v1/candidates/cand_000000000000000000000000' -BearerToken $registryToken -AcceptedStatusCodes @(404) -TimeoutSeconds 120 | Out-Null
+  Wait-Sc968Http -BaseUrl $registryUrl -Path '/api/v1/candidates/cand_000000000000000000000000' -BearerToken $registryToken -AcceptedStatusCodes @(404) -TimeoutSeconds $registryStartupTimeout | Out-Null
 
   # Run against a database owned by the acceptance rather than the developer database on 5433. That
   # one's Flyway history is written by the working tree, so it drifts from the committed migrations
@@ -241,9 +331,28 @@ try {
   [Environment]::SetEnvironmentVariable('CHROMASCAPE_LOG_LEVEL',(EnvOr 'SC968_LOG_LEVEL' 'INFO'),'Process')
   [Environment]::SetEnvironmentVariable('MCP_AUTO_START',(EnvOr 'SC968_MCP_AUTO_START' 'false'),'Process')
   [Environment]::SetEnvironmentVariable('SPRING_DATASOURCE_URL',(EnvOr 'SC968_DATASOURCE_URL' "jdbc:postgresql://localhost:5433/${databaseName}?sslmode=disable"),'Process')
+  # Developer-launched Micro6 clients commonly own the default executor/recorder ports (8098/8123).
+  # The acceptance must never resolve candidate source provenance from one of those unrelated
+  # processes: doing so mixes client build identities and correctly fails proposal creation. Give
+  # every acceptance-owned Micro6 phase isolated ports and point both ChromaScape consumers at the
+  # same isolated executor. The phases are sequential, so they can safely reuse these two ports.
+  $acceptanceExecutorBind = EnvOr 'SC968_MICRO6_EXECUTOR_BIND_ADDR' '127.0.0.1:18098'
+  $acceptanceExecutorUrl = EnvOr 'SC968_MICRO6_EXECUTOR_BASE_URL' ("http://" + $acceptanceExecutorBind)
+  [Environment]::SetEnvironmentVariable('MICRO6_EXECUTOR_BIND_ADDR',$acceptanceExecutorBind,'Process')
+  [Environment]::SetEnvironmentVariable('MICRO6_RECORDER_BIND_ADDR',(EnvOr 'SC968_MICRO6_RECORDER_BIND_ADDR' '127.0.0.1:18123'),'Process')
+  [Environment]::SetEnvironmentVariable('MICRO6_EXECUTOR_BASE_URL',$acceptanceExecutorUrl,'Process')
+  [Environment]::SetEnvironmentVariable('CHROMASCAPE_PATCHLOOP_MICRO6_EXECUTOR_BASE_URL',$acceptanceExecutorUrl,'Process')
 
-  $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' (Join-Path $env:SystemRoot 'System32/cmd.exe')
-  $chromaArguments = EnvOr 'SC968_CHROMASCAPE_ARGUMENTS' "/d /c call `"$(Join-Path $ChromaScapeRoot 'gradlew.bat')`" --no-daemon --no-watch-fs bootRun"
+  # Keep the long interactive wait independent of Gradle daemon lifetime. A machine-wide
+  # `gradle --stop` otherwise terminates bootRun even though this acceptance uses --no-daemon (that
+  # option still creates a single-use daemon). The preflight gate builds this executable Boot JAR.
+  $chromaJar = Join-Path $ChromaScapeRoot 'build\libs\chromascape-0.2.0-SNAPSHOT.jar'
+  if (-not (Test-Path -LiteralPath $chromaJar -PathType Leaf)) {
+    throw "Preflight did not produce the ChromaScape runtime JAR: $chromaJar"
+  }
+  $javaExecutable = (Get-Command java.exe -ErrorAction Stop).Source
+  $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' $javaExecutable
+  $chromaArguments = EnvOr 'SC968_CHROMASCAPE_ARGUMENTS' ("-jar `"" + $chromaJar + "`"")
   $chroma = Start-Sc968OwnedProcess -Name 'chromascape' -FilePath $chromaExecutable -WorkingDirectory $ChromaScapeRoot -ArgumentList $chromaArguments -LogPath (Join-Path $logs 'chromascape-runtime.log')
   $owned += $chroma
   Wait-Sc968Http -BaseUrl $chromaUrl -Path '/debugger' -AcceptedStatusCodes @(200,301,302) -TimeoutSeconds 900 -PollMilliseconds 1000 | Out-Null
@@ -255,26 +364,39 @@ try {
   $captureAuthProbe = Invoke-Sc968Http -BaseUrl $chromaUrl -Path '/api/v1/ai-routine/runs/from-runelite-capture' -Method 'POST' -BearerToken $captureToken -Body '{"schema":"current-slice-run-request/v1"}'
   if ($captureAuthProbe.StatusCode -eq 401) { throw 'ChromaScape did not receive the SC-968 capture token' }
   if ($captureAuthProbe.StatusCode -ne 422) { throw "Capture authentication probe returned unexpected HTTP $($captureAuthProbe.StatusCode)" }
+  $managedCaptureAuthProbe = Invoke-Sc968Http -BaseUrl $chromaUrl -Path '/api/v1/ai-routine/runs/from-stabilization/sc968-auth-probe' -Method 'POST' -BearerToken $captureToken -Body '{"schema":"current-slice-run-request/v1"}'
+  if ($managedCaptureAuthProbe.StatusCode -eq 401) { throw 'ChromaScape did not receive the SC-968 capture token on managed run creation' }
+  if ($managedCaptureAuthProbe.StatusCode -ne 422) { throw "Managed capture authentication probe returned unexpected HTTP $($managedCaptureAuthProbe.StatusCode)" }
+
+  $managedSeedPlan = Join-Path $ChromaScapeRoot 'src/test/resources/sc968/micro6-managed-stabilization-plan.json'
+  $baselineManagedIdentity = Initialize-Sc968ManagedCaptureIdentity -Micro6Root $Micro6Root -ContractsRoot $ContractsRoot -BaseUrl $chromaUrl -PlanPath $managedSeedPlan -OutputDirectory (Join-Path $output 'stabilization-baseline') -Name 'baseline' -RunIndex 0
 
   # Baseline: the status sidecar is produced by the real Micro6 plugin. No run/session or action
   # data is generated by this harness.
   $baselineStatusFile = Join-Path $output 'baseline-status.json'
-  Set-Sc968Micro6Environment -BaseUrl $chromaUrl -CaptureToken $captureToken -StatusFile $baselineStatusFile -SpoolDirectory (Join-Path $OutputRoot 'spool/baseline')
+  $baselineStartTrigger = Join-Path $output 'baseline-start.trigger'
+  Set-Sc968Micro6Environment -BaseUrl $chromaUrl -CaptureToken $captureToken -StatusFile $baselineStatusFile -SpoolDirectory (Join-Path $OutputRoot 'spool/baseline') -ManagedIdentity $baselineManagedIdentity -StartTriggerFile $baselineStartTrigger
   $microLog = Join-Path $logs 'baseline-micro6.log'
   $micro = Start-Sc968OwnedProcess -Name 'micro6-baseline' -FilePath $microLaunch -WorkingDirectory $Micro6Root -ArgumentList (EnvOr 'SC968_MICRO6_LAUNCH_ARGUMENTS' '') -LogPath $microLog
   $owned += $micro
+  # The operator has to log in before the plugin can start a capture, and the only prompts used to
+  # come after RECORDING was already reached. The 2026-08-28 09:45 run failed exactly here: the
+  # client sat on LOGIN_SCREEN for the whole 1800 s wait with nothing on screen asking for a login.
+  $null = Wait-CaptureClientReady $baselineStatusFile $runtimeTimeout
+  Write-Host 'LOG IN NOW (1/3): log into the baseline Micro6 client, then do nothing until the FISH prompt.' -ForegroundColor Cyan
+  $null = Wait-CaptureLogin $baselineStatusFile $runtimeTimeout
+  Start-CaptureWindow $baselineStartTrigger
   $recordingState = Wait-Capture $baselineStatusFile $runtimeTimeout
   if ($recordingState.state -ne 'RECORDING') { throw 'Baseline Micro6 never reached RECORDING' }
   $baselineSession = Read-Session $chromaUrl $captureToken ([string]$recordingState.session_id)
   if ([int]$baselineSession.action_count -ne 0) { throw 'Baseline gameplay began before the capture was observable' }
+  $null = Wait-CaptureTicks $chromaUrl $captureToken ([string]$recordingState.session_id) $minimumTicks $runtimeTimeout
   Write-Host 'FISH NOW (1/3): in the baseline Micro6 client, use Net on a Fishing spot once.' -ForegroundColor Yellow
   $baselineCompletedState = Wait-Sc968CaptureStatus -StatusFile $baselineStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
   if ($baselineCompletedState.state -ne 'COMPLETED') { throw "Baseline capture ended in $($baselineCompletedState.state)" }
   $baselineSession = Read-Session $chromaUrl $captureToken ([string]$baselineCompletedState.session_id)
   Require-CompletedCapture $baselineSession 'Baseline' $minimumTicks
   Require-CaptureIdentity $baselineSession 'MICRO6_MANAGED'
-  Stop-Sc968OwnedProcess $micro
-  $owned = @($owned | Where-Object { $_.Pid -ne $micro.Pid })
 
   # Curate and publish the evidence graph that gives the deterministic Assistant an immutable base.
   $recordingId = [string]$baselineSession.recording_id
@@ -369,18 +491,33 @@ try {
   [IO.File]::WriteAllBytes((Join-Path $registryOutput 'candidate.jar'),$download.BodyBytes)
   $candidateEvidence = [ordered]@{ proposal_id=$patchProposalId; candidate_id=$candidateId; candidate_hash=$candidateHash; certification_hash=$certificationHash; signature=$candidateSignature; manifest_hash=(Sha256Bytes $stagedManifest); registry_manifest_hash=$lookupHash; manifest_byte_equal=$true; artifact_hash=(Sha256Bytes $stagedJar); artifact_byte_equal=$true; control_allowed=$false }
 
+  # The baseline client hosts the patch-loop executor on 8098, and that executor is the only source
+  # of the Micro6 source manifest the patch flow above resolves its span from. Stopping the client
+  # right after its capture -- as this driver used to -- left from-failure connecting to a dead port
+  # and failing SOURCE_SNAPSHOT_NOT_FOUND. Keep it up until the candidate is registered, then stop it
+  # here: the candidate client binds the same port, so the two can never overlap.
+  Stop-Sc968OwnedProcess $micro
+  $owned = @($owned | Where-Object { $_.Pid -ne $micro.Pid })
+
   # Second Micro6 launch proves exact candidate retrieval and AccountBuilder loading. Shadow is not
   # opened here: the cross-runner compatibility contract intentionally requires RuneLite capture.
+  $candidateManagedIdentity = Initialize-Sc968ManagedCaptureIdentity -Micro6Root $Micro6Root -ContractsRoot $ContractsRoot -BaseUrl $chromaUrl -PlanPath $managedSeedPlan -OutputDirectory (Join-Path $output 'stabilization-candidate') -Name 'candidate' -RunIndex 1
   $candidateStatusFile = Join-Path $output 'candidate-status.json'
-  Set-Sc968Micro6Environment -BaseUrl $chromaUrl -CaptureToken $captureToken -StatusFile $candidateStatusFile -SpoolDirectory (Join-Path $OutputRoot 'spool/candidate') -CandidateId $candidateId
+  $candidateStartTrigger = Join-Path $output 'candidate-start.trigger'
+  Set-Sc968Micro6Environment -BaseUrl $chromaUrl -CaptureToken $captureToken -StatusFile $candidateStatusFile -SpoolDirectory (Join-Path $OutputRoot 'spool/candidate') -ManagedIdentity $candidateManagedIdentity -StartTriggerFile $candidateStartTrigger -CandidateId $candidateId
   $candidateLog = Join-Path $logs 'candidate-micro6.log'
   $candidateMicro = Start-Sc968OwnedProcess -Name 'micro6-candidate' -FilePath $microLaunch -WorkingDirectory $Micro6Root -ArgumentList (EnvOr 'SC968_MICRO6_LAUNCH_ARGUMENTS' '') -LogPath $candidateLog
   $owned += $candidateMicro
   Wait-LogMarkers $candidateLog $candidateMicro.Pid @('verified exact registry manifest','verified candidate artifact','immediate pre-load artifact rehash passed','applied remote AccountBuilder candidate') $runtimeTimeout
+  $null = Wait-CaptureClientReady $candidateStatusFile $runtimeTimeout
+  Write-Host 'LOG IN NOW (2/3): log into the candidate Micro6 client, then do nothing until the FISH prompt.' -ForegroundColor Cyan
+  $null = Wait-CaptureLogin $candidateStatusFile $runtimeTimeout
+  Start-CaptureWindow $candidateStartTrigger
   $secondRecordingState = Wait-Capture $candidateStatusFile $runtimeTimeout
   if ($secondRecordingState.state -ne 'RECORDING') { throw 'Candidate Micro6 never reached RECORDING' }
   $secondSession = Read-Session $chromaUrl $captureToken ([string]$secondRecordingState.session_id)
   if ([int]$secondSession.action_count -ne 0) { throw 'Candidate gameplay began before the capture was observable' }
+  $null = Wait-CaptureTicks $chromaUrl $captureToken ([string]$secondRecordingState.session_id) $minimumTicks $runtimeTimeout
   Write-Host 'FISH NOW (2/3): in the candidate Micro6 client, use Net on a Fishing spot once.' -ForegroundColor Yellow
   $secondCompletedState = Wait-Sc968CaptureStatus -StatusFile $candidateStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
   if ($secondCompletedState.state -ne 'COMPLETED') { throw "Candidate capture ended in $($secondCompletedState.state)" }
@@ -398,10 +535,15 @@ try {
   # One standard RuneLite human capture proves the second adapter and hosts the real read-only
   # cross-runner shadow. The configured launcher must leave enough time for the operator to fish.
   $runeliteStatusFile = Join-Path $output 'runelite-status.json'
-  Set-Sc968RuneLiteEnvironment -BaseUrl $chromaUrl -CaptureToken $captureToken -StatusFile $runeliteStatusFile -SpoolDirectory (Join-Path $OutputRoot 'spool/runelite')
+  $runeliteStartTrigger = Join-Path $output 'runelite-start.trigger'
+  Set-Sc968RuneLiteEnvironment -BaseUrl $chromaUrl -CaptureToken $captureToken -StatusFile $runeliteStatusFile -SpoolDirectory (Join-Path $OutputRoot 'spool/runelite') -SourceIdentity $candidateManagedIdentity -StartTriggerFile $runeliteStartTrigger
   $runeliteLog = Join-Path $logs 'runelite-human.log'
   $runelite = Start-Sc968OwnedProcess -Name 'runelite-human' -FilePath $runeliteLaunch -WorkingDirectory $RuneLiteRoot -ArgumentList (EnvOr 'SC968_RUNELITE_LAUNCH_ARGUMENTS' '') -LogPath $runeliteLog
   $owned += $runelite
+  $null = Wait-CaptureClientReady $runeliteStatusFile $runtimeTimeout
+  Write-Host 'LOG IN NOW (3/3): log into the standard RuneLite client, then do nothing until the FISH prompt.' -ForegroundColor Cyan
+  $null = Wait-CaptureLogin $runeliteStatusFile $runtimeTimeout
+  Start-CaptureWindow $runeliteStartTrigger
   $runeliteRecordingState = Wait-Capture $runeliteStatusFile $runtimeTimeout
   if ($runeliteRecordingState.state -ne 'RECORDING') { throw 'RuneLite capture never reached RECORDING' }
   $runeliteLiveSession = Read-Session $chromaUrl $captureToken ([string]$runeliteRecordingState.session_id)
@@ -409,6 +551,7 @@ try {
   if ([int]$runeliteLiveSession.action_count -ne 0) { throw 'RuneLite gameplay began before the shadow was observable' }
   $shadow = (Api $chromaUrl "/api/v1/ai-routine/models/$modelId/shadow-runs" $operatorToken 'POST' @{ schema='routine-shadow-run-request/v1'; session_id=[string]$runeliteRecordingState.session_id }).Json
   if ($shadow.state -ne 'ACTIVE' -or $shadow.control_allowed -ne $false) { throw 'RuneLite live shadow did not become ACTIVE read-only' }
+  $null = Wait-CaptureTicks $chromaUrl $captureToken ([string]$runeliteRecordingState.session_id) $minimumTicks $runtimeTimeout
   Write-Host 'FISH NOW (3/3): in standard RuneLite, use Net on a Fishing spot once.' -ForegroundColor Yellow
   $runeliteCompletedState = Wait-Sc968CaptureStatus -StatusFile $runeliteStatusFile -States @('COMPLETED','FAILED','UNCERTAIN') -TimeoutSeconds $runtimeTimeout
   if ($runeliteCompletedState.state -ne 'COMPLETED') { throw "RuneLite capture ended in $($runeliteCompletedState.state)" }

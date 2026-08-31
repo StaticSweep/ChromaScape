@@ -10,7 +10,7 @@ public class RoutineAssistantEvent {
   @Column(name="conversation_id",nullable=false,length=160) private String conversationId;
   @Column(name="event_id",nullable=false) private Long eventId;
   @Column(nullable=false,length=60) private String type;
-  @Lob private String dataJson;
+  @Column(columnDefinition = "text") private String dataJson;
   @Column(nullable=false) private Instant createdAt=Instant.now();
   public Long getId(){return id;} public String getConversationId(){return conversationId;} public void setConversationId(String v){conversationId=v;} public Long getEventId(){return eventId;} public void setEventId(Long v){eventId=v;} public String getType(){return type;} public void setType(String v){type=v;} public String getDataJson(){return dataJson;} public void setDataJson(String v){dataJson=v;} public Instant getCreatedAt(){return createdAt;}
 }

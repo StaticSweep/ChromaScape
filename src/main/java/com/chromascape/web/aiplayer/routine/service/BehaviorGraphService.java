@@ -197,6 +197,12 @@ public class BehaviorGraphService {
     if (!hash.equals(graphHash(mapper.valueToTree(definition)))) {
       throw error("GRAPH_HASH_INVALID", "stored assistant graph hash does not match finalized definition");
     }
+    // A graph id is its content hash, so a diff that changes nothing produces the base graph's own
+    // id and the insert dies on the unique index -- a 500 for what is really a rejected proposal.
+    // Say so instead.
+    if (repository.findByGraphId(graphId).isPresent()) {
+      throw error("GRAPH_UNCHANGED", "assistant draft is identical to its base graph");
+    }
     BehaviorGraphDefinition draft = new BehaviorGraphDefinition(); draft.setGraphId(graphId); draft.setGraphHash(hash); draft.setIdentityJson(write(identity)); draft.setDefinitionJson(write(definition)); draft.setAssistantDiffJson(write(diff)); draft.setSupersedesGraphId(baseGraphId); draft.setState("DRAFT"); repository.save(draft);
     // The run's core graph identity is immutable; an assistant revision is recorded as an explicit
     // supersession edge (supersedes_graph_id) instead of overwriting identity.graph. The run graph

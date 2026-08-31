@@ -96,25 +96,9 @@ public class RoutineReplayShadowService {
     Map<String, Object> definition = readMap(model.getDefinitionJson());
     List<JsonNode> expected = actionNodes(definition);
     List<JsonNode> actual = captures.actions(recordingId);
-    List<Map<String, Object>> decisions = new ArrayList<>();
-    int matched = 0;
-    int count = Math.max(expected.size(), actual.size());
-    for (int i = 0; i < count; i++) {
-      JsonNode expectedAction = i < expected.size() ? expected.get(i) : null;
-      JsonNode actualAction = i < actual.size() ? actual.get(i) : null;
-      boolean same = expectedAction != null && actualAction != null
-          && CanonicalJsonHasher.canonical(expectedAction).equals(CanonicalJsonHasher.canonical(actualAction));
-      if (same) matched++;
-      Map<String, Object> decision = new LinkedHashMap<>();
-      decision.put("ordinal", i);
-      decision.put("tick", actualAction == null ? null : actualAction.path("tick").asLong());
-      decision.put("expected", expectedAction);
-      decision.put("observed", actualAction);
-      decision.put("status", same ? "MATCHED" : "ABSTAINED");
-      decision.put("control_allowed", false);
-      decisions.add(decision);
-    }
-    String status = expected.size() == actual.size() && matched == expected.size() ? "PASSED" : "FAILED";
+    List<Map<String, Object>> decisions = decisions(expected, actual);
+    int matched = matchedCount(decisions);
+    String status = passed(expected, decisions) ? "PASSED" : "FAILED";
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("schema", "routine-replay-result/v1");
     result.put("status", status);
@@ -152,6 +136,63 @@ public class RoutineReplayShadowService {
     result.put("abstentions", List.of(Map.of("reason", recommendations.isEmpty() ? "NO_ACTION_OBSERVED" : "READ_ONLY", "control_allowed", false)));
     result.put("control_allowed", false);
     return persistTrace(model, sessionId, "SHADOW", modelIdentity, result);
+  }
+
+  /**
+   * Aligns the model's actions against the recorded trace as an ordered subsequence.
+   *
+   * <p>A recording is a linear trace of everything the operator did while demonstrating, incidental
+   * clicks included: walking to the fishing spot, dismissing a menu, double-clicking the spot. The
+   * routine the evidence supports is narrower, so a model is deliberately a subsequence of its
+   * recording and ABSTAINS on the rest. This used to pair the two lists index for index and demand
+   * equal lengths, which required every model to be a verbatim transcript of its recording -- which
+   * no graph the Assistant can usefully propose ever is, and which contradicts both the ABSTAIN
+   * node type in behavior-graph-definition/v1 and the acceptance's own requirement that a draft
+   * graph's first ACTION be the demonstrated interaction. Order is still enforced, so a model whose
+   * actions occur out of sequence does not match.
+   */
+  static List<Map<String, Object>> decisions(List<JsonNode> expected, List<JsonNode> actual) {
+    List<Map<String, Object>> decisions = new ArrayList<>();
+    int cursor = 0;
+    for (JsonNode observed : actual) {
+      boolean same = cursor < expected.size()
+          && CanonicalJsonHasher.canonical(expected.get(cursor))
+              .equals(CanonicalJsonHasher.canonical(observed));
+      decisions.add(decision(decisions.size(), observed.path("tick").asLong(),
+          same ? expected.get(cursor) : null, observed, same ? "MATCHED" : "ABSTAINED"));
+      if (same) cursor++;
+    }
+    // A modelled action the recording never shows is a real divergence, not an abstention.
+    for (int i = cursor; i < expected.size(); i++) {
+      decisions.add(decision(decisions.size(), expected.get(i).path("tick").asLong(),
+          expected.get(i), null, "MISSING"));
+    }
+    return decisions;
+  }
+
+  /** Every modelled action matched, and a model that claims nothing never passes. */
+  static boolean passed(List<JsonNode> expected, List<Map<String, Object>> decisions) {
+    return !expected.isEmpty() && matchedCount(decisions) == expected.size();
+  }
+
+  private static int matchedCount(List<Map<String, Object>> decisions) {
+    int matched = 0;
+    for (Map<String, Object> decision : decisions) {
+      if ("MATCHED".equals(decision.get("status"))) matched++;
+    }
+    return matched;
+  }
+
+  private static Map<String, Object> decision(
+      int ordinal, Long tick, JsonNode expected, JsonNode observed, String status) {
+    Map<String, Object> decision = new LinkedHashMap<>();
+    decision.put("ordinal", ordinal);
+    decision.put("tick", tick);
+    decision.put("expected", expected);
+    decision.put("observed", observed);
+    decision.put("status", status);
+    decision.put("control_allowed", false);
+    return decision;
   }
 
   private List<JsonNode> actionNodes(Map<String, Object> definition) {

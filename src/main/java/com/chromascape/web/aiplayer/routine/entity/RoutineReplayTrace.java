@@ -12,8 +12,8 @@ public class RoutineReplayTrace {
   @Column(name = "recording_id", nullable = false, length = 160) private String recordingId;
   @Column(name = "trace_mode", nullable = false, length = 30) private String traceMode;
   @Column(name = "content_hash", nullable = false, length = 71) private String contentHash;
-  @Lob @Column(name = "identity_json", nullable = false) private String identityJson;
-  @Lob @Column(name = "result_json", nullable = false) private String resultJson;
+  @Column(name = "identity_json", nullable = false, columnDefinition = "text") private String identityJson;
+  @Column(name = "result_json", nullable = false, columnDefinition = "text") private String resultJson;
   @Column(nullable = false) private Instant createdAt = Instant.now();
 
   public Long getId() { return id; }

@@ -58,73 +58,97 @@ public class PatchCandidateWorkflowService {
   private static final String SCHEMA_V2 = "certified-candidate/v2";
   private static final java.time.Duration LEASE_DURATION = java.time.Duration.ofMinutes(15);
   private static final List<String> BUILD_GATES = List.of(
-      ":runelite-client:compileJava", ":runelite-client:checkstyleMain",
-      ":runelite-client:checkstyleTest", ":runelite-client:test",
-      ":runelite-client:shadowJar", ":runelite-client:generateRuntimeSbom");
+      ":client:compileJava", ":client:sc967CandidateCheckstyleMain",
+      ":client:sc967CandidateCheckstyleTest", ":client:sc967CandidateTest",
+      ":client:shadowJar", ":client:generateRuntimeSbom");
   private static final String PATCH = """
       diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
       --- a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
       +++ b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java
-      @@ -95,3 +95,6 @@
-           private Fish getFishType(String fishName) {
+      @@ -93,8 +93,11 @@ public class FishingExecutionTask extends AccountBuilderTask implements Configur
+      !     }
+      !\u0020
+      !     private Fish getFishType(String fishName) {
       +        if (fishName == null || fishName.isBlank()) {
       +            throw new UnsupportedFishTypeException(fishName);
       +        }
-              // Convert fish name to Fish enum - simple mapping
+      !         // Convert fish name to Fish enum - simple mapping
       -        switch (fishName.toLowerCase()) {
       +        switch (fishName.trim().toLowerCase()) {
-      @@ -122,4 +125,3 @@
-                  default:
-      -        System.out.println("[FishingExecutionTask] Warning: Unknown fish name '" + fishName + "', defaulting to SHRIMP");
-      -        return Fish.SHRIMP;
-      +        throw new UnsupportedFishTypeException(fishName);
-          }
-      }
+      !             case "shrimp":
+      !             case "raw shrimp":
+      !                 return Fish.SHRIMP;
+      @@ -120,8 +123,7 @@ public class FishingExecutionTask extends AccountBuilderTask implements Configur
+      !             case "raw shark":
+      !                 return Fish.SHARK;
+      !             default:
+      -                System.out.println("[FishingExecutionTask] Warning: Unknown fish name '" + fishName + "', defaulting to SHRIMP");
+      -                return Fish.SHRIMP;
+      +                throw new UnsupportedFishTypeException(fishName);
+      !         }
+      !     }
+      !\u0020
       diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java
       new file mode 100644
       --- /dev/null
       +++ b/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/UnsupportedFishTypeException.java
-      @@ -0,0 +1,8 @@
+      @@ -0,0 +1,12 @@
       +package net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing;
       +
-      +/** Raised when a Fishing plan names a null, blank, or unsupported fish. */
-      +public final class UnsupportedFishTypeException extends IllegalArgumentException {
-      +  public UnsupportedFishTypeException(String fishName) {
-      +    super("Unsupported fish type: " + fishName);
-      +  }
+      +/**
+      + * Raised when a Fishing plan names a null, blank, or unsupported fish.
+      + */
+      +public final class UnsupportedFishTypeException extends IllegalArgumentException
+      +{
+      +	public UnsupportedFishTypeException(String fishName)
+      +	{
+      +		super("Unsupported fish type: " + fishName);
+      +	}
       +}
       diff --git a/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java
       new file mode 100644
       --- /dev/null
       +++ b/runelite-client/src/test/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTaskTest.java
-      @@ -0,0 +1,25 @@
+      @@ -0,0 +1,38 @@
       +package net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing;
       +
       +import net.runelite.api.coords.WorldPoint;
       +import org.junit.Test;
       +
-      +public class FishingExecutionTaskTest {
-      +  @Test(expected = UnsupportedFishTypeException.class)
-      +  public void nullFishIsRejected() { new FishingExecutionTask(step(null)); }
+      +public class FishingExecutionTaskTest
+      +{
+      +	@Test(expected = UnsupportedFishTypeException.class)
+      +	public void nullFishIsRejected()
+      +	{
+      +		new FishingExecutionTask(step(null));
+      +	}
       +
-      +  @Test(expected = UnsupportedFishTypeException.class)
-      +  public void blankFishIsRejected() { new FishingExecutionTask(step("  ")); }
+      +	@Test(expected = UnsupportedFishTypeException.class)
+      +	public void blankFishIsRejected()
+      +	{
+      +		new FishingExecutionTask(step("  "));
+      +	}
       +
-      +  @Test(expected = UnsupportedFishTypeException.class)
-      +  public void unknownFishIsRejected() { new FishingExecutionTask(step("not-a-fish")); }
+      +	@Test(expected = UnsupportedFishTypeException.class)
+      +	public void unknownFishIsRejected()
+      +	{
+      +		new FishingExecutionTask(step("not-a-fish"));
+      +	}
       +
-      +  @Test
-      +  public void canonicalFishRemainsSupported() {
-      +    new FishingExecutionTask(step("Shrimp"));
-      +    new FishingExecutionTask(step("raw shrimp"));
-      +  }
+      +	@Test
+      +	public void canonicalFishRemainsSupported()
+      +	{
+      +		new FishingExecutionTask(step("Shrimp"));
+      +		new FishingExecutionTask(step("raw shrimp"));
+      +	}
       +
-      +  private static FishingPlanStep step(String fish) {
-      +    return new FishingPlanStep(1, 2, fish, 1, 10.0, 10, 1,
-      +        new WorldPoint(3087, 3228, 0));
-      +  }
+      +	private static FishingPlanStep step(String fish)
+      +	{
+      +		return new FishingPlanStep(1, 2, fish, 1, 10.0, 10, 1,
+      +			new WorldPoint(3087, 3228, 0));
+      +	}
       +}
-      """;
+      """.replace("\n!", "\n");
 
   private final ObjectMapper mapper;
   private final IsolatedPatchWorker worker;
@@ -241,6 +265,13 @@ public class PatchCandidateWorkflowService {
       throw error(HttpStatus.UNPROCESSABLE_ENTITY, "SOURCE_PROVENANCE_UNVERIFIED",
           "only a signed source manifest with exact commit, tree, and artifact identity may enter the patch loop");
     }
+    if (!resolved.clientBuildId().equals(candidateIdentity.client().clientBuildId())) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_BUILD_MISMATCH",
+          "candidate identity client build differs from the authoritative source manifest");
+    }
+    candidateIdentity = withCandidateSource(
+        candidateIdentity, resolved.sourceSnapshotId(), resolved.sourceManifestHash());
+    identities.validate(candidateIdentity);
     String requestedBase = text(request, "base_commit");
     if (requestedBase != null && !requestedBase.equals(resolved.commitId())) {
       throw error(HttpStatus.UNPROCESSABLE_ENTITY, "BASE_COMMIT_MISMATCH", "requested base commit differs from the verified source commit");
@@ -305,6 +336,15 @@ public class PatchCandidateWorkflowService {
     entity.setState("PATCH_PROPOSED");
     repository.save(entity);
     return response(entity);
+  }
+
+  /** Binds candidate provenance to the authoritative patch source without changing prior groups. */
+  static CurrentSliceIdentity withCandidateSource(CurrentSliceIdentity identity,
+      String sourceSnapshotId, String sourceManifestHash) {
+    return new CurrentSliceIdentity(
+        identity.schema(), identity.task(), identity.run(), identity.client(), identity.capture(),
+        new CurrentSliceIdentity.Source(sourceSnapshotId, sourceManifestHash),
+        identity.graph(), identity.model(), null, false);
   }
 
   @Transactional

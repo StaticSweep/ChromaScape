@@ -9,9 +9,9 @@ public class BehaviorGraphDefinition {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private Long id;
   @Column(name="graph_id",nullable=false,unique=true,length=160) private String graphId;
   @Column(name="graph_hash",nullable=false,length=71) private String graphHash;
-  @Lob @Column(name="identity_json",nullable=false) private String identityJson;
-  @Lob @Column(name="definition_json",nullable=false) private String definitionJson;
-  @Lob @Column(name="assistant_diff_json") private String assistantDiffJson;
+  @Column(name="identity_json",nullable=false, columnDefinition = "text") private String identityJson;
+  @Column(name="definition_json",nullable=false, columnDefinition = "text") private String definitionJson;
+  @Column(name="assistant_diff_json", columnDefinition = "text") private String assistantDiffJson;
   @Column(name="supersedes_graph_id", length=160) private String supersedesGraphId;
   @Column(nullable=false,length=20) private String state="DRAFT";
   @Column(nullable=false) private Instant createdAt=Instant.now();

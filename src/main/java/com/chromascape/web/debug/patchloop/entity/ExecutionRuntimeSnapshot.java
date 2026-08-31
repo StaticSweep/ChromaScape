@@ -22,12 +22,10 @@ public class ExecutionRuntimeSnapshot {
   private String executionId;
 
   /** Runtime data as JSON */
-  @Lob
   @Column(name = "runtime_data_json", columnDefinition = "TEXT")
   private String runtimeDataJson;
 
   /** Context data as JSON */
-  @Lob
   @Column(name = "context_data_json", columnDefinition = "TEXT")
   private String contextDataJson;
 

@@ -8,8 +8,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.DosFileAttributeView;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -27,9 +29,13 @@ import org.w3c.dom.Element;
 
 @Component
 public class IsolatedPatchWorker {
-  private static final Duration COMMAND_TIMEOUT = Duration.ofMinutes(10);
+  // A cold native Windows candidate build compiles the full Micro6 client before running the
+  // hardened checks. On the acceptance host this legitimately exceeds ten minutes; retain a
+  // bounded timeout while allowing the complete fixed gate set to finish.
+  private static final Duration COMMAND_TIMEOUT = Duration.ofMinutes(20);
   private static final int MAX_OUTPUT_BYTES = 256 * 1024;
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private record GradleCache(Path userHome, Path readOnlyDependencies) { }
 
   /** commands is retained for source compatibility but must always be empty; the worker owns gates. */
   public record BuildRequest(Path micro6Root, String baseCommit, String unifiedDiff, Set<String> allowlistedPaths, List<String> commands,
@@ -54,8 +60,23 @@ public class IsolatedPatchWorker {
       temp = Files.createTempDirectory("sc967-micro6-");
       Path repo = temp.resolve("repo");
       Path patch = temp.resolve("candidate.patch");
-      runCommand(List.of("git", "clone", "--no-hardlinks", request.micro6Root().toString(), repo.toString()), temp, "ISOLATED_CLONE_FAILED");
-      runCommand(List.of("git", "-C", repo.toString(), "checkout", "--detach", request.baseCommit()), temp, "ISOLATED_CLONE_FAILED");
+      Path source = request.micro6Root().toAbsolutePath().normalize();
+      if (!Files.isDirectory(source)) throw new IOException("ISOLATED_SOURCE_NOT_FOUND");
+      Path captureContracts = source.resolveSibling("contracts").resolve("java").normalize();
+      if (!Files.isDirectory(captureContracts)) throw new IOException("CAPTURE_CONTRACTS_NOT_FOUND");
+      String commonGitDirectory = capture(List.of("git", "-C", source.toString(), "rev-parse",
+          "--path-format=absolute", "--git-common-dir"), temp).trim();
+      Path repository = commonGitDirectory.isBlank() ? null : Path.of(commonGitDirectory).toAbsolutePath().normalize();
+      if (repository == null || !Files.isDirectory(repository)) throw new IOException("ISOLATED_SOURCE_REPOSITORY_NOT_FOUND");
+      // Micro6 contains tracked paths that exceed Win32's legacy 260-character checkout limit once
+      // nested under the isolated temp directory. Enable Git's supported long-path handling for
+      // this private clone only; the source repository and global Git configuration stay intact.
+      // Resolve the source worktree's common repository before changing cwd to the temp sandbox.
+      // This avoids treating a live linked worktree as the clone transport while the acceptance
+      // client and Gradle gates still have files open there.
+      runCommand(List.of("git", "clone", "--no-checkout", "--config", "core.longpaths=true", "--no-hardlinks",
+          repository.toString(), repo.toString()), temp, "ISOLATED_CLONE_FAILED");
+      runCommand(List.of("git", "-C", repo.toString(), "checkout", "--detach", request.baseCommit()), temp, "ISOLATED_CHECKOUT_FAILED");
       if (!capture(List.of("git", "-C", repo.toString(), "status", "--porcelain"), temp).isBlank()) {
         return failed(request, changed, "ISOLATED_TREE_DIRTY");
       }
@@ -64,21 +85,25 @@ public class IsolatedPatchWorker {
       Files.writeString(patch, request.unifiedDiff(), StandardCharsets.UTF_8);
       runCommand(List.of("git", "-C", repo.toString(), "apply", "--check", patch.toString()), temp, "PATCH_CHECK_FAILED");
       runCommand(List.of("git", "-C", repo.toString(), "apply", patch.toString()), temp, "PATCH_APPLY_FAILED");
+      runCommand(List.of("git", "-C", repo.toString(), "diff", "--check"), temp, "PATCH_WHITESPACE_FAILED");
 
       changed = changedFiles(repo);
       Set<String> allowlist = request.allowlistedPaths() == null ? Set.of() : request.allowlistedPaths();
       if (!allowlist.equals(new HashSet<>(changed))) return failed(request, changed, "PATCH_ALLOWLIST_VIOLATION");
 
-      Path gradleHome = configuredGradleHome(temp);
-      Files.createDirectories(gradleHome);
+      GradleCache gradleCache = configuredGradleCache(temp, repo);
       // Invoke the native Gradle wrapper directly: gradlew.bat on Windows, ./gradlew on Unix.
       // Never route Micro6 work through bash.
       List<String> gradle = new ArrayList<>();
       gradle.add(isWindows() ? "gradlew.bat" : "./gradlew");
       gradle.addAll(List.of("--offline", "--no-daemon", "--no-watch-fs", "--max-workers=1",
-          ":runelite-client:compileJava", ":runelite-client:checkstyleMain", ":runelite-client:checkstyleTest",
-          ":runelite-client:test", ":runelite-client:shadowJar", ":runelite-client:generateRuntimeSbom"));
-      runCommand(gradle, repo, "BUILD_FAILED", Map.of("GRADLE_USER_HOME", gradleHome.toString()));
+          "-PaiRoutineCaptureContractsDir=" + captureContracts,
+          ":client:compileJava", ":client:sc967CandidateCheckstyleMain",
+          ":client:sc967CandidateCheckstyleTest", ":client:sc967CandidateTest",
+          ":client:shadowJar", ":client:generateRuntimeSbom"));
+      runCommand(gradle, repo, "BUILD_FAILED", Map.of(
+          "GRADLE_USER_HOME", gradleCache.userHome().toString(),
+          "GRADLE_RO_DEP_CACHE", gradleCache.readOnlyDependencies().toString()));
 
       Path jar = findExpectedShadowJar(repo, request.expectedJarName());
       byte[] jarBytes = Files.readAllBytes(jar);
@@ -252,17 +277,22 @@ public class IsolatedPatchWorker {
 
     /** The final {@code MAX_OUTPUT_BYTES} bytes of the merged output, as UTF-8 text. */
     String tail() {
+      return new String(snapshot(), StandardCharsets.UTF_8).replaceAll("\\s+", " ");
+    }
+
+    /** Raw bounded output for commands whose line structure is part of the result. */
+    String text() {
+      return new String(snapshot(), StandardCharsets.UTF_8);
+    }
+
+    private byte[] snapshot() {
       synchronized (this) {
         byte[] tail = new byte[full ? CAPACITY : write];
         for (int i = 0; i < tail.length; i++) {
           tail[i] = buffer[(write - tail.length + i + CAPACITY) % CAPACITY];
         }
-        return new String(tail, StandardCharsets.UTF_8).replaceAll("\\s+", " ");
+        return tail;
       }
-    }
-
-    String text() {
-      return tail();
     }
   }
 
@@ -333,9 +363,13 @@ public class IsolatedPatchWorker {
     for (JsonNode component : bom.path("components")) {
       String group = component.path("group").asText(); String name = component.path("name").asText(); String version = component.path("version").asText();
       String purl = component.path("purl").asText(); String hash = component.path("sha256").asText();
-      if (group.isBlank() || name.isBlank() || version.isBlank() || !purl.matches("pkg:maven/[^/]+/[^@]+@[^?]+") || !purls.add(purl) || !hash.matches("sha256:[0-9a-f]{64}")) throw new IOException("SBOM_COMPONENT_INVALID");
+      if (group.isBlank() || name.isBlank() || version.isBlank() || !isValidSbomPurl(purl) || !purls.add(purl) || !hash.matches("sha256:[0-9a-f]{64}")) throw new IOException("SBOM_COMPONENT_INVALID");
     }
     return CanonicalJsonHasher.canonical(bom).getBytes(StandardCharsets.UTF_8);
+  }
+
+  static boolean isValidSbomPurl(String purl) {
+    return purl.matches("pkg:maven/[^/]+/[^@]+@[^?]+(?:\\?classifier=[A-Za-z0-9._~-]+)?");
   }
 
   private static byte[] deterministicTestReport(Path repo) throws Exception {
@@ -430,25 +464,82 @@ public class IsolatedPatchWorker {
   private static String hash(byte[] data) { try { return "sha256:" + toHex(MessageDigest.getInstance("SHA-256").digest(data)); } catch (Exception e) { throw new IllegalStateException(e); } }
   private static String toHex(byte[] bytes) { StringBuilder value = new StringBuilder(); for (byte b : bytes) value.append(String.format("%02x", b)); return value.toString(); }
 
-  private static Path configuredGradleHome(Path temp) throws IOException {
+  private static GradleCache configuredGradleCache(Path temp, Path repo) throws IOException {
     String configured = System.getenv("SC967_GRADLE_USER_HOME");
     if (configured == null || configured.isBlank()) throw new IOException("GRADLE_CACHE_NOT_CONFIGURED");
     Path source = Path.of(configured).toAbsolutePath().normalize();
     if (!Files.isDirectory(source)) throw new IOException("GRADLE_CACHE_NOT_CONFIGURED");
+    Path readOnlyDependencies = source.resolve("caches").normalize();
+    if (!Files.isDirectory(readOnlyDependencies.resolve("modules-2"))) {
+      throw new IOException("GRADLE_DEPENDENCY_CACHE_NOT_FOUND");
+    }
     Path target = temp.resolve("gradle-user-home");
+    Files.createDirectories(target);
+
+    Path wrapperProperties = repo.resolve("gradle/wrapper/gradle-wrapper.properties");
+    String distributionLine = Files.readAllLines(wrapperProperties, StandardCharsets.UTF_8).stream()
+        .filter(line -> line.startsWith("distributionUrl="))
+        .findFirst().orElseThrow(() -> new IOException("GRADLE_DISTRIBUTION_NOT_CONFIGURED"));
+    String distribution = distributionLine.substring(distributionLine.lastIndexOf('/') + 1);
+    if (!distribution.endsWith(".zip")) throw new IOException("GRADLE_DISTRIBUTION_NOT_CONFIGURED");
+    distribution = distribution.substring(0, distribution.length() - 4);
+    if (!distribution.matches("[A-Za-z0-9._-]+")) {
+      throw new IOException("GRADLE_DISTRIBUTION_NOT_CONFIGURED");
+    }
+    Path wrapperSource = source.resolve("wrapper/dists").resolve(distribution).normalize();
+    if (!wrapperSource.startsWith(source) || !Files.isDirectory(wrapperSource)) {
+      throw new IOException("GRADLE_DISTRIBUTION_NOT_FOUND");
+    }
+    Path wrapperTarget = target.resolve("wrapper/dists").resolve(distribution);
+    copyGradleTree(wrapperSource, wrapperTarget);
+    return new GradleCache(target, readOnlyDependencies);
+  }
+
+  private static void copyGradleTree(Path source, Path target) throws IOException {
     try (var stream = Files.walk(source)) {
       stream.forEach(path -> {
-        try { Path relative = source.relativize(path); Path destination = target.resolve(relative); if (Files.isDirectory(path)) Files.createDirectories(destination); else Files.copy(path, destination, StandardCopyOption.REPLACE_EXISTING); }
+        try {
+          Path relative = source.relativize(path);
+          if (!isGradleRuntimePath(relative)) return;
+          Path destination = target.resolve(relative);
+          if (Files.isDirectory(path)) {
+            Files.createDirectories(destination);
+          } else if (!isGradleCoordinationFile(relative)) {
+            Files.copy(path, destination, StandardCopyOption.REPLACE_EXISTING);
+          }
+        }
         catch (IOException e) { throw new java.io.UncheckedIOException(e); }
       });
     } catch (java.io.UncheckedIOException e) { throw e.getCause(); }
-    return target;
+  }
+
+  static boolean isGradleCoordinationFile(Path relative) {
+    Path name = relative == null ? null : relative.getFileName();
+    if (name == null) return false;
+    String value = name.toString().toLowerCase(java.util.Locale.ROOT);
+    return value.endsWith(".lock") || value.endsWith(".lck");
+  }
+
+  static boolean isGradleRuntimePath(Path relative) {
+    if (relative == null || relative.getNameCount() <= 2) return true;
+    String distributionChild = relative.getName(2).toString();
+    return distributionChild.equals("bin") || distributionChild.equals("lib");
   }
 
   private static void deleteRecursively(Path root) throws IOException {
     if (!Files.exists(root)) return;
     IOException[] failure = new IOException[1];
-    try (var stream = Files.walk(root)) { stream.sorted(Comparator.reverseOrder()).forEach(path -> { try { Files.deleteIfExists(path); } catch (IOException e) { failure[0] = e; } }); }
+    try (var stream = Files.walk(root)) {
+      stream.sorted(Comparator.reverseOrder()).forEach(path -> {
+        try {
+          DosFileAttributeView dos = Files.getFileAttributeView(path, DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+          if (dos != null && dos.readAttributes().isReadOnly()) dos.setReadOnly(false);
+          Files.deleteIfExists(path);
+        } catch (IOException e) {
+          failure[0] = e;
+        }
+      });
+    }
     if (failure[0] != null) throw failure[0];
   }
 }

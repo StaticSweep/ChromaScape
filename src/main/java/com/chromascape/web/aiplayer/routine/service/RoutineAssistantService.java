@@ -1,11 +1,9 @@
 package com.chromascape.web.aiplayer.routine.service;
 
 import com.chromascape.web.aiplayer.routine.dto.RoutineApiDtos;
-import com.chromascape.web.aiplayer.routine.entity.BehaviorGraphDefinition;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantEvent;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantProposal;
-import com.chromascape.web.aiplayer.routine.repository.BehaviorGraphDefinitionRepository;
 import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantConversationRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantEventRepository;
@@ -43,7 +41,6 @@ public class RoutineAssistantService {
   private final RoutineAssistantConversationRepository conversations;
   private final RoutineAssistantEventRepository events;
   private final RoutineAssistantProposalRepository proposals;
-  private final BehaviorGraphDefinitionRepository graphs;
   private final CurrentSliceRunRepository runs;
   private final BehaviorGraphService graphService;
   private final GraphSchemaValidator schemaValidator;
@@ -56,10 +53,10 @@ public class RoutineAssistantService {
 
   public RoutineAssistantService(RoutineAssistantProvider provider, ObjectMapper mapper,
       RoutineAssistantConversationRepository conversations, RoutineAssistantEventRepository events,
-      RoutineAssistantProposalRepository proposals, BehaviorGraphDefinitionRepository graphs,
+      RoutineAssistantProposalRepository proposals,
       CurrentSliceRunRepository runs, BehaviorGraphService graphService,
       GraphSchemaValidator schemaValidator, RoutineAssistantConversationStore store) {
-    this.provider = provider; this.mapper = mapper; this.conversations = conversations; this.events = events; this.proposals = proposals; this.graphs = graphs; this.runs = runs; this.graphService = graphService; this.schemaValidator = schemaValidator; this.store = store;
+    this.provider = provider; this.mapper = mapper; this.conversations = conversations; this.events = events; this.proposals = proposals; this.runs = runs; this.graphService = graphService; this.schemaValidator = schemaValidator; this.store = store;
   }
 
   @Transactional
@@ -81,6 +78,12 @@ public class RoutineAssistantService {
   public Map<String, Object> status(String id) {
     RoutineAssistantConversation conversation = conversation(id);
     Map<String, Object> result = new LinkedHashMap<>(response(conversation));
+    // A generation that fails does so in milliseconds, but the failure was only ever visible as an
+    // event on the SSE stream. A poller watching for latest_proposal could not tell "still working"
+    // from "already dead" and had to burn its whole timeout. Surface the terminal state.
+    result.put("generation_state", conversation.getGenerationState() == null ? "IDLE" : conversation.getGenerationState());
+    events.findFirstByConversationIdAndTypeOrderByEventIdDesc(id, "generation.failed")
+        .ifPresent(event -> result.put("last_generation_failure", read(event.getDataJson())));
     proposals.findFirstByConversationIdOrderByIdDesc(id)
         .ifPresent(proposal -> result.put("latest_proposal", proposalResponse(proposal)));
     return result;
@@ -139,11 +142,15 @@ public class RoutineAssistantService {
 
   private void generateProposal(String id, String token, String message) {
     try {
-      RoutineAssistantConversation conversation = conversation(id);
-      Map<String, Object> context = new LinkedHashMap<>(); context.put("run_id", conversation.getRunId());
-      latestGraphForRun(conversation.getRunId()).ifPresent(graph -> {
-        context.put("graph_id", graph.getGraphId()); context.put("graph_hash", graph.getGraphHash());
-      });
+      // This runs on generationExecutor: no transaction and no open session. The store owns every
+      // read the generator needs and performs them behind one, so a lazy load can never surface
+      // here as the silent generation.failed the catch below used to record.
+      Map<String, Object> context = store.generationContext(id);
+      // Parsing is safe off-thread; the store already materialized the JSON inside its transaction.
+      Object definitionJson = context.remove("graph_definition_json");
+      if (definitionJson instanceof String raw && !raw.isBlank()) {
+        context.put("graph_definition", read(raw));
+      }
       long delta = store.appendGenerationEvent(id, token, "analysis.delta",
           write(Map.of("text", "Reviewing immutable capture evidence and graph semantics.", "control_allowed", false)));
       if (delta < 0) return;
@@ -272,7 +279,6 @@ public class RoutineAssistantService {
     result.put("control_allowed", false);
     return result;
   }
-  private Optional<BehaviorGraphDefinition> latestGraphForRun(String runId) { return graphs.findFirstByStateAndIdentityJsonContainingOrderByCreatedAtDesc("PUBLISHED", "\"run_id\":\"" + runId + "\""); }
   @SuppressWarnings("unchecked") private Map<String, Object> read(String json) { try { return mapper.readValue(json, Map.class); } catch (Exception e) { throw error(HttpStatus.INTERNAL_SERVER_ERROR, "PERSISTED_JSON_CORRUPT", "persisted assistant diff is corrupt"); } }
   @SuppressWarnings("unchecked") private static Map<String, Object> cast(Object value) { return (Map<String, Object>) value; }
   private String write(Object value) { try { return mapper.writeValueAsString(value); } catch (Exception e) { throw error(HttpStatus.UNPROCESSABLE_ENTITY, "ASSISTANT_DIFF_INVALID", "assistant payload is invalid"); } }

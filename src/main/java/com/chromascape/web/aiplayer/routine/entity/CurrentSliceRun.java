@@ -9,7 +9,7 @@ public class CurrentSliceRun {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private Long id;
   @Column(name="run_id", nullable=false, unique=true, length=160) private String runId;
   @Column(name="attempt_id", length=160) private String attemptId;
-  @Lob @Column(name="identity_json", nullable=false) private String identityJson;
+  @Column(name="identity_json", nullable=false, columnDefinition = "text") private String identityJson;
   @Column(nullable=false, length=40) private String stage;
   @Column(nullable=false) private boolean controlAllowed=false;
   @Column(nullable=false) private Instant createdAt=Instant.now();

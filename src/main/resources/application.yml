@@ -4,6 +4,14 @@ spring:
   application:
     name: ChromaScape
 
+  # Report bundles are parsed by StabilizationBundleStreamReader directly from the servlet input
+  # stream so authentication and bounded streaming happen before any multipart materialization.
+  # Boot's eager multipart resolver would consume that stream before the controller can enforce
+  # those limits.
+  servlet:
+    multipart:
+      enabled: false
+
   # Database configuration
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/chromascape?sslmode=disable}

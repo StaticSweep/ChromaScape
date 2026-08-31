@@ -3,6 +3,7 @@ package com.chromascape.web.aiplayer.routine.service;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantEvent;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantProposal;
+import com.chromascape.web.aiplayer.routine.repository.BehaviorGraphDefinitionRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantConversationRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantEventRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantProposalRepository;
@@ -20,14 +21,17 @@ public class RoutineAssistantConversationStore {
   private final RoutineAssistantConversationRepository conversations;
   private final RoutineAssistantEventRepository events;
   private final RoutineAssistantProposalRepository proposals;
+  private final BehaviorGraphDefinitionRepository graphs;
 
   public RoutineAssistantConversationStore(
       RoutineAssistantConversationRepository conversations,
       RoutineAssistantEventRepository events,
-      RoutineAssistantProposalRepository proposals) {
+      RoutineAssistantProposalRepository proposals,
+      BehaviorGraphDefinitionRepository graphs) {
     this.conversations = conversations;
     this.events = events;
     this.proposals = proposals;
+    this.graphs = graphs;
   }
 
   @Transactional
@@ -154,6 +158,32 @@ public class RoutineAssistantConversationStore {
     long next = conversation.getNextEventId() == null ? 1L : conversation.getNextEventId() + 1L;
     conversation.setNextEventId(next); conversations.save(conversation);
     RoutineAssistantEvent event = new RoutineAssistantEvent(); event.setConversationId(conversation.getConversationId()); event.setEventId(next); event.setType(type); event.setDataJson(dataJson); events.save(event); return next;
+  }
+
+  /**
+   * Assembles the provider context for one generation.
+   *
+   * <p>The generator runs on a plain executor thread with no transaction and no open session, so
+   * every read it depends on belongs here instead, behind one. The conversation is read by scalar
+   * projection because the run id is all the generator needs, and the run's published graph is
+   * matched on its identity content in SQL.
+   */
+  @Transactional(readOnly = true)
+  public java.util.Map<String, Object> generationContext(String conversationId) {
+    String runId = conversations.findRunIdByConversationId(conversationId)
+        .orElseThrow(() -> conflict("NOT_FOUND", "conversation not found"));
+    java.util.Map<String, Object> context = new java.util.LinkedHashMap<>();
+    context.put("run_id", runId);
+    graphs.findFirstByStateAndIdentityJsonContainingOrderByCreatedAtDesc(
+            "PUBLISHED", "\"run_id\":\"" + runId + "\"")
+        .ifPresent(graph -> {
+          context.put("graph_id", graph.getGraphId());
+          context.put("graph_hash", graph.getGraphHash());
+          // The provider has to see the graph to propose a diff against it. The caller parses this
+          // off-thread, so read it here while the session is open.
+          context.put("graph_definition_json", graph.getDefinitionJson());
+        });
+    return context;
   }
 
   private RoutineAssistantConversation locked(String id) { return conversations.findWithLockByConversationId(id).orElseThrow(() -> conflict("NOT_FOUND", "conversation not found")); }

@@ -17,8 +17,8 @@ public class RoutineShadowDecision {
   @Column(name = "source_event_index", nullable = false) private int sourceEventIndex;
   @Column(nullable = false) private long tick;
   @Column(nullable = false, length = 20) private String status;
-  @Lob @Column(name = "recommendation_json") private String recommendationJson;
-  @Lob @Column(name = "observed_action_json") private String observedActionJson;
+  @Column(name = "recommendation_json", columnDefinition = "text") private String recommendationJson;
+  @Column(name = "observed_action_json", columnDefinition = "text") private String observedActionJson;
   @Column(nullable = false, length = 20) private String outcome;
   @Column(name = "model_identity_hash", nullable = false, length = 71) private String modelIdentityHash;
   @Column(name = "session_identity_hash", nullable = false, length = 71) private String sessionIdentityHash;

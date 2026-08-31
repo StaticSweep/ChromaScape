@@ -24,7 +24,8 @@ public class RoutineController {
   public RoutineController(CurrentSliceRunService runs, RoutineCaptureIngestionService captures, RoutineCurationService curation, BehaviorGraphService graphs, SourceRunOrchestrationService sourceOrchestration) { this.runs=runs;this.captures=captures;this.curation=curation;this.graphs=graphs;this.sourceOrchestration=sourceOrchestration; }
   /** Compatibility constructor for controller tests that predate SC-810 run binding. */
   public RoutineController(CurrentSliceRunService runs, RoutineCaptureIngestionService captures, RoutineCurationService curation, BehaviorGraphService graphs) { this(runs, captures, curation, graphs, null); }
-  @PostMapping("/runs/from-stabilization/{attemptId}") public ResponseEntity<Object> createRun(@PathVariable String attemptId,@RequestBody RoutineApiDtos.StartRunRequest request){
+  @PostMapping("/runs/from-stabilization/{attemptId}") public ResponseEntity<Object> createRun(@RequestHeader(value="Authorization",required=false) String authorization,@PathVariable String attemptId,@RequestBody RoutineApiDtos.StartRunRequest request){
+    authorize(authorization);
     CurrentSliceIdentity identity = request == null ? null : request.identity();
     if (sourceOrchestration != null && identity != null && identity.client() != null
         && "MICRO6_MANAGED".equals(identity.client().clientKind())

@@ -41,14 +41,14 @@ CREATE TABLE IF NOT EXISTS replay_recording_actions (
 
 DO $$
 BEGIN
-    IF NOT EXISTS (
+    IF to_regclass('public.debug_sessions') IS NOT NULL AND NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'fk_replay_recording_actions_session'
     ) THEN
         ALTER TABLE replay_recording_actions
             ADD CONSTRAINT fk_replay_recording_actions_session
             FOREIGN KEY (session_id) REFERENCES debug_sessions(session_id) ON DELETE RESTRICT;
     END IF;
-    IF NOT EXISTS (
+    IF to_regclass('public.recording_sessions') IS NOT NULL AND NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'fk_replay_recording_actions_recording'
     ) THEN
         ALTER TABLE replay_recording_actions

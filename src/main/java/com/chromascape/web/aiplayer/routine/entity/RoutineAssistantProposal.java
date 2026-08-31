@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
@@ -17,7 +16,7 @@ public class RoutineAssistantProposal {
   @Version private Long version;
   @Column(name = "proposal_id", nullable = false, unique = true, length = 160) private String proposalId;
   @Column(name = "conversation_id", nullable = false, length = 160) private String conversationId;
-  @Lob private String diffJson;
+  @Column(columnDefinition = "text") private String diffJson;
   @Column(nullable = false, length = 30) private String state = "PROPOSED";
   @Column(name = "draft_graph_id", length = 160, unique = true) private String draftGraphId;
   @Column(name = "accepted_event_id") private Long acceptedEventId;

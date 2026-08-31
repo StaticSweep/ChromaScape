@@ -10,8 +10,8 @@ public class RoutineModel {
   @Column(name = "model_id", nullable = false, unique = true, length = 160) private String modelId;
   @Column(name = "graph_id", nullable = false, length = 160) private String graphId;
   @Column(name = "model_hash", nullable = false, length = 71) private String modelHash;
-  @Lob @Column(name = "identity_json", nullable = false) private String identityJson;
-  @Lob @Column(name = "definition_json", nullable = false) private String definitionJson;
+  @Column(name = "identity_json", nullable = false, columnDefinition = "text") private String identityJson;
+  @Column(name = "definition_json", nullable = false, columnDefinition = "text") private String definitionJson;
   @Column(nullable = false) private Instant createdAt = Instant.now();
 
   public Long getId() { return id; }

@@ -23,6 +23,7 @@ class AiRoutineOperatorWebConfigTest {
     verify(registration).excludePathPatterns(
         "/api/v1/ai-routine/capture/**",
         "/api/v1/ai-routine/runs/runelite",
-        "/api/v1/ai-routine/runs/from-runelite-capture");
+        "/api/v1/ai-routine/runs/from-runelite-capture",
+        "/api/v1/ai-routine/runs/from-stabilization/**");
   }
 }
