@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -102,10 +103,77 @@ public class ReplayRunService {
         run.setControlAllowed(false);
         run.setBranchKey(MAIN_BRANCH);
         run.setCreatedAt(LocalDateTime.now());
+        copyManifestMetadata(run, manifest);
 
         run = runRepository.save(run);
         log.info("Created replay run {} mode={} owner={}", run.getId(), run.getMode(), ownerId);
         return toResponse(run);
+    }
+
+    /**
+     * Creates the v2 queued run after the compiler has produced an immutable published manifest.
+     * The request fingerprint makes a reused idempotency key fail closed when its semantic
+     * request differs, including conversion mode and viewer intent.
+     */
+    public ReplayRun createV2(
+            ScenarioManifest manifest,
+            CreateXrspsRunRequest request,
+            String ownerId,
+            String requestFingerprint) {
+        Optional<ReplayRun> existing =
+                runRepository.findByIdempotencyKeyAndOwnerId(request.idempotencyKey(), ownerId);
+        if (existing.isPresent()) {
+            return requireMatchingIdempotency(existing.get(), requestFingerprint);
+        }
+
+        ReplayRun run = new ReplayRun();
+        run.setMode(ReplayMode.CAUSAL_SIMULATION);
+        run.setManifestId(manifest.getId());
+        run.setManifestChecksum(manifest.getManifestChecksum());
+        run.setOwnerId(ownerId);
+        run.setIdempotencyKey(request.idempotencyKey());
+        run.setRequestFingerprint(requestFingerprint);
+        run.setViewerRequested(request.viewerRequested());
+        run.setState(ReplayRunState.QUEUED);
+        run.setPhase(ReplayRunPhase.PREFLIGHT);
+        run.setStopPolicy(request.stopPolicy());
+        run.setControlAllowed(false);
+        run.setBranchKey(MAIN_BRANCH);
+        run.setCreatedAt(LocalDateTime.now());
+        copyManifestMetadata(run, manifest);
+        try {
+            return runRepository.saveAndFlush(run);
+        } catch (DataIntegrityViolationException race) {
+            ReplayRun winner =
+                    runRepository
+                            .findByIdempotencyKeyAndOwnerId(request.idempotencyKey(), ownerId)
+                            .orElseThrow(() -> race);
+            return requireMatchingIdempotency(winner, requestFingerprint);
+        }
+    }
+
+    private ReplayRun requireMatchingIdempotency(ReplayRun existing, String requestFingerprint) {
+        if (requestFingerprint != null
+                && existing.getRequestFingerprint() != null
+                && !requestFingerprint.equals(existing.getRequestFingerprint())) {
+            throw ReplayException.conflict(
+                    ReplayErrorCode.RUN_IDEMPOTENCY_CONFLICT,
+                    "The idempotency key was already used for a different replay request");
+        }
+        return existing;
+    }
+
+    private void copyManifestMetadata(ReplayRun run, ScenarioManifest manifest) {
+        run.setManifestVersion(manifest.getManifestVersion());
+        run.setFidelity(manifest.getFidelity());
+        run.setConversionQuality(manifest.getConversionQuality());
+        run.setActionCoveragePct(manifest.getActionCoveragePct());
+        run.setGapCount(manifest.getGapCount());
+        run.setApproximationCount(manifest.getApproximationCount());
+        run.setXrspsAdapterVersion(manifest.getXrspsAdapterVersion());
+        run.setXrspsBuildCommit(manifest.getXrspsBuildCommit());
+        run.setCacheRevision(manifest.getCacheRevision());
+        run.setContentRevision(manifest.getContentRevision());
     }
 
     // ── query ──
@@ -113,6 +181,17 @@ public class ReplayRunService {
     @Transactional(readOnly = true)
     public ReplayRunResponse getOwned(UUID runId, String ownerId) {
         return toResponse(requireOwnedRun(runId, ownerId));
+    }
+
+    /** Owned entity access for additional public projections; it preserves uniform 404 behavior. */
+    @Transactional(readOnly = true)
+    public ReplayRun getOwnedEntity(UUID runId, String ownerId) {
+        return requireOwnedRun(runId, ownerId);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<ReplayRun> findByIdempotencyKey(String idempotencyKey, String ownerId) {
+        return runRepository.findByIdempotencyKeyAndOwnerId(idempotencyKey, ownerId);
     }
 
     @Transactional(readOnly = true)
@@ -132,9 +211,10 @@ public class ReplayRunService {
         requireOwnedRun(runId, ownerId);
 
         long after = afterOrdinal != null ? afterOrdinal : -1L;
+        int boundedLimit = Math.max(1, Math.min(1000, limit));
         List<ReplayEvent> events = eventRepository
                 .findByRunIdAndOrdinalGreaterThanOrderByOrdinalAsc(
-                        runId, after, PageRequest.of(0, limit));
+                        runId, after, PageRequest.of(0, boundedLimit));
         long nextAfter = events.isEmpty() ? after : events.get(events.size() - 1).getOrdinal();
         boolean hasMore = eventRepository.countByRunId(runId) > nextAfter + 1;
 

@@ -72,6 +72,61 @@ public class BuilderGoalRunStateMutationService {
   // Public mutation API
   // ------------------------------------------------------------------
 
+  /** Persists an auto-detected repair incident without replacing other task metadata partitions. */
+  @Transactional
+  public void recordRepairIncident(String iterationId, Map<String, Object> incident) {
+    PatchLoopIteration iteration =
+        iterationRepository
+            .findByIterationIdForUpdate(iterationId)
+            .orElseThrow(
+                () ->
+                    new IllegalArgumentException(
+                        "Builder Goal iteration not found: " + iterationId));
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    taskMetadata.put("repair_incident", deepCopy(incident));
+
+    Object recoveryValue = taskMetadata.get("recovery");
+    Map<String, Object> recovery =
+        recoveryValue instanceof Map<?, ?>
+            ? objectMapper.convertValue(
+                recoveryValue, new TypeReference<LinkedHashMap<String, Object>>() {})
+            : new LinkedHashMap<>();
+    if (recovery.get("phase") == null) {
+      recovery.put("phase", "AWAITING_OPERATOR_PROMPT");
+      recovery.put("message", "Repair incident detected; review evidence before generating a patch plan");
+      recovery.put("updated_at", LocalDateTime.now().toString());
+      taskMetadata.put("recovery", recovery);
+    }
+
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    persistenceService.saveIteration(iteration);
+  }
+
+  /** Records a patch-only export on the incident while preserving the active source worktree. */
+  @Transactional
+  public void recordRepairPatchExport(String iterationId, Map<String, Object> artifact) {
+    PatchLoopIteration iteration =
+        iterationRepository
+            .findByIterationIdForUpdate(iterationId)
+            .orElseThrow(
+                () ->
+                    new IllegalArgumentException(
+                        "Builder Goal iteration not found: " + iterationId));
+    Map<String, Object> taskMetadata = readTaskMetadata(iteration);
+    Object value = taskMetadata.get("repair_incident");
+    Map<String, Object> incident =
+        value instanceof Map<?, ?>
+            ? objectMapper.convertValue(
+                value, new TypeReference<LinkedHashMap<String, Object>>() {})
+            : new LinkedHashMap<>();
+    incident.put("state", "PATCH_EXPORTED");
+    incident.put("patch_export", deepCopy(artifact));
+    incident.put("updated_at", LocalDateTime.now().toString());
+    taskMetadata.put("repair_incident", incident);
+    iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+    persistenceService.saveIteration(iteration);
+  }
+
   /**
    * Reserves a publish slot for the given iteration. Locks the row, rejects terminal or already-
    * stopped runs, persists entry_id and PUBLISHING status, and returns the freshly-loaded metadata

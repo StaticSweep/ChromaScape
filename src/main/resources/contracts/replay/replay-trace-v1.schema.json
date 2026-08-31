@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chromascape.dev/replay/replay-trace-v1.schema.json",
+  "title": "xRSPS Replay Trace v1",
+  "description": "Immutable xRSPS observer trace emitted by a causal replay kernel.",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "plane": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["x", "y", "plane"]
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "eventVersion": { "type": "integer", "const": 1 },
+        "ordinal": { "type": "integer", "minimum": 0 },
+        "tick": { "type": "integer", "minimum": 0 },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "eventType": { "type": "string" },
+        "category": { "type": "string" },
+        "payload": { "type": "object" }
+      },
+      "required": ["eventVersion", "ordinal", "tick", "sequence", "eventType", "category"]
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "projectionVersion": { "type": "integer", "const": 1 },
+        "tick": { "type": "integer", "minimum": 0 },
+        "player": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": { "position": { "$ref": "#/$defs/position" } },
+          "required": ["position"]
+        },
+        "npcs": { "type": "array" },
+        "objects": { "type": "array" },
+        "taskState": { "type": "object" }
+      },
+      "required": ["projectionVersion", "tick", "player", "npcs", "objects", "taskState"]
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "frameVersion": { "type": "integer", "const": 1 },
+        "ordinal": { "type": "integer", "minimum": 0 },
+        "tick": { "type": "integer", "minimum": 0 },
+        "observation": { "$ref": "#/$defs/observation" },
+        "player": { "type": "object" },
+        "playerRenderState": { "type": "object" },
+        "entityDeltas": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "npcs": { "type": "array" },
+            "objects": { "type": "array" }
+          },
+          "required": ["npcs", "objects"]
+        },
+        "npcs": { "type": "array" },
+        "objects": { "type": "array" },
+        "taskState": { "type": "object" },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/event" } },
+        "movementPath": { "type": "array", "items": { "$ref": "#/$defs/position" } },
+        "animations": { "type": "object" },
+        "graphics": { "type": "array" },
+        "projectiles": { "type": "array" },
+        "interfaces": { "type": "array" },
+        "dialogue": { "type": "array" },
+        "inventory": { "type": "array" },
+        "equipment": { "type": "array" },
+        "skills": { "type": "object" },
+        "vars": { "type": "object" },
+        "semanticEffects": { "type": "array", "items": { "$ref": "#/$defs/event" } },
+        "previousChainHash": { "type": "string", "minLength": 1 },
+        "stateHash": { "type": "string", "minLength": 1 },
+        "actionDigest": { "type": ["string", "null"] },
+        "chainHash": { "type": "string", "minLength": 1 },
+        "sourceActionIndex": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "required": ["frameVersion", "ordinal", "tick", "observation", "player", "npcs", "objects", "taskState", "events", "stateHash", "actionDigest", "chainHash", "sourceActionIndex"]
+    }
+  },
+  "properties": {
+    "schema": { "const": "xrsps-replay-trace/v1" },
+    "viewerTraceSchema": { "const": "xrsps-replay-trace/v1" },
+    "traceVersion": { "type": "integer", "const": 1 },
+    "projectionVersion": { "type": "integer", "const": 1 },
+    "hashVersion": { "type": "string" },
+    "genesisChainHash": { "type": "string", "minLength": 1 },
+    "finalChainHash": { "type": "string", "minLength": 1 },
+    "finalStateHash": { "type": ["string", "null"] },
+    "frameCount": { "type": "integer", "minimum": 0 },
+    "frames": { "type": "array", "items": { "$ref": "#/$defs/frame" } },
+    "ordinals": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+    "events": { "type": "array", "items": { "$ref": "#/$defs/event" } }
+  },
+  "required": ["schema", "viewerTraceSchema", "frames", "ordinals", "events"]
+}

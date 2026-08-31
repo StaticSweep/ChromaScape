@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "source-error/v1",
+  "title": "Stable source manifest/read failure",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "code", "message"],
+  "properties": {
+    "schema": {"const": "source-error/v1"},
+    "code": {
+      "enum": [
+        "SOURCE_UNAVAILABLE",
+        "SOURCE_REDACTED",
+        "SOURCE_PRUNED",
+        "SOURCE_GENERATED_ONLY",
+        "SOURCE_BUILD_MISMATCH",
+        "SOURCE_MANIFEST_INVALID",
+        "SOURCE_CONTENT_HASH_MISMATCH",
+        "SOURCE_ACCESS_DENIED",
+        "SOURCE_INDEX_PARTIAL",
+        "SOURCE_SCHEMA_UNSUPPORTED",
+        "SOURCE_FILE_NOT_FOUND",
+        "SOURCE_SYMBOL_NOT_FOUND",
+        "SOURCE_NETWORK_UNAVAILABLE",
+        "SOURCE_RATE_LIMITED"
+      ]
+    },
+    "message": {"type": "string", "minLength": 1, "maxLength": 240},
+    "correlation_id": {"type": "string", "minLength": 1, "maxLength": 160}
+  }
+}

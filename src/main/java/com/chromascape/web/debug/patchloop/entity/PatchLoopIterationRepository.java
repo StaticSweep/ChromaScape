@@ -75,6 +75,9 @@ public interface PatchLoopIterationRepository extends JpaRepository<PatchLoopIte
   Optional<PatchLoopIteration> findFirstBySourceTypeAndRunRecordingIdOrderByCreatedAtDesc(
       String sourceType, String runRecordingId);
 
+  Optional<PatchLoopIteration> findFirstBySourceTypeAndRunSessionIdOrderByCreatedAtDesc(
+      String sourceType, String runSessionId);
+
   /**
    * Finds an iteration by ID with a pessimistic write lock, guaranteeing no concurrent mutation of
    * the row during the transaction. Used by {@code BuilderGoalRunStateMutationService}.

@@ -200,18 +200,18 @@ public class ReplayWorker {
 
             // Capability handshake with version verification.
             KernelMessage caps = kernel.send("capabilities", null);
-            verifyCapabilityResponse(caps, run);
+            verifyCapabilityResponse(caps, run, manifestDoc);
 
             // reset with manifest as a JSON object (never an escaped string).
             ObjectNode resetParams = mapper.createObjectNode();
             resetParams.set("manifest", manifestDoc);
             KernelMessage resetMsg = kernel.send("reset", resetParams);
             assertOk(resetMsg, "reset");
-            long expectedTick = resetMsg.result().path("result").path("initialTick").asLong(-1);
+            long expectedTick = resetMsg.result().path("initialTick").asLong(-1);
             if (expectedTick < 0) {
                 throw new IllegalStateException("reset returned no initialTick");
             }
-            persistEvents(run, claim.attempt(), resetMsg.result().path("result").path("events"), es);
+            persistEvents(run, claim.attempt(), resetMsg.result().path("events"), es);
 
             runService.transition(run.getId(), ReplayRunState.RUNNING, ReplayRunPhase.EXECUTE);
 
@@ -225,10 +225,14 @@ public class ReplayWorker {
                 ObjectNode stepParams = mapper.createObjectNode();
                 stepParams.put("expectedTick", expectedTick);
                 stepParams.set("action", action);
+                // Bind every kernel step to the source semantic action. The viewer trace uses
+                // this index to distinguish recorded evidence from simulated consequences and
+                // to jump back to the exact curation input that produced a frame.
+                stepParams.put("sourceActionIndex", i);
                 stepParams.put("maxTicks", STEP_MAX_TICKS);
                 KernelMessage stepMsg = kernel.send("step", stepParams);
                 assertStepOk(stepMsg, i);
-                JsonNode result = stepMsg.result().path("result");
+                JsonNode result = stepMsg.result();
 
                 persistEvents(run, claim.attempt(), result.path("events"), es);
                 JsonNode observation = result.path("observation");
@@ -258,7 +262,7 @@ public class ReplayWorker {
             JsonNode expectations = manifestDoc.path("expectations");
             KernelMessage finalObserve = kernel.send("observe", null);
             assertOk(finalObserve, "observe");
-            JsonNode actualObservation = finalObserve.result().path("result").path("observation");
+            JsonNode actualObservation = finalObserve.result().path("observation");
             var comparison = mismatchEngine.compareAtCheckpoint(
                     run.getId(), claim.attempt().getId(),
                     expectations, actualObservation, expectedTick, 0, run.getStopPolicy());
@@ -266,20 +270,28 @@ public class ReplayWorker {
             // Trace + manifest artifacts.
             KernelMessage traceMsg = kernel.send("trace", mapper.createObjectNode().put("afterOrdinal", -1));
             assertOk(traceMsg, "trace");
-            byte[] traceBytes = mapper.writeValueAsBytes(traceMsg.result().path("result"));
+            ObjectNode traceDocument = normalizeCanonicalTraceDocument(
+                    traceMsg.result(), manifestDoc.path("manifestVersion").asInt(1), run.isViewerRequested());
+            byte[] traceBytes = canonicalBytes(traceDocument);
             ArtifactRef traceRef = artifactService.stageArtifact(run.getId(),
                     com.chromascape.web.replay.api.dto.ArtifactKind.TRACE, traceBytes,
                     "application/json");
             es.artifactChecksums.add(traceRef.getChecksum());
+            run.setViewerTraceChecksum(traceRef.getChecksum());
+            run.setViewerTraceFrameCount((long) traceDocument.path("frames").size());
+            runRepository.save(run);
             byte[] manifestBytes = mapper.writeValueAsBytes(manifestDoc);
             ArtifactRef manifestRef = artifactService.stageArtifact(run.getId(),
                     com.chromascape.web.replay.api.dto.ArtifactKind.MANIFEST, manifestBytes,
                     "application/json");
             es.artifactChecksums.add(manifestRef.getChecksum());
 
-            // Outcome resolution: hard mismatch stops the run as FAILED (PASSED otherwise).
+            // A hard mismatch makes the durable run FAILED even when RUN_TO_END was selected.
+            // The stop policy controls execution short-circuiting; it must not turn a failed
+            // comparison into a successful terminal state.
+            boolean hardMismatch = comparison.hardCount() > 0;
             boolean hardStop = comparison.shouldStop();
-            if (hardStop && comparison.hardCount() > 0) {
+            if (hardMismatch) {
                 for (var m : comparison.recorded()) {
                     if (!es.recordedMismatchIds.contains(m.getId())) {
                         es.recordedMismatchIds.add(m.getId());
@@ -291,10 +303,10 @@ public class ReplayWorker {
 
             // Report BEFORE artifact finalization: its checksum lists the staged
             // artifact content addresses. The REPORT artifact is added after.
-            ReplayOutcome outcome = hardStop ? ReplayOutcome.FAILED : ReplayOutcome.PASSED;
+            ReplayOutcome outcome = hardMismatch ? ReplayOutcome.FAILED : ReplayOutcome.PASSED;
             var report = reportService.finalizeReport(
                     refreshed(run), claim.attempt(), outcome,
-                    hardStop ? "MISMATCH_HARD_STOP" : null,
+                    hardMismatch ? (hardStop ? "MISMATCH_HARD_STOP" : "MISMATCH_HARD") : null,
                     es.executedActions, es.checkpointCount,
                     es.lastStateHash, es.chainHash, es.artifactChecksums,
                     java.sql.Timestamp.valueOf(run.getStartedAt() != null ? run.getStartedAt()
@@ -311,7 +323,10 @@ public class ReplayWorker {
             if (current.getState() == ReplayRunState.CANCELLING) {
                 runService.applyTransition(current, ReplayRunState.CANCELLED, ReplayRunPhase.FINALIZE_REPORT);
             } else {
-                runService.applyTransition(current, ReplayRunState.SUCCEEDED, ReplayRunPhase.FINALIZE_REPORT);
+                runService.applyTransition(
+                        current,
+                        hardMismatch ? ReplayRunState.FAILED : ReplayRunState.SUCCEEDED,
+                        ReplayRunPhase.FINALIZE_REPORT);
                 current.setOutcome(outcome);
             }
             runRepository.save(current);
@@ -346,7 +361,7 @@ public class ReplayWorker {
                                 long tick, int actionIndex, ExecutionState es) {
         KernelMessage snapMsg = kernel.send("snapshot", null);
         assertOk(snapMsg, "snapshot");
-        JsonNode snapshot = snapMsg.result().path("result").path("snapshot");
+        JsonNode snapshot = snapMsg.result().path("snapshot");
         byte[] snapBytes = canonicalBytes(snapshot);
         ArtifactRef ref = artifactService.stageArtifact(run.getId(),
                 com.chromascape.web.replay.api.dto.ArtifactKind.SNAPSHOT, snapBytes, "application/json");
@@ -403,29 +418,480 @@ public class ReplayWorker {
         });
     }
 
-    private void verifyCapabilityResponse(KernelMessage caps, ReplayRun run) {
+    /**
+     * Validates the complete capability handshake before changing any run state or metadata.
+     * The manifest is the source of truth for all immutable pins; the run carries the same pins
+     * as a durable copy and is checked as well so a partially-created/legacy row cannot weaken
+     * the boundary.
+     */
+    private void verifyCapabilityResponse(KernelMessage caps, ReplayRun run, JsonNode manifest) {
         assertOk(caps, "capabilities");
-        JsonNode capability = caps.result().path("result").path("capabilities");
-        if (capability.isMissingNode()) {
-            capability = caps.result().path("result");
+        JsonNode result = caps.result();
+        JsonNode capability = result != null ? result.path("capabilities") : null;
+        if (capability == null || !capability.isObject()) {
+            throw capabilityError(
+                    ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+                    "The xRSPS capability response has no capability object",
+                    "Upgrade the worker to the ChromaScape replay capability contract");
         }
-        if (!capability.path("modes").path("causalSimulation").asBoolean(false)) {
-            throw new ReplayException(ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
-                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, false,
-                    "Kernel does not offer causal simulation", null, null, null);
+
+        requireBoolean(capability, "controlAllowed", false, ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+                "The xRSPS worker must be read-only");
+        JsonNode modes = capability.path("modes");
+        if (!modes.isObject()) {
+            throw capabilityError(
+                    ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+                    "The xRSPS capability response has no modes object",
+                    "Upgrade the worker to the ChromaScape replay capability contract");
+        }
+        requireBoolean(modes, "policyReplay", false, ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+                "Policy replay is not permitted by this worker contract");
+        requireBoolean(modes, "causalSimulation", true, ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+                "The worker must explicitly advertise causal simulation");
+        requireBoolean(capability, "openRuneAvailable", false, ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+                "OpenRune fallback is not permitted for xRSPS replay");
+
+        int manifestVersion = requireManifestVersion(manifest);
+        JsonNode scenarioVersions = capability.path("scenarioSchemaVersions");
+        if (!scenarioVersions.isArray() || !containsInteger(scenarioVersions, manifestVersion)) {
+            throw capabilityError(
+                    ReplayErrorCode.SCHEMA_VERSION_UNSUPPORTED,
+                    "The worker does not advertise scenario manifest version " + manifestVersion,
+                    "Use a worker that supports the immutable scenario manifest version");
+        }
+
+        JsonNode manifestRuntime = manifest.path("runtime");
+        if (!manifestRuntime.isObject()) {
+            throw capabilityError(
+                    ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE,
+                    "The immutable manifest has no runtime identity",
+                    "Recompile the replay with complete xRSPS runtime pins");
         }
         JsonNode xrsps = capability.path("xrsps");
-        run.setXrspsAdapterVersion(xrsps.path("adapterVersion").asText(null));
-        run.setXrspsBuildCommit(xrsps.path("buildCommit").asText(null));
-        run.setCacheRevision(xrsps.path("cacheRevision").asText(null));
-        run.setContentRevision(xrsps.path("contentRevision").asText(null));
+        if (!xrsps.isObject()) {
+            throw capabilityError(
+                    ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE,
+                    "The xRSPS capability response has no runtime identity",
+                    "Start a worker with adapter, build, cache, and content identities");
+        }
+        String adapterVersion = requirePinnedIdentity(manifestRuntime, xrsps, run,
+                "xrspsAdapterVersion", "adapterVersion");
+        String buildCommit = requirePinnedIdentity(manifestRuntime, xrsps, run,
+                "xrspsBuildCommit", "buildCommit");
+        String cacheRevision = requirePinnedIdentity(manifestRuntime, xrsps, run,
+                "cacheRevision", "cacheRevision");
+        String contentRevision = requirePinnedIdentity(manifestRuntime, xrsps, run,
+                "contentRevision", "contentRevision");
+
+        String fidelity = requireText(capability, "fidelity", ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+                "The worker must explicitly declare replay fidelity");
+        if (!"SYNTHETIC_CONTRACT".equals(fidelity) && !"XRSPS_AUTHORITATIVE".equals(fidelity)) {
+            throw capabilityError(
+                    ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+                    "The worker declared unsupported replay fidelity",
+                    "Use fidelity=SYNTHETIC_CONTRACT or fidelity=XRSPS_AUTHORITATIVE");
+        }
+        // Manifest v1 predates the explicit fidelity field. Its durable run row is the
+        // compatibility source of truth and is backfilled to SYNTHETIC_CONTRACT by V25.
+        // v2 must carry the field in the immutable document so it cannot be weakened by a
+        // partially-created or legacy run row.
+        String durableFidelity = run.getFidelity();
+        if (durableFidelity == null || durableFidelity.isBlank()) {
+            durableFidelity = "SYNTHETIC_CONTRACT";
+        }
+        String manifestFidelity = manifestVersion >= 2
+                ? requireText(manifest, "fidelity", ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+                "The immutable manifest must declare replay fidelity")
+                : durableFidelity;
+        if (!fidelity.equals(manifestFidelity) || !fidelity.equals(durableFidelity)) {
+            throw capabilityError(
+                    ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE,
+                    "The worker fidelity does not match the immutable replay pins",
+                    "Run the replay with the worker identity used to compile the manifest");
+        }
+        JsonNode certifiableNode = capability.get("certifiable");
+        if (certifiableNode == null || !certifiableNode.isBoolean()) {
+            throw capabilityError(
+                    ReplayErrorCode.XRSPS_CAPABILITY_UNAVAILABLE,
+                    "The worker must explicitly declare whether it is certifiable",
+                    "Upgrade the worker to the replay capability contract");
+        }
+        boolean certifiable = certifiableNode.booleanValue();
+        if ("CERTIFIED".equals(run.getConversionQuality())
+                && (!certifiable || !"XRSPS_AUTHORITATIVE".equals(fidelity))) {
+            throw capabilityError(
+                    ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE,
+                    "The worker is not authoritative for certified replay",
+                    "Use a worker advertising fidelity=XRSPS_AUTHORITATIVE and certifiable=true");
+        }
+
+        boolean traceRequired = manifestVersion >= 2 || run.isViewerRequested();
+        if (traceRequired) {
+            String viewerTraceSchema = requireText(
+                    capability, "viewerTraceSchema", ReplayErrorCode.SCHEMA_VERSION_UNSUPPORTED,
+                    "The worker must declare its observer trace schema");
+            if (!"xrsps-replay-trace/v1".equals(viewerTraceSchema)) {
+                throw capabilityError(
+                        ReplayErrorCode.SCHEMA_VERSION_UNSUPPORTED,
+                        "The worker does not support xRSPS replay trace schema v1",
+                        "Upgrade the worker to xrsps-replay-trace/v1");
+            }
+        }
+
+        JsonNode supported = capability.get("supportedActions");
+        if (supported == null || !supported.isArray()
+                || !allTextual(supported)) {
+            throw capabilityError(
+                    ReplayErrorCode.ACTION_UNSUPPORTED,
+                    "The worker capability has no valid supportedActions declaration",
+                    "Upgrade the worker to declare every supported semantic action");
+        }
+        JsonNode actions = manifest.path("actions");
+        if (!actions.isArray()) {
+            throw ReplayException.invalid(
+                    ReplayErrorCode.ACTION_SEQUENCE_INVALID,
+                    "The immutable manifest has no action array");
+        }
+        for (JsonNode action : actions) {
+            String type = action.isObject() && action.path("type").isTextual()
+                    ? action.path("type").textValue() : null;
+            if (type == null || !containsText(supported, type)) {
+                throw ReplayException.invalid(
+                        ReplayErrorCode.ACTION_UNSUPPORTED,
+                        type == null
+                                ? "The immutable manifest contains an action without a type"
+                                : "Worker capability does not declare manifest action " + type);
+            }
+        }
+
+        // This is deliberately the first mutation in this method. All capability and pin
+        // validation above must succeed before the durable run is touched.
+        run.setXrspsAdapterVersion(adapterVersion);
+        run.setXrspsBuildCommit(buildCommit);
+        run.setCacheRevision(cacheRevision);
+        run.setContentRevision(contentRevision);
         runRepository.save(run);
     }
 
+    private ReplayException capabilityError(ReplayErrorCode code, String message, String remediation) {
+        return new ReplayException(
+                code,
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                false,
+                message,
+                remediation);
+    }
+
+    private static int requireManifestVersion(JsonNode manifest) {
+        JsonNode version = manifest == null ? null : manifest.get("manifestVersion");
+        if (version == null || !version.isIntegralNumber() || (version.intValue() != 1 && version.intValue() != 2)) {
+            throw ReplayException.invalid(
+                    ReplayErrorCode.SCHEMA_VERSION_UNSUPPORTED,
+                    "The immutable manifest has an unsupported manifestVersion");
+        }
+        return version.intValue();
+    }
+
+    private static boolean containsInteger(JsonNode values, int expected) {
+        for (JsonNode value : values) {
+            if (value.isIntegralNumber() && value.intValue() == expected) return true;
+        }
+        return false;
+    }
+
+    private static boolean containsText(JsonNode values, String expected) {
+        for (JsonNode value : values) {
+            if (value.isTextual() && expected.equals(value.textValue())) return true;
+        }
+        return false;
+    }
+
+    private static boolean allTextual(JsonNode values) {
+        for (JsonNode value : values) {
+            if (!value.isTextual()) return false;
+        }
+        return true;
+    }
+
+    private static void requireBoolean(JsonNode object, String field, boolean expected,
+                                       ReplayErrorCode code, String message) {
+        JsonNode value = object.get(field);
+        if (value == null || !value.isBoolean() || value.booleanValue() != expected) {
+            throw ReplayException.invalid(code, message);
+        }
+    }
+
+    private static String requireText(JsonNode object, String field, ReplayErrorCode code, String message) {
+        JsonNode value = object == null ? null : object.get(field);
+        if (value == null || !value.isTextual() || value.textValue().isBlank()) {
+            throw ReplayException.invalid(code, message);
+        }
+        return value.textValue();
+    }
+
+    private static String requirePinnedIdentity(JsonNode manifestRuntime, JsonNode xrsps, ReplayRun run,
+                                                String manifestField, String capabilityField) {
+        String manifestValue = requireText(manifestRuntime, manifestField,
+                ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE,
+                "The immutable manifest has an incomplete runtime identity");
+        String actualValue = requireText(xrsps, capabilityField,
+                ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE,
+                "The worker has an incomplete runtime identity");
+        String runValue = switch (manifestField) {
+            case "xrspsAdapterVersion" -> run.getXrspsAdapterVersion();
+            case "xrspsBuildCommit" -> run.getXrspsBuildCommit();
+            case "cacheRevision" -> run.getCacheRevision();
+            case "contentRevision" -> run.getContentRevision();
+            default -> null;
+        };
+        if (!manifestValue.equals(actualValue) || !manifestValue.equals(runValue)) {
+            throw new ReplayException(
+                    ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE,
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    false,
+                    "The worker runtime identity does not match the immutable manifest",
+                    "Run the replay with the pinned adapter, build, cache, and content revisions");
+        }
+        return actualValue;
+    }
+
+    /** Normalize the adapter response to the canonical viewer contract before hashing it. */
+    private ObjectNode normalizeCanonicalTraceDocument(JsonNode raw, int manifestVersion,
+                                                        boolean viewerRequested) {
+        boolean strict = manifestVersion >= 2 || viewerRequested;
+        if (raw == null || !raw.isObject()) {
+            throw traceCorrupt("xRSPS kernel returned an invalid trace document");
+        }
+
+        // The current TypeScript worker returns the visual document at the response root and
+        // keeps the diagnostic event page beside it. Older adapters may wrap the document in a
+        // `trace` object or expose a legacy `trace` array. Read both forms, but always emit one
+        // canonical ChromaScape document so hashes and viewer pagination are stable.
+        JsonNode source = raw.path("trace").isObject() ? raw.path("trace") : raw;
+        String schema = source.path("schema").asText(null);
+        if (schema == null && !strict) {
+            schema = "xrsps-replay-trace/v1";
+        }
+        if (!"xrsps-replay-trace/v1".equals(schema)) {
+            throw traceCorrupt("xRSPS kernel returned an unsupported trace schema");
+        }
+
+        JsonNode rawFrames = source.path("frames");
+        if (!rawFrames.isArray() && raw.path("trace").isArray()) {
+            rawFrames = raw.path("trace");
+        }
+        if (!rawFrames.isArray()) {
+            throw traceCorrupt("xRSPS kernel returned no trace frames");
+        }
+
+        ObjectNode trace = mapper.createObjectNode();
+        trace.put("schema", "xrsps-replay-trace/v1");
+        trace.put("viewerTraceSchema", "xrsps-replay-trace/v1");
+        ArrayNode frames = trace.putArray("frames");
+        ArrayNode ordinals = trace.putArray("ordinals");
+        for (int index = 0; index < rawFrames.size(); index++) {
+            ObjectNode frame = normalizeTraceFrame(rawFrames.get(index), source, index, strict);
+            frames.add(frame);
+            ordinals.add(frame.path("ordinal").asLong(index));
+        }
+
+        JsonNode rawEvents = raw.path("events").isArray() ? raw.path("events") : source.path("events");
+        trace.set("events", normalizeTraceEvents(rawEvents, strict));
+        copyTraceMetadata(source, trace, frames);
+        return trace;
+    }
+
+    private ObjectNode normalizeTraceFrame(JsonNode rawFrame, JsonNode document, int index,
+                                           boolean strict) {
+        if (rawFrame == null || !rawFrame.isObject()) {
+            throw traceCorrupt("xRSPS kernel returned a non-object replay frame");
+        }
+        JsonNode frameObservation = rawFrame.path("observation");
+        long tick = integralOr(rawFrame.get("tick"), -1L);
+        if (tick < 0) {
+            throw traceCorrupt("xRSPS kernel returned a replay frame without a valid tick");
+        }
+        ObjectNode observation = normalizeTraceObservation(rawFrame, frameObservation, document, tick);
+        long ordinal = integralOr(rawFrame.get("ordinal"),
+                integralOr(rawFrame.get("frameOrdinal"), index));
+        if (ordinal < 0 || (strict && (!rawFrame.has("ordinal") && !rawFrame.has("frameOrdinal")))) {
+            throw traceCorrupt("xRSPS kernel returned a replay frame without a valid ordinal");
+        }
+
+        ObjectNode frame = mapper.createObjectNode();
+        frame.put("frameVersion", rawFrame.path("frameVersion").asInt(1));
+        frame.put("ordinal", ordinal);
+        frame.put("tick", tick);
+        frame.set("observation", observation);
+        frame.set("player", observation.path("player").deepCopy());
+        frame.set("npcs", observation.path("npcs").deepCopy());
+        frame.set("objects", observation.path("objects").deepCopy());
+        frame.set("taskState", observation.path("taskState").deepCopy());
+        JsonNode events = rawFrame.path("events").isArray()
+                ? rawFrame.path("events") : rawFrame.path("semanticEffects");
+        frame.set("events", normalizeTraceEvents(events, strict));
+
+        JsonNode stateHash = rawFrame.get("stateHash");
+        if (stateHash == null || !stateHash.isTextual() || stateHash.asText().isBlank()) {
+            if (strict) {
+                throw traceCorrupt("xRSPS kernel returned a replay frame without a state hash");
+            }
+            frame.put("stateHash", projectionService.stateHash(observation));
+        } else {
+            frame.set("stateHash", stateHash.deepCopy());
+        }
+        JsonNode actionDigest = rawFrame.has("actionDigest")
+                ? rawFrame.get("actionDigest") : rawFrame.get("actionHash");
+        if (actionDigest == null) {
+            frame.putNull("actionDigest");
+        } else if (actionDigest.isNull() || actionDigest.isTextual()) {
+            frame.set("actionDigest", actionDigest.deepCopy());
+        } else {
+            throw traceCorrupt("xRSPS kernel returned an invalid action digest");
+        }
+        JsonNode chainHash = rawFrame.get("chainHash");
+        if (chainHash == null || !chainHash.isTextual() || chainHash.asText().isBlank()) {
+            throw traceCorrupt("xRSPS kernel returned a replay frame without a chain hash");
+        }
+        frame.set("chainHash", chainHash.deepCopy());
+        JsonNode sourceActionIndex = rawFrame.get("sourceActionIndex");
+        if (sourceActionIndex == null || sourceActionIndex.isNull()) {
+            frame.putNull("sourceActionIndex");
+        } else if (sourceActionIndex.isIntegralNumber() && sourceActionIndex.asLong() >= 0) {
+            frame.set("sourceActionIndex", sourceActionIndex.deepCopy());
+        } else {
+            throw traceCorrupt("xRSPS kernel returned an invalid source action index");
+        }
+
+        // Keep the render-only part of the xRSPS frame. These fields are optional in the canonical
+        // contract, but retaining them lets the observer render movement/effects without exposing
+        // the kernel's mutable world graph.
+        copyRenderField(rawFrame, frame, "playerRenderState", observation.path("player"));
+        copyRenderField(rawFrame, frame, "movementPath", defaultPositionPath(observation));
+        copyRenderField(rawFrame, frame, "animations", defaultAnimations(observation));
+        copyRenderField(rawFrame, frame, "graphics", mapper.createArrayNode());
+        copyRenderField(rawFrame, frame, "projectiles", mapper.createArrayNode());
+        copyRenderField(rawFrame, frame, "interfaces", mapper.createArrayNode());
+        copyRenderField(rawFrame, frame, "dialogue", mapper.createArrayNode());
+        copyRenderField(rawFrame, frame, "inventory", observation.path("player").path("inventory"));
+        copyRenderField(rawFrame, frame, "equipment", observation.path("player").path("equipment"));
+        copyRenderField(rawFrame, frame, "skills", observation.path("player").path("skills"));
+        copyRenderField(rawFrame, frame, "vars", observation.path("taskState"));
+        copyRenderField(rawFrame, frame, "semanticEffects", frame.path("events"));
+        if (rawFrame.has("previousChainHash")) {
+            frame.set("previousChainHash", rawFrame.get("previousChainHash").deepCopy());
+        }
+        return frame;
+    }
+
+    private ObjectNode normalizeTraceObservation(JsonNode rawFrame, JsonNode rawObservation,
+                                                  JsonNode document, long tick) {
+        ObjectNode observation = rawObservation != null && rawObservation.isObject()
+                ? (ObjectNode) rawObservation.deepCopy() : mapper.createObjectNode();
+        observation.put("projectionVersion", observation.path("projectionVersion")
+                .asInt(document.path("projectionVersion").asInt(1)));
+        observation.put("tick", tick);
+        JsonNode player = observation.path("player").isObject()
+                ? observation.path("player")
+                : rawFrame.path("player").isObject() ? rawFrame.path("player")
+                : rawFrame.path("playerRenderState");
+        if (!player.isObject() || !player.path("position").isObject()) {
+            throw traceCorrupt("xRSPS kernel returned a replay frame without player position");
+        }
+        observation.set("player", player.deepCopy());
+
+        JsonNode npcs = observation.path("npcs").isArray()
+                ? observation.path("npcs")
+                : rawFrame.path("npcs").isArray() ? rawFrame.path("npcs")
+                : rawFrame.path("entityDeltas").path("npcs");
+        JsonNode objects = observation.path("objects").isArray()
+                ? observation.path("objects")
+                : rawFrame.path("objects").isArray() ? rawFrame.path("objects")
+                : rawFrame.path("entityDeltas").path("objects");
+        JsonNode taskState = observation.path("taskState").isObject()
+                ? observation.path("taskState")
+                : rawFrame.path("taskState").isObject() ? rawFrame.path("taskState")
+                : rawFrame.path("vars");
+        observation.set("npcs", npcs.isArray() ? npcs.deepCopy() : mapper.createArrayNode());
+        observation.set("objects", objects.isArray() ? objects.deepCopy() : mapper.createArrayNode());
+        observation.set("taskState", taskState.isObject() ? taskState.deepCopy() : mapper.createObjectNode());
+        return observation;
+    }
+
+    private ArrayNode normalizeTraceEvents(JsonNode rawEvents, boolean strict) {
+        ArrayNode events = mapper.createArrayNode();
+        if (rawEvents == null || !rawEvents.isArray()) return events;
+        for (JsonNode rawEvent : rawEvents) {
+            if (rawEvent == null || !rawEvent.isObject()) {
+                if (strict) throw traceCorrupt("xRSPS kernel returned a non-object trace event");
+                continue;
+            }
+            ObjectNode event = (ObjectNode) rawEvent.deepCopy();
+            if (!event.has("eventVersion")) event.put("eventVersion", 1);
+            if (strict && (!event.path("ordinal").isIntegralNumber()
+                    || !event.path("tick").isIntegralNumber()
+                    || !event.path("sequence").isIntegralNumber()
+                    || !event.path("eventType").isTextual()
+                    || !event.path("category").isTextual())) {
+                throw traceCorrupt("xRSPS kernel returned an invalid trace event");
+            }
+            events.add(event);
+        }
+        return events;
+    }
+
+    private void copyTraceMetadata(JsonNode source, ObjectNode trace, ArrayNode frames) {
+        copyIfPresent(source, trace, "traceVersion");
+        copyIfPresent(source, trace, "projectionVersion");
+        copyIfPresent(source, trace, "hashVersion");
+        copyIfPresent(source, trace, "genesisChainHash");
+        copyIfPresent(source, trace, "finalChainHash");
+        copyIfPresent(source, trace, "finalStateHash");
+        trace.put("frameCount", frames.size());
+    }
+
+    private void copyIfPresent(JsonNode source, ObjectNode target, String field) {
+        if (source.has(field)) target.set(field, source.get(field).deepCopy());
+    }
+
+    private void copyRenderField(JsonNode source, ObjectNode target, String field, JsonNode fallback) {
+        JsonNode value = source.get(field);
+        target.set(field, value == null || value.isNull() ? fallback.deepCopy() : value.deepCopy());
+    }
+
+    private ArrayNode defaultPositionPath(JsonNode observation) {
+        ArrayNode path = mapper.createArrayNode();
+        JsonNode position = observation.path("player").path("position");
+        if (position.isObject()) path.add(position.deepCopy());
+        return path;
+    }
+
+    private ObjectNode defaultAnimations(JsonNode observation) {
+        ObjectNode animations = mapper.createObjectNode();
+        JsonNode animation = observation.path("player").get("animation");
+        if (animation == null || animation.isNull()) animations.putNull("player");
+        else animations.set("player", animation.deepCopy());
+        return animations;
+    }
+
+    private static long integralOr(JsonNode node, long fallback) {
+        return node != null && node.isIntegralNumber() ? node.asLong() : fallback;
+    }
+
+    private ReplayException traceCorrupt(String message) {
+        return new ReplayException(
+                ReplayErrorCode.TRACE_CORRUPT,
+                org.springframework.http.HttpStatus.BAD_GATEWAY,
+                false,
+                message,
+                "Upgrade the worker to emit xRSPS replay trace schema v1");
+    }
+
     private void assertOk(KernelMessage msg, String op) {
-        if (msg.isError()) {
-            String code = msg.error() != null ? msg.error().path("code").asText("INTERNAL_ERROR") : "INTERNAL_ERROR";
-            String message = msg.error() != null ? msg.error().path("message").asText("") : "";
+        if (msg == null || msg.isError() || msg.result() == null) {
+            JsonNode error = msg == null ? null : msg.error();
+            String code = error != null ? error.path("code").asText("INTERNAL_ERROR") : "INTERNAL_ERROR";
+            String message = error != null ? error.path("message").asText("") : "";
             throw new ReplayException(mapErrorCode(code),
                     org.springframework.http.HttpStatus.BAD_GATEWAY, false,
                     "Kernel " + op + " failed (" + code + ")", null, message, null);

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator;
+import com.chromascape.web.aiplayer.routine.source.SourceManifestContract;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
@@ -227,14 +228,26 @@ public class PatchCandidateWorkflowService {
     if (candidateIdentity.source() == null || candidateIdentity.graph() == null || candidateIdentity.model() == null) {
       throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_INCOMPLETE", "identity through graph and model is required before proposal creation");
     }
-    Micro6SourceManifestClient.SourceBinding resolved = source.resolveFishingSource();
-    String requestedBase = text(request, "base_commit");
-    if (requestedBase != null && !requestedBase.equals(resolved.clientBuildId())) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "BASE_COMMIT_MISMATCH", "requested base commit differs from embedded Micro6 build identity");
+    Micro6SourceManifestClient.SourceBinding resolved = source.resolve(
+        new Micro6SourceManifestClient.SourceRequest(
+            "FISHING_TRAINING",
+            "net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing.FishingExecutionTask",
+            "FishingExecutionTask#getFishType(String)",
+            Micro6SourceManifestClient.expectedIdentity(candidateIdentity)));
+    if (!resolved.signatureVerified()
+        || !SourceManifestContract.isGitObjectId(resolved.commitId())
+        || !SourceManifestContract.isGitObjectId(resolved.treeId())
+        || !SourceManifestContract.isHash(resolved.artifactDigest())) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "SOURCE_PROVENANCE_UNVERIFIED",
+          "only a signed source manifest with exact commit, tree, and artifact identity may enter the patch loop");
     }
-    String baseCommit = requestedBase == null ? resolved.clientBuildId() : requestedBase;
+    String requestedBase = text(request, "base_commit");
+    if (requestedBase != null && !requestedBase.equals(resolved.commitId())) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "BASE_COMMIT_MISMATCH", "requested base commit differs from the verified source commit");
+    }
+    String baseCommit = requestedBase == null ? resolved.commitId() : requestedBase;
     if (baseCommit == null || baseCommit.isBlank() || "nogit".equals(baseCommit)) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "SOURCE_BINDING_INCOMPLETE", "embedded Micro6 build commit is required");
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "SOURCE_BINDING_INCOMPLETE", "verified Micro6 source commit is required");
     }
 
     Map<String, Object> binding = new LinkedHashMap<>();
@@ -255,6 +268,12 @@ public class PatchCandidateWorkflowService {
     binding.put("start_line", resolved.startLine());
     binding.put("end_line", resolved.endLine());
     binding.put("preimage_hash", resolved.preimageHash());
+    binding.put("repository_id", resolved.repositoryId());
+    binding.put("commit_id", resolved.commitId());
+    binding.put("tree_id", resolved.treeId());
+    binding.put("build_id", resolved.clientBuildId());
+    binding.put("artifact_digest", resolved.artifactDigest());
+    binding.put("signature_verified", resolved.signatureVerified());
 
     ObjectNode content = mapper.createObjectNode();
     content.put("schema", "patch-proposal/v1");

@@ -1,0 +1,19 @@
+package com.chromascape.web.aiplayer.routine.source;
+
+/** Stable, non-leaky failure states for authoritative source reads. */
+public enum SourceManifestFailureCode {
+  SOURCE_UNAVAILABLE,
+  SOURCE_REDACTED,
+  SOURCE_PRUNED,
+  SOURCE_GENERATED_ONLY,
+  SOURCE_BUILD_MISMATCH,
+  SOURCE_MANIFEST_INVALID,
+  SOURCE_CONTENT_HASH_MISMATCH,
+  SOURCE_ACCESS_DENIED,
+  SOURCE_INDEX_PARTIAL,
+  SOURCE_SCHEMA_UNSUPPORTED,
+  SOURCE_FILE_NOT_FOUND,
+  SOURCE_SYMBOL_NOT_FOUND,
+  SOURCE_NETWORK_UNAVAILABLE,
+  SOURCE_RATE_LIMITED
+}

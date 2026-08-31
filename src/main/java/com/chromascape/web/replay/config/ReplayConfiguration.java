@@ -36,7 +36,9 @@ public class ReplayConfiguration {
      * Canonical JSON mapper for replay artifacts. Must produce byte-identical
      * output to the TypeScript canonical JSON implementation.
      */
-    @Bean(name = "replayCanonicalMapper")
+    // defaultCandidate=false keeps this specialised mapper out of unqualified by-type
+    // injection, so it never competes with the application-wide ObjectMapper.
+    @Bean(name = "replayCanonicalMapper", defaultCandidate = false)
     public ObjectMapper replayCanonicalMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());

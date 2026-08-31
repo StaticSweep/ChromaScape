@@ -30,6 +30,14 @@ import java.util.concurrent.TimeUnit;
 public class XrspsStartupValidator {
 
     private static final Logger log = LoggerFactory.getLogger(XrspsStartupValidator.class);
+    private static final java.util.Set<String> SUPPORTED_FIDELITIES =
+            java.util.Set.of("SYNTHETIC_CONTRACT", "XRSPS_AUTHORITATIVE");
+    private static final java.util.Set<String> SUPPORTED_ACTIONS = java.util.Set.of(
+            "WAIT_UNTIL_TICK", "WALK_TO", "INTERACT_NPC", "INTERACT_OBJECT",
+            "INTERACT_GROUND_ITEM", "INTERACT_INVENTORY_ITEM", "INTERACT_WIDGET",
+            "SELECT_DIALOGUE_OPTION", "CAST_SPELL", "EQUIP_ITEM");
+    private static final List<Integer> SUPPORTED_SCENARIO_VERSIONS = List.of(1, 2);
+    private static final String SUPPORTED_VIEWER_TRACE_SCHEMA = "xrsps-replay-trace/v1";
 
     private final ReplayProperties properties;
     private final ReplayCapabilityService capabilityService;
@@ -111,9 +119,9 @@ public class XrspsStartupValidator {
                 xrspsNode.path("buildCommit").asText(""),
                 xrspsNode.path("cacheRevision").asText(""),
                 xrspsNode.path("contentRevision").asText(""));
-        return new CapabilityManifest(
-                node.path("schemaVersion").asInt(-1),
-                false, // controlAllowed is always forced to false server-side
+            return new CapabilityManifest(
+                    node.path("schemaVersion").asInt(-1),
+                    node.path("controlAllowed").asBoolean(false),
                 modes,
                 intList(node.path("scenarioSchemaVersions")),
                 intList(node.path("semanticActionVersions")),
@@ -121,13 +129,38 @@ public class XrspsStartupValidator {
                 intList(node.path("projectionVersions")),
                 stringList(node.path("hashVersions")),
                 identity,
-                false);
+                    node.path("openRuneAvailable").asBoolean(false),
+                node.path("certifiable").asBoolean(false),
+                node.path("fidelity").asText("SYNTHETIC_CONTRACT"),
+                stringList(node.path("supportedActions")),
+                node.path("viewerTraceSchema").asText(null));
     }
 
     List<String> verifyVersions(CapabilityManifest manifest, ReplayProperties.Xrsps cfg) {
         List<String> problems = new ArrayList<>();
         if (manifest.schemaVersion() != 1) {
             problems.add("unsupported capability schemaVersion " + manifest.schemaVersion());
+        }
+        if (manifest.controlAllowed()) {
+            problems.add("controlAllowed must be false");
+        }
+        if (manifest.openRuneAvailable()) {
+            problems.add("openRuneAvailable must be false");
+        }
+        if (!SUPPORTED_SCENARIO_VERSIONS.equals(manifest.scenarioSchemaVersions())) {
+            problems.add("unsupported scenarioSchemaVersions " + manifest.scenarioSchemaVersions());
+        }
+        if (!SUPPORTED_VIEWER_TRACE_SCHEMA.equals(manifest.viewerTraceSchema())) {
+            problems.add("unsupported viewerTraceSchema " + manifest.viewerTraceSchema());
+        }
+        if (!SUPPORTED_FIDELITIES.contains(manifest.fidelity())) {
+            problems.add("unsupported fidelity " + manifest.fidelity());
+        }
+        if (manifest.supportedActions().stream().anyMatch(action -> !SUPPORTED_ACTIONS.contains(action))) {
+            problems.add("unsupported semantic action declaration");
+        }
+        if (manifest.modes().causalSimulation() && manifest.supportedActions().isEmpty()) {
+            problems.add("causal simulation declares no supported actions");
         }
         requireExpected(problems, "adapterVersion",
                 cfg.getExpectedAdapterVersion(), manifest.xrsps().adapterVersion());

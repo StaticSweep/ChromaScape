@@ -69,6 +69,11 @@ output/*
 # chromascape runtime cache
 .chromascape/
 
+# Local Felix indexes
+/.felix.*.db
+/.felix.*.db-shm
+/.felix.*.db-wal
+
 # custom user scripts
 /src/main/java/com/chromascape/scripts/*/
 /scripts/*/

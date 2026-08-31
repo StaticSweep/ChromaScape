@@ -119,6 +119,26 @@ gateway:
 
 # ChromaScape runtime configuration
 chromascape:
+  # SC-810 authoritative source manifest verification and debugger read boundary. These keys are
+  # the single canonical manifest trust configuration (SourceTrustProperties); the legacy
+  # micro6.source-manifest trust keys are aliases only and must agree with these at startup.
+  source:
+    # Legacy manifests remain readable as provenance UNKNOWN, but production can require signed
+    # task-source-manifest/v1 documents by setting this flag and configuring the public key.
+    require-signature: ${CHROMASCAPE_SOURCE_REQUIRE_SIGNATURE:false}
+    allow-legacy: ${CHROMASCAPE_SOURCE_ALLOW_LEGACY:true}
+    public-key-base64: ${CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64:}
+    public-key-id: ${CHROMASCAPE_SOURCE_PUBLIC_KEY_ID:}
+    environment: ${CHROMASCAPE_SOURCE_ENVIRONMENT:}
+    # Development default keeps debugger read authentication off; enabling it without both tokens
+    # fails startup through SourceConfigurationValidator. Production must enable it explicitly.
+    require-auth: ${CHROMASCAPE_SOURCE_REQUIRE_AUTH:false}
+    access:
+      metadata-token: ${CHROMASCAPE_SOURCE_METADATA_TOKEN:}
+      content-token: ${CHROMASCAPE_SOURCE_CONTENT_TOKEN:}
+      actor-id: ${CHROMASCAPE_SOURCE_ACTOR_ID:debugger}
+    cache:
+      max-bytes: ${CHROMASCAPE_SOURCE_CACHE_MAX_BYTES:52428800}
   patchloop:
     # Execution backend: local_instance | micro6_local_executor
     execution-backend: ${CHROMASCAPE_PATCHLOOP_EXECUTION_BACKEND:micro6_local_executor}
@@ -267,6 +287,19 @@ micro6:
     timeout-ms: ${MICRO6_EXECUTOR_TIMEOUT_MS:60000}
     # Cache TTL in seconds
     refresh-seconds: ${MICRO6_EXECUTOR_CATALOG_REFRESH_SECONDS:30}
+  source-manifest:
+    # The producer source API is a separate transport boundary from the general catalog API.
+    # Trust values below (require-signature/allow-legacy/public-key*/environment) are legacy
+    # aliases only: services no longer read them, and SourceConfigurationValidator fails startup
+    # when an explicitly configured alias disagrees with the canonical chromascape.source trust.
+    auth-required: ${MICRO6_SOURCE_AUTH_REQUIRED:false}
+    auth-token: ${MICRO6_SOURCE_AUTH_TOKEN:}
+    actor: ${MICRO6_SOURCE_ACTOR:chromascape-web}
+    environment: ${MICRO6_SOURCE_ENVIRONMENT:}
+    allow-legacy: ${MICRO6_SOURCE_ALLOW_LEGACY:true}
+    require-signature: ${MICRO6_SOURCE_REQUIRE_SIGNATURE:false}
+    public-key-base64: ${MICRO6_SOURCE_PUBLIC_KEY_BASE64:}
+    public-key-id: ${MICRO6_SOURCE_PUBLIC_KEY_ID:}
 
 # Analysis Provider Configuration - For BMAD (Bot Metric Analysis & Diagnostics)
 analysis:
@@ -336,6 +369,41 @@ microbot:
     poll-interval-ms: ${MICROBOT_AGENT_SERVER_POLL_MS:2000}
 
 # Feature Flags
+replay:
+  # Replay, worker, and viewer remain opt-in. Their data contracts are harmless while disabled.
+  enabled: ${REPLAY_ENABLED:false}
+  xrsps:
+    executable: ${REPLAY_XRSPS_EXECUTABLE:node}
+    entrypoint: ${REPLAY_XRSPS_ENTRYPOINT:}
+    working-directory: ${REPLAY_XRSPS_WORKING_DIRECTORY:}
+    expected-adapter-version: ${REPLAY_XRSPS_EXPECTED_ADAPTER_VERSION:}
+    expected-build-commit: ${REPLAY_XRSPS_EXPECTED_BUILD_COMMIT:}
+    expected-cache-revision: ${REPLAY_XRSPS_EXPECTED_CACHE_REVISION:}
+    expected-content-revision: ${REPLAY_XRSPS_EXPECTED_CONTENT_REVISION:}
+    startup-timeout-ms: ${REPLAY_XRSPS_STARTUP_TIMEOUT_MS:15000}
+    request-timeout-ms: ${REPLAY_XRSPS_REQUEST_TIMEOUT_MS:30000}
+    shutdown-timeout-ms: ${REPLAY_XRSPS_SHUTDOWN_TIMEOUT_MS:5000}
+    max-stdout-line-bytes: ${REPLAY_XRSPS_MAX_STDOUT_LINE_BYTES:10485760}
+    max-stderr-bytes: ${REPLAY_XRSPS_MAX_STDERR_BYTES:1048576}
+  worker:
+    enabled: ${REPLAY_WORKER_ENABLED:false}
+    concurrency: ${REPLAY_WORKER_CONCURRENCY:2}
+    lease-duration-seconds: ${REPLAY_WORKER_LEASE_DURATION_SECONDS:30}
+    heartbeat-seconds: ${REPLAY_WORKER_HEARTBEAT_SECONDS:10}
+    poll-interval-ms: ${REPLAY_WORKER_POLL_INTERVAL_MS:1000}
+    run-timeout-seconds: ${REPLAY_WORKER_RUN_TIMEOUT_SECONDS:300}
+    max-event-batch: ${REPLAY_WORKER_MAX_EVENT_BATCH:100}
+    max-retries: ${REPLAY_WORKER_MAX_RETRIES:2}
+  artifacts:
+    root: ${REPLAY_ARTIFACT_ROOT:.chromascape/replay-artifacts}
+    max-artifact-bytes: ${REPLAY_MAX_ARTIFACT_BYTES:104857600}
+    retain-failed-staging-hours: ${REPLAY_RETAIN_FAILED_STAGING_HOURS:24}
+  viewer:
+    enabled: ${REPLAY_VIEWER_ENABLED:false}
+    origin: ${REPLAY_VIEWER_ORIGIN:http://127.0.0.1:3000}
+    signing-secret: ${REPLAY_VIEWER_SIGNING_SECRET:}
+    token-ttl-seconds: ${REPLAY_VIEWER_TOKEN_TTL_SECONDS:300}
+
 features:
   task-synthesis:
     enabled: ${FEATURES_TASK_SYNTHESIS_ENABLED:true}
@@ -346,6 +414,30 @@ features:
     shadow-mode: ${FEATURES_AI_PLAYER_SHADOW:false}
     # Observable request only; ShadowPolicyService permanently enforces false.
     control-enabled: ${FEATURES_AI_PLAYER_CONTROL:false}
+
+# SC-1430 provider decision runtime. It is deliberately disabled and has no delivery capability.
+gameplay:
+  # SC-1431 source-neutral orchestration. Both flags stay off until dependency and SC-1449
+  # conformance evidence exists; HELD/SHADOW use the application service directly in tests.
+  accountbuilder-orchestration:
+    enabled: ${GAMEPLAY_ACCOUNTBUILDER_ORCHESTRATION_ENABLED:false}
+    live-delivery-enabled: ${GAMEPLAY_ACCOUNTBUILDER_LIVE_DELIVERY_ENABLED:false}
+    operator-key: ${GAMEPLAY_ACCOUNTBUILDER_ORCHESTRATION_OPERATOR_KEY:}
+  provider-runtime:
+    enabled: ${GAMEPLAY_PROVIDER_RUNTIME_ENABLED:false}
+    operator-key: ${GAMEPLAY_PROVIDER_RUNTIME_OPERATOR_KEY:}
+    work-root: ${GAMEPLAY_PROVIDER_RUNTIME_WORK_ROOT:.chromascape/provider-runtime-work}
+    transcript-root: ${GAMEPLAY_PROVIDER_TRANSCRIPT_ROOT:.chromascape/provider-transcripts}
+    max-stdout-bytes: ${GAMEPLAY_PROVIDER_MAX_STDOUT_BYTES:1048576}
+    max-stderr-bytes: ${GAMEPLAY_PROVIDER_MAX_STDERR_BYTES:131072}
+    claude:
+      command: ["${GAMEPLAY_PROVIDER_CLAUDE_COMMAND:claude}"]
+      allowed-models: ["claude-*", "sonnet", "opus"]
+      credential-environment-names: ["ANTHROPIC_API_KEY"]
+    codex:
+      command: ["${GAMEPLAY_PROVIDER_CODEX_COMMAND:codex}"]
+      allowed-models: ["gpt-*", "o3", "o4-*"]
+      credential-environment-names: ["OPENAI_API_KEY"]
 
 # AI Player Configuration
 ai-player:

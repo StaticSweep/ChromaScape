@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:chromascape:gameplay:sc-1429:v1",
+  "title": "SC-1429 provider-neutral gameplay contract v1",
+  "$defs": {
+    "token": {"type":"string","pattern":"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "sha256": {"type":"string","pattern":"^sha256:[a-f0-9]{64}$"},
+    "evidenceRef": {"type":"string","minLength":1,"maxLength":512,"pattern":"^[^\\u0000-\\u001F]+$"},
+    "identities": {
+      "type":"object","additionalProperties":false,
+      "required":["accountId","clientId","environmentId","runId","taskId","sessionId","recordingId","sourceId"],
+      "properties": {
+        "accountId":{"$ref":"#/$defs/token"},"clientId":{"$ref":"#/$defs/token"},
+        "environmentId":{"$ref":"#/$defs/token"},"runId":{"$ref":"#/$defs/token"},
+        "taskId":{"$ref":"#/$defs/token"},"sessionId":{"$ref":"#/$defs/token"},
+        "recordingId":{"$ref":"#/$defs/token"},"sourceId":{"$ref":"#/$defs/token"}
+      }
+    },
+    "observation": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","observationId","revision","capturedAt","capturedTick","identities","catalogDigest","buildId","player","inventory","skills","eligibleTargets","taskState","confidence"],
+      "properties": {
+        "contractVersion":{"const":"sc-1429/v1"},"observationId":{"$ref":"#/$defs/token"},
+        "revision":{"type":"integer","minimum":0},"capturedAt":{"type":"string","format":"date-time"},
+        "capturedTick":{"type":"integer","minimum":0},"identities":{"$ref":"#/$defs/identities"},
+        "catalogDigest":{"$ref":"#/$defs/sha256"},"buildId":{"$ref":"#/$defs/token"},
+        "player":{"type":"object","additionalProperties":false,"required":["worldPoint","animation","interactingTarget"],"properties":{"worldPoint":{"type":"string","pattern":"^-?[0-9]+,-?[0-9]+,[0-3]$"},"animation":{"type":"integer"},"interactingTarget":{"type":["string","null"],"maxLength":128}}},
+        "inventory":{"type":"array","maxItems":28,"items":{"type":"object","additionalProperties":false,"required":["itemId","quantity"],"properties":{"itemId":{"type":"integer","minimum":0},"quantity":{"type":"integer","minimum":1}}}},
+        "skills":{"type":"object","additionalProperties":false,"required":["fishingLevel","fishingXp"],"properties":{"fishingLevel":{"type":"integer","minimum":1,"maximum":126},"fishingXp":{"type":"integer","minimum":0}}},
+        "eligibleTargets":{"type":"array","maxItems":32,"items":{"$ref":"#/$defs/token"}},
+        "taskState":{"type":"object","additionalProperties":false,"required":["revision","status","taskKey"],"properties":{"revision":{"type":"integer","minimum":0},"status":{"enum":["IDLE","RECEIVED","QUEUED","ASSIGNED","RUNNING","PAUSED","COMPLETED","FAILED","CANCELLED"]},"taskKey":{"type":["string","null"],"pattern":"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"}}},
+        "confidence":{"type":"object","additionalProperties":false,"required":["adapterObservationConfidence","knowledgeFreshnessConfidence","complete"],"properties":{"adapterObservationConfidence":{"type":"number","minimum":0,"maximum":1},"knowledgeFreshnessConfidence":{"type":"number","minimum":0,"maximum":1},"complete":{"type":"boolean"}}}
+      }
+    },
+    "semanticAction": {
+      "oneOf":[
+        {"type":"object","additionalProperties":false,"required":["kind","taskKey","settings","target","expectedTransition","preconditions","verifierId","decisionId","evidenceRefs"],"properties":{"kind":{"const":"START_FISHING_TASK"},"taskKey":{"const":"FISHING_TRAINING"},"settings":{"type":"object","additionalProperties":false,"required":["targetLevel","areaPolicy"],"properties":{"targetLevel":{"type":"integer","minimum":2,"maximum":99},"areaPolicy":{"enum":["LUMBRIDGE","DRAYNOR","BARBARIAN_VILLAGE"]}}},"target":{"const":"FISHING"},"expectedTransition":{"enum":["FISHING_XP_INCREASED","TARGET_LEVEL_REACHED"]},"preconditions":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/token"}},"verifierId":{"$ref":"#/$defs/token"},"decisionId":{"$ref":"#/$defs/token"},"evidenceRefs":{"type":"array","minItems":1,"maxItems":32,"items":{"$ref":"#/$defs/evidenceRef"}}}},
+        {"type":"object","additionalProperties":false,"required":["kind","decisionId","reason"],"properties":{"kind":{"const":"ABSTAIN"},"decisionId":{"$ref":"#/$defs/token"},"reason":{"enum":["NO_ELIGIBLE_TASK","STALE_KNOWLEDGE","UNSUPPORTED_CAPABILITY","LOW_CONFIDENCE","POLICY_DENIED"]}}}
+      ]
+    },
+    "providerProposal": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","decisionId","policyConfidence","semanticAction","evidenceRefs"],
+      "properties":{"contractVersion":{"const":"sc-1429/v1"},"decisionId":{"$ref":"#/$defs/token"},"policyConfidence":{"type":"number","minimum":0,"maximum":1},"semanticAction":{"$ref":"#/$defs/semanticAction"},"evidenceRefs":{"type":"array","maxItems":32,"items":{"$ref":"#/$defs/evidenceRef"}}}
+    },
+    "budgets": {"type":"object","additionalProperties":false,"required":["maxActions","maxAttempts","maxElapsedMs"],"properties":{"maxActions":{"type":"integer","minimum":1,"maximum":20},"maxAttempts":{"type":"integer","minimum":1,"maximum":3},"maxElapsedMs":{"type":"integer","minimum":1000,"maximum":1800000}}},
+    "executionEnvelope": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","provider","modelVersion","decisionId","requestId","idempotencyKey","goalPlanDigest","taskSkillDigests","taskKey","settings","identities","catalogDigest","schemaDigest","policyDigest","knowledgeDigest","semanticActionDigest","expectedTransition","verifierId","buildId","expectedObservationRevision","expectedTaskRevision","authorityId","leaseGeneration","fence","budgets","deadline","killSwitchScope"],
+      "properties": {
+        "contractVersion":{"const":"sc-1429/v1"},"provider":{"enum":["CLAUDE","CODEX"]},"modelVersion":{"$ref":"#/$defs/token"},
+        "decisionId":{"$ref":"#/$defs/token"},"requestId":{"$ref":"#/$defs/token"},"idempotencyKey":{"$ref":"#/$defs/token"},
+        "goalPlanDigest":{"$ref":"#/$defs/sha256"},"taskSkillDigests":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/sha256"}},
+        "taskKey":{"const":"FISHING_TRAINING"},"settings":{"$ref":"#/$defs/semanticAction/oneOf/0/properties/settings"},
+        "identities":{"$ref":"#/$defs/identities"},"catalogDigest":{"$ref":"#/$defs/sha256"},"schemaDigest":{"$ref":"#/$defs/sha256"},
+        "policyDigest":{"$ref":"#/$defs/sha256"},"knowledgeDigest":{"$ref":"#/$defs/sha256"},"semanticActionDigest":{"$ref":"#/$defs/sha256"},"expectedTransition":{"enum":["FISHING_XP_INCREASED","TARGET_LEVEL_REACHED"]},"verifierId":{"$ref":"#/$defs/token"},"buildId":{"$ref":"#/$defs/token"},
+        "expectedObservationRevision":{"type":"integer","minimum":0},"expectedTaskRevision":{"type":"integer","minimum":0},
+        "authorityId":{"$ref":"#/$defs/token"},"leaseGeneration":{"type":"integer","minimum":1},"fence":{"type":"integer","minimum":1},
+        "budgets":{"$ref":"#/$defs/budgets"},"deadline":{"type":"string","format":"date-time"},"killSwitchScope":{"const":"RUN"}
+      }
+    },
+    "authority": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","authorityId","actorType","approvedBy","approvedAt","expiresAt","envelopeDigest","scopeDigest","oneUse","signature"],
+      "properties":{"contractVersion":{"const":"sc-1429/v1"},"authorityId":{"$ref":"#/$defs/token"},"actorType":{"const":"HUMAN"},"approvedBy":{"$ref":"#/$defs/token"},"approvedAt":{"type":"string","format":"date-time"},"expiresAt":{"type":"string","format":"date-time"},"envelopeDigest":{"$ref":"#/$defs/sha256"},"scopeDigest":{"$ref":"#/$defs/sha256"},"oneUse":{"const":true},"signature":{"type":"string","pattern":"^hmac-sha256:[a-f0-9]{64}$"}}
+    },
+    "receipt": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","receiptId","requestId","envelopeDigest","phase","outcome","at","evidenceRefs","retryAllowed"],
+      "properties":{"contractVersion":{"const":"sc-1429/v1"},"receiptId":{"$ref":"#/$defs/token"},"requestId":{"$ref":"#/$defs/token"},"envelopeDigest":{"$ref":"#/$defs/sha256"},"phase":{"enum":["VALIDATION","AUTHORIZATION","RESERVATION","DISPATCH","ACTIVATION","PROGRESS","TASK_TERMINAL","VERIFICATION","FINALIZATION"]},"outcome":{"enum":["HELD","DELIVERED","CONFIRMED","REFUTED","UNVERIFIABLE","UNCERTAIN_OUTCOME","ABSTAINED","DENIED","FAILED","STOPPED"]},"failureCode":{"type":["string","null"],"pattern":"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},"at":{"type":"string","format":"date-time"},"evidenceRefs":{"type":"array","maxItems":64,"items":{"$ref":"#/$defs/evidenceRef"}},"retryAllowed":{"type":"boolean"}}
+    }
+  }
+}

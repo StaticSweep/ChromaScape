@@ -1,10 +1,13 @@
 package com.chromascape.web.aiplayer.routine.controller;
 
+import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
 import com.chromascape.web.aiplayer.routine.dto.RoutineApiDtos;
 import com.chromascape.web.aiplayer.routine.service.BehaviorGraphService;
 import com.chromascape.web.aiplayer.routine.service.CurrentSliceRunService;
 import com.chromascape.web.aiplayer.routine.service.RoutineCaptureIngestionService;
 import com.chromascape.web.aiplayer.routine.service.RoutineCurationService;
+import com.chromascape.web.aiplayer.routine.source.SourceManifestException;
+import com.chromascape.web.aiplayer.routine.source.SourceRunOrchestrationService;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -15,9 +18,23 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/ai-routine")
 public class RoutineController {
   private final CurrentSliceRunService runs; private final RoutineCaptureIngestionService captures; private final RoutineCurationService curation; private final BehaviorGraphService graphs;
+  private final SourceRunOrchestrationService sourceOrchestration;
   @Value("${ai-routine.capture.token:}") private String captureToken;
-  public RoutineController(CurrentSliceRunService runs, RoutineCaptureIngestionService captures, RoutineCurationService curation, BehaviorGraphService graphs) { this.runs=runs;this.captures=captures;this.curation=curation;this.graphs=graphs; }
-  @PostMapping("/runs/from-stabilization/{attemptId}") public ResponseEntity<Object> createRun(@PathVariable String attemptId,@RequestBody RoutineApiDtos.StartRunRequest request){return ResponseEntity.ok(runs.create(attemptId,request.identity()));}
+  @org.springframework.beans.factory.annotation.Autowired
+  public RoutineController(CurrentSliceRunService runs, RoutineCaptureIngestionService captures, RoutineCurationService curation, BehaviorGraphService graphs, SourceRunOrchestrationService sourceOrchestration) { this.runs=runs;this.captures=captures;this.curation=curation;this.graphs=graphs;this.sourceOrchestration=sourceOrchestration; }
+  /** Compatibility constructor for controller tests that predate SC-810 run binding. */
+  public RoutineController(CurrentSliceRunService runs, RoutineCaptureIngestionService captures, RoutineCurationService curation, BehaviorGraphService graphs) { this(runs, captures, curation, graphs, null); }
+  @PostMapping("/runs/from-stabilization/{attemptId}") public ResponseEntity<Object> createRun(@PathVariable String attemptId,@RequestBody RoutineApiDtos.StartRunRequest request){
+    CurrentSliceIdentity identity = request == null ? null : request.identity();
+    if (sourceOrchestration != null && identity != null && identity.client() != null
+        && "MICRO6_MANAGED".equals(identity.client().clientKind())
+        && identity.run() != null && identity.run().runId() != null) {
+      // The remote manifest fetch/verify happens with no transaction active inside the
+      // orchestration service; manifest, run, binding and SOURCE_BOUND then commit atomically.
+      return ResponseEntity.ok(sourceOrchestration.createSourceBoundRun(attemptId, identity));
+    }
+    return ResponseEntity.ok(runs.create(attemptId,identity));
+  }
   @PostMapping({"/runs/runelite", "/runs/from-runelite-capture"}) public ResponseEntity<Object> createRuneLiteRun(@RequestHeader(value="Authorization",required=false) String authorization,@RequestBody RoutineApiDtos.StartRunRequest request){authorize(authorization);return ResponseEntity.ok(runs.createRunelite(request.identity()));}
   @GetMapping("/runs/{runId}") public ResponseEntity<Object> getRun(@PathVariable String runId){return ResponseEntity.ok(runs.get(runId));}
   @PostMapping("/capture/sessions") public ResponseEntity<Object> start(@RequestHeader(value="Authorization",required=false) String authorization,@RequestHeader(value="Idempotency-Key",required=false) String key,@RequestBody RoutineApiDtos.CaptureSessionRequest request){authorize(authorization);Map<String,Object> body=captures.start(request,key);return accepted(String.valueOf(body.get("session_id")),body);}
@@ -51,5 +68,6 @@ public class RoutineController {
         .body(body);
   }
   @ExceptionHandler(RoutineCaptureIngestionService.RoutineCaptureException.class) public ResponseEntity<Object> captureError(RoutineCaptureIngestionService.RoutineCaptureException e){return ResponseEntity.status(e.status()).body(Map.of("code",e.code(),"message",e.getMessage()));}
+  @ExceptionHandler(SourceManifestException.class) public ResponseEntity<Object> sourceError(SourceManifestException e){return ResponseEntity.status(e.status()).body(Map.of("schema","source-error/v1","code",e.code().name(),"message","source request failed"));}
   @ExceptionHandler(Exception.class) public ResponseEntity<Object> error(Exception e){return ResponseEntity.unprocessableEntity().body(Map.of("code","IDENTITY_MISMATCH","message",e.getMessage()));}
 }

@@ -54,7 +54,18 @@ public record CurrentSliceIdentity(
   @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Source(
       @JsonProperty("source_snapshot_id") String sourceSnapshotId,
-      @JsonProperty("source_manifest_hash") String sourceManifestHash) {}
+      @JsonProperty("source_manifest_hash") String sourceManifestHash,
+      @JsonProperty("repository_id") String repositoryId,
+      @JsonProperty("commit_id") String commitId,
+      @JsonProperty("tree_id") String treeId,
+      @JsonProperty("build_id") String buildId,
+      @JsonProperty("artifact_digest") String artifactDigest,
+      @JsonProperty("signature_verified") Boolean signatureVerified) {
+    /** Compatibility constructor for pre-SC-810 identities. */
+    public Source(String sourceSnapshotId, String sourceManifestHash) {
+      this(sourceSnapshotId, sourceManifestHash, null, null, null, null, null, null);
+    }
+  }
   @JsonInclude(JsonInclude.Include.NON_NULL)
   public record Graph(
       @JsonProperty("graph_id") String graphId,
@@ -91,7 +102,18 @@ public record CurrentSliceIdentity(
       exact(client.adapterContract(), "runelite-capture/v1", "client.adapter_contract"); exact(client.domain(), "RUNELITE", "client.domain");
     } else fail(CurrentSliceFailureCode.CLIENT_CAPABILITY_INVALID, "unsupported client_kind");
     if (capture != null) { required(capture.sessionId(), "capture.session_id"); required(capture.recordingId(), "capture.recording_id"); hash(capture.recordingHash(), "capture.recording_hash"); }
-    if (source != null) { if (!matches(SNAPSHOT, source.sourceSnapshotId())) fail(CurrentSliceFailureCode.HASH_FORMAT_INVALID, "invalid source_snapshot_id"); hash(source.sourceManifestHash(), "source.source_manifest_hash"); }
+    if (source != null) {
+      if (!matches(SNAPSHOT, source.sourceSnapshotId())) fail(CurrentSliceFailureCode.HASH_FORMAT_INVALID, "invalid source_snapshot_id");
+      hash(source.sourceManifestHash(), "source.source_manifest_hash");
+      if (source.repositoryId() != null || source.commitId() != null || source.treeId() != null
+          || source.buildId() != null || source.artifactDigest() != null) {
+        required(source.repositoryId(), "source.repository_id");
+        required(source.commitId(), "source.commit_id");
+        required(source.treeId(), "source.tree_id");
+        required(source.buildId(), "source.build_id");
+        hash(source.artifactDigest(), "source.artifact_digest");
+      }
+    }
     if (graph != null) { if (!matches(GRAPH, graph.graphId())) fail(CurrentSliceFailureCode.HASH_FORMAT_INVALID, "invalid graph_id"); hash(graph.graphHash(), "graph.graph_hash"); }
     if (model != null) { if (!matches(MODEL, model.modelId())) fail(CurrentSliceFailureCode.HASH_FORMAT_INVALID, "invalid model_id"); hash(model.modelHash(), "model.model_hash"); }
     if (candidate != null) { if (!matches(CANDIDATE, candidate.candidateId())) fail(CurrentSliceFailureCode.HASH_FORMAT_INVALID, "invalid candidate_id"); hash(candidate.candidateHash(), "candidate.candidate_hash"); hash(candidate.certificationHash(), "candidate.certification_hash"); required(candidate.signature(), "candidate.signature"); try { Base64.getDecoder().decode(candidate.signature()); } catch (IllegalArgumentException e) { fail(CurrentSliceFailureCode.HASH_FORMAT_INVALID, "candidate.signature is not base64"); } }
@@ -111,7 +133,7 @@ public record CurrentSliceIdentity(
         || !sameIfPresent(run, downstream.run)
         || !Objects.equals(client, downstream.client)
         || !sameIfPresent(capture, downstream.capture)
-        || !sameIfPresent(source, downstream.source)
+        || !sameSourceIfPresent(source, downstream.source)
         || !sameIfPresent(graph, downstream.graph)
         || !sameIfPresent(model, downstream.model)
         || !sameIfPresent(candidate, downstream.candidate)) {
@@ -120,6 +142,24 @@ public record CurrentSliceIdentity(
   }
 
   private static boolean sameIfPresent(Object upstream, Object downstream) {
+    return upstream == null || Objects.equals(upstream, downstream);
+  }
+  /** Source provenance may be progressively enriched after a run is created, but never changed. */
+  private static boolean sameSourceIfPresent(Source upstream, Source downstream) {
+    if (upstream == null) return true;
+    if (downstream == null) return false;
+    return sameField(upstream.sourceSnapshotId(), downstream.sourceSnapshotId())
+        && sameField(upstream.sourceManifestHash(), downstream.sourceManifestHash())
+        && sameField(upstream.repositoryId(), downstream.repositoryId())
+        && sameField(upstream.commitId(), downstream.commitId())
+        && sameField(upstream.treeId(), downstream.treeId())
+        && sameField(upstream.buildId(), downstream.buildId())
+        && sameField(upstream.artifactDigest(), downstream.artifactDigest())
+        && (upstream.signatureVerified() == null
+            || Objects.equals(upstream.signatureVerified(), downstream.signatureVerified()));
+  }
+
+  private static boolean sameField(String upstream, String downstream) {
     return upstream == null || Objects.equals(upstream, downstream);
   }
   private static boolean matches(Pattern pattern, String value) { return value != null && pattern.matcher(value).matches(); }

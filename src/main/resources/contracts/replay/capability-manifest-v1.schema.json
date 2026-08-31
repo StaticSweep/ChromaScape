@@ -58,6 +58,21 @@
     "openRuneAvailable": {
       "type": "boolean",
       "const": false
+    },
+    "certifiable": {
+      "type": "boolean"
+    },
+    "fidelity": {
+      "type": "string",
+      "enum": ["SYNTHETIC_CONTRACT", "XRSPS_AUTHORITATIVE"]
+    },
+    "supportedActions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "viewerTraceSchema": {
+      "type": "string",
+      "const": "xrsps-replay-trace/v1"
     }
   },
   "required": [
@@ -70,6 +85,10 @@
     "projectionVersions",
     "hashVersions",
     "xrsps",
-    "openRuneAvailable"
+    "openRuneAvailable",
+    "certifiable",
+    "fidelity",
+    "supportedActions",
+    "viewerTraceSchema"
   ]
 }

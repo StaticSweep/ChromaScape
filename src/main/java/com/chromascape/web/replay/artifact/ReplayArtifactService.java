@@ -162,6 +162,11 @@ public class ReplayArtifactService {
 
     /** Returns the finalized content bytes for an artifact reference. */
     public byte[] readFinalized(ArtifactRef ref) {
+        if (ref == null || !ArtifactRef.STATE_FINALIZED.equals(ref.getState())) {
+            throw ReplayException.conflict(
+                    ReplayErrorCode.TRACE_NOT_AVAILABLE,
+                    "The requested replay artifact has not been finalized");
+        }
         String hex = ref.getChecksum().startsWith(HASH_PREFIX)
                 ? ref.getChecksum().substring(HASH_PREFIX.length()) : ref.getChecksum();
         Path root = Path.of(properties.getArtifacts().getRoot());
@@ -173,6 +178,26 @@ public class ReplayArtifactService {
                     org.springframework.http.HttpStatus.NOT_FOUND, false,
                     "Artifact content is unavailable", null, null, e);
         }
+    }
+
+    /** Reads a finalized artifact and verifies its content address on every access. */
+    public byte[] readVerified(ArtifactRef ref) {
+        byte[] content = readFinalized(ref);
+        String actual = checksum(content);
+        if (!actual.equals(ref.getChecksum())) {
+            throw new ReplayException(
+                    ReplayErrorCode.TRACE_CORRUPT,
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    false,
+                    "Replay artifact content failed checksum verification",
+                    "Regenerate the replay trace; the stored evidence is corrupt");
+        }
+        return content;
+    }
+
+    /** Returns the content address used by artifact references. */
+    public String checksum(byte[] content) {
+        return HASH_PREFIX + sha256Hex(content);
     }
 
     private static String sha256Hex(byte[] content) {

@@ -1496,6 +1496,7 @@ public class BuilderGoalRunnerService {
 
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
     Map<String, Object> recoveryMetadata = readRecoveryMetadata(taskMetadata);
+    Map<String, Object> repairIncident = readRepairIncident(taskMetadata);
     Map<String, Object> workspace = readRecoveryWorkspace(taskMetadata);
     String phase = stringValue(recoveryMetadata.get("phase"));
 
@@ -1548,6 +1549,8 @@ public class BuilderGoalRunnerService {
     response.put("recoveryState", stringValue(readRecoveryMetadata(taskMetadata).get("phase")));
     response.put("analysisAvailable", run.get("analysisAvailable"));
     response.put("approvalAvailable", run.get("approvalAvailable"));
+    response.put("repairIncident", repairIncident);
+    response.put("repairPatchExportAvailable", run.get("repairPatchExportAvailable"));
     return response;
   }
 
@@ -1692,6 +1695,7 @@ public class BuilderGoalRunnerService {
     Map<String, Object> run = toRunSummary(iteration);
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
     Map<String, Object> recoveryMetadata = readRecoveryMetadata(taskMetadata);
+    Map<String, Object> repairIncident = readRepairIncident(taskMetadata);
     Map<String, Object> workspace = readRecoveryWorkspace(taskMetadata);
     String phase = stringValue(recoveryMetadata.get("phase"));
 
@@ -1716,6 +1720,8 @@ public class BuilderGoalRunnerService {
     }
     response.put("analysisAvailable", run.get("analysisAvailable"));
     response.put("approvalAvailable", run.get("approvalAvailable"));
+    response.put("repairIncident", repairIncident);
+    response.put("repairPatchExportAvailable", run.get("repairPatchExportAvailable"));
     return response;
   }
 
@@ -4125,6 +4131,7 @@ public class BuilderGoalRunnerService {
     Map<String, Object> targetPreparationMetadata = readTargetPreparationMetadata(taskMetadata);
     Map<String, Object> publishMetadata = readPublishMetadata(taskMetadata);
     Map<String, Object> recoveryMetadata = readRecoveryMetadata(taskMetadata);
+    Map<String, Object> repairIncident = readRepairIncident(taskMetadata);
     AnalysisInputMetadata analysisInputMetadata = readAnalysisInputMetadata(taskMetadata);
     String publishStatus = stringValue(publishMetadata.get("status"));
     boolean taskStartedObserved = Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"));
@@ -4148,14 +4155,16 @@ public class BuilderGoalRunnerService {
             && !"PUBLISH_FAILED".equalsIgnoreCase(publishStatus);
     boolean approvalAvailable =
         !cancelled
+            && repairIncident.isEmpty()
             && approvalRequired
             && analysisAvailable
             && patchDraftAvailable
             && RECOVERY_PATCH_PLAN_READY.equals(stringValue(recoveryMetadata.get("phase")));
-    boolean canAnalyze =
-        !cancelled
-            && iteration.getStatus() == PatchLoopStatus.FAILED
-            && !"PUBLISH_FAILED".equalsIgnoreCase(publishStatus);
+    boolean canAnalyze = determineAnalyzeBlockedReason(iteration, publishStatus) == null;
+    boolean repairPatchExportAvailable =
+        !repairIncident.isEmpty()
+            && patchDraftAvailable
+            && RECOVERY_PATCH_PLAN_READY.equals(stringValue(recoveryMetadata.get("phase")));
     boolean canFixAndRelaunch = approvalAvailable;
     boolean configAvailable = hasStoredConfig(iteration);
     String rerunBlockedReason = determineRerunBlockedReason(iteration);
@@ -4389,6 +4398,8 @@ public class BuilderGoalRunnerService {
     response.put("recoveryPhase", stringValue(recoveryMetadata.get("phase")));
     response.put("recoveryMessage", stringValueAllowBlank(recoveryMetadata.get("message")));
     response.put("recoveryUpdatedAt", stringValue(recoveryMetadata.get("updated_at")));
+    response.put("repairIncident", repairIncident);
+    response.put("repairPatchExportAvailable", repairPatchExportAvailable);
     response.put(
         "lastSuccessfulPollAt", stringValue(publishMetadata.get("last_successful_poll_at")));
     response.put("lastPollAt", stringValue(publishMetadata.get("last_poll_at")));
@@ -4419,7 +4430,8 @@ public class BuilderGoalRunnerService {
         || "CANCELLED".equalsIgnoreCase(publishStatus)) {
       return "Run was cancelled";
     }
-    if (iteration.getStatus() != PatchLoopStatus.FAILED) {
+    boolean repairIncidentOpen = !readRepairIncident(readTaskMetadata(iteration)).isEmpty();
+    if (iteration.getStatus() != PatchLoopStatus.FAILED && !repairIncidentOpen) {
       return "Run must fail before it can be analyzed";
     }
     if ("PUBLISH_FAILED".equalsIgnoreCase(publishStatus)) {
@@ -5514,6 +5526,18 @@ public class BuilderGoalRunnerService {
       return Map.of();
     }
     Object value = taskMetadata.get("recovery");
+    if (value instanceof Map<?, ?> mapValue) {
+      return new LinkedHashMap<>((Map<String, Object>) mapValue);
+    }
+    return Map.of();
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> readRepairIncident(Map<String, Object> taskMetadata) {
+    if (taskMetadata == null) {
+      return Map.of();
+    }
+    Object value = taskMetadata.get("repair_incident");
     if (value instanceof Map<?, ?> mapValue) {
       return new LinkedHashMap<>((Map<String, Object>) mapValue);
     }

@@ -74,6 +74,10 @@ public class CuratedAction {
 
         public CuratedActionId() {}
 
+        public void setCurationId(UUID curationId) { this.curationId = curationId; }
+        public void setTick(long tick) { this.tick = tick; }
+        public void setSequence(int sequence) { this.sequence = sequence; }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;

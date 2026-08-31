@@ -1,8 +1,10 @@
 package com.chromascape.web.debug.tickdebugger.service;
 
+import com.chromascape.web.debug.buildergoal.service.BuilderGoalRepairIncidentService;
 import com.chromascape.web.debug.tickdebugger.dto.TickBatchMessage;
 import com.chromascape.web.debug.tickdebugger.dto.TickBatchMessage.TickLogEntry;
 import com.chromascape.web.debug.tickdebugger.dto.TickBatchMessage.TickOverlayEntry;
+import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.TickLog;
 import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickOverlay;
@@ -27,6 +29,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,6 +61,13 @@ public class TickStreamIngestionService {
   private final LeeuwBotConfig leeuwBotConfig;
   private final HttpClient httpClient;
 
+  /** Optional for lightweight legacy/unit construction; present in the application context. */
+  @Autowired(required = false)
+  private ReplayRecordingActionIngestionService actionIngestionService;
+
+  @Autowired(required = false)
+  private BuilderGoalRepairIncidentService repairIncidentService;
+
   private final List<WebSocketSession> debuggerClients = new ArrayList<>();
 
   public TickStreamIngestionService(
@@ -69,6 +79,31 @@ public class TickStreamIngestionService {
       ObjectMapper objectMapper,
       @Autowired(required = false) LeeuwBotBridgeService leeuwBotBridgeService,
       @Autowired(required = false) LeeuwBotConfig leeuwBotConfig) {
+    this(
+        sessionService,
+        snapshotRepository,
+        logRepository,
+        overlayRepository,
+        markerRepository,
+        objectMapper,
+        leeuwBotBridgeService,
+        leeuwBotConfig,
+        null);
+  }
+
+  /** Constructor used by the application and by focused ingestion tests. */
+  @Autowired
+  public TickStreamIngestionService(
+      DebugSessionService sessionService,
+      TickSnapshotRepository snapshotRepository,
+      TickLogRepository logRepository,
+      TickOverlayRepository overlayRepository,
+      TimelineMarkerRepository markerRepository,
+      ObjectMapper objectMapper,
+      @Autowired(required = false) LeeuwBotBridgeService leeuwBotBridgeService,
+      @Autowired(required = false) LeeuwBotConfig leeuwBotConfig,
+      @Autowired(required = false)
+          ReplayRecordingActionIngestionService actionIngestionService) {
     this.sessionService = sessionService;
     this.snapshotRepository = snapshotRepository;
     this.logRepository = logRepository;
@@ -78,6 +113,7 @@ public class TickStreamIngestionService {
     this.leeuwBotBridgeService = leeuwBotBridgeService;
     this.leeuwBotConfig = leeuwBotConfig;
     this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(5000)).build();
+    this.actionIngestionService = actionIngestionService;
   }
 
   /**
@@ -93,17 +129,34 @@ public class TickStreamIngestionService {
   public void processTickBatch(TickBatchMessage batch) {
     try {
       Map<String, Object> normalizedPs = normalizePlayerState(batch.getPlayerState());
+      if (batch.getMicrobotStatus() != null) {
+        normalizedPs.put("microbotStatus", batch.getMicrobotStatus());
+      }
+      if (batch.getActiveTaskKey() != null) {
+        normalizedPs.put("activeTaskKey", batch.getActiveTaskKey());
+      }
+      if (batch.getActivePluginClasses() != null) {
+        normalizedPs.put("activePluginClasses", batch.getActivePluginClasses());
+      }
       batch.setPlayerState(normalizedPs);
       validateStrictV2(batch);
       String sessionId = batch.getSessionId();
 
       // Verify session exists
-      if (sessionService.getSession(sessionId).isEmpty()) {
+      Optional<DebugSession> session = sessionService.getSession(sessionId);
+      if (session.isEmpty()) {
         log.warn(
             "Received tick batch for unknown session: {}. Active sessions: {}",
             sessionId,
             sessionService.getActiveSessions().size());
         return;
+      }
+
+      // Persist typed actions before any derived replay artifact is built. The ingestion service
+      // performs ownership, schema, checksum, duplicate, and conflict validation. Legacy logs are
+      // still persisted below and are intentionally not used as a replacement for this stream.
+      if (actionIngestionService != null && batch.getActions() != null && !batch.getActions().isEmpty()) {
+        actionIngestionService.ingest(batch, session.get().getRecordingId());
       }
 
       long tick = batch.getTick();
@@ -116,6 +169,10 @@ public class TickStreamIngestionService {
 
       // 2. Save tick snapshot
       saveTickSnapshot(batch, timestamp);
+
+      if (repairIncidentService != null) {
+        repairIncidentService.observe(batch);
+      }
 
       // 3. Save tick logs and collect errors for markers
       List<TickLogEntry> logs = batch.getLogs();

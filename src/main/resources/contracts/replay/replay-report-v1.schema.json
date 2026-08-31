@@ -14,6 +14,20 @@
       "enum": ["OBSERVED_PLAYBACK", "POLICY_REPLAY", "CAUSAL_SIMULATION"]
     },
     "manifestChecksum": { "type": "string" },
+    "manifestVersion": { "type": "integer", "minimum": 1 },
+    "fidelity": {
+      "type": "string",
+      "enum": ["SYNTHETIC_CONTRACT", "XRSPS_AUTHORITATIVE"]
+    },
+    "conversionQuality": {
+      "type": "string",
+      "enum": ["CERTIFIED", "BEST_EFFORT", "UNSUPPORTED"]
+    },
+    "actionCoveragePct": { "type": "number", "minimum": 0, "maximum": 100 },
+    "gapCount": { "type": "integer", "minimum": 0 },
+    "approximationCount": { "type": "integer", "minimum": 0 },
+    "viewerTraceChecksum": { "type": "string" },
+    "viewerTraceFrameCount": { "type": "integer", "minimum": 0 },
     "runtimeIdentity": {
       "type": "object",
       "additionalProperties": false,
@@ -44,6 +58,9 @@
       },
       "required": ["hard", "soft", "info"]
     },
+    "mismatchHardCount": { "type": "integer", "minimum": 0 },
+    "mismatchSoftCount": { "type": "integer", "minimum": 0 },
+    "mismatchInfoCount": { "type": "integer", "minimum": 0 },
     "finalStateHash": { "type": "string" },
     "finalChainHash": { "type": "string" },
     "artifactRefs": {

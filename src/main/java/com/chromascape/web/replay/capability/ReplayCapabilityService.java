@@ -46,6 +46,21 @@ public class ReplayCapabilityService {
         return m != null && m.modes() != null && m.modes().causalSimulation();
     }
 
+    /** True only when the worker explicitly identifies an authoritative certifiable runtime. */
+    public boolean isAuthoritativeCertifiable() {
+        CapabilityManifest m = currentManifest;
+        return isSimulationAvailable()
+                && m.certifiable()
+                && "XRSPS_AUTHORITATIVE".equals(m.fidelity());
+    }
+
+    /** Returns whether the current worker declares support for a semantic action. */
+    public boolean supportsAction(String actionType) {
+        return actionType != null
+                && currentManifest != null
+                && currentManifest.supportedActions().contains(actionType);
+    }
+
     /** Updates the current manifest from a successful handshake. */
     public void updateFromHandshake(CapabilityManifest manifest) {
         this.currentManifest = manifest;
@@ -90,13 +105,17 @@ public class ReplayCapabilityService {
         return new CapabilityManifest(
                 1,
                 false,
-                new CapabilityManifest.CapabilityModes(true, true, false),
-                java.util.List.of(1),
+                new CapabilityManifest.CapabilityModes(true, false, false),
+                java.util.List.of(1, 2),
                 java.util.List.of(1),
                 java.util.List.of(1),
                 java.util.List.of(1),
                 java.util.List.of("sha256-canonical-json-v1"),
                 new CapabilityManifest.XrspsIdentity("", "", "", ""),
-                false);
+                false,
+                false,
+                "SYNTHETIC_CONTRACT",
+                java.util.List.of(),
+                null);
     }
 }

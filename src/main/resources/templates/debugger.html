@@ -978,6 +978,7 @@
 
           <!-- Patch plan generation + review -->
           <div class="recovery-section recovery-patchplan">
+            <div id="recoveryRepairIncident" class="alert alert-warning py-2 px-3 mb-2" hidden></div>
             <div class="recovery-section-header">
               <h6 class="mb-0"><i class="bi bi-lightbulb me-1"></i>Patch Plan</h6>
               <div class="d-flex gap-2">
@@ -986,6 +987,9 @@
                 </button>
                 <button type="button" class="btn btn-sm btn-success" id="recoveryApproveBtn" disabled>
                   <i class="bi bi-play-fill me-1"></i>Approve Patch + Relaunch
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-success" id="recoveryExportPatchBtn" disabled>
+                  <i class="bi bi-file-earmark-diff me-1"></i>Export Patch
                 </button>
               </div>
             </div>
@@ -1046,10 +1050,10 @@
               <div class="table-responsive">
                 <table class="table table-dark table-hover table-sm mb-2">
                   <thead>
-                    <tr><th></th><th>Recording ID</th><th>Account</th><th>Start</th></tr>
+                    <tr><th>Action</th><th>Recording ID</th><th>Account</th><th>Script</th><th>Status</th></tr>
                   </thead>
                   <tbody id="replay-recording-list">
-                    <tr><td colspan="4" class="text-center">Loading…</td></tr>
+                    <tr><td colspan="5" class="text-center">Loading…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1065,6 +1069,7 @@
             <div class="col-lg-6"><div id="replay-events-panel"></div></div>
             <div class="col-lg-6"><div id="replay-report-panel"></div></div>
           </div>
+          <div id="replay-mismatch-panel"></div>
         </div>
         <div class="fishing-shadow-panel glass-panel">
           <h5><i class="bi bi-fishing me-2"></i>Fishing Shadow Agent</h5>
@@ -1242,7 +1247,7 @@
     <pre data-ai-routine-output aria-live="polite"></pre>
   </section>
   <script src="/js/debugger.js?v=16"></script>
-  <script src="/js/replay-debugger.js?v=2"></script>
+  <script src="/js/replay-debugger.js?v=3"></script>
   <script src="/js/ai-routine-state.js?v=1"></script>
   <script src="/js/ai-routine.js?v=3"></script>
   <script src="/js/patchloop.js?v=2"></script>

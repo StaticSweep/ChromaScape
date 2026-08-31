@@ -195,11 +195,17 @@ if (-not (Wait-ForDbReady -DbHost $DbHost -Port $DbPort -TimeoutSec $DbReadyTime
 Write-Step "Database preflight passed: $DbHost`:$DbPort is reachable."
 
 Write-Step "Stopping stale ChromaScape/bootRun processes..."
+$escapedProjectDir = [regex]::Escape($ProjectDir)
 $targets = Get-CimInstance Win32_Process |
   Where-Object {
     $_.CommandLine -and
-    $_.CommandLine -like "*ChromaScape*" -and
-    ($_.Name -match "java|cmd|gradle")
+    $_.CommandLine -match $escapedProjectDir -and
+    (
+      ($_.Name -match "^java(?:\.exe)?$" -and
+        $_.CommandLine -match "bootRun|ChromaScapeApplication|GradleDaemon") -or
+      ($_.Name -match "^(?:cmd|gradle)(?:\.exe)?$" -and
+        $_.CommandLine -match "gradlew(?:\.bat)?[^\r\n]*bootRun")
+    )
   }
 
 foreach ($proc in $targets) {

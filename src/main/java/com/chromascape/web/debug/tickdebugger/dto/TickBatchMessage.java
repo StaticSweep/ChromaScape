@@ -82,6 +82,18 @@ public class TickBatchMessage {
   /** Widget state subset. */
   private List<Map<String, Object>> widgets;
 
+  /** Optional Microbot runtime status for repair incident detection. */
+  private String microbotStatus;
+
+  /** Optional canonical Account Builder task key. */
+  private String activeTaskKey;
+
+  /** Optional active Microbot plugin class names. */
+  private List<String> activePluginClasses;
+
+  /** Typed semantic actions captured at client dispatch boundaries. */
+  private List<RecordingAction> actions;
+
   @JsonCreator
   public TickBatchMessage(
       @JsonProperty("type") String type,
@@ -104,7 +116,11 @@ public class TickBatchMessage {
       @JsonProperty("groundObjects") List<Map<String, Object>> groundObjects,
       @JsonProperty("groundItems") List<Map<String, Object>> groundItems,
       @JsonProperty("players") List<Map<String, Object>> players,
-      @JsonProperty("widgets") List<Map<String, Object>> widgets) {
+      @JsonProperty("widgets") List<Map<String, Object>> widgets,
+      @JsonProperty("microbotStatus") String microbotStatus,
+      @JsonProperty("activeTaskKey") String activeTaskKey,
+      @JsonProperty("activePluginClasses") List<String> activePluginClasses,
+      @JsonProperty("actions") List<RecordingAction> actions) {
     this.type = type;
     this.schemaVersion = schemaVersion;
     this.sessionId = sessionId;
@@ -126,6 +142,10 @@ public class TickBatchMessage {
     this.groundItems = groundItems;
     this.players = players;
     this.widgets = widgets;
+    this.microbotStatus = microbotStatus;
+    this.activeTaskKey = activeTaskKey;
+    this.activePluginClasses = activePluginClasses;
+    this.actions = actions != null ? actions : new ArrayList<>();
   }
 
   /** Default constructor for programmatic construction. */
@@ -151,6 +171,8 @@ public class TickBatchMessage {
     this.groundItems = new ArrayList<>();
     this.players = new ArrayList<>();
     this.widgets = new ArrayList<>();
+    this.actions = new ArrayList<>();
+    this.activePluginClasses = new ArrayList<>();
   }
 
   public String getType() {
@@ -199,6 +221,38 @@ public class TickBatchMessage {
 
   public void setPlayerState(Map<String, Object> playerState) {
     this.playerState = playerState;
+  }
+
+  public String getMicrobotStatus() {
+    return microbotStatus;
+  }
+
+  public void setMicrobotStatus(String microbotStatus) {
+    this.microbotStatus = microbotStatus;
+  }
+
+  public String getActiveTaskKey() {
+    return activeTaskKey;
+  }
+
+  public void setActiveTaskKey(String activeTaskKey) {
+    this.activeTaskKey = activeTaskKey;
+  }
+
+  public List<String> getActivePluginClasses() {
+    return activePluginClasses;
+  }
+
+  public void setActivePluginClasses(List<String> activePluginClasses) {
+    this.activePluginClasses = activePluginClasses;
+  }
+
+  public List<RecordingAction> getActions() {
+    return actions;
+  }
+
+  public void setActions(List<RecordingAction> actions) {
+    this.actions = actions;
   }
 
   public List<Map<String, Object>> getInventory() {

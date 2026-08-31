@@ -52,6 +52,13 @@ public enum ReplayErrorCode {
     CACHE_REVISION_UNAVAILABLE,
     CONTENT_REVISION_UNAVAILABLE,
 
+    // Read-only trace viewer
+    TRACE_NOT_AVAILABLE,
+    TRACE_CORRUPT,
+    VIEWER_UNAVAILABLE,
+    VIEWER_TOKEN_INVALID,
+    VIEWER_TOKEN_EXPIRED,
+
     // Integrity
     CHECKSUM_MISMATCH,
 

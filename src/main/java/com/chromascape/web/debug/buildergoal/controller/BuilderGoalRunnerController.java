@@ -1,6 +1,7 @@
 package com.chromascape.web.debug.buildergoal.controller;
 
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlService;
+import com.chromascape.web.debug.buildergoal.service.BuilderGoalRepairPatchExportService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalSensitiveTextSanitizer;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalStartException;
@@ -12,7 +13,11 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +37,9 @@ public class BuilderGoalRunnerController {
   private final BuilderGoalLauncherControlService launcherControlService;
   private final Micro6OnlineClientRegistryService clientRegistryService;
   private final ObjectMapper objectMapper;
+
+  @Autowired
+  private BuilderGoalRepairPatchExportService repairPatchExportService;
 
   public BuilderGoalRunnerController(
       BuilderGoalRunnerService builderGoalRunnerService,
@@ -542,6 +550,34 @@ public class BuilderGoalRunnerController {
                   "Failed to approve builder goal recovery",
                   "details",
                   sanitizeFailure(e)));
+    }
+  }
+
+  @PostMapping("/runs/{iterationId}/export-repair-patch")
+  public ResponseEntity<Object> exportRepairPatch(@PathVariable String iterationId) {
+    try {
+      return ResponseEntity.ok(repairPatchExportService.export(iterationId));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("error", sanitizeMessage(e.getMessage())));
+    } catch (IllegalStateException e) {
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(Map.of("error", sanitizeMessage(e.getMessage())));
+    } catch (Exception e) {
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body(Map.of("error", "Failed to export repair patch", "details", sanitizeFailure(e)));
+    }
+  }
+
+  @GetMapping("/repair-patches/{artifactId}")
+  public ResponseEntity<Resource> downloadRepairPatch(@PathVariable String artifactId) {
+    try {
+      Resource patch = repairPatchExportService.load(artifactId);
+      return ResponseEntity.ok()
+          .contentType(MediaType.parseMediaType("text/x-diff"))
+          .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"repair.patch\"")
+          .body(patch);
+    } catch (IllegalArgumentException | java.io.IOException e) {
+      return ResponseEntity.notFound().build();
     }
   }
 

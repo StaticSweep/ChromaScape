@@ -32,6 +32,30 @@ public class ReplayReport {
     @Column(name = "manifest_checksum", nullable = false)
     private String manifestChecksum;
 
+    @Column(name = "manifest_version", nullable = false)
+    private int manifestVersion = 1;
+
+    @Column(nullable = false, length = 32)
+    private String fidelity = "SYNTHETIC_CONTRACT";
+
+    @Column(name = "conversion_quality", nullable = false, length = 32)
+    private String conversionQuality = "BEST_EFFORT";
+
+    @Column(name = "action_coverage_pct", nullable = false)
+    private double actionCoveragePct;
+
+    @Column(name = "gap_count", nullable = false)
+    private int gapCount;
+
+    @Column(name = "approximation_count", nullable = false)
+    private int approximationCount;
+
+    @Column(name = "viewer_trace_checksum", length = 71)
+    private String viewerTraceChecksum;
+
+    @Column(name = "viewer_trace_frame_count")
+    private Long viewerTraceFrameCount;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ReplayOutcome outcome;
@@ -105,6 +129,22 @@ public class ReplayReport {
     public void setMode(ReplayMode v) { this.mode = v; }
     public String getManifestChecksum() { return manifestChecksum; }
     public void setManifestChecksum(String v) { this.manifestChecksum = v; }
+    public int getManifestVersion() { return manifestVersion; }
+    public void setManifestVersion(int v) { this.manifestVersion = v; }
+    public String getFidelity() { return fidelity; }
+    public void setFidelity(String v) { this.fidelity = v; }
+    public String getConversionQuality() { return conversionQuality; }
+    public void setConversionQuality(String v) { this.conversionQuality = v; }
+    public double getActionCoveragePct() { return actionCoveragePct; }
+    public void setActionCoveragePct(double v) { this.actionCoveragePct = v; }
+    public int getGapCount() { return gapCount; }
+    public void setGapCount(int v) { this.gapCount = v; }
+    public int getApproximationCount() { return approximationCount; }
+    public void setApproximationCount(int v) { this.approximationCount = v; }
+    public String getViewerTraceChecksum() { return viewerTraceChecksum; }
+    public void setViewerTraceChecksum(String v) { this.viewerTraceChecksum = v; }
+    public Long getViewerTraceFrameCount() { return viewerTraceFrameCount; }
+    public void setViewerTraceFrameCount(Long v) { this.viewerTraceFrameCount = v; }
     public ReplayOutcome getOutcome() { return outcome; }
     public void setOutcome(ReplayOutcome v) { this.outcome = v; }
     public int getExecutedActionCount() { return executedActionCount; }

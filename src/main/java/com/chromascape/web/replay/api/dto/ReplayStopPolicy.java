@@ -4,5 +4,7 @@ package com.chromascape.web.replay.api.dto;
 public enum ReplayStopPolicy {
     STOP_ON_FIRST_HARD,
     COLLECT_UNTIL_CHECKPOINT,
-    COLLECT_ALL
+    COLLECT_ALL,
+    /** Execute every action and collect comparison results without an early stop. */
+    RUN_TO_END
 }

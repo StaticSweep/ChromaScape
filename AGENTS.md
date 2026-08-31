@@ -1,5 +1,11 @@
 # Instructions
 
+## Pathing
+
+- Always use Windows pathing for projects located on Windows drives. Use paths such as
+  `C:\Dev\IdeaProjects\ChromaScape`, never WSL equivalents such as
+  `/mnt/c/Dev/IdeaProjects/ChromaScape`, including when calling Felix MCP or any other tool.
+
 ## ChromaScape Operations
 
 - When asked how to restart ChromaScape, use `docs/CHROMASCAPE_RESTART_RUNBOOK.md` as the source of truth.

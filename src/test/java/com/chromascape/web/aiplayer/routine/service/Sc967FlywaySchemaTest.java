@@ -63,14 +63,17 @@ class Sc967FlywaySchemaTest {
     org.flywaydb.core.api.output.MigrateResult result = new Flyway(configuration).migrate();
 
     // V1_1 (baseline), V4 (legacy durability), and V6 (final outbox/evidence) are the SC-967
-    // owners. V1_1-V5 remain immutable; the assertions below prove the additive V6 path.
+    // owners. V1_1-V5 remain immutable; V16 adds the SC-810 source provenance boundary.
     assertTrue(migratedToV6(result), "SC-967 schema must migrate through V6");
+    assertTrue(migratedToV16(result), "SC-810 schema must migrate through V16");
 
     Set<String> expectedTables = Set.of(
         "current_slice_runs", "routine_capture_records", "routine_curations",
         "behavior_graph_definitions", "routine_assistant_conversations", "routine_assistant_events",
         "routine_assistant_proposals", "routine_models", "routine_replay_traces",
-        "patch_candidate_runs", "routine_capture_operations", "routine_capture_external_bindings");
+        "patch_candidate_runs", "routine_capture_operations", "routine_capture_external_bindings",
+        "source_manifest_references", "source_run_bindings", "source_content_objects",
+        "source_read_audit_events");
     Set<String> present = tables();
     assertTrue(present.containsAll(expectedTables),
         "missing SC-967 tables; present=" + present + " expected=" + expectedTables);
@@ -105,6 +108,18 @@ class Sc967FlywaySchemaTest {
         "missing external binding lookup index");
     assertTrue(indexExists("patch_candidate_runs", "idx_patch_candidate_registration_claim"),
         "missing candidate registration lease index");
+    Map<String, String> sourceIndexes = Map.of(
+        "uk_source_manifest_references_manifest_hash", "source_manifest_references",
+        "uk_source_manifest_references_snapshot_id", "source_manifest_references",
+        "uk_source_run_bindings_run_id", "source_run_bindings",
+        "uk_source_run_bindings_recording_id", "source_run_bindings",
+        "uk_source_content_objects_content_hash", "source_content_objects",
+        "idx_source_read_audit_run_created", "source_read_audit_events",
+        "idx_source_read_audit_snapshot_created", "source_read_audit_events");
+    for (Map.Entry<String, String> index : sourceIndexes.entrySet()) {
+      assertTrue(indexExists(index.getValue(), index.getKey()),
+          "missing SC-810 index " + index.getKey());
+    }
 
     // V4 durability columns exist for the capture outbox / assistant generation lease.
     assertTrue(columnExists("routine_capture_records", "version"), "capture version column missing");
@@ -129,6 +144,8 @@ class Sc967FlywaySchemaTest {
     assertTrue(columnExists("routine_capture_operations", "next_attempt_at"), "capture operation recovery time missing");
     assertTrue(columnExists("routine_capture_external_bindings", "correlation_id"), "external correlation binding missing");
     assertTrue(columnExists("routine_capture_external_bindings", "completion_attempted"), "external completion binding missing");
+    assertTrue(columnExists("source_run_bindings", "environment"), "source environment binding missing");
+    assertTrue(columnExists("source_read_audit_events", "content_hash"), "source content audit hash missing");
   }
 
   @Test
@@ -195,6 +212,15 @@ class Sc967FlywaySchemaTest {
   private boolean migratedToV6(org.flywaydb.core.api.output.MigrateResult result) {
     for (org.flywaydb.core.api.output.MigrateOutput output : result.migrations) {
       if ("6".equals(output.version == null ? "" : output.version)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean migratedToV16(org.flywaydb.core.api.output.MigrateResult result) {
+    for (org.flywaydb.core.api.output.MigrateOutput output : result.migrations) {
+      if ("16".equals(output.version == null ? "" : output.version)) {
         return true;
       }
     }

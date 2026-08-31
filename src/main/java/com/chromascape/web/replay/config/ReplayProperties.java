@@ -20,6 +20,7 @@ public class ReplayProperties {
     @Valid private final Xrsps xrsps = new Xrsps();
     @Valid private final Worker worker = new Worker();
     @Valid private final Artifacts artifacts = new Artifacts();
+    @Valid private final Viewer viewer = new Viewer();
 
     public boolean isEnabled() {
         return enabled;
@@ -39,6 +40,10 @@ public class ReplayProperties {
 
     public Artifacts getArtifacts() {
         return artifacts;
+    }
+
+    public Viewer getViewer() {
+        return viewer;
     }
 
     /** xRSPS kernel process configuration. Never exposed to the browser. */
@@ -283,6 +288,50 @@ public class ReplayProperties {
 
         public void setRetainFailedStagingHours(int retainFailedStagingHours) {
             this.retainFailedStagingHours = retainFailedStagingHours;
+        }
+    }
+
+    /** Read-only xRSPS WebGL viewer configuration. Secrets never come from a request. */
+    public static class Viewer {
+
+        private boolean enabled;
+
+        @NotBlank private String origin = "http://127.0.0.1:3000";
+
+        private String signingSecret;
+
+        @Positive private long tokenTtlSeconds = 300;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getOrigin() {
+            return origin;
+        }
+
+        public void setOrigin(String origin) {
+            this.origin = origin;
+        }
+
+        public String getSigningSecret() {
+            return signingSecret;
+        }
+
+        public void setSigningSecret(String signingSecret) {
+            this.signingSecret = signingSecret;
+        }
+
+        public long getTokenTtlSeconds() {
+            return tokenTtlSeconds;
+        }
+
+        public void setTokenTtlSeconds(long tokenTtlSeconds) {
+            this.tokenTtlSeconds = tokenTtlSeconds;
         }
     }
 }

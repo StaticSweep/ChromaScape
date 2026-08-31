@@ -125,7 +125,7 @@ public class MismatchEngine {
         return switch (stopPolicy) {
             case STOP_ON_FIRST_HARD -> level == MismatchLevel.HARD;
             case COLLECT_UNTIL_CHECKPOINT -> level == MismatchLevel.HARD;
-            case COLLECT_ALL -> false;
+            case COLLECT_ALL, RUN_TO_END -> false;
         };
     }
 

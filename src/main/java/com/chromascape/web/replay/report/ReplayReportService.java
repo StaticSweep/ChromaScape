@@ -7,6 +7,7 @@ import com.chromascape.web.replay.projection.CanonicalProjectionService;
 import com.chromascape.web.replay.report.entity.ReplayReport;
 import com.chromascape.web.replay.report.repository.ReplayReportRepository;
 import com.chromascape.web.replay.run.entity.ReplayAttempt;
+import com.chromascape.web.replay.run.entity.ReplayMismatch;
 import com.chromascape.web.replay.run.entity.ReplayRun;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -65,9 +66,11 @@ public class ReplayReportService {
         long soft = mismatchEngine.countByLevel(run.getId(), MismatchLevel.SOFT);
         long info = mismatchEngine.countByLevel(run.getId(), MismatchLevel.INFO);
 
+        Instant terminalAt = run.getTerminalAt() != null
+                ? java.sql.Timestamp.valueOf(run.getTerminalAt()).toInstant() : Instant.now();
         ObjectNode doc = buildReportDocument(run, attempt, outcome, terminalReasonCode,
                 executedActionCount, checkpointCount, hard, soft, info,
-                finalStateHash, finalChainHash, artifactChecksums);
+                finalStateHash, finalChainHash, artifactChecksums, startedAt, terminalAt);
 
         String canonical;
         try {
@@ -77,12 +80,22 @@ public class ReplayReportService {
         }
         // Fail closed: never persist an unhashed checksum.
         String checksum = "sha256:" + sha256Hex(canonical.getBytes(StandardCharsets.UTF_8));
+        doc.put("reportChecksum", checksum);
+        canonical = projectionService.canonicalJson(doc);
 
         ReplayReport report = new ReplayReport();
         report.setRunId(run.getId());
         report.setAttemptId(attempt != null ? attempt.getId() : null);
         report.setMode(run.getMode());
         report.setManifestChecksum(run.getManifestChecksum());
+        report.setManifestVersion(run.getManifestVersion());
+        report.setFidelity(run.getFidelity());
+        report.setConversionQuality(run.getConversionQuality());
+        report.setActionCoveragePct(run.getActionCoveragePct());
+        report.setGapCount(run.getGapCount());
+        report.setApproximationCount(run.getApproximationCount());
+        report.setViewerTraceChecksum(run.getViewerTraceChecksum());
+        report.setViewerTraceFrameCount(run.getViewerTraceFrameCount());
         report.setOutcome(outcome);
         report.setExecutedActionCount(executedActionCount);
         report.setCheckpointCount(checkpointCount);
@@ -100,8 +113,7 @@ public class ReplayReportService {
         report.setReportChecksum(checksum);
         report.setControlAllowed(false);
         report.setStartedAt(startedAt);
-        report.setTerminalAt(run.getTerminalAt() != null
-                ? java.sql.Timestamp.valueOf(run.getTerminalAt()).toInstant() : Instant.now());
+        report.setTerminalAt(terminalAt);
         report.setFinalizedAt(Instant.now());
         return reportRepository.save(report);
     }
@@ -111,9 +123,11 @@ public class ReplayReportService {
                                            int executedActionCount, int checkpointCount,
                                            long hard, long soft, long info,
                                            String finalStateHash, String finalChainHash,
-                                           List<String> artifactChecksums) {
+                                           List<String> artifactChecksums,
+                                           Instant startedAt, Instant terminalAt) {
         ObjectNode doc = mapper.createObjectNode();
         doc.put("reportVersion", 1);
+        doc.put("manifestVersion", run.getManifestVersion());
         doc.put("runId", run.getId().toString());
         if (attempt != null) {
             doc.put("attemptId", attempt.getId().toString());
@@ -122,6 +136,11 @@ public class ReplayReportService {
         }
         doc.put("mode", run.getMode().name());
         doc.put("manifestChecksum", run.getManifestChecksum());
+        doc.put("fidelity", run.getFidelity());
+        doc.put("conversionQuality", run.getConversionQuality());
+        doc.put("actionCoveragePct", run.getActionCoveragePct());
+        doc.put("gapCount", run.getGapCount());
+        doc.put("approximationCount", run.getApproximationCount());
         doc.put("outcome", outcome.name());
         if (terminalReasonCode != null) {
             doc.put("terminalReason", terminalReasonCode);
@@ -131,23 +150,72 @@ public class ReplayReportService {
         doc.put("mismatchHardCount", hard);
         doc.put("mismatchSoftCount", soft);
         doc.put("mismatchInfoCount", info);
+        ObjectNode totals = doc.putObject("mismatchTotals");
+        totals.put("hard", hard);
+        totals.put("soft", soft);
+        totals.put("info", info);
+        ReplayMismatch firstHard = mismatchEngine.getMismatches(run.getId()).stream()
+                .filter(mismatch -> mismatch.getLevel() == MismatchLevel.HARD)
+                .findFirst()
+                .orElse(null);
+        if (firstHard != null) {
+            doc.set("firstHardMismatch", mismatchNode(firstHard));
+        }
         if (finalStateHash != null) {
             doc.put("finalStateHash", finalStateHash);
         }
         if (finalChainHash != null) {
             doc.put("finalChainHash", finalChainHash);
         }
-        ArrayNode artifacts = doc.putArray("artifactChecksums");
+        if (run.getViewerTraceChecksum() != null) {
+            doc.put("viewerTraceChecksum", run.getViewerTraceChecksum());
+        }
+        if (run.getViewerTraceFrameCount() != null) {
+            doc.put("viewerTraceFrameCount", run.getViewerTraceFrameCount());
+        }
+        ArrayNode artifacts = doc.putArray("artifactRefs");
         if (artifactChecksums != null) {
             artifactChecksums.forEach(artifacts::add);
         }
-        ObjectNode runtime = doc.putObject("runtime");
+        ObjectNode runtime = doc.putObject("runtimeIdentity");
         runtime.put("xrspsAdapterVersion", run.getXrspsAdapterVersion());
         runtime.put("xrspsBuildCommit", run.getXrspsBuildCommit());
         runtime.put("cacheRevision", run.getCacheRevision());
         runtime.put("contentRevision", run.getContentRevision());
+        if (startedAt != null) doc.put("startedAt", startedAt.toString());
+        if (terminalAt != null) doc.put("terminalAt", terminalAt.toString());
         doc.put("controlAllowed", false);
         return doc;
+    }
+
+    private ObjectNode mismatchNode(ReplayMismatch mismatch) {
+        ObjectNode node = mapper.createObjectNode();
+        node.put("mismatchVersion", 1);
+        node.put("level", mismatch.getLevel().name());
+        node.put("ruleId", mismatch.getRuleId());
+        if (mismatch.getFirstTick() != null) node.put("firstTick", mismatch.getFirstTick());
+        if (mismatch.getTickSequence() != null) node.put("sequence", mismatch.getTickSequence());
+        node.put("domain", mismatch.getDomain());
+        if (mismatch.getJsonPointer() != null) node.put("jsonPointer", mismatch.getJsonPointer());
+        node.set("expected", parseValue(mismatch.getExpectedValue()));
+        node.set("actual", parseValue(mismatch.getActualValue()));
+        if (mismatch.getRelatedActionOrdinal() != null) {
+            node.put("relatedActionOrdinal", mismatch.getRelatedActionOrdinal());
+        }
+        if (mismatch.getCheckpointId() != null) node.put("checkpointId", mismatch.getCheckpointId().toString());
+        if (mismatch.getCausalParentId() != null) node.put("causalParentId", mismatch.getCausalParentId().toString());
+        if (mismatch.getCascadeCount() != null) node.put("cascadeCount", mismatch.getCascadeCount());
+        return node;
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode parseValue(String value) {
+        if (value == null) return mapper.nullNode();
+        try {
+            com.fasterxml.jackson.databind.JsonNode parsed = mapper.readTree(value);
+            return parsed == null ? mapper.nullNode() : parsed;
+        } catch (Exception ignored) {
+            return mapper.getNodeFactory().textNode(value);
+        }
     }
 
     @Transactional(readOnly = true)

@@ -423,6 +423,8 @@ class AccountTaskPlanner {
     this.recoveryRefreshEvidenceBtn = document.getElementById('recoveryRefreshEvidenceBtn');
     this.recoveryGeneratePatchBtn = document.getElementById('recoveryGeneratePatchBtn');
     this.recoveryApproveBtn = document.getElementById('recoveryApproveBtn');
+    this.recoveryExportPatchBtn = document.getElementById('recoveryExportPatchBtn');
+    this.recoveryRepairIncident = document.getElementById('recoveryRepairIncident');
     this.recoveryPrompt = document.getElementById('recoveryPrompt');
     this.recoveryContext = document.getElementById('recoveryContext');
     this.recoveryPatchPlanReview = document.getElementById('recoveryPatchPlanReview');
@@ -796,6 +798,9 @@ class AccountTaskPlanner {
     }
     if (this.recoveryApproveBtn) {
       this.recoveryApproveBtn.addEventListener('click', () => this.approveRecoveryRelaunch());
+    }
+    if (this.recoveryExportPatchBtn) {
+      this.recoveryExportPatchBtn.addEventListener('click', () => this.exportRecoveryPatch());
     }
     if (this.recoveryEvidenceGroups) {
       this.recoveryEvidenceGroups.addEventListener('change', (event) => {
@@ -2087,6 +2092,10 @@ class AccountTaskPlanner {
       const recoveryLine = recoveryParts.length
         ? `<div class="small text-muted mt-1"><i class="bi bi-tools me-1"></i>${this.escapeHtml(recoveryParts.join(' • '))}</div>`
         : '';
+      const incident = run.repairIncident || null;
+      const incidentLine = incident
+        ? `<div class="small text-warning mt-1"><i class="bi bi-exclamation-triangle me-1"></i>${this.escapeHtml(`${incident.type || 'INCIDENT'} • ${incident.reason || 'Review required'}`)}</div>`
+        : '';
       const revisionLine = run.micro6RevisionId
         ? `<div class="small text-muted mt-1"><i class="bi bi-git me-1"></i>${this.escapeHtml(run.micro6RevisionId)}</div>`
         : '';
@@ -2128,6 +2137,7 @@ class AccountTaskPlanner {
           ${stopSendErrorLine}
           ${diagnosisLine}
           ${recoveryLine}
+          ${incidentLine}
           ${revisionLine}
           ${analysisUsageLine}
           <div class="plan-card-meta">
@@ -4862,6 +4872,7 @@ class AccountTaskPlanner {
     this.showRecoveryWorkspaceShell(iterationId, { phase: 'loading' });
     this.setRecoveryGenerateState(true, 'Loading...');
     this.setRecoveryApproveState(true);
+    this.setRecoveryExportState(true);
 
     // Bind the Codex session; a bind failure is reported in the status strip but does
     // not block manual prompt/evidence review.
@@ -4880,6 +4891,7 @@ class AccountTaskPlanner {
         throw new Error(result.error || `HTTP ${response.status}`);
       }
       this.recoveryDraft = result;
+      this.renderRepairIncident(result.repairIncident || result.run?.repairIncident);
       // Seed patch loop immediately so inputs are pre-filled during replay load.
       const patchLoopSeedResult = this.seedPatchLoopFromRecoveryWorkspace(result);
       this.recoveryPatchLoopSeedError = patchLoopSeedResult.seeded ? '' : (patchLoopSeedResult.reason || '');
@@ -4916,6 +4928,7 @@ class AccountTaskPlanner {
           '<div class="text-muted fst-italic">No patch plan generated yet. Describe the issue, select evidence, then Generate Patch Plan.</div>';
       }
       this.setRecoveryApproveState(!Boolean(result.approvalAvailable));
+      this.setRecoveryExportState(!Boolean(result.repairPatchExportAvailable));
       this.setRecoveryGenerateState(Boolean(result.canAnalyze) === false, 'Generate Patch Plan');
       this.startRecoveryPolling();
       this.showRecoveryWorkspaceShell(iterationId, {
@@ -5681,8 +5694,13 @@ class AccountTaskPlanner {
         throw new Error(result.error || `HTTP ${response.status}`);
       }
       await this.loadBuilderGoalRuns();
-      this.renderRecoveryPatchPlan(result, result.patchId ? 'Patch plan generated. Approve Patch + Relaunch is now available.' : 'Patch planning completed, but no patch draft was produced.', result.patchId ? 'success' : 'warning');
-      this.setRecoveryApproveState(!Boolean(result.patchId));
+      const repairIncident = result.repairIncident || this.recoveryDraft?.repairIncident;
+      const generatedMessage = repairIncident
+        ? 'Patch plan generated. Review it, then export a patch file.'
+        : 'Patch plan generated. Approve Patch + Relaunch is now available.';
+      this.renderRecoveryPatchPlan(result, result.patchId ? generatedMessage : 'Patch planning completed, but no patch draft was produced.', result.patchId ? 'success' : 'warning');
+      this.setRecoveryApproveState(!Boolean(result.patchId) || Boolean(repairIncident));
+      this.setRecoveryExportState(!(Boolean(result.patchId) && Boolean(repairIncident)));
     } catch (error) {
       console.error('Failed to generate recovery patch plan:', error);
       this.renderRecoveryPatchPlan(null, `Failed to generate a patch plan: ${error.message}`, 'danger');
@@ -5727,6 +5745,52 @@ class AccountTaskPlanner {
       alert('Failed to approve recovery relaunch: ' + error.message);
       this.setRecoveryApproveState(false);
     }
+  }
+
+  async exportRecoveryPatch() {
+    if (!this.recoveryIterationId) return;
+    this.setRecoveryExportState(true, 'Exporting...');
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(this.recoveryIterationId)}/export-repair-patch`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+      const link = result.downloadUrl
+        ? `<div class="mt-2"><a class="btn btn-sm btn-outline-success" href="${this.escapeAttr(result.downloadUrl)}"><i class="bi bi-download me-1"></i>Download ${this.escapeHtml(result.filename || 'repair.patch')}</a></div>`
+        : '';
+      this.renderRecoveryPatchPlan(
+        null,
+        `Patch exported safely (${result.filesChanged || 0} files, ${result.linesChanged || 0} changed lines). The active Micro6 worktree was not modified.`,
+        'success'
+      );
+      if (this.recoveryPatchPlanReview) {
+        this.recoveryPatchPlanReview.innerHTML += link;
+      }
+      await this.loadBuilderGoalRuns();
+      this.setRecoveryExportState(false, 'Export Again');
+    } catch (error) {
+      console.error('Failed to export recovery patch:', error);
+      this.renderRecoveryPatchPlan(null, `Failed to export the repair patch: ${error.message}`, 'danger');
+      this.setRecoveryExportState(false);
+    }
+  }
+
+  renderRepairIncident(incident) {
+    if (!this.recoveryRepairIncident) return;
+    if (!incident) {
+      this.recoveryRepairIncident.hidden = true;
+      this.recoveryRepairIncident.textContent = '';
+      return;
+    }
+    const details = [incident.type, incident.reason];
+    if (Number(incident.stagnant_seconds) > 0) {
+      details.push(`${incident.stagnant_seconds}s without progress`);
+    }
+    this.recoveryRepairIncident.textContent = details.filter(Boolean).join(' • ');
+    this.recoveryRepairIncident.hidden = false;
   }
 
   showRecoveryRelaunchPanel(result) {
@@ -5816,6 +5880,8 @@ class AccountTaskPlanner {
         }
       }
       this.setRecoveryApproveState(!state.approvalAvailable);
+      this.renderRepairIncident(state.repairIncident || state.run?.repairIncident);
+      this.setRecoveryExportState(!Boolean(state.repairPatchExportAvailable));
     } catch (error) {
       console.debug('Recovery state poll failed:', error);
     }
@@ -5833,6 +5899,12 @@ class AccountTaskPlanner {
     if (label) {
       this.recoveryApproveBtn.innerHTML = `<i class="bi bi-play-fill me-1"></i>${this.escapeHtml(label)}`;
     }
+  }
+
+  setRecoveryExportState(disabled, label = 'Export Patch') {
+    if (!this.recoveryExportPatchBtn) return;
+    this.recoveryExportPatchBtn.disabled = Boolean(disabled);
+    this.recoveryExportPatchBtn.innerHTML = `<i class="bi bi-file-earmark-diff me-1"></i>${this.escapeHtml(label)}`;
   }
 
   async loadStabilizationKpis() {
