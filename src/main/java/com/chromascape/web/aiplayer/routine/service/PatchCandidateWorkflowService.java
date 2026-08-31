@@ -252,6 +252,13 @@ public class PatchCandidateWorkflowService {
       throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_INCOMPLETE", "identity through graph and model is required before proposal creation");
     }
     Micro6SourceManifestClient.SourceBinding resolved = source.resolveFishingSource();
+    if (!resolved.clientBuildId().equals(candidateIdentity.client().clientBuildId())) {
+      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_BUILD_MISMATCH",
+          "candidate identity client build differs from the authoritative source manifest");
+    }
+    candidateIdentity = withCandidateSource(
+        candidateIdentity, resolved.sourceSnapshotId(), resolved.sourceManifestHash());
+    identities.validate(candidateIdentity);
     String requestedBase = text(request, "base_commit");
     if (requestedBase != null && !requestedBase.equals(resolved.clientBuildId())) {
       throw error(HttpStatus.UNPROCESSABLE_ENTITY, "BASE_COMMIT_MISMATCH", "requested base commit differs from embedded Micro6 build identity");
@@ -310,6 +317,15 @@ public class PatchCandidateWorkflowService {
     entity.setState("PATCH_PROPOSED");
     repository.save(entity);
     return response(entity);
+  }
+
+  /** Binds candidate provenance to the authoritative patch source without changing prior groups. */
+  static CurrentSliceIdentity withCandidateSource(CurrentSliceIdentity identity,
+      String sourceSnapshotId, String sourceManifestHash) {
+    return new CurrentSliceIdentity(
+        identity.schema(), identity.task(), identity.run(), identity.client(), identity.capture(),
+        new CurrentSliceIdentity.Source(sourceSnapshotId, sourceManifestHash),
+        identity.graph(), identity.model(), null, false);
   }
 
   @Transactional

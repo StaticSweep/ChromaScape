@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
 import com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorProperties;
 import com.chromascape.web.aiplayer.routine.config.Sc967CandidateProperties;
 import com.chromascape.web.aiplayer.routine.repository.PatchCandidateRunRepository;
@@ -32,6 +33,42 @@ import org.junit.jupiter.api.io.TempDir;
  * {@link Sc967CandidateProperties}, so {@code SC967_CANDIDATE_BUILDS_ENABLED=true} is honored.
  */
 class PatchCandidateWorkflowServiceTest {
+
+  @Test
+  void candidateSourceBindingReplacesOnlyTheAuthoritativeSourceGroup() {
+    String hash = "sha256:" + "a".repeat(64);
+    CurrentSliceIdentity.Task task = new CurrentSliceIdentity.Task(
+        "FISHING_TRAINING", hash, "profile", hash, hash);
+    CurrentSliceIdentity.Run run = new CurrentSliceIdentity.Run(
+        "run_1", "attempt_1", 1, "executor_1");
+    CurrentSliceIdentity.Capture capture = new CurrentSliceIdentity.Capture(
+        "session_1", "recording_1", hash);
+    CurrentSliceIdentity.Graph graph = new CurrentSliceIdentity.Graph(
+        "graph_aaaaaaaaaaaaaaaaaaaaaaaa", hash);
+    CurrentSliceIdentity.Model model = new CurrentSliceIdentity.Model(
+        "model_aaaaaaaaaaaaaaaaaaaaaaaa", hash);
+    CurrentSliceIdentity identity = new CurrentSliceIdentity(
+        "current-slice-identity/v1", task, run,
+        new CurrentSliceIdentity.Client("client", "MICRO6_MANAGED", "build", hash,
+            "micro6-builder/v2", "MICRO6"),
+        capture, new CurrentSliceIdentity.Source("srcsnap_aaaaaaaaaaaaaaaaaaaaaaaa", hash),
+        graph, model, null, false);
+
+    CurrentSliceIdentity rebound = PatchCandidateWorkflowService.withCandidateSource(
+        identity, "srcsnap_bbbbbbbbbbbbbbbbbbbbbbbb", "sha256:" + "b".repeat(64));
+
+    rebound.validate();
+    assertEquals(new CurrentSliceIdentity.Source(
+        "srcsnap_bbbbbbbbbbbbbbbbbbbbbbbb", "sha256:" + "b".repeat(64)), rebound.source());
+    assertEquals(task, rebound.task());
+    assertEquals(run, rebound.run());
+    assertEquals(identity.client(), rebound.client());
+    assertEquals(capture, rebound.capture());
+    assertEquals(graph, rebound.graph());
+    assertEquals(model, rebound.model());
+    assertEquals(null, rebound.candidate());
+    assertEquals(false, rebound.controlAllowed());
+  }
 
   @Test
   void canonicalCandidatePatchRetainsExactUnifiedDiffContext() throws Exception {
