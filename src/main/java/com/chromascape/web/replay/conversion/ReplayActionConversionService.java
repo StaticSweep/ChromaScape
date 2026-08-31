@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -89,8 +90,12 @@ public class ReplayActionConversionService {
     List<TickSnapshot> snapshots =
         snapshotRepository.findBySessionIdAndTickBetweenOrderByTick(
             sessionId, startTick, endTick);
+    List<TickLog> logs =
+        logRepository.findBySessionIdAndTickBetweenOrderByTickAsc(
+            sessionId, startTick, endTick);
 
-    boolean completeTypedStream = isCompleteTypedStream(typed, sessionId, startTick, endTick);
+    boolean completeTypedStream =
+        isCompleteTypedStream(typed, logs, sessionId, startTick, endTick);
     if (mode != ConversionMode.LEGACY_BEST_EFFORT && !typed.isEmpty()) {
       return capturedResult(sessionId, startTick, endTick, mode, typed, completeTypedStream);
     }
@@ -119,9 +124,6 @@ public class ReplayActionConversionService {
           0.0);
     }
 
-    List<TickLog> logs =
-        logRepository.findBySessionIdAndTickBetweenOrderByTickAsc(
-            sessionId, startTick, endTick);
     return legacyResult(sessionId, startTick, endTick, mode, logs, snapshots, typed.size());
   }
 
@@ -197,7 +199,11 @@ public class ReplayActionConversionService {
    * or operator are useful evidence, but cannot upgrade a manifest to CERTIFIED.
    */
   private static boolean isCompleteTypedStream(
-      List<ReplayRecordingAction> typed, String sessionId, long startTick, long endTick) {
+      List<ReplayRecordingAction> typed,
+      List<TickLog> logs,
+      String sessionId,
+      long startTick,
+      long endTick) {
     if (typed == null || typed.isEmpty()) {
       return false;
     }
@@ -216,7 +222,70 @@ public class ReplayActionConversionService {
         return false;
       }
     }
-    return true;
+
+    // A typed row by itself cannot prove that the client captured every dispatch. Micro6 emits a
+    // legacy PLAYER_ACTION/MENU_CLICK diagnostic for the same dispatch, carrying the source tick
+    // and sequence. Require a one-to-one key match and the same inferred semantic type; otherwise
+    // a recording containing one typed action plus an untyped/unsupported menu click would be
+    // incorrectly promoted to CERTIFIED.
+    Map<ActionKey, TickLog> legacyByKey = new HashMap<>();
+    if (logs == null || logs.isEmpty()) {
+      return false;
+    }
+    for (TickLog log : logs) {
+      if (log == null) {
+        continue;
+      }
+      String subsystem = log.getSubsystem() == null ? "" : log.getSubsystem().trim();
+      String event = log.getEventType() == null ? "" : log.getEventType().trim();
+      if (!"PLAYER_ACTION".equalsIgnoreCase(subsystem)
+          || !"MENU_CLICK".equalsIgnoreCase(event)) {
+        if ("PLAYER_ACTION".equalsIgnoreCase(subsystem)
+            && "ACTION_QUEUE_OVERFLOW".equalsIgnoreCase(event)) {
+          return false;
+        }
+        continue;
+      }
+      Map<String, Object> details = jsonMap(log.getDetails());
+      long sourceTick = number(details.get("sourceTick"), log.getTick() == null ? -1 : log.getTick());
+      int sequence = intValue(details.get("sequence"), -1);
+      if (sourceTick < startTick || sourceTick > endTick || sequence < 0) {
+        return false;
+      }
+      ActionKey key = new ActionKey(sourceTick, sequence);
+      if (legacyByKey.putIfAbsent(key, log) != null) {
+        return false;
+      }
+      if (actionType("MENU_CLICK", "PLAYER_ACTION", details) == null) {
+        return false;
+      }
+    }
+    if (legacyByKey.isEmpty()) {
+      return false;
+    }
+
+    Set<ActionKey> typedKeys = new HashSet<>();
+    for (ReplayRecordingAction action : typed) {
+      if ("WAIT_UNTIL_TICK".equals(action.getActionType())) {
+        continue;
+      }
+      ActionKey key = new ActionKey(action.getTick(), action.getSequence());
+      if (!typedKeys.add(key) || !legacyByKey.containsKey(key)) {
+        return false;
+      }
+      Map<String, Object> details = jsonMap(legacyByKey.get(key).getDetails());
+      String inferredType = actionType("MENU_CLICK", "PLAYER_ACTION", details);
+      if (!action.getActionType().equals(inferredType)) {
+        return false;
+      }
+      String legacyOption = text(details, "option", "optionText", "action");
+      String typedOption = text(jsonMap(action.getArgumentsJson()), "option");
+      if (legacyOption != null && typedOption != null
+          && !normalizeOption(legacyOption).equals(normalizeOption(typedOption))) {
+        return false;
+      }
+    }
+    return typedKeys.size() == legacyByKey.size();
   }
 
   private ReplayActionConversionResult legacyResult(
@@ -673,6 +742,16 @@ public class ReplayActionConversionService {
     return timestamp == null ? FIXED_CAPTURED_AT : timestamp.toInstant(ZoneOffset.UTC).toString();
   }
 
+  private static String normalizeOption(String value) {
+    return value == null
+        ? ""
+        : value.replaceAll("(?i)<[^>]+>", "")
+            .replace('\u00a0', ' ')
+            .trim()
+            .replaceAll("\\s+", " ")
+            .toLowerCase(Locale.ROOT);
+  }
+
   private static String legacyGapCode(TickLog log) {
     if (log.getEventType() == null) return "LEGACY_EVENT_TYPE_MISSING";
     if (log.getDetails() == null || !log.getDetails().isObject()) return "LEGACY_DETAILS_MISSING";
@@ -699,6 +778,8 @@ public class ReplayActionConversionService {
   }
 
   private record Position(int x, int y, int plane) {}
+
+  private record ActionKey(long tick, int sequence) {}
 
   private record LegacyCandidate(RecordingAction action, int requestedSequence, String reason) {}
 }
