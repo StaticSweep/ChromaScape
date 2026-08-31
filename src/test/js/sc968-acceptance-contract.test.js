@@ -74,6 +74,17 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
   assert.match(isolatedPatchWorker,
     /List\.of\("git", "clone", "--no-checkout", "--config", "core\.longpaths=true", "--no-hardlinks"/);
   assert.match(isolatedPatchWorker, /ISOLATED_CHECKOUT_FAILED/);
+  assert.match(isolatedPatchWorker, /resolveSibling\("contracts"\)\.resolve\("java"\)/);
+  assert.match(isolatedPatchWorker, /CAPTURE_CONTRACTS_NOT_FOUND/);
+  assert.match(isolatedPatchWorker,
+    /"-PaiRoutineCaptureContractsDir=" \+ captureContracts/);
+  assert.match(isolatedPatchWorker,
+    /":client:compileJava", ":client:sc967CandidateCheckstyleMain"/);
+  assert.match(isolatedPatchWorker,
+    /":client:sc967CandidateCheckstyleTest"/);
+  assert.match(isolatedPatchWorker, /":client:sc967CandidateTest"/);
+  assert.match(isolatedPatchWorker, /"diff", "--check"/);
+  assert.doesNotMatch(isolatedPatchWorker, /:runelite-client:/);
   assert.match(isolatedPatchWorker, /DosFileAttributeView/);
   assert.match(isolatedPatchWorker, /dos\.setReadOnly\(false\)/);
   assert.match(runtime, /\$workerTemp = Join-Path \$OutputRoot '\.worker-temp'/);

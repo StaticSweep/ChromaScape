@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,7 @@ import com.chromascape.web.aiplayer.routine.config.Sc967CandidateProperties;
 import com.chromascape.web.aiplayer.routine.repository.PatchCandidateRunRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyFactory;
@@ -30,6 +32,50 @@ import org.junit.jupiter.api.io.TempDir;
  * {@link Sc967CandidateProperties}, so {@code SC967_CANDIDATE_BUILDS_ENABLED=true} is honored.
  */
 class PatchCandidateWorkflowServiceTest {
+
+  @Test
+  void canonicalCandidatePatchRetainsExactUnifiedDiffContext() throws Exception {
+    Field patchField = PatchCandidateWorkflowService.class.getDeclaredField("PATCH");
+    patchField.setAccessible(true);
+    String patch = (String) patchField.get(null);
+
+    assertTrue(patch.contains("@@ -93,8 +93,11 @@ public class FishingExecutionTask"
+        + " extends AccountBuilderTask implements Configur\n"
+        + "     }\n"
+        + "\n"
+        + "     private Fish getFishType(String fishName) {\n"));
+    assertTrue(patch.contains("\n         // Convert fish name to Fish enum - simple mapping\n"));
+    assertTrue(patch.contains("@@ -120,8 +123,7 @@ public class FishingExecutionTask"
+        + " extends AccountBuilderTask implements Configur\n"
+        + "             case \"raw shark\":\n"
+        + "                 return Fish.SHARK;\n"
+        + "             default:\n"));
+    assertTrue(patch.contains("+                throw new UnsupportedFishTypeException(fishName);\n"
+        + "         }\n"
+        + "     }\n"
+        + "\n"
+        + "diff --git a/runelite-client/src/main/java/net/runelite/client/plugins/microbot/accountbuilder/"));
+    assertTrue(patch.contains("@@ -0,0 +1,38 @@\n"
+        + "+package net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing;"));
+  }
+
+  @Test
+  void canonicalCandidatePatchAppliesToConfiguredMicro6Checkout() throws Exception {
+    String checkout = System.getenv("SC968_MICRO6_VERIFY_ROOT");
+    assumeTrue(checkout != null && !checkout.isBlank(),
+        "SC968_MICRO6_VERIFY_ROOT enables the native patch applicability check");
+    Field patchField = PatchCandidateWorkflowService.class.getDeclaredField("PATCH");
+    patchField.setAccessible(true);
+    Path patchFile = Files.createTempFile("sc967-canonical-candidate-", ".patch");
+    Files.writeString(patchFile, (String) patchField.get(null), StandardCharsets.UTF_8);
+    Process process = new ProcessBuilder(
+        "git", "-C", Path.of(checkout).toAbsolutePath().normalize().toString(),
+        "apply", "--check", patchFile.toString())
+        .redirectErrorStream(true)
+        .start();
+    String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    assertEquals(0, process.waitFor(), output);
+  }
 
   private AiRoutineOperatorProperties operator(String token, String id) {
     AiRoutineOperatorProperties props = new AiRoutineOperatorProperties();

@@ -58,6 +58,8 @@ public class IsolatedPatchWorker {
       Path patch = temp.resolve("candidate.patch");
       Path source = request.micro6Root().toAbsolutePath().normalize();
       if (!Files.isDirectory(source)) throw new IOException("ISOLATED_SOURCE_NOT_FOUND");
+      Path captureContracts = source.resolveSibling("contracts").resolve("java").normalize();
+      if (!Files.isDirectory(captureContracts)) throw new IOException("CAPTURE_CONTRACTS_NOT_FOUND");
       String commonGitDirectory = capture(List.of("git", "-C", source.toString(), "rev-parse",
           "--path-format=absolute", "--git-common-dir"), temp).trim();
       Path repository = commonGitDirectory.isBlank() ? null : Path.of(commonGitDirectory).toAbsolutePath().normalize();
@@ -79,6 +81,7 @@ public class IsolatedPatchWorker {
       Files.writeString(patch, request.unifiedDiff(), StandardCharsets.UTF_8);
       runCommand(List.of("git", "-C", repo.toString(), "apply", "--check", patch.toString()), temp, "PATCH_CHECK_FAILED");
       runCommand(List.of("git", "-C", repo.toString(), "apply", patch.toString()), temp, "PATCH_APPLY_FAILED");
+      runCommand(List.of("git", "-C", repo.toString(), "diff", "--check"), temp, "PATCH_WHITESPACE_FAILED");
 
       changed = changedFiles(repo);
       Set<String> allowlist = request.allowlistedPaths() == null ? Set.of() : request.allowlistedPaths();
@@ -91,8 +94,10 @@ public class IsolatedPatchWorker {
       List<String> gradle = new ArrayList<>();
       gradle.add(isWindows() ? "gradlew.bat" : "./gradlew");
       gradle.addAll(List.of("--offline", "--no-daemon", "--no-watch-fs", "--max-workers=1",
-          ":runelite-client:compileJava", ":runelite-client:checkstyleMain", ":runelite-client:checkstyleTest",
-          ":runelite-client:test", ":runelite-client:shadowJar", ":runelite-client:generateRuntimeSbom"));
+          "-PaiRoutineCaptureContractsDir=" + captureContracts,
+          ":client:compileJava", ":client:sc967CandidateCheckstyleMain",
+          ":client:sc967CandidateCheckstyleTest", ":client:sc967CandidateTest",
+          ":client:shadowJar", ":client:generateRuntimeSbom"));
       runCommand(gradle, repo, "BUILD_FAILED", Map.of("GRADLE_USER_HOME", gradleHome.toString()));
 
       Path jar = findExpectedShadowJar(repo, request.expectedJarName());
