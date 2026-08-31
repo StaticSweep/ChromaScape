@@ -321,6 +321,17 @@ try {
   [Environment]::SetEnvironmentVariable('CHROMASCAPE_LOG_LEVEL',(EnvOr 'SC968_LOG_LEVEL' 'INFO'),'Process')
   [Environment]::SetEnvironmentVariable('MCP_AUTO_START',(EnvOr 'SC968_MCP_AUTO_START' 'false'),'Process')
   [Environment]::SetEnvironmentVariable('SPRING_DATASOURCE_URL',(EnvOr 'SC968_DATASOURCE_URL' "jdbc:postgresql://localhost:5433/${databaseName}?sslmode=disable"),'Process')
+  # Developer-launched Micro6 clients commonly own the default executor/recorder ports (8098/8123).
+  # The acceptance must never resolve candidate source provenance from one of those unrelated
+  # processes: doing so mixes client build identities and correctly fails proposal creation. Give
+  # every acceptance-owned Micro6 phase isolated ports and point both ChromaScape consumers at the
+  # same isolated executor. The phases are sequential, so they can safely reuse these two ports.
+  $acceptanceExecutorBind = EnvOr 'SC968_MICRO6_EXECUTOR_BIND_ADDR' '127.0.0.1:18098'
+  $acceptanceExecutorUrl = EnvOr 'SC968_MICRO6_EXECUTOR_BASE_URL' ("http://" + $acceptanceExecutorBind)
+  [Environment]::SetEnvironmentVariable('MICRO6_EXECUTOR_BIND_ADDR',$acceptanceExecutorBind,'Process')
+  [Environment]::SetEnvironmentVariable('MICRO6_RECORDER_BIND_ADDR',(EnvOr 'SC968_MICRO6_RECORDER_BIND_ADDR' '127.0.0.1:18123'),'Process')
+  [Environment]::SetEnvironmentVariable('MICRO6_EXECUTOR_BASE_URL',$acceptanceExecutorUrl,'Process')
+  [Environment]::SetEnvironmentVariable('CHROMASCAPE_PATCHLOOP_MICRO6_EXECUTOR_BASE_URL',$acceptanceExecutorUrl,'Process')
 
   $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' (Join-Path $env:SystemRoot 'System32/cmd.exe')
   $chromaArguments = EnvOr 'SC968_CHROMASCAPE_ARGUMENTS' "/d /c call `"$(Join-Path $ChromaScapeRoot 'gradlew.bat')`" --no-daemon --no-watch-fs bootRun"
