@@ -333,8 +333,16 @@ try {
   [Environment]::SetEnvironmentVariable('MICRO6_EXECUTOR_BASE_URL',$acceptanceExecutorUrl,'Process')
   [Environment]::SetEnvironmentVariable('CHROMASCAPE_PATCHLOOP_MICRO6_EXECUTOR_BASE_URL',$acceptanceExecutorUrl,'Process')
 
-  $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' (Join-Path $env:SystemRoot 'System32/cmd.exe')
-  $chromaArguments = EnvOr 'SC968_CHROMASCAPE_ARGUMENTS' "/d /c call `"$(Join-Path $ChromaScapeRoot 'gradlew.bat')`" --no-daemon --no-watch-fs bootRun"
+  # Keep the long interactive wait independent of Gradle daemon lifetime. A machine-wide
+  # `gradle --stop` otherwise terminates bootRun even though this acceptance uses --no-daemon (that
+  # option still creates a single-use daemon). The preflight gate builds this executable Boot JAR.
+  $chromaJar = Join-Path $ChromaScapeRoot 'build\libs\chromascape-0.2.0-SNAPSHOT.jar'
+  if (-not (Test-Path -LiteralPath $chromaJar -PathType Leaf)) {
+    throw "Preflight did not produce the ChromaScape runtime JAR: $chromaJar"
+  }
+  $javaExecutable = (Get-Command java.exe -ErrorAction Stop).Source
+  $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' $javaExecutable
+  $chromaArguments = EnvOr 'SC968_CHROMASCAPE_ARGUMENTS' ("-jar `"" + $chromaJar + "`"")
   $chroma = Start-Sc968OwnedProcess -Name 'chromascape' -FilePath $chromaExecutable -WorkingDirectory $ChromaScapeRoot -ArgumentList $chromaArguments -LogPath (Join-Path $logs 'chromascape-runtime.log')
   $owned += $chroma
   Wait-Sc968Http -BaseUrl $chromaUrl -Path '/debugger' -AcceptedStatusCodes @(200,301,302) -TimeoutSeconds 900 -PollMilliseconds 1000 | Out-Null

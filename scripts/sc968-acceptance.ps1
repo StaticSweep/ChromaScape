@@ -87,7 +87,10 @@ try {
   # live driver below remains the final cross-process integration gate.
   $null = Invoke-Gate 'chromascape_compile' $ChromaScapeRoot {
     $ErrorActionPreference = 'Continue'
-    .\gradlew.bat --no-daemon --no-watch-fs --build-cache compileJava compileTestJava
+    # Build the executable runtime artifact here as part of the native gate. The interactive driver
+    # launches this JAR directly so an unrelated `gradle --stop` cannot terminate ChromaScape while
+    # the harness is waiting for a human login/fishing action.
+    .\gradlew.bat --no-daemon --no-watch-fs --build-cache compileJava compileTestJava bootJar
   } (Join-Path $logs 'chromascape-compile.log') $gates
   $null = Invoke-Gate 'chromascape_ai_runtime_tests' $ChromaScapeRoot {
     $ErrorActionPreference = 'Continue'
