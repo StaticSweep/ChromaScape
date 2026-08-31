@@ -211,6 +211,16 @@ try {
   $artifactName = Require 'SC968_EXPECTED_ARTIFACT_NAME'
 
   $chromaUrl = EnvOr 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:8090'
+  $chromaUri = $null
+  if (-not [Uri]::TryCreate($chromaUrl, [UriKind]::Absolute, [ref]$chromaUri) -or
+      $chromaUri.Scheme -ne 'http' -or -not $chromaUri.IsLoopback -or $chromaUri.Port -lt 1 -or
+      $chromaUri.AbsolutePath -ne '/' -or -not [string]::IsNullOrWhiteSpace($chromaUri.Query) -or
+      -not [string]::IsNullOrWhiteSpace($chromaUri.Fragment)) {
+    throw 'SC968_CHROMASCAPE_URL must be a loopback HTTP origin with an explicit port and no path, query, or fragment'
+  }
+  # Keep the server bind and every native-client callback on the same configured origin. Previously
+  # the clients honored SC968_CHROMASCAPE_URL while Spring silently retained its 8090 default.
+  $env:SERVER_PORT = [string]$chromaUri.Port
   $registryUrl = EnvOr 'SC968_REGISTRY_URL' 'http://127.0.0.1:8181'
   $minimumTicks = [int](EnvOr 'SC968_MINIMUM_TICKS' '20')
   # Interactive acceptance spans three real clients and may wait on an operator who is not

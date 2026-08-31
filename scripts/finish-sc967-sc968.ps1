@@ -314,6 +314,7 @@ if (-not $microVersionMatch.Success) { throw 'Micro6 project.build.version is ma
 Set-DefaultEnvironment 'SC968_EXPECTED_ARTIFACT_NAME' ("client-{0}-shaded.jar" -f $microVersionMatch.Groups[1].Value.Trim())
 Set-DefaultEnvironment 'SC968_MICRO6_LAUNCH_SCRIPT' $microLauncher
 Set-DefaultEnvironment 'SC968_RUNELITE_LAUNCH_SCRIPT' $runeliteLauncher
+Set-DefaultEnvironment 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:18090'
 Set-DefaultEnvironment 'SC968_REGISTRY_URL' 'http://127.0.0.1:8181'
 Set-DefaultEnvironment 'SC968_TASK_KEY' 'FISHING_TRAINING'
 Set-DefaultEnvironment 'SC968_SETTINGS_HASH' (Get-TextSha256 '{}')
@@ -321,13 +322,21 @@ Set-DefaultEnvironment 'SC968_PROFILE_ID' 'sc968-fishing-acceptance-v1'
 Set-DefaultEnvironment 'SC968_PROFILE_HASH' (Get-TextSha256 '{"profile_id":"sc968-fishing-acceptance-v1","task_key":"FISHING_TRAINING"}')
 Set-DefaultEnvironment 'SC968_CATALOG_HASH' (Get-TextSha256 '{"schema":"sc968-acceptance-catalog/v1","tasks":["FISHING_TRAINING"]}')
 
-$listener = Get-NetTCPConnection -State Listen -LocalPort 8090 -ErrorAction SilentlyContinue | Select-Object -First 1
+$chromaUri = $null
+if (-not [Uri]::TryCreate($env:SC968_CHROMASCAPE_URL, [UriKind]::Absolute, [ref]$chromaUri) -or
+    $chromaUri.Scheme -ne 'http' -or -not $chromaUri.IsLoopback -or $chromaUri.Port -lt 1 -or
+    $chromaUri.AbsolutePath -ne '/' -or -not [string]::IsNullOrWhiteSpace($chromaUri.Query) -or
+    -not [string]::IsNullOrWhiteSpace($chromaUri.Fragment)) {
+  throw 'SC968_CHROMASCAPE_URL must be a loopback HTTP origin with an explicit port and no path, query, or fragment'
+}
+$chromaPort = $chromaUri.Port
+$listener = Get-NetTCPConnection -State Listen -LocalPort $chromaPort -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($null -ne $listener) {
   $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
   if ($null -eq $process -or ([string]$process.CommandLine -notmatch '(?i)chromascape')) {
-    throw "Port 8090 is owned by an unrecognized process (PID $($listener.OwningProcess)); stop it and rerun"
+    throw "ChromaScape acceptance port $chromaPort is owned by an unrecognized process (PID $($listener.OwningProcess)); stop it or set SC968_CHROMASCAPE_URL to a free HTTP origin"
   }
-  Write-Output "Stopping the existing ChromaScape process on port 8090 (PID $($listener.OwningProcess))"
+  Write-Output "Stopping the existing ChromaScape acceptance process on port $chromaPort (PID $($listener.OwningProcess))"
   Stop-Process -Id $listener.OwningProcess -Force
   Start-Sleep -Seconds 2
 }

@@ -171,6 +171,10 @@ test('SC-968 one-command wrapper uses real local roots and creates isolated sign
   assert.match(runtime, /ai-routine\/runs\/from-stabilization\/sc968-auth-probe' -Method 'POST'/);
   assert.match(runtime, /\$managedCaptureAuthProbe\.StatusCode -ne 422/);
   assert.match(runtime, /ChromaScape did not receive the SC-968 capture token/);
+  assert.match(finish, /Set-DefaultEnvironment 'SC968_CHROMASCAPE_URL' 'http:\/\/127\.0\.0\.1:18090'/);
+  assert.match(finish, /Get-NetTCPConnection -State Listen -LocalPort \$chromaPort/);
+  assert.doesNotMatch(finish, /Get-NetTCPConnection -State Listen -LocalPort 8090/);
+  assert.match(runtime, /\$env:SERVER_PORT = \[string\]\$chromaUri\.Port/);
   assert.match(finish, /\$goVersion = '1\.24\.13'/);
   assert.match(finish, /Go\\bin\\go\.exe/);
   assert.match(finish, /\$env:GOTMPDIR = \$goTemp/);
