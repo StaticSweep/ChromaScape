@@ -463,11 +463,24 @@ public class IsolatedPatchWorker {
     Path target = temp.resolve("gradle-user-home");
     try (var stream = Files.walk(source)) {
       stream.forEach(path -> {
-        try { Path relative = source.relativize(path); Path destination = target.resolve(relative); if (Files.isDirectory(path)) Files.createDirectories(destination); else Files.copy(path, destination, StandardCopyOption.REPLACE_EXISTING); }
+        try {
+          Path relative = source.relativize(path);
+          Path destination = target.resolve(relative);
+          if (Files.isDirectory(path)) {
+            Files.createDirectories(destination);
+          } else if (!isGradleCoordinationFile(relative)) {
+            Files.copy(path, destination, StandardCopyOption.REPLACE_EXISTING);
+          }
+        }
         catch (IOException e) { throw new java.io.UncheckedIOException(e); }
       });
     } catch (java.io.UncheckedIOException e) { throw e.getCause(); }
     return target;
+  }
+
+  static boolean isGradleCoordinationFile(Path relative) {
+    Path name = relative == null ? null : relative.getFileName();
+    return name != null && name.toString().toLowerCase(java.util.Locale.ROOT).endsWith(".lock");
   }
 
   private static void deleteRecursively(Path root) throws IOException {
