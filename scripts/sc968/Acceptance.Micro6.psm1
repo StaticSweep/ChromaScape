@@ -127,27 +127,41 @@ function Initialize-Sc968ManagedCaptureIdentity {
   if ($LASTEXITCODE -ne 0 -or $micro6Revision -notmatch '^[0-9a-f]{40}$' -or $contractsRevision -notmatch '^[0-9a-f]{40}$') {
     throw "SC-968 could not resolve source revisions for '$Name'"
   }
-  $sourceManifest = [ordered]@{
-    schema = 'sc968-capture-source-manifest/v1'
-    task_key = 'FISHING_TRAINING'
-    micro6_revision = $micro6Revision
-    contracts_revision = $contractsRevision
-    stabilization_plan_hash = [string]$manifest.plan_hash
-    stabilization_manifest_hash = [string]$manifest.manifest_hash
+  # The capture identity and the later patch proposal must share one immutable source group. The
+  # Micro6 runtime serves its generated, packaged source catalog to the patch workflow, so using a
+  # separate stabilization-receipt hash here creates a truthful but different source identity and
+  # candidate registration correctly rejects the attempted replacement. The shadowJar gate has
+  # already generated and tested this exact resource; bind the capture to the same bytes the
+  # launched client packages and serves.
+  $packagedSourceManifest = Join-Path $Micro6Root 'runelite-client\build\resources\main\micro6-contracts\fishing-source-manifest.json'
+  if (-not (Test-Path -LiteralPath $packagedSourceManifest -PathType Leaf)) {
+    throw "Micro6 packaged Fishing source manifest is missing for '$Name': $packagedSourceManifest"
+  }
+  $sourceBytes = [IO.File]::ReadAllBytes($packagedSourceManifest)
+  try {
+    $sourceManifest = [Text.Encoding]::UTF8.GetString($sourceBytes) | ConvertFrom-Json
+  } catch {
+    throw "Micro6 packaged Fishing source manifest is invalid JSON for '$Name'"
+  }
+  $sourceSnapshotId = [string]$sourceManifest.source_snapshot_id
+  $sourceHash = [string]$sourceManifest.source_manifest_hash
+  if ($sourceManifest.schema -ne 'micro6-source-manifest/v1' -or
+      $sourceManifest.task_key -ne 'FISHING_TRAINING' -or
+      [string]$sourceManifest.client_build_id -ne $micro6Revision -or
+      $sourceSnapshotId -notmatch '^srcsnap_[0-9a-f]{24}$' -or
+      $sourceHash -notmatch '^sha256:[0-9a-f]{64}$' -or
+      $sourceSnapshotId -ne ('srcsnap_' + $sourceHash.Substring(7,24))) {
+    throw "Micro6 packaged Fishing source identity is invalid or stale for '$Name'"
   }
   $sourcePath = Join-Path $OutputDirectory 'source-manifest.json'
-  $sourceJson = $sourceManifest | ConvertTo-Json -Depth 10 -Compress
-  $utf8 = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false
-  $sourceBytes = $utf8.GetBytes($sourceJson)
   [IO.File]::WriteAllBytes($sourcePath, $sourceBytes)
-  $sourceHash = 'sha256:' + (([Security.Cryptography.SHA256]::Create().ComputeHash($sourceBytes) | ForEach-Object { $_.ToString('x2') }) -join '')
 
   return [pscustomobject]@{
     RunId = [string]$manifest.run_id
     AttemptId = [string]$attempts[0].attempt_id
     EntryId = $entryId
     ExecutorInstanceId = [string]$manifest.micro6_instance_id
-    SourceSnapshotId = 'srcsnap_' + $sourceHash.Substring(7,24)
+    SourceSnapshotId = $sourceSnapshotId
     SourceManifestHash = $sourceHash
     SourceManifestPath = $sourcePath
   }
