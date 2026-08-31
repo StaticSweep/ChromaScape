@@ -213,7 +213,10 @@ try {
   $chromaUrl = EnvOr 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:8090'
   $registryUrl = EnvOr 'SC968_REGISTRY_URL' 'http://127.0.0.1:8181'
   $minimumTicks = [int](EnvOr 'SC968_MINIMUM_TICKS' '20')
-  $runtimeTimeout = [int](EnvOr 'SC968_RUNTIME_TIMEOUT_SECONDS' '1800')
+  # Interactive acceptance spans three real clients and may wait on an operator who is not
+  # continuously watching the console. Keep owned clients available for two hours; this changes
+  # only the wait budget and does not relax capture, identity, safety, or evidence checks.
+  $runtimeTimeout = [int](EnvOr 'SC968_RUNTIME_TIMEOUT_SECONDS' '7200')
   $registryStartupTimeout = [int](EnvOr 'SC968_REGISTRY_STARTUP_TIMEOUT_SECONDS' '600')
   $registryRoot = Join-Path $LeeuwBotRoot 'plugin-service'
   $output = Join-Path $OutputRoot 'runtime'

@@ -51,6 +51,11 @@ test('SC-968 allows its owned candidate registry to compile before probing it', 
     /-AcceptedStatusCodes @\(404\) -TimeoutSeconds \$registryStartupTimeout/);
 });
 
+test('SC-968 keeps interactive clients available for asynchronous operator response', () => {
+  assert.match(runtime,
+    /\$runtimeTimeout = \[int\]\(EnvOr 'SC968_RUNTIME_TIMEOUT_SECONDS' '7200'\)/);
+});
+
 test('SC-968 candidate evidence uses and validates the signed nested manifest identity', () => {
   assert.match(runtime, /Field \$candidateManifest 'candidate'/);
   assert.match(runtime, /Field \$candidateIdentity 'certification_hash'/);
