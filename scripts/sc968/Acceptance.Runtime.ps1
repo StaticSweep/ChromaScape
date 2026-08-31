@@ -111,7 +111,7 @@ function Wait-AssistantProposal([string] $BaseUrl, [string] $Token, [string] $Co
   throw 'Timed out waiting for the Assistant graph proposal'
 }
 
-function Wait-LogMarkers([string] $LogPath, [int] $Pid, [string[]] $Markers, [int] $TimeoutSeconds) {
+function Wait-LogMarkers([string] $LogPath, [int] $ProcessId, [string[]] $Markers, [int] $TimeoutSeconds) {
   $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
   do {
     if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
@@ -120,7 +120,7 @@ function Wait-LogMarkers([string] $LogPath, [int] $Pid, [string[]] $Markers, [in
       foreach ($marker in $Markers) { if ($content -notmatch [regex]::Escape($marker)) { $complete = $false; break } }
       if ($complete) { return }
     }
-    $process = Get-Process -Id $Pid -ErrorAction SilentlyContinue
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
     if ($null -eq $process) { break }
     Start-Sleep -Milliseconds 500
   } while ([DateTimeOffset]::UtcNow -lt $deadline)

@@ -56,6 +56,11 @@ test('SC-968 keeps interactive clients available for asynchronous operator respo
     /\$runtimeTimeout = \[int\]\(EnvOr 'SC968_RUNTIME_TIMEOUT_SECONDS' '7200'\)/);
 });
 
+test('SC-968 PowerShell helpers do not shadow the read-only automatic PID variable', () => {
+  assert.doesNotMatch(runtime, /\[int\]\s+\$Pid\b/i);
+  assert.match(runtime, /Wait-LogMarkers\(\[string\] \$LogPath, \[int\] \$ProcessId/);
+});
+
 test('SC-968 candidate evidence uses and validates the signed nested manifest identity', () => {
   assert.match(runtime, /Field \$candidateManifest 'candidate'/);
   assert.match(runtime, /Field \$candidateIdentity 'certification_hash'/);
