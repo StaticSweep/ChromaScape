@@ -29,7 +29,10 @@ import org.w3c.dom.Element;
 
 @Component
 public class IsolatedPatchWorker {
-  private static final Duration COMMAND_TIMEOUT = Duration.ofMinutes(10);
+  // A cold native Windows candidate build compiles the full Micro6 client before running the
+  // hardened checks. On the acceptance host this legitimately exceeds ten minutes; retain a
+  // bounded timeout while allowing the complete fixed gate set to finish.
+  private static final Duration COMMAND_TIMEOUT = Duration.ofMinutes(20);
   private static final int MAX_OUTPUT_BYTES = 256 * 1024;
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private record GradleCache(Path userHome, Path readOnlyDependencies) { }
