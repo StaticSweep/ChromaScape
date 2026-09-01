@@ -356,9 +356,21 @@ try {
   $javaExecutable = (Get-Command java.exe -ErrorAction Stop).Source
   $chromaExecutable = EnvOr 'SC968_CHROMASCAPE_EXECUTABLE' $javaExecutable
   $chromaArguments = EnvOr 'SC968_CHROMASCAPE_ARGUMENTS' ("-jar `"" + $chromaJar + "`"")
-  $chroma = Start-Sc968OwnedProcess -Name 'chromascape' -FilePath $chromaExecutable -WorkingDirectory $ChromaScapeRoot -ArgumentList $chromaArguments -LogPath (Join-Path $logs 'chromascape-runtime.log')
-  $owned += $chroma
-  Wait-Sc968Http -BaseUrl $chromaUrl -Path '/debugger' -AcceptedStatusCodes @(200,301,302) -TimeoutSeconds 900 -PollMilliseconds 1000 | Out-Null
+  $chroma = $null
+  for ($startupAttempt = 1; $startupAttempt -le 3; $startupAttempt++) {
+    $chroma = Start-Sc968OwnedProcess -Name 'chromascape' -FilePath $chromaExecutable -WorkingDirectory $ChromaScapeRoot -ArgumentList $chromaArguments -LogPath (Join-Path $logs 'chromascape-runtime.log')
+    $owned += $chroma
+    try {
+      Wait-Sc968Http -BaseUrl $chromaUrl -Path '/debugger' -AcceptedStatusCodes @(200,301,302) -TimeoutSeconds 180 -PollMilliseconds 1000 | Out-Null
+      break
+    } catch {
+      Stop-Sc968OwnedProcess $chroma
+      $owned = @($owned | Where-Object { $_.Pid -ne $chroma.Pid })
+      if ($startupAttempt -eq 3) { throw }
+      Write-Warning "ChromaScape startup attempt $startupAttempt failed; retrying against the already-provisioned acceptance database"
+      Start-Sleep -Seconds 2
+    }
+  }
 
   # Exercise the same authenticated run-creation POST used by CaptureSessionClient before launching
   # an interactive client. An empty request passes capture authentication and then fails identity
