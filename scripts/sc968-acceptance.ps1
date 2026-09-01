@@ -156,7 +156,24 @@ try {
     $runtime[$name] = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
   }
   if (-not $AllowDirtyDevelopmentTrees) { foreach ($gate in $gates.Values) { if ($gate.status -ne 'PASS') { break } } }
-  $envInfo = [ordered]@{ windows_version=[Environment]::OSVersion.VersionString; java_version=((& java -version 2>&1) -join ' '); timestamp=[DateTimeOffset]::UtcNow.ToString('o'); timezone=[TimeZoneInfo]::Local.Id }
+  # java writes its version banner to stderr even when it succeeds. With the script-wide
+  # ErrorActionPreference=Stop, invoking it directly turns that expected banner into a terminating
+  # NativeCommandError on Windows PowerShell 5.1. Capture both streams through Process instead.
+  $javaCommand = @(Get-Command java -CommandType Application -ErrorAction Stop)[0].Source
+  $javaStartInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $javaStartInfo.FileName = $javaCommand
+  $javaStartInfo.Arguments = '-version'
+  $javaStartInfo.UseShellExecute = $false
+  $javaStartInfo.CreateNoWindow = $true
+  $javaStartInfo.RedirectStandardOutput = $true
+  $javaStartInfo.RedirectStandardError = $true
+  $javaProcess = [System.Diagnostics.Process]::Start($javaStartInfo)
+  $javaStdout = $javaProcess.StandardOutput.ReadToEnd()
+  $javaStderr = $javaProcess.StandardError.ReadToEnd()
+  $javaProcess.WaitForExit()
+  if ($javaProcess.ExitCode -ne 0) { throw "java -version failed with exit code $($javaProcess.ExitCode)" }
+  $javaVersion = (@($javaStderr, $javaStdout) -join ' ').Trim()
+  $envInfo = [ordered]@{ windows_version=[Environment]::OSVersion.VersionString; java_version=$javaVersion; timestamp=[DateTimeOffset]::UtcNow.ToString('o'); timezone=[TimeZoneInfo]::Local.Id }
   $ok = Write-Sc968Evidence (Join-Path $OutputRoot 'sc-968-acceptance-manifest.json') $envInfo $repositories $contracts $tests $runtime $gates $dirtyDevelopment
   $demoOk = Write-Sc967DemoEvidence (Join-Path $OutputRoot 'sc-967-demo-manifest.json') $repositories $contracts $runtime $gates $dirtyDevelopment
   if (-not $ok -or -not $demoOk) { exit 1 }

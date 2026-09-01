@@ -161,6 +161,10 @@ test('SC-968 entrypoint and manifests require all five runtime evidence document
   assert.match(entry, /SC968_RUNELITE_LAUNCH_SCRIPT/);
   assert.match(entry, /\$env:SC968_CAPTURE_CONTRACT_VERSION = \$lock\['module_version'\]/);
   assert.match(entry, /'baseline','assistant','runelite','candidate','shadow'/);
+  assert.doesNotMatch(entry, /& java -version 2>&1/);
+  assert.match(entry, /@\(Get-Command java -CommandType Application -ErrorAction Stop\)\[0\]\.Source/);
+  assert.match(entry, /RedirectStandardError = \$true/);
+  assert.match(entry, /java -version failed with exit code/);
   assert.match(entry, /-RuneLiteRoot \$RuneLiteRoot/);
   assert.match(evidence, /assistant = \$Runtime\.assistant/);
   assert.match(evidence, /runelite = \$Runtime\.runelite/);
