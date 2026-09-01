@@ -1221,4 +1221,245 @@ class FishingShadowDecisionServiceTest {
     assertThat(service.history("debug_1", RUN, false, 50)).hasSize(2);
     assertThat(service.status("debug_1", RUN)).containsEntry("processed", 1);
   }
+
+  @Test
+  @DisplayName("run discovery survives a newly opened run before its first tick")
+  void runsSurviveNewlyOpenedRunBeforeFirstTick() {
+    service.openSession("debug_1", RUN);
+
+    Map<String, Object> runs = service.runs("debug_1");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> runList = (List<Map<String, Object>>) runs.get("runs");
+    assertThat(runList).hasSize(1);
+    Map<String, Object> summary = runList.get(0);
+    assertThat(summary).containsEntry("shadowRunId", RUN);
+    assertThat(summary).containsEntry("firstObservedAt", null);
+    assertThat(summary).containsEntry("lastObservedAt", null);
+    assertThat(summary).containsEntry("firstTick", -1L);
+    assertThat(summary).containsEntry("lastTick", -1L);
+    assertThat(summary).containsEntry("decisionCount", 0);
+    assertThat(summary).containsEntry("active", true);
+    assertThat(summary).containsEntry("legacy", false);
+  }
+
+  @Test
+  @DisplayName("run discovery includes only the legacy file with nullable fields")
+  void runsIncludeLegacyFileWithNullableFields() throws Exception {
+    // Legacy schema-v1 file exists but contains no decisions (empty).
+    Path legacy = tempDir.resolve("fishing").resolve("shadow").resolve("debug_1.jsonl");
+    Files.createDirectories(legacy.getParent());
+    Files.writeString(legacy, "");
+
+    Map<String, Object> runs = service.runs("debug_1");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> runList = (List<Map<String, Object>>) runs.get("runs");
+    assertThat(runList).hasSize(1);
+    Map<String, Object> summary = runList.get(0);
+    assertThat(summary).containsEntry("shadowRunId", null);
+    assertThat(summary).containsEntry("firstObservedAt", null);
+    assertThat(summary).containsEntry("lastObservedAt", null);
+    assertThat(summary).containsEntry("firstTick", -1L);
+    assertThat(summary).containsEntry("lastTick", -1L);
+    assertThat(summary).containsEntry("decisionCount", 0);
+    assertThat(summary).containsEntry("active", false);
+    assertThat(summary).containsEntry("legacy", true);
+  }
+
+  @Test
+  @DisplayName("run discovery tolerates an empty run file")
+  void runsTolerateEmptyRunFile() throws Exception {
+    Path file =
+        tempDir.resolve("fishing").resolve("shadow").resolve("debug_1").resolve(RUN + ".jsonl");
+    Files.createDirectories(file.getParent());
+    Files.writeString(file, "");
+
+    Map<String, Object> runs = service.runs("debug_1");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> runList = (List<Map<String, Object>>) runs.get("runs");
+    assertThat(runList).hasSize(1);
+    Map<String, Object> summary = runList.get(0);
+    assertThat(summary).containsEntry("shadowRunId", RUN);
+    assertThat(summary).containsEntry("decisionCount", 0);
+    assertThat(summary).containsEntry("legacy", false);
+  }
+
+  @Test
+  @DisplayName("run discovery merges an active run with its historical file and sorts newest first")
+  void runsMergeActiveWithHistoricalAndSortNewestFirst() throws Exception {
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    writer.flush();
+
+    // A historical run file without in-memory state, observed earlier than the active run.
+    Path histFile =
+        tempDir.resolve("fishing").resolve("shadow").resolve("debug_1").resolve("run_old.jsonl");
+    Files.writeString(
+        histFile,
+        objectMapper.writeValueAsString(decision("debug_1", "run_old", 5, 9, "2026-08-11T04:00:00Z"))
+            + System.lineSeparator());
+
+    Map<String, Object> runs = service.runs("debug_1");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> runList = (List<Map<String, Object>>) runs.get("runs");
+    assertThat(runList).hasSize(2);
+    // Newest first: the active run processed a later decision than the historical run.
+    assertThat(runList.get(0)).containsEntry("shadowRunId", RUN);
+    assertThat(runList.get(0)).containsEntry("active", true);
+    assertThat(runList.get(0)).containsEntry("decisionCount", 1);
+    assertThat(runList.get(1)).containsEntry("shadowRunId", "run_old");
+    assertThat(runList.get(1)).containsEntry("active", false);
+    assertThat(runList.get(1)).containsEntry("decisionCount", 1);
+  }
+
+  @Test
+  @DisplayName("run discovery includes the legacy file alongside active and historical runs")
+  void runsIncludeLegacyAlongsideActiveAndHistorical() throws Exception {
+    evaluate(batch("debug_1", 1, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    writer.flush();
+
+    Path legacy = tempDir.resolve("fishing").resolve("shadow").resolve("debug_1.jsonl");
+    Files.writeString(
+        legacy,
+        objectMapper.writeValueAsString(decision("debug_1", null, 7, 9))
+            + System.lineSeparator());
+
+    Map<String, Object> runs = service.runs("debug_1");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> runList = (List<Map<String, Object>>) runs.get("runs");
+    assertThat(runList).hasSize(2);
+    boolean legacyFound = runList.stream().anyMatch(r -> Boolean.TRUE.equals(r.get("legacy")));
+    assertThat(legacyFound).isTrue();
+    Map<String, Object> legacySummary =
+        runList.stream().filter(r -> Boolean.TRUE.equals(r.get("legacy"))).findFirst().orElseThrow();
+    assertThat(legacySummary).containsEntry("shadowRunId", null);
+    assertThat(legacySummary).containsEntry("legacy", true);
+  }
+
+  @Test
+  @DisplayName("run summaries with nullable timestamps serialize cleanly through the controller mapper")
+  void nullableRunSummariesSerializeCleanly() throws Exception {
+    service.openSession("debug_1", RUN);
+
+    Map<String, Object> runs = service.runs("debug_1");
+    String json = objectMapper.writeValueAsString(runs);
+    assertThat(json).contains("\"shadowRunId\":\"" + RUN + "\"");
+    assertThat(json).contains("\"firstObservedAt\":null");
+    assertThat(json).contains("\"lastObservedAt\":null");
+    assertThat(json).contains("\"firstTick\":-1");
+    assertThat(json).contains("\"decisionCount\":0");
+  }
+
+  @Test
+  @DisplayName(
+      "old-run cleanup cannot close a newer run and tick zero is accepted with no history merge")
+  void oldRunCleanupCannotAffectNewerRun() throws Exception {
+    // Run A (session debug_1, run_a) processes a high tick.
+    FishingShadowDecision runA =
+        evaluate(
+            service,
+            batch("debug_1", 500, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)),
+            "run_a");
+    assertThat(runA).isNotNull();
+    writer.flush();
+
+    // Clean up run A.
+    service.cleanupSession("debug_1", "run_a");
+
+    // Run B reuses the same textual session id with a fresh shadow run id.
+    assertThat(service.openSession("debug_1", "run_b")).isTrue();
+    FishingShadowDecision runB =
+        evaluate(
+            service,
+            batch("debug_1", 0, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)),
+            "run_b");
+    assertThat(runB).isNotNull();
+    assertThat(runB.tick()).isEqualTo(0);
+    writer.flush();
+
+    // Run B status reflects only run-B state: no run-A decisions.
+    Map<String, Object> statusB = service.status("debug_1", "run_b");
+    assertThat(statusB).containsEntry("sessionId", "debug_1");
+    assertThat(statusB).containsEntry("shadowRunId", "run_b");
+    assertThat(statusB).containsEntry("latestTick", 0L);
+    assertThat(statusB).containsEntry("processed", 1);
+
+    // Run-B history contains no run-A decision.
+    List<FishingShadowDecision> historyB = service.history("debug_1", "run_b", false, 50);
+    assertThat(historyB).hasSize(1);
+    assertThat(historyB.get(0).tick()).isEqualTo(0);
+    assertThat(historyB.get(0).shadowRunId()).isEqualTo("run_b");
+  }
+
+  @Test
+  @DisplayName("the first in-memory decision supplies firstTick and firstObservedAt")
+  void firstInMemoryDecisionSuppliesFirstMetadata() {
+    evaluate(batch("debug_1", 10, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+
+    Map<String, Object> runs = service.runs("debug_1");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> runList = (List<Map<String, Object>>) runs.get("runs");
+    Map<String, Object> summary = runList.get(0);
+    assertThat(summary).containsEntry("firstTick", 10L);
+    assertThat(summary).containsEntry("lastTick", 10L);
+    assertThat(summary).containsEntry("firstObservedAt", "2026-08-11T05:30:00Z");
+    assertThat(summary).containsEntry("decisionCount", 1);
+  }
+
+  @Test
+  @DisplayName("a later decision changes only the last metadata")
+  void laterDecisionChangesOnlyLastMetadata() {
+    evaluate(batch("debug_1", 10, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    evaluate(batch("debug_1", 20, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+
+    Map<String, Object> runs = service.runs("debug_1");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> runList = (List<Map<String, Object>>) runs.get("runs");
+    Map<String, Object> summary = runList.get(0);
+    assertThat(summary).containsEntry("firstTick", 10L);
+    assertThat(summary).containsEntry("lastTick", 20L);
+    assertThat(summary).containsEntry("firstObservedAt", "2026-08-11T05:30:00Z");
+    assertThat(summary).containsEntry("decisionCount", 2);
+  }
+
+  @Test
+  @DisplayName("persisted and in-memory ranges merge: first is minimum, last and count are maximum")
+  void persistedAndInMemoryRangesMerge() throws Exception {
+    // Process tick 10 and flush, so the file holds [10].
+    evaluate(batch("debug_1", 10, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+    writer.flush();
+
+    // Process a later tick 20 without flushing, so it is only in memory.
+    evaluate(batch("debug_1", 20, 100, 100, 0, false, true, -1, 1, fishingSpot(101, 100, 0)));
+
+    Map<String, Object> runs = service.runs("debug_1");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> runList = (List<Map<String, Object>>) runs.get("runs");
+    Map<String, Object> summary = runList.get(0);
+    assertThat(summary).containsEntry("firstTick", 10L);
+    assertThat(summary).containsEntry("lastTick", 20L);
+    assertThat(summary).containsEntry("decisionCount", 2);
+  }
+
+  private FishingShadowDecision decision(
+      String sessionId, String shadowRunId, long tick, int statusOrdinal) {
+    return decision(sessionId, shadowRunId, tick, statusOrdinal, "2026-08-11T05:30:00Z");
+  }
+
+  private FishingShadowDecision decision(
+      String sessionId, String shadowRunId, long tick, int statusOrdinal, String observedAt) {
+    return new FishingShadowDecision(
+        2,
+        "AI_PLAYER_SHADOW_DECISION",
+        statusOrdinal % 2 == 0 ? "PREDICTED" : "ABSTAINED",
+        "fishing_ab12cd34",
+        sessionId,
+        shadowRunId,
+        tick,
+        observedAt,
+        NET_FISHING_SPOT,
+        null,
+        null,
+        4.0,
+        8201L,
+        450);
+  }
 }

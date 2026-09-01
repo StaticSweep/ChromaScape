@@ -24,6 +24,15 @@ spring:
       # Flyway migration V1 and must never be relied on here.
       ddl-auto: update
     show-sql: false
+    properties:
+      hibernate:
+        # Real JDBC batching for replay evidence inserts (events, hash samples, mismatches):
+        # ordered inserts make multi-partition event writes batch on the wire, and the replay
+        # PostgreSQL suite asserts >2-batch behavior end to end.
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
   # Versioned schema migrations (SC-572/SC-967). baseline-on-migrate lets an existing database adopt
   # the migration history without a manual baseline insert; V1 enforces the durable artifact mapping.
   # out-of-order lets the SC-967 baseline (V1_1, a no-op through IF NOT EXISTS on databases where
@@ -393,6 +402,7 @@ replay:
     shutdown-timeout-ms: ${REPLAY_XRSPS_SHUTDOWN_TIMEOUT_MS:5000}
     max-stdout-line-bytes: ${REPLAY_XRSPS_MAX_STDOUT_LINE_BYTES:10485760}
     max-stderr-bytes: ${REPLAY_XRSPS_MAX_STDERR_BYTES:1048576}
+    response-queue-capacity: ${REPLAY_XRSPS_RESPONSE_QUEUE_CAPACITY:16}
   worker:
     enabled: ${REPLAY_WORKER_ENABLED:false}
     concurrency: ${REPLAY_WORKER_CONCURRENCY:2}
@@ -402,6 +412,9 @@ replay:
     run-timeout-seconds: ${REPLAY_WORKER_RUN_TIMEOUT_SECONDS:300}
     max-event-batch: ${REPLAY_WORKER_MAX_EVENT_BATCH:100}
     max-retries: ${REPLAY_WORKER_MAX_RETRIES:2}
+    missing-report-repair-enabled: ${REPLAY_MISSING_REPORT_REPAIR_ENABLED:true}
+    missing-report-repair-batch-size: ${REPLAY_MISSING_REPORT_REPAIR_BATCH_SIZE:25}
+    missing-report-repair-interval-seconds: ${REPLAY_MISSING_REPORT_REPAIR_INTERVAL_SECONDS:30}
   artifacts:
     root: ${REPLAY_ARTIFACT_ROOT:.chromascape/replay-artifacts}
     max-artifact-bytes: ${REPLAY_MAX_ARTIFACT_BYTES:104857600}
@@ -451,47 +464,3 @@ gameplay:
 ai-player:
   dataset:
     output-dir: ${AI_PLAYER_DATASET_DIR:.chromascape/datasets}
-
-# Simulator Verifier Integration Configuration
-simulator:
-  verifier:
-    # Enable/disable simulator verifier integration
-    enabled: ${SIMULATOR_VERIFIER_ENABLED:true}
-
-    # Root directory of the OpenRune-Server project
-    openrune-root: ${SIMULATOR_OPENRUNE_ROOT:F:\\Dev\\IdeaProjects\\OpenRune-Server}
-
-    # Gradle command to execute (relative to openrune-root)
-    gradle-cmd: ${SIMULATOR_GRADLE_CMD:gradlew.bat}
-
-    # Invocation mode: jar (default) or gradle (fallback)
-    invocation-mode: ${SIMULATOR_INVOCATION_MODE:jar}
-
-    # Verifier jar path (relative to openrune-root if not absolute)
-    verifier-jar-path: ${SIMULATOR_VERIFIER_JAR:simulator-verifier/build/libs/simulator-verifier-all.jar}
-
-    # Default bridge URL for fetching the latest deterministic session
-    default-bridge-url: ${SIMULATOR_DEFAULT_BRIDGE_URL:http://localhost:8092}
-
-    # API key for authenticating with the bridge service
-    api-key: ${CHROMASCAPE_API_KEY:dev-token}
-
-    # Directory where simulator verification reports will be stored
-    reports-dir: ${SIMULATOR_REPORTS_DIR:output/simulator-reports}
-
-    # Maximum number of concurrent verification jobs allowed
-    max-concurrent-jobs: ${SIMULATOR_MAX_CONCURRENT_JOBS:2}
-
-    # Maximum time (in seconds) a verification job is allowed to run
-    job-timeout-seconds: ${SIMULATOR_JOB_TIMEOUT:300}
-
-    # Automatically create the reports directory if it doesn't exist
-    auto-create-reports-dir: ${SIMULATOR_AUTO_CREATE_DIR:true}
-
-  # Replay Control - Proxy to OpenRune HTTP API for in-game playback control
-  replay-control:
-    enabled: ${SIMULATOR_REPLAY_CONTROL_ENABLED:true}
-    openrune-api-url: ${SIMULATOR_REPLAY_API_URL:http://127.0.0.1:8195}
-    api-key: ${SIMULATOR_REPLAY_API_KEY:dev-token}
-    connection-timeout-ms: ${SIMULATOR_REPLAY_CONNECTION_TIMEOUT:5000}
-    read-timeout-ms: ${SIMULATOR_REPLAY_READ_TIMEOUT:10000}

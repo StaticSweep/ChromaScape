@@ -1,6 +1,64 @@
 -- V12: Replay suites and runs.
 -- Creates suite/test-case grouping and durable run infrastructure.
 
+-- Older ChromaScape builds let Hibernate create a different replay_runs table
+-- (BIGINT id plus run_id/session_id/run_type columns).  CREATE TABLE IF NOT
+-- EXISTS would silently keep that incompatible table and the replay_attempts
+-- foreign key below would then fail (UUID -> BIGINT).  Preserve that legacy
+-- table before installing the current UUID-backed schema.  Refuse to rename an
+-- unknown shape so a genuinely unexpected schema still fails closed.
+DO $$
+DECLARE
+    replay_run_id_type TEXT;
+    legacy_shape BOOLEAN;
+BEGIN
+    SELECT data_type
+      INTO replay_run_id_type
+      FROM information_schema.columns
+     WHERE table_schema = current_schema()
+       AND table_name = 'replay_runs'
+       AND column_name = 'id';
+
+    IF replay_run_id_type IS NOT NULL AND replay_run_id_type <> 'uuid' THEN
+        SELECT replay_run_id_type = 'bigint'
+               AND EXISTS (
+                   SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'replay_runs' AND column_name = 'run_id'
+               )
+               AND EXISTS (
+                   SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'replay_runs' AND column_name = 'session_id'
+               )
+               AND EXISTS (
+                   SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = current_schema()
+                      AND table_name = 'replay_runs' AND column_name = 'run_type'
+               )
+          INTO legacy_shape;
+
+        IF NOT legacy_shape THEN
+            RAISE EXCEPTION
+                'V12 cannot migrate replay_runs: expected UUID id or recognized legacy BIGINT schema, found id type %',
+                replay_run_id_type;
+        END IF;
+
+        IF to_regclass(current_schema() || '.replay_runs_legacy_v12') IS NOT NULL THEN
+            RAISE EXCEPTION
+                'V12 cannot archive legacy replay_runs: replay_runs_legacy_v12 already exists';
+        END IF;
+
+        ALTER TABLE replay_runs RENAME TO replay_runs_legacy_v12;
+
+        -- PostgreSQL does not rename the primary-key index when its table is
+        -- renamed.  Free the conventional name needed by the new table.
+        IF to_regclass(current_schema() || '.replay_runs_pkey') IS NOT NULL THEN
+            ALTER INDEX replay_runs_pkey RENAME TO replay_runs_legacy_v12_pkey;
+        END IF;
+    END IF;
+END $$;
+
 -- Replay suites (mutable grouping metadata)
 CREATE TABLE IF NOT EXISTS replay_suites (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '39';
+  static BUILDER_GOAL_BUNDLE_VERSION = '40';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -17,9 +17,9 @@ class AccountTaskPlanner {
   static BUILDER_GOAL_STATUS_LABELS = {
     AWAITING_EXECUTOR_CONFIRMATION: 'Executor request sent; awaiting confirmation.',
     RECONCILING: 'Executor request sent; awaiting confirmation.',
-    ACCEPTED: 'Task accepted and queued by the executor; waiting for script start.',
+    ACCEPTED: 'Task published to Micro6; waiting for client-thread configuration.',
     ASSIGNED: 'Executor assigned the task; waiting for confirmed script start.',
-    QUEUED: 'Task accepted and queued by the executor.',
+    QUEUED: 'Micro6 configured and queued the task.',
     RUNNING: 'Task started; the executor confirmed the script is running.',
     PAUSED: 'Task paused.',
     STOPPING: 'Stop requested; awaiting executor confirmation.',
@@ -102,8 +102,8 @@ class AccountTaskPlanner {
     WAITING_FOR_DISPATCH: 'Waiting for dispatch readiness',
     READY_TO_PUBLISH: 'Executor is dispatch-ready; preparing to publish',
     PUBLISHED: 'Task published successfully',
-    ACCEPTED: 'Task accepted and queued by the executor; waiting for script start',
-    QUEUED: 'Task accepted and queued by the executor',
+    ACCEPTED: 'Task published to Micro6; waiting for client-thread configuration',
+    QUEUED: 'Micro6 configured and queued the task',
     ASSIGNED: 'Executor assigned the task; waiting for confirmed script start',
     RUNNING: 'Task started; the executor confirmed the script is running',
     PAUSED: 'Task paused; the executor suspended the task',
@@ -184,6 +184,112 @@ class AccountTaskPlanner {
       return false;
     }
     return AccountTaskPlanner.ACTIVE_PRE_START_STATUSES.has(run.status.toUpperCase());
+  }
+
+  /**
+   * Returns phase-specific human text for the executor lifecycle shown in the run detail and log
+   * summary. Combines the raw executor status, activation phase, and settings configuration state
+   * so an operator can see exactly where a run stalled. Returns null when no special text applies.
+   */
+  static describeBuilderGoalExecutorPhase(run) {
+    if (!run) {
+      return null;
+    }
+    const executorStatus = String(run.executorStatus || run.publishStatus || run.status || '').toUpperCase();
+    const activation = String(run.publishActivationState || '').toUpperCase();
+    const configState = String(run.configurationState || '').toUpperCase();
+    const failed =
+      executorStatus === 'FAILED' || String(run.status || '').toUpperCase() === 'FAILED';
+
+    // ChromaScape cancelled the accepted entry after the start deadline expired. Present the
+    // explicit timeout-cancellation outcome before any raw executor failure text.
+    if (failed && run.executorCancelRequested) {
+      return 'Task start timed out. ChromaScape cancelled the accepted Micro6 executor entry.';
+    }
+    // A confirmed executor failure is shown immediately with the executor's own reason.
+    if (failed && (activation === 'FAILED' || configState === 'FAILED')) {
+      return AccountTaskPlanner.describeStructuredExecutorFailure(run) ||
+        run.executorFailureReason || run.failureReason ||
+        'Executor reported a configuration/dispatch failure.';
+    }
+    // A failed run whose executor still reports a stale pre-queue status needs cleanup/restart.
+    if (failed && (executorStatus === 'RECEIVED' || executorStatus === 'PENDING' || executorStatus === 'ACCEPTED')) {
+      return 'Executor entry is stale; restart or remove it before rerunning';
+    }
+    // Configuration is actively running on the executor.
+    if (executorStatus === 'RECEIVED' && activation === 'CONFIGURING' && configState === 'PENDING') {
+      return 'Micro6 accepted the task and is waiting for the RuneLite client thread to apply its configuration';
+    }
+    // Configuration is applied; the task is waiting for queue activation.
+    if ((executorStatus === 'QUEUED' || executorStatus === 'ASSIGNED') && configState === 'APPLIED') {
+      return 'Configuration applied; waiting for queue activation';
+    }
+    return null;
+  }
+
+  /**
+   * Builds a compact diagnostics string for the run detail/log summary covering the normalized
+   * status, raw executor status, activation phase, configuration state, and failure code/phase.
+   */
+  static builderGoalExecutorDiagnostics(run) {
+    if (!run) {
+      return '';
+    }
+    const parts = [];
+    if (run.status) parts.push(`status ${run.status}`);
+    if (run.executorStatus && run.executorStatus !== run.status) {
+      parts.push(`executor ${run.executorStatus}`);
+    }
+    if (run.publishActivationState) parts.push(`activation ${run.publishActivationState}`);
+    if (run.configurationState) parts.push(`configuration ${run.configurationState}`);
+    if (run.configurationWaitMs !== null && run.configurationWaitMs !== undefined) {
+      const waitMs = Number(run.configurationWaitMs);
+      if (Number.isFinite(waitMs)) parts.push(`configuration wait ${Math.max(0, Math.round(waitMs))}ms`);
+    }
+    if (run.configurationEnqueuedAt) parts.push(`configuration enqueued ${run.configurationEnqueuedAt}`);
+    if (run.configurationStartedAt) parts.push(`configuration started ${run.configurationStartedAt}`);
+    if (run.configurationAppliedAt) parts.push(`configuration applied ${run.configurationAppliedAt}`);
+    if (run.executorErrorCode) parts.push(`error_code ${run.executorErrorCode}`);
+    if (run.executorFailurePhase) parts.push(`phase ${run.executorFailurePhase}`);
+    return parts.join(' • ');
+  }
+
+  /**
+   * Formats a structured executor failure as "Micro6 configuration failed: CODE during PHASE — reason",
+   * preferring the executor's structured error_code/failure_phase/failure_reason over the raw
+   * failure text. Returns null when no structured failure is present.
+   */
+  static describeStructuredExecutorFailure(run) {
+    if (!run) {
+      return null;
+    }
+    const code = String(run.executorErrorCode || '').trim();
+    const phase = String(run.executorFailurePhase || '').trim();
+    const reason = String(run.executorFailureReason || run.failureReason || '').trim();
+    // Structured formatting applies only when the executor supplied a structured code or phase.
+    // A bare reason is not a structured failure and is surfaced as-is by the caller.
+    if (!code && !phase) {
+      return null;
+    }
+    let text = 'Micro6 configuration failed:';
+    if (code) text += ` ${code}`;
+    if (phase) text += ` during ${phase}`;
+    if (reason) text += ` — ${reason}`;
+    return text;
+  }
+
+  /**
+   * Returns the elapsed time (ms) since the executor dispatch started, or null when unknown.
+   */
+  static elapsedSinceDispatchStarted(run) {
+    if (!run || !run.dispatchStartedAt) {
+      return null;
+    }
+    const started = new Date(run.dispatchStartedAt).getTime();
+    if (Number.isNaN(started)) {
+      return null;
+    }
+    return Date.now() - started;
   }
 
   constructor() {
@@ -1488,11 +1594,15 @@ class AccountTaskPlanner {
           typeof payload.settings === 'object' &&
           !Array.isArray(payload.settings)
         ) {
+          const savedConfig = this.filterSavedBuilderGoalSettings(payload.settings, selectedTask);
           this.setBuilderGoalWorldValue(payload.world);
-          this.setBuilderGoalConfigEditor(payload.settings, {
+          this.setBuilderGoalConfigEditor(savedConfig.settings, {
             accountId: payload.accountId || selectedAccount.accountId,
             taskKey: payload.taskKey || selectedTask.task_key,
             displayName: payload.displayName,
+            savedSettingsWarning: savedConfig.discardedKeys.length
+              ? `Removed obsolete saved setting${savedConfig.discardedKeys.length === 1 ? '' : 's'}: ${savedConfig.discardedKeys.join(', ')}.`
+              : null,
             dirty: false,
             invalidatePrefill: false
           });
@@ -1516,6 +1626,59 @@ class AccountTaskPlanner {
       dirty: false,
       invalidatePrefill: false
     });
+  }
+
+  // Saved task settings can outlive a catalog schema change. Only this automatic prefill path
+  // is repaired; settings an operator pastes or edits manually must reach server validation
+  // unchanged so a typo or unsupported field is never silently discarded.
+  filterSavedBuilderGoalSettings(settings, task) {
+    settings = settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+    const fields = task?.args_schema?.fields;
+    if (!Array.isArray(fields)) {
+      return { settings, discardedKeys: [] };
+    }
+    const allowedKeys = new Set(
+      fields
+        .map(field => field?.key)
+        .filter(key => typeof key === 'string' && key.trim())
+    );
+    const filteredSettings = {};
+    const discardedKeys = [];
+    const taskKey = String(task?.task_key || '').toUpperCase();
+    const isFishingTraining = taskKey === 'FISHING_TRAINING' || taskKey === 'FISH_TRAINING';
+    const hasCanonicalStopValue = Object.prototype.hasOwnProperty.call(settings, 'stopConditionValue');
+    const legacyStopValues = ['targetLevel', 'target_level']
+      .filter(key => Object.prototype.hasOwnProperty.call(settings, key))
+      .map(key => settings[key]);
+    const legacyStopValueIsConsistent =
+      legacyStopValues.length > 0 && legacyStopValues.every(value => Object.is(value, legacyStopValues[0]));
+    Object.entries(settings).forEach(([key, value]) => {
+      if (allowedKeys.has(key)) {
+        filteredSettings[key] = value;
+      } else if (
+        isFishingTraining &&
+        !hasCanonicalStopValue &&
+        key === 'targetLevel' &&
+        legacyStopValueIsConsistent
+      ) {
+        // Saved Fishing settings may predate the canonical stop-condition field. Migrate this
+        // narrow legacy alias only during automatic restoration; pasted/manual settings still go
+        // to server validation unchanged and unknown keys remain rejected there.
+        filteredSettings.stopConditionValue = value;
+        discardedKeys.push(key);
+      } else if (
+        isFishingTraining &&
+        !hasCanonicalStopValue &&
+        key === 'target_level' &&
+        legacyStopValueIsConsistent
+      ) {
+        filteredSettings.stopConditionValue = value;
+        discardedKeys.push(key);
+      } else {
+        discardedKeys.push(key);
+      }
+    });
+    return { settings: filteredSettings, discardedKeys };
   }
 
   setBuilderGoalConfigEditor(settings, options = {}) {
@@ -1557,6 +1720,7 @@ class AccountTaskPlanner {
       options.accountId,
       resolvedTaskKey
     );
+    this.builderGoalSavedSettingsWarning = options.savedSettingsWarning || null;
     this.renderBuilderGoalConfigMeta({
       savedDisplayName: options.displayName || null,
       loadedFromRun: options.loadedFromRun || false,
@@ -1615,6 +1779,9 @@ class AccountTaskPlanner {
     } else {
       parts.push('The editor will prefill from the last saved run for this account and task when available.');
     }
+    if (this.builderGoalSavedSettingsWarning) {
+      parts.push(this.builderGoalSavedSettingsWarning);
+    }
     parts.push('Manual edits may change task_key; ChromaScape will keep settings and synchronize the task selector.');
     this.builderGoalConfigMeta.innerHTML = `<span class="text-muted">${this.escapeHtml(parts.join(' '))}</span>`;
   }
@@ -1672,6 +1839,7 @@ class AccountTaskPlanner {
 
   handleBuilderGoalConfigInput() {
     this.builderGoalConfigDirty = true;
+    this.builderGoalSavedSettingsWarning = null;
     this.builderGoalConfigPrefillGeneration =
       (this.builderGoalConfigPrefillGeneration || 0) + 1;
     // A valid manually entered task_key is authoritative for the selector. Unknown keys become
@@ -3010,7 +3178,11 @@ class AccountTaskPlanner {
     const accountLabel = run.accountName || run.targetAccountName || run.accountId || 'account';
     const worldSuffix = run.world ? ` • World ${run.world}` : '';
     const taskLabel = run.displayName || run.taskKey || 'task';
-    const detailMessage = run.targetPreparationMessage || run.targetReadinessReason || '';
+    const detailMessage =
+      AccountTaskPlanner.describeBuilderGoalExecutorPhase(run) ||
+      run.targetPreparationMessage ||
+      run.targetReadinessReason ||
+      '';
 
     // Elapsed time
     let elapsedText = '';
@@ -3025,6 +3197,16 @@ class AccountTaskPlanner {
         const secs = seconds % 60;
         elapsedText = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
       }
+    }
+
+    // Elapsed time since the executor began dispatching (configuration start).
+    let dispatchElapsedText = '';
+    const dispatchElapsedMs = AccountTaskPlanner.elapsedSinceDispatchStarted(run);
+    if (dispatchElapsedMs !== null && dispatchElapsedMs > 0) {
+      const seconds = Math.floor(dispatchElapsedMs / 1000);
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      dispatchElapsedText = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
     }
 
     // Step indicator
@@ -3042,6 +3224,10 @@ class AccountTaskPlanner {
     if (run.world) metaParts.push(`<i class="bi bi-globe2 me-1"></i>World ${this.escapeHtml(String(run.world))}`);
     metaParts.push(`<i class="bi bi-list-task me-1"></i>${this.escapeHtml(taskLabel)}`);
     if (elapsedText) metaParts.push(`<i class="bi bi-clock me-1"></i>${this.escapeHtml(elapsedText)}`);
+    if (dispatchElapsedText) {
+      metaParts.push(`<i class="bi bi-hourglass-split me-1"></i>dispatch ${this.escapeHtml(dispatchElapsedText)}`);
+    }
+    const executorDiagnostics = AccountTaskPlanner.builderGoalExecutorDiagnostics(run);
     if (run.attemptId) metaParts.push(`<i class="bi bi-tag me-1"></i>attempt ${this.escapeHtml(String(run.attemptId))}`);
     if (run.effectiveGradleTask) metaParts.push(`<i class="bi bi-gear me-1"></i>${this.escapeHtml(run.effectiveGradleTask)}`);
     if (run.launcherPid) metaParts.push(`<i class="bi bi-cpu me-1"></i>PID ${this.escapeHtml(String(run.launcherPid))}`);
@@ -3059,6 +3245,7 @@ class AccountTaskPlanner {
     this.builderGoalClientStatus.innerHTML =
       `<div class="text-${tone}"><strong>${spinnerHtml}${this.escapeHtml(label)}</strong>${viewLogHtml}</div>` +
       (detailMessage ? `<div class="small text-muted mt-1">${this.escapeHtml(detailMessage)}</div>` : '') +
+      (executorDiagnostics ? `<div class="small text-muted mt-1 font-monospace">${this.escapeHtml(executorDiagnostics)}</div>` : '') +
       `<div class="small text-muted mt-1">${metaParts.join(' • ')}</div>` +
       stepHtml;
   }
@@ -3069,24 +3256,259 @@ class AccountTaskPlanner {
    */
   renderBuilderGoalRunFailure(run, options = {}) {
     if (!this.builderGoalClientStatus) return;
-    const summary = run.targetReadinessReason || run.launchFailureDetail || run.failureReason ||
+    // When the executor reported a concrete configuration/dispatch failure, surface the executor's
+    // own reason immediately rather than the generic build-failure copy.
+    const executorPhase = options.buildFailure === false
+      ? AccountTaskPlanner.describeBuilderGoalExecutorPhase(run)
+      : null;
+    const summary = executorPhase || run.executorFailureReason || run.failureReason ||
+      run.targetReadinessReason || run.launchFailureDetail ||
       'Micro6 failed to compile before the client could start.';
     const iterationId = run.iterationId || this.builderGoalRunTrackerIterationId;
     const viewLogHtml = iterationId
       ? `<a href="javascript:void(0)" onclick="window.accountTaskPlanner.loadBuilderGoalRunLogs('${this.escapeHtml(iterationId)}')" class="text-decoration-none"><i class="bi bi-file-text me-1"></i>View Launch Log</a>`
       : '';
-    const logPathHtml = run.launchLogFile
+    const compileRecovery = run.failureCode === 'PRODUCTION_COMPILE_FAILED';
+    const logPathHtml = !compileRecovery && run.launchLogFile
       ? `<div class="small text-muted mt-1"><code>${this.escapeHtml(run.launchLogFile)}</code></div>`
+      : '';
+    const failureMetadata = [];
+    if (run.failureCode) {
+      failureMetadata.push(`code ${run.failureCode}`);
+    }
+    if (run.failurePhase) {
+      failureMetadata.push(`phase ${run.failurePhase}`);
+    }
+    if (run.correlationId) {
+      failureMetadata.push(`correlation ${run.correlationId}`);
+    }
+    const failureMetadataHtml = failureMetadata.length > 0
+      ? `<div class="small text-muted mt-1 font-monospace">${this.escapeHtml(failureMetadata.join(' • '))}</div>`
       : '';
     const buildFailure = options.buildFailure !== false;
     const title = buildFailure
       ? 'Micro6 failed to compile before the client could start.'
       : 'Builder Goal run failed.';
+    const diagnostics = AccountTaskPlanner.builderGoalExecutorDiagnostics(run);
     this.builderGoalClientStatus.innerHTML =
       `<div class="text-danger"><strong><i class="bi bi-exclamation-octagon me-1"></i>` +
       `${this.escapeHtml(title)}</strong></div>` +
       `<div class="small mt-1">${this.escapeHtml(summary)}</div>` +
+      failureMetadataHtml +
+      (diagnostics ? `<div class="small text-muted mt-1 font-monospace">${this.escapeHtml(diagnostics)}</div>` : '') +
       logPathHtml +
+      (viewLogHtml && !compileRecovery ? `<div class="small mt-1">${viewLogHtml}</div>` : '') +
+      (compileRecovery && iterationId ? this.compileRecoveryPanelHtml(iterationId) : '');
+    if (compileRecovery && iterationId) {
+      void this.refreshCompileRecovery(iterationId);
+    }
+  }
+
+  compileRecoveryPanelHtml(iterationId) {
+    const id = this.escapeAttr(String(iterationId));
+    return `<section class="mt-3 border rounded p-3 bg-light" data-compile-recovery="${id}" aria-live="polite">
+      <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+        <strong>Micro6 production compilation failed</strong>
+        <span class="badge bg-danger">FAILED</span>
+      </div>
+      <div class="small text-muted mt-1" data-compile-recovery-summary>Loading sanitized diagnostics…</div>
+      <button type="button" class="btn btn-primary btn-sm mt-3" onclick="window.accountTaskPlanner.startCompileRepair('${id}')">
+        <i class="bi bi-magic me-1"></i>Fix compile errors with AI
+      </button>
+      <div class="d-flex gap-2 flex-wrap mt-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.accountTaskPlanner.copyCompileArtifact('${id}','compiler-errors')">Copy errors</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.accountTaskPlanner.copyCompileArtifact('${id}','full')">Copy full log</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.accountTaskPlanner.copyCompileArtifact('${id}','prompt')">Copy AI prompt</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.accountTaskPlanner.downloadCompileArtifact('${id}')">Download sanitized log</button>
+      </div>
+      <pre class="small mt-3 mb-0 p-2 bg-white border rounded" data-compile-recovery-errors hidden></pre>
+      <div class="mt-3" data-compile-recovery-plan hidden></div>
+      <div class="small mt-2" data-compile-recovery-status></div>
+      <div class="mt-2 d-flex gap-2 flex-wrap" data-compile-recovery-actions></div>
+    </section>`;
+  }
+
+  async refreshCompileRecovery(iterationId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    if (!panel) return;
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery`);
+      const state = await response.json();
+      if (!response.ok) throw new Error(state.message || `HTTP ${response.status}`);
+      panel._compileRecovery = state;
+      const original = (state.artifacts || []).find(a => a.kind === 'ORIGINAL_COMPILE_LOG');
+      const errorsArtifact = (state.artifacts || []).find(a => a.kind === 'COMPILER_ERRORS');
+      const summary = panel.querySelector('[data-compile-recovery-summary]');
+      if (summary) summary.textContent = `${state.activeAttempt?.errorCountBefore ?? 'Compiler'} errors • Run ${iterationId}${original ? ` • SHA-256 ${original.sha256.slice(0, 12)}…` : ''}`;
+      if (errorsArtifact) {
+        const errors = await this.fetchCompileArtifact(iterationId, errorsArtifact.artifactId, 'compiler-errors');
+        const pre = panel.querySelector('[data-compile-recovery-errors]');
+        if (pre) { pre.textContent = errors.text; pre.hidden = false; }
+      }
+      this.renderCompileRepairAttempt(panel, iterationId, state.activeAttempt);
+      if (state.activeAttempt && !['AWAITING_APPROVAL', 'SUCCEEDED', 'FAILED', 'CANCELLED'].includes(state.activeAttempt.state)) {
+        window.setTimeout(() => this.refreshCompileRecovery(iterationId), 1500);
+      }
+    } catch (error) {
+      this.setCompileRecoveryStatus(panel, `Could not load compile evidence: ${error.message}`, 'danger');
+    }
+  }
+
+  renderCompileRepairAttempt(panel, iterationId, attempt) {
+    const actions = panel.querySelector('[data-compile-recovery-actions]');
+    if (!actions) return;
+    const planPanel = panel.querySelector('[data-compile-recovery-plan]');
+    if (!attempt) { actions.innerHTML = ''; if (planPanel) planPanel.hidden = true; return; }
+    this.setCompileRecoveryStatus(panel, `AI Compile Repair • ${attempt.state} • pass ${attempt.passNumber} of ${attempt.maxPasses}`, attempt.state === 'FAILED' ? 'danger' : 'info');
+    this.renderCompileRepairPlan(planPanel, attempt.plan);
+    const attemptId = this.escapeAttr(attempt.attemptId);
+    if (attempt.state === 'AWAITING_APPROVAL') {
+      actions.innerHTML = `<button class="btn btn-success btn-sm" onclick="window.accountTaskPlanner.approveCompileRepair('${this.escapeAttr(iterationId)}','${attemptId}')">Approve and verify</button>
+        <button class="btn btn-outline-danger btn-sm" onclick="window.accountTaskPlanner.cancelCompileRepair('${this.escapeAttr(iterationId)}','${attemptId}')">Cancel</button>`;
+    } else if (attempt.state === 'SUCCEEDED') {
+      actions.innerHTML = `<button class="btn btn-success btn-sm" onclick="window.accountTaskPlanner.rerunCompileRecovery('${this.escapeAttr(iterationId)}','${attemptId}')">Rerun Task</button>`;
+    } else if (!['FAILED', 'CANCELLED'].includes(attempt.state)) {
+      actions.innerHTML = `<button class="btn btn-outline-danger btn-sm" onclick="window.accountTaskPlanner.cancelCompileRepair('${this.escapeAttr(iterationId)}','${attemptId}')">Cancel</button>`;
+    } else actions.innerHTML = '';
+  }
+
+  renderCompileRepairPlan(container, plan) {
+    if (!container) return;
+    if (!plan || !Array.isArray(plan.changes)) {
+      container.hidden = true;
+      container.innerHTML = '';
+      return;
+    }
+    const changes = plan.changes.map((change, index) => {
+      const location = change.lineNumber ? `:${change.lineNumber}` : '';
+      return `<article class="border rounded p-2 mt-2">
+        <div class="small fw-semibold">${index + 1}. ${this.escapeHtml(change.changeType || 'MODIFY')} ${this.escapeHtml(change.filePath || 'unknown file')}${this.escapeHtml(location)}</div>
+        ${change.oldText ? `<div class="small text-muted mt-2">Current</div><pre class="small bg-white border rounded p-2 mb-0">${this.escapeHtml(change.oldText)}</pre>` : ''}
+        ${change.newText ? `<div class="small text-muted mt-2">Proposed</div><pre class="small bg-white border rounded p-2 mb-0">${this.escapeHtml(change.newText)}</pre>` : ''}
+      </article>`;
+    }).join('');
+    container.innerHTML = `<div class="fw-semibold">Review proposed compile repair</div>
+      ${plan.description ? `<div class="small mt-1">${this.escapeHtml(plan.description)}</div>` : ''}
+      ${plan.rationale ? `<div class="small text-muted mt-1">${this.escapeHtml(plan.rationale)}</div>` : ''}
+      ${changes}`;
+    container.hidden = false;
+  }
+
+  setCompileRecoveryStatus(panel, message, tone = 'muted') {
+    const status = panel?.querySelector('[data-compile-recovery-status]');
+    if (status) { status.className = `small mt-2 text-${tone}`; status.textContent = message; }
+  }
+
+  async fetchCompileArtifact(iterationId, artifactId, view) {
+    const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/artifacts/${encodeURIComponent(artifactId)}?view=${encodeURIComponent(view)}`);
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
+    return body;
+  }
+
+  async copyCompileArtifact(iterationId, view) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      const state = panel?._compileRecovery || await (await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery`)).json();
+      const kind = view === 'full' ? 'ORIGINAL_COMPILE_LOG' : view === 'prompt' ? 'AI_PROMPT' : 'COMPILER_ERRORS';
+      const artifact = (state.artifacts || []).find(a => a.kind === kind);
+      if (!artifact) throw new Error('Requested sanitized artifact is unavailable');
+      const body = await this.fetchCompileArtifact(iterationId, artifact.artifactId, view);
+      await this.copyTextWithFallback(body.text);
+      this.setCompileRecoveryStatus(panel, `${view === 'full' ? 'Full sanitized log' : view === 'prompt' ? 'AI prompt' : 'Compiler errors'} copied.`, 'success');
+    } catch (error) { this.setCompileRecoveryStatus(panel, `Copy failed: ${error.message}`, 'danger'); }
+  }
+
+  async copyTextWithFallback(text) {
+    if (navigator.clipboard?.writeText) { try { await navigator.clipboard.writeText(text); return; } catch (_) {} }
+    const area = document.createElement('textarea'); area.value = text; area.setAttribute('readonly', ''); area.style.position = 'fixed'; area.style.opacity = '0'; document.body.appendChild(area); area.select();
+    const copied = document.execCommand && document.execCommand('copy'); document.body.removeChild(area);
+    if (!copied) throw new Error('Clipboard permission denied');
+  }
+
+  async startCompileRepair(iterationId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      const bound = await this.bindBuilderGoalCodexRun(iterationId, { silent: true });
+      if (!bound?.bound || !this.codexSessionId) throw new Error(bound?.reason || 'No Codex session is available');
+      this.setCompileRecoveryStatus(panel, 'Analyzing sanitized compiler diagnostics…', 'info');
+      const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/ai-repair`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({codexSessionId:this.codexSessionId,mode:'PLAN_ONLY',maxPasses:3,idempotencyKey:`ui-${iterationId}-${nonce}`}) });
+      const body = await response.json(); if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
+      await this.refreshCompileRecovery(iterationId);
+    } catch (error) { this.setCompileRecoveryStatus(panel, `AI repair failed: ${error.message}`, 'danger'); }
+  }
+
+  async approveCompileRepair(iterationId, attemptId) { await this.postCompileRepairAction(iterationId, attemptId, 'approve'); }
+  async cancelCompileRepair(iterationId, attemptId) { await this.postCompileRepairAction(iterationId, attemptId, 'cancel'); }
+  async rerunCompileRecovery(iterationId, attemptId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      this.setCompileRecoveryStatus(panel, 'Starting the verified repair as a child run…', 'info');
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/attempts/${encodeURIComponent(attemptId)}/rerun`, {method:'POST'});
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
+      if (body?.run?.iterationId) await this.bindBuilderGoalCodexRun(body.run.iterationId, {silent:true});
+      await this.loadBuilderGoalRuns();
+      this.renderBuilderGoalClientStatus(`Verified compile repair rerun accepted${body?.run?.iterationId ? ` as ${body.run.iterationId}` : ''}.`, 'success');
+    } catch (error) {
+      this.setCompileRecoveryStatus(panel, `Rerun failed: ${error.message}`, 'danger');
+    }
+  }
+  async postCompileRepairAction(iterationId, attemptId, action) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try { this.setCompileRecoveryStatus(panel, action === 'approve' ? 'Applying approved patch and verifying compilation…' : 'Cancelling repair…', 'info'); const response=await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/attempts/${encodeURIComponent(attemptId)}/${action}`,{method:'POST'});const body=await response.json();if(!response.ok)throw new Error(body.message||`HTTP ${response.status}`);await this.refreshCompileRecovery(iterationId); }
+    catch(error){this.setCompileRecoveryStatus(panel,`${action} failed: ${error.message}`,'danger');}
+  }
+
+  downloadCompileArtifact(iterationId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    const artifact = (panel?._compileRecovery?.artifacts || []).find(a => a.kind === 'ORIGINAL_COMPILE_LOG');
+    if (!artifact) { this.setCompileRecoveryStatus(panel, 'Sanitized log is unavailable.', 'danger'); return; }
+    window.location.assign(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/artifacts/${encodeURIComponent(artifact.artifactId)}/download`);
+  }
+
+  /**
+   * Returns the safest useful summary for a structured Builder Goal start failure. The backend
+   * keeps the legacy error field, so prefer its sanitized detail while retaining the stable code
+   * and phase for operators and tests.
+   */
+  static describeBuilderGoalStartFailure(result, status) {
+    const body = result && typeof result === 'object' ? result : {};
+    const primary = [body.details, body.error, body.code, `HTTP ${status}`]
+      .find(value => value !== null && value !== undefined && String(value).trim() !== '');
+    const parts = [String(primary || `HTTP ${status}`)];
+    if (body.code && String(body.code) !== String(primary)) {
+      parts.push(`code ${body.code}`);
+    }
+    if (body.phase) {
+      parts.push(`phase ${body.phase}`);
+    }
+    if (body.correlationId) {
+      parts.push(`correlation ${body.correlationId}`);
+    }
+    return parts.join(' • ');
+  }
+
+  /** Renders a structured preflight failure before the exact failed run is polled. */
+  renderBuilderGoalStartFailure(result, status) {
+    if (!this.builderGoalClientStatus) return;
+    const body = result && typeof result === 'object' ? result : {};
+    const message = AccountTaskPlanner.describeBuilderGoalStartFailure(body, status);
+    const iterationId = body.iterationId || '';
+    const viewLogHtml = iterationId
+      ? `<a href="javascript:void(0)" onclick="window.accountTaskPlanner.loadBuilderGoalRunLogs('${this.escapeAttr(String(iterationId))}')" class="text-decoration-none"><i class="bi bi-file-text me-1"></i>View Launch Log</a>`
+      : '';
+    const statusUrl = typeof body.statusUrl === 'string' &&
+      body.statusUrl.startsWith('/api/debug/builder-goals/')
+      ? body.statusUrl
+      : '';
+    const statusLink = statusUrl
+      ? `<a href="${this.escapeAttr(statusUrl)}" target="_blank" rel="noopener" class="ms-2">View Run</a>`
+      : '';
+    this.builderGoalClientStatus.innerHTML =
+      `<div class="text-danger"><strong><i class="bi bi-exclamation-octagon me-1"></i>` +
+      `${this.escapeHtml(message)}</strong>${statusLink}</div>` +
       (viewLogHtml ? `<div class="small mt-1">${viewLogHtml}</div>` : '');
   }
 
@@ -3210,9 +3632,36 @@ class AccountTaskPlanner {
           scriptClicked: false
         })
       });
-      const result = await response.json();
+      const responseText = await response.text();
+      const trimmedResponseText = responseText.trim();
+      let result = {};
+      if (trimmedResponseText) {
+        try {
+          result = JSON.parse(trimmedResponseText);
+        } catch (parseError) {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          throw new Error('Invalid JSON response');
+        }
+      } else if (response.ok) {
+        throw new Error('Empty response body');
+      }
       if (!response.ok) {
-        throw new Error(result.error || `HTTP ${response.status}`);
+        // A failed preflight has already been persisted by the backend. Start exact-run polling
+        // even for HTTP 422 so the failure remains visible in the same run-history UI as a normal
+        // accepted launch.
+        if (result && result.iterationId) {
+          this.startBuilderGoalRunTracking(result.iterationId, {
+            statusUrl: result.statusUrl
+          });
+        }
+        const failure = new Error(
+          AccountTaskPlanner.describeBuilderGoalStartFailure(result, response.status)
+        );
+        failure.builderGoalFailure = result;
+        failure.httpStatus = response.status;
+        throw failure;
       }
       if (result.published === false) {
         await this.loadBuilderGoalRuns();
@@ -3242,14 +3691,21 @@ class AccountTaskPlanner {
     } catch (error) {
       console.error('Failed to publish builder goal task:', error);
       const timedOut = error && error.name === 'AbortError';
+      const structuredFailure = error && error.builderGoalFailure;
       const message = timedOut
         ? 'Publish timed out before Micro6 acknowledged the task.'
-        : error.message;
+        : structuredFailure
+          ? AccountTaskPlanner.describeBuilderGoalStartFailure(
+              structuredFailure,
+              error.httpStatus || 500
+            )
+          : error.message || 'HTTP request failed';
       await this.loadBuilderGoalRuns();
-      this.renderBuilderGoalClientStatus(
-        `Failed to run task: ${message}`,
-        'danger'
-      );
+      if (structuredFailure) {
+        this.renderBuilderGoalStartFailure(structuredFailure, error.httpStatus || 500);
+      } else {
+        this.renderBuilderGoalClientStatus(`Failed to run task: ${message}`, 'danger');
+      }
       alert('Failed to run task: ' + message);
     } finally {
       clearTimeout(timeoutHandle);
@@ -4099,6 +4555,10 @@ class AccountTaskPlanner {
       if (run.status) parts.push(`status ${run.status}`);
       if (run.targetPreparationState) parts.push(`prep ${run.targetPreparationState}`);
       if (run.publishStatus) parts.push(`publish ${run.publishStatus}`);
+      const executorDiagnostics = AccountTaskPlanner.builderGoalExecutorDiagnostics(run);
+      if (executorDiagnostics) parts.push(executorDiagnostics);
+      const phaseText = AccountTaskPlanner.describeBuilderGoalExecutorPhase(run);
+      if (phaseText) parts.push(phaseText);
       if (filter.matchMode) {
         parts.push(
           filter.matchMode === 'run_filtered'
@@ -4981,6 +5441,7 @@ class AccountTaskPlanner {
       this.recoveryShell.hidden = false;
     }
     document.body.classList.add('recovery-mode-active');
+    window.DebuggerWorkspace?.activate?.('recovery', { syncMode: false });
 
     if (phase === 'loading') {
       this.resetRecoveryWorkspaceUi();
@@ -5183,6 +5644,7 @@ class AccountTaskPlanner {
       this.recoveryShell.hidden = true;
     }
     document.body.classList.remove('recovery-mode-active');
+    window.DebuggerWorkspace?.activate?.('runs', { syncMode: false });
     if (this.recoveryRunLabel) {
       this.recoveryRunLabel.textContent = '';
     }
@@ -6457,7 +6919,14 @@ class AccountTaskPlanner {
   }
 
   buildTaskConfigEnvelope(itemId, selectedTask, settingsContainerId) {
-    const settings = this.captureTaskSettingsFromForm(itemId, selectedTask, settingsContainerId);
+    const capturedSettings = this.captureTaskSettingsFromForm(itemId, selectedTask, settingsContainerId);
+    const canonicalSettings = this.normalizeFishingPlannerSettings(
+      capturedSettings,
+      selectedTask?.task_key
+    );
+    if (canonicalSettings.error) {
+      throw new Error(canonicalSettings.error);
+    }
     const state = this.itemSelectionState.get(itemId) || {};
     const requirements = state.taskRequirements || {};
     return {
@@ -6465,7 +6934,7 @@ class AccountTaskPlanner {
       task_key: selectedTask?.task_key || '',
       display_name: selectedTask?.display_name || '',
       panel_display_name: selectedTask?.panel_display_name || '',
-      settings,
+      settings: canonicalSettings.settings,
       requirements
     };
   }
@@ -6539,8 +7008,16 @@ class AccountTaskPlanner {
     const state = this.itemSelectionState.get(itemId) || {};
     const resolvedTask = this.findCatalogTaskByKeyFlexible(normalized.taskKey) || selectedTask || null;
     const resolvedTaskKey = resolvedTask?.task_key || selectedTask?.task_key || state.selectedTaskKey || '';
+    const canonicalSettings = this.normalizeFishingPlannerSettings(
+      normalized.settings,
+      resolvedTaskKey
+    );
+    if (canonicalSettings.error) {
+      this.showTaskConfigMessage(itemId, canonicalSettings.error, 'error');
+      return;
+    }
     state.selectedTaskKey = resolvedTaskKey;
-    state.taskSettings = normalized.settings || {};
+    state.taskSettings = canonicalSettings.settings;
     state.taskRequirements = normalized.requirements || {};
     this.itemSelectionState.set(itemId, state);
 
@@ -6575,6 +7052,46 @@ class AccountTaskPlanner {
       (reqCount ? `, stored requirements metadata (${reqCount} key(s))` : '') +
       '.';
     this.showTaskConfigMessage(itemId, msg, ignoredKeys.length ? 'warning' : 'success');
+  }
+
+  // The current Micro6 Fishing schema uses stopConditionValue. Keep copied planner payloads
+  // compatible with its two historical aliases without relaxing validation for other fields.
+  normalizeFishingPlannerSettings(settings, taskKey) {
+    const normalized =
+      settings && typeof settings === 'object' && !Array.isArray(settings) ? { ...settings } : {};
+    const key = String(taskKey || '').toUpperCase();
+    if (key !== 'FISHING_TRAINING' && key !== 'FISH_TRAINING') {
+      return { settings: normalized };
+    }
+    const hasCanonical = Object.prototype.hasOwnProperty.call(normalized, 'stopConditionValue');
+    const hasCamel = Object.prototype.hasOwnProperty.call(normalized, 'targetLevel');
+    const hasSnake = Object.prototype.hasOwnProperty.call(normalized, 'target_level');
+    const legacyValues = [
+      ...(hasCamel ? [normalized.targetLevel] : []),
+      ...(hasSnake ? [normalized.target_level] : [])
+    ];
+    if (
+      legacyValues.length > 1 &&
+      !legacyValues.every(value => Object.is(value, legacyValues[0]))
+    ) {
+      return { error: 'Conflicting Fishing target-level settings: targetLevel and target_level disagree.' };
+    }
+    const legacy = legacyValues[0];
+    if (
+      hasCanonical &&
+      legacyValues.length &&
+      !Object.is(normalized.stopConditionValue, legacy)
+    ) {
+      return {
+        error: 'Conflicting Fishing target-level settings: stopConditionValue disagrees with a legacy target-level value.'
+      };
+    }
+    if (!hasCanonical && legacyValues.length) {
+      normalized.stopConditionValue = legacy;
+    }
+    delete normalized.targetLevel;
+    delete normalized.target_level;
+    return { settings: normalized };
   }
 
   showTaskConfigMessage(itemId, message, tone) {
@@ -7013,10 +7530,12 @@ class AccountTaskPlanner {
 
   escapeHtml(text) {
     if (text === null || text === undefined || text === '') return '';
-    if (typeof document === 'undefined') return String(text);
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   escapeAttr(text) {

@@ -1,0 +1,28 @@
+{
+  "snapshotVersion": 1,
+  "runtimeIdentity": {
+    "adapterVersion": "1.0.0",
+    "buildCommit": "exact-commit",
+    "cacheRevision": "sha256:abc123",
+    "contentRevision": "sha256:def456"
+  },
+  "tick": 110,
+  "clock": {"currentTick": 110, "startTime": "2026-01-01T00:00:00Z"},
+  "random": {"seed": "42", "state": [12345, 67890]},
+  "ids": {"counters": {}},
+  "world": {"worldId": 999},
+  "players": [],
+  "npcs": [],
+  "objects": [],
+  "groundItems": [],
+  "scheduler": {},
+  "timers": [],
+  "pendingActions": [],
+  "pendingMovement": [],
+  "pendingInteractions": [],
+  "contentState": [],
+  "scriptState": [],
+  "eventQueue": {},
+  "canonicalStateHash": "sha256:observation-hash",
+  "checksum": "sha256:snapshot-hash"
+}

@@ -6,15 +6,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import com.chromascape.web.simulator.SimulatorVerifyJobStore.JobStatus;
 import com.chromascape.web.simulator.SimulatorVerifyJobStore.VerifyJob;
 import java.lang.reflect.Method;
 import java.util.Map;
+import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -24,6 +28,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Behavioral integration test suite for {@link SimulatorVerifyService}.
@@ -34,9 +40,17 @@ import org.springframework.test.context.ActiveProfiles;
  * <p>Complements {@link SimulatorVerifyServiceTest} which covers structural (signature-based) tests
  * using reflection and mocks.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
+@SpringBootTest(
+    classes = com.chromascape.web.ChromaScapeApplication.class,
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles({"test", "openrune-legacy"})
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class SimulatorVerifyServiceIntegrationTest {
+
+  @DynamicPropertySource
+  static void isolatedPostgres(DynamicPropertyRegistry registry) {
+    IsolatedPostgresTestDatabase.register(registry);
+  }
 
   @LocalServerPort private int port;
 
@@ -46,10 +60,15 @@ class SimulatorVerifyServiceIntegrationTest {
 
   @Autowired private SimulatorVerifierProperties properties;
 
+  @Autowired private Flyway flyway;
+
+  @Autowired private DataSource dataSource;
+
   private String baseUrl;
 
   @BeforeEach
   void setUp() {
+    IsolatedPostgresTestDatabase.assertRepositoryHeadAndNoUnresolvedMigration16(flyway, dataSource);
     baseUrl = "http://localhost:" + port + "/api/simulator/verify";
   }
 
@@ -384,14 +403,14 @@ class SimulatorVerifyServiceIntegrationTest {
   class ReportRetrievalBehavioralTests {
 
     @Test
-    @DisplayName("Should return 404 when report not available")
-    void shouldReturn404WhenReportNotAvailable() {
+    @DisplayName("Should return synthetic failure report when verifier cannot start")
+    void shouldReturnSyntheticFailureReportWhenVerifierCannotStart() {
       // Skip if simulator integration is disabled
       if (!properties.isEnabled()) {
         return;
       }
 
-      // Arrange - start a job that will fail (no report generated)
+      // Arrange - start a job that will fail before the verifier produces a report.
       HttpHeaders headers = new HttpHeaders();
       headers.setContentType(MediaType.APPLICATION_JSON);
       String requestJson =
@@ -417,19 +436,15 @@ class SimulatorVerifyServiceIntegrationTest {
                 assertEquals("FAILED", statusResponse.getBody().get("status"));
               });
 
-      // Act - try to get report
-      ResponseEntity<String> reportResponse =
-          restTemplate.getForEntity(baseUrl + "/" + jobId + "/report", String.class);
+      // Act - retrieve the service-generated synthetic failure report.
+      ResponseEntity<Map> reportResponse =
+          restTemplate.getForEntity(baseUrl + "/" + jobId + "/report", Map.class);
 
-      // Assert
-      assertEquals(
-          HttpStatus.NOT_FOUND,
-          reportResponse.getStatusCode(),
-          "Should return 404 when report not available");
-      assertNotNull(reportResponse.getBody(), "Error response body should not be null");
-      assertTrue(
-          reportResponse.getBody().contains("Report not available"),
-          "Error response should contain appropriate error message");
+      // Assert - failed jobs expose a machine-readable synthetic report.
+      assertEquals(HttpStatus.OK, reportResponse.getStatusCode());
+      assertNotNull(reportResponse.getBody(), "Synthetic report body should not be null");
+      assertEquals(false, reportResponse.getBody().get("passed"));
+      assertNotNull(reportResponse.getBody().get("error"));
     }
 
     @Test

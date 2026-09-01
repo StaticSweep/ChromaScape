@@ -318,12 +318,90 @@
     return fresh;
   }
 
+  /**
+   * Selects the active shadow run from a {@code /runs} discovery payload.
+   *
+   * <p>A run is auto-selected only when it is explicitly marked {@code active} and is a real
+   * schema-v2 run ({@code shadowRunId} present, not the legacy file). An empty run list, a list with
+   * no active run, or a list containing only legacy history returns {@code null} so the caller shows
+   * the run selector and never silently loads legacy history.
+   *
+   * @param {Array} runs the {@code runs} array from the server
+   * @returns {Object|null} the single active run, or null when there is none
+   */
+  function selectActiveRun(runs) {
+    if (!Array.isArray(runs)) return null;
+    const active = runs.find(r => r && r.active && !r.legacy && r.shadowRunId);
+    return active || null;
+  }
+
+  /**
+   * Computes the run-list fields after a session/run switch.
+   *
+   * <p>When the new session differs from the previously tracked session (or either is unknown),
+   * the run list is cleared. When the session is unchanged (a run change within the same session),
+   * the discovered run list is preserved so the run selector stays populated.
+   *
+   * @param {Array} currentRuns the current runs array
+   * @param {string|null} currentRunsSessionId the session the current runs belong to
+   * @param {string|null} previousSessionId the session before the switch
+   * @param {string|null} newSessionId the session after the switch
+   * @returns {{runs: Array, runsSessionId: string|null}}
+   */
+  function resetRunsOnSessionSwitch(
+    currentRuns,
+    currentRunsSessionId,
+    previousSessionId,
+    newSessionId
+  ) {
+    if (newSessionId && previousSessionId && newSessionId === previousSessionId) {
+      return { runs: currentRuns || [], runsSessionId: currentRunsSessionId || null };
+    }
+    return { runs: [], runsSessionId: null };
+  }
+
+  /**
+   * Applies a {@code /runs} discovery payload, keyed by session.
+   *
+   * <p>The discovery applies only when it targets the currently tracked session; otherwise the
+   * current run list is returned unchanged so a stale, aborted, or malformed discovery can never
+   * restore a previous session's runs. A successful discovery stores the (possibly empty) run list
+   * for the target session.
+   *
+   * @param {Array} currentRuns the current runs array
+   * @param {string|null} currentRunsSessionId the session the current runs belong to
+   * @param {string|null} trackedSessionId the currently tracked session
+   * @param {string} targetSessionId the session the discovery was requested for
+   * @param {Array} discoveredRuns the runs array from the server
+   * @returns {{runs: Array, runsSessionId: string|null}}
+   */
+  function applyRunsDiscovery(
+    currentRuns,
+    currentRunsSessionId,
+    trackedSessionId,
+    targetSessionId,
+    discoveredRuns
+  ) {
+    if (trackedSessionId && trackedSessionId !== targetSessionId) {
+      // Stale/aborted discovery for a non-tracked session: ignore.
+      return { runs: currentRuns || [], runsSessionId: currentRunsSessionId || null };
+    }
+    if (!Array.isArray(discoveredRuns)) {
+      // Malformed discovery cannot overwrite current state.
+      return { runs: currentRuns || [], runsSessionId: currentRunsSessionId || null };
+    }
+    return { runs: discoveredRuns, runsSessionId: targetSessionId };
+  }
+
   const api = {
     createEmptyShadowState,
     mergeHistoryIntoState,
     mergeLiveDecisionIntoState,
     mergeStatusIntoState,
     switchShadowSessionState,
+    selectActiveRun,
+    resetRunsOnSessionSwitch,
+    applyRunsDiscovery,
     decisionKey
   };
 

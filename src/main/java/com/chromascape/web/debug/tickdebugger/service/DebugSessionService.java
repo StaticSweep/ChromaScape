@@ -14,7 +14,6 @@ import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.entity.RecordingSession;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
-import com.chromascape.web.recording.exception.FrameCaptureException;
 import com.chromascape.web.recording.service.RecordingService;
 import com.chromascape.web.recording.service.RecordingService.RecordingMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,7 +25,9 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -83,8 +84,9 @@ public class DebugSessionService {
   @Transactional
   public SessionStartResponse startSession(
       String accountName, String scriptName, Boolean recordingEnabled) {
-    return startSession(
-        accountName, scriptName, recordingEnabled, RecordingTriggerSource.MICRO6_AUTO, null);
+    return startSessionWithOutcome(
+            accountName, scriptName, recordingEnabled, RecordingTriggerSource.MICRO6_AUTO, null)
+        .response();
   }
 
   /**
@@ -102,7 +104,8 @@ public class DebugSessionService {
       String scriptName,
       Boolean recordingEnabled,
       RecordingTriggerSource triggerSource) {
-    return startSession(accountName, scriptName, recordingEnabled, triggerSource, null);
+    return startSessionWithOutcome(accountName, scriptName, recordingEnabled, triggerSource, null)
+        .response();
   }
 
   /**
@@ -118,12 +121,45 @@ public class DebugSessionService {
       Boolean recordingEnabled,
       RecordingTriggerSource triggerSource,
       String preferredSessionId) {
+    return startSessionWithOutcome(
+            accountName, scriptName, recordingEnabled, triggerSource, preferredSessionId)
+        .response();
+  }
 
-    DebugSession session = resolveOrCreateSession(accountName, scriptName, preferredSessionId);
+  /**
+   * Start a session/recording with optional preferred session binding, returning authoritative
+   * creation/reuse metadata plus a rollback token so a failed WebSocket transaction can compensate
+   * exactly the mutations this operation performed.
+   *
+   * <p>This is the authoritative resolve-or-create entry point. The returned {@link
+   * SessionStartOutcome} is the only source of truth for whether a session was newly created or a
+   * preferred session was reused, and whether this operation started a recording. The metadata is
+   * internal and never serialized to Micro6 or the debugger.
+   */
+  @Transactional
+  public SessionStartOutcome startSessionWithOutcome(
+      String accountName,
+      String scriptName,
+      Boolean recordingEnabled,
+      RecordingTriggerSource triggerSource,
+      String preferredSessionId) {
+
+    ResolveResult resolved = resolveOrCreateSession(accountName, scriptName, preferredSessionId);
+    DebugSession session = resolved.session();
+    boolean createdNewSession = resolved.createdNewSession();
+    boolean reusedPreferredSession = resolved.reusedPreferredSession();
     String sessionId = session.getSessionId();
     Long startTick = session.getStartTick() != null ? session.getStartTick() : 0L;
+
+    // Capture the pre-mutation recording/lifecycle state so a reused session can be restored on
+    // rollback.
+    String previousRecordingId = session.getRecordingId();
+    LocalDateTime previousStartTime = session.getStartTime();
+    DebugSessionLifecycleState previousLifecycleState = session.getLifecycleState();
+
     String recordingId = null;
     String recordingFailureReason = null;
+    boolean recordingStartedByOperation = false;
     LocalDateTime sessionStartTime;
 
     // Optionally start video recording
@@ -131,66 +167,65 @@ public class DebugSessionService {
         Boolean.TRUE.equals(recordingEnabled) && shouldStartRecording(triggerSource);
 
     if (shouldStartRecording) {
-      try {
-        recordingId = recordingService.startRecording(triggerSource);
-        sessionStartTime = recordingService.getRecordingStartTimeAsLocalDateTime();
-
-        if (sessionStartTime == null) {
-          sessionStartTime = LocalDateTime.now();
-          log.warn("Recording started but time unavailable, using current time");
-        }
-
-        // Update (or bind existing) session with recording ID and aligned start time
-        session.setRecordingId(recordingId);
-        session.setStartTime(sessionStartTime);
-
-        // Create RecordingSession entity for debug session recording
-        RecordingSession recordingSession =
-            new RecordingSession(
-                recordingId,
-                accountName,
-                scriptName,
-                sessionStartTime,
-                toSessionTrigger(triggerSource),
-                null);
-        recordingSessionRepository.save(recordingSession);
-
-        log.info("Started recording {} for debug session {}", recordingId, sessionId);
-      } catch (Exception e) {
-        // Recording start failed - degrade to a tick-only session instead of failing the session.
-        // The session stays in RECORDING so tick ingestion and playback continue; only video is
-        // lost. Failure diagnostics are recorded for later inspection.
-        String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-        String failureContext =
-            e instanceof FrameCaptureException ? e.getMessage() : getStackTraceString(e);
-        session.recordFailureDiagnostic(
-            DebugSessionFailureCode.REC_START_FAILED,
-            "Recording failed to start; continuing debug session without video: " + errorMsg,
-            failureContext);
-
-        // Save the diagnostic state in the current transaction (will commit when method returns)
+      String existingRecordingId = session.getRecordingId();
+      if (existingRecordingId != null && !existingRecordingId.isBlank()) {
+        // Reuse an existing recording association: never start a second recording and never treat
+        // the existing recording as owned by this operation.
+        recordingId = existingRecordingId;
+        log.info("Reusing existing recording {} for debug session {}", recordingId, sessionId);
+      } else {
         try {
-          sessionRepository.save(session);
-          log.error(
-              "Session {} recording start degraded: code={}, reason={}",
-              sessionId,
-              session.getFailureCode(),
-              errorMsg);
-        } catch (Exception saveEx) {
-          log.error(
-              "Failed to persist recording-start diagnostic for session {}: {}",
-              sessionId,
-              saveEx.getMessage());
-        }
+          recordingId = recordingService.startRecording(triggerSource);
+          // From this point the recorder is an external side effect that must be compensated if
+          // any database write below fails. Set ownership before the first persistence call.
+          recordingStartedByOperation = true;
+          sessionStartTime = recordingService.getRecordingStartTimeAsLocalDateTime();
 
-        // Return partial success - session continues tick-only (no recording linked)
-        recordingEnabled = false;
-        recordingId = null;
-        recordingFailureReason = "Recording failed to start: " + errorMsg;
-        log.warn(
-            "Degrading session {} to tick-only mode after recording start failure: {}",
-            sessionId,
-            errorMsg);
+          if (sessionStartTime == null) {
+            sessionStartTime = LocalDateTime.now();
+            log.warn("Recording started but time unavailable, using current time");
+          }
+
+          // Update (or bind existing) session with recording ID and aligned start time
+          session.setRecordingId(recordingId);
+          session.setStartTime(sessionStartTime);
+
+          // Create RecordingSession entity for debug session recording
+          RecordingSession recordingSession =
+              new RecordingSession(
+                  recordingId,
+                  accountName,
+                  scriptName,
+                  sessionStartTime,
+                  toSessionTrigger(triggerSource),
+                  null);
+          recordingSessionRepository.save(recordingSession);
+
+          log.info("Started recording {} for debug session {}", recordingId, sessionId);
+        } catch (Exception e) {
+          String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+          if (recordingStartedByOperation) {
+            // A failure after startRecording() is not a degraded recording start: persistence
+            // cannot safely continue without its recording association. Undo the exact recorder
+            // side effect and fail the transaction.
+            try {
+              stopRecordingForRollback(recordingId);
+            } catch (SessionStartRollbackException rollbackFailure) {
+              rollbackFailure.addSuppressed(e);
+              throw rollbackFailure;
+            }
+            throw new SessionStartRollbackException(
+                "Failed to persist started recording for debug session", e);
+          }
+          // Capture/start failure before ownership was acquired degrades to tick-only. The debug
+          // session remains operational rather than becoming FAILED with no end time.
+          recordingFailureReason = errorMsg;
+          recordingEnabled = false;
+          log.warn(
+              "Recording unavailable for debug session {}; continuing tick-only: {}",
+              sessionId,
+              errorMsg);
+        }
       }
     } else if (Boolean.TRUE.equals(recordingEnabled)) {
       recordingFailureReason = recordingBlockedReason(triggerSource);
@@ -201,7 +236,14 @@ public class DebugSessionService {
 
     // Transition to RECORDING state on success
     session.transitionTo(DebugSessionLifecycleState.RECORDING);
-    session = sessionRepository.save(session);
+    try {
+      session = sessionRepository.save(session);
+    } catch (Exception e) {
+      if (recordingStartedByOperation) {
+        stopRecordingForRollback(recordingId);
+      }
+      throw new SessionStartRollbackException("Failed to persist debug session start", e);
+    }
 
     log.info(
         "Debug session transitioned to RECORDING: sessionId={}, state={}, recording={}",
@@ -209,17 +251,186 @@ public class DebugSessionService {
         session.getLifecycleState(),
         recordingId);
 
-    return new SessionStartResponse(
-        sessionId, recordingEnabled, recordingId, startTick, recordingFailureReason);
+    SessionStartRollbackToken token =
+        new SessionStartRollbackToken(
+            sessionId,
+            createdNewSession,
+            recordingStartedByOperation ? recordingId : null,
+            previousRecordingId,
+            previousStartTime,
+            previousLifecycleState);
+    SessionStartResponse response =
+        new SessionStartResponse(
+            sessionId, recordingEnabled, recordingId, startTick, recordingFailureReason);
+    return new SessionStartOutcome(
+        response, token, createdNewSession, reusedPreferredSession, recordingStartedByOperation);
   }
 
   /**
-   * Capture-outbox entry point. The dispatcher has already committed its lease, so capture
-   * recorder I/O must not run inside that transaction. This method deliberately suspends any
-   * ambient transaction and invokes the existing lifecycle implementation directly; repository
-   * writes are committed by their individual Spring Data operations before/after the recorder
-   * call.
+   * Compensates a session-start operation described by {@code rollbackToken}, idempotently.
+   *
+   * <p>For a newly created session, stops only the recording this operation started (if any),
+   * finalizes the corresponding {@link RecordingSession} row, and finalizes the debug session. For
+   * a reused session, never finalizes the pre-existing session; it stops only the operation-owned
+   * recording and restores the prior recording id, start time, and lifecycle state, refusing to
+   * overwrite newer state via a compare-and-set on the recording id.
+   *
+   * @throws SessionStartRollbackException when compensation is incomplete (e.g. the recording
+   *     association changed or recording stop failed); the caller must retain retry ownership.
    */
+  @Transactional
+  public void rollbackSessionStart(SessionStartRollbackToken rollbackToken, String reason) {
+    if (rollbackToken == null
+        || rollbackToken.sessionId() == null
+        || rollbackToken.sessionId().isBlank()) {
+      return;
+    }
+    Optional<DebugSession> sessionOpt =
+        sessionRepository.findBySessionId(rollbackToken.sessionId());
+    if (sessionOpt.isEmpty()) {
+      // Nothing to compensate; idempotent no-op.
+      log.warn("Start rollback found no debug session for token; nothing to compensate");
+      return;
+    }
+    DebugSession session = sessionOpt.get();
+
+    if (rollbackToken.createdNewSession()) {
+      rollbackNewSession(session, rollbackToken, reason);
+    } else {
+      rollbackReusedSession(session, rollbackToken, reason);
+    }
+  }
+
+  /**
+   * Compensates a newly created session: stop the operation-owned recording, finalize its {@link
+   * RecordingSession} row, and finalize the debug session idempotently.
+   */
+  private void rollbackNewSession(
+      DebugSession session, SessionStartRollbackToken token, String reason) {
+    String operationRecordingId = token.recordingIdStartedByOperation();
+    if (operationRecordingId != null && !operationRecordingId.isBlank()) {
+      stopRecordingForRollback(operationRecordingId);
+      finalizeRecordingSessionForRollback(operationRecordingId);
+    }
+    // Finalize the newly created session (idempotent: skip when already terminal).
+    if (session.getLifecycleState() != DebugSessionLifecycleState.FINALIZED
+        && session.getLifecycleState() != DebugSessionLifecycleState.FAILED) {
+      session.setEndTime(LocalDateTime.now());
+      snapshotRepository
+          .findMaxTickBySessionId(session.getSessionId())
+          .ifPresent(session::setEndTick);
+      session.transitionTo(DebugSessionLifecycleState.FINALIZED);
+      sessionRepository.save(session);
+      log.info("Start rollback finalized newly created session: reason={}", reason);
+    }
+  }
+
+  /**
+   * Compensates a reused session: stop only the operation-owned recording and restore the prior
+   * recording id, start time, and lifecycle state, refusing to overwrite newer state.
+   */
+  private void rollbackReusedSession(
+      DebugSession session, SessionStartRollbackToken token, String reason) {
+    String operationRecordingId = token.recordingIdStartedByOperation();
+    String currentRecordingId = session.getRecordingId();
+
+    if (operationRecordingId != null && !operationRecordingId.isBlank()) {
+      if (operationRecordingId.equals(currentRecordingId)) {
+        if (session.getLifecycleState() != DebugSessionLifecycleState.RECORDING) {
+          throw new SessionStartRollbackException(
+              "Session lifecycle changed; refusing to overwrite newer state");
+        }
+        // Still owned by this operation: stop and restore.
+        stopRecordingForRollback(operationRecordingId);
+        finalizeRecordingSessionForRollback(operationRecordingId);
+        session.setRecordingId(token.previousRecordingId());
+        session.setStartTime(token.previousStartTime());
+        session.setLifecycleState(token.previousLifecycleState());
+        sessionRepository.save(session);
+        log.info(
+            "Start rollback restored reused session recording/lifecycle state: reason={}", reason);
+      } else if (Objects.equals(token.previousRecordingId(), currentRecordingId)) {
+        // A prior rollback already restored the state; idempotent no-op.
+        log.debug("Start rollback already applied for reused session; nothing to do");
+      } else {
+        // Newer state replaced the operation-owned recording; refuse to overwrite it.
+        throw new SessionStartRollbackException(
+            "Recording association changed; refusing to overwrite newer state");
+      }
+    } else {
+      // No operation-owned recording: the only mutation was the lifecycle transition. Restore the
+      // prior lifecycle state only while the operation's expected RECORDING state is still present.
+      // A concurrent stop/failure must never be turned back into an active session.
+      if (session.getLifecycleState() != DebugSessionLifecycleState.RECORDING
+          && session.getLifecycleState() != token.previousLifecycleState()) {
+        throw new SessionStartRollbackException(
+            "Session lifecycle changed; refusing to overwrite newer state");
+      }
+      session.setLifecycleState(token.previousLifecycleState());
+      sessionRepository.save(session);
+      log.debug("Start rollback restored reused session lifecycle state: reason={}", reason);
+    }
+  }
+
+  /** Stops the operation-owned recording, treating an already-stopped recording as a no-op. */
+  private void stopRecordingForRollback(String recordingId) {
+    try {
+      String currentRecordingId = recordingService.getCurrentRecordingId();
+      if (currentRecordingId == null) {
+        return;
+      }
+      if (!recordingId.equals(currentRecordingId)
+          || !recordingService.stopRecordingIfCurrent(recordingId)) {
+        throw new SessionStartRollbackException(
+            "Operation-owned recording is no longer the current recording");
+      }
+    } catch (Exception e) {
+      if (e instanceof SessionStartRollbackException rollbackException) {
+        throw rollbackException;
+      }
+      log.error("Failed to stop recording during rollback: {}", e.getMessage(), e);
+      throw new SessionStartRollbackException("Failed to stop recording during rollback", e);
+    }
+  }
+
+  /** Finalizes the {@link RecordingSession} row for an operation-owned recording, idempotently. */
+  private void finalizeRecordingSessionForRollback(String recordingId) {
+    if (recordingId == null || recordingId.isBlank()) {
+      return;
+    }
+    recordingSessionRepository
+        .findByRecordingId(recordingId)
+        .ifPresent(
+            rec -> {
+              if (rec.getEndTime() == null) {
+                rec.setEndTime(LocalDateTime.now());
+                recordingSessionRepository.save(rec);
+              }
+            });
+  }
+
+  /** Authoritative result of a session start. Internal only; never serialized. */
+  public record SessionStartOutcome(
+      SessionStartResponse response,
+      SessionStartRollbackToken rollbackToken,
+      boolean createdNewSession,
+      boolean reusedPreferredSession,
+      boolean recordingStartedByOperation) {}
+
+  /** Immutable description of the mutations a session start performed, for idempotent rollback. */
+  public record SessionStartRollbackToken(
+      String sessionId,
+      boolean createdNewSession,
+      String recordingIdStartedByOperation,
+      String previousRecordingId,
+      LocalDateTime previousStartTime,
+      DebugSessionLifecycleState previousLifecycleState) {}
+
+  /** Result of resolving (or creating) the canonical debug session for a start. */
+  private record ResolveResult(
+      DebugSession session, boolean createdNewSession, boolean reusedPreferredSession) {}
+
+  /** Capture-outbox entry point that keeps recorder I/O outside the dispatcher's transaction. */
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public SessionStartResponse startCaptureSession(
       String accountName,
@@ -388,10 +599,7 @@ public class DebugSessionService {
     }
   }
 
-  /**
-   * Capture-outbox stop entry point. Keep the recorder stop outside a database transaction so an
-   * external success cannot be rolled back together with session metadata.
-   */
+  /** Capture-outbox stop entry point that keeps recorder stop outside a database transaction. */
   @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public void stopCaptureSession(String sessionId, Long endTick, boolean stopRecording) {
     stopSession(sessionId, endTick, stopRecording);
@@ -553,23 +761,35 @@ public class DebugSessionService {
     return maybeRelinkRecordingToTickBearingSession(current);
   }
 
-  private DebugSession resolveOrCreateSession(
+  /**
+   * Returns true when a debug session with the given id exists and is still active (has no end
+   * time). Used by the tick-stream WebSocket handler to decide whether a SESSION_START transaction
+   * is reusing an already-active preferred session (and must therefore not finalize it on rollback)
+   * or is creating a fresh session.
+   */
+  public boolean isSessionActive(String sessionId) {
+    if (sessionId == null || sessionId.isBlank()) {
+      return false;
+    }
+    return sessionRepository.findBySessionId(sessionId).map(DebugSession::isActive).orElse(false);
+  }
+
+  private ResolveResult resolveOrCreateSession(
       String accountName, String scriptName, String preferredSessionId) {
     if (preferredSessionId != null && !preferredSessionId.isBlank()) {
       Optional<DebugSession> preferred = sessionRepository.findBySessionId(preferredSessionId);
-      if (preferred.isPresent() && preferred.get().isActive()) {
+      if (preferred.isPresent()
+          && preferred.get().isActive()
+          && preferred.get().getLifecycleState() != DebugSessionLifecycleState.FAILED
+          && preferred.get().getLifecycleState() != DebugSessionLifecycleState.FINALIZED) {
         DebugSession active = preferred.get();
         log.info("Binding recording to preferred active session {}", active.getSessionId());
-        return active;
+        return new ResolveResult(active, false, true);
       }
       log.warn("Preferred session {} not active/found, falling back", preferredSessionId);
     }
 
-    // Capture outbox bindings reserve a deterministic external session id before recorder I/O.
-    // Reusing that id lets a post-crash lookup find the same debugger session; ordinary callers
-    // retain the legacy timestamp-based allocation.
-    String sessionId = preferredSessionId != null && preferredSessionId.startsWith("capture_debug_")
-        ? preferredSessionId : "debug_" + System.currentTimeMillis();
+    String sessionId = "debug_" + UUID.randomUUID().toString().replace("-", "");
     DebugSession created =
         new DebugSession(sessionId, accountName, scriptName, LocalDateTime.now(), 0L);
     created = sessionRepository.save(created);
@@ -578,7 +798,7 @@ public class DebugSessionService {
         sessionId,
         accountName,
         scriptName);
-    return created;
+    return new ResolveResult(created, true, false);
   }
 
   private boolean maybeRelinkRecordingToTickBearingSession(DebugSession current) {

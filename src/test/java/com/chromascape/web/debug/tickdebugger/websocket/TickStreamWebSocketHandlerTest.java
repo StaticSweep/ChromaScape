@@ -21,6 +21,8 @@ import com.chromascape.web.aiplayer.prototype.FishingState;
 import com.chromascape.web.aiplayer.prototype.SemanticAction;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
+import com.chromascape.web.debug.tickdebugger.service.DebugSessionService.SessionStartOutcome;
+import com.chromascape.web.debug.tickdebugger.service.DebugSessionService.SessionStartRollbackToken;
 import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -100,6 +102,7 @@ class TickStreamWebSocketHandlerTest {
     ingestionService = mock(TickStreamIngestionService.class);
     debuggerHandler = mock(DebuggerTickWebSocketHandler.class);
     shadowDecisionService = mock(FishingShadowDecisionService.class);
+    when(shadowDecisionService.openSession(any(), any())).thenReturn(true);
     wsSession = mock(WebSocketSession.class);
     when(wsSession.getId()).thenReturn(wsId);
     handler =
@@ -109,7 +112,12 @@ class TickStreamWebSocketHandlerTest {
 
   private void stubStartSession(String sessionId) {
     SessionStartResponse response = new SessionStartResponse(sessionId, true, "rec_1", 0L, null);
-    when(sessionService.startSession(any(), any(), any(), any(), any())).thenReturn(response);
+    SessionStartRollbackToken token =
+        new SessionStartRollbackToken(sessionId, true, "rec_1", null, null, null);
+    SessionStartOutcome outcome =
+        new SessionStartOutcome(response, token, true, false, true);
+    when(sessionService.startSessionWithOutcome(any(), any(), any(), any(), any()))
+        .thenReturn(outcome);
   }
 
   private void bind(String sessionId) throws Exception {
@@ -304,7 +312,7 @@ class TickStreamWebSocketHandlerTest {
                 + "\"recordingEnabled\":true,\"preferredSessionId\":\"debug_2\","
                 + "\"clientRequestId\":\"req-2\"}"));
 
-    verify(sessionService, times(1)).startSession(any(), any(), any(), any(), any());
+    verify(sessionService, times(1)).startSessionWithOutcome(any(), any(), any(), any(), any());
     // The original binding is retained: a tick for debug_1 is still accepted.
     publishOnEvaluate(decision());
     handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson("debug_1")));
@@ -576,7 +584,7 @@ class TickStreamWebSocketHandlerTest {
     handler.handleTextMessage(other, new TextMessage(startJson2));
 
     // No second session is created, and the correlated rejection is sent to the second socket.
-    verify(sessionService, times(1)).startSession(any(), any(), any(), any(), any());
+    verify(sessionService, times(1)).startSessionWithOutcome(any(), any(), any(), any(), any());
     ArgumentCaptor<TextMessage> captor = ArgumentCaptor.forClass(TextMessage.class);
     verify(other).sendMessage(captor.capture());
     String payload = captor.getValue().getPayload();
@@ -652,25 +660,25 @@ class TickStreamWebSocketHandlerTest {
   }
 
   @Test
-  @DisplayName("a failed response send retains ownership for disconnect cleanup")
-  void failedResponseSendRetainsOwnership() throws Exception {
+  @DisplayName("a failed response send invokes synchronous compensation and clears ownership")
+  void failedResponseSendInvokesSynchronousCompensation() throws Exception {
     setup("ws-send-fail");
     stubStartSession("debug_1");
     doThrow(new RuntimeException("send boom")).when(wsSession).sendMessage(any());
 
     handler.handleTextMessage(wsSession, new TextMessage(startJson()));
 
+    // Synchronous compensation ran and released the binding/ownership; the later close callback
+    // performs no further work.
+    verify(sessionService).rollbackSessionStart(any(), anyString());
+    verify(shadowDecisionService).cleanupSession(eq("debug_1"), any());
     @SuppressWarnings("unchecked")
     Map<String, Object> bindings =
         (Map<String, Object>) ReflectionTestUtils.getField(handler, "sessionBindings");
-    assertThat(bindings).containsKey("ws-send-fail");
+    assertThat(bindings).doesNotContainKey("ws-send-fail");
 
     handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
-    verify(sessionService).finalizeSessionOnDisconnect("debug_1", "disconnect");
-    @SuppressWarnings("unchecked")
-    Map<String, Object> owners =
-        (Map<String, Object>) ReflectionTestUtils.getField(handler, "sessionOwners");
-    assertThat(owners).doesNotContainKey("debug_1");
+    verify(sessionService, never()).finalizeSessionOnDisconnect("debug_1", "disconnect");
   }
 
   @Test

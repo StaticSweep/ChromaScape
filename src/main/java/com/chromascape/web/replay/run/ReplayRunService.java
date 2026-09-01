@@ -9,6 +9,7 @@ import com.chromascape.web.replay.error.ReplayException;
 import com.chromascape.web.replay.manifest.entity.ScenarioManifest;
 import com.chromascape.web.replay.manifest.repository.ScenarioManifestRepository;
 import com.chromascape.web.replay.report.entity.ReplayReport;
+import com.chromascape.web.replay.report.ReplayReportService;
 import com.chromascape.web.replay.report.repository.ReplayReportRepository;
 import com.chromascape.web.replay.run.dto.*;
 import com.chromascape.web.replay.run.entity.ReplayAttempt;
@@ -22,6 +23,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -52,6 +54,7 @@ public class ReplayRunService {
     private final ReplayEventRepository eventRepository;
     private final ReplayReportRepository reportRepository;
     private final ScenarioManifestRepository manifestRepository;
+    private ReplayReportService reportService;
 
     private final int leaseDurationSeconds;
 
@@ -70,6 +73,21 @@ public class ReplayRunService {
         this.manifestRepository = manifestRepository;
         Integer configured = environment.getProperty("replay.worker.lease-duration-seconds", Integer.class);
         this.leaseDurationSeconds = configured != null ? configured : 30;
+    }
+
+    /** Constructor used by the durability line; report creation remains owned by its service. */
+    @Autowired
+    public ReplayRunService(ReplayRunRepository runRepository,
+                            ReplayAttemptRepository attemptRepository,
+                            ReplayCheckpointRepository checkpointRepository,
+                            ReplayEventRepository eventRepository,
+                            ReplayReportRepository reportRepository,
+                            ScenarioManifestRepository manifestRepository,
+                            ReplayReportService reportService,
+                            org.springframework.core.env.Environment environment) {
+        this(runRepository, attemptRepository, checkpointRepository, eventRepository,
+                reportRepository, manifestRepository, environment);
+        this.reportService = reportService;
     }
 
     // ── creation ──
@@ -224,21 +242,39 @@ public class ReplayRunService {
     // ── lifecycle mutations ──
 
     public CancelReplayRunResponse cancel(UUID runId, String ownerId) {
-        ReplayRun run = requireOwnedRun(runId, ownerId);
+        requireOwnedRun(runId, ownerId);
+        ReplayRun run = runRepository.findByIdForUpdate(runId)
+                .orElseThrow(() -> ReplayException.notFound(
+                        ReplayErrorCode.RECORDING_NOT_FOUND, "Run " + runId + " not found"));
         if (TERMINAL_STATES.contains(run.getState())) {
             throw ReplayException.conflict(ReplayErrorCode.RUN_IMMUTABLE,
                     "Run " + runId + " is already terminal");
         }
-        if (run.getState() == ReplayRunState.RUNNING || run.getState() == ReplayRunState.STARTING
-                || run.getState() == ReplayRunState.CLAIMED) {
-            run.setState(ReplayRunState.CANCELLING);
-            run.setTerminalReason("CANCEL_REQUESTED");
-        } else if (run.getState() == ReplayRunState.CANCELLING) {
-            // already pending cancellation
-        } else {
-            run.setState(ReplayRunState.CANCELLED);
-            run.setOutcome(com.chromascape.web.replay.api.dto.ReplayOutcome.CANCELLED);
-            run.setTerminalAt(LocalDateTime.now());
+        if (run.getPhase() == ReplayRunPhase.FINALIZE_ARTIFACTS
+                || run.getPhase() == ReplayRunPhase.FINALIZE_REPORT) {
+            throw ReplayException.conflict(ReplayErrorCode.RUN_IMMUTABLE,
+                    "Run " + runId + " has entered artifact finalization and can no longer be cancelled");
+        }
+        switch (run.getState()) {
+            case QUEUED -> {
+                LocalDateTime dbNow = runRepository.currentTimestamp();
+                applyTransition(run, ReplayRunState.CANCELLED, null, dbNow);
+                run.setOutcome(com.chromascape.web.replay.api.dto.ReplayOutcome.CANCELLED);
+                run.setTerminalReason("CANCEL_REQUESTED");
+                if (reportService == null) {
+                    throw new IllegalStateException("ReplayReportService is required for cancellation");
+                }
+                var prepared = reportService.preparePreExecutionCancellationReport(run, dbNow);
+                runRepository.save(run);
+                reportRepository.save(reportService.materialize(prepared, run, null));
+            }
+            case CLAIMED, STARTING, RUNNING -> {
+                run.setState(ReplayRunState.CANCELLING);
+                run.setTerminalReason("CANCEL_REQUESTED");
+            }
+            case CANCELLING -> { }
+            default -> throw ReplayException.conflict(ReplayErrorCode.RUN_IMMUTABLE,
+                    "Run " + runId + " is already terminal");
         }
         runRepository.save(run);
         return new CancelReplayRunResponse(run.getId().toString(), !TERMINAL_STATES.contains(run.getState()));
@@ -344,42 +380,35 @@ public class ReplayRunService {
         }
         ReplayRun run = runRepository.findById(runId).orElseThrow();
 
-        int nextAttemptNo = attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(runId)
-                .map(a -> a.getAttemptNo() + 1).orElse(1);
-        int nextGeneration = attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(runId)
-                .map(a -> Math.max(a.getFencingGeneration() + 1, nextAttemptNo)).orElse(1);
-
-        LocalDateTime now = LocalDateTime.now();
-        ReplayAttempt attempt = new ReplayAttempt();
-        attempt.setRunId(runId);
-        attempt.setAttemptNo(nextAttemptNo);
-        attempt.setFencingGeneration(nextGeneration);
-        attempt.setLeaseOwner(workerIdentity);
-        attempt.setWorkerIdentity(workerIdentity);
-        attempt.setLeaseExpiresAt(now.plusSeconds(leaseDurationSeconds));
-        attempt.setHeartbeatAt(now);
-        attempt.setState("RUNNING");
-        attempt.setCreatedAt(now);
-        attemptRepository.save(attempt);
-
-        run.setXrspsAdapterVersion(run.getXrspsAdapterVersion());
-        runRepository.save(run);
+        ReplayAttempt latest = attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(runId)
+                .orElse(null);
+        int nextAttemptNo = latest != null ? latest.getAttemptNo() + 1 : 1;
+        int nextGeneration = latest != null
+                ? Math.max(latest.getFencingGeneration() + 1, nextAttemptNo) : 1;
+        UUID attemptId = UUID.randomUUID();
+        int inserted = attemptRepository.insertAttemptWithDatabaseClock(
+                attemptId, runId, nextAttemptNo, nextGeneration, workerIdentity,
+                leaseDurationSeconds);
+        if (inserted != 1) {
+            throw new ReplayException(ReplayErrorCode.INTERNAL_ERROR,
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, true,
+                    "Failed to open attempt " + nextAttemptNo + " for run " + runId,
+                    "Retry claiming the run", null, null);
+        }
+        ReplayAttempt attempt = attemptRepository.findById(attemptId)
+                .orElseThrow(() -> new ReplayException(ReplayErrorCode.INTERNAL_ERROR,
+                        org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, true,
+                        "Attempt row vanished immediately after insert", null, null, null));
         log.info("Worker {} claimed run {} attempt {} fence {}", workerIdentity, runId, nextAttemptNo, nextGeneration);
-        return new ClaimResult(run, attempt);
+        return new ClaimResult(run, attempt, ReplayFence.of(attempt));
     }
 
     /** Renews the lease on the current attempt; rejects stale workers. */
     public void heartbeatOrThrow(UUID runId, ReplayAttempt attempt, String workerIdentity) {
-        if (!workerIdentity.equals(attempt.getLeaseOwner())) {
-            throw staleFence(runId, attempt);
-        }
-        LocalDateTime now = LocalDateTime.now();
-        if (attempt.getLeaseExpiresAt() != null && now.isAfter(attempt.getLeaseExpiresAt())) {
-            throw staleFence(runId, attempt);
-        }
-        attempt.setHeartbeatAt(now);
-        attempt.setLeaseExpiresAt(now.plusSeconds(leaseDurationSeconds));
-        attemptRepository.save(attempt);
+        int updated = attemptRepository.renewLeaseFenced(
+                attempt.getId(), runId, attempt.getFencingGeneration(), workerIdentity,
+                leaseDurationSeconds);
+        if (updated != 1) throw staleFence(runId, attempt);
     }
 
     /** Returns the active attempt when its lease has expired at {@code now}. */
@@ -397,12 +426,33 @@ public class ReplayRunService {
         }
     }
 
+    public ReplayAttempt requireValidFence(
+            UUID runId, UUID attemptId, int fencingGeneration, String workerIdentity) {
+        return attemptRepository
+                .findValidFencedAttempt(attemptId, runId, fencingGeneration, workerIdentity)
+                .orElseThrow(() -> staleFenceById(attemptId));
+    }
+
+    public ReplayAttempt requireValidFence(
+            UUID runId, ReplayAttempt attempt, String workerIdentity) {
+        return requireValidFence(
+                runId, attempt.getId(), attempt.getFencingGeneration(), workerIdentity);
+    }
+
     private ReplayException staleFence(UUID runId, ReplayAttempt attempt) {
         return new ReplayException(ReplayErrorCode.ATTEMPT_STALE_FENCE,
                 org.springframework.http.HttpStatus.CONFLICT, false,
                 "This attempt no longer holds the lease",
                 "The run was reclaimed by another worker or the lease expired",
                 "attempt=" + attempt.getAttemptNo(), null);
+    }
+
+    private ReplayException staleFenceById(UUID attemptId) {
+        return new ReplayException(ReplayErrorCode.ATTEMPT_STALE_FENCE,
+                org.springframework.http.HttpStatus.CONFLICT, false,
+                "This attempt no longer holds a valid lease",
+                "The run was recovered by another process or the lease expired",
+                "attempt=" + attemptId, null);
     }
 
     public ReplayRun transition(UUID runId, ReplayRunState targetState, ReplayRunPhase targetPhase) {
@@ -416,16 +466,50 @@ public class ReplayRunService {
     }
 
     public void applyTransition(ReplayRun run, ReplayRunState targetState, ReplayRunPhase targetPhase) {
+        applyTransition(run, targetState, targetPhase, runRepository.currentTimestamp());
+    }
+
+    public void applyTransition(ReplayRun run, ReplayRunState targetState,
+                                ReplayRunPhase targetPhase, LocalDateTime transitionAt) {
         validateTransition(run.getState(), targetState);
         run.setState(targetState);
         if (targetPhase != null) {
             run.setPhase(targetPhase);
         }
         if (targetState == ReplayRunState.STARTING && run.getStartedAt() == null) {
-            run.setStartedAt(LocalDateTime.now());
+            run.setStartedAt(transitionAt);
         }
         if (TERMINAL_STATES.contains(targetState)) {
-            run.setTerminalAt(LocalDateTime.now());
+            run.setTerminalAt(transitionAt);
+        }
+    }
+
+    public boolean isPastDeadline(ReplayRun run, int timeoutSeconds) {
+        return Boolean.TRUE.equals(runRepository.isDeadlineExceeded(run.getId(), timeoutSeconds));
+    }
+
+    public boolean tryUpdatePhaseFenced(UUID runId, ReplayAttempt attempt,
+                                        String workerIdentity, ReplayRunPhase targetPhase) {
+        return runRepository.updatePhaseFenced(runId, attempt.getId(),
+                attempt.getFencingGeneration(), workerIdentity, targetPhase.name()) == 1;
+    }
+
+    public void updatePhaseFenced(UUID runId, UUID attemptId, int fencingGeneration,
+                                  String workerIdentity, ReplayRunPhase expectedPhase,
+                                  ReplayRunPhase targetPhase) {
+        if (expectedPhase != null) {
+            ReplayRun current = runRepository.findById(runId)
+                    .orElseThrow(() -> ReplayException.notFound(
+                            ReplayErrorCode.RECORDING_NOT_FOUND, "Run " + runId + " not found"));
+            if (current.getState() != ReplayRunState.RUNNING
+                    || current.getPhase() != expectedPhase) {
+                throw staleFenceById(attemptId);
+            }
+        }
+        int updated = runRepository.updatePhaseFenced(runId, attemptId, fencingGeneration,
+                workerIdentity, targetPhase.name());
+        if (updated != 1) {
+            throw staleFenceById(attemptId);
         }
     }
 
@@ -496,5 +580,5 @@ public class ReplayRunService {
     }
 
     /** Claim outcome bundle. */
-    public record ClaimResult(ReplayRun run, ReplayAttempt attempt) {}
+    public record ClaimResult(ReplayRun run, ReplayAttempt attempt, ReplayFence fence) {}
 }

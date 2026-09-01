@@ -20,10 +20,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,10 +96,7 @@ public class ReplayActionConversionService {
 
     boolean completeTypedStream =
         isCompleteTypedStream(typed, logs, sessionId, startTick, endTick);
-    if (mode != ConversionMode.LEGACY_BEST_EFFORT && !typed.isEmpty()) {
-      return capturedResult(sessionId, startTick, endTick, mode, typed, completeTypedStream);
-    }
-    if (mode == ConversionMode.CAPTURED_ONLY) {
+    if (mode == ConversionMode.CAPTURED_ONLY && !completeTypedStream) {
       return result(
           sessionId,
           startTick,
@@ -115,7 +112,7 @@ public class ReplayActionConversionService {
                       : "TYPED_ACTION_STREAM_INCOMPLETE",
                   typed.isEmpty()
                       ? "No typed recording actions exist in the requested range"
-                      : "Typed recording actions are not a complete Micro6 semantic capture",
+                      : "Typed recording actions do not cover every semantic dispatch",
                   ActionProvenance.DEFAULTED,
                   null)),
           List.of(),
@@ -123,7 +120,9 @@ public class ReplayActionConversionService {
           0,
           0.0);
     }
-
+    if (mode != ConversionMode.LEGACY_BEST_EFFORT && !typed.isEmpty()) {
+      return capturedResult(sessionId, startTick, endTick, mode, typed, completeTypedStream);
+    }
     return legacyResult(sessionId, startTick, endTick, mode, logs, snapshots, typed.size());
   }
 
@@ -266,9 +265,6 @@ public class ReplayActionConversionService {
 
     Set<ActionKey> typedKeys = new HashSet<>();
     for (ReplayRecordingAction action : typed) {
-      if ("WAIT_UNTIL_TICK".equals(action.getActionType())) {
-        continue;
-      }
       ActionKey key = new ActionKey(action.getTick(), action.getSequence());
       if (!typedKeys.add(key) || !legacyByKey.containsKey(key)) {
         return false;
@@ -282,6 +278,15 @@ public class ReplayActionConversionService {
       String typedOption = text(jsonMap(action.getArgumentsJson()), "option");
       if (legacyOption != null && typedOption != null
           && !normalizeOption(legacyOption).equals(normalizeOption(typedOption))) {
+        return false;
+      }
+      String typedStableId = action.getTargetStableId();
+      String legacyStableId = stableTarget(details);
+      if (!"WAIT_UNTIL_TICK".equals(action.getActionType())
+          && (typedStableId == null
+              || typedStableId.isBlank()
+              || legacyStableId == null
+              || !typedStableId.equals(legacyStableId))) {
         return false;
       }
     }

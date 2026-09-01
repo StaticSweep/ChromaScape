@@ -2,12 +2,9 @@ package com.chromascape.web.replay.catalog.dto;
 
 import java.util.List;
 
-/**
- * Wrapper for the recording catalog endpoint.
- */
+/** Wrapper for the recording catalog endpoint. */
 public record ReplayRecordingCatalogResponse(
-        int schemaVersion,
-        List<ReplayRecordingCatalogEntry> entries) {
+    int schemaVersion, List<ReplayRecordingCatalogEntry> entries) {
 
-    public static final int CURRENT_VERSION = 1;
+  public static final int CURRENT_VERSION = 1;
 }

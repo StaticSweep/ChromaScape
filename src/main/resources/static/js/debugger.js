@@ -17,6 +17,13 @@ let botStateWebSocket = null;
 let viewportWebSocket = null;
 let tickPoller = null;
 let aiInspectorPoller = null;
+let recordingStatusPoller = null;
+let providerStatusPoller = null;
+let windowSelectionPoller = null;
+let recordingDiagnosticsPoller = null;
+let feedStatusPoller = null;
+let debuggerPageClosing = false;
+let logWebSocketReconnectTimer = null;
 
 // Viewport frame synchronization state
 let lastDrawnSeq = 0;
@@ -48,10 +55,145 @@ let isDebugSessionActive = false;
 let debugFeedEnabled = false;
 const DEBUG_FEED_KEY = 'debugger_debug_feed_enabled';
 
+// Session/recording synchronization guards. These prevent duplicate SESSION_CREATED broadcasts
+// and overlapping status generations from resetting the live panel during transport recovery.
+let lastProcessedSessionCreatedKey = null;
+let ignoredSessionCreatedCount = 0;
+let lastIgnoredSessionSummaryAt = 0;
+let recordingStatusRequest = null;
+let recordingStatusGeneration = 0;
+let recordingStatusAbortController = null;
+let recordingNotificationId = null;
+
 const elements = {};
 const MAX_LOG_ENTRIES = 3000;
 const liveLogHistory = [];
 const replayLogHistory = [];
+
+const DEBUGGER_WORKSPACES = Object.freeze({
+  runs: {
+    eyebrow: 'Operator workspace',
+    title: 'Runs',
+    description: 'Launch a Micro6 task, follow its progress, and open evidence or recovery from one place.'
+  },
+  live: {
+    eyebrow: 'Observe',
+    title: 'Live session',
+    description: 'Watch the selected client, current tick, structured state, and incoming logs.'
+  },
+  replays: {
+    eyebrow: 'Investigate',
+    title: 'Replay evidence',
+    description: 'Select a recording and inspect synchronized video, ticks, state, overlays, and logs.'
+  },
+  recovery: {
+    eyebrow: 'Diagnose and repair',
+    title: 'Recovery',
+    description: 'Annotate failed-run evidence, generate a patch plan, and approve a controlled relaunch.'
+  },
+  'ai-training': {
+    eyebrow: 'Evidence and operations',
+    title: 'AI Training',
+    description: 'Trace recordings through datasets, models, held-out replay, and live shadow without copying identifiers.'
+  },
+  developer: {
+    eyebrow: 'Advanced',
+    title: 'Developer Tools',
+    description: 'Experimental replay kernels, patch-loop internals, recording labs, and raw AI tooling.'
+  }
+});
+
+let debuggerWorkspaceInitialized = false;
+let debuggerWorkspaceModeSync = false;
+let currentDebuggerWorkspace = 'runs';
+
+function activateDebuggerWorkspace(workspace, options = {}) {
+  const definition = DEBUGGER_WORKSPACES[workspace];
+  if (!definition) return;
+
+  currentDebuggerWorkspace = workspace;
+  document.body.dataset.workspace = workspace;
+
+  document.querySelectorAll('[data-workspace]').forEach(button => {
+    if (!button.classList.contains('workspace-tab')) return;
+    const active = button.dataset.workspace === workspace;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+
+  const eyebrow = document.getElementById('workspaceEyebrow');
+  const title = document.getElementById('workspaceTitle');
+  const description = document.getElementById('workspaceDescription');
+  if (eyebrow) eyebrow.textContent = definition.eyebrow;
+  if (title) title.textContent = definition.title;
+  if (description) description.textContent = definition.description;
+
+  const recoveryEmpty = document.getElementById('recoveryEmptyState');
+  if (recoveryEmpty) {
+    recoveryEmpty.hidden = workspace !== 'recovery'
+      || document.body.classList.contains('recovery-mode-active');
+  }
+
+  if (options.syncMode !== false && (workspace === 'live' || workspace === 'replays')) {
+    debuggerWorkspaceModeSync = true;
+    try {
+      switchMode(workspace === 'replays' ? 'replay' : 'live');
+    } finally {
+      debuggerWorkspaceModeSync = false;
+    }
+  }
+
+  document.dispatchEvent(new CustomEvent('debugger:workspace-changed', {
+    detail: { workspace }
+  }));
+}
+
+function syncWorkspaceConnectionStatus() {
+  const source = document.getElementById('feedStatusIndicator');
+  const dot = document.getElementById('workspaceConnectionDot');
+  const text = document.getElementById('workspaceConnectionText');
+  if (!source || !dot || !text) return;
+
+  const connected = /connected/i.test(source.textContent || '')
+    && !/disconnected/i.test(source.textContent || '');
+  dot.classList.toggle('connected', connected);
+  dot.classList.toggle('warning', !connected && /connecting/i.test(source.textContent || ''));
+  text.textContent = connected ? 'Telemetry connected' : 'Telemetry disconnected';
+}
+
+function initializeDebuggerWorkspaces() {
+  document.querySelectorAll('.workspace-tab').forEach(button => {
+    button.addEventListener('click', () => activateDebuggerWorkspace(button.dataset.workspace));
+    button.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      const tabs = Array.from(document.querySelectorAll('.workspace-tab'));
+      const currentIndex = tabs.indexOf(button);
+      const direction = event.key === 'ArrowRight' ? 1 : -1;
+      const next = tabs[(currentIndex + direction + tabs.length) % tabs.length];
+      next.focus();
+      activateDebuggerWorkspace(next.dataset.workspace);
+    });
+  });
+  document.querySelectorAll('[data-workspace-link]').forEach(button => {
+    button.addEventListener('click', () => activateDebuggerWorkspace(button.dataset.workspaceLink));
+  });
+
+  const feedStatus = document.getElementById('feedStatusIndicator');
+  if (feedStatus) {
+    new MutationObserver(syncWorkspaceConnectionStatus)
+      .observe(feedStatus, { childList: true, subtree: true, characterData: true, attributes: true });
+  }
+  syncWorkspaceConnectionStatus();
+  debuggerWorkspaceInitialized = true;
+  activateDebuggerWorkspace('runs', { syncMode: false });
+}
+
+window.DebuggerWorkspace = {
+  activate: activateDebuggerWorkspace,
+  current: () => currentDebuggerWorkspace
+};
 
 // Replay recording-load lifecycle: generation guards against stale metadata/session
 // responses repopulating state after the user switches recordings or leaves Replay mode.
@@ -466,11 +608,13 @@ let userScrollResetTimeout = null;
 // Snapshot tick timeline (authoritative source for tick sync)
 const replaySnapshotTimeline = []; // Sorted array of ticks with snapshots
 let replaySessionStartTick = 0; // Starting tick for the current replay session
+let replayTimelineScale = 1; // Wall-clock recording duration / encoded media duration
 
 // Windowed tick-card loading state
 const replayTickCardCache = new Map(); // tick -> tick card data
 const replayLoadedRanges = []; // Array of {start, end} windows already fetched
 const replayTickWindowInFlight = []; // Array of {start, end} windows currently being fetched
+let replayTickCardsUnavailable = false; // Stop repeated 404s for a video-only/orphaned replay
 
 // Global section toggles
 const globalSectionToggles = {
@@ -541,6 +685,7 @@ function cacheElements() {
   elements.botStateContent = document.getElementById('botStateContent');
   elements.aiInspectorContent = document.getElementById('aiInspectorContent');
   elements.fishingShadowContent = document.getElementById('fishingShadowContent');
+  elements.fishingRecordingLab = document.getElementById('fishingRecordingLab');
   // New tick-based elements
   elements.currentTick = document.getElementById('currentTick');
   elements.currentTime = document.getElementById('currentTime');
@@ -570,6 +715,11 @@ function cacheElements() {
 }
 
 function switchMode(mode) {
+  if (debuggerWorkspaceInitialized
+      && !debuggerWorkspaceModeSync
+      && !document.body.classList.contains('recovery-mode-active')) {
+    activateDebuggerWorkspace(mode === 'replay' ? 'replays' : 'live', { syncMode: false });
+  }
   if (currentMode === mode) return; // Don't clear logs if already in this mode
 
   // Invalidate any in-flight recording load / timeline sync before switching.
@@ -1043,7 +1193,11 @@ function buildTickGroup(tick, entries) {
   seekBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (currentMode !== 'replay' || tick === null || !elements.replayVideo) return;
-    const videoTime = (Number(tick) * 0.6);
+    const card = replayTickCardCache.get(Number(tick));
+    const timelineTimeMs = card && Number.isFinite(Number(card.videoTimeMs))
+      ? Number(card.videoTimeMs)
+      : Math.max(0, (Number(tick) - replaySessionStartTick) * 600);
+    const videoTime = timelineTimeMs / Math.max(0.0001, replayTimelineScale) / 1000;
     elements.replayVideo.currentTime = Math.max(0, videoTime);
     updateScrubberFromVideo();
   });
@@ -4276,17 +4430,20 @@ function normalizeActionLog(log, options = {}) {
 }
 
 function connectLogWebSocket() {
+  if (debuggerPageClosing) return;
   const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${wsProtocol}://${location.host}/ws/logs`;
 
-  let reconnectTimeout;
-
   function connect() {
+    if (debuggerPageClosing) return;
     logWebSocket = new WebSocket(wsUrl);
 
     logWebSocket.onopen = () => {
       console.log('[Debugger] Log WebSocket connected to', wsUrl);
-      clearTimeout(reconnectTimeout);
+      if (logWebSocketReconnectTimer) {
+        clearTimeout(logWebSocketReconnectTimer);
+        logWebSocketReconnectTimer = null;
+      }
     };
 
     logWebSocket.onmessage = (event) => {
@@ -4296,7 +4453,12 @@ function connectLogWebSocket() {
 
     logWebSocket.onclose = () => {
       logWebSocket = null;
-      reconnectTimeout = setTimeout(connect, 3000);
+      if (!debuggerPageClosing && !logWebSocketReconnectTimer) {
+        logWebSocketReconnectTimer = setTimeout(() => {
+          logWebSocketReconnectTimer = null;
+          connect();
+        }, 3000);
+      }
     };
 
     logWebSocket.onerror = (error) => {
@@ -4371,6 +4533,7 @@ function escapeHtml(text) {
 // ==================== VIEWPORT ====================
 
 function connectViewportWebSocket() {
+  if (debuggerPageClosing) return;
   // Ensure canvas and context are ready
   if (!elements.viewportCanvas) {
     console.error('[VIEWPORT] Canvas element not found');
@@ -4818,6 +4981,7 @@ async function drainFrameBuffer() {
 // ==================== OVERLAY ====================
 
 function connectOverlayWebSocket() {
+  if (debuggerPageClosing) return;
   const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${wsProtocol}://${location.host}/ws/overlay`;
 
@@ -4931,6 +5095,7 @@ function resizeOverlayCanvas(metrics) {
 // ==================== BOT STATE ====================
 
 function connectBotStateWebSocket() {
+  if (debuggerPageClosing) return;
   const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${wsProtocol}://${location.host}/ws/bot-state`;
 
@@ -4944,6 +5109,31 @@ function connectBotStateWebSocket() {
       console.error('Failed to parse bot state', e);
     }
   };
+}
+
+/** Detaches and closes the non-tick page sockets before unload. */
+function closeDebuggerWebSockets() {
+  if (logWebSocketReconnectTimer) {
+    clearTimeout(logWebSocketReconnectTimer);
+    logWebSocketReconnectTimer = null;
+  }
+  const sockets = [logWebSocket, viewportWebSocket, overlayWebSocket, botStateWebSocket];
+  logWebSocket = null;
+  viewportWebSocket = null;
+  overlayWebSocket = null;
+  botStateWebSocket = null;
+  sockets.forEach((socket) => {
+    if (!socket) return;
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onerror = null;
+    socket.onclose = null;
+    try {
+      socket.close(1000, 'page unload');
+    } catch (error) {
+      // best-effort cleanup
+    }
+  });
 }
 
 function renderBotState(payload) {
@@ -5036,6 +5226,7 @@ function initReplayModeListeners() {
           currentSyncAbortController = null;
         }
         currentRecording = null;
+        renderFishingRecordingLabSelection();
         lastHighlightedTick = null;
         replayLogHistory.length = 0;
         replayTickSnapshots.clear();
@@ -5231,7 +5422,9 @@ async function loadRecordingSessions() {
 
   try {
     // Load sessions first; health is fetched afterwards so it never blocks the dropdown.
-    const recordingRes = await fetch('/api/recordings/sessions');
+    const recordingRes = await fetch(
+      '/api/recordings/sessions?includeArchived=' + (fishingRecordingLab.showArchived ? 'true' : 'false')
+    );
     if (!recordingRes.ok) {
       throw new Error('Failed to load sessions');
     }
@@ -5242,11 +5435,13 @@ async function loadRecordingSessions() {
     // Build metadata map keyed by recordingId
     sessionMetadataMap = {};
     sessionPlayabilityMap = {};
+    fishingRecordingLab.archivedRecordings.clear();
 
     sessions.forEach(session => {
       const option = document.createElement('option');
       option.value = session.recordingId;
       option.dataset.recordingId = session.recordingId;
+      if (session.archivedAt) fishingRecordingLab.archivedRecordings.add(session.recordingId);
 
       // Store metadata for editor
       sessionMetadataMap[session.recordingId] = {
@@ -5270,7 +5465,7 @@ async function loadRecordingSessions() {
         ? ` [${session.status === 'RECORDING' ? 'Recording' : 'Not finalized'}]`
         : ' [OK]';
 
-      option.textContent = `${displayName}${statusBadge}`;
+      option.textContent = `${displayName}${statusBadge}${session.archivedAt ? ' · Archived' : ''}`;
 
       if (!playable) {
         option.disabled = true;
@@ -5473,9 +5668,11 @@ async function loadRecording(recordingId) {
   abortReplaySnapshotRequests();
   replaySnapshotTimeline.length = 0; // Clear snapshot timeline
   replaySessionStartTick = 0; // Reset session start tick
+  replayTimelineScale = 1;
   currentReplayDebugSessionId = null;
   replayLoadedRanges.length = 0;
   replayTickWindowInFlight.length = 0;
+  replayTickCardsUnavailable = false;
   replayTickCardCache.clear();
   if (typeof perTickSectionToggles !== 'undefined') {
     perTickSectionToggles.clear(); // Clear tick UI state
@@ -5575,6 +5772,7 @@ async function loadRecording(recordingId) {
   if (stale()) return false;
   currentRecording = recordingId;
   history.replaceState({}, '', `/debugger?recordingId=${encodeURIComponent(recordingId)}`);
+  renderFishingRecordingLabSelection();
 
   // Load video
   if (elements.replayVideo) {
@@ -5584,6 +5782,16 @@ async function loadRecording(recordingId) {
     // log sync fires as soon as video metadata is available. The global
     // loadedmetadata handler still updates scrubber dimensions only.
     elements.replayVideo.addEventListener('loadedmetadata', () => {
+      const recordingStartMs = Date.parse(recording.startTime);
+      const recordingEndMs = Date.parse(recording.endTime);
+      const mediaDurationMs = elements.replayVideo.duration * 1000;
+      if (Number.isFinite(recordingStartMs)
+        && Number.isFinite(recordingEndMs)
+        && recordingEndMs > recordingStartMs
+        && Number.isFinite(mediaDurationMs)
+        && mediaDurationMs > 0) {
+        replayTimelineScale = (recordingEndMs - recordingStartMs) / mediaDurationMs;
+      }
       updateScrubberFromVideo();
       if (isCurrentReplayLoad(loadGeneration, recordingId)) {
         const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
@@ -5743,6 +5951,7 @@ function buildReplayHistoryFromTickCards(tickCards) {
 /** Load a window of tick cards for the current replay and add them to the cache. */
 async function loadReplayTickWindow(recordingId, startTick, endTick) {
   if (!recordingId || startTick == null || endTick == null) return;
+  if (replayTickCardsUnavailable) return;
   if (startTick > endTick) return;
   if (isReplayRangeLoaded(startTick, endTick) || isReplayRangeInFlight(startTick, endTick)) return;
 
@@ -5773,6 +5982,9 @@ async function loadReplayTickWindow(recordingId, startTick, endTick) {
     }
 
     if (!response.ok) {
+      if (response.status === 404) {
+        replayTickCardsUnavailable = true;
+      }
       console.warn('Failed to load tick cards, status:', response.status);
       return;
     }
@@ -5801,6 +6013,7 @@ async function loadReplayTickWindow(recordingId, startTick, endTick) {
 /** Ensure the ticks around the current video position are loaded. */
 async function ensureReplayTickWindow(recordingId, currentTick) {
   if (!recordingId || currentTick == null || isNaN(currentTick)) return;
+  if (replayTickCardsUnavailable) return;
   const start = Math.max(0, currentTick - 50);
   const end = currentTick + 150;
   if (isReplayRangeLoaded(start, end)) return;
@@ -5859,6 +6072,7 @@ function registerReplayLoadedRange(start, end) {
  * @returns {number|null} - Calculated tick or null if unable to determine
  */
 function calculateTickFromVideoTime(videoMs) {
+  videoMs *= replayTimelineScale;
   // Primary method: Use snapshot timeline if available
   if (replaySnapshotTimeline.length > 0) {
     // Calculate expected tick from video time (600ms per tick)
@@ -5973,7 +6187,7 @@ async function syncLogsToVideo(videoMs) {
 
   const requestedRecordingId = currentRecording;
   const requestedGeneration = replayLoadGeneration;
-  const requestedVideoMs = Math.floor(videoMs);
+  const requestedVideoMs = Math.floor(videoMs * replayTimelineScale);
 
   // Abort the preceding replay-log request before starting a new one
   if (currentSyncAbortController) {
@@ -6323,11 +6537,25 @@ function scrollToCurrentTick(tick) {
   const now = Date.now();
   lastProgrammaticScrollTime = now;
   programmaticScrollUntil = now + 1200;
-  const behavior = (isLive || isPlaying) ? 'instant' : 'smooth';
+  const behavior = (isLive || isPlaying) ? 'auto' : 'smooth';
   if (window.DEBUG_TICK) {
     console.log('[AutoFollow] scrollToCurrentTick tick:', tick, 'behavior:', behavior, 'isLive:', isLive);
   }
-  target.scrollIntoView({ block: 'nearest', behavior });
+
+  // scrollIntoView() also scrolls ancestor containers, including the document. During live tick
+  // updates that made the page scrollbar jump up and down even though only the log pane should
+  // follow the current tick. Compute the smallest pane-local adjustment instead.
+  const containerRect = container.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  let nextScrollTop = container.scrollTop;
+  if (targetRect.top < containerRect.top) {
+    nextScrollTop += targetRect.top - containerRect.top;
+  } else if (targetRect.bottom > containerRect.bottom) {
+    nextScrollTop += targetRect.bottom - containerRect.bottom;
+  } else {
+    return;
+  }
+  container.scrollTo({ top: Math.max(0, nextScrollTop), behavior });
 }
 
 /**
@@ -6535,6 +6763,8 @@ function normalizeWindowAccountName(value) {
 }
 
 function resetLiveDebugSessionForWindowChange(displayName) {
+  lastProcessedSessionCreatedKey = null;
+  ignoredSessionCreatedCount = 0;
   currentDebugSessionId = null;
   currentDebugSession = null;
   isDebugSessionActive = false;
@@ -6589,6 +6819,39 @@ function sessionCreatedMatchesSelectedWindow(data) {
   return !sessionAccount || selectedAccount === sessionAccount;
 }
 
+function buildSessionCreatedKey(data) {
+  const core = typeof DebuggerSessionSyncCore !== 'undefined' ? DebuggerSessionSyncCore : null;
+  if (core) {
+    return core.sessionCreatedKey(
+      currentWindowId || '',
+      data && data.accountName ? data.accountName : currentWindowAccountName,
+      data && data.sessionId,
+      data && data.shadowRunId
+    );
+  }
+  return [
+    currentWindowId || '',
+    normalizeWindowAccountName(data && data.accountName ? data.accountName : currentWindowAccountName),
+    data && data.sessionId ? data.sessionId : '',
+    data && data.shadowRunId ? data.shadowRunId : ''
+  ].join('|');
+}
+
+function noteIgnoredSessionCreated(data) {
+  ignoredSessionCreatedCount++;
+  const now = Date.now();
+  if (now - lastIgnoredSessionSummaryAt >= 60000) {
+    lastIgnoredSessionSummaryAt = now;
+    console.info(
+      '[Debugger] Ignored SESSION_CREATED events while debug feed is disabled:',
+      ignoredSessionCreatedCount,
+      'latest session:',
+      data && data.sessionId ? data.sessionId : '(unknown)'
+    );
+    ignoredSessionCreatedCount = 0;
+  }
+}
+
 function shouldRenderLiveTickBatch(data) {
   if (!data || !data.sessionId) {
     return !pendingWindowSessionRebind;
@@ -6626,6 +6889,11 @@ let currentDebugSession = null;
 let currentTick = null;
 let tickRange = { min: 0, max: 0 };
 let tickStreamWebSocket = null;
+let tickStreamReconnectTimer = null;
+let tickStreamConnectionGeneration = 0;
+let tickStreamPageClosing = false;
+let tickStreamLastErrorAt = 0;
+let tickStreamLastParseErrorAt = 0;
 let isPlaying = false;
 let playbackSpeed = 1;
 let playbackInterval = null;
@@ -6634,28 +6902,55 @@ let playbackInterval = null;
  * Connect to tick stream WebSocket for live tick updates.
  */
 function connectTickStreamWebSocket() {
+  if (tickStreamPageClosing) return;
+
   const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${wsProtocol}://${location.host}/ws/debugger/tick-stream`;
+  const generation = ++tickStreamConnectionGeneration;
 
-  if (tickStreamWebSocket) {
-    tickStreamWebSocket.close();
+  if (tickStreamReconnectTimer) {
+    clearTimeout(tickStreamReconnectTimer);
+    tickStreamReconnectTimer = null;
   }
 
-  tickStreamWebSocket = new WebSocket(wsUrl);
+  const previousSocket = tickStreamWebSocket;
+  tickStreamWebSocket = null;
+  if (previousSocket) {
+    // Detach lifecycle callbacks before closing so an intentional replacement cannot schedule a
+    // second reconnect when the old socket reports onclose asynchronously.
+    previousSocket.onopen = null;
+    previousSocket.onmessage = null;
+    previousSocket.onerror = null;
+    previousSocket.onclose = null;
+    try {
+      previousSocket.close(1000, 'replaced');
+    } catch (error) {
+      // A socket that never completed its handshake may reject close(); it is already detached.
+    }
+  }
 
-  tickStreamWebSocket.onopen = () => {
+  const socket = new WebSocket(wsUrl);
+  tickStreamWebSocket = socket;
+
+  socket.onopen = () => {
+    if (generation !== tickStreamConnectionGeneration || socket !== tickStreamWebSocket) return;
     console.log('Connected to tick stream WebSocket');
-    // Reload shadow status/history on (re)connect so the panel resumes from persisted state.
-    fishingShadowLoadStatus();
-    fishingShadowLoadHistory();
+    // A disabled feed must not restart shadow requests merely because the browser transport
+    // recovered. The next accepted SESSION_CREATED event will bind the panel when re-enabled.
+    if (debugFeedEnabled) {
+      fishingShadowLoadStatus();
+      fishingShadowLoadHistory();
+    }
   };
 
-  tickStreamWebSocket.onmessage = (event) => {
+  socket.onmessage = (event) => {
+    if (generation !== tickStreamConnectionGeneration || socket !== tickStreamWebSocket) return;
     try {
       const data = JSON.parse(event.data);
 
       // Handle AI_PLAYER_SHADOW_DECISION broadcasts from the fishing shadow agent.
       if (data.type === 'AI_PLAYER_SHADOW_DECISION') {
+        if (!debugFeedEnabled) return;
         handleShadowDecision(data);
         return;
       }
@@ -6663,17 +6958,35 @@ function connectTickStreamWebSocket() {
       // Handle SESSION_CREATED broadcast from Micro6
       if (data.type === 'SESSION_CREATED') {
         if (!sessionCreatedMatchesSelectedWindow(data)) {
-          console.log(
-            '[Debugger] Ignoring SESSION_CREATED for non-selected account:',
-            data.accountName || '(unknown)',
-            'selected:',
-            currentWindowAccountName || '(none)'
-          );
+          // Session broadcasts are fan-out notifications. A busy Micro6 account that is not the
+          // selected debugger window must not turn into one console entry per reconnect.
           return;
         }
 
+        const sessionCreatedKey = buildSessionCreatedKey(data);
+        const syncCore = typeof DebuggerSessionSyncCore !== 'undefined'
+          ? DebuggerSessionSyncCore
+          : null;
+        if (syncCore
+          ? syncCore.isDuplicateSessionCreated(lastProcessedSessionCreatedKey, sessionCreatedKey)
+          : lastProcessedSessionCreatedKey === sessionCreatedKey) {
+          // Duplicate broadcasts are expected while multiple debugger consumers are connected;
+          // they must not reset state or restart any request.
+          return;
+        }
+
+        if (!debugFeedEnabled) {
+          // Treat an ignored broadcast as seen for deduplication purposes. Reconnects may repeat
+          // the same SESSION_CREATED tuple while the feed is disabled; only the first contributes
+          // to the throttled diagnostic summary. Re-enabling the feed clears this key above.
+          lastProcessedSessionCreatedKey = sessionCreatedKey;
+          noteIgnoredSessionCreated(data);
+          return;
+        }
+        lastProcessedSessionCreatedKey = sessionCreatedKey;
+
         // Update UI to use Micro6's sessionId
-        if (debugFeedEnabled && (!currentDebugSessionId || !isRecording || pendingWindowSessionRebind)) {
+        if (data.sessionId) {
           currentDebugSessionId = data.sessionId;
           currentDebugSession = data.sessionId;
           isDebugSessionActive = true;
@@ -6684,8 +6997,6 @@ function connectTickStreamWebSocket() {
           console.log('✅ Micro6 session detected:', data.sessionId, 'run:', data.shadowRunId || 'unknown');
           // A new session/run must never inherit the previous session's shadow tick baseline.
           fishingShadowSwitchSession(data.sessionId, data.shadowRunId || null);
-        } else {
-          console.log('ℹ️ SESSION_CREATED received but debug feed is disabled');
         }
         return;
       }
@@ -6716,19 +7027,59 @@ function connectTickStreamWebSocket() {
       if (window.DEBUG_TICK) console.log('[Tick Debug] Received tick data:', data);
       withLiveLogScrollAnchor(() => updatePanelsForTick(data));
     } catch (e) {
-      console.error('Failed to parse tick stream message', e);
+      const now = Date.now();
+      if (now - tickStreamLastParseErrorAt >= 30000) {
+        tickStreamLastParseErrorAt = now;
+        console.error('Failed to parse tick stream message');
+      }
     }
   };
 
-  tickStreamWebSocket.onerror = (error) => {
-    console.error('Tick stream WebSocket error:', error);
+  socket.onerror = () => {
+    if (generation !== tickStreamConnectionGeneration || socket !== tickStreamWebSocket) return;
+    const now = Date.now();
+    if (now - tickStreamLastErrorAt >= 30000) {
+      tickStreamLastErrorAt = now;
+      console.error('Tick stream WebSocket transport error');
+    }
   };
 
-  tickStreamWebSocket.onclose = () => {
+  socket.onclose = () => {
+    if (generation !== tickStreamConnectionGeneration || socket !== tickStreamWebSocket) return;
     tickStreamWebSocket = null;
-    // Reconnect after 3 seconds
-    setTimeout(connectTickStreamWebSocket, 3000);
+    if (tickStreamPageClosing || tickStreamReconnectTimer) return;
+    // Reconnect after 3 seconds. Keep one timer per socket generation so repeated close/error
+    // callbacks cannot create an unbounded browser-side connection storm.
+    tickStreamReconnectTimer = setTimeout(() => {
+      tickStreamReconnectTimer = null;
+      if (!tickStreamPageClosing && generation === tickStreamConnectionGeneration && !tickStreamWebSocket) {
+        connectTickStreamWebSocket();
+      }
+    }, 3000);
   };
+}
+
+function closeTickStreamWebSocket() {
+  tickStreamPageClosing = true;
+  tickStreamConnectionGeneration++;
+  fishingShadowAbortPendingRequests();
+  if (tickStreamReconnectTimer) {
+    clearTimeout(tickStreamReconnectTimer);
+    tickStreamReconnectTimer = null;
+  }
+  const socket = tickStreamWebSocket;
+  tickStreamWebSocket = null;
+  if (socket) {
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onerror = null;
+    socket.onclose = null;
+    try {
+      socket.close(1000, 'page unload');
+    } catch (error) {
+      // best-effort cleanup
+    }
+  }
 }
 
 /**
@@ -7440,7 +7791,8 @@ function initRecordingControls() {
 
   // Periodic state sync check (every 30 seconds)
   // This helps recover from state mismatches
-  setInterval(() => {
+  if (recordingStatusPoller) clearInterval(recordingStatusPoller);
+  recordingStatusPoller = setInterval(() => {
     checkRecordingStatus();
   }, 30000);
 }
@@ -7511,6 +7863,7 @@ async function startRecording() {
     if (data.recordingId) {
       // Recording started successfully
       currentRecordingId = data.recordingId;
+      recordingNotificationId = currentRecordingId;
       isRecording = true;
       recordingStartTime = Date.now();
 
@@ -7535,7 +7888,8 @@ async function startRecording() {
       currentRecordingId = null;
 
       console.warn('⚠️ Session started without recording:', data);
-      showNotification('Session started but recording failed - check backend logs', 'warning');
+      showNotification(data.recordingFailureReason ||
+        'Session started but video recording could not be enabled', 'warning');
     }
 
   } catch (error) {
@@ -7589,6 +7943,7 @@ async function stopRecording() {
         console.warn('Recording already stopped, resetting UI state');
         isRecording = false;
         currentRecordingId = null;
+        recordingNotificationId = null;
         currentSessionId = null;
         recordingStartTime = null;
 
@@ -7633,6 +7988,7 @@ async function stopRecording() {
 
     const savedRecordingId = currentRecordingId;
     currentRecordingId = null;
+    recordingNotificationId = null;
     currentSessionId = null;
     recordingStartTime = null;
 
@@ -7680,6 +8036,7 @@ async function forceResetRecording() {
     // Reset frontend state
     isRecording = false;
     currentRecordingId = null;
+    recordingNotificationId = null;
     currentSessionId = null;
     recordingStartTime = null;
 
@@ -7713,84 +8070,149 @@ async function forceResetRecording() {
  * Check current recording status and synchronize frontend state with backend.
  */
 async function checkRecordingStatus() {
-  try {
-    const response = await fetch('/api/recordings/status');
-    if (!response.ok) return;
+  if (recordingStatusRequest) return recordingStatusRequest;
 
-    const data = await response.json();
-    const backendRecording = data.recording && data.recordingId;
+  const generation = ++recordingStatusGeneration;
+  const controller = new AbortController();
+  recordingStatusAbortController = controller;
+  const request = (async () => {
+    try {
+      const response = await fetch('/api/recordings/status', { signal: controller.signal });
+      if (!response.ok || controller.signal.aborted || generation !== recordingStatusGeneration) return;
 
-    if (backendRecording && !isRecording) {
-      // Backend says recording, but frontend doesn't know about it
-      const sourceLabel = data.triggerSource || 'UNKNOWN';
-      console.log(`📹 Synchronizing: Backend has active recording [source: ${sourceLabel}], updating frontend state`);
+      const data = await response.json();
+      if (controller.signal.aborted || generation !== recordingStatusGeneration) return;
 
-      isRecording = true;
-      currentRecordingId = data.recordingId;
-      recordingStartTime = data.startTime ? new Date(data.startTime).getTime() : Date.now();
+      const backendRecording = Boolean(data && data.recording && data.recordingId);
+      const backendRecordingId = backendRecording ? String(data.recordingId) : null;
+      const previousRecordingId = currentRecordingId;
+      const previousRecordingActive = isRecording;
+      const core = typeof DebuggerSessionSyncCore !== 'undefined' ? DebuggerSessionSyncCore : null;
+      const transition = core
+        ? core.recordingTransition(
+          previousRecordingId,
+          previousRecordingActive,
+          backendRecordingId,
+          backendRecording
+        )
+        : {
+          changed: previousRecordingId !== backendRecordingId || previousRecordingActive !== backendRecording,
+          recordingChanged: previousRecordingId !== backendRecordingId,
+          becameInactive: previousRecordingActive && !backendRecording
+        };
 
-      // Try to find associated debug session
-      if (!currentSessionId) {
-        try {
-          const sessionResponse = await fetch(`/api/debug/replay/sessions/active?recordingId=${currentRecordingId}`);
-          if (sessionResponse.ok) {
-            const sessionData = await sessionResponse.json();
-            currentSessionId = sessionData.sessionId;
-            currentDebugSessionId = sessionData.sessionId;
-            currentDebugSession = sessionData.sessionId;
-            pendingWindowSessionRebind = false;
-            // Account/window session rebind: reset the shadow panel for the re-discovered session.
-            fishingShadowSwitchSession(sessionData.sessionId);
-            console.log('📹 Found associated debug session:', currentSessionId);
+      if (backendRecording) {
+        // A new recording generation invalidates the previous association. Keep the recording
+        // active while the debugger waits for SESSION_CREATED or the association endpoint.
+        if (transition.recordingChanged && previousRecordingId && previousRecordingId !== backendRecordingId) {
+          currentSessionId = null;
+          currentDebugSessionId = null;
+          currentDebugSession = null;
+          isDebugSessionActive = false;
+        }
+
+        isRecording = true;
+        currentRecordingId = backendRecordingId;
+        recordingStartTime = data.startTime
+          ? new Date(data.startTime).getTime()
+          : (recordingStartTime || Date.now());
+
+        if (transition.changed) {
+          elements.recordBtn.classList.remove('btn-danger');
+          elements.recordBtn.classList.add('btn-success');
+          elements.recordBtnText.textContent = 'Stop Recording';
+          if (elements.recordingStatus) elements.recordingStatus.classList.remove('d-none');
+          startRecordingDurationTimer();
+        }
+
+        if (core
+          ? core.shouldNotifyRecording(recordingNotificationId, backendRecordingId)
+          : recordingNotificationId !== backendRecordingId) {
+          recordingNotificationId = backendRecordingId;
+          const sourceLabel = data.triggerSource
+            ? ` (${String(data.triggerSource).replace(/_/g, ' ')})`
+            : '';
+          showNotification(`Recording active${sourceLabel}`, 'info');
+        }
+
+        // Association is best-effort. A 404 is a normal transition while the backend finalizes or
+        // binds a session; it must not clear the active recording or reset the panel repeatedly.
+        // While the debug feed is disabled, do not start live-session discovery or mutate the
+        // fishing panel in response to recording polls. The next explicit enable/broadcast will
+        // bind the live session once.
+        if (debugFeedEnabled && !currentSessionId) {
+          try {
+            const sessionResponse = await fetch(
+              `/api/debug/replay/sessions/active?recordingId=${encodeURIComponent(backendRecordingId)}`,
+              { signal: controller.signal }
+            );
+            if (
+              sessionResponse.ok
+              && !controller.signal.aborted
+              && generation === recordingStatusGeneration
+              && currentRecordingId === backendRecordingId
+              && !currentSessionId
+            ) {
+              const sessionData = await sessionResponse.json();
+              if (sessionData && sessionData.sessionId) {
+                currentSessionId = sessionData.sessionId;
+                currentDebugSessionId = sessionData.sessionId;
+                currentDebugSession = sessionData.sessionId;
+                pendingWindowSessionRebind = false;
+                fishingShadowSwitchSession(sessionData.sessionId);
+              }
+            }
+          } catch (associationError) {
+            if (!associationError || associationError.name !== 'AbortError') {
+              // Missing association is intentionally quiet; the next poll or SESSION_CREATED event
+              // will retry it without producing another panel reset or user notification.
+            }
           }
-        } catch (e) {
-          console.log('📹 No active debug session found for this recording (auto-recording)');
+        }
+        return;
+      }
+
+      if (previousRecordingActive || previousRecordingId) {
+        // Clear the recording and its session association as one transition, then invalidate the
+        // three shadow requests once. This prevents alternating status generations from thrashing
+        // the fishing panel.
+        isRecording = false;
+        currentRecordingId = null;
+        currentSessionId = null;
+        currentDebugSessionId = null;
+        currentDebugSession = null;
+        isDebugSessionActive = false;
+        recordingStartTime = null;
+        recordingNotificationId = null;
+        elements.recordBtn.classList.remove('btn-success');
+        elements.recordBtn.classList.add('btn-danger');
+        elements.recordBtnText.textContent = 'Start Recording';
+        if (elements.recordingStatus) elements.recordingStatus.classList.add('d-none');
+        stopRecordingDurationTimer();
+        // Keep the live fishing panel untouched while the debug feed is disabled. The panel is
+        // rebound from the next accepted session event when the feed is explicitly enabled.
+        if (debugFeedEnabled) {
+          fishingShadowSwitchSession(null);
         }
       }
-
-      // Update UI to recording state
-      elements.recordBtn.classList.remove('btn-danger');
-      elements.recordBtn.classList.add('btn-success');
-      elements.recordBtnText.textContent = 'Stop Recording';
-
-      if (elements.recordingStatus) {
-        elements.recordingStatus.classList.remove('d-none');
-      }
-
-      startRecordingDurationTimer();
-
-      const srcNote = data.triggerSource ? ` [${data.triggerSource}]` : '';
-      console.log(`📹 Recording already in progress: ${currentRecordingId}${srcNote}`);
-      if (data.triggerSource && data.triggerSource !== 'MANUAL') {
-        showNotification(`Recording active (${data.triggerSource.replace('_', ' ')})`, 'info');
-      }
-
-    } else if (!backendRecording && isRecording) {
-      // Frontend thinks we're recording, but backend says no
-      console.warn('State mismatch: Frontend thinks recording, but backend says no. Resetting frontend state.');
-
-      isRecording = false;
-      currentRecordingId = null;
-      currentSessionId = null;
-      recordingStartTime = null;
-
-      // Reset UI
-      elements.recordBtn.classList.remove('btn-success');
-      elements.recordBtn.classList.add('btn-danger');
-      elements.recordBtnText.textContent = 'Start Recording';
-
-      if (elements.recordingStatus) {
-        elements.recordingStatus.classList.add('d-none');
-      }
-
-      if (recordingDurationInterval) {
-        clearInterval(recordingDurationInterval);
-        recordingDurationInterval = null;
+    } catch (error) {
+      if (!error || error.name !== 'AbortError') {
+        console.error('Failed to check recording status:', error);
       }
     }
-  } catch (error) {
-    console.error('Failed to check recording status:', error);
-  }
+  })();
+
+  let settledRequest;
+  settledRequest = request.finally(() => {
+    if (recordingStatusRequest === settledRequest) {
+      recordingStatusRequest = null;
+    }
+    if (recordingStatusAbortController === controller) {
+      recordingStatusAbortController = null;
+    }
+  });
+  recordingStatusRequest = settledRequest;
+  return recordingStatusRequest;
 }
 
 /**
@@ -7882,11 +8304,30 @@ async function setDebugFeedEnabled(enabled, sendSignal) {
   updateDebugFeedToggleUi();
 
   if (!enabled) {
+    // A disabled feed must stop in-flight shadow/session discovery work immediately. The
+    // recording itself remains untouched, but its status/association and shadow requests must
+    // not continue applying live-session state while transport events are being ignored.
+    fishingShadowAbortPendingRequests();
     // Hide debug session indicator when feed is off (do not stop recording)
     if (elements.debugSessionStatus) {
       elements.debugSessionStatus.classList.add('d-none');
     }
     isDebugSessionActive = false;
+  } else {
+    // Allow the next accepted broadcast after re-enabling the feed to bind the current window,
+    // even if the same session was observed while the feed was disabled.
+    lastProcessedSessionCreatedKey = null;
+    if (fishingShadowAgentInitialized) {
+      // Re-enable is an explicit lifecycle trigger. Rebind the currently selected session once so
+      // a broadcast that arrived while disabled does not leave the panel permanently stale.
+      fishingShadowSwitchSession(null);
+      if (currentDebugSessionId) {
+        fishingShadowSwitchSession(currentDebugSessionId, null);
+      } else {
+        fishingShadowLoadModels();
+        fishingShadowLoadStatus();
+      }
+    }
   }
 
   if (sendSignal) {
@@ -8718,7 +9159,8 @@ function initPatchLoopControls() {
   updateProviderStatus();
 
   // Poll provider status every 15 seconds
-  setInterval(updateProviderStatus, 15000);
+  if (providerStatusPoller) clearInterval(providerStatusPoller);
+  providerStatusPoller = setInterval(updateProviderStatus, 15000);
 
   // Verify Codex MCP button
   const verifyBtn = document.getElementById('verifyCodexMcpBtn');
@@ -9075,6 +9517,200 @@ function initPatchLoopControls() {
   }
 }
 
+// ==================== FISHING RECORDING LAB ====================
+
+const fishingRecordingLab = {
+  modelId: null,
+  ranges: new Map(),
+  archivedRecordings: new Set(),
+  showArchived: false,
+  busy: false
+};
+
+function initFishingRecordingLab() {
+  const lab = elements.fishingRecordingLab;
+  if (!lab) return;
+  lab.addEventListener('click', async (event) => {
+    const button = event.target.closest('button');
+    if (!button || fishingRecordingLab.busy) return;
+    try {
+      if (button.id === 'fishingLabMarkStart') setFishingLabRangeEdge('start');
+      else if (button.id === 'fishingLabMarkEnd') setFishingLabRangeEdge('end');
+      else if (button.id === 'fishingLabClearRange') clearFishingLabRange();
+      else if (button.id === 'fishingLabUseTraining') useCurrentFishingRecording('training');
+      else if (button.id === 'fishingLabUseTest') useCurrentFishingRecording('test');
+      else if (button.id === 'fishingLabPreflight') await runFishingLabPreflight();
+      else if (button.id === 'fishingLabTrain') await runFishingLabTraining();
+      else if (button.id === 'fishingLabReplay') await runFishingLabReplay();
+      else if (button.id === 'fishingLabArchive') await archiveFishingLabRecording();
+    } catch (error) {
+      renderFishingLabResult({ status: 'FAILED', message: error.message || String(error) });
+    }
+  });
+  lab.addEventListener('change', (event) => {
+    if (event.target.id === 'fishingLabShowArchived') {
+      fishingRecordingLab.showArchived = event.target.checked;
+      loadRecordingSessions();
+      return;
+    }
+    if (event.target.id === 'fishingLabStartTick' || event.target.id === 'fishingLabEndTick') {
+      rememberFishingLabRange();
+    }
+  });
+  renderFishingRecordingLabSelection();
+}
+
+function renderFishingRecordingLabSelection() {
+  const label = document.getElementById('fishingLabCurrentRecording');
+  if (label) label.textContent = currentRecording || 'select a replay';
+  const range = currentRecording ? fishingRecordingLab.ranges.get(currentRecording) : null;
+  const start = document.getElementById('fishingLabStartTick');
+  const end = document.getElementById('fishingLabEndTick');
+  if (start) start.value = range && range.startTick != null ? range.startTick : '';
+  if (end) end.value = range && range.endTick != null ? range.endTick : '';
+  const model = document.getElementById('fishingLabModelId');
+  if (model) model.textContent = fishingRecordingLab.modelId || '--';
+  const archive = document.getElementById('fishingLabArchive');
+  if (archive) {
+    const archived = currentRecording && fishingRecordingLab.archivedRecordings.has(currentRecording);
+    archive.textContent = archived ? 'Restore current' : 'Archive current';
+  }
+}
+
+function setFishingLabRangeEdge(edge) {
+  if (!currentRecording || currentMode !== 'replay') throw new Error('Select and open a replay before marking a range');
+  if (!Number.isFinite(Number(currentTick))) throw new Error('The replay has no current tick yet');
+  const input = document.getElementById(edge === 'start' ? 'fishingLabStartTick' : 'fishingLabEndTick');
+  if (input) input.value = String(Number(currentTick));
+  rememberFishingLabRange();
+}
+
+function rememberFishingLabRange(strict = false) {
+  if (!currentRecording) return;
+  const startValue = document.getElementById('fishingLabStartTick')?.value.trim() || '';
+  const endValue = document.getElementById('fishingLabEndTick')?.value.trim() || '';
+  if (!strict && Boolean(startValue) !== Boolean(endValue)) return;
+  const range = readFishingLabRangeInputs();
+  if (range) fishingRecordingLab.ranges.set(currentRecording, range);
+  else fishingRecordingLab.ranges.delete(currentRecording);
+}
+
+function clearFishingLabRange() {
+  if (currentRecording) fishingRecordingLab.ranges.delete(currentRecording);
+  const start = document.getElementById('fishingLabStartTick');
+  const end = document.getElementById('fishingLabEndTick');
+  if (start) start.value = '';
+  if (end) end.value = '';
+}
+
+function readFishingLabRangeInputs() {
+  const startValue = document.getElementById('fishingLabStartTick')?.value.trim() || '';
+  const endValue = document.getElementById('fishingLabEndTick')?.value.trim() || '';
+  if (!startValue && !endValue) return null;
+  if (!startValue || !endValue) throw new Error('Mark both range edges, or use the full recording');
+  const startTick = Number(startValue);
+  const endTick = Number(endValue);
+  if (!Number.isInteger(startTick) || !Number.isInteger(endTick) || startTick < 0 || endTick < startTick) {
+    throw new Error('Range ticks must be non-negative integers with start at or before end');
+  }
+  return { startTick, endTick };
+}
+
+function rangeForFishingRecording(recordingId) {
+  if (recordingId === currentRecording) rememberFishingLabRange(true);
+  return fishingRecordingLab.ranges.get(recordingId) || null;
+}
+
+function useCurrentFishingRecording(kind) {
+  if (!currentRecording) throw new Error('Select a replay first');
+  rememberFishingLabRange(true);
+  const input = document.getElementById(kind === 'training' ? 'fishingLabTrainingId' : 'fishingLabTestId');
+  if (input) input.value = currentRecording;
+}
+
+async function fishingLabRequest(path, options) {
+  fishingRecordingLab.busy = true;
+  try {
+    const response = await fetch(path, options);
+    const text = await response.text();
+    let data;
+    try { data = text ? JSON.parse(text) : {}; } catch (_) { data = { message: text }; }
+    if (!response.ok) throw new Error(data.message || data.error || data.code || ('HTTP ' + response.status));
+    return data;
+  } finally {
+    fishingRecordingLab.busy = false;
+  }
+}
+
+function fishingLabPayload(recordingId, extra = {}) {
+  return { recordingId, ...(rangeForFishingRecording(recordingId) || {}), ...extra };
+}
+
+async function runFishingLabPreflight() {
+  if (!currentRecording) throw new Error('Select a finalized replay first');
+  const payload = fishingLabPayload(currentRecording);
+  const params = new URLSearchParams({ recordingId: payload.recordingId });
+  if (payload.startTick != null) {
+    params.set('startTick', payload.startTick);
+    params.set('endTick', payload.endTick);
+  }
+  renderFishingLabResult({ status: 'RUNNING', message: 'Running preflight...' });
+  renderFishingLabResult(await fishingLabRequest('/api/ai-player/prototype/fishing/preflight?' + params));
+}
+
+async function runFishingLabTraining() {
+  const recordingId = document.getElementById('fishingLabTrainingId')?.value.trim();
+  if (!recordingId) throw new Error('Choose a training recording');
+  renderFishingLabResult({ status: 'RUNNING', message: 'Training demonstration model...' });
+  const data = await fishingLabRequest('/api/ai-player/prototype/fishing/train', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fishingLabPayload(recordingId))
+  });
+  fishingRecordingLab.modelId = data.modelId || null;
+  renderFishingRecordingLabSelection();
+  renderFishingLabResult(data);
+  await fishingShadowLoadModels();
+}
+
+async function runFishingLabReplay() {
+  const recordingId = document.getElementById('fishingLabTestId')?.value.trim();
+  const modelId = fishingRecordingLab.modelId || fishingShadow.selectedModelId || fishingShadow.activeModelId;
+  if (!recordingId) throw new Error('Choose a held-out replay recording');
+  if (!modelId) throw new Error('Train or select a model first');
+  renderFishingLabResult({ status: 'RUNNING', message: 'Running held-out replay...' });
+  const data = await fishingLabRequest('/api/ai-player/prototype/fishing/run', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fishingLabPayload(recordingId, { modelId }))
+  });
+  renderFishingLabResult(data);
+  await fishingShadowLoadModels();
+}
+
+async function archiveFishingLabRecording() {
+  if (!currentRecording) throw new Error('Select a finalized replay first');
+  const archivedId = currentRecording;
+  const restore = fishingRecordingLab.archivedRecordings.has(archivedId);
+  const action = restore ? 'restore' : 'archive';
+  const data = await fishingLabRequest('/api/recordings/sessions/' + encodeURIComponent(archivedId) + '/' + action, { method: 'POST' });
+  if (!restore) fishingRecordingLab.ranges.delete(archivedId);
+  if (!restore && !fishingRecordingLab.showArchived) currentRecording = null;
+  await loadRecordingSessions();
+  renderFishingRecordingLabSelection();
+  renderFishingLabResult(data);
+}
+
+function renderFishingLabResult(data) {
+  const node = document.getElementById('fishingLabResult');
+  if (!node) return;
+  const status = String((data && data.status) || '').toUpperCase();
+  node.className = 'recording-lab-result';
+  if (status === 'READY') node.classList.add('ready');
+  else if (status === 'PASSED' || status === 'TRAINED') node.classList.add('passed');
+  else if (status === 'NOT_READY') node.classList.add('not-ready');
+  else if (status === 'FAILED' || status === 'REJECTED') node.classList.add('failed');
+  node.textContent = JSON.stringify(data, null, 2);
+}
+
 // ==================== FISHING SHADOW AGENT ====================
 
 let fishingShadow = {
@@ -9107,8 +9743,18 @@ let fishingShadowLiveRevision = 0;
 // Abort controllers for the in-flight status/history requests, cancelled on session switch.
 let fishingShadowStatusAbortController = null;
 let fishingShadowHistoryAbortController = null;
+let fishingShadowRunsAbortController = null;
+let fishingShadowAgentInitialized = false;
 
 function fishingShadowAbortPendingRequests() {
+  if (recordingStatusAbortController) {
+    recordingStatusGeneration++;
+    recordingStatusAbortController.abort();
+    recordingStatusAbortController = null;
+    // The old promise will settle asynchronously. Clear the single-flight slot now so a session
+    // switch can start a fresh status poll instead of receiving the already-aborted promise.
+    recordingStatusRequest = null;
+  }
   if (fishingShadowStatusAbortController) {
     fishingShadowStatusAbortController.abort();
     fishingShadowStatusAbortController = null;
@@ -9117,11 +9763,16 @@ function fishingShadowAbortPendingRequests() {
     fishingShadowHistoryAbortController.abort();
     fishingShadowHistoryAbortController = null;
   }
+  if (fishingShadowRunsAbortController) {
+    fishingShadowRunsAbortController.abort();
+    fishingShadowRunsAbortController = null;
+  }
 }
 
 function initFishingShadowAgent() {
   const container = elements.fishingShadowContent;
   if (!container) return;
+  fishingShadowAgentInitialized = true;
 
   // Buttons are wired through event delegation inside the rendered panel.
   container.addEventListener('click', (event) => {
@@ -9161,6 +9812,14 @@ function initFishingShadowAgent() {
       }
     }
   });
+
+  // Loading the panel must not create shadow/status traffic while the live feed is disabled. The
+  // feed toggle is initialized before this function during page startup; explicit user actions
+  // on the panel remain allowed and are handled by the delegated listeners above.
+  if (!debugFeedEnabled) {
+    renderFishingShadow();
+    return;
+  }
 
   fishingShadowLoadModels();
   // On reload, restore the live session/run when known; otherwise leave the panel unbound until a
@@ -9222,10 +9881,21 @@ async function fishingShadowLoadStatus(targetSessionId, targetShadowRunId) {
     if (!response.ok) return;
     const status = await response.json();
     // Discard responses captured for a previous session/run generation.
-    if (generation !== fishingShadowSessionGeneration) return;
-    // Discard responses whose requested session/run is no longer the tracked session/run.
-    if (session && fishingShadow.sessionId && session !== fishingShadow.sessionId) return;
-    if (run && fishingShadow.shadowRunId && run !== fishingShadow.shadowRunId) return;
+    const syncCore = typeof DebuggerSessionSyncCore !== 'undefined' ? DebuggerSessionSyncCore : null;
+    if (syncCore
+      ? !syncCore.acceptsGeneration(
+        generation,
+        fishingShadowSessionGeneration,
+        controller.signal,
+        session,
+        fishingShadow.sessionId,
+        run,
+        fishingShadow.shadowRunId
+      )
+      : generation !== fishingShadowSessionGeneration
+        || controller.signal.aborted
+        || (session && session !== fishingShadow.sessionId)
+        || (run && run !== fishingShadow.shadowRunId)) return;
 
     // Model readiness and persistence fields are global/current status and always apply. Session
     // counters and the latest decision apply only when no accepted live decision landed while the
@@ -9233,11 +9903,11 @@ async function fishingShadowLoadStatus(targetSessionId, targetShadowRunId) {
     // roll live counters backward. If the revision changed, retain local counters and live
     // decisions.
     const applySessionCounters = liveRevision === fishingShadowLiveRevision;
-    const core = typeof FishingShadowCore !== 'undefined' ? FishingShadowCore : null;
-    if (core) {
+    const shadowCore = typeof FishingShadowCore !== 'undefined' ? FishingShadowCore : null;
+    if (shadowCore) {
       Object.assign(
         fishingShadow,
-        core.mergeStatusIntoState(fishingShadow, status, session, run, applySessionCounters)
+        shadowCore.mergeStatusIntoState(fishingShadow, status, session, run, applySessionCounters)
       );
     } else {
       fishingShadow.status = status;
@@ -9447,7 +10117,21 @@ async function fishingShadowLoadHistory(sessionId, shadowRunId, legacy) {
     const history = await response.json();
     if (!Array.isArray(history)) return;
     // Discard responses captured for a previous session generation.
-    if (generation !== fishingShadowSessionGeneration) return;
+    const core = typeof DebuggerSessionSyncCore !== 'undefined' ? DebuggerSessionSyncCore : null;
+    if (core
+      ? !core.acceptsGeneration(
+        generation,
+        fishingShadowSessionGeneration,
+        controller.signal,
+        target,
+        fishingShadow.sessionId,
+        legacy ? null : run,
+        legacy ? null : fishingShadow.shadowRunId
+      )
+      : generation !== fishingShadowSessionGeneration
+        || controller.signal.aborted
+        || target !== fishingShadow.sessionId
+        || (!legacy && run !== fishingShadow.shadowRunId)) return;
 
     if (typeof FishingShadowCore !== 'undefined') {
       Object.assign(fishingShadow, FishingShadowCore.mergeHistoryIntoState(fishingShadow, history, target, legacy ? null : run));
@@ -9498,10 +10182,20 @@ async function fishingShadowLoadHistory(sessionId, shadowRunId, legacy) {
  * (legacy history is never chosen silently).
  */
 function fishingShadowSwitchSession(sessionId, shadowRunId) {
+  const nextSessionId = sessionId || null;
+  const nextShadowRunId = shadowRunId || null;
+  if (
+    fishingShadow.sessionId === nextSessionId
+    && fishingShadow.shadowRunId === nextShadowRunId
+    && !fishingShadow.showingLegacy
+  ) {
+    return;
+  }
   fishingShadowSessionGeneration++;
   fishingShadowLiveRevision = 0;
   fishingShadowAbortPendingRequests();
   fishingShadow.selectedRunId = null;
+  fishingShadow.runs = [];
   fishingShadow.showingLegacy = false;
   const fresh = (typeof FishingShadowCore !== 'undefined')
     ? FishingShadowCore.switchShadowSessionState(sessionId, shadowRunId)
@@ -9517,8 +10211,8 @@ function fishingShadowSwitchSession(sessionId, shadowRunId) {
         abstained: 0,
         persistenceError: null
       };
-  fishingShadow.sessionId = sessionId || null;
-  fishingShadow.shadowRunId = shadowRunId || null;
+  fishingShadow.sessionId = nextSessionId;
+  fishingShadow.shadowRunId = nextShadowRunId;
   fishingShadow.latestTick = fresh.latestTick;
   fishingShadow.latestDecision = fresh.latestDecision;
   fishingShadow.decisions = fresh.decisions;
@@ -9546,25 +10240,54 @@ async function fishingShadowLoadRuns(sessionId) {
   const container = elements.fishingShadowContent;
   if (!container) return;
   const generation = fishingShadowSessionGeneration;
+  if (!sessionId) return;
+  if (fishingShadowRunsAbortController) {
+    fishingShadowRunsAbortController.abort();
+  }
+  const controller = new AbortController();
+  fishingShadowRunsAbortController = controller;
   try {
     const params = new URLSearchParams({ sessionId });
     const response = await fetch(
-      '/api/ai-player/prototype/fishing/shadow/runs?' + params.toString()
+      '/api/ai-player/prototype/fishing/shadow/runs?' + params.toString(),
+      { signal: controller.signal }
     );
     if (!response.ok) return;
     const data = await response.json();
-    if (generation !== fishingShadowSessionGeneration) return;
+    const core = typeof DebuggerSessionSyncCore !== 'undefined' ? DebuggerSessionSyncCore : null;
+    if (core
+      ? !core.acceptsGeneration(
+        generation,
+        fishingShadowSessionGeneration,
+        controller.signal,
+        sessionId,
+        fishingShadow.sessionId,
+        null,
+        null
+      )
+      : generation !== fishingShadowSessionGeneration
+        || controller.signal.aborted
+        || sessionId !== fishingShadow.sessionId) return;
+    if (data && data.sessionId && data.sessionId !== sessionId) return;
     if (!data || !Array.isArray(data.runs)) return;
     fishingShadow.runs = data.runs;
     const active = data.runs.find(r => r.active && !r.legacy && r.shadowRunId);
     if (active) {
       fishingShadowSwitchSession(sessionId, active.shadowRunId);
+      // Switching to the active run resets the panel, including its run list. Restore the
+      // response that was just validated so the selector remains useful without another request.
+      fishingShadow.runs = data.runs;
+      renderFishingShadow();
       return;
     }
     renderFishingShadow();
   } catch (error) {
     if (error && error.name === 'AbortError') return;
     console.error('Failed to load fishing shadow runs', error);
+  } finally {
+    if (fishingShadowRunsAbortController === controller) {
+      fishingShadowRunsAbortController = null;
+    }
   }
 }
 
@@ -9789,6 +10512,7 @@ function renderFishingShadow() {
 document.addEventListener('DOMContentLoaded', () => {
   cacheElements();
   switchMode('live'); // Initialize mode BEFORE WebSocket connections
+  initializeDebuggerWorkspaces();
 
   elements.liveBtn.addEventListener('click', () => switchMode('live'));
   elements.replayBtn.addEventListener('click', () => switchMode('replay'));
@@ -9798,7 +10522,59 @@ document.addEventListener('DOMContentLoaded', () => {
   connectOverlayWebSocket();
   connectBotStateWebSocket();
   connectTickStreamWebSocket(); // New tick stream WebSocket
-  initFishingShadowAgent(); // Fishing Shadow Agent panel
+
+  const closeDebuggerPage = () => {
+    if (debuggerPageClosing) return;
+    debuggerPageClosing = true;
+    closeDebuggerWebSockets();
+    closeTickStreamWebSocket();
+    fishingShadowAbortPendingRequests();
+    if (tickPoller) {
+      clearInterval(tickPoller);
+      tickPoller = null;
+    }
+    if (aiInspectorPoller) {
+      clearInterval(aiInspectorPoller);
+      aiInspectorPoller = null;
+    }
+    if (recordingStatusPoller) {
+      clearInterval(recordingStatusPoller);
+      recordingStatusPoller = null;
+    }
+    if (providerStatusPoller) {
+      clearInterval(providerStatusPoller);
+      providerStatusPoller = null;
+    }
+    if (windowSelectionPoller) {
+      clearInterval(windowSelectionPoller);
+      windowSelectionPoller = null;
+    }
+    if (recordingDiagnosticsPoller) {
+      clearInterval(recordingDiagnosticsPoller);
+      recordingDiagnosticsPoller = null;
+    }
+    if (feedStatusPoller) {
+      clearInterval(feedStatusPoller);
+      feedStatusPoller = null;
+    }
+    if (recordingDurationInterval) {
+      clearInterval(recordingDurationInterval);
+      recordingDurationInterval = null;
+    }
+    if (playbackInterval) {
+      clearInterval(playbackInterval);
+      playbackInterval = null;
+    }
+    if (patchLoopCatalogPollTimer) {
+      clearInterval(patchLoopCatalogPollTimer);
+      patchLoopCatalogPollTimer = null;
+    }
+    if (window.patchLoopManager && typeof window.patchLoopManager.disconnect === 'function') {
+      window.patchLoopManager.disconnect();
+    }
+  };
+  window.addEventListener('pagehide', closeDebuggerPage, { once: true });
+  window.addEventListener('beforeunload', closeDebuggerPage, { once: true });
 
   // Initialize patch loop manager
   if (typeof PatchLoopManager !== 'undefined') {
@@ -9823,6 +10599,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initRecordingControls(); // Recording controls
   initDebugSessionControls(); // Debug session controls (live mode only)
   initDebugFeedControls(); // Debug feed toggle (pause/resume micro6)
+  initFishingRecordingLab(); // Recording quality, range, training, and replay workflow
+  initFishingShadowAgent(); // Fishing Shadow Agent panel
   initTaskRecordingControls(); // Task recording controls
 
   // Viewport pause/resume button
@@ -9832,7 +10610,8 @@ document.addEventListener('DOMContentLoaded', () => {
   startTickPolling();
 
   fetchAndRenderWindows();
-  setInterval(fetchAndRenderWindows, 5000);
+  if (windowSelectionPoller) clearInterval(windowSelectionPoller);
+  windowSelectionPoller = setInterval(fetchAndRenderWindows, 5000);
 
   if (elements.replayVideo) {
     elements.replayVideo.addEventListener('loadedmetadata', () => resizeOverlayCanvas(getViewportMetrics() || { width: 0, height: 0 }));
@@ -9843,11 +10622,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (metrics) resizeOverlayCanvas(metrics);
   });
 
+  if (aiInspectorPoller) clearInterval(aiInspectorPoller);
   aiInspectorPoller = setInterval(fetchAiInspector, 5000);
   fetchAiInspector();
 
   // Start recording diagnostics polling
-  setInterval(() => {
+  if (recordingDiagnosticsPoller) clearInterval(recordingDiagnosticsPoller);
+  recordingDiagnosticsPoller = setInterval(() => {
     if (currentMode === 'live') {
       updateRecordingDiagnostics();
     }
@@ -9855,7 +10636,8 @@ document.addEventListener('DOMContentLoaded', () => {
   updateRecordingDiagnostics();
 
   // Start feed status polling
-  setInterval(updateFeedStatus, 5000);
+  if (feedStatusPoller) clearInterval(feedStatusPoller);
+  feedStatusPoller = setInterval(updateFeedStatus, 5000);
   updateFeedStatus();
 
   // Deep-link: auto-open a recording via ?recordingId=, ?recording= (legacy), ?sessionId=, or ?mode=replay

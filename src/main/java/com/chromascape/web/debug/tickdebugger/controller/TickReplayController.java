@@ -29,10 +29,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -1032,6 +1034,7 @@ public class TickReplayController {
    * @param end optional end tick (default: start + 100)
    * @return list of tick card data
    */
+  @Deprecated
   @GetMapping("/tick-cards/{recordingId}")
   public ResponseEntity<?> getTickCards(
       @PathVariable String recordingId,
@@ -1048,7 +1051,9 @@ public class TickReplayController {
         error.put(
             "message",
             "This recording was made before tick tracking was enabled. Only video playback is available.");
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .headers(deprecatedTickCardHeaders(recordingId))
+            .body(error);
       }
 
       DebugSession session = sessionOpt.get();
@@ -1063,7 +1068,7 @@ public class TickReplayController {
       List<TickSnapshot> snapshots =
           snapshotRepository.findBySessionIdAndTickBetweenOrderByTick(sessionId, start, end);
       List<TickLog> logs =
-          logRepository.findBySessionIdAndTickBetweenOrderByTickAsc(sessionId, start, end);
+          logRepository.findBySessionIdAndTickBetweenOrderByTickAscIdAsc(sessionId, start, end);
 
       // Build tick cards
       Map<Long, TickCardData> tickCardsMap = new LinkedHashMap<>();
@@ -1159,7 +1164,13 @@ public class TickReplayController {
         Long tick = entry.getKey();
         List<TickLog> tickLogs = entry.getValue();
 
-        TickCardData card = tickCardsMap.computeIfAbsent(tick, this::createEmptyTickCard);
+        // A log without a captured snapshot is evidence, but it is not a frame. Keep it out of
+        // the legacy card projection so it cannot synthesize a visual tick that the v1 frame API
+        // would never return.
+        TickCardData card = tickCardsMap.get(tick);
+        if (card == null) {
+          continue;
+        }
 
         Map<String, Integer> sectionCounts = card.getSectionCounts();
         Map<String, Object> sectionData = card.getSectionData();
@@ -1174,7 +1185,7 @@ public class TickReplayController {
                 .filter(
                     l ->
                         (l.getEventType() != null
-                                && l.getEventType().toLowerCase().contains("dialogue"))
+                                && l.getEventType().toLowerCase(Locale.ROOT).contains("dialogue"))
                             || (l.getSubsystem() != null
                                 && l.getSubsystem().equalsIgnoreCase("dialogue")))
                 .toList();
@@ -1189,7 +1200,7 @@ public class TickReplayController {
                 .filter(
                     l ->
                         (l.getEventType() != null
-                                && l.getEventType().toLowerCase().contains("varbit"))
+                                && l.getEventType().toLowerCase(Locale.ROOT).contains("varbit"))
                             || (l.getSubsystem() != null
                                 && l.getSubsystem().equalsIgnoreCase("varbit")))
                 .toList();
@@ -1208,14 +1219,27 @@ public class TickReplayController {
           start,
           end);
 
-      return ResponseEntity.ok(tickCards);
+      return ResponseEntity.ok().headers(deprecatedTickCardHeaders(recordingId)).body(tickCards);
 
     } catch (Exception e) {
       log.error("Failed to get tick cards for recording {}: {}", recordingId, e.getMessage(), e);
       Map<String, Object> error = new HashMap<>();
       error.put("error", e.getMessage());
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .headers(deprecatedTickCardHeaders(recordingId))
+          .body(error);
     }
+  }
+
+  private HttpHeaders deprecatedTickCardHeaders(String recordingId) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.add("Deprecation", "true");
+    headers.add(
+        "Link",
+        "</api/replay/playback/v1/recordings/"
+            + recordingId
+            + "/frames>; rel=\"successor-version\"");
+    return headers;
   }
 
   /**

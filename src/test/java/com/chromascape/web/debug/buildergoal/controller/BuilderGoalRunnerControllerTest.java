@@ -550,7 +550,7 @@ class BuilderGoalRunnerControllerTest {
     result.put("world", 360);
     result.put("deduplicated", false);
     result.put("statusUrl", "/api/debug/builder-goals/launch-operations/op-123");
-    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360, false)).thenReturn(result);
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360)).thenReturn(result);
 
     com.fasterxml.jackson.databind.JsonNode payload =
         objectMapper.readTree(
@@ -576,7 +576,7 @@ class BuilderGoalRunnerControllerTest {
     assertThat(body.get("deduplicated")).isEqualTo(false);
     assertThat(body.get("statusUrl"))
         .isEqualTo("/api/debug/builder-goals/launch-operations/op-123");
-    verify(builderGoalRunnerService).launchAccount("hash-1", "machine-1", 360, false);
+    verify(builderGoalRunnerService).launchAccount("hash-1", "machine-1", 360);
   }
 
   @Test
@@ -590,7 +590,7 @@ class BuilderGoalRunnerControllerTest {
     result.put("world", 360);
     result.put("deduplicated", true);
     result.put("statusUrl", "/api/debug/builder-goals/launch-operations/op-123");
-    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360, false)).thenReturn(result);
+    when(builderGoalRunnerService.launchAccount("hash-1", "machine-1", 360)).thenReturn(result);
 
     com.fasterxml.jackson.databind.JsonNode payload =
         objectMapper.readTree(
@@ -611,7 +611,7 @@ class BuilderGoalRunnerControllerTest {
 
   @Test
   void launchAccount_returnsBadRequestWhenAccountMissing() throws Exception {
-    when(builderGoalRunnerService.launchAccount(null, "machine-1", null, false))
+    when(builderGoalRunnerService.launchAccount(null, "machine-1", null))
         .thenThrow(new IllegalArgumentException("accountId is required"));
     com.fasterxml.jackson.databind.JsonNode payload =
         objectMapper.readTree(

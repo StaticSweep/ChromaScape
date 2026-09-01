@@ -2,6 +2,7 @@ package com.chromascape.web.simulator;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 /**
  * Configuration properties for the OpenRune Replay Control proxy.
@@ -11,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 @ConfigurationProperties(prefix = "simulator.replay-control")
+@Profile("openrune-legacy")
 public class SimulatorReplayControlProperties {
 
   /** Whether the replay control proxy is enabled. */

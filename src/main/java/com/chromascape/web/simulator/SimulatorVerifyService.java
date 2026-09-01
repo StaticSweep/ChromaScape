@@ -32,6 +32,7 @@ import java.util.concurrent.TimeoutException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 /**
@@ -41,6 +42,7 @@ import org.springframework.stereotype.Service;
  * verifier output reports.
  */
 @Service
+@Profile("openrune-legacy")
 public class SimulatorVerifyService {
 
   private static final Logger logger = LogManager.getLogger(SimulatorVerifyService.class);

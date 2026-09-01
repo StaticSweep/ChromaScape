@@ -18,9 +18,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "observedPlayback": { "type": "boolean" },
-        "policyReplay": { "type": "boolean" },
-        "causalSimulation": { "type": "boolean" }
+        "observedPlayback": { "const": false },
+        "policyReplay": { "const": false },
+        "causalSimulation": { "const": true }
       },
       "required": ["observedPlayback", "policyReplay", "causalSimulation"]
     },
@@ -68,11 +68,13 @@
     },
     "supportedActions": {
       "type": "array",
-      "items": { "type": "string" }
-    },
-    "viewerTraceSchema": {
-      "type": "string",
-      "const": "xrsps-replay-trace/v1"
+      "prefixItems": [
+        { "const": "WAIT_UNTIL_TICK" },
+        { "const": "INTERACT_NPC" }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     }
   },
   "required": [
@@ -88,7 +90,6 @@
     "openRuneAvailable",
     "certifiable",
     "fidelity",
-    "supportedActions",
-    "viewerTraceSchema"
+    "supportedActions"
   ]
 }

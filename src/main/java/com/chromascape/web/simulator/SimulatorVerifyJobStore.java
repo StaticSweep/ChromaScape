@@ -3,6 +3,7 @@ package com.chromascape.web.simulator;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
  * ConcurrentHashMap for thread-safe access without explicit synchronization.
  */
 @Component
+@Profile("openrune-legacy")
 public class SimulatorVerifyJobStore {
 
   /** Job states in the verification lifecycle. */

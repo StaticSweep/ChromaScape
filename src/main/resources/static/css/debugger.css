@@ -135,6 +135,58 @@ body {
   /* overflow: hidden removed - allows child elements to display their own scrollbars */
 }
 
+.fishing-recording-panel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.fishing-recording-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.recording-lab-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recording-lab-range {
+  width: 220px;
+}
+
+.recording-lab-id {
+  flex: 1;
+  min-width: 360px;
+}
+
+.recording-lab-result {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  max-height: 150px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.recording-lab-result.ready,
+.recording-lab-result.passed {
+  color: #5cde7c;
+  background: rgba(40, 167, 69, 0.15);
+}
+
+.recording-lab-result.not-ready,
+.recording-lab-result.failed {
+  color: #f0767e;
+  background: rgba(220, 53, 69, 0.15);
+}
+
 .viewport-stage {
   position: relative;
   flex: 1;
@@ -3041,4 +3093,611 @@ body.recovery-mode-active .logs-panel {
 
 .player-json-bracket {
   color: #64748b;
+}
+
+/* ==========================================================================
+ * Workspace shell (v15)
+ * The debugger is an operator workflow, not one endlessly scrolling dashboard.
+ * Existing IDs remain intact; workspace state controls which capability is visible.
+ * ========================================================================== */
+
+:root {
+  --debugger-shell: rgba(10, 18, 31, 0.94);
+  --debugger-surface: rgba(19, 31, 50, 0.82);
+  --debugger-surface-strong: rgba(23, 38, 61, 0.96);
+  --debugger-line: rgba(148, 163, 184, 0.18);
+  --debugger-copy: #e7edf6;
+  --debugger-muted: #91a0b5;
+  --debugger-accent: #5da7ff;
+  /* Keep legacy page rules and Bootstrap utilities legible on the dark shell. */
+  --text-muted: var(--debugger-muted);
+}
+
+body[data-workspace] {
+  background:
+    radial-gradient(circle at 14% -10%, rgba(42, 112, 198, 0.22), transparent 34rem),
+    #08111f;
+  color: var(--debugger-copy);
+  --glass-bg: var(--debugger-surface);
+  --glass-border: var(--debugger-line);
+  --glass-shadow: 0 14px 35px rgba(0, 0, 0, 0.18);
+  --text-main: var(--debugger-copy);
+  --bs-body-color: var(--debugger-copy);
+  --bs-secondary-color: var(--debugger-muted);
+}
+
+body[data-workspace] .text-muted {
+  color: var(--debugger-muted) !important;
+}
+
+body[data-workspace] .glass-panel:hover {
+  border-color: rgba(93, 167, 255, 0.32);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Bootstrap derives control text from the dark page body while keeping its default light input
+   background. Give light controls their own explicit, accessible foreground palette. */
+body[data-workspace] .form-control,
+body[data-workspace] .form-select {
+  color: #172033;
+  caret-color: #172033;
+  background-color: #f8fafc;
+  border-color: #b8c4d3;
+}
+
+body[data-workspace] .form-control::placeholder {
+  color: #6b7c93;
+  opacity: 1;
+}
+
+body[data-workspace] .form-control:focus,
+body[data-workspace] .form-select:focus {
+  color: #111827;
+  background-color: #fff;
+  border-color: var(--debugger-accent);
+  box-shadow: 0 0 0 0.2rem rgba(93, 167, 255, 0.2);
+}
+
+body[data-workspace] .form-control:disabled,
+body[data-workspace] .form-select:disabled {
+  color: #43526a;
+  background-color: #dce3eb;
+  border-color: #aeb9c7;
+  opacity: 1;
+}
+
+body[data-workspace] .form-control[readonly] {
+  color: #334155;
+  background-color: #e9eef4;
+}
+
+body[data-workspace] .form-select option,
+body[data-workspace] .input-group-text {
+  color: #172033;
+  background-color: #f8fafc;
+}
+
+.debugger-page {
+  width: min(1920px, 100%);
+  margin: 0 auto;
+  gap: 14px;
+  padding: 14px 18px 24px;
+}
+
+.debugger-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+  min-height: 58px;
+  padding: 9px 12px;
+  gap: 10px;
+  border-radius: 14px;
+  background: var(--debugger-shell);
+  border-color: var(--debugger-line);
+  backdrop-filter: blur(18px);
+}
+
+.debugger-topbar .navbar-brand {
+  margin: 0 8px 0 0;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.debugger-topbar .btn,
+.debugger-topbar .form-select {
+  min-height: 36px;
+}
+
+.debugger-topbar .topbar-left {
+  min-width: 0;
+}
+
+.debugger-topbar .tick-controls {
+  margin-left: auto;
+}
+
+.debugger-workspace-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 5px 7px;
+  border: 1px solid var(--debugger-line);
+  border-radius: 13px;
+  background: rgba(12, 22, 38, 0.78);
+}
+
+.workspace-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 13px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--debugger-muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.workspace-tab:hover {
+  color: var(--debugger-copy);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.workspace-tab.active,
+.workspace-tab[aria-selected="true"] {
+  color: #fff;
+  background: rgba(52, 130, 226, 0.22);
+  border-color: rgba(93, 167, 255, 0.38);
+}
+
+.workspace-global-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-right: 8px;
+  color: var(--debugger-muted);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.workspace-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.16);
+}
+
+.workspace-status-dot.connected {
+  background: #43d17a;
+  box-shadow: 0 0 0 3px rgba(67, 209, 122, 0.15);
+}
+
+.workspace-status-dot.warning {
+  background: #f6bf4f;
+  box-shadow: 0 0 0 3px rgba(246, 191, 79, 0.15);
+}
+
+.workspace-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 7px 4px 4px;
+}
+
+.workspace-heading h1 {
+  margin: 0;
+  color: #f8fbff;
+  font-size: clamp(1.45rem, 2vw, 2rem);
+  font-weight: 720;
+  letter-spacing: -0.025em;
+}
+
+.workspace-heading p {
+  margin: 4px 0 0;
+  max-width: 780px;
+  color: var(--debugger-muted);
+  font-size: 0.88rem;
+}
+
+.workspace-heading .workspace-eyebrow {
+  margin: 0 0 2px;
+  color: var(--debugger-accent);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.workspace-empty-state {
+  min-height: 260px;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 42px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  background: var(--debugger-surface);
+  text-align: left;
+}
+
+.workspace-empty-state:not([hidden]) {
+  display: flex;
+}
+
+.workspace-empty-state > i {
+  color: var(--debugger-accent);
+  font-size: 2rem;
+}
+
+.workspace-empty-state h2 {
+  margin: 0 0 5px;
+  font-size: 1.05rem;
+}
+
+.workspace-empty-state p {
+  margin: 0;
+  color: var(--debugger-muted);
+}
+
+/* Global header shows only controls relevant to the selected workspace. */
+.debugger-topbar .mode-controls > .btn-group {
+  display: none !important;
+}
+
+body:not([data-workspace="live"]) .debugger-topbar .mode-controls,
+body:not([data-workspace="replays"]) .debugger-topbar .session-controls,
+body:not([data-workspace="replays"]) #replayMetadataEditor,
+body:not([data-workspace="replays"]) #replayMetadataPreview,
+body:not([data-workspace="replays"]) #sessionHealthPreview {
+  display: none !important;
+}
+
+#taskPlannerToggleBtn {
+  display: none !important;
+}
+
+body:not([data-workspace="live"]) #fpsDropdown,
+body[data-workspace="replays"] #windowSelectorDropdown,
+body[data-workspace="recovery"] #windowSelectorDropdown,
+body[data-workspace="developer"] #windowSelectorDropdown {
+  display: none !important;
+}
+
+body:not([data-workspace="live"]) .tick-controls .tick-readout,
+body:not([data-workspace="live"]) .tick-controls .tick-jump,
+body:not([data-workspace="live"]) .tick-controls #feedStatusIndicator {
+  display: none !important;
+}
+
+body[data-workspace="runs"] #windowSelectorDropdown,
+body[data-workspace="runs"] .debugger-topbar .tick-controls .tick-readout,
+body[data-workspace="runs"] .debugger-topbar .tick-controls .tick-jump,
+body[data-workspace="runs"] .debugger-topbar .tick-controls #feedStatusIndicator {
+  display: none !important;
+}
+
+/* Runs is a real workspace instead of a narrow overlay. */
+body:not([data-workspace="runs"]) #taskPlannerPanel,
+body:not([data-workspace="developer"]) #taskRecordingPanel,
+body:not([data-workspace="developer"]) #patchLoopPanel {
+  display: none !important;
+}
+
+body:not([data-workspace="ai-training"]) #aiTrainingPanel {
+  display: none !important;
+}
+
+body[data-workspace="ai-training"] .debugger-container,
+body[data-workspace="ai-training"] #taskPlannerPanel,
+body[data-workspace="ai-training"] #taskRecordingPanel,
+body[data-workspace="ai-training"] #patchLoopPanel,
+body[data-workspace="ai-training"] #ai-routine-panel {
+  display: none !important;
+}
+
+body[data-workspace="ai-training"] #windowSelectorDropdown,
+body[data-workspace="ai-training"] .debugger-topbar .tick-controls .tick-readout,
+body[data-workspace="ai-training"] .debugger-topbar .tick-controls .tick-jump,
+body[data-workspace="ai-training"] .debugger-topbar .tick-controls #feedStatusIndicator {
+  display: none !important;
+}
+
+body[data-workspace="runs"] #taskPlannerPanel {
+  position: static;
+  display: block !important;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  transform: none;
+  padding: 18px;
+  border-radius: 15px;
+  background: var(--debugger-surface);
+}
+
+body[data-workspace="runs"] .task-planner-header {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+}
+
+body[data-workspace="runs"] #toggleTaskPlannerBtn {
+  display: none;
+}
+
+body[data-workspace="runs"] .task-planner-content {
+  display: grid !important;
+  grid-template-columns: minmax(620px, 1.7fr) minmax(300px, 0.8fr);
+  align-items: start;
+  gap: 16px;
+}
+
+body[data-workspace="runs"] #builderGoalRunnerSection {
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  padding: 16px;
+  border: 1px solid var(--debugger-line);
+  border-radius: 12px;
+  background: rgba(8, 17, 31, 0.42);
+}
+
+body[data-workspace="runs"] .task-planner-content > .task-planner-section:not(#builderGoalRunnerSection) {
+  grid-column: 2;
+  padding: 14px;
+  border: 1px solid var(--debugger-line);
+  border-radius: 12px;
+  background: rgba(8, 17, 31, 0.42);
+}
+
+body[data-workspace="runs"] #builderGoalRunsList {
+  max-height: 420px;
+}
+
+.operator-help {
+  border: 1px solid var(--debugger-line);
+  border-radius: 9px;
+  background: rgba(8, 17, 31, 0.3);
+}
+
+.operator-help > summary {
+  padding: 8px 10px;
+  color: var(--debugger-muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.operator-help > div {
+  margin-inline: 9px;
+  margin-bottom: 9px;
+}
+
+/* Shared evidence surface for Live, Replays, and active Recovery. */
+body[data-workspace="runs"] .debugger-container,
+body[data-workspace="runs"] #taskRecordingPanel,
+body[data-workspace="runs"] #patchLoopPanel,
+body[data-workspace="runs"] #ai-routine-panel {
+  display: none !important;
+}
+
+body[data-workspace="live"] .debugger-container,
+body[data-workspace="replays"] .debugger-container,
+body[data-workspace="recovery"] .debugger-container {
+  display: grid;
+  grid-template-rows: minmax(540px, auto) auto auto;
+  gap: 14px;
+}
+
+body[data-workspace="live"] .scrubber-bar {
+  display: none;
+}
+
+body[data-workspace="live"] .debugger-bottom,
+body[data-workspace="replays"] .debugger-bottom {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+body[data-workspace="live"] #xrspsReplayWorkspace,
+body[data-workspace="live"] .fishing-shadow-panel,
+body[data-workspace="live"] .fishing-recording-panel,
+body[data-workspace="replays"] #xrspsReplayWorkspace,
+body[data-workspace="replays"] .fishing-shadow-panel,
+body[data-workspace="replays"] .fishing-recording-panel {
+  display: none !important;
+}
+
+body[data-workspace="recovery"] .debugger-bottom {
+  display: none !important;
+}
+
+body[data-workspace="recovery"]:not(.recovery-mode-active) .debugger-container {
+  display: none;
+}
+
+body[data-workspace="recovery"].recovery-mode-active .debugger-container {
+  grid-template-rows: minmax(440px, auto) auto minmax(0, auto);
+}
+
+.viewport-panel,
+.logs-panel,
+.bot-state-panel,
+.ai-inspector-panel,
+.fishing-shadow-panel,
+.fishing-recording-panel,
+#xrspsReplayWorkspace,
+.scrubber-bar,
+.recovery-section,
+.recovery-workspace-banner {
+  border-color: var(--debugger-line) !important;
+  border-radius: 14px !important;
+}
+
+.debugger-main {
+  grid-template-columns: minmax(0, 1.45fr) minmax(420px, 0.85fr);
+  gap: 14px;
+}
+
+.viewport-stage {
+  min-height: 460px;
+  border-radius: 11px;
+}
+
+.logs-panel {
+  overflow: hidden;
+}
+
+.logs-panel .console-output {
+  min-height: 360px;
+  max-height: 620px;
+  /* Live rows are inserted and rerendered continuously. Keep browser scroll anchoring from
+     moving the document; debugger.js preserves and follows this pane explicitly. */
+  overflow-anchor: none;
+}
+
+.log-advanced-filters {
+  margin: 2px 0 9px;
+  border: 1px solid var(--debugger-line);
+  border-radius: 9px;
+  background: rgba(8, 17, 31, 0.32);
+}
+
+.log-advanced-filters > summary {
+  padding: 7px 10px;
+  color: var(--debugger-muted);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 650;
+  list-style-position: inside;
+}
+
+.log-advanced-filters[open] > summary {
+  color: var(--debugger-copy);
+  border-bottom: 1px solid var(--debugger-line);
+}
+
+.log-advanced-filters-body {
+  padding: 9px;
+}
+
+/* Developer tools are intentionally separated from normal operation. */
+body[data-workspace="developer"] #taskRecordingPanel {
+  display: block !important;
+  margin: 0;
+  border-radius: 14px;
+}
+
+body[data-workspace="developer"] #patchLoopPanel {
+  position: static;
+  display: block !important;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  transform: none;
+  z-index: auto;
+  padding: 18px;
+  border-radius: 14px;
+}
+
+body[data-workspace="developer"] .debugger-container {
+  display: block;
+}
+
+body[data-workspace="developer"] .debugger-main,
+body[data-workspace="developer"] .scrubber-bar,
+body[data-workspace="developer"] #recoveryModeShell,
+body[data-workspace="developer"] .bot-state-panel,
+body[data-workspace="developer"] .ai-inspector-panel {
+  display: none !important;
+}
+
+body[data-workspace="developer"] .debugger-bottom {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+body[data-workspace="developer"] #xrspsReplayWorkspace,
+body[data-workspace="developer"] .fishing-recording-panel {
+  grid-column: 1 / -1;
+}
+
+#ai-routine-panel {
+  display: none;
+}
+
+body[data-workspace="developer"] #ai-routine-panel {
+  display: block;
+  width: min(1884px, calc(100% - 36px));
+  margin: 0 auto 24px;
+  border-radius: 14px;
+}
+
+@media (max-width: 1180px) {
+  body[data-workspace="runs"] .task-planner-content {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-workspace="runs"] #builderGoalRunnerSection,
+  body[data-workspace="runs"] .task-planner-content > .task-planner-section:not(#builderGoalRunnerSection) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .debugger-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .debugger-page {
+    padding: 8px;
+  }
+
+  .debugger-topbar {
+    position: static;
+  }
+
+  .debugger-topbar .navbar-brand span,
+  .workspace-global-status,
+  .workspace-heading .workspace-eyebrow {
+    display: none;
+  }
+
+  .workspace-tab {
+    padding-inline: 10px;
+  }
+
+  .workspace-heading {
+    align-items: flex-start;
+  }
+
+  body[data-workspace="runs"] .task-planner-content,
+  body[data-workspace="live"] .debugger-bottom,
+  body[data-workspace="replays"] .debugger-bottom,
+  body[data-workspace="developer"] .debugger-bottom {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-workspace="developer"] #xrspsReplayWorkspace,
+  body[data-workspace="developer"] .fishing-recording-panel {
+    grid-column: 1;
+  }
 }

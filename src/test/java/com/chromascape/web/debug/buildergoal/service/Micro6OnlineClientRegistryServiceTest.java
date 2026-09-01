@@ -461,7 +461,9 @@ class Micro6OnlineClientRegistryServiceTest {
               "dispatch_hold": false,
               "startup_state": "accountbuilder_ready",
               "login_state": "logged_in",
-              "pathfinder_ready": true
+              "pathfinder_ready": true,
+              "launch_attempt_id": "attempt-both-compatibility",
+              "process_id": 4242
             }
             """));
 
@@ -493,7 +495,9 @@ class Micro6OnlineClientRegistryServiceTest {
               "dispatch_hold": false,
               "startup_state": "accountbuilder_ready",
               "login_state": "logged_in",
-              "pathfinder_ready": true
+              "pathfinder_ready": true,
+              "launch_attempt_id": "attempt-legacy",
+              "process_id": 4242
             }
             """));
 

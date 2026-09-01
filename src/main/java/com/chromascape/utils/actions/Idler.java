@@ -60,4 +60,12 @@ public class Idler {
       logger.error("Error while waiting for idle", e);
     }
   }
+
+  public static void wait(int seconds) {
+    try {
+      Thread.sleep(seconds * 1000);
+    } catch (InterruptedException e) {
+      logger.error("Error while waiting", e);
+    }
+  }
 }

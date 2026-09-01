@@ -73,6 +73,9 @@ public class ReplayProperties {
 
         @Positive private long maxStderrBytes = 1_048_576;
 
+        /** Bounded response queue capacity; the kernel is strictly one-request-at-a-time. */
+        @Positive private int responseQueueCapacity = 16;
+
         public String getExecutable() {
             return executable;
         }
@@ -168,6 +171,14 @@ public class ReplayProperties {
         public void setMaxStderrBytes(long maxStderrBytes) {
             this.maxStderrBytes = maxStderrBytes;
         }
+
+        public int getResponseQueueCapacity() {
+            return responseQueueCapacity;
+        }
+
+        public void setResponseQueueCapacity(int responseQueueCapacity) {
+            this.responseQueueCapacity = responseQueueCapacity;
+        }
     }
 
     /** Worker scheduling configuration. */
@@ -191,6 +202,12 @@ public class ReplayProperties {
 
         @Min(0)
         private int maxRetries = 2;
+
+        private boolean missingReportRepairEnabled = true;
+
+        @Positive private int missingReportRepairBatchSize = 25;
+
+        @Positive private int missingReportRepairIntervalSeconds = 30;
 
         public boolean isEnabled() {
             return enabled;
@@ -254,6 +271,30 @@ public class ReplayProperties {
 
         public void setMaxRetries(int maxRetries) {
             this.maxRetries = maxRetries;
+        }
+
+        public boolean isMissingReportRepairEnabled() {
+            return missingReportRepairEnabled;
+        }
+
+        public void setMissingReportRepairEnabled(boolean missingReportRepairEnabled) {
+            this.missingReportRepairEnabled = missingReportRepairEnabled;
+        }
+
+        public int getMissingReportRepairBatchSize() {
+            return missingReportRepairBatchSize;
+        }
+
+        public void setMissingReportRepairBatchSize(int missingReportRepairBatchSize) {
+            this.missingReportRepairBatchSize = missingReportRepairBatchSize;
+        }
+
+        public int getMissingReportRepairIntervalSeconds() {
+            return missingReportRepairIntervalSeconds;
+        }
+
+        public void setMissingReportRepairIntervalSeconds(int missingReportRepairIntervalSeconds) {
+            this.missingReportRepairIntervalSeconds = missingReportRepairIntervalSeconds;
         }
     }
 

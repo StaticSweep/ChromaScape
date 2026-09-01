@@ -5,6 +5,8 @@ import com.chromascape.web.replay.api.dto.ReplayOutcome;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Immutable final report for one run. Columns match V14 exactly.
@@ -41,7 +43,7 @@ public class ReplayReport {
     @Column(name = "conversion_quality", nullable = false, length = 32)
     private String conversionQuality = "BEST_EFFORT";
 
-    @Column(name = "action_coverage_pct", nullable = false)
+    @Column(name = "action_coverage_pct", nullable = false, columnDefinition = "NUMERIC(5,2)")
     private double actionCoveragePct;
 
     @Column(name = "gap_count", nullable = false)
@@ -67,13 +69,13 @@ public class ReplayReport {
     private int checkpointCount;
 
     @Column(name = "mismatch_hard_count", nullable = false)
-    private long mismatchHardCount;
+    private int mismatchHardCount;
 
     @Column(name = "mismatch_soft_count", nullable = false)
-    private long mismatchSoftCount;
+    private int mismatchSoftCount;
 
     @Column(name = "mismatch_info_count", nullable = false)
-    private long mismatchInfoCount;
+    private int mismatchInfoCount;
 
     @Column(name = "final_state_hash")
     private String finalStateHash;
@@ -97,6 +99,7 @@ public class ReplayReport {
     private String contentRevision;
 
     @Column(name = "report_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String reportJson;
 
     /** SHA-256 of the canonical report document. Unique and immutable. */
@@ -152,11 +155,11 @@ public class ReplayReport {
     public int getCheckpointCount() { return checkpointCount; }
     public void setCheckpointCount(int v) { this.checkpointCount = v; }
     public long getMismatchHardCount() { return mismatchHardCount; }
-    public void setMismatchHardCount(long v) { this.mismatchHardCount = v; }
+    public void setMismatchHardCount(long v) { this.mismatchHardCount = Math.toIntExact(v); }
     public long getMismatchSoftCount() { return mismatchSoftCount; }
-    public void setMismatchSoftCount(long v) { this.mismatchSoftCount = v; }
+    public void setMismatchSoftCount(long v) { this.mismatchSoftCount = Math.toIntExact(v); }
     public long getMismatchInfoCount() { return mismatchInfoCount; }
-    public void setMismatchInfoCount(long v) { this.mismatchInfoCount = v; }
+    public void setMismatchInfoCount(long v) { this.mismatchInfoCount = Math.toIntExact(v); }
     public String getFinalStateHash() { return finalStateHash; }
     public void setFinalStateHash(String v) { this.finalStateHash = v; }
     public String getFinalChainHash() { return finalChainHash; }

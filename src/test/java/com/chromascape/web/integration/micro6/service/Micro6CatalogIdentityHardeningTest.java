@@ -259,6 +259,7 @@ class Micro6CatalogIdentityHardeningTest {
 
     // The runtime transitions to GENERATING (re-generating its schema bundle). The prior
     // same-identity full catalog may only be exposed as STALE, never as fresh READY.
+    registry.catalogStateByRef.put(ref, "GENERATING");
     registry.schemaBundleStateByRef.put(ref, "GENERATING");
     JsonNode second = service.getCatalogForExecutor(ref, "full", false);
     assertThat(second.path("catalog_state").asText()).isEqualTo("STALE");
@@ -280,6 +281,7 @@ class Micro6CatalogIdentityHardeningTest {
 
     // A generation failure transitions the runtime to ERROR: the prior same-identity full catalog
     // may only be exposed as STALE, never as fresh READY.
+    registry.catalogStateByRef.put(ref, "DEGRADED");
     registry.schemaBundleStateByRef.put(ref, "ERROR");
     JsonNode second = service.getCatalogForExecutor(ref, "full", false);
     assertThat(second.path("catalog_state").asText()).isEqualTo("STALE");
@@ -314,6 +316,6 @@ class Micro6CatalogIdentityHardeningTest {
 
     JsonNode rejected = service.getCatalogForExecutor(ref, "full", true);
     assertThat(rejected.path("catalog_state").asText()).isEqualTo("UNAVAILABLE");
-    assertThat(rejected.path("reason_code").asText()).isEqualTo("IDENTITY_UNVERIFIED");
+    assertThat(rejected.path("reason_code").asText()).isEqualTo("CONTRACT_INVALID");
   }
 }

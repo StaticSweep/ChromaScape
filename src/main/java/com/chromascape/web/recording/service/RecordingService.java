@@ -129,7 +129,7 @@ public class RecordingService implements FrameListener {
    * @param triggerSource what initiated this recording
    * @return The recording ID for this session
    */
-  public String startRecording(RecordingTriggerSource triggerSource) {
+  public synchronized String startRecording(RecordingTriggerSource triggerSource) {
     if (!config.isEnabled()) {
       logger.warn("Recording is disabled");
       throw new RecordingDisabledException();
@@ -320,7 +320,7 @@ public class RecordingService implements FrameListener {
    *
    * @return Recording metadata including duration and file path
    */
-  public RecordingMetadata stopRecording() {
+  public synchronized RecordingMetadata stopRecording() {
     if (!recording.getAndSet(false)) {
       logger.warn("No recording in progress");
       return null;
@@ -435,6 +435,21 @@ public class RecordingService implements FrameListener {
       cleanup();
       return null;
     }
+  }
+
+  /**
+   * Stops a recording only when it is still the recording identified by {@code recordingId}.
+   * This prevents rollback for one session from stopping a newer process-wide recording.
+   */
+  public synchronized boolean stopRecordingIfCurrent(String recordingId) {
+    if (recordingId == null || recordingId.isBlank() || !recording.get()) {
+      return false;
+    }
+    if (!recordingId.equals(currentRecordingId)) {
+      return false;
+    }
+    stopRecording();
+    return true;
   }
 
   /**

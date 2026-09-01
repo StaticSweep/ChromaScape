@@ -5,7 +5,6 @@ import static org.mockito.Mockito.*;
 
 import com.chromascape.web.debug.tickdebugger.dto.DebugSessionSummary;
 import com.chromascape.web.debug.tickdebugger.dto.SessionCountProjection;
-import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionLifecycleState;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
@@ -15,16 +14,15 @@ import com.chromascape.web.debug.tickdebugger.entity.TimelineMarkerRepository;
 import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
 import com.chromascape.web.recording.entity.RecordingSessionRepository;
-import com.chromascape.web.recording.exception.FrameCaptureException;
 import com.chromascape.web.recording.service.RecordingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -111,68 +109,220 @@ class DebugSessionServiceTest {
     assertTrue(service.toSummaries(List.of()).isEmpty());
   }
 
-  @Test
-  void startSession_recordingStartFailure_degradesToTickOnlySession() {
-    when(sessionRepository.save(ArgumentMatchers.any(DebugSession.class)))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-    when(recordingService.startRecording(RecordingTriggerSource.MANUAL))
-        .thenThrow(new FrameCaptureException(10, 1000L, 1000L, "no frame captured", false));
-
-    SessionStartResponse response =
-        service.startSession("account-1", "script-1", true, RecordingTriggerSource.MANUAL, null);
-
-    // Session must survive as a tick-only session, not FAILED
-    ArgumentCaptor<DebugSession> captor = ArgumentCaptor.forClass(DebugSession.class);
-    verify(sessionRepository, atLeastOnce()).save(captor.capture());
-    DebugSession saved = captor.getAllValues().get(captor.getAllValues().size() - 1);
-    assertEquals(DebugSessionLifecycleState.RECORDING, saved.getLifecycleState());
-    assertEquals("REC_START_FAILED", saved.getFailureCode());
-    assertNotNull(saved.getFailureReason());
-    assertNull(saved.getRecordingId());
-
-    // No RecordingSession row created for the failed recording
-    verify(recordingSessionRepository, never()).save(any());
-
-    // Response reflects the degraded mode
-    assertNotNull(response.getSessionId());
-    assertTrue(response.getSessionId().startsWith("debug_"));
-    assertFalse(response.getRecordingEnabled());
-    assertNull(response.getRecordingId());
-    assertNotNull(response.getRecordingFailureReason());
-    assertTrue(response.getRecordingFailureReason().contains("failed to start"));
+  private void stubSaveReturnsSame() {
+    when(sessionRepository.save(any(DebugSession.class))).thenAnswer(inv -> inv.getArgument(0));
   }
 
   @Test
-  void startSession_unknownPreferredSessionId_createsNewAuthoritativeId() {
-    String provisionalId = "a4a7d886-1111-2222-3333-444455556666";
-    when(sessionRepository.findBySessionId(provisionalId)).thenReturn(java.util.Optional.empty());
-    when(sessionRepository.save(ArgumentMatchers.any(DebugSession.class)))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-    when(recordingService.startRecording(RecordingTriggerSource.MANUAL))
-        .thenReturn("recording_new_1");
+  void startWithOutcome_reusesActivePreferredSession() {
+    DebugSession preferred = createSession("debug_pref");
+    when(sessionRepository.findBySessionId("debug_pref")).thenReturn(Optional.of(preferred));
+    stubSaveReturnsSame();
+    when(recordingService.startRecording(any(RecordingTriggerSource.class))).thenReturn("rec_new");
+    when(recordingService.getRecordingStartTimeAsLocalDateTime()).thenReturn(LocalDateTime.now());
 
-    SessionStartResponse response =
-        service.startSession(
-            "account-1", "script-1", true, RecordingTriggerSource.MANUAL, provisionalId);
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", true, RecordingTriggerSource.MANUAL, "debug_pref");
 
-    // The provisional client request id must never be persisted as the authoritative session id:
-    // an unknown preferred id falls back to a freshly generated debug_* id.
-    assertNotNull(response.getSessionId());
-    assertTrue(response.getSessionId().startsWith("debug_"));
-    assertNotEquals(provisionalId, response.getSessionId());
+    assertTrue(outcome.reusedPreferredSession());
+    assertFalse(outcome.createdNewSession());
+    assertEquals("debug_pref", outcome.response().getSessionId());
+  }
 
-    // The session is persisted on creation (STARTING) and again when it transitions to RECORDING.
-    // The authoritative id and recording binding must be present on the final persisted state.
-    ArgumentCaptor<DebugSession> captor = ArgumentCaptor.forClass(DebugSession.class);
-    verify(sessionRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
-    java.util.List<DebugSession> saved = captor.getAllValues();
-    DebugSession last = saved.get(saved.size() - 1);
-    assertEquals(response.getSessionId(), last.getSessionId());
-    assertEquals("recording_new_1", response.getRecordingId());
-    assertTrue(response.getRecordingEnabled());
-    // The provisional client request id is never persisted as the authoritative session id.
-    assertTrue(
-        saved.stream()
-            .noneMatch(session -> provisionalId.equals(session.getSessionId())));
+  @Test
+  void startWithOutcome_missingPreferredCreatesNewSession() {
+    when(sessionRepository.findBySessionId("missing")).thenReturn(Optional.empty());
+    stubSaveReturnsSame();
+
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", false, RecordingTriggerSource.MANUAL, "missing");
+
+    assertTrue(outcome.createdNewSession());
+    assertFalse(outcome.reusedPreferredSession());
+    assertTrue(outcome.response().getSessionId().startsWith("debug_"));
+  }
+
+  @Test
+  void startWithOutcome_inactivePreferredCreatesNewSession() {
+    DebugSession inactive = createSession("debug_pref");
+    inactive.setEndTime(LocalDateTime.now());
+    when(sessionRepository.findBySessionId("debug_pref")).thenReturn(Optional.of(inactive));
+    stubSaveReturnsSame();
+
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", false, RecordingTriggerSource.MANUAL, "debug_pref");
+
+    assertTrue(outcome.createdNewSession());
+    assertFalse(outcome.reusedPreferredSession());
+    assertTrue(outcome.response().getSessionId().startsWith("debug_"));
+  }
+
+  @Test
+  void startWithOutcome_noPreferredCreatesNewSession() {
+    stubSaveReturnsSame();
+
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", false, RecordingTriggerSource.MANUAL, null);
+
+    assertTrue(outcome.createdNewSession());
+    assertFalse(outcome.reusedPreferredSession());
+  }
+
+  @Test
+  void startWithOutcome_reusesExistingRecordingWithoutRestart() {
+    DebugSession preferred = createSession("debug_pref");
+    preferred.setRecordingId("rec_existing");
+    when(sessionRepository.findBySessionId("debug_pref")).thenReturn(Optional.of(preferred));
+    stubSaveReturnsSame();
+
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", true, RecordingTriggerSource.MANUAL, "debug_pref");
+
+    assertTrue(outcome.reusedPreferredSession());
+    assertFalse(outcome.recordingStartedByOperation());
+    assertEquals("rec_existing", outcome.response().getRecordingId());
+    verify(recordingService, never()).startRecording(any(RecordingTriggerSource.class));
+  }
+
+  @Test
+  void startWithOutcome_reusedSessionWithoutRecordingStartsOwnedRecording() {
+    DebugSession preferred = createSession("debug_pref");
+    when(sessionRepository.findBySessionId("debug_pref")).thenReturn(Optional.of(preferred));
+    stubSaveReturnsSame();
+    when(recordingService.startRecording(any(RecordingTriggerSource.class))).thenReturn("rec_new");
+    when(recordingService.getRecordingStartTimeAsLocalDateTime()).thenReturn(LocalDateTime.now());
+
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", true, RecordingTriggerSource.MANUAL, "debug_pref");
+
+    assertTrue(outcome.reusedPreferredSession());
+    assertTrue(outcome.recordingStartedByOperation());
+    assertEquals("rec_new", outcome.rollbackToken().recordingIdStartedByOperation());
+  }
+
+  @Test
+  void rollback_newSessionStopsRecordingAndFinalizes() {
+    AtomicReference<DebugSession> created = new AtomicReference<>();
+    when(sessionRepository.save(any(DebugSession.class)))
+        .thenAnswer(
+            inv -> {
+              DebugSession s = inv.getArgument(0);
+              created.set(s);
+              return s;
+            });
+    when(sessionRepository.findBySessionId(anyString()))
+        .thenAnswer(
+            inv ->
+                created.get() != null && created.get().getSessionId().equals(inv.getArgument(0))
+                    ? Optional.of(created.get())
+                    : Optional.empty());
+    when(recordingService.startRecording(any(RecordingTriggerSource.class))).thenReturn("rec_new");
+    when(recordingService.getRecordingStartTimeAsLocalDateTime()).thenReturn(LocalDateTime.now());
+    when(recordingService.getCurrentRecordingId()).thenReturn("rec_new").thenReturn((String) null);
+    when(recordingService.stopRecordingIfCurrent("rec_new")).thenReturn(true);
+
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", true, RecordingTriggerSource.MANUAL, null);
+    assertTrue(outcome.createdNewSession());
+
+    service.rollbackSessionStart(outcome.rollbackToken(), "test rollback");
+
+    verify(recordingService).stopRecordingIfCurrent("rec_new");
+    assertEquals(DebugSessionLifecycleState.FINALIZED, created.get().getLifecycleState());
+  }
+
+  @Test
+  void rollback_reusedSessionRestoresPriorFields() {
+    DebugSession preferred = createSession("debug_pref");
+    preferred.transitionTo(DebugSessionLifecycleState.RECORDING);
+    LocalDateTime priorStart = LocalDateTime.of(2025, 6, 15, 12, 0);
+    preferred.setStartTime(priorStart);
+    when(sessionRepository.findBySessionId("debug_pref")).thenReturn(Optional.of(preferred));
+    stubSaveReturnsSame();
+    when(recordingService.startRecording(any(RecordingTriggerSource.class))).thenReturn("rec_new");
+    when(recordingService.getRecordingStartTimeAsLocalDateTime()).thenReturn(LocalDateTime.now());
+    when(recordingService.getCurrentRecordingId()).thenReturn("rec_new");
+    when(recordingService.stopRecordingIfCurrent("rec_new")).thenReturn(true);
+
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", true, RecordingTriggerSource.MANUAL, "debug_pref");
+    assertTrue(outcome.reusedPreferredSession());
+    assertEquals("rec_new", preferred.getRecordingId());
+
+    service.rollbackSessionStart(outcome.rollbackToken(), "test rollback");
+
+    verify(recordingService).stopRecordingIfCurrent("rec_new");
+    assertNull(preferred.getRecordingId());
+    assertEquals(priorStart, preferred.getStartTime());
+    assertEquals(DebugSessionLifecycleState.RECORDING, preferred.getLifecycleState());
+  }
+
+  @Test
+  void rollback_repeatedIsHarmless() {
+    DebugSession preferred = createSession("debug_pref");
+    preferred.transitionTo(DebugSessionLifecycleState.RECORDING);
+    when(sessionRepository.findBySessionId("debug_pref")).thenReturn(Optional.of(preferred));
+    stubSaveReturnsSame();
+    when(recordingService.startRecording(any(RecordingTriggerSource.class))).thenReturn("rec_new");
+    when(recordingService.getRecordingStartTimeAsLocalDateTime()).thenReturn(LocalDateTime.now());
+    when(recordingService.getCurrentRecordingId()).thenReturn("rec_new").thenReturn((String) null);
+    when(recordingService.stopRecordingIfCurrent("rec_new")).thenReturn(true);
+
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", true, RecordingTriggerSource.MANUAL, "debug_pref");
+
+    service.rollbackSessionStart(outcome.rollbackToken(), "first");
+    service.rollbackSessionStart(outcome.rollbackToken(), "second");
+
+    verify(recordingService, times(1)).stopRecordingIfCurrent("rec_new");
+    assertNull(preferred.getRecordingId());
+  }
+
+  @Test
+  void rollback_reusedSessionRefusesToOverwriteNewerRecording() {
+    DebugSession preferred = createSession("debug_pref");
+    when(sessionRepository.findBySessionId("debug_pref")).thenReturn(Optional.of(preferred));
+    stubSaveReturnsSame();
+    when(recordingService.startRecording(any(RecordingTriggerSource.class))).thenReturn("rec_new");
+    when(recordingService.getRecordingStartTimeAsLocalDateTime()).thenReturn(LocalDateTime.now());
+
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", true, RecordingTriggerSource.MANUAL, "debug_pref");
+    assertTrue(outcome.recordingStartedByOperation());
+
+    // A newer operation replaced the recording association.
+    preferred.setRecordingId("rec_other");
+
+    assertThrows(
+        SessionStartRollbackException.class,
+        () -> service.rollbackSessionStart(outcome.rollbackToken(), "test rollback"));
+    verify(recordingService, never()).stopRecording();
+    assertEquals("rec_other", preferred.getRecordingId());
+  }
+
+  @Test
+  void startWithOutcome_recordingFailureDegradesWithoutClaimingOwnership() {
+    when(sessionRepository.save(any(DebugSession.class))).thenAnswer(inv -> inv.getArgument(0));
+    when(recordingService.startRecording(any(RecordingTriggerSource.class)))
+        .thenThrow(new RuntimeException("no frame"));
+
+    DebugSessionService.SessionStartOutcome outcome =
+        service.startSessionWithOutcome(
+            "acct", "script", true, RecordingTriggerSource.MANUAL, null);
+
+    assertFalse(outcome.response().getRecordingEnabled());
+    assertFalse(outcome.recordingStartedByOperation());
+    assertNull(outcome.rollbackToken().recordingIdStartedByOperation());
+    assertNotNull(outcome.response().getRecordingFailureReason());
   }
 }

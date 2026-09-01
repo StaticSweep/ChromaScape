@@ -354,7 +354,7 @@ public class StabilizationIngestionService {
     }
     if (!declaredPlanHash.equals(plan.path("planHash").asText(""))) {
       throw new IllegalArgumentException(
-          "report bundle plan.planHash does not equal the recomputed plan hash");
+          "report bundle plan_hash/planHash does not equal the recomputed plan hash");
     }
     validatePlanSchema(plan);
     validateManifestArtifactDigest(manifest);
@@ -638,15 +638,18 @@ public class StabilizationIngestionService {
       String planBuildId = plan.path("buildId").asText("");
       String planInstance = plan.path("micro6InstanceId").asText("");
       String planCatalogHash = plan.path("task").path("catalogHash").asText("");
-      if (!sameText(manifest.path("plan_id"), plan.path("planId"))
-          || !planTaskKey.equals(manifest.path("task_key").asText(""))
-          || !planSettingsHash.equals(manifest.path("settings_hash").asText(""))
-          || !planBuildId.equals(manifest.path("build_id").asText(""))
-          || !planInstance.equals(manifest.path("micro6_instance_id").asText(""))
-          || !planCatalogHash.equals(manifest.path("catalog_hash").asText(""))) {
-        throw new IllegalArgumentException(
-            "harness manifest aggregate identity does not match the plan");
-      }
+      requirePlanIdentityMatch("plan_id", manifest.path("plan_id"), plan.path("planId"));
+      requirePlanIdentityMatch(
+          "task_key", manifest.path("task_key"), plan.path("task").path("taskKey"));
+      requirePlanIdentityMatch(
+          "settings_hash",
+          manifest.path("settings_hash"),
+          plan.path("settings").path("settingsHash"));
+      requirePlanIdentityMatch("build_id", manifest.path("build_id"), plan.path("buildId"));
+      requirePlanIdentityMatch(
+          "micro6_instance_id", manifest.path("micro6_instance_id"), plan.path("micro6InstanceId"));
+      requirePlanIdentityMatch(
+          "catalog_hash", manifest.path("catalog_hash"), plan.path("task").path("catalogHash"));
       // The plan's own declared planHash must equal the manifest plan_hash. The recomputed hash of
       // the bundle plan document is verified separately before this method; requiring the plan's
       // internal planHash field to agree closes the self-hashed-but-mismatched-plan gap.
@@ -662,6 +665,14 @@ public class StabilizationIngestionService {
 
   private static boolean sameText(JsonNode a, JsonNode b) {
     return a.asText("").equals(b.asText(""));
+  }
+
+  private static void requirePlanIdentityMatch(
+      String field, JsonNode manifestValue, JsonNode planValue) {
+    if (!sameText(manifestValue, planValue)) {
+      throw new IllegalArgumentException(
+          "harness manifest aggregate identity field '" + field + "' does not match the plan");
+    }
   }
 
   /**

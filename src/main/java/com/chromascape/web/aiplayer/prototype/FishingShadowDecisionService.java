@@ -99,6 +99,10 @@ public class FishingShadowDecisionService {
     int initialInventoryTotal;
     long latestTick = -1;
     FishingShadowDecision latest;
+    /** Tick of the first finalized decision for this run generation; -1 until set. */
+    long firstTick = -1;
+    /** Observed timestamp of the first finalized decision; never overwritten for the generation. */
+    String firstObservedAt;
     int processed;
     int predicted;
     int abstained;
@@ -322,6 +326,10 @@ public class FishingShadowDecisionService {
     }
     FishingShadowDecision decision = evaluation.decision();
     state.latestTick = decision.tick();
+    if (state.firstTick < 0) {
+      state.firstTick = decision.tick();
+      state.firstObservedAt = decision.observedAt();
+    }
     state.processed++;
     if ("PREDICTED".equals(decision.status())) {
       state.predicted++;
@@ -555,40 +563,41 @@ public class FishingShadowDecisionService {
         if (state.latest != null) {
           lastObservedAt = state.latest.observedAt();
           lastTick = state.latestTick;
-          if (firstObservedAt == null) {
-            firstObservedAt = state.latest.observedAt();
-          }
         } else if (state.latestTick >= 0) {
           lastTick = state.latestTick;
+        }
+        if (state.firstTick >= 0) {
+          firstTick = state.firstTick;
+          firstObservedAt = state.firstObservedAt;
         }
       }
     }
     if (stats != null) {
-      if (firstTick == null) {
+      // Persisted statistics can extend the range but cannot replace an earlier in-memory first
+      // decision with a later one. firstTick is the minimum valid first tick and lastTick is the
+      // maximum valid last tick.
+      if (firstTick == null || stats.firstTick() < firstTick) {
         firstTick = stats.firstTick();
-      } else {
-        firstTick = Math.min(firstTick, stats.firstTick());
-      }
-      if (lastTick == null) {
-        lastTick = stats.lastTick();
-      } else {
-        lastTick = Math.max(lastTick, stats.lastTick());
-      }
-      if (firstObservedAt == null) {
         firstObservedAt = stats.firstObservedAt();
       }
-      lastObservedAt = stats.lastObservedAt();
+      if (lastTick == null || stats.lastTick() > lastTick) {
+        lastTick = stats.lastTick();
+        lastObservedAt = stats.lastObservedAt();
+      }
       decisionCount = Math.max(decisionCount, stats.count());
     }
-    return Map.of(
-        "shadowRunId", runId,
-        "firstObservedAt", firstObservedAt,
-        "lastObservedAt", lastObservedAt,
-        "firstTick", firstTick != null ? firstTick : -1L,
-        "lastTick", lastTick != null ? lastTick : -1L,
-        "decisionCount", decisionCount,
-        "active", active,
-        "legacy", legacy);
+    // Nullable-safe summary: Map.of() rejects null values, which would break legacy summaries
+    // (shadowRunId == null), a run opened before its first decision, or an empty run file.
+    Map<String, Object> result = new java.util.LinkedHashMap<>();
+    result.put("shadowRunId", runId);
+    result.put("firstObservedAt", firstObservedAt);
+    result.put("lastObservedAt", lastObservedAt);
+    result.put("firstTick", firstTick != null ? firstTick : -1L);
+    result.put("lastTick", lastTick != null ? lastTick : -1L);
+    result.put("decisionCount", decisionCount);
+    result.put("active", active);
+    result.put("legacy", legacy);
+    return result;
   }
 
   /**

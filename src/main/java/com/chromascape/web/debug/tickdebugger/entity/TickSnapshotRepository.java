@@ -51,6 +51,23 @@ public interface TickSnapshotRepository extends JpaRepository<TickSnapshot, Long
   Page<TickSnapshot> findBySessionIdAndTickGreaterThanEqualOrderByTick(
       String sessionId, Long fromTick, Pageable pageable);
 
+  /** Bounded replay page ordered deterministically when more than one row shares a tick. */
+  Page<TickSnapshot> findBySessionIdAndTickGreaterThanEqualOrderByTickAscIdAsc(
+      String sessionId, Long fromTick, Pageable pageable);
+
+  /** Bounded replay page strictly after a compound {@code (tick,id)} cursor. */
+  @Query(
+      "SELECT t FROM TickSnapshot t "
+          + "WHERE t.sessionId = :sessionId "
+          + "AND (t.tick > :cursorTick "
+          + "OR (t.tick = :cursorTick AND t.id > :cursorId)) "
+          + "ORDER BY t.tick ASC, t.id ASC")
+  Page<TickSnapshot> findBySessionIdAndAfterCursor(
+      @Param("sessionId") String sessionId,
+      @Param("cursorTick") Long cursorTick,
+      @Param("cursorId") Long cursorId,
+      Pageable pageable);
+
   @Query("SELECT MAX(t.tick) FROM TickSnapshot t WHERE t.sessionId = :sessionId")
   Optional<Long> findMaxTickBySessionId(@Param("sessionId") String sessionId);
 
@@ -66,6 +83,15 @@ public interface TickSnapshotRepository extends JpaRepository<TickSnapshot, Long
             AND (
               (jsonb_exists(t.player_state, 'worldX') AND jsonb_exists(t.player_state, 'worldY'))
               OR (jsonb_exists(t.player_state, 'x') AND jsonb_exists(t.player_state, 'z'))
+              OR (jsonb_exists(t.player_state, 'x') AND jsonb_exists(t.player_state, 'y'))
+              OR (
+                jsonb_typeof(t.player_state -> 'position') = 'object'
+                AND jsonb_exists(t.player_state -> 'position', 'x')
+                AND (
+                  jsonb_exists(t.player_state -> 'position', 'y')
+                  OR jsonb_exists(t.player_state -> 'position', 'z')
+                )
+              )
             )
           """,
       nativeQuery = true)

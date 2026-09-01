@@ -7,6 +7,8 @@ import com.chromascape.web.debug.tickdebugger.dto.SessionStartResponse;
 import com.chromascape.web.debug.tickdebugger.dto.SessionStopRequest;
 import com.chromascape.web.debug.tickdebugger.dto.TickBatchMessage;
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
+import com.chromascape.web.debug.tickdebugger.service.DebugSessionService.SessionStartOutcome;
+import com.chromascape.web.debug.tickdebugger.service.DebugSessionService.SessionStartRollbackToken;
 import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,13 +44,16 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
  * synchronizing on the WebSocket session, which also covers transport-error and close handling. The
  * lock order is {@code WebSocketSession monitor → ownershipLock} and is never reversed.
  *
+ * <p>Session start is transactional: the preferred session id is reserved under {@code
+ * ownershipLock} before the (potentially slow) service call, the service call runs outside the
+ * lock, and the reservation is converted into canonical ownership before the binding is committed.
+ * A failed start is compensated through {@link DebugSessionService#rollbackSessionStart}; when
+ * compensation fails the binding and ownership are retained so the close callback performs exactly
+ * one guarded retry. Only an {@link BindingPhase#ACTIVE} binding accepts ticks.
+ *
  * <p>Protocol rejections receive machine-readable {@code ERROR} responses ({@code
  * SESSION_ALREADY_BOUND}, {@code SESSION_ALREADY_OWNED}, {@code SESSION_NOT_BOUND}, {@code
  * SESSION_STOPPING}, {@code SESSION_ID_MISMATCH}).
- *
- * <p>Stop, transport-error, and close follow a state machine that permits only the allowed
- * finalization attempts: an explicit stop that fails is not retried during a transport callback,
- * and close performs at most one final fallback before removing the binding regardless of success.
  */
 @Component
 public class TickStreamWebSocketHandler extends TextWebSocketHandler {
@@ -64,8 +69,14 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
 
   /** Binding phase of a WebSocket-bound debug session. */
   enum BindingPhase {
+    /** The start transaction is in progress (reserved/owned, shadow run not yet open). */
+    STARTING,
     /** The bound session accepts ticks. */
     ACTIVE,
+    /** Shadow-run open (or pre-commit work) failed and compensation failed; close may retry. */
+    START_ROLLBACK_FAILED,
+    /** The success response could not be delivered and compensation failed; close may retry. */
+    START_RESPONSE_FAILED,
     /** An explicit SESSION_STOP was attempted but finalization failed; close may retry. */
     EXPLICIT_STOP_FAILED,
     /** Transport-error finalization failed; close may retry. */
@@ -78,8 +89,20 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
    * @param sessionId the canonical debug session id
    * @param shadowRunId the shadow run id opened for this binding
    * @param phase whether the connection still accepts ticks
+   * @param shadowOpened whether the shadow run was opened successfully
+   * @param rollbackToken describes the exact mutations a failed start must compensate
    */
-  record SessionBinding(String sessionId, String shadowRunId, BindingPhase phase) {}
+  record SessionBinding(
+      String sessionId,
+      String shadowRunId,
+      BindingPhase phase,
+      boolean shadowOpened,
+      SessionStartRollbackToken rollbackToken) {
+
+    SessionBinding withPhase(BindingPhase newPhase) {
+      return new SessionBinding(sessionId, shadowRunId, newPhase, shadowOpened, rollbackToken);
+    }
+  }
 
   /**
    * Maps WebSocket session IDs to bound debug session ownership. Populated on successful
@@ -93,6 +116,14 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
    * ownership of a preferred session across connections. Mutated only under {@code ownershipLock}.
    */
   private final Map<String, String> sessionOwners = new ConcurrentHashMap<>();
+
+  /**
+   * Maps a preferred session id to the WebSocket session id that reserved it while a SESSION_START
+   * transaction is in flight. Prevents two sockets from racing to start the same preferred session
+   * without holding the ownership lock during recording startup. Mutated only under {@code
+   * ownershipLock}.
+   */
+  private final Map<String, String> preferredReservations = new ConcurrentHashMap<>();
 
   /**
    * Serializes session creation, canonical ownership claims, and ownership release. Acquired only
@@ -172,17 +203,24 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
   }
 
-  /** Handle SESSION_START message from Micro6. */
+  /**
+   * Handle SESSION_START message from Micro6.
+   *
+   * <p>Session start is transactional: the preferred session id is reserved under the ownership
+   * lock, the authoritative service call runs outside the lock, and the reservation is converted
+   * into canonical ownership before a {@code STARTING} binding is installed. The shadow run opens
+   * before the binding becomes {@code ACTIVE}, and a response is written only after commit. A
+   * failure before the success response is delivered is compensated via the unified cleanup path,
+   * which retains ownership when compensation fails so the close callback can retry exactly once.
+   */
   private void handleSessionStart(WebSocketSession wsSession, JsonNode root) {
-    // Response-attempt guard: set immediately before the first sendMessage call. At most one
-    // response-write attempt is allowed per SESSION_START, so a failure while writing the
-    // success/degraded response never produces a second (ERROR) response, and exceptions before
-    // any response attempt still produce exactly one correlated SESSION_START failed.
-    boolean responseAttempted = false;
+    // Single-response guard: once the success response is written, any later exception in this
+    // handler must not emit a second (ERROR) response to the same SESSION_START.
+    boolean successResponseSent = false;
+    String wsId = wsSession.getId();
     try {
       SessionStartRequest request = objectMapper.treeToValue(root, SessionStartRequest.class);
       String clientRequestId = request.getClientRequestId();
-      String wsId = wsSession.getId();
       log.info(
           "Starting debug session via WebSocket: account={}, script={}, recording={}, clientRequestId={}",
           request.getAccountName(),
@@ -190,12 +228,10 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           request.getRecordingEnabled(),
           clientRequestId != null ? clientRequestId : "none");
 
-      // A WebSocket owns at most one session: reject a second SESSION_START on this connection.
-      if (sessionBindings.containsKey(wsId)) {
-        log.warn(
-            "Rejecting second SESSION_START on connection {}: already bound to session {}",
-            wsId,
-            sessionBindings.get(wsId).sessionId());
+      // A WebSocket owns at most one session: reject a second SESSION_START on this connection,
+      // whether it already has a binding or a start reservation is still in flight.
+      if (sessionBindings.containsKey(wsId) || hasStartReservation(wsId)) {
+        log.warn("Rejecting second SESSION_START on connection {}: already bound/reserved", wsId);
         sendErrorResponse(
             wsSession,
             "SESSION_ALREADY_BOUND",
@@ -205,133 +241,358 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       }
 
       boolean recordingEnabled = Boolean.TRUE.equals(request.getRecordingEnabled());
-      SessionStartResponse response;
-      String shadowRunId;
+      String preferred = request.getPreferredSessionId();
+      String shadowRunId = "shadow_" + UUID.randomUUID().toString().replace("-", "");
+
+      // Reserve the preferred session id under the ownership lock, then release the lock before
+      // the (potentially slow) service call. This prevents two sockets from racing to start the
+      // same preferred session without holding the global lock during recording startup.
+      // Rejections are decided under the lock but the error is sent outside it, so the global
+      // lock is never held during a blocking network send.
+      String reservationRejection = null;
       synchronized (ownershipLock) {
-        // Reject a requested preferred session already owned by another WebSocket.
-        String preferred = request.getPreferredSessionId();
-        if (preferred != null && !preferred.isBlank()) {
+        if (sessionBindings.containsKey(wsId) || hasStartReservation(wsId)) {
+          reservationRejection = "SESSION_ALREADY_BOUND";
+        } else if (preferred != null && !preferred.isBlank()) {
           String owner = sessionOwners.get(preferred);
-          if (owner != null && !owner.equals(wsId)) {
+          String reserver = preferredReservations.get(preferred);
+          if ((owner != null && !owner.equals(wsId))
+              || (reserver != null && !reserver.equals(wsId))) {
             log.warn(
-                "Rejecting SESSION_START on connection {}: preferred session {} owned by {}",
+                "Rejecting SESSION_START on connection {}: preferred session {} owned/reserved by another connection",
                 wsId,
-                preferred,
-                owner);
-            sendErrorResponse(
-                wsSession,
-                "SESSION_ALREADY_OWNED",
-                "The requested debug session belongs to another connection",
-                clientRequestId);
-            return;
+                preferred);
+            reservationRejection = "SESSION_ALREADY_OWNED";
+          } else {
+            preferredReservations.put(preferred, wsId);
           }
         }
+      }
+      if (reservationRejection != null) {
+        sendErrorResponse(
+            wsSession,
+            reservationRejection,
+            "SESSION_ALREADY_OWNED".equals(reservationRejection)
+                ? "The requested debug session belongs to another connection"
+                : "This connection already owns a debug session",
+            clientRequestId);
+        return;
+      }
 
-        // Create/start the debug session while still inside the ownership transaction.
-        response =
-            sessionService.startSession(
+      // Call the authoritative service outside the ownership lock.
+      SessionStartOutcome outcome;
+      try {
+        outcome =
+            sessionService.startSessionWithOutcome(
                 request.getAccountName(),
                 request.getScriptName(),
                 recordingEnabled,
                 request.getTriggerSource(),
                 preferred);
-
-        // Inspect the canonical session id returned by the service and reject any unexpected
-        // canonical ownership conflict.
-        String canonicalSessionId = response.getSessionId();
-        String canonicalOwner = sessionOwners.get(canonicalSessionId);
-        if (canonicalOwner != null && !canonicalOwner.equals(wsId)) {
-          log.warn(
-              "Rejecting SESSION_START on connection {}: canonical session {} owned by {}",
-              wsId,
-              canonicalSessionId,
-              canonicalOwner);
-          sendErrorResponse(
-              wsSession,
-              "SESSION_ALREADY_OWNED",
-              "The requested debug session belongs to another connection",
-              clientRequestId);
-          return;
+      } catch (Exception e) {
+        log.error("Error starting debug session: {}", e.getMessage(), e);
+        releasePreferredReservation(preferred, wsId);
+        if (!sendErrorResponse(
+            wsSession, "SESSION_START failed", e.getMessage(), clientRequestId)) {
+          closeWebSocketSafely(wsSession);
         }
-
-        // Generate a collision-resistant shadow run id and add both ownership mappings.
-        shadowRunId = "shadow_" + UUID.randomUUID().toString().replace("-", "");
-        sessionBindings.put(
-            wsId, new SessionBinding(canonicalSessionId, shadowRunId, BindingPhase.ACTIVE));
-        sessionOwners.put(canonicalSessionId, wsId);
-        log.debug(
-            "Bound WS session {} to debug session {} run {}",
-            wsId,
-            canonicalSessionId,
-            shadowRunId);
+        return;
       }
 
-      // Echo the transport correlation id unchanged and expose the run id for observability. The
-      // full constructor carries clientRequestId to avoid handler-side mutation of the DTO.
-      SessionStartResponse outbound =
-          new SessionStartResponse(
-              response.getSessionId(),
-              response.getRecordingEnabled(),
-              response.getRecordingId(),
-              response.getStartTick(),
-              response.getRecordingFailureReason(),
-              clientRequestId);
-      outbound.setShadowRunId(shadowRunId);
+      String canonicalSessionId = outcome.response().getSessionId();
+
+      // Reacquire the ownership lock: check the authoritative canonical session id for conflicts,
+      // convert the reservation into canonical ownership, and install a STARTING binding.
+      // Reacquire the ownership lock: check the authoritative canonical session id for conflicts
+      // and convert the reservation into canonical ownership. Compensation (which may stop a
+      // recording or touch the repository) and the error send run outside the lock so neither a
+      // slow rollback nor a blocking send serializes all ownership transitions.
+      SessionStartRollbackToken conflictToken = null;
+      synchronized (ownershipLock) {
+        String canonicalOwner = sessionOwners.get(canonicalSessionId);
+        if (canonicalOwner != null && !canonicalOwner.equals(wsId)) {
+          conflictToken = outcome.rollbackToken();
+          if (preferred != null && !preferred.isBlank()) {
+            preferredReservations.remove(preferred, wsId);
+          }
+        } else {
+          sessionOwners.put(canonicalSessionId, wsId);
+          // The preferred reservation is obsolete once canonical ownership is claimed; remove it
+          // regardless of whether the canonical id equals the preferred id.
+          if (preferred != null && !preferred.isBlank()) {
+            preferredReservations.remove(preferred, wsId);
+          }
+          sessionBindings.put(
+              wsId,
+              new SessionBinding(
+                  canonicalSessionId,
+                  shadowRunId,
+                  BindingPhase.STARTING,
+                  false,
+                  outcome.rollbackToken()));
+        }
+      }
+      if (conflictToken != null) {
+        log.warn(
+            "Rejecting SESSION_START on connection {}: canonical session {} owned by another connection",
+            wsId,
+            canonicalSessionId);
+        // A canonical conflict has no canonical ownership for this socket. If compensation fails,
+        // retain a non-active binding solely as a guarded cleanup handle; otherwise the started
+        // recorder/session would become unreachable.
+        if (!compensateOutcome(conflictToken, "session start canonical ownership conflict")) {
+          synchronized (ownershipLock) {
+            sessionBindings.putIfAbsent(
+                wsId,
+                new SessionBinding(
+                    canonicalSessionId,
+                    shadowRunId,
+                    BindingPhase.START_ROLLBACK_FAILED,
+                    false,
+                    conflictToken));
+          }
+          closeWebSocketSafely(wsSession);
+          return;
+        }
+        sendErrorResponse(
+            wsSession,
+            "SESSION_ALREADY_OWNED",
+            "The requested debug session belongs to another connection",
+            clientRequestId);
+        return;
+      }
+
+      // Open the shadow run; only a successful open advances the binding to ACTIVE.
+      boolean shadowOpened;
+      try {
+        shadowOpened = shadowDecisionService.openSession(canonicalSessionId, shadowRunId);
+      } catch (Exception e) {
+        log.error(
+            "Failed to open shadow run for session {}: {}", canonicalSessionId, e.getMessage(), e);
+        shadowOpened = false;
+      }
+
+      if (!shadowOpened) {
+        startFailureCleanup(
+            wsSession,
+            clientRequestId,
+            BindingPhase.START_ROLLBACK_FAILED,
+            "Failed to open shadow run for the session",
+            true);
+        return;
+      }
+
+      // Atomically replace the STARTING binding with an ACTIVE binding.
+      SessionBinding starting = sessionBindings.get(wsId);
+      SessionBinding active =
+          new SessionBinding(
+              canonicalSessionId, shadowRunId, BindingPhase.ACTIVE, true, outcome.rollbackToken());
+      synchronized (ownershipLock) {
+        sessionBindings.replace(wsId, starting, active);
+      }
+
+      // Echo the transport correlation id unchanged and expose the run id for observability.
+      SessionStartResponse response = outcome.response();
+      response.setClientRequestId(clientRequestId);
+      response.setShadowRunId(shadowRunId);
 
       log.info(
           "SESSION_START result: sessionId={}, shadowRunId={}, recordingId={}, failureReason={}, clientRequestId={}",
-          outbound.getSessionId(),
+          response.getSessionId(),
           shadowRunId,
-          outbound.getRecordingId() != null ? outbound.getRecordingId() : "none",
-          outbound.getRecordingFailureReason() != null
-              ? outbound.getRecordingFailureReason()
+          response.getRecordingId() != null ? response.getRecordingId() : "none",
+          response.getRecordingFailureReason() != null
+              ? response.getRecordingFailureReason()
               : "none",
-          outbound.getClientRequestId() != null ? outbound.getClientRequestId() : "none");
+          response.getClientRequestId() != null ? response.getClientRequestId() : "none");
 
-      // Open the shadow run before the first tick. The run id is unique per binding, so a
-      // conflicting duplicate open is practically impossible; a rejection is logged and does not
-      // undo the binding.
-      shadowDecisionService.openSession(outbound.getSessionId(), shadowRunId);
-
-      // Send response back to Micro6 with the sessionId. The guard is armed before the first
-      // response write: when sending the success/degraded response throws, no additional ERROR is
-      // attempted, the server binding is retained so disconnect finalization cleans up the created
-      // session, and the socket is closed to trigger that finalization.
-      responseAttempted = true;
-      String responseJson = objectMapper.writeValueAsString(outbound);
+      // Serialize and send the response. A failure here happens after the binding was committed:
+      // compensate synchronously and close so the close callback (if any) performs no further work.
+      String responseJson;
+      try {
+        responseJson = objectMapper.writeValueAsString(response);
+      } catch (Exception e) {
+        log.error(
+            "Failed to serialize SESSION_START response for session {}; compensating and closing",
+            canonicalSessionId,
+            e);
+        startFailureCleanup(
+            wsSession,
+            clientRequestId,
+            BindingPhase.START_RESPONSE_FAILED,
+            "Failed to serialize SESSION_START response",
+            false);
+        return;
+      }
       try {
         wsSession.sendMessage(new TextMessage(responseJson));
-      } catch (Exception sendFailure) {
+        successResponseSent = true;
+      } catch (Exception e) {
         log.error(
-            "Failed to send SESSION_START response for session {}; closing connection for disconnect finalization: {}",
-            outbound.getSessionId(),
-            sendFailure.getMessage());
-        try {
-          wsSession.close(CloseStatus.SERVER_ERROR);
-        } catch (Exception ignored) {
-          // best-effort
-        }
+            "Failed to send SESSION_START response for session {}; compensating and closing",
+            canonicalSessionId,
+            e);
+        startFailureCleanup(
+            wsSession,
+            clientRequestId,
+            BindingPhase.START_RESPONSE_FAILED,
+            "Failed to send SESSION_START response",
+            false);
         return;
       }
 
       log.info(
           "Sent SESSION_START response to Micro6: sessionId={}, shadowRunId={}",
-          outbound.getSessionId(),
+          response.getSessionId(),
           shadowRunId);
 
-      // Broadcast session creation to all debugger clients
-      broadcastSessionStartToDebugger(outbound, request.getAccountName());
+      // Broadcast session creation to all debugger clients only after the send succeeded.
+      broadcastSessionStartToDebugger(response, request.getAccountName());
 
     } catch (Exception e) {
       log.error("Error handling SESSION_START: {}", e.getMessage(), e);
-      if (!responseAttempted) {
+      if (!successResponseSent) {
         String clientRequestId =
             root.has("clientRequestId") && !root.get("clientRequestId").isNull()
                 ? root.get("clientRequestId").asText()
                 : null;
-        sendErrorResponse(wsSession, "SESSION_START failed", e.getMessage(), clientRequestId);
+        startFailureCleanup(
+            wsSession,
+            clientRequestId,
+            BindingPhase.START_ROLLBACK_FAILED,
+            e.getMessage() != null ? e.getMessage() : "SESSION_START failed",
+            true);
       }
     }
+  }
+
+  /**
+   * Unified cleanup for a failed session-start transaction.
+   *
+   * <p>Order: mark the binding with a non-active failure phase, close the exact shadow run if it
+   * was opened, call {@link DebugSessionService#rollbackSessionStart}, then either remove binding +
+   * ownership + reservation (compensation succeeded) or retain them and close the socket so the
+   * close callback performs exactly one guarded retry (compensation failed).
+   *
+   * @param sendError when true, a correlated error is sent if no success response may have been
+   *     delivered; when false (response delivery already failed), the socket is closed instead.
+   */
+  private void startFailureCleanup(
+      WebSocketSession wsSession,
+      String clientRequestId,
+      BindingPhase failurePhase,
+      String detail,
+      boolean sendError) {
+    String wsId = wsSession.getId();
+    SessionBinding binding = sessionBindings.get(wsId);
+    if (binding == null) {
+      // Nothing was bound; release any lingering preferred reservation, then deliver the error.
+      releaseReservationsForWsId(wsId);
+      if (sendError) {
+        if (!sendErrorResponse(wsSession, "SESSION_START failed", detail, clientRequestId)) {
+          closeWebSocketSafely(wsSession);
+        }
+      }
+      return;
+    }
+
+    // 1. Mark the binding with the non-active failure phase.
+    SessionBinding failing = binding.withPhase(failurePhase);
+    synchronized (ownershipLock) {
+      sessionBindings.replace(wsId, binding, failing);
+    }
+
+    // 2 + 3. Close the shadow run (if opened) and compensate the session start.
+    boolean compensated = rollbackBinding(wsId, failing, detail);
+
+    if (compensated) {
+      // 4. Remove binding, canonical ownership, and any preferred reservation.
+      removeBindingAndOwnershipAndReservation(wsId, failing);
+      if (sendError) {
+        if (!sendErrorResponse(wsSession, "SESSION_START failed", detail, clientRequestId)) {
+          closeWebSocketSafely(wsSession);
+        }
+      } else {
+        closeWebSocketSafely(wsSession);
+      }
+    } else {
+      // 5. Retain binding and ownership; close so the close callback retries exactly once.
+      closeWebSocketSafely(wsSession);
+    }
+  }
+
+  /**
+   * Closes the shadow run (if it was opened) and rolls back the session start. Both operations are
+   * required: losing the in-memory run cleanup must retain retry state just like a failed recording
+   * rollback.
+   */
+  private boolean rollbackBinding(String wsId, SessionBinding binding, String reason) {
+    boolean shadowCleaned = true;
+    if (binding.shadowOpened()) {
+      try {
+        shadowDecisionService.cleanupSession(binding.sessionId(), binding.shadowRunId());
+      } catch (Exception e) {
+        log.error("Failed to clean up shadow run during start rollback: {}", e.getMessage(), e);
+        shadowCleaned = false;
+      }
+    }
+    try {
+      sessionService.rollbackSessionStart(binding.rollbackToken(), reason);
+      return shadowCleaned;
+    } catch (Exception e) {
+      log.error(
+          "Failed to roll back session start for session {}: {}",
+          binding.sessionId(),
+          e.getMessage(),
+          e);
+      return false;
+    }
+  }
+
+  /**
+   * Compensates a start outcome without an installed binding (e.g. canonical ownership conflict).
+   */
+  private boolean compensateOutcome(SessionStartRollbackToken token, String reason) {
+    try {
+      sessionService.rollbackSessionStart(token, reason);
+      return true;
+    } catch (Exception e) {
+      log.error("Failed to compensate session start outcome: {}", e.getMessage(), e);
+      return false;
+    }
+  }
+
+  /** Releases a preferred-session reservation made by this WebSocket, idempotently. */
+  private void releasePreferredReservation(String preferred, String wsId) {
+    if (preferred == null || preferred.isBlank()) {
+      return;
+    }
+    synchronized (ownershipLock) {
+      preferredReservations.remove(preferred, wsId);
+    }
+  }
+
+  /** Returns true when this WebSocket holds a preferred-session reservation. */
+  private boolean hasStartReservation(String wsId) {
+    synchronized (ownershipLock) {
+      return preferredReservations.containsValue(wsId);
+    }
+  }
+
+  /**
+   * Closes the WebSocket and performs the guarded final cleanup immediately when a failed-start
+   * binding remains. This does not rely on a container close callback, which may never arrive for
+   * an already-closed or broken transport; a later callback observes no binding and is a no-op.
+   */
+  private void closeWebSocketSafely(WebSocketSession wsSession) {
+    try {
+      wsSession.close(CloseStatus.SERVER_ERROR);
+    } catch (Exception e) {
+      log.warn("Failed to close WebSocket after SESSION_START failure: {}", e.getMessage());
+    }
+    // The start failure has already made one compensation attempt. This is the single guarded
+    // fallback attempt and is safe whether close succeeded, threw, or invoked its callback inline.
+    finalizeOnDisconnect(wsSession);
   }
 
   /** Handle TICK_BATCH message from Micro6. */
@@ -466,9 +727,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       // Atomically change ACTIVE -> EXPLICIT_STOP_FAILED before finalization; from this point
       // onward ticks on the connection are rejected. The interim phase is retained whenever the
       // explicit finalization fails so close can perform exactly one fallback.
-      SessionBinding stopping =
-          new SessionBinding(
-              binding.sessionId(), binding.shadowRunId(), BindingPhase.EXPLICIT_STOP_FAILED);
+      SessionBinding stopping = binding.withPhase(BindingPhase.EXPLICIT_STOP_FAILED);
       if (!sessionBindings.replace(session.getId(), binding, stopping)) {
         return;
       }
@@ -495,8 +754,13 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
   }
 
-  /** Send error response to Micro6 client. */
-  private void sendErrorResponse(
+  /**
+   * Send error response to Micro6 client.
+   *
+   * @return true when the error was delivered, false when the send failed (e.g. the session is
+   *     closed or the serialization failed)
+   */
+  private boolean sendErrorResponse(
       WebSocketSession session, String error, String detail, String clientRequestId) {
     try {
       java.util.LinkedHashMap<String, Object> errorResponse = new java.util.LinkedHashMap<>();
@@ -507,8 +771,10 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         errorResponse.put("clientRequestId", clientRequestId);
       }
       session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorResponse)));
+      return true;
     } catch (Exception e) {
       log.error("Failed to send error response: {}", e.getMessage());
+      return false;
     }
   }
 
@@ -521,6 +787,25 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       if (sessionBindings.remove(wsId, expected)) {
         sessionOwners.remove(expected.sessionId(), wsId);
       }
+    }
+  }
+
+  /** Releases every preferred-session reservation held by this WebSocket, idempotently. */
+  private void releaseReservationsForWsId(String wsId) {
+    synchronized (ownershipLock) {
+      preferredReservations.entrySet().removeIf(e -> wsId.equals(e.getValue()));
+    }
+  }
+
+  /**
+   * Removes one WebSocket's binding, canonical ownership, and any lingering preferred reservation.
+   */
+  private void removeBindingAndOwnershipAndReservation(String wsId, SessionBinding expected) {
+    synchronized (ownershipLock) {
+      if (sessionBindings.remove(wsId, expected)) {
+        sessionOwners.remove(expected.sessionId(), wsId);
+      }
+      preferredReservations.entrySet().removeIf(e -> wsId.equals(e.getValue()));
     }
   }
 
@@ -565,10 +850,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
    *
    * <p>For an {@code ACTIVE} binding, one implicit transport finalization is attempted; on success
    * the binding and ownership are released, on failure the binding is retained in {@link
-   * BindingPhase#TRANSPORT_FINALIZATION_FAILED} for the close callback. For an {@code
-   * EXPLICIT_STOP_FAILED} binding no further finalization runs during the transport callback and
-   * the binding is retained for close. Repeated {@code TRANSPORT_FINALIZATION_FAILED} callbacks are
-   * ignored.
+   * BindingPhase#TRANSPORT_FINALIZATION_FAILED} for the close callback. Failed-start bindings are
+   * not finalized on transport error; their single retry is reserved for the close callback.
    */
   private void finalizeOnTransportError(WebSocketSession wsSession) {
     String wsId = wsSession.getId();
@@ -603,15 +886,14 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         } else {
           synchronized (ownershipLock) {
             sessionBindings.replace(
-                wsId,
-                binding,
-                new SessionBinding(
-                    binding.sessionId(),
-                    binding.shadowRunId(),
-                    BindingPhase.TRANSPORT_FINALIZATION_FAILED));
+                wsId, binding, binding.withPhase(BindingPhase.TRANSPORT_FINALIZATION_FAILED));
           }
         }
       }
+      case STARTING, START_ROLLBACK_FAILED, START_RESPONSE_FAILED -> log.debug(
+          "Skipping transport-error finalization on WS session {} while start is in progress/failed (phase {})",
+          wsId,
+          binding.phase());
       case EXPLICIT_STOP_FAILED -> log.debug(
           "Skipping transport-error finalization on WS session {} while session {} awaits close "
               + "fallback",
@@ -628,11 +910,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
    * Implicitly finalize the debug session bound to a WebSocket that disconnected without sending an
    * explicit SESSION_STOP.
    *
-   * <p>This is the final fallback path: it runs at most once per binding (including when an
-   * explicit SESSION_STOP or transport-error finalization previously failed), always closes the
-   * shadow run idempotently, and removes the binding and (only if it still points to this
-   * WebSocket) the canonical ownership after this final attempt regardless of success. A repeated
-   * close callback therefore performs no further finalization.
+   * <p>This is the final fallback path: it runs at most once per binding, always closes the shadow
+   * run idempotently, and removes the binding and (only if it still points to this WebSocket) the
+   * canonical ownership after this final attempt regardless of success. A failed start retains
+   * exactly one guarded retry of its compensation here. A repeated close callback therefore
+   * performs no further finalization.
    */
   private void finalizeOnDisconnect(WebSocketSession wsSession) {
     String wsId = wsSession.getId();
@@ -643,23 +925,52 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       return;
     }
 
-    log.info(
-        "Implicit session stop on disconnect for WS session {}, debugSessionId={}, shadowRunId={}",
-        wsId,
-        binding.sessionId(),
-        binding.shadowRunId());
-
-    try {
-      sessionService.finalizeSessionOnDisconnect(binding.sessionId(), "disconnect");
-    } catch (Exception e) {
-      log.error(
-          "Failed to implicitly finalize session {} on disconnect: {}",
-          binding.sessionId(),
-          e.getMessage(),
-          e);
-    } finally {
-      shadowDecisionService.cleanupSession(binding.sessionId(), binding.shadowRunId());
-      removeBindingAndOwnership(wsId, binding);
+    switch (binding.phase()) {
+      case STARTING, START_ROLLBACK_FAILED, START_RESPONSE_FAILED -> {
+        log.info(
+            "Implicit session start cleanup on disconnect for WS session {}, debugSessionId={}, phase={}",
+            wsId,
+            binding.sessionId(),
+            binding.phase());
+        // Exactly one guarded retry of the start compensation; then remove binding + ownership
+        // regardless of success.
+        rollbackBinding(wsId, binding, "disconnect");
+        removeBindingAndOwnershipAndReservation(wsId, binding);
+      }
+      case ACTIVE -> {
+        log.info(
+            "Implicit session stop on disconnect for WS session {}, debugSessionId={}, shadowRunId={}",
+            wsId,
+            binding.sessionId(),
+            binding.shadowRunId());
+        try {
+          sessionService.finalizeSessionOnDisconnect(binding.sessionId(), "disconnect");
+        } catch (Exception e) {
+          log.error(
+              "Failed to implicitly finalize session {} on disconnect: {}",
+              binding.sessionId(),
+              e.getMessage(),
+              e);
+        } finally {
+          shadowDecisionService.cleanupSession(binding.sessionId(), binding.shadowRunId());
+          removeBindingAndOwnershipAndReservation(wsId, binding);
+        }
+      }
+      case EXPLICIT_STOP_FAILED, TRANSPORT_FINALIZATION_FAILED -> {
+        log.info("Close fallback for WS session {}, debugSessionId={}", wsId, binding.sessionId());
+        try {
+          sessionService.finalizeSessionOnDisconnect(binding.sessionId(), "disconnect");
+        } catch (Exception e) {
+          log.error(
+              "Failed to finalize session {} on disconnect fallback: {}",
+              binding.sessionId(),
+              e.getMessage(),
+              e);
+        } finally {
+          shadowDecisionService.cleanupSession(binding.sessionId(), binding.shadowRunId());
+          removeBindingAndOwnershipAndReservation(wsId, binding);
+        }
+      }
     }
   }
 

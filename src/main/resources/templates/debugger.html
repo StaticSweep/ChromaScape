@@ -8,12 +8,13 @@
   <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   <title>ChromaScape - Debugger</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
-    integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPgv6ud+Mvd" crossorigin="anonymous" />
+    integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous" />
   <link rel="stylesheet" href="/css/style.css" />
-  <link rel="stylesheet" href="/css/debugger.css?v=12" />
+  <link rel="stylesheet" href="/css/debugger.css?v=17" />
   <link rel="stylesheet" href="/css/ai-routine.css?v=1" />
+  <link rel="stylesheet" href="/css/ai-training.css?v=1" />
   <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
-    integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+    integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
     crossorigin="anonymous"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <script th:inline="javascript">
@@ -21,7 +22,7 @@
   </script>
 </head>
 
-<body>
+<body data-workspace="runs">
   <div class="debugger-page">
     <nav class="debugger-topbar">
       <div class="topbar-section topbar-left">
@@ -148,6 +149,51 @@
         </button>
       </div>
     </nav>
+
+    <section class="debugger-workspace-bar" aria-label="Debugger workspaces">
+      <nav class="workspace-tabs" id="debuggerWorkspaceNav" role="tablist" aria-label="Primary debugger navigation">
+        <button class="workspace-tab active" type="button" role="tab" aria-selected="true" data-workspace="runs">
+          <i class="bi bi-rocket-takeoff"></i><span>Runs</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="live">
+          <i class="bi bi-broadcast"></i><span>Live</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="replays">
+          <i class="bi bi-play-circle"></i><span>Replays</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="recovery">
+          <i class="bi bi-tools"></i><span>Recovery</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="ai-training">
+          <i class="bi bi-diagram-3"></i><span>AI Training</span>
+        </button>
+        <button class="workspace-tab" type="button" role="tab" aria-selected="false" data-workspace="developer">
+          <i class="bi bi-code-square"></i><span>Developer Tools</span>
+        </button>
+      </nav>
+      <div class="workspace-global-status" aria-label="Connection status">
+        <span class="workspace-status-dot" id="workspaceConnectionDot"></span>
+        <span id="workspaceConnectionText">Connecting</span>
+      </div>
+    </section>
+
+    <header class="workspace-heading" id="workspaceHeading">
+      <div>
+        <p class="workspace-eyebrow" id="workspaceEyebrow">Operator workspace</p>
+        <h1 id="workspaceTitle">Runs</h1>
+        <p id="workspaceDescription">Launch a Micro6 task, follow its progress, and open evidence or recovery from one place.</p>
+      </div>
+      <div class="workspace-heading-actions" id="workspaceHeadingActions"></div>
+    </header>
+
+    <section class="workspace-empty-state" id="recoveryEmptyState" hidden>
+      <i class="bi bi-tools"></i>
+      <div>
+        <h2>No run is open for recovery</h2>
+        <p>Choose a failed run in Runs, then select <strong>Open Recovery Workspace</strong>.</p>
+      </div>
+      <button type="button" class="btn btn-primary" data-workspace-link="runs">View failed runs</button>
+    </section>
 
     <!-- Auto-Record Tasks Panel -->
     <div class="task-recording-panel glass-panel" id="taskRecordingPanel">
@@ -371,7 +417,7 @@
     <!-- Account Task Planner Panel -->
     <div class="task-planner-panel glass-panel" id="taskPlannerPanel" style="display:none;">
       <div class="task-planner-header">
-        <h6><i class="bi bi-kanban me-2"></i>Account Task Planner</h6>
+        <h6><i class="bi bi-rocket-takeoff me-2"></i>Runs</h6>
         <div class="task-planner-controls">
           <button class="btn btn-sm btn-outline-secondary" id="refreshPlansBtn" title="Refresh plans">
             <i class="bi bi-arrow-clockwise"></i>
@@ -383,16 +429,19 @@
       </div>
 
       <div class="task-planner-content" id="taskPlannerContent">
-        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="39">
+        <div class="task-planner-section" id="builderGoalRunnerSection" data-planner-bundle-version="40">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="form-label mb-0">Builder Goal Runner</label>
             <button class="btn btn-sm btn-outline-secondary" id="refreshBuilderGoalRunsBtn" title="Refresh builder runs">
               <i class="bi bi-arrow-clockwise"></i>
             </button>
           </div>
-          <div class="small text-muted mb-2">
-            Select an account, choose a Micro6 task, set the task settings and world, and run it. The JSON editor shows the selected task as a <code>{"task_key", "settings"}</code> envelope so an operator can edit either value directly. ChromaScape will launch the local micro6 workspace, wait for the executor to become dispatch-ready, and then publish the task. Launch Account only prepares the executor; Publish Task sends the selected task without relaunching it. An existing non-ready Micro6 session for the same account must be stopped before a duplicate can be launched.
-          </div>
+          <details class="operator-help mb-3">
+            <summary>How launching and publishing work</summary>
+            <div class="small text-muted mt-2">
+              Run Task launches Micro6, waits for a dispatch-ready executor, and publishes the selected task. Launch Account only prepares the executor; Publish Task sends the task to an executor that is already online. Task settings use the editable <code>{"task_key", "settings"}</code> envelope.
+            </div>
+          </details>
           <div class="mb-2">
             <label class="form-label small mb-1" for="builderGoalAccountSelect">Account</label>
             <select id="builderGoalAccountSelect" class="form-select form-select-sm">
@@ -459,7 +508,9 @@
           <div id="builderGoalClientStatus" class="small text-muted mb-3">
             Select an account and task to run.
           </div>
-          <div class="border rounded p-2 mb-3 bg-body-tertiary">
+          <details class="operator-help mb-3">
+            <summary>Codex operator session</summary>
+          <div class="border rounded p-2 mt-2 bg-body-tertiary">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <div>
                 <div class="form-label mb-0">Codex Session</div>
@@ -482,6 +533,7 @@
               </button>
             </div>
           </div>
+          </details>
           <details class="mb-3">
             <summary class="small text-muted" style="cursor:pointer;">Advanced: import raw builder payload</summary>
             <div class="mt-2">
@@ -690,6 +742,9 @@
               <span>Verbose</span>
             </label>
           </div>
+          <details class="log-advanced-filters">
+            <summary><i class="bi bi-sliders me-1"></i>Advanced filters</summary>
+            <div class="log-advanced-filters-body">
           <!-- Section toggles for tick cards -->
           <div class="section-toggles mb-2" id="sectionToggles">
             <button class="section-toggle active" data-section="actions" title="Show action log entries">Actions</button>
@@ -757,6 +812,8 @@
               </div>
             </div>
           </div>
+            </div>
+          </details>
           <div id="logsContainer" class="console-output">
             <div class="text-muted fst-italic">Waiting for logs...</div>
           </div>
@@ -1039,7 +1096,6 @@
               <label class="form-label small mb-0 me-1">Mode</label>
               <select id="replayModeSelect" class="form-select form-select-sm d-inline-block w-auto">
                 <option value="OBSERVED_PLAYBACK">Observed Playback</option>
-                <option value="POLICY_REPLAY">Policy Replay</option>
                 <option value="CAUSAL_SIMULATION" selected>Causal Simulation</option>
               </select>
             </span>
@@ -1196,6 +1252,59 @@
 
   <script src="/js/fishing-shadow-core.js?v=1"></script>
   <script src="/js/debugger-session-sync-core.js?v=1"></script>
+  <section id="aiTrainingPanel" class="ai-training-panel" aria-label="AI training catalog">
+    <div class="ai-training-toolbar">
+      <label>
+        <span>Recordings</span>
+        <select id="aiTrainingUsageFilter" class="form-select form-select-sm">
+          <option value="used" selected>Used in AI</option>
+          <option value="all">All recordings</option>
+        </select>
+      </label>
+      <label>
+        <span>Task</span>
+        <select id="aiTrainingTaskFilter" class="form-select form-select-sm">
+          <option value="all">All tasks</option>
+        </select>
+      </label>
+      <label>
+        <span>Status</span>
+        <select id="aiTrainingStatusFilter" class="form-select form-select-sm">
+          <option value="all">All statuses</option>
+          <option value="ACTIVE_SHADOW">Active shadow</option>
+          <option value="REPLAY_VALIDATED">Replay validated</option>
+          <option value="TRAINED">Trained</option>
+          <option value="INVALID">Invalid</option>
+        </select>
+      </label>
+      <button id="aiTrainingRefresh" type="button" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
+    </div>
+
+    <div id="aiTrainingAlert" class="ai-training-alert" role="status" aria-live="polite" hidden></div>
+    <div class="ai-training-layout">
+      <aside class="ai-training-catalog" aria-label="Training lineages">
+        <div class="ai-training-catalog-heading">
+          <h2>Evidence catalog</h2>
+          <span id="aiTrainingCount" class="badge text-bg-secondary">0</span>
+        </div>
+        <div id="aiTrainingLineageList" class="ai-training-list" role="listbox" aria-label="AI lineages"></div>
+        <details class="ai-training-recordings">
+          <summary>Recording inventory <span id="aiTrainingRecordingCount">0</span></summary>
+          <div id="aiTrainingRecordingList"></div>
+        </details>
+      </aside>
+
+      <main id="aiTrainingDetail" class="ai-training-detail" tabindex="-1">
+        <div class="ai-training-empty">
+          <i class="bi bi-diagram-3"></i>
+          <h2>Select a lineage</h2>
+          <p>Choose a recording-backed model or AI Routine to inspect its provenance and safe operations.</p>
+        </div>
+      </main>
+    </div>
+  </section>
   <section id="ai-routine-panel" aria-label="AI Routine read-only debugger">
     <h2>AI Routine · capture / graph / replay / shadow</h2>
     <div class="ai-routine-grid">
@@ -1246,12 +1355,13 @@
     <button type="button" data-ai-candidate-reconcile>Reconcile candidate registration</button>
     <pre data-ai-routine-output aria-live="polite"></pre>
   </section>
-  <script src="/js/debugger.js?v=16"></script>
+  <script src="/js/debugger.js?v=21"></script>
+  <script src="/js/ai-training.js?v=1"></script>
   <script src="/js/replay-debugger.js?v=3"></script>
   <script src="/js/ai-routine-state.js?v=1"></script>
   <script src="/js/ai-routine.js?v=3"></script>
   <script src="/js/patchloop.js?v=2"></script>
-<script src="/js/account-task-planner.js?v=39"></script>
+<script src="/js/account-task-planner.js?v=40"></script>
 </body>
 
 </html>

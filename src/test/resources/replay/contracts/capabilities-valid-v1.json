@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "controlAllowed": false,
+  "modes": {
+    "observedPlayback": false,
+    "policyReplay": false,
+    "causalSimulation": true
+  },
+  "scenarioSchemaVersions": [1],
+  "semanticActionVersions": [1],
+  "snapshotVersions": [1],
+  "projectionVersions": [1],
+  "hashVersions": ["sha256-canonical-json-v1"],
+  "xrsps": {
+    "adapterVersion": "1.0.0",
+    "buildCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "cacheRevision": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "contentRevision": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "openRuneAvailable": false,
+  "certifiable": true,
+  "fidelity": "SYNTHETIC_CONTRACT",
+  "supportedActions": ["WAIT_UNTIL_TICK", "INTERACT_NPC"]
+}

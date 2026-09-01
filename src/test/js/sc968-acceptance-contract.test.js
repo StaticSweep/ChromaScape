@@ -31,13 +31,16 @@ test('SC-968 runtime requires Assistant acceptance and a real RuneLite capture',
 });
 
 test('SC-968 login prompts wait until each native client has initialized', () => {
-  assert.match(runtime, /function Wait-CaptureClientReady/);
-  for (const [statusFile, phase] of [
-    ['baselineStatusFile', '1/3'],
-    ['candidateStatusFile', '2/3'],
-    ['runeliteStatusFile', '3/3'],
+  assert.match(runtime,
+    /function Wait-CaptureClientReady\(\[string\] \$StatusFile, \[int\] \$TimeoutSeconds, \[int\] \$ProcessId\)/);
+  assert.match(runtime, /Get-Process -Id \$ProcessId -ErrorAction SilentlyContinue/);
+  assert.match(runtime, /exited before publishing its capture status sidecar/);
+  for (const [statusFile, processId, phase] of [
+    ['baselineStatusFile', 'micro.Pid', '1/3'],
+    ['candidateStatusFile', 'candidateMicro.Pid', '2/3'],
+    ['runeliteStatusFile', 'runelite.Pid', '3/3'],
   ]) {
-    const ready = runtime.indexOf(`Wait-CaptureClientReady $${statusFile}`);
+    const ready = runtime.indexOf(`Wait-CaptureClientReady $${statusFile} $runtimeTimeout $${processId}`);
     const prompt = runtime.indexOf(`LOG IN NOW (${phase})`);
     assert.ok(ready >= 0, `${statusFile} readiness wait is missing`);
     assert.ok(prompt > ready, `phase ${phase} prompt precedes native client readiness`);

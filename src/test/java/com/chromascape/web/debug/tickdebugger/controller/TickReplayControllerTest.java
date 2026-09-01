@@ -149,6 +149,10 @@ class TickReplayControllerTest {
 
     ResponseEntity<?> response = controller.getTickCards("recording-3", 0L, 100L);
     assertEquals(HttpStatus.OK, response.getStatusCode());
+    assertEquals("true", response.getHeaders().getFirst("Deprecation"));
+    assertEquals(
+        "</api/replay/playback/v1/recordings/recording-3/frames>; rel=\"successor-version\"",
+        response.getHeaders().getFirst("Link"));
 
     List<TickCardData> cards = (List<TickCardData>) response.getBody();
     assertNotNull(cards);

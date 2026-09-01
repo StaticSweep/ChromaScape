@@ -1136,7 +1136,7 @@ test('refreshBuilderGoalRuns no unhandled rejection escapes the refresh method',
   assert.deepEqual(unhandled, [], 'no rejection may escape refreshBuilderGoalRuns');
 });
 
-test('builder goal bundle version markers agree on 39', () => {
+test('builder goal bundle version markers agree on 40', () => {
   const source = require('node:fs').readFileSync(
     path.resolve(__dirname, '../../main/resources/static/js/account-task-planner.js'),
     'utf8'
@@ -1146,7 +1146,7 @@ test('builder goal bundle version markers agree on 39', () => {
     'utf8'
   );
   const jsVersion = AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION;
-  assert.equal(jsVersion, '39');
+  assert.equal(jsVersion, '40');
   assert.ok(
     source.includes(`BUILDER_GOAL_BUNDLE_VERSION = '${jsVersion}'`),
     'JS source must declare the same bundle version'
@@ -1182,7 +1182,7 @@ test('formatBuilderGoalStatus returns correct labels for all statuses', () => {
   );
   assert.equal(
     AccountTaskPlanner.formatBuilderGoalStatus(run('QUEUED')),
-    'Task accepted and queued by the executor.'
+    'Micro6 configured and queued the task.'
   );
   assert.equal(
     AccountTaskPlanner.formatBuilderGoalStatus(run('STOPPING')),
@@ -1233,6 +1233,169 @@ test('formatBuilderGoalStatus maps RUNNING to a started label', () => {
   );
 });
 
+test('formatBuilderGoalStatus distinguishes published configuration from queued work', () => {
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('ACCEPTED')),
+    'Task published to Micro6; waiting for client-thread configuration.'
+  );
+  assert.equal(
+    AccountTaskPlanner.formatBuilderGoalStatus(run('QUEUED')),
+    'Micro6 configured and queued the task.'
+  );
+});
+
+test('describeBuilderGoalExecutorPhase reports configuration running', () => {
+  assert.equal(
+    AccountTaskPlanner.describeBuilderGoalExecutorPhase({
+      status: 'ACCEPTED',
+      executorStatus: 'RECEIVED',
+      publishActivationState: 'CONFIGURING',
+      configurationState: 'PENDING'
+    }),
+    'Micro6 accepted the task and is waiting for the RuneLite client thread to apply its configuration'
+  );
+});
+
+test('describeBuilderGoalExecutorPhase reports timeout-cancelled wording', () => {
+  assert.equal(
+    AccountTaskPlanner.describeBuilderGoalExecutorPhase({
+      status: 'FAILED',
+      executorStatus: 'RECEIVED',
+      publishActivationState: 'CONFIGURING',
+      configurationState: 'PENDING',
+      executorCancelRequested: true,
+      executorFailureReason: 'Task start timed out after 300s: executor status RECEIVED'
+    }),
+    'Task start timed out. ChromaScape cancelled the accepted Micro6 executor entry.'
+  );
+});
+
+test('describeBuilderGoalExecutorPhase prefers structured code/phase/reason', () => {
+  assert.equal(
+    AccountTaskPlanner.describeBuilderGoalExecutorPhase({
+      status: 'FAILED',
+      executorStatus: 'FAILED',
+      publishActivationState: 'FAILED',
+      configurationState: 'FAILED',
+      executorErrorCode: 'INVALID_TASK_CONFIGURATION',
+      executorFailurePhase: 'CONFIGURE_TASK',
+      executorFailureReason: 'stopConditionValue must be positive'
+    }),
+    'Micro6 configuration failed: INVALID_TASK_CONFIGURATION during CONFIGURE_TASK — stopConditionValue must be positive'
+  );
+});
+
+test('describeStructuredExecutorFailure returns null without structured fields', () => {
+  assert.equal(AccountTaskPlanner.describeStructuredExecutorFailure(null), null);
+  assert.equal(AccountTaskPlanner.describeStructuredExecutorFailure({ status: 'FAILED' }), null);
+});
+
+test('describeBuilderGoalExecutorPhase reports applied config waiting for queue', () => {
+  assert.equal(
+    AccountTaskPlanner.describeBuilderGoalExecutorPhase({
+      status: 'QUEUED',
+      executorStatus: 'QUEUED',
+      publishActivationState: 'QUEUED',
+      configurationState: 'APPLIED'
+    }),
+    'Configuration applied; waiting for queue activation'
+  );
+});
+
+test('describeBuilderGoalExecutorPhase surfaces executor failure reason immediately', () => {
+  assert.equal(
+    AccountTaskPlanner.describeBuilderGoalExecutorPhase({
+      status: 'FAILED',
+      executorStatus: 'FAILED',
+      publishActivationState: 'FAILED',
+      configurationState: 'FAILED',
+      executorFailureReason: 'java.lang.AssertionError: must be called on client thread'
+    }),
+    'java.lang.AssertionError: must be called on client thread'
+  );
+});
+
+test('describeBuilderGoalExecutorPhase flags stale pre-queue executor entry', () => {
+  assert.equal(
+    AccountTaskPlanner.describeBuilderGoalExecutorPhase({
+      status: 'FAILED',
+      executorStatus: 'RECEIVED',
+      publishActivationState: 'CONFIGURING',
+      configurationState: 'PENDING'
+    }),
+    'Executor entry is stale; restart or remove it before rerunning'
+  );
+});
+
+test('describeBuilderGoalExecutorPhase returns null for unrelated statuses', () => {
+  assert.equal(
+    AccountTaskPlanner.describeBuilderGoalExecutorPhase({ status: 'COMPLETED' }),
+    null
+  );
+  assert.equal(
+    AccountTaskPlanner.describeBuilderGoalExecutorPhase({ status: 'RUNNING' }),
+    null
+  );
+  assert.equal(AccountTaskPlanner.describeBuilderGoalExecutorPhase(null), null);
+});
+
+test('builderGoalExecutorDiagnostics includes raw executor and failure fields', () => {
+  const diagnostics = AccountTaskPlanner.builderGoalExecutorDiagnostics({
+    status: 'ACCEPTED',
+    executorStatus: 'RECEIVED',
+    publishActivationState: 'CONFIGURING',
+    configurationState: 'PENDING',
+    configurationWaitMs: 45000,
+    configurationEnqueuedAt: '2026-08-17T05:53:35.494Z',
+    configurationStartedAt: null,
+    configurationAppliedAt: null,
+    executorErrorCode: 'DISPATCH_THREAD_VIOLATION',
+    executorFailurePhase: 'CONFIGURE_TASK'
+  });
+  assert.ok(diagnostics.includes('status ACCEPTED'));
+  assert.ok(diagnostics.includes('executor RECEIVED'));
+  assert.ok(diagnostics.includes('activation CONFIGURING'));
+  assert.ok(diagnostics.includes('configuration PENDING'));
+  assert.ok(diagnostics.includes('configuration wait 45000ms'));
+  assert.ok(diagnostics.includes('configuration enqueued 2026-08-17T05:53:35.494Z'));
+  assert.ok(diagnostics.includes('error_code DISPATCH_THREAD_VIOLATION'));
+  assert.ok(diagnostics.includes('phase CONFIGURE_TASK'));
+});
+
+test('builderGoalExecutorDiagnostics omits executor when identical to status', () => {
+  const diagnostics = AccountTaskPlanner.builderGoalExecutorDiagnostics({
+    status: 'QUEUED',
+    executorStatus: 'QUEUED'
+  });
+  assert.ok(!diagnostics.includes('executor QUEUED'));
+  assert.ok(diagnostics.includes('status QUEUED'));
+});
+
+test('elapsedSinceDispatchStarted returns null when dispatch time unknown', () => {
+  assert.equal(AccountTaskPlanner.elapsedSinceDispatchStarted({}), null);
+  assert.equal(AccountTaskPlanner.elapsedSinceDispatchStarted(null), null);
+  assert.equal(AccountTaskPlanner.elapsedSinceDispatchStarted({ dispatchStartedAt: 'garbage' }), null);
+});
+
+test('elapsedSinceDispatchStarted measures from dispatch start', () => {
+  const past = new Date(Date.now() - 65000).toISOString();
+  const elapsed = AccountTaskPlanner.elapsedSinceDispatchStarted({ dispatchStartedAt: past });
+  assert.ok(elapsed !== null && elapsed >= 60000);
+});
+
+test('renderBuilderGoalRunFailure prefers executor failure reason', () => {
+  const planner = launchStatusPlanner();
+  planner.builderGoalClientStatus = { innerHTML: '' };
+  planner.renderBuilderGoalRunFailure({
+    status: 'FAILED',
+    executorStatus: 'FAILED',
+    publishActivationState: 'FAILED',
+    configurationState: 'FAILED',
+    executorFailureReason: 'java.lang.AssertionError: must be called on client thread'
+  }, { buildFailure: false });
+  assert.ok(planner.builderGoalClientStatus.innerHTML.includes('must be called on client thread'));
+});
+
 test('formatBuilderGoalStatus returns null for null/missing run', () => {
   assert.equal(AccountTaskPlanner.formatBuilderGoalStatus(null), null);
   assert.equal(AccountTaskPlanner.formatBuilderGoalStatus({}), null);
@@ -1246,7 +1409,7 @@ test('formatBuilderGoalStatus handles case-insensitive status input', () => {
   );
   assert.equal(
     AccountTaskPlanner.formatBuilderGoalStatus(run('queued')),
-    'Task accepted and queued by the executor.'
+    'Micro6 configured and queued the task.'
   );
 });
 
@@ -1290,8 +1453,8 @@ test('isActivePublishState returns false for null/missing run', () => {
 
 // --- Bundle marker tests ---
 
-test('BUILDER_GOAL_BUNDLE_VERSION is 39', () => {
-  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '39');
+test('BUILDER_GOAL_BUNDLE_VERSION is 40', () => {
+  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '40');
 });
 
 test('ACTIVE_PRE_START_STATUSES includes RECONCILING and AWAITING_EXECUTOR_CONFIRMATION', () => {
@@ -1351,7 +1514,7 @@ test('BUILDER_GOAL_STATUS_LABELS contains all required labels', () => {
   assert.equal(labels.AWAITING_EXECUTOR_CONFIRMATION, 'Executor request sent; awaiting confirmation.');
   assert.equal(labels.RECONCILING, 'Executor request sent; awaiting confirmation.');
   assert.equal(labels.ASSIGNED, 'Executor assigned the task; waiting for confirmed script start.');
-  assert.equal(labels.QUEUED, 'Task accepted and queued by the executor.');
+  assert.equal(labels.QUEUED, 'Micro6 configured and queued the task.');
   assert.equal(labels.PAUSED, 'Task paused.');
   assert.equal(labels.STOPPING, 'Stop requested; awaiting executor confirmation.');
   assert.equal(labels.PUBLISH_FAILED, 'Task publish failed.');
@@ -2313,4 +2476,65 @@ test('exact-run COMPLETED is terminal success', async () => {
 
   assert.equal(planner.builderGoalRunTrackerIterationId, '');
   assert.equal(planner._progressOptions.terminal, true);
+});
+
+test('Builder Goal structured start failures prefer safe details and retain trace metadata', () => {
+  const message = AccountTaskPlanner.describeBuilderGoalStartFailure(
+    {
+      error: 'Failed to start builder goal run',
+      code: 'BUILD_PREPARATION_FAILED',
+      phase: 'PREPARING_BUILD',
+      details: 'Capture contract could not be resolved',
+      correlationId: 'buildergoal_corr123'
+    },
+    422
+  );
+
+  assert.ok(message.startsWith('Capture contract could not be resolved'));
+  assert.ok(message.includes('code BUILD_PREPARATION_FAILED'));
+  assert.ok(message.includes('phase PREPARING_BUILD'));
+  assert.ok(message.includes('correlation buildergoal_corr123'));
+  assert.ok(!message.includes('HTTP 422'));
+});
+
+test('Builder Goal non-JSON failure falls back to HTTP status', () => {
+  assert.equal(
+    AccountTaskPlanner.describeBuilderGoalStartFailure({}, 500),
+    'HTTP 500'
+  );
+});
+
+test('compile recovery panel exposes safe same-screen actions without a host path', () => {
+  const planner = launchStatusPlanner();
+  const html = planner.compileRecoveryPanelHtml('buildergoal_123');
+
+  assert.ok(html.includes('Fix compile errors with AI'));
+  assert.ok(html.includes('Copy errors'));
+  assert.ok(html.includes('Copy full log'));
+  assert.ok(html.includes('Copy AI prompt'));
+  assert.ok(html.includes('Download sanitized log'));
+  assert.ok(!html.includes('C:\\'));
+});
+
+test('compile recovery renders a reviewable escaped patch plan', () => {
+  const planner = launchStatusPlanner();
+  const container = {hidden: true, innerHTML: ''};
+
+  planner.renderCompileRepairPlan(container, {
+    description: 'Fix <compile>',
+    rationale: 'Restore the declared type',
+    changes: [{
+      changeType: 'MODIFY',
+      filePath: 'src/Task.java',
+      lineNumber: 7,
+      oldText: 'String value = <broken>;',
+      newText: 'String value = "fixed";'
+    }]
+  });
+
+  assert.equal(container.hidden, false);
+  assert.ok(container.innerHTML.includes('Review proposed compile repair'));
+  assert.ok(container.innerHTML.includes('src/Task.java:7'));
+  assert.ok(container.innerHTML.includes('&lt;compile&gt;'));
+  assert.ok(!container.innerHTML.includes('<broken>'));
 });

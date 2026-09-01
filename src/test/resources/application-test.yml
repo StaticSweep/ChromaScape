@@ -2,12 +2,19 @@
 # Portable defaults for integration tests - no Windows-only paths
 
 spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5433/chromascape_test
-    username: chromascape
-    password: chromascape123
+  # Datasource URL, credentials, and schema are registered by
+  # IsolatedPostgresTestDatabase through @DynamicPropertySource. Keeping them out of this
+  # profile prevents tests from ever mutating the developer database.
+  flyway:
+    enabled: true
+    clean-disabled: true
+    baseline-on-migrate: false
+    create-schemas: true
+    locations: classpath:db/migration
   jpa:
     hibernate:
+      # Flyway migrates versioned tables; Hibernate may create legacy tables in this disposable
+      # isolated database. It can never alter the developer database.
       ddl-auto: create-drop
 
 server:
@@ -20,18 +27,6 @@ stabilization:
   auth:
     token: test-stabilization-read-token
     write-token: test-stabilization-write-token
-
-# Simulator verifier - portable paths for WSL/Linux CI
-simulator:
-  verifier:
-    enabled: true
-    openrune-root: ${SIMULATOR_OPENRUNE_ROOT:/mnt/f/Dev/IdeaProjects/OpenRune-Server}
-    invocation-mode: jar
-    verifier-jar-path: simulator-verifier/build/libs/simulator-verifier-all.jar
-    reports-dir: ${SIMULATOR_REPORTS_DIR:/tmp/simulator-test-reports}
-    max-concurrent-jobs: 1
-    job-timeout-seconds: 60
-    auto-create-reports-dir: true
 
 # Disable noisy subsystems during tests
 overlay-broadcaster:

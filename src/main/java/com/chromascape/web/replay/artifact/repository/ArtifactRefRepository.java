@@ -15,4 +15,7 @@ public interface ArtifactRefRepository extends JpaRepository<ArtifactRef, UUID> 
 
     Optional<ArtifactRef> findFirstByRunIdAndKindAndStateOrderByCreatedAtDesc(
             UUID runId, ArtifactKind kind, String state);
+
+    Optional<ArtifactRef> findByRunIdAndKindAndChecksum(
+            UUID runId, ArtifactKind kind, String checksum);
 }

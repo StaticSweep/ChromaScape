@@ -36,7 +36,7 @@ public class ReplayRun {
     @Column(name = "conversion_quality", nullable = false, length = 32)
     private String conversionQuality = "BEST_EFFORT";
 
-    @Column(name = "action_coverage_pct", nullable = false)
+    @Column(name = "action_coverage_pct", nullable = false, columnDefinition = "NUMERIC(5,2)")
     private double actionCoveragePct;
 
     @Column(name = "gap_count", nullable = false)
@@ -117,6 +117,9 @@ public class ReplayRun {
     @Column(name = "terminal_at")
     private LocalDateTime terminalAt;
 
+    @Column(name = "finalization_reserved_at")
+    private LocalDateTime finalizationReservedAt;
+
     public ReplayRun() {}
 
     // -- Getters / Setters --
@@ -185,6 +188,8 @@ public class ReplayRun {
     public void setStartedAt(LocalDateTime v) { this.startedAt = v; }
     public LocalDateTime getTerminalAt() { return terminalAt; }
     public void setTerminalAt(LocalDateTime v) { this.terminalAt = v; }
+    public LocalDateTime getFinalizationReservedAt() { return finalizationReservedAt; }
+    public void setFinalizationReservedAt(LocalDateTime v) { this.finalizationReservedAt = v; }
 
     // -- Convenience helpers --
 

@@ -11,14 +11,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/replay")
 public class ReplayCapabilityController {
 
-    private final ReplayCapabilityService capabilityService;
+  private final ReplayCapabilityService capabilityService;
 
-    public ReplayCapabilityController(ReplayCapabilityService capabilityService) {
-        this.capabilityService = capabilityService;
-    }
+  public ReplayCapabilityController(ReplayCapabilityService capabilityService) {
+    this.capabilityService = capabilityService;
+  }
 
-    @GetMapping("/capabilities")
-    public ResponseEntity<CapabilityManifest> capabilities() {
-        return ResponseEntity.ok(capabilityService.getManifest());
-    }
+  @GetMapping("/capabilities")
+  public ResponseEntity<CapabilityManifest> capabilities() {
+    return ResponseEntity.ok(capabilityService.getManifest());
+  }
 }

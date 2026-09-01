@@ -34,7 +34,7 @@ import org.bytedeco.opencv.opencv_core.Rect;
  */
 public class ColourContours {
 
-  public static boolean debug = false;
+  public static boolean debug = true;
 
   /**
    * Finds and returns a list of ChromaObj instances representing contours in the given image that
@@ -140,5 +140,14 @@ public class ColourContours {
     try (Point2f point2f = new Point2f(clientPoint.x, clientPoint.y)) {
       return pointPolygonTest(contour, point2f, false) > 0;
     }
+  }
+
+  public static boolean colourFound(BufferedImage image, ColourObj colourName) {
+    List<ChromaObj> objs = new ArrayList<ChromaObj>();
+    objs = ColourContours.getChromaObjsInColour(image, colourName);
+    if (!objs.isEmpty()) {
+      return true;
+    }
+    return false;
   }
 }

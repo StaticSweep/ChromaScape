@@ -382,6 +382,13 @@ final class Micro6TestServers {
           schemaBundleState = schemaBundleHash == null ? "NOT_AVAILABLE" : "AVAILABLE";
         }
       }
+      // A non-AVAILABLE lifecycle state cannot continue to attest the previously available
+      // schema bundle. The real registry clears this value during generation/error/restart; do the
+      // same in the fake so stale-cache tests exercise the lifecycle matrix rather than an invalid
+      // state-plus-hash combination.
+      if (!"AVAILABLE".equals(schemaBundleState)) {
+        schemaBundleHash = null;
+      }
       StringBuilder json =
           new StringBuilder("{")
               .append("\"machine_uuid\":\"")

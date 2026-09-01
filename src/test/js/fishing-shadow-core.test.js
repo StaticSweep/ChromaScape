@@ -554,3 +554,86 @@ test('live-before-status ordering (delayed status) does not roll back counters',
   assert.strictEqual(merged.abstained, 0);
   assert.strictEqual(merged.latestTick, 6);
 });
+
+// ---- Run discovery (/runs payloads) ----
+
+test('selectActiveRun returns null for an empty runs list', () => {
+  assert.strictEqual(core.selectActiveRun([]), null);
+});
+
+test('selectActiveRun returns null when no run is marked active', () => {
+  const runs = [
+    { shadowRunId: 'run_1', active: false, legacy: false },
+    { shadowRunId: 'run_2', active: false, legacy: false }
+  ];
+  assert.strictEqual(core.selectActiveRun(runs), null);
+});
+
+test('selectActiveRun returns the single explicitly active run', () => {
+  const runs = [
+    { shadowRunId: 'run_1', active: false, legacy: false },
+    { shadowRunId: 'run_2', active: true, legacy: false }
+  ];
+  assert.deepStrictEqual(core.selectActiveRun(runs), { shadowRunId: 'run_2', active: true, legacy: false });
+});
+
+test('selectActiveRun never selects legacy history silently', () => {
+  const runs = [
+    { shadowRunId: null, active: false, legacy: true },
+    { shadowRunId: 'run_old', active: true, legacy: true }
+  ];
+  assert.strictEqual(core.selectActiveRun(runs), null);
+});
+
+test('selectActiveRun tolerates a missing or malformed runs payload', () => {
+  assert.strictEqual(core.selectActiveRun(undefined), null);
+  assert.strictEqual(core.selectActiveRun(null), null);
+  assert.strictEqual(core.selectActiveRun('not-an-array'), null);
+  assert.strictEqual(core.selectActiveRun([null, { active: false }]), null);
+});
+
+test('an empty /runs response leaves the state unbound', () => {
+  const state = core.switchShadowSessionState('s1', null);
+  assert.strictEqual(core.selectActiveRun([]), null);
+  assert.strictEqual(state.sessionId, 's1');
+  assert.strictEqual(state.shadowRunId, null);
+  assert.strictEqual(state.latestTick, -1);
+});
+
+// ---- Session-keyed run-list management ----
+
+test('switching from session A to B clears A runs', () => {
+  const result = core.resetRunsOnSessionSwitch(
+    [{ shadowRunId: 'run_a' }], 'A', 'A', 'B'
+  );
+  assert.deepStrictEqual(result, { runs: [], runsSessionId: null });
+});
+
+test('switching runs within one session preserves the run list', () => {
+  const result = core.resetRunsOnSessionSwitch(
+    [{ shadowRunId: 'run_a' }, { shadowRunId: 'run_b' }], 'A', 'A', 'A'
+  );
+  assert.strictEqual(result.runs.length, 2);
+  assert.strictEqual(result.runsSessionId, 'A');
+});
+
+test('empty run discovery stores an empty current-session result', () => {
+  const result = core.applyRunsDiscovery([], null, 'A', 'A', []);
+  assert.deepStrictEqual(result, { runs: [], runsSessionId: 'A' });
+});
+
+test('late discovery for session A is ignored after switching to B', () => {
+  const result = core.applyRunsDiscovery(
+    [{ shadowRunId: 'run_b' }], 'B', 'B', 'A', [{ shadowRunId: 'run_a' }]
+  );
+  assert.deepStrictEqual(result.runs, [{ shadowRunId: 'run_b' }]);
+  assert.strictEqual(result.runsSessionId, 'B');
+});
+
+test('malformed run discovery cannot overwrite current state', () => {
+  const result = core.applyRunsDiscovery(
+    [{ shadowRunId: 'run_1' }], 'A', 'A', 'A', 'not-an-array'
+  );
+  assert.deepStrictEqual(result.runs, [{ shadowRunId: 'run_1' }]);
+  assert.strictEqual(result.runsSessionId, 'A');
+});

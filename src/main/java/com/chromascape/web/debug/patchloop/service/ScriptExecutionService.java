@@ -819,15 +819,17 @@ public class ScriptExecutionService {
         return verifyEntryForAttachment(
             scriptName, taskKey, targetBaseUrl, conflict, statusResult, taskMetadata);
       }
-      if (hasConfirmedStatusIdentityMismatch(
-          statusResult.rawResponse(),
-          conflict.existingEntryId(),
-          taskKey,
-          requestedIterationId)) {
+      String mismatchReason =
+          confirmedStatusIdentityMismatchReason(
+              statusResult.rawResponse(),
+              conflict.existingEntryId(),
+              taskKey,
+              requestedIterationId);
+      if (mismatchReason != null) {
         return Micro6PublishResult.conflictingDispatch(
             conflict.existingEntryId(),
             targetBaseUrl,
-            "Micro6 duplicate entry returned a confirmed identity mismatch");
+            "Micro6 duplicate entry " + conflict.existingEntryId() + " returned " + mismatchReason);
       }
       try {
         Thread.sleep(1000L);
@@ -929,15 +931,14 @@ public class ScriptExecutionService {
       Micro6RunStatusResult secondPoll =
           getMicro6RunStatus(
               taskMetadata, conflict.existingEntryId());
-      if (hasConfirmedStatusIdentityMismatch(
-          secondPoll.rawResponse(),
-          conflict.existingEntryId(),
-          taskKey,
-          requestedIterationId)) {
+      String mismatchReason =
+          confirmedStatusIdentityMismatchReason(
+              secondPoll.rawResponse(), conflict.existingEntryId(), taskKey, requestedIterationId);
+      if (mismatchReason != null) {
         return Micro6PublishResult.conflictingDispatch(
             conflict.existingEntryId(),
             targetBaseUrl,
-            "Micro6 duplicate entry returned a confirmed identity mismatch");
+            "Micro6 duplicate entry " + conflict.existingEntryId() + " returned " + mismatchReason);
       }
       if (!secondPoll.found()
           || !sameEntryAndTask(secondPoll.rawResponse(), conflict.existingEntryId(), taskKey)
@@ -1922,10 +1923,35 @@ public class ScriptExecutionService {
     return null;
   }
 
-  private boolean hasConfirmedStatusIdentityMismatch(
+  private String confirmedStatusIdentityMismatchReason(
       JsonNode payload, int expectedEntryId, String expectedTaskKey, String expectedIterationId) {
-    return "STATUS_IDENTITY_MISMATCH"
-        .equals(validateStatusIdentity(payload, expectedEntryId, expectedTaskKey, expectedIterationId));
+    if (!"STATUS_IDENTITY_MISMATCH"
+        .equals(
+            validateStatusIdentity(
+                payload, expectedEntryId, expectedTaskKey, expectedIterationId))) {
+      return null;
+    }
+    JsonNode entryNode = payload != null ? payload.get("entry_id") : null;
+    if (entryNode != null && entryNode.canConvertToInt() && entryNode.asInt() != expectedEntryId) {
+      return "a mismatched entry id " + entryNode.asInt();
+    }
+    if (expectedTaskKey != null) {
+      String returnedTaskKey =
+          firstNonBlank(rawTextNode(payload, "task_key"), rawTextNode(payload, "queued_task"));
+      if (!matchesCanonicalTaskIdentity(returnedTaskKey, expectedTaskKey)) {
+        return "a mismatched task identity";
+      }
+    }
+    if (expectedIterationId != null) {
+      String returnedIterationId =
+          firstNonBlank(
+              rawTextNode(payload, "iteration_id"),
+              rawTextNode(payload, "builder_goal_iteration_id"));
+      if (!expectedIterationId.equals(returnedIterationId)) {
+        return "a mismatched iteration identity";
+      }
+    }
+    return "a confirmed identity mismatch";
   }
 
   public Micro6ExecutorHealthResult getMicro6ExecutorHealth(Map<String, Object> taskMetadata) {

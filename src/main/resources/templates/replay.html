@@ -12,6 +12,33 @@
             min-height: 100vh;
             color: #e0e0e0;
         }
+        body .text-muted {
+            color: #a8b4c7 !important;
+        }
+        body .form-control,
+        body .form-select {
+            color: #172033;
+            caret-color: #172033;
+            background-color: #f8fafc;
+            border-color: #b8c4d3;
+        }
+        body .form-control::placeholder {
+            color: #6b7c93;
+            opacity: 1;
+        }
+        body .form-control:focus,
+        body .form-select:focus {
+            color: #111827;
+            background-color: #fff;
+            border-color: #5da7ff;
+            box-shadow: 0 0 0 0.2rem rgba(93, 167, 255, 0.2);
+        }
+        body .form-control:disabled,
+        body .form-select:disabled {
+            color: #43526a;
+            background-color: #dce3eb;
+            opacity: 1;
+        }
         .glass-panel {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
@@ -177,6 +204,16 @@
             font-size: 18px;
             font-weight: bold;
         }
+        .replay-load-status {
+            min-height: 1.4rem;
+            color: #a8b4c7;
+        }
+        .replay-load-status.ready {
+            color: #72d89b;
+        }
+        .replay-load-status.error {
+            color: #ff7b86;
+        }
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -227,141 +264,6 @@
             </div>
         </div>
 
-        <!-- Simulator Certification -->
-        <div class="row" id="simulatorSection">
-            <div class="col-12">
-                <div class="glass-panel">
-                    <h6><i class="bi bi-badge-hd me-2"></i>Simulator Certification</h6>
-
-                    <div th:if="${simulatorConfig != null and simulatorConfig.enabled}">
-                        <div class="row align-items-end mb-3">
-                            <div class="col-md-3">
-                                <label class="form-label">Session</label>
-                                <input type="text" id="simSession" class="form-control form-control-sm" placeholder="latest" value="latest">
-                                <small class="text-muted">"latest" or session ID</small>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Scenario</label>
-                                <select id="simScenario" class="form-select form-select-sm">
-                                    <option value="">None</option>
-                                    <option value="S1-happy-path">S1: Happy Path</option>
-                                    <option value="S2-input-heavy">S2: Input Heavy</option>
-                                    <option value="S3-reconnect">S3: Reconnect</option>
-                                    <option value="S4-out-of-order">S4: Out of Order</option>
-                                    <option value="S5-low-activity">S5: Low Activity</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Bridge URL</label>
-                                <input type="text" id="simBridgeUrl" class="form-control form-control-sm"
-                                       th:value="${simulatorConfig.defaultBridgeUrl}">
-                            </div>
-                            <div class="col-md-3">
-                                <button id="runCertBtn" class="btn btn-primary w-100">
-                                    <i class="bi bi-play-fill me-1"></i>Run Certification
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Results Panel -->
-                        <div id="simResults" style="display:none;">
-                            <div class="p-3 rounded mb-3" id="simStatusBadge">
-                                <div class="d-flex align-items-center">
-                                    <div id="simStatusIcon" class="me-2"></div>
-                                    <div>
-                                        <h6 class="mb-0" id="simStatusTitle"></h6>
-                                        <small id="simStatusDetail"></small>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div id="simSummary" class="mb-3" style="display:none;">
-                                <div class="row text-center">
-                                    <div class="col-6 col-md-3 mb-2">
-                                        <div class="p-2 rounded bg-dark bg-opacity-25">
-                                            <div class="small text-muted">Actions</div>
-                                            <div class="h5 mb-0" id="simTotalActions">-</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-6 col-md-3 mb-2">
-                                        <div class="p-2 rounded bg-dark bg-opacity-25">
-                                            <div class="small text-muted">Ticks</div>
-                                            <div class="h5 mb-0" id="simTickRange">-</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-6 col-md-3 mb-2">
-                                        <div class="p-2 rounded bg-dark bg-opacity-25">
-                                            <div class="small text-muted">Players</div>
-                                            <div class="h5 mb-0" id="simPlayerCount">-</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-6 col-md-3 mb-2">
-                                        <div class="p-2 rounded bg-dark bg-opacity-25">
-                                            <div class="small text-muted">Duration</div>
-                                            <div class="h5 mb-0" id="simDuration">-</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Violations -->
-                                <div class="mt-3">
-                                    <div class="d-flex justify-content-around text-center">
-                                        <div>
-                                            <div class="badge bg-danger me-1">HARD</div>
-                                            <span id="simViolationsHard" class="h5">0</span>
-                                        </div>
-                                        <div>
-                                            <div class="badge bg-warning text-dark me-1">SOFT</div>
-                                            <span id="simViolationsSoft" class="h5">0</span>
-                                        </div>
-                                        <div>
-                                            <div class="badge bg-info text-dark me-1">WARN</div>
-                                            <span id="simViolationsWarn" class="h5">0</span>
-                                        </div>
-                                        <div>
-                                            <div class="badge bg-secondary me-1">N/E</div>
-                                            <span id="simViolationsNe" class="h5">0</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Actions -->
-                            <div class="d-flex gap-2">
-                                <button id="simDownloadReport" class="btn btn-sm btn-outline-light" style="display:none;">
-                                    <i class="bi bi-download me-1"></i>Download JSON
-                                </button>
-                                <button id="simViewReport" class="btn btn-sm btn-outline-info" style="display:none;">
-                                    <i class="bi bi-code-slash me-1"></i>View Report
-                                </button>
-                                <button id="simRunAgain" class="btn btn-sm btn-outline-secondary ms-auto" style="display:none;">
-                                    <i class="bi bi-arrow-clockwise me-1"></i>Run Again
-                                </button>
-                            </div>
-
-                            <!-- Report JSON Viewer -->
-                            <div id="simReportViewer" class="mt-3" style="display:none;">
-                                <pre id="simReportJson" class="p-3 rounded bg-dark bg-opacity-50" style="max-height: 300px; overflow-y: auto; font-size: 12px;"></pre>
-                            </div>
-                        </div>
-
-                        <!-- Progress -->
-                        <div id="simProgress" style="display:none;" class="text-center p-3">
-                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                            <span class="ms-2">Running certification...</span>
-                        </div>
-                    </div>
-
-                    <div th:if="${simulatorConfig == null or !simulatorConfig.enabled}">
-                        <div class="alert alert-info mb-0">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Simulator certification is currently disabled. Enable it in application.yml with <code>simulator.verifier.enabled=true</code>.
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Video Player -->
         <div class="row" id="playerSection" style="display:none;">
             <div class="col-lg-8">
@@ -371,12 +273,15 @@
                             Your browser does not support video playback.
                         </video>
                     </div>
+                    <div id="replayLoadStatus" class="replay-load-status mt-2" role="status" aria-live="polite">
+                        Select a recording below to load its video.
+                    </div>
                     <div class="timeline-container mt-3">
                         <input type="range" id="timelineSlider" class="form-range timeline-slider" min="0" max="100" value="0" step="0.1">
                         <div class="row align-items-center mt-2">
                             <div class="col-auto">
                                 <button id="playPauseBtn" class="btn btn-primary">
-                                    <i class="bi bi-pause-fill"></i>
+                                    <i class="bi bi-play-fill"></i>
                                 </button>
                             </div>
                             <div class="col-auto">
@@ -500,7 +405,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const DEBUG_API_BASE = '/api/debug/replay';
-        const REPLAY_SOURCE_API = '/api/simulator/replay/source';
+        const RECORDING_SESSIONS_API = '/api/recordings/sessions';
+        const REPLAY_TICK_CATALOG_API = '/api/replay/playback/recordings';
         let isRecording = false;
         let currentRecordingId = null;
         let currentSessionId = null;
@@ -524,6 +430,7 @@
         const loadingTickData = document.getElementById('loadingTickData');
         const recordingsList = document.getElementById('recordingsList');
         const globalCategoryToggles = document.getElementById('globalCategoryToggles');
+        const replayLoadStatus = document.getElementById('replayLoadStatus');
 
         // State
         const state = {
@@ -619,37 +526,98 @@
         // Load recordings and mark replayability by tick snapshot availability
         async function loadRecordings() {
             try {
-                const response = await fetch(`${REPLAY_SOURCE_API}/catalog?limit=200&offset=0`);
-                const data = await response.json();
-                const recordings = Array.isArray(data.entries) ? data.entries : [];
+                const response = await fetch(RECORDING_SESSIONS_API);
+                if (!response.ok) {
+                    throw new Error(`Recording catalog returned HTTP ${response.status}`);
+                }
+                const sessions = await response.json();
+
+                // Tick coverage enriches the list but never gates ordinary video playback.
+                // Authentication or xRSPS availability must not hide otherwise valid MP4 files.
+                const tickEntriesByRecording = new Map();
+                try {
+                    const tickResponse = await fetch(`${REPLAY_TICK_CATALOG_API}?limit=200&offset=0`);
+                    if (tickResponse.ok) {
+                        const tickCatalog = await tickResponse.json();
+                        (Array.isArray(tickCatalog.entries) ? tickCatalog.entries : []).forEach(entry => {
+                            if (entry.recordingId) tickEntriesByRecording.set(entry.recordingId, entry);
+                        });
+                    }
+                } catch (tickCatalogError) {
+                    console.warn('Tick coverage unavailable; video playback remains available:', tickCatalogError);
+                }
+
+                const recordings = (Array.isArray(sessions) ? sessions : []).map(session => {
+                    const tickEntry = tickEntriesByRecording.get(session.recordingId);
+                    const playable = session.playable === true;
+                    return {
+                        ...session,
+                        replayable: playable,
+                        tickCount: tickEntry?.tickCount || 0,
+                        replayabilityReason: playable
+                            ? (tickEntry?.tickCount > 0
+                                ? `Video and ${tickEntry.tickCount} synchronized ticks available`
+                                : 'Video playback available; no synchronized tick snapshots')
+                            : (session.videoError || 'Recording video is not finalized')
+                    };
+                });
 
                 if (recordings.length === 0) {
                     recordingsList.innerHTML = '<tr><td colspan="5" class="text-center">No recordings found</td></tr>';
                     return;
                 }
 
-                recordingsList.innerHTML = recordings.map(r => `
-                    <tr class="recording-item" data-id="${r.recordingId}">
-                        <td><code>${r.recordingId}</code></td>
-                        <td>${r.accountName || '-'}</td>
-                        <td>${r.startTime ? new Date(r.startTime).toLocaleString() : '--'}</td>
-                        <td>
-                            ${(r.replayable === false)
-                                ? `<span class="badge bg-warning text-dark" title="${r.replayabilityReason || 'Not replayable'}">Not replayable</span>`
-                                : `<span class="badge bg-success" title="${r.replayabilityReason || ''}">Replayable (${r.tickCount || 0} ticks)</span>`}
-                            <div class="small text-muted mt-1">${r.replayabilityReason || ''}</div>
-                        </td>
-                        <td>
-                            ${(r.replayable === false)
-                                ? `<button class="btn btn-sm btn-outline-secondary" disabled title="${r.replayabilityReason || 'Not replayable'}">
-                                     Unavailable
-                                   </button>`
-                                : `<button class="btn btn-sm btn-primary play-recording" data-id="${r.recordingId}">
-                                     <i class="bi bi-check2-circle"></i> Select
-                                   </button>`}
-                        </td>
-                    </tr>
-                `).join('');
+                // DOM construction only: API values are assigned through
+                // textContent/attributes, never interpolated into HTML.
+                while (recordingsList.firstChild) {
+                    recordingsList.removeChild(recordingsList.firstChild);
+                }
+                for (const r of recordings) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'recording-item';
+
+                    const idCell = document.createElement('td');
+                    const codeEl = document.createElement('code');
+                    codeEl.textContent = r.recordingId || '';
+                    idCell.appendChild(codeEl);
+
+                    const accountCell = document.createElement('td');
+                    accountCell.textContent = r.accountName || '-';
+
+                    const startCell = document.createElement('td');
+                    startCell.textContent = r.startTime ? new Date(r.startTime).toLocaleString() : '--';
+
+                    const statusCell = document.createElement('td');
+                    const badge = document.createElement('span');
+                    badge.className = (r.replayable === false)
+                        ? 'badge bg-warning text-dark'
+                        : 'badge bg-success';
+                    badge.textContent = (r.replayable === false)
+                        ? 'Not replayable'
+                        : (r.tickCount > 0 ? `Video + ${r.tickCount} ticks` : 'Video only');
+                    statusCell.appendChild(badge);
+                    const reasonDiv = document.createElement('div');
+                    reasonDiv.className = 'small text-muted mt-1';
+                    reasonDiv.textContent = r.replayabilityReason || '';
+                    statusCell.appendChild(reasonDiv);
+
+                    const actionCell = document.createElement('td');
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-sm play-recording';
+                    if (r.replayable === false) {
+                        btn.classList.add('btn-outline-secondary');
+                        btn.disabled = true;
+                        btn.textContent = 'Unavailable';
+                    } else {
+                        btn.classList.add('btn-primary');
+                        btn.textContent = 'Play';
+                        btn.dataset.id = r.recordingId || '';
+                    }
+                    actionCell.appendChild(btn);
+
+                    tr.append(idCell, accountCell, startCell, statusCell, actionCell);
+                    recordingsList.appendChild(tr);
+                }
 
                 // Add select button listeners
                 document.querySelectorAll('.play-recording').forEach(btn => {
@@ -663,6 +631,14 @@
                 return recordings;
             } catch (error) {
                 console.error('Failed to load recordings:', error);
+                recordingsList.replaceChildren();
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.className = 'text-center text-danger';
+                cell.textContent = `Could not load recordings: ${error.message}`;
+                row.appendChild(cell);
+                recordingsList.appendChild(row);
             }
         }
 
@@ -671,12 +647,49 @@
             playerSection.scrollIntoView({ behavior: 'smooth' });
             currentRecordingId = recordingId;
             currentReplayEntry = entry;
-            const recordingInput = document.getElementById('orRecordingId');
-            recordingInput.value = recordingId || '';
+
+            if (!await loadRecordingVideo(recordingId)) {
+                return;
+            }
 
             // Background: fetch sync info and tick data without blocking playback
-            await loadSyncInfo(recordingId);
-            await loadTickCardsForRecording(recordingId);
+            await Promise.allSettled([
+                loadSyncInfo(recordingId),
+                loadTickCardsForRecording(recordingId)
+            ]);
+        }
+
+        async function loadRecordingVideo(recordingId) {
+            replayLoadStatus.className = 'replay-load-status mt-2';
+            replayLoadStatus.textContent = 'Loading recording video…';
+            videoPlayer.pause();
+            videoPlayer.removeAttribute('src');
+            videoPlayer.load();
+
+            try {
+                const response = await fetch(`/api/recordings/${encodeURIComponent(recordingId)}`);
+                if (!response.ok) {
+                    throw new Error(`Recording metadata returned HTTP ${response.status}`);
+                }
+                const recording = await response.json();
+                if (recording.playable === false) {
+                    throw new Error(recording.videoError || 'Recording is not finalized');
+                }
+                if (!recording.videoUrl) {
+                    throw new Error(recording.videoError || 'No video file is available');
+                }
+
+                videoPlayer.src = recording.videoUrl;
+                videoPlayer.load();
+                replayLoadStatus.classList.add('ready');
+                replayLoadStatus.textContent = 'Video loaded. Press Play to begin.';
+                return true;
+            } catch (error) {
+                console.error('Failed to load recording video:', error);
+                replayLoadStatus.classList.add('error');
+                replayLoadStatus.textContent = `Cannot play this recording: ${error.message}`;
+                return false;
+            }
         }
 
         async function loadSyncInfo(recordingId) {
@@ -881,7 +894,14 @@
 
             const header = document.createElement('div');
             header.className = 'section-header';
-            header.innerHTML = `<i class="bi bi-circle-fill" style="font-size: 8px;"></i> ${sectionName.charAt(0).toUpperCase() + sectionName.slice(1)}`;
+            // Static icon fragment (no API/user data) plus a text node title.
+            const iconSpan = document.createElement('i');
+            iconSpan.className = 'bi bi-circle-fill';
+            iconSpan.style.fontSize = '8px';
+            header.appendChild(iconSpan);
+            const headerTitle = document.createElement('span');
+            headerTitle.textContent = ' ' + sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+            header.appendChild(headerTitle);
             section.appendChild(header);
 
             const content = document.createElement('div');
@@ -892,23 +912,25 @@
                 sectionData.forEach(log => {
                     const logLine = document.createElement('div');
                     logLine.className = `log-entry ${log.severity?.toLowerCase() || 'info'}`;
-                    logLine.innerHTML = `<span class="log-timestamp">[${log.subsystem || 'Game'}]</span> ${escapeHtml(log.message)}`;
+                    const tag = document.createElement('span');
+                    tag.className = 'log-timestamp';
+                    tag.textContent = `[${log.subsystem || 'Game'}]`;
+                    logLine.appendChild(tag);
+                    logLine.appendChild(document.createTextNode(' ' + (log.message || '')));
                     content.appendChild(logLine);
                 });
             } else if (sectionName === 'player') {
                 content.innerHTML = '<div class="text-muted" style="font-size: 11px;">See summary above</div>';
             } else {
-                content.innerHTML = `<pre style="font-size: 11px; margin: 0;">${JSON.stringify(sectionData, null, 2)}</pre>`;
+                // textContent only: API data never passes through an HTML sink.
+                const pre = document.createElement('pre');
+                pre.style.cssText = 'font-size: 11px; margin: 0;';
+                pre.textContent = JSON.stringify(sectionData, null, 2);
+                content.replaceChildren(pre);
             }
 
             section.appendChild(content);
             return section;
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
         }
 
         // Global category toggles
@@ -982,6 +1004,13 @@
 
         videoPlayer.addEventListener('loadedmetadata', () => {
             durationEl.textContent = formatTime(videoPlayer.duration);
+            replayLoadStatus.className = 'replay-load-status ready mt-2';
+            replayLoadStatus.textContent = 'Video ready.';
+        });
+
+        videoPlayer.addEventListener('error', () => {
+            replayLoadStatus.className = 'replay-load-status error mt-2';
+            replayLoadStatus.textContent = 'The browser could not load this MP4. Check that the recording file still exists.';
         });
 
         timelineSlider.addEventListener('input', () => {
@@ -1002,220 +1031,9 @@
         // Load recordings on page load
         loadRecordings();
 
-        // ==================== Simulator Certification ====================
-        const SIMULATOR_API_BASE = '/api/simulator/verify';
-        let currentSimJobId = null;
-        let simPollInterval = null;
-
-        const runCertBtn = document.getElementById('runCertBtn');
-        const simResults = document.getElementById('simResults');
-        const simProgress = document.getElementById('simProgress');
-        const simSummary = document.getElementById('simSummary');
-        const simStatusBadge = document.getElementById('simStatusBadge');
-        const simStatusIcon = document.getElementById('simStatusIcon');
-        const simStatusTitle = document.getElementById('simStatusTitle');
-        const simStatusDetail = document.getElementById('simStatusDetail');
-        const simDownloadReport = document.getElementById('simDownloadReport');
-        const simViewReport = document.getElementById('simViewReport');
-        const simRunAgain = document.getElementById('simRunAgain');
-        const simReportViewer = document.getElementById('simReportViewer');
-        const simReportJson = document.getElementById('simReportJson');
-
-        runCertBtn?.addEventListener('click', startCertification);
-
-        async function startCertification() {
-            const session = document.getElementById('simSession').value.trim() || 'latest';
-            const scenario = document.getElementById('simScenario').value;
-            const bridgeUrl = document.getElementById('simBridgeUrl').value.trim();
-
-            // Reset UI
-            simResults.style.display = 'none';
-            simReportViewer.style.display = 'none';
-            simProgress.style.display = 'block';
-            runCertBtn.disabled = true;
-
-            try {
-                const response = await fetch(SIMULATOR_API_BASE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session, scenario, bridgeUrl })
-                });
-
-                const data = await response.json();
-
-                if (data.jobId) {
-                    currentSimJobId = data.jobId;
-                    pollJobStatus();
-                } else if (data.error) {
-                    showError(data.error);
-                    runCertBtn.disabled = false;
-                    simProgress.style.display = 'none';
-                }
-            } catch (error) {
-                console.error('Failed to start certification:', error);
-                showError('Failed to start certification: ' + error.message);
-                runCertBtn.disabled = false;
-                simProgress.style.display = 'none';
-            }
-        }
-
-        function pollJobStatus() {
-            // Clear any existing interval
-            if (simPollInterval) {
-                clearInterval(simPollInterval);
-            }
-
-            // Poll every 1.5 seconds
-            simPollInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`${SIMULATOR_API_BASE}/${currentSimJobId}`);
-                    const data = await response.json();
-
-                    if (data.error) {
-                        showError(data.error);
-                        stopPolling();
-                        return;
-                    }
-
-                    const status = data.status;
-
-                    if (status === 'QUEUED' || status === 'RUNNING') {
-                        // Still running, continue polling
-                        return;
-                    }
-
-                    // Job completed
-                    stopPolling();
-                    simProgress.style.display = 'none';
-                    simResults.style.display = 'block';
-                    runCertBtn.disabled = false;
-
-                    if (status === 'SUCCEEDED') {
-                        showResults(data);
-                    } else if (status === 'FAILED') {
-                        showError(data.error || 'Verification failed');
-                    }
-                } catch (error) {
-                    console.error('Failed to poll job status:', error);
-                    showError('Failed to get job status');
-                    stopPolling();
-                }
-            }, 1500);
-        }
-
-        function stopPolling() {
-            if (simPollInterval) {
-                clearInterval(simPollInterval);
-                simPollInterval = null;
-            }
-        }
-
-        function showResults(data) {
-            const summary = data.summary;
-            const passed = summary?.passed ?? false;
-
-            // Set status badge
-            if (passed) {
-                simStatusBadge.className = 'p-3 rounded mb-3 bg-success bg-opacity-25 border border-success';
-                simStatusIcon.innerHTML = '<i class="bi bi-check-circle-fill text-success fs-4"></i>';
-                simStatusTitle.textContent = 'PASSED';
-                simStatusTitle.className = 'mb-0 text-success';
-            } else {
-                simStatusBadge.className = 'p-3 rounded mb-3 bg-danger bg-opacity-25 border border-danger';
-                simStatusIcon.innerHTML = '<i class="bi bi-x-circle-fill text-danger fs-4"></i>';
-                simStatusTitle.textContent = 'FAILED';
-                simStatusTitle.className = 'mb-0 text-danger';
-            }
-
-            simStatusDetail.textContent = `Exit code: ${data.exitCode} | Job: ${data.jobId.substring(0, 8)}`;
-
-            // Show summary
-            if (summary) {
-                simSummary.style.display = 'block';
-                document.getElementById('simTotalActions').textContent = summary.totalActions;
-                document.getElementById('simTickRange').textContent = `${summary.startTick}-${summary.endTick}`;
-                document.getElementById('simPlayerCount').textContent = summary.playerCount;
-                document.getElementById('simDuration').textContent = formatDuration(summary.durationMs);
-
-                // Violations
-                document.getElementById('simViolationsHard').textContent = summary.violations.hard;
-                document.getElementById('simViolationsSoft').textContent = summary.violations.soft;
-                document.getElementById('simViolationsWarn').textContent = summary.violations.warn;
-                document.getElementById('simViolationsNe').textContent = summary.violations.notEvaluated;
-            }
-
-            // Show action buttons - only Download/View when report is available
-            if (data.reportAvailable) {
-                simDownloadReport.style.display = 'inline-block';
-                simViewReport.style.display = 'inline-block';
-            } else {
-                simDownloadReport.style.display = 'none';
-                simViewReport.style.display = 'none';
-            }
-            simRunAgain.style.display = 'inline-block';
-
-            // Setup action buttons
-            simDownloadReport.onclick = () => downloadReport();
-            simViewReport.onclick = () => viewReport();
-            simRunAgain.onclick = () => {
-                simResults.style.display = 'none';
-                simReportViewer.style.display = 'none';
-            };
-        }
-
-        function showError(message) {
-            simProgress.style.display = 'none';
-            simResults.style.display = 'block';
-            simSummary.style.display = 'none';
-            simDownloadReport.style.display = 'none';
-            simViewReport.style.display = 'none';
-            simRunAgain.style.display = 'inline-block';
-
-            simStatusBadge.className = 'p-3 rounded mb-3 bg-danger bg-opacity-25 border border-danger';
-            simStatusIcon.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger fs-4"></i>';
-            simStatusTitle.textContent = 'ERROR';
-            simStatusTitle.className = 'mb-0 text-danger';
-            simStatusDetail.textContent = message;
-
-            simRunAgain.onclick = () => {
-                simResults.style.display = 'none';
-            };
-            runCertBtn.disabled = false;
-        }
-
-        async function downloadReport() {
-            try {
-                const response = await fetch(`${SIMULATOR_API_BASE}/${currentSimJobId}/report`);
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `simulator-report-${currentSimJobId}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                }
-            } catch (error) {
-                console.error('Failed to download report:', error);
-            }
-        }
-
-        async function viewReport() {
-            try {
-                const response = await fetch(`${SIMULATOR_API_BASE}/${currentSimJobId}/report`);
-                if (response.ok) {
-                    const json = await response.text();
-                    simReportJson.textContent = json;
-                    simReportViewer.style.display = 'block';
-                    simReportViewer.scrollIntoView({ behavior: 'smooth' });
-                }
-            } catch (error) {
-                console.error('Failed to view report:', error);
-            }
-        }
-
-    <script src="/js/replay-debugger.js"></script>
+        // ==================== Legacy Simulator Certification removed ====================
+        // Certification now lives exclusively in the xRSPS replay pipeline:
+        // /api/replay/runs/{id}/report supersedes /api/simulator/verify.
+    </script>
 </body>
 </html>

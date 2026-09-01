@@ -548,7 +548,6 @@ class BuilderGoalRunnerServiceTest {
             Map.of("password", "s3cret")
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
     Map<String, Object> response =
@@ -619,7 +618,6 @@ class BuilderGoalRunnerServiceTest {
             Map.of("password", "s3cret")
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
     Map<String, Object> response =
@@ -828,7 +826,6 @@ class BuilderGoalRunnerServiceTest {
             null,
             null);
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
     Map<String, Object> response =
         service.startRun(
@@ -852,7 +849,7 @@ class BuilderGoalRunnerServiceTest {
     assertThat(response.get("accepted")).isEqualTo(true);
     assertThat(response.get("published")).isNull();
     assertThat(response.get("entryId")).isNull();
-    assertThat(response.get("catalogValidation")).isEqualTo("SKIPPED_NO_CACHE");
+    assertThat(response.get("catalogValidation")).isEqualTo("SKIPPED_CATALOG_MISS");
     assertThat(response.get("catalogValidationSkipped")).isEqualTo(true);
     assertThat(((Map<?, ?>) response.get("targetPreparation")).get("state"))
         .isEqualTo("PREPARING_TARGET");
@@ -977,7 +974,6 @@ class BuilderGoalRunnerServiceTest {
     when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
             BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(List.of(staleIteration));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
     Map<String, Object> response =
@@ -1420,8 +1416,6 @@ class BuilderGoalRunnerServiceTest {
             }
             """);
     when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(staleCatalog);
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(staleCatalog);
-    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(staleCatalog);
     Map<String, Object> response = service.rerun("buildergoal_rerun0001");
 
     assertThat(response.get("accepted")).isEqualTo(true);
@@ -1708,34 +1702,10 @@ class BuilderGoalRunnerServiceTest {
             Map.of()
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
-    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+    stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
-    ScriptExecutionService.Micro6ExecutorHealthResult health =
-        new ScriptExecutionService.Micro6ExecutorHealthResult(
-            true,
-            true,
-            "READY_TO_PUBLISH",
-            "dispatch-ready",
-            "bigGreenMeat",
-            "1111111111111111",
-            "bigGreenMeat",
-            "1111111111111111",
-            false,
-            null,
-            "READY",
-            "LOGGED_IN",
-            null,
-            null,
-            null,
-            "http://127.0.0.1:8098",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null);
+    ScriptExecutionService.Micro6ExecutorHealthResult health = dispatchReadyHealth();
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
@@ -1778,7 +1748,8 @@ class BuilderGoalRunnerServiceTest {
             Map.of()
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+    stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
@@ -1826,8 +1797,8 @@ class BuilderGoalRunnerServiceTest {
             Map.of()
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
-    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+    stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
     ScriptExecutionService.Micro6ExecutorHealthResult health =
         new ScriptExecutionService.Micro6ExecutorHealthResult(
@@ -1891,8 +1862,8 @@ class BuilderGoalRunnerServiceTest {
             Map.of()
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
-    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+    stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
     ScriptExecutionService.Micro6ExecutorHealthResult health =
         new ScriptExecutionService.Micro6ExecutorHealthResult(
@@ -2060,15 +2031,7 @@ class BuilderGoalRunnerServiceTest {
             eq("3720a9a3b5c9f57b"), eq("udasuAvuco"), isNull(), any(), eq(360)))
         .thenReturn(List.of(targetClient));
     when(micro6ExecutorCatalogService.getCatalogForBaseUrl("http://127.0.0.1:18098", true))
-        .thenReturn(
-            objectMapper.valueToTree(
-                Map.of(
-                    "tasks",
-                    List.of(
-                        Map.of(
-                            "key", "fish_training",
-                            "name", "Fish Training",
-                            "enabled", true)))));
+        .thenReturn(runnableCatalog("fish_training", "Fish Training", "targetFish"));
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
         .thenReturn(
@@ -2177,38 +2140,14 @@ class BuilderGoalRunnerServiceTest {
                         "message", "executor not reachable"),
                 "settings", Map.of("treeType", "WILLOW"))));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+    stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
     when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
             BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(List.of(deferred));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
-    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
-        .thenReturn(
-            new ScriptExecutionService.Micro6ExecutorHealthResult(
-                true,
-                true,
-                "READY_TO_PUBLISH",
-                "dispatch-ready",
-                "bigGreenMeat",
-                "1111111111111111",
-                "bigGreenMeat",
-                "1111111111111111",
-                false,
-                null,
-                "READY",
-                "LOGGED_IN",
-                null,
-                null,
-                null,
-                "http://127.0.0.1:8098",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null));
+        .thenReturn(dispatchReadyHealth());
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
@@ -2360,7 +2299,6 @@ class BuilderGoalRunnerServiceTest {
             Map.of("password", "s3cret")
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
     Map<String, Object> response =
@@ -2383,7 +2321,7 @@ class BuilderGoalRunnerServiceTest {
             null);
 
     assertThat(response.get("accepted")).isEqualTo(true);
-    assertThat(response.get("catalogValidation")).isEqualTo("SKIPPED_NO_CACHE");
+    assertThat(response.get("catalogValidation")).isEqualTo("SKIPPED_CATALOG_MISS");
     verify(iterationRepository, times(1)).save(any(PatchLoopIteration.class));
   }
 
@@ -2404,34 +2342,10 @@ class BuilderGoalRunnerServiceTest {
             Map.of()
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
-    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+    stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
-    ScriptExecutionService.Micro6ExecutorHealthResult health =
-        new ScriptExecutionService.Micro6ExecutorHealthResult(
-            true,
-            true,
-            "READY_TO_PUBLISH",
-            "dispatch-ready",
-            "bigGreenMeat",
-            "1111111111111111",
-            "bigGreenMeat",
-            "1111111111111111",
-            false,
-            null,
-            "READY",
-            "LOGGED_IN",
-            null,
-            null,
-            null,
-            "http://127.0.0.1:8098",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null);
+    ScriptExecutionService.Micro6ExecutorHealthResult health = dispatchReadyHealth();
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap())).thenReturn(health);
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
@@ -2445,7 +2359,6 @@ class BuilderGoalRunnerServiceTest {
             "configurable_woodcutting",
             Map.of("treeType", "WILLOW"),
             360,
-            "http://127.0.0.1:8098",
             false,
             null);
 
@@ -2488,7 +2401,6 @@ class BuilderGoalRunnerServiceTest {
                     "configurable_woodcutting",
                     Map.of("treeType", "WILLOW"),
                     360,
-                    "http://127.0.0.1:8098",
                     false,
                     null))
         .isInstanceOf(IllegalStateException.class)
@@ -2585,13 +2497,14 @@ class BuilderGoalRunnerServiceTest {
                 "settings", Map.of("treeType", "WILLOW"))));
     when(iterationRepository.findByIterationId("buildergoal_published_1"))
         .thenReturn(Optional.of(iteration));
-    when(scriptExecutionService.stopMicro6PublishedRun(anyMap(), eq(42), anyString()))
-        .thenReturn(true);
+    when(scriptExecutionService.requestStopMicro6PublishedRun(anyMap(), eq(42), anyString()))
+        .thenReturn(new ScriptExecutionService.Micro6ControlResult(true, null, null));
 
     Map<String, Object> response = service.stopRun("buildergoal_published_1", null);
 
     assertThat(response.get("success")).isEqualTo(true);
-    verify(scriptExecutionService, times(1)).stopMicro6PublishedRun(anyMap(), eq(42), anyString());
+    verify(scriptExecutionService, times(1))
+        .requestStopMicro6PublishedRun(anyMap(), eq(42), anyString());
     verify(persistenceService, never()).updateIterationStatus(iteration, PatchLoopStatus.CANCELLED);
   }
 
@@ -2782,7 +2695,6 @@ class BuilderGoalRunnerServiceTest {
             Map.of("password", "s3cret")
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
     service.startRun(
@@ -2861,7 +2773,6 @@ class BuilderGoalRunnerServiceTest {
     when(clientRegistryService.findOnlineClientForRecovery(
             eq("1111111111111111"), eq("bigGreenMeat"), isNull(), any()))
         .thenReturn(Optional.of(targetClient));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
     service.startRun(
@@ -3153,7 +3064,7 @@ class BuilderGoalRunnerServiceTest {
                     "FISHING_TRAINING",
                     Map.of(),
                     360,
-                    "http://127.0.0.1:8098",
+                    null,
                     false,
                     null))
         .isInstanceOf(IllegalStateException.class)
@@ -3220,16 +3131,40 @@ class BuilderGoalRunnerServiceTest {
         "IDLE",
         null,
         Instant.now(),
+        360,
+        360,
+        true,
+        "RUNNING",
+        true,
+        false,
         null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null);
+        "accountbuilder_ready",
+        "logged_in",
+        true,
+        "attempt-1111111111111111",
+        4321,
+        AccountIdentityContract.HASH_SCHEME,
+        "1111111111111111");
   }
 
   private ScriptExecutionService.Micro6ExecutorHealthResult dispatchReadyHealth() {
+    com.fasterxml.jackson.databind.node.ObjectNode raw = objectMapper.createObjectNode();
+    raw.put("account_hash", "1111111111111111");
+    raw.put("requested_account_hash", "1111111111111111");
+    raw.put("account_hash_scheme", AccountIdentityContract.HASH_SCHEME);
+    raw.put("requested_account_name", "bigGreenMeat");
+    raw.put("account_name", "bigGreenMeat");
+    raw.put("requested_world", 360);
+    raw.put("current_world", 360);
+    raw.put("world_matched", true);
+    raw.put("dispatch_hold", false);
+    raw.put("startup_state", "accountbuilder_ready");
+    raw.put("login_state", "logged_in");
+    raw.put("pathfinder_ready", true);
+    raw.put("script_loop_alive", true);
+    raw.put("script_lifecycle_state", "RUNNING");
+    raw.put("launch_attempt_id", "attempt-1111111111111111");
+    raw.put("process_id", 4321);
     return new ScriptExecutionService.Micro6ExecutorHealthResult(
         true,
         true,
@@ -3247,13 +3182,78 @@ class BuilderGoalRunnerServiceTest {
         null,
         null,
         "http://127.0.0.1:8098",
+        raw,
+        360,
+        360,
+        true,
+        true,
+        "RUNNING",
+        true);
+  }
+
+  private void stubDispatchReadyTarget(String accountHash, String accountName, int world) {
+    stubDispatchReadyTarget(accountHash, accountName, world, "http://127.0.0.1:8098");
+  }
+
+  private void stubDispatchReadyTarget(
+      String accountHash, String accountName, int world, String baseUrl) {
+    when(clientRegistryService.findDispatchReadyClientsForRecovery(
+            eq(accountHash), eq(accountName), isNull(), any(), eq(world)))
+        .thenReturn(List.of(dispatchReadyTarget(accountHash, accountName, world, baseUrl)));
+  }
+
+  private Micro6OnlineClientRegistryService.TargetClient dispatchReadyTarget(
+      String accountHash, String accountName, int world, String baseUrl) {
+    return new Micro6OnlineClientRegistryService.TargetClient(
+        "client-" + accountName,
+        accountName,
+        accountHash,
+        baseUrl,
+        "0.0.0.0:8098",
+        "micro6",
+        "accountbuilder_builderpro",
+        "IDLE",
         null,
+        Instant.now(),
+        world,
+        world,
+        true,
+        "RUNNING",
+        true,
+        false,
         null,
-        null,
-        null,
-        null,
-        null,
-        null);
+        "accountbuilder_ready",
+        "logged_in",
+        true,
+        "attempt-" + accountHash,
+        4321,
+        AccountIdentityContract.HASH_SCHEME,
+        accountHash);
+  }
+
+  private JsonNode runnableCatalog(String taskKey, String displayName, String settingKey) {
+    com.fasterxml.jackson.databind.node.ObjectNode catalog = objectMapper.createObjectNode();
+    catalog.put("catalog_state", "READY");
+    com.fasterxml.jackson.databind.node.ObjectNode task = catalog.putArray("tasks").addObject();
+    task.put("key", taskKey);
+    task.put("task_key", taskKey);
+    task.put("display_name", displayName);
+    task.put("runnable", true);
+    task.put("enabled", true);
+    task.put("settings_schema_state", "AVAILABLE");
+    task.put("settings_schema_version", "1");
+    task.put("settings_schema_hash", "sha256:" + "a".repeat(64));
+    com.fasterxml.jackson.databind.node.ObjectNode schema = task.putObject("args_schema");
+    schema.putArray("fields");
+    if (settingKey != null) {
+      schema.withArray("fields").addObject().put("key", settingKey).put("type", "string");
+    }
+    return catalog;
+  }
+
+  private void stubRunnableCatalog(String taskKey, String displayName, String settingKey) {
+    when(micro6ExecutorCatalogService.getCatalogForBaseUrl("http://127.0.0.1:8098", true))
+        .thenReturn(runnableCatalog(taskKey, displayName, settingKey));
   }
 
   @Test
@@ -3571,35 +3571,11 @@ class BuilderGoalRunnerServiceTest {
             Map.of()
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
-    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+    stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
-        .thenReturn(
-            new ScriptExecutionService.Micro6ExecutorHealthResult(
-                true,
-                true,
-                "READY_TO_PUBLISH",
-                "dispatch-ready",
-                "bigGreenMeat",
-                "1111111111111111",
-                "bigGreenMeat",
-                "1111111111111111",
-                false,
-                null,
-                "READY",
-                "LOGGED_IN",
-                null,
-                null,
-                null,
-                "http://127.0.0.1:8098",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null));
+        .thenReturn(dispatchReadyHealth());
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
@@ -3640,35 +3616,11 @@ class BuilderGoalRunnerServiceTest {
             Map.of()
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
-    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+    stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
-        .thenReturn(
-            new ScriptExecutionService.Micro6ExecutorHealthResult(
-                true,
-                true,
-                "READY_TO_PUBLISH",
-                "dispatch-ready",
-                "bigGreenMeat",
-                "1111111111111111",
-                "bigGreenMeat",
-                "1111111111111111",
-                false,
-                null,
-                "READY",
-                "LOGGED_IN",
-                null,
-                null,
-                null,
-                "http://127.0.0.1:8098",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null));
+        .thenReturn(dispatchReadyHealth());
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
@@ -4081,35 +4033,11 @@ class BuilderGoalRunnerServiceTest {
             Map.of()
         );
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
-    when(micro6ExecutorCatalogService.getCatalog(true)).thenReturn(null);
-    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+    stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
-        .thenReturn(
-            new ScriptExecutionService.Micro6ExecutorHealthResult(
-                true,
-                true,
-                "READY_TO_PUBLISH",
-                "dispatch-ready",
-                "bigGreenMeat",
-                "1111111111111111",
-                "bigGreenMeat",
-                "1111111111111111",
-                false,
-                null,
-                "READY",
-                "LOGGED_IN",
-                null,
-                null,
-                null,
-                "http://127.0.0.1:8098",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null));
+        .thenReturn(dispatchReadyHealth());
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(
@@ -4716,31 +4644,7 @@ class BuilderGoalRunnerServiceTest {
             });
     when(scriptExecutionService.reserveMicro6EntryId()).thenReturn(100);
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
-        .thenReturn(
-            new ScriptExecutionService.Micro6ExecutorHealthResult(
-                true,
-                true,
-                "READY_TO_PUBLISH",
-                "dispatch-ready",
-                "bigGreenMeat",
-                "1111111111111111",
-                "bigGreenMeat",
-                "1111111111111111",
-                false,
-                null,
-                "accountbuilder_ready",
-                "logged_in",
-                null,
-                null,
-                null,
-                "http://127.0.0.1:8098",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null));
+        .thenReturn(dispatchReadyHealth());
     when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
         .thenReturn(
             ScriptExecutionService.Micro6PublishResult.success(

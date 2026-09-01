@@ -168,20 +168,20 @@ class PatchCandidateManifestV2Test {
   }
 
   private static Path vectorsPath() {
-    String override = System.getenv("SC967_VECTORS_PATH");
-    if (override != null && !override.isBlank()) {
-      return Paths.get(override);
+    String resolved = System.getProperty("sc967.vectors.path");
+    if (resolved == null || resolved.isBlank()) {
+      resolved = System.getenv("SC967_VECTORS_PATH");
     }
-    Path fromCwd = Paths.get("").toAbsolutePath().normalize().resolve("contracts/sc967/ed25519-vectors.json");
-    if (Files.isRegularFile(fromCwd)) {
-      return fromCwd;
+    if (resolved == null || resolved.isBlank()) {
+      throw new IllegalStateException(
+          "Gradle did not resolve the canonical SC-967 fixture; configure -Psc967VectorsPath "
+              + "or SC967_VECTORS_PATH");
     }
-    // ChromaScape module root -> workspace root (one level up).
-    Path fromModule = Paths.get("").toAbsolutePath().normalize().getParent().resolve("contracts/sc967/ed25519-vectors.json");
-    if (Files.isRegularFile(fromModule)) {
-      return fromModule;
+    Path path = Paths.get(resolved).toAbsolutePath().normalize();
+    if (!Files.isRegularFile(path)) {
+      throw new IllegalStateException("Resolved SC-967 fixture is not a regular file: " + path);
     }
-    throw new IllegalStateException("contracts/sc967/ed25519-vectors.json not found; set SC967_VECTORS_PATH");
+    return path;
   }
 
   private static String canonicalHash(JsonNode manifest) {

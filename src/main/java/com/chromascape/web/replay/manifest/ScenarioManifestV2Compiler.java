@@ -33,8 +33,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -226,7 +226,7 @@ public class ScenarioManifestV2Compiler {
     entity.setEndTick(endTick);
     entity.setManifestJson(parseObject(canonicalManifest));
     entity.setManifestChecksum(manifestChecksum);
-    entity.setFidelity(capability.fidelity());
+    entity.setFidelity(capability.fidelity().name());
     entity.setConversionQuality(conversion.quality().name());
     entity.setActionCoveragePct(conversion.actionCoveragePct());
     entity.setGapCount(conversion.gaps().size() + unsupported.size());
@@ -384,7 +384,7 @@ public class ScenarioManifestV2Compiler {
         entry.put("sourceSnapshotId", approximation.sourceSnapshotId());
       }
     }
-    doc.put("fidelity", capability.fidelity());
+    doc.put("fidelity", capability.fidelity().name());
     doc.put("fidelityRequirement", conversion.quality().name());
     doc.put("controlAllowed", false);
     return doc;
@@ -554,7 +554,7 @@ public class ScenarioManifestV2Compiler {
     return projectionService.sha256Hex(projectionService.canonicalJsonBytes(basis));
   }
 
-  private ObjectNode buildInitialState(
+  ObjectNode buildInitialState(
       TickSnapshot first, ReplayActionConversionResult conversion) {
     JsonNode playerState = first.getPlayerState();
     if (playerState == null || !playerState.isObject()) {
@@ -584,30 +584,85 @@ public class ScenarioManifestV2Compiler {
           "Initial world must contain a non-empty typed NPC list");
     }
     ArrayNode normalizedNpcs = state.putArray("npcs");
-    Map<String, String> inferredSpotTypes = inferSpotTypes(conversion);
+    validateNpcActions(conversion);
+    Set<String> referencedNpcIds = referencedNpcIds(conversion);
+    Map<String, Set<String>> spotTypeCandidates = spotTypeCandidates(conversion);
+    Map<String, List<JsonNode>> npcsByStableId = new HashMap<>();
     List<JsonNode> npcEntries = new ArrayList<>();
     for (JsonNode npc : npcs) {
-      if (!npc.isObject()
+      if (npc == null
+          || !npc.isObject()
           || isBlank(npc.path("stableId").asText(null))
           || positionNode(npc) == null) {
         throw ReplayException.invalid(
             ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
             "Initial NPC world state lacks stableId or position");
       }
+      npcsByStableId
+          .computeIfAbsent(npc.path("stableId").asText(), ignored -> new ArrayList<>())
+          .add(npc);
+    }
+    for (String stableId : referencedNpcIds) {
+      List<JsonNode> matches = npcsByStableId.getOrDefault(stableId, List.of());
+      if (matches.isEmpty()) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
+            "Initial NPC target " + stableId + " is not present in the recorded world");
+      }
+      if (matches.size() > 1) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
+            "Initial NPC target " + stableId + " is ambiguous in the recorded world");
+      }
+      Set<String> candidates = spotTypeCandidates.getOrDefault(stableId, Set.of());
+      if (candidates.size() != 1) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.ACTION_AMBIGUOUS,
+            "NPC target " + stableId + " has no single supported fishing option");
+      }
+    }
+    for (JsonNode npc : npcs) {
+      String stableId = npc.path("stableId").asText();
+      boolean referenced = referencedNpcIds.contains(stableId);
+      String recordedSpotType = npc.path("spotType").asText(null);
+      boolean recordedSpotTypePresent = !isBlank(recordedSpotType);
+      if (!referenced && !isSupportedFishingOption(recordedSpotType)) {
+        // The capture may contain nearby NPCs that are not fishing spots. They are not part of
+        // the v1 kernel world unless a semantic action resolves them as a target.
+        continue;
+      }
+      String spotType = recordedSpotType;
+      Set<String> candidates = spotTypeCandidates.getOrDefault(stableId, Set.of());
+      if (referenced) {
+        if (recordedSpotTypePresent && !isSupportedFishingOption(recordedSpotType)) {
+          throw ReplayException.invalid(
+              ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+              "Referenced NPC " + stableId + " has unsupported spotType " + recordedSpotType);
+        }
+        String inferred = candidates.iterator().next();
+        if (isSupportedFishingOption(recordedSpotType)
+            && !recordedSpotType.equals(inferred)) {
+          throw ReplayException.invalid(
+              ReplayErrorCode.ACTION_UNSUPPORTED,
+              "NPC target " + stableId + " records spotType " + recordedSpotType
+                  + " but the action selects " + inferred);
+        }
+        spotType = inferred;
+      }
       ObjectNode normalized = npc.deepCopy();
       normalized.set("position", normalizedPosition(positionNode(npc)));
-      String spotType = normalized.path("spotType").asText(null);
-      if (!isSupportedFishingOption(spotType)) {
-        spotType = inferredSpotTypes.get(normalized.path("stableId").asText());
-      }
       if (!isSupportedFishingOption(spotType)) {
         throw ReplayException.invalid(
             ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-            "Initial NPC " + normalized.path("stableId").asText()
-                + " lacks an unambiguous supported spotType");
+            "Initial NPC " + stableId + " lacks a supported spotType");
       }
       normalized.put("spotType", spotType);
       npcEntries.add(normalized);
+    }
+    if (npcEntries.isEmpty()) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+          "Initial world contains no supported fishing NPC");
     }
     npcEntries.sort(Comparator.comparing(npc -> npc.path("stableId").asText()));
     Set<String> stableIds = new HashSet<>();
@@ -629,11 +684,49 @@ public class ScenarioManifestV2Compiler {
     return state;
   }
 
+  private void validateNpcActions(ReplayActionConversionResult conversion) {
+    if (conversion == null || conversion.actions() == null) return;
+    for (ConvertedReplayAction converted : conversion.actions()) {
+      if (converted == null || converted.action() == null
+          || !"INTERACT_NPC".equals(converted.action().getActionType())) {
+        continue;
+      }
+      String stableId = textValue(converted.action().getTarget(), "stableId");
+      if (isBlank(stableId)) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
+            "INTERACT_NPC action at tick " + converted.action().getTick()
+                + " has no stable target id");
+      }
+      String option = textValue(converted.action().getArguments(), "option");
+      if (!isSupportedFishingOption(option)) {
+        throw ReplayException.invalid(
+            ReplayErrorCode.ACTION_UNSUPPORTED,
+            "INTERACT_NPC action at tick " + converted.action().getTick()
+                + " has missing or unsupported option");
+      }
+    }
+  }
+
+  private Set<String> referencedNpcIds(ReplayActionConversionResult conversion) {
+    Set<String> result = new HashSet<>();
+    if (conversion == null || conversion.actions() == null) return result;
+    for (ConvertedReplayAction converted : conversion.actions()) {
+      if (converted == null || converted.action() == null
+          || !"INTERACT_NPC".equals(converted.action().getActionType())) {
+        continue;
+      }
+      String stableId = textValue(converted.action().getTarget(), "stableId");
+      if (!isBlank(stableId)) result.add(stableId);
+    }
+    return result;
+  }
+
   /**
-   * Derives the single fishing option required by the current kernel from captured NPC actions.
-   * Multiple different options for one target are deliberately ambiguous and are not defaulted.
+   * Derives the supported fishing options requested for each referenced NPC. Multiple different
+   * options for one target are deliberately retained so the caller can reject the ambiguity.
    */
-  private Map<String, String> inferSpotTypes(ReplayActionConversionResult conversion) {
+  private Map<String, Set<String>> spotTypeCandidates(ReplayActionConversionResult conversion) {
     Map<String, Set<String>> candidates = new HashMap<>();
     if (conversion == null || conversion.actions() == null) {
       return Map.of();
@@ -643,9 +736,8 @@ public class ScenarioManifestV2Compiler {
           || !"INTERACT_NPC".equals(converted.action().getActionType())) {
         continue;
       }
-      Map<String, Object> target = converted.action().getTarget();
-      if (target == null || !(target.get("stableId") instanceof String stableId)
-          || stableId.isBlank()) {
+      String stableId = textValue(converted.action().getTarget(), "stableId");
+      if (isBlank(stableId)) {
         continue;
       }
       Map<String, Object> arguments = converted.action().getArguments();
@@ -655,14 +747,7 @@ public class ScenarioManifestV2Compiler {
         candidates.computeIfAbsent(stableId, ignored -> new HashSet<>()).add(fishingOption);
       }
     }
-    Map<String, String> result = new HashMap<>();
-    candidates.forEach(
-        (stableId, options) -> {
-          if (options.size() == 1) {
-            result.put(stableId, options.iterator().next());
-          }
-        });
-    return result;
+    return candidates;
   }
 
   private boolean isSupportedFishingOption(String spotType) {

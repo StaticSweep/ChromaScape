@@ -1,0 +1,81 @@
+/**
+ * Styles for the xRSPS replay debugger panels.
+ * Complements the existing debugger.css and bootstrap theme.
+ */
+
+.replay-debugger-container {
+    padding: 15px;
+}
+
+.replay-mode-selector {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 15px;
+}
+
+.replay-mode-selector .btn {
+    flex: 1;
+    font-size: 14px;
+    padding: 8px 12px;
+}
+
+.replay-mode-selector .btn.active {
+    font-weight: bold;
+}
+
+.replay-recording-row {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.replay-recording-row:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.replay-recording-row.simulation-eligible {
+    border-left: 3px solid var(--bs-success);
+}
+
+.replay-recording-row.policy-only {
+    border-left: 3px solid var(--bs-info);
+}
+
+.replay-recording-row.playback-only {
+    border-left: 3px solid var(--bs-secondary);
+}
+
+#replay-preflight-panel,
+#replay-compile-panel,
+#replay-run-panel,
+#replay-events-panel,
+#replay-report-panel {
+    margin-bottom: 15px;
+}
+
+#replay-capability-badge {
+    margin-bottom: 10px;
+}
+
+.replay-badge {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    margin-right: 3px;
+}
+
+.replay-mismatch-card {
+    border-left: 4px solid var(--bs-danger);
+    background: rgba(220, 53, 69, 0.1);
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+}
+
+.replay-mismatch-card.soft {
+    border-left-color: var(--bs-warning);
+    background: rgba(255, 193, 7, 0.08);
+}
+
+.replay-mismatch-card.info {
+    border-left-color: var(--bs-info);
+    background: rgba(13, 202, 240, 0.08);
+}

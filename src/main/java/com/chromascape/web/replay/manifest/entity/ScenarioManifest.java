@@ -77,7 +77,7 @@ public class ScenarioManifest {
     @Column(name = "conversion_quality", nullable = false, length = 32)
     private String conversionQuality = "BEST_EFFORT";
 
-    @Column(name = "action_coverage_pct", nullable = false)
+    @Column(name = "action_coverage_pct", nullable = false, columnDefinition = "NUMERIC(5,2)")
     private double actionCoveragePct;
 
     @Column(name = "gap_count", nullable = false)

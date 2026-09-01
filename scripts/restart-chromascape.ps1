@@ -95,6 +95,26 @@ function Wait-ForDbReady {
   return $false
 }
 
+function Test-BootRunActive {
+  param(
+    [int]$LauncherPid,
+    [string]$ProjectDir
+  )
+
+  $escapedProjectDir = [regex]::Escape($ProjectDir)
+  $process = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object {
+      $_.ProcessId -eq $LauncherPid -or
+      (
+        $_.CommandLine -and
+        $_.CommandLine -match $escapedProjectDir -and
+        $_.CommandLine -match "bootRun|ChromaScapeApplication"
+      )
+    } |
+    Select-Object -First 1
+  return $null -ne $process
+}
+
 function Start-BootRunAttempt {
   param(
     [string]$GradleBat,
@@ -122,8 +142,7 @@ function Start-BootRunAttempt {
       $listening = $true
       break
     }
-    $launcherStillRunning = Get-CimInstance Win32_Process -Filter "ProcessId=$($proc.Id)" -ErrorAction SilentlyContinue
-    if (-not $launcherStillRunning) {
+    if (-not (Test-BootRunActive -LauncherPid $proc.Id -ProjectDir $ProjectDir)) {
       break
     }
   } while ((Get-Date) -lt $deadline)
@@ -136,7 +155,7 @@ function Start-BootRunAttempt {
     }
   }
 
-  $stillRunning = Get-CimInstance Win32_Process -Filter "ProcessId=$($proc.Id)" -ErrorAction SilentlyContinue
+  $stillRunning = Test-BootRunActive -LauncherPid $proc.Id -ProjectDir $ProjectDir
   if ($stillRunning) {
     Write-Step "Startup timeout waiting for port $Port."
     Write-Step "Launcher PID $($proc.Id) is still running (startup may still be in progress)."

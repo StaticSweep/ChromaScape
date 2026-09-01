@@ -747,11 +747,17 @@ public class BuilderGoalLauncherControlService {
           displayName,
           displayName,
           displayName,
-          null,
+          legacyHashScheme(accountHash),
           email,
           status,
           enabled,
           metadata);
+    }
+
+    private static String legacyHashScheme(String accountHash) {
+      return AccountIdentityContract.isCanonicalHash(accountHash)
+          ? AccountIdentityContract.HASH_SCHEME
+          : null;
     }
   }
 

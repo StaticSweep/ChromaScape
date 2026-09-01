@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 /**
  * Configuration properties for the OpenRune Simulator Verifier integration.
@@ -13,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 @ConfigurationProperties(prefix = "simulator.verifier")
+@Profile("openrune-legacy")
 public class SimulatorVerifierProperties {
 
   /** Whether the simulator verifier integration is enabled. */

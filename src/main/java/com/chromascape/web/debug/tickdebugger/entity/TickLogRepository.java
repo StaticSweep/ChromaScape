@@ -24,6 +24,10 @@ public interface TickLogRepository extends JpaRepository<TickLog, Long> {
   List<TickLog> findBySessionIdAndTickBetweenOrderByTickAsc(
       String sessionId, Long startTick, Long endTick);
 
+  /** Find logs in a frame page range with a deterministic ID tie-breaker. */
+  List<TickLog> findBySessionIdAndTickBetweenOrderByTickAscIdAsc(
+      String sessionId, Long startTick, Long endTick);
+
   /** Find error logs for a session. */
   List<TickLog> findBySessionIdAndSeverityIgnoreCaseOrderByTickAsc(
       String sessionId, String severity);
