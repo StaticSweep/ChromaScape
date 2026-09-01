@@ -121,20 +121,13 @@ try {
   $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' --tests 'net.runelite.client.plugins.microbot.accountbuilder.integration.builder.SourceManifestCatalogTest' } (Join-Path $logs 'micro6-test.log') $gates
   $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:shadowJar } (Join-Path $logs 'micro6-shadowjar.log') $gates
   $null = Invoke-Gate 'micro6_sbom' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:generateRuntimeSbom } (Join-Path $logs 'micro6-sbom.log') $gates
-  $contractVersionArgument = '-Dcapture-contract.version=' + $lock['module_version']
-  $runeliteCaptureTestsArgument = '-Dtest=Sc968CaptureCompletionPolicyTest,RuneLiteCaptureSafetyTest'
   $null = Invoke-Gate 'runelite_capture_tests' $RuneLiteRoot {
     $ErrorActionPreference = 'Continue'
-    # Build and install the reactor dependencies without executing their unrelated suites. In
-    # particular, the cache module owns tests that intentionally call System.exit and can terminate
-    # Surefire before the RuneLite capture tests are reached.
-    & $mavenCommand -q $mavenRepoArgument -pl runelite-client -am $contractVersionArgument -DskipTests install
-    $reactorCode = $LASTEXITCODE
-    if ($reactorCode -ne 0) {
-      $global:LASTEXITCODE = $reactorCode
-      return
-    }
-    & $mavenCommand -q $mavenRepoArgument -pl runelite-client $contractVersionArgument $runeliteCaptureTestsArgument test
+    # Current RuneLite uses its native Gradle build. The capture contract repository and exact
+    # version are process-scoped above, so dependency resolution cannot silently use a stale pin.
+    .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:test `
+      --tests 'net.runelite.client.plugins.airoutinecapture.Sc968CaptureCompletionPolicyTest' `
+      --tests 'net.runelite.client.plugins.airoutinecapture.RuneLiteCaptureSafetyTest'
   } (Join-Path $logs 'runelite-test.log') $gates
 
   if (-not $AllowDirtyDevelopmentTrees) {
