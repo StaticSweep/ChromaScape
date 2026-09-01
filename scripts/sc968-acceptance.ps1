@@ -127,7 +127,8 @@ try {
     # version are process-scoped above, so dependency resolution cannot silently use a stale pin.
     .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:test `
       --tests 'net.runelite.client.plugins.airoutinecapture.Sc968CaptureCompletionPolicyTest' `
-      --tests 'net.runelite.client.plugins.airoutinecapture.RuneLiteCaptureSafetyTest'
+      --tests 'net.runelite.client.plugins.airoutinecapture.RuneLiteCaptureSafetyTest' `
+      --tests 'net.runelite.client.plugins.airoutinecapture.RuneLiteCaptureIdentityFactoryTest'
   } (Join-Path $logs 'runelite-test.log') $gates
 
   if (-not $AllowDirtyDevelopmentTrees) {

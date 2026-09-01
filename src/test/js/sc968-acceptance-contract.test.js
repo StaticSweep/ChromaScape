@@ -195,6 +195,7 @@ test('SC-968 one-command wrapper uses real local roots and creates isolated sign
   assert.match(entry, /\.\\gradlew\.bat --no-daemon --no-watch-fs --build-cache :client:test/);
   assert.match(entry, /net\.runelite\.client\.plugins\.airoutinecapture\.Sc968CaptureCompletionPolicyTest/);
   assert.match(entry, /net\.runelite\.client\.plugins\.airoutinecapture\.RuneLiteCaptureSafetyTest/);
+  assert.match(entry, /net\.runelite\.client\.plugins\.airoutinecapture\.RuneLiteCaptureIdentityFactoryTest/);
   assert.match(entry, /SC967_VECTORS_PATH = Join-Path \$ContractsRoot/);
   assert.match(entry, /chromascape_compile/);
   assert.match(entry, /compileJava compileTestJava/);
