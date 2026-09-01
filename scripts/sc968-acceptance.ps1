@@ -72,6 +72,8 @@ try {
   Get-Content -LiteralPath $lockPath | ForEach-Object { if ($_ -match '^([^=]+)=(.*)$') { $lock[$Matches[1]]=$Matches[2] } }
   if ($lock['contracts_revision'] -ne $repositories.contracts.revision) { throw 'capture contract revision does not match contracts HEAD' }
   if ($lock['protocol'] -ne 'runelite-capture/v1') { throw 'unsupported capture contract protocol' }
+  if ([string]::IsNullOrWhiteSpace($lock['module_version'])) { throw 'capture contract module version is missing' }
+  $env:SC968_CAPTURE_CONTRACT_VERSION = $lock['module_version']
   $contracts = [ordered]@{ revision=$lock['contracts_revision']; module_version=$lock['module_version']; source_tree_sha256=$lock['source_tree_sha256'] }
 
   $contractModule = Join-Path $ContractsRoot 'java/ai-routine-capture-contract'

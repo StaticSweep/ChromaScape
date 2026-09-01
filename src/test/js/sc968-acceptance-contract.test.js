@@ -159,6 +159,7 @@ test('SC-968 entrypoint and manifests require all five runtime evidence document
   assert.match(common, /\$global:LASTEXITCODE = \$null/);
   assert.match(entry, /leeuwbot_go_vet[^\n]+\$ErrorActionPreference = 'Continue'/);
   assert.match(entry, /SC968_RUNELITE_LAUNCH_SCRIPT/);
+  assert.match(entry, /\$env:SC968_CAPTURE_CONTRACT_VERSION = \$lock\['module_version'\]/);
   assert.match(entry, /'baseline','assistant','runelite','candidate','shadow'/);
   assert.match(entry, /-RuneLiteRoot \$RuneLiteRoot/);
   assert.match(evidence, /assistant = \$Runtime\.assistant/);
