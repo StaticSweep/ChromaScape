@@ -60,8 +60,8 @@ class ReplayMigrationIntegrationTest {
       "V18__replay_checkpoint_artifact_checksum.sql",
       "V19__reconcile_replay_checkpoint_artifacts.sql",
       "V20__replay_finalization_reservation.sql",
-      "V21__replay_pre_execution_reports.sql",
-      "V22__replay_playback_catalog_pagination.sql",
+      "V30__replay_pre_execution_reports.sql",
+      "V31__replay_playback_catalog_pagination.sql",
       "V25__replay_v2_metadata.sql",
       "V26__replay_v2_request_identity.sql"
     };
@@ -117,7 +117,7 @@ class ReplayMigrationIntegrationTest {
   }
 
   @Test
-  void replayChainV11ThroughV22AppliesOnEmptyDatabase() throws Exception {
+  void replayChainThroughV31AppliesOnEmptyDatabase() throws Exception {
     try (PostgreSQLContainer<?> pg = postgres("replay_chain");
         Connection connection = connect(pg)) {
       int applied = flyway(pg, replayMigrations()).migrate().migrationsExecuted;
@@ -133,7 +133,7 @@ class ReplayMigrationIntegrationTest {
   }
 
   @Test
-  void v22CreatesPlaybackIndexesWhenDebuggerTablesExist() throws Exception {
+  void v31CreatesPlaybackIndexesWhenDebuggerTablesExist() throws Exception {
     try (PostgreSQLContainer<?> pg = postgres("v22_playback_indexes");
         Connection connection = connect(pg)) {
       exec(
@@ -150,10 +150,10 @@ class ReplayMigrationIntegrationTest {
           "CREATE TABLE tick_logs (id BIGSERIAL PRIMARY KEY, session_id VARCHAR(100) NOT NULL,"
               + "tick BIGINT NOT NULL)");
 
-      runSingleMigration(connection, "V22__replay_playback_catalog_pagination.sql");
+      runSingleMigration(connection, "V31__replay_playback_catalog_pagination.sql");
       // A deployment retry must be harmless and must not rewrite captured evidence.
       assertDoesNotThrow(
-          () -> runSingleMigration(connection, "V22__replay_playback_catalog_pagination.sql"));
+          () -> runSingleMigration(connection, "V31__replay_playback_catalog_pagination.sql"));
 
       assertTrue(indexExists(connection, "idx_debug_sessions_playback_keyset"));
       assertTrue(indexExists(connection, "idx_debug_sessions_playback_account_keyset"));

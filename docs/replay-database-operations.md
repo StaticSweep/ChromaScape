@@ -7,7 +7,7 @@ Replay playback uses four PostgreSQL keyset indexes over the existing debugger t
 - `idx_tick_snapshots_playback_session_tick_id`
 - `idx_tick_logs_playback_session_tick_id`
 
-Migration `V22__replay_playback_catalog_pagination.sql` creates these indexes idempotently when
+Migration `V31__replay_playback_catalog_pagination.sql` creates these indexes idempotently when
 the debugger tables already exist. On a fresh database, Flyway can reach V22 before Hibernate has
 created those tables. `ReplayPlaybackIndexConvergence` runs after the Hibernate entity manager is
 available and applies the same definitions, then checks PostgreSQL's reported definitions for drift.

@@ -179,8 +179,10 @@ class ReplayStressCertificationTest {
     "V18__replay_checkpoint_artifact_checksum.sql",
     "V19__reconcile_replay_checkpoint_artifacts.sql",
     "V20__replay_finalization_reservation.sql",
-    "V21__replay_pre_execution_reports.sql",
-    "V22__replay_playback_catalog_pagination.sql"
+    "V25__replay_v2_metadata.sql",
+    "V26__replay_v2_request_identity.sql",
+    "V30__replay_pre_execution_reports.sql",
+    "V31__replay_playback_catalog_pagination.sql"
   };
 
   private static final Path MIGRATION_DIRECTORY = createMigrationDirectory();

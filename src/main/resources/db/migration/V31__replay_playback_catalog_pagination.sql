@@ -1,7 +1,7 @@
--- V22: indexes for the read-only observed playback catalog and frame/log pages.
+-- V31: indexes for the read-only observed playback catalog and frame/log pages.
 --
 -- The debugger tables are historically managed by Hibernate ddl-auto and may not exist yet when
--- Flyway runs on a brand-new database. The guards keep V22 safe in that bootstrap case; the
+-- Flyway runs on a brand-new database. The guards keep V31 safe in that bootstrap case; the
 -- post-Hibernate playback index convergence runner applies the same definitions after creation.
 -- Existing evidence is never rewritten or removed.
 
