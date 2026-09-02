@@ -4,3 +4,4 @@
 *.jar binary
 docs/MCP_QUICK_START.md text eol=lf
 src/main/resources/templates/debugger.html text eol=lf
+src/main/resources/contracts/source/task-source-manifest-v1.schema.json text eol=lf
