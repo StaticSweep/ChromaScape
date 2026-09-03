@@ -5,6 +5,7 @@ function Write-Sc968Evidence([string] $OutputPath, [System.Collections.IDictiona
   $document = [ordered]@{
     schema = 'sc968-acceptance-manifest/v1'; environment = $Environment; repositories = $Repositories; contracts = $Contracts
     tests = $Tests; baseline = $Runtime.baseline; assistant = $Runtime.assistant; runelite = $Runtime.runelite; candidate = $Runtime.candidate; shadow = $Runtime.shadow
+    control_allowed = $false; control_dispatch_count = 0
     safety = [ordered]@{ control_allowed = $false; control_dispatch_count = 0; secret_scan = 'PASS' }
     gates = $Gates; overall = if ($overall) { 'PASS' } else { 'FAIL' }
   }
@@ -22,6 +23,7 @@ function Write-Sc967DemoEvidence([string] $OutputPath, [System.Collections.IDict
     schema = 'sc967-demo-manifest/v1'; repositories = $Repositories; contracts = $Contracts
     baseline = $Runtime.baseline; assistant = $Runtime.assistant; runelite = $Runtime.runelite
     candidate = $Runtime.candidate; shadow = $Runtime.shadow
+    control_allowed = $false; control_dispatch_count = 0
     safety = [ordered]@{ control_allowed = $false; control_dispatch_count = 0 }
     overall = if ($overall) { 'PASS' } else { 'FAIL' }
   }
