@@ -122,6 +122,7 @@ test('SC-968 Micro6 captures bind certified stabilization and source provenance'
     /SetEnvironmentVariable\('BUILDER_GOAL_MICRO6_PROJECT_DIR',\$Micro6Root,'Process'\)/);
   assert.match(runtime, /'MICRO6_ROOT','BUILDER_GOAL_MICRO6_PROJECT_DIR','MICRO6_EXPECTED_ARTIFACT_NAME'/);
   assert.match(micro6, /:client:micro6StabilizationHarness/);
+  assert.match(micro6, /"-PaiRoutineCaptureContractsDir=\$captureContracts"/);
   assert.match(micro6, /Push-Location \$Micro6Root/);
   assert.match(micro6, /\$seedExitCode = \$LASTEXITCODE/);
   assert.match(micro6, /--args=\$arguments" 2>&1 \| Out-Host/);
@@ -166,6 +167,11 @@ test('SC-968 entrypoint and manifests require all five runtime evidence document
   assert.match(entry, /RedirectStandardError = \$true/);
   assert.match(entry, /java -version failed with exit code/);
   assert.match(entry, /-RuneLiteRoot \$RuneLiteRoot/);
+  assert.match(entry, /\$env:SC968_CAPTURE_CONTRACTS_DIR = \$captureContracts/);
+  assert.match(entry, /:client:test[^\r\n]+"-PaiRoutineCaptureContractsDir=\$captureContracts"/);
+  assert.match(entry, /:client:shadowJar "-PaiRoutineCaptureContractsDir=\$captureContracts"/);
+  assert.match(entry, /:client:generateRuntimeSbom "-PaiRoutineCaptureContractsDir=\$captureContracts"/);
+  assert.match(runtime, /SC968_CAPTURE_CONTRACTS_DIR/);
   assert.match(evidence, /assistant = \$Runtime\.assistant/);
   assert.match(evidence, /runelite = \$Runtime\.runelite/);
   assert.match(evidence, /sc967-demo-manifest\/v1/);

@@ -194,7 +194,7 @@ $temporaryEnvironmentNames = @(
   'MICRO6_REMOTE_ACCOUNTBUILDER_TOKEN','MICRO6_REMOTE_PUBLIC_KEY_RING','AI_ROUTINE_CAPTURE_TOKEN','AI_ROUTINE_OPERATOR_TOKEN',
   'AI_ROUTINE_OPERATOR_ID','SC967_CANDIDATE_BUILDS_ENABLED','SC967_CANDIDATE_STAGING_ROOT','LEEUWBOT_CANDIDATE_REGISTRY_URL',
   'STATIC_API_TOKEN','CANDIDATE_STORAGE_ROOT','CANDIDATE_TRUSTED_KEYS_DIR','CANDIDATE_SIGNING_PRIVATE_KEY_PATH',
-  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','BUILDER_GOAL_MICRO6_PROJECT_DIR','MICRO6_EXPECTED_ARTIFACT_NAME',
+  'CANDIDATE_SIGNING_PUBLIC_KEY_PATH','CANDIDATE_SIGNING_KEY_ID','MICRO6_ROOT','BUILDER_GOAL_MICRO6_PROJECT_DIR','MICRO6_EXPECTED_ARTIFACT_NAME','SC968_CAPTURE_CONTRACTS_DIR',
   'STABILIZATION_AUTH_TOKEN','STABILIZATION_AUTH_WRITE_TOKEN','SPRING_DATASOURCE_URL','MCP_AUTO_START',
   'LOGGING_LEVEL_ROOT','CHROMASCAPE_LOG_LEVEL','TEMP','TMP')
 
@@ -236,6 +236,10 @@ try {
   $logs = Join-Path $OutputRoot 'logs'
   $registryOutput = Join-Path $OutputRoot 'registry'
   $stagingRoot = Join-Path $registryOutput 'staging'
+  $captureContracts = Join-Path $ContractsRoot 'java'
+  if (-not (Test-Path -LiteralPath $captureContracts -PathType Container)) {
+    throw "Integrated capture contracts directory is missing: $captureContracts"
+  }
   # Keep candidate-worker sandboxes under the acceptance-owned output root. Some Windows machines
   # force every executable launched beneath the user TEMP directory into Sandboxie; Git then exits
   # before repository discovery without producing output. A run-owned TEMP/TMP also prevents the
@@ -275,6 +279,7 @@ try {
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_PUBLIC_KEY_PATH',$signingPublic,'Process')
   [Environment]::SetEnvironmentVariable('CANDIDATE_SIGNING_KEY_ID',$signingKeyId,'Process')
   [Environment]::SetEnvironmentVariable('MICRO6_ROOT',$Micro6Root,'Process')
+  [Environment]::SetEnvironmentVariable('SC968_CAPTURE_CONTRACTS_DIR',$captureContracts,'Process')
   # PatchCandidateWorkflowService reads the builder-goal recovery property. Pass the absolute
   # acceptance worktree path explicitly: its isolated clone runs from a temporary directory, where
   # the application's relative ../micro6 default cannot resolve to this run's clean worktree.

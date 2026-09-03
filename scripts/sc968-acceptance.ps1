@@ -48,6 +48,14 @@ try {
   if (-not (Test-Path -LiteralPath $env:SC967_VECTORS_PATH -PathType Leaf)) {
     throw "SC-967 shared vectors are missing: $env:SC967_VECTORS_PATH"
   }
+  $captureContracts = Join-Path $ContractsRoot 'java'
+  if (-not (Test-Path -LiteralPath $captureContracts -PathType Container)) {
+    throw "Integrated capture contracts directory is missing: $captureContracts"
+  }
+  # The runtime driver launches Micro6 in child PowerShell processes. Bind those launchers to the
+  # exact Contracts checkout supplied to this acceptance, rather than allowing Gradle settings to
+  # fall back to a sibling or developer checkout.
+  $env:SC968_CAPTURE_CONTRACTS_DIR = $captureContracts
   $mavenRepoArgument = '-Dmaven.repo.local=' + $env:SC968_MAVEN_REPO
   $mavenCommand = $env:SC968_MAVEN_COMMAND
   if ([string]::IsNullOrWhiteSpace($mavenCommand) -or -not (Test-Path -LiteralPath $mavenCommand -PathType Leaf)) {
@@ -118,9 +126,9 @@ try {
     $ErrorActionPreference = 'Continue'
     & node --test src/test/js/sc968-acceptance-contract.test.js
   } (Join-Path $logs 'chromascape-acceptance-contract-test.log') $gates
-  $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' --tests 'net.runelite.client.plugins.microbot.accountbuilder.integration.builder.SourceManifestCatalogTest' } (Join-Path $logs 'micro6-test.log') $gates
-  $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:shadowJar } (Join-Path $logs 'micro6-shadowjar.log') $gates
-  $null = Invoke-Gate 'micro6_sbom' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:generateRuntimeSbom } (Join-Path $logs 'micro6-sbom.log') $gates
+  $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' --tests 'net.runelite.client.plugins.microbot.accountbuilder.integration.builder.SourceManifestCatalogTest' "-PaiRoutineCaptureContractsDir=$captureContracts" } (Join-Path $logs 'micro6-test.log') $gates
+  $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:shadowJar "-PaiRoutineCaptureContractsDir=$captureContracts" } (Join-Path $logs 'micro6-shadowjar.log') $gates
+  $null = Invoke-Gate 'micro6_sbom' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:generateRuntimeSbom "-PaiRoutineCaptureContractsDir=$captureContracts" } (Join-Path $logs 'micro6-sbom.log') $gates
   $null = Invoke-Gate 'runelite_capture_tests' $RuneLiteRoot {
     $ErrorActionPreference = 'Continue'
     # Current RuneLite uses its native Gradle build. The capture contract repository and exact

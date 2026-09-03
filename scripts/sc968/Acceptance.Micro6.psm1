@@ -89,13 +89,17 @@ function Initialize-Sc968ManagedCaptureIdentity {
   if (-not (Test-Path -LiteralPath $PlanPath -PathType Leaf)) { throw "SC-968 stabilization seed plan is missing: $PlanPath" }
   $gradle = Join-Path $Micro6Root 'gradlew.bat'
   if (-not (Test-Path -LiteralPath $gradle -PathType Leaf)) { throw "Micro6 Gradle launcher is missing: $gradle" }
+  $captureContracts = Join-Path $ContractsRoot 'java'
+  if (-not (Test-Path -LiteralPath $captureContracts -PathType Container)) {
+    throw "Integrated capture contracts directory is missing: $captureContracts"
+  }
   New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
   $arguments = "--plan=$PlanPath --output=$OutputDirectory --fixture=pass --run-index=$RunIndex --certify-url=$BaseUrl --certification-mode=required"
   $seedExitCode = 1
   Push-Location $Micro6Root
   try {
-    & $gradle --no-daemon --no-watch-fs ":client:micro6StabilizationHarness" "-Pmicro6.stabilization.plan=$PlanPath" "--args=$arguments" 2>&1 | Out-Host
+    & $gradle --no-daemon --no-watch-fs "-PaiRoutineCaptureContractsDir=$captureContracts" ":client:micro6StabilizationHarness" "-Pmicro6.stabilization.plan=$PlanPath" "--args=$arguments" 2>&1 | Out-Host
     $seedExitCode = $LASTEXITCODE
   } finally {
     Pop-Location
