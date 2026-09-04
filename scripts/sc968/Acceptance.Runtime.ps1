@@ -66,6 +66,9 @@ function Wait-CaptureLogin([string] $StatusFile, [int] $TimeoutSeconds) {
   $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
   do {
     $status = Read-Sc968CaptureStatus -StatusFile $StatusFile
+    if ($status -and $status.status_publication_failed -eq $true) {
+      throw "Capture status sidecar publication failed for '$StatusFile'"
+    }
     if ($status -and $status.PSObject.Properties.Name -contains 'logged_in' -and $status.logged_in) { return $status }
     Start-Sleep -Milliseconds 500
   } while ([DateTimeOffset]::UtcNow -lt $deadline)
@@ -79,6 +82,9 @@ function Wait-CaptureClientReady([string] $StatusFile, [int] $TimeoutSeconds, [i
   $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
   do {
     $status = Read-Sc968CaptureStatus -StatusFile $StatusFile
+    if ($status -and $status.status_publication_failed -eq $true) {
+      throw "Capture status sidecar publication failed for '$StatusFile'"
+    }
     if ($status) { return $status }
     if ($null -eq (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) {
       throw "Client launcher process $ProcessId exited before publishing its capture status sidecar"
@@ -186,7 +192,7 @@ function Require-CaptureIdentity([object] $Status, [string] $ExpectedClientKind)
 $owned = @()
 $savedEnvironment = @{}
 $temporaryEnvironmentNames = @(
-  'SC968_CAPTURE_ENABLED','SC968_CHROMASCAPE_URL','SC968_CAPTURE_TOKEN','SC968_CAPTURE_STATUS_FILE','SC968_CAPTURE_SPOOL',
+  'SC968_CAPTURE_ENABLED','SC968_CHROMASCAPE_URL','CHROMASCAPE_BASE_URL','SC968_CAPTURE_TOKEN','SC968_CAPTURE_STATUS_FILE','SC968_CAPTURE_SPOOL',
   'SC968_CAPTURE_START_FILE',
   'SC968_TASK_KEY','SC968_SETTINGS_HASH','SC968_PROFILE_ID','SC968_PROFILE_HASH','SC968_CATALOG_HASH','SC968_CLIENT_ID',
   'SC968_RUN_ID','SC968_ATTEMPT_ID','SC968_ENTRY_ID','SC968_EXECUTOR_INSTANCE_ID','SC968_SOURCE_SNAPSHOT_ID','SC968_SOURCE_MANIFEST_HASH',
@@ -213,7 +219,7 @@ try {
   $signingKeyId = Require 'SC968_SIGNING_KEY_ID'
   $artifactName = Require 'SC968_EXPECTED_ARTIFACT_NAME'
 
-  $chromaUrl = EnvOr 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:8090'
+  $chromaUrl = EnvOr 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:18090'
   $chromaUri = $null
   if (-not [Uri]::TryCreate($chromaUrl, [UriKind]::Absolute, [ref]$chromaUri) -or
       $chromaUri.Scheme -ne 'http' -or -not $chromaUri.IsLoopback -or $chromaUri.Port -lt 1 -or
@@ -221,8 +227,22 @@ try {
       -not [string]::IsNullOrWhiteSpace($chromaUri.Fragment)) {
     throw 'SC968_CHROMASCAPE_URL must be a loopback HTTP origin with an explicit port and no path, query, or fragment'
   }
+  if ($chromaUri.Port -eq 8090) {
+    throw 'SC968 acceptance must use an isolated port; development port 8090 is not allowed'
+  }
   # Keep the server bind and every native-client callback on the same configured origin. Previously
   # the clients honored SC968_CHROMASCAPE_URL while Spring silently retained its 8090 default.
+  # This is process-scoped and is intentionally set before the executable JAR is started so Spring
+  # resolves chromascape.base-url from the acceptance origin rather than an inherited developer
+  # environment. The post-write check makes a failed environment assignment a preflight failure.
+  $inheritedChromaBaseUrl = [Environment]::GetEnvironmentVariable('CHROMASCAPE_BASE_URL')
+  if (-not [string]::IsNullOrWhiteSpace($inheritedChromaBaseUrl) -and $inheritedChromaBaseUrl -ne $chromaUrl) {
+    throw "CHROMASCAPE_BASE_URL '$inheritedChromaBaseUrl' differs from isolated SC968_CHROMASCAPE_URL '$chromaUrl'"
+  }
+  [Environment]::SetEnvironmentVariable('CHROMASCAPE_BASE_URL',$chromaUrl,'Process')
+  if ([Environment]::GetEnvironmentVariable('CHROMASCAPE_BASE_URL') -ne $chromaUrl) {
+    throw "CHROMASCAPE_BASE_URL did not resolve to the isolated SC968_CHROMASCAPE_URL '$chromaUrl'"
+  }
   $env:SERVER_PORT = [string]$chromaUri.Port
   $registryUrl = EnvOr 'SC968_REGISTRY_URL' 'http://127.0.0.1:8181'
   $minimumTicks = [int](EnvOr 'SC968_MINIMUM_TICKS' '20')

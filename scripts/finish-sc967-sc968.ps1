@@ -5,6 +5,7 @@ param(
   [string] $LeeuwBotRoot = 'C:\Dev\IdeaProjects\leeuwbotbackend\leeuwbot-api\leeuwbotapi',
   [string] $ChromaScapeRoot = 'C:\Dev\IdeaProjects\ChromaScape',
   [string] $Micro6Root = 'C:\Dev\IdeaProjects\micro6',
+  [string] $RuntimeMicro6Root = '',
   [string] $RuneLiteRoot = 'C:\Dev\IdeaProjects\runelite',
   [string] $EvidenceRoot = '',
   [switch] $PreparedWorktrees,
@@ -197,7 +198,7 @@ if (-not $PreparedWorktrees) {
     Write-Output "Prepared clean acceptance worktrees under $worktreeBase"
     & $PSCommandPath -ContractsRoot $contractsWorktree `
       -LeeuwBotRoot (Join-Path $leeuwWorktree $leeuwRelative) `
-      -ChromaScapeRoot $chromaWorktree -Micro6Root $microWorktree `
+      -ChromaScapeRoot $chromaWorktree -Micro6Root $microWorktree -RuntimeMicro6Root $RuntimeMicro6Root `
       -RuneLiteRoot $runeliteWorktree `
       -EvidenceRoot (Join-Path $sourceChromaRoot 'output\sc968') `
       -PreparedWorktrees -PreflightOnly:$PreflightOnly
@@ -329,6 +330,9 @@ if (-not [Uri]::TryCreate($env:SC968_CHROMASCAPE_URL, [UriKind]::Absolute, [ref]
     -not [string]::IsNullOrWhiteSpace($chromaUri.Fragment)) {
   throw 'SC968_CHROMASCAPE_URL must be a loopback HTTP origin with an explicit port and no path, query, or fragment'
 }
+if ($chromaUri.Port -eq 8090) {
+  throw 'SC968 acceptance must use an isolated port; development port 8090 is not allowed'
+}
 $chromaPort = $chromaUri.Port
 $listener = Get-NetTCPConnection -State Listen -LocalPort $chromaPort -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($null -ne $listener) {
@@ -363,6 +367,7 @@ Write-Output ''
 
 & $acceptance -ContractsRoot $ContractsRoot -LeeuwBotRoot $LeeuwBotRoot `
   -ChromaScapeRoot $ChromaScapeRoot -Micro6Root $Micro6Root -RuneLiteRoot $RuneLiteRoot `
+  -RuntimeMicro6Root $RuntimeMicro6Root `
   -OutputRoot $outputRoot
 if ($LASTEXITCODE -ne 0) { throw "SC-967/SC-968 acceptance failed. Inspect $outputRoot\logs" }
 

@@ -18,6 +18,7 @@ function Set-Sc968Micro6Environment {
   )
   $env:SC968_CAPTURE_ENABLED = 'true'
   $env:SC968_CHROMASCAPE_URL = $BaseUrl
+  $env:CHROMASCAPE_BASE_URL = $BaseUrl
   $env:SC968_CAPTURE_TOKEN = $CaptureToken
   $env:SC968_CAPTURE_STATUS_FILE = $StatusFile
   # The client waits for this file before it opens the recording window, so the operator's login
@@ -54,6 +55,7 @@ function Set-Sc968RuneLiteEnvironment {
   )
   $env:SC968_CAPTURE_ENABLED = 'true'
   $env:SC968_CHROMASCAPE_URL = $BaseUrl
+  $env:CHROMASCAPE_BASE_URL = $BaseUrl
   $env:SC968_CAPTURE_TOKEN = $CaptureToken
   $env:SC968_CAPTURE_STATUS_FILE = $StatusFile
   $env:SC968_CAPTURE_START_FILE = $StartTriggerFile
@@ -173,11 +175,24 @@ function Initialize-Sc968ManagedCaptureIdentity {
 
 function Read-Sc968CaptureStatus([string] $StatusFile) {
   if (-not (Test-Path -LiteralPath $StatusFile -PathType Leaf)) { return $null }
+  $stream = $null
+  $reader = $null
   try {
-    $value = Get-Content -LiteralPath $StatusFile -Raw | ConvertFrom-Json
+    # Windows PowerShell's Get-Content does not share DELETE. A Java atomic replacement can
+    # therefore fail while this short-lived reader still has the old sidecar open. Explicitly
+    # share READ/WRITE/DELETE and dispose the handle before returning so the publisher and reader
+    # have a cooperative replacement contract on Windows.
+    $share = [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
+    $stream = [IO.File]::Open($StatusFile, [IO.FileMode]::Open, [IO.FileAccess]::Read, $share)
+    $reader = New-Object -TypeName System.IO.StreamReader -ArgumentList @($stream, [Text.Encoding]::UTF8, $true)
+    $value = ($reader.ReadToEnd() | ConvertFrom-Json)
     if ($value.schema -ne 'sc968-capture-status/v1') { return $null }
     return $value
   } catch { return $null }
+  finally {
+    if ($null -ne $reader) { $reader.Dispose() }
+    elseif ($null -ne $stream) { $stream.Dispose() }
+  }
 }
 
 function Wait-Sc968CaptureStatus {
@@ -190,6 +205,9 @@ function Wait-Sc968CaptureStatus {
   $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
   do {
     $status = Read-Sc968CaptureStatus $StatusFile
+    if ($status -and $status.status_publication_failed -eq $true) {
+      throw "Capture status sidecar publication failed for '$StatusFile'"
+    }
     if ($status -and ($States -contains [string]$status.state)) { return $status }
     Start-Sleep -Milliseconds $PollMilliseconds
   } while ([DateTimeOffset]::UtcNow -lt $deadline)

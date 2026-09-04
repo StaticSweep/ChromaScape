@@ -5,6 +5,7 @@ param(
   [Parameter(Mandatory=$true)][string] $ChromaScapeRoot,
   [Parameter(Mandatory=$true)][string] $Micro6Root,
   [Parameter(Mandatory=$true)][string] $RuneLiteRoot,
+  [string] $RuntimeMicro6Root = '',
   [string] $OutputRoot = (Join-Path $ChromaScapeRoot 'output/sc968'),
   [string] $RuntimeDriver = (Join-Path $PSScriptRoot 'sc968/Acceptance.Runtime.ps1'),
   [switch] $AllowDirtyDevelopmentTrees
@@ -22,6 +23,7 @@ $gates = @{}
 $tests = $gates
 $runtime = [ordered]@{ baseline = $null; assistant = $null; runelite = $null; candidate = $null; shadow = $null }
 $dirtyDevelopment = [bool]$AllowDirtyDevelopmentTrees
+$executionMicro6Root = if ([string]::IsNullOrWhiteSpace($RuntimeMicro6Root)) { $Micro6Root } else { $RuntimeMicro6Root }
 
 try {
   Assert-NativeJava17
@@ -139,6 +141,28 @@ try {
       --tests 'net.runelite.client.plugins.airoutinecapture.RuneLiteCaptureIdentityFactoryTest'
   } (Join-Path $logs 'runelite-test.log') $gates
 
+  # Build/test gates rewrite tracked Micro6 build outputs. The live clients must start from a
+  # separate clean checkout at the exact same revision, so acceptance cannot accidentally execute
+  # from a test-polluted source tree.
+  if (-not (Test-Path -LiteralPath $executionMicro6Root -PathType Container)) {
+    throw "Runtime Micro6 checkout is missing: $executionMicro6Root"
+  }
+  $runtimeMicro6Revision = Get-GitRevision $executionMicro6Root
+  if ($runtimeMicro6Revision -ne $repositories.micro6.revision) {
+    throw "Runtime Micro6 revision $runtimeMicro6Revision does not match gate revision $($repositories.micro6.revision)"
+  }
+  if ($executionMicro6Root -ne $Micro6Root) {
+    $runtimeMicro6State = Get-GitTrackedState $executionMicro6Root
+    if (-not [string]::IsNullOrWhiteSpace($runtimeMicro6State)) {
+      throw "Runtime Micro6 checkout must be clean before live acceptance:`n$runtimeMicro6State"
+    }
+  }
+  $runtimeMicro6Launcher = Join-Path $executionMicro6Root 'scripts\launch-sc968-micro6.ps1'
+  if (-not (Test-Path -LiteralPath $runtimeMicro6Launcher -PathType Leaf)) {
+    throw "Runtime Micro6 launcher is missing: $runtimeMicro6Launcher"
+  }
+  $env:SC968_MICRO6_LAUNCH_SCRIPT = $runtimeMicro6Launcher
+
   if (-not $AllowDirtyDevelopmentTrees) {
     # Build output is excluded here, not source: micro6 tracks compiled .class files under
     # runelite-api/build, so the gates above rewrite them on every run and a literal git status can
@@ -156,7 +180,7 @@ try {
     $ErrorActionPreference = 'Continue'
     & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $RuntimeDriver `
       -ContractsRoot $ContractsRoot -LeeuwBotRoot $LeeuwBotRoot -ChromaScapeRoot $ChromaScapeRoot `
-      -Micro6Root $Micro6Root -RuneLiteRoot $RuneLiteRoot -OutputRoot $OutputRoot
+      -Micro6Root $executionMicro6Root -RuneLiteRoot $RuneLiteRoot -OutputRoot $OutputRoot
   } (Join-Path $logs 'runtime-acceptance.log') $gates
   foreach ($name in @('baseline','assistant','runelite','candidate','shadow')) {
     $path = Join-Path $OutputRoot ("runtime/$name.json")

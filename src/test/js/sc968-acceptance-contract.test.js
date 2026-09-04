@@ -110,6 +110,28 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
   assert.match(runtime, /'CHROMASCAPE_LOG_LEVEL','TEMP','TMP'/);
 });
 
+test('SC-968 propagates and restores the isolated ChromaScape origin', () => {
+  assert.match(runtime, /'SC968_CHROMASCAPE_URL','CHROMASCAPE_BASE_URL','SC968_CAPTURE_TOKEN'/);
+  assert.match(runtime,
+    /SetEnvironmentVariable\('CHROMASCAPE_BASE_URL',\$chromaUrl,'Process'\)/);
+  assert.match(runtime,
+    /GetEnvironmentVariable\('CHROMASCAPE_BASE_URL'\) -ne \$chromaUrl/);
+  assert.match(runtime,
+    /inheritedChromaBaseUrl.*differs from isolated SC968_CHROMASCAPE_URL/);
+  assert.match(runtime,
+    /SetEnvironmentVariable\(\$name,\$old,'Process'\)/);
+  assert.match(runtime, /\$env:SERVER_PORT = \[string\]\$chromaUri\.Port/);
+  assert.match(micro6, /\$env:CHROMASCAPE_BASE_URL = \$BaseUrl/);
+  assert.doesNotMatch(runtime,
+    /CHROMASCAPE_BASE_URL.*http:\/\/localhost:8090/);
+});
+
+test('SC-968 status reads allow the Java sidecar to be atomically replaced on Windows', () => {
+  assert.match(micro6, /\[IO\.FileShare\]::ReadWrite -bor \[IO\.FileShare\]::Delete/);
+  assert.match(micro6, /StreamReader/);
+  assert.doesNotMatch(micro6, /Get-Content -LiteralPath \$StatusFile -Raw/);
+});
+
 test('SC-968 Micro6 captures bind certified stabilization and source provenance', () => {
   assert.match(runtime, /Initialize-Sc968ManagedCaptureIdentity/);
   assert.match(runtime, /-ManagedIdentity \$baselineManagedIdentity/);
@@ -171,6 +193,9 @@ test('SC-968 entrypoint and manifests require all five runtime evidence document
   assert.match(entry, /:client:test[^\r\n]+"-PaiRoutineCaptureContractsDir=\$captureContracts"/);
   assert.match(entry, /:client:shadowJar "-PaiRoutineCaptureContractsDir=\$captureContracts"/);
   assert.match(entry, /:client:generateRuntimeSbom "-PaiRoutineCaptureContractsDir=\$captureContracts"/);
+  assert.match(entry, /RuntimeMicro6Root/);
+  assert.match(entry, /-Micro6Root \$executionMicro6Root/);
+  assert.match(entry, /Runtime Micro6 checkout must be clean before live acceptance/);
   assert.match(runtime, /SC968_CAPTURE_CONTRACTS_DIR/);
   assert.match(evidence, /assistant = \$Runtime\.assistant/);
   assert.match(evidence, /runelite = \$Runtime\.runelite/);
@@ -192,6 +217,7 @@ test('SC-968 one-command wrapper uses real local roots and creates isolated sign
   assert.match(runtime, /ChromaScape did not receive the SC-968 capture token/);
   assert.match(finish, /Set-DefaultEnvironment 'SC968_CHROMASCAPE_URL' 'http:\/\/127\.0\.0\.1:18090'/);
   assert.match(finish, /Get-NetTCPConnection -State Listen -LocalPort \$chromaPort/);
+  assert.match(finish, /\$chromaUri\.Port -eq 8090/);
   assert.doesNotMatch(finish, /Get-NetTCPConnection -State Listen -LocalPort 8090/);
   assert.match(runtime, /\$env:SERVER_PORT = \[string\]\$chromaUri\.Port/);
   assert.match(finish, /\$goVersion = '1\.24\.13'/);
