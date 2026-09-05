@@ -144,30 +144,85 @@ function Initialize-Sc968ManagedCaptureIdentity {
     throw "SC-968 could not resolve source revisions for '$Name'"
   }
   # The capture identity and the later patch proposal must share one immutable source group. The
-  # Micro6 runtime serves its generated, packaged source catalog to the patch workflow, so using a
-  # separate stabilization-receipt hash here creates a truthful but different source identity and
-  # candidate registration correctly rejects the attempted replacement. The shadowJar gate has
-  # already generated and tested this exact resource; bind the capture to the same bytes the
-  # launched client packages and serves.
-  $packagedSourceManifest = Join-Path $Micro6Root 'runelite-client\build\resources\main\micro6-contracts\fishing-source-manifest.json'
+  # Micro6 runtime serves the signed, content-addressed source bundle generated after shadowJar;
+  # never bind acceptance evidence to the legacy embedded compatibility manifest.
+  $sourceBundleRoot = [Environment]::GetEnvironmentVariable('MICRO6_SOURCE_BUNDLE_ROOT')
+  if ([string]::IsNullOrWhiteSpace($sourceBundleRoot) -or
+      -not (Test-Path -LiteralPath $sourceBundleRoot -PathType Container)) {
+    throw "Authoritative Micro6 source bundle is missing for '$Name': $sourceBundleRoot"
+  }
+  $currentPath = Join-Path $sourceBundleRoot 'current.json'
+  if (-not (Test-Path -LiteralPath $currentPath -PathType Leaf)) {
+    throw "Authoritative Micro6 source bundle current.json is missing for '$Name': $currentPath"
+  }
+  try {
+    $current = Get-Content -LiteralPath $currentPath -Raw | ConvertFrom-Json
+  } catch {
+    throw "Authoritative Micro6 source bundle current.json is invalid for '$Name'"
+  }
+  $bundleId = [string]$current.bundle_id
+  if ($current.schema -ne 'task-source-current/v1' -or $bundleId -notmatch '^srcbundle_[0-9a-f]{24}$' -or
+      [string]$current.path -ne ('bundles/' + $bundleId)) {
+    throw "Authoritative Micro6 source bundle pointer is invalid for '$Name'"
+  }
+  $bundleDirectory = Join-Path $sourceBundleRoot ('bundles\' + $bundleId)
+  $completeMarker = Join-Path $bundleDirectory 'COMPLETE'
+  if (-not (Test-Path -LiteralPath $completeMarker -PathType Leaf) -or
+      (Get-Item -LiteralPath $completeMarker).Length -ne 0) {
+    throw "Authoritative Micro6 source bundle is incomplete for '$Name'"
+  }
+  $bundleJsonPath = Join-Path $bundleDirectory 'bundle.json'
+  try {
+    $bundleJson = Get-Content -LiteralPath $bundleJsonPath -Raw | ConvertFrom-Json
+  } catch {
+    throw "Authoritative Micro6 source bundle metadata is invalid for '$Name'"
+  }
+  if ($bundleJson.schema -ne 'task-source-bundle/v1' -or
+      [string]$bundleJson.bundle_id -ne $bundleId) {
+    throw "Authoritative Micro6 source bundle metadata does not match its pointer for '$Name'"
+  }
+  $manifestEntries = @($bundleJson.manifests | Where-Object { $_.task_key -eq 'FISHING_TRAINING' })
+  if ($manifestEntries.Count -ne 1 -or [string]$manifestEntries[0].path -ne 'manifests/FISHING_TRAINING.json') {
+    throw "Authoritative Fishing source manifest is not registered in the bundle for '$Name'"
+  }
+  $packagedSourceManifest = Join-Path $bundleDirectory 'manifests\FISHING_TRAINING.json'
   if (-not (Test-Path -LiteralPath $packagedSourceManifest -PathType Leaf)) {
-    throw "Micro6 packaged Fishing source manifest is missing for '$Name': $packagedSourceManifest"
+    throw "Authoritative Fishing source manifest is missing for '$Name': $packagedSourceManifest"
   }
   $sourceBytes = [IO.File]::ReadAllBytes($packagedSourceManifest)
   try {
     $sourceManifest = [Text.Encoding]::UTF8.GetString($sourceBytes) | ConvertFrom-Json
   } catch {
-    throw "Micro6 packaged Fishing source manifest is invalid JSON for '$Name'"
+    throw "Authoritative Fishing source manifest is invalid JSON for '$Name'"
   }
   $sourceSnapshotId = [string]$sourceManifest.source_snapshot_id
   $sourceHash = [string]$sourceManifest.source_manifest_hash
-  if ($sourceManifest.schema -ne 'micro6-source-manifest/v1' -or
+  $micro6Tree = (& git -C $Micro6Root rev-parse 'HEAD^{tree}' 2>$null).Trim()
+  $artifactIdentityPath = Join-Path $Micro6Root 'runelite-client\build\identity\micro6-artifact.properties'
+  $artifactDigestLine = if (Test-Path -LiteralPath $artifactIdentityPath -PathType Leaf) {
+    Get-Content -LiteralPath $artifactIdentityPath | Where-Object { $_ -match '^artifact_digest=' } | Select-Object -First 1
+  } else { $null }
+  $artifactDigest = if ($null -eq $artifactDigestLine) { '' } else { ([string]$artifactDigestLine).Substring('artifact_digest='.Length).Trim() }
+  $sourceEnvironment = [Environment]::GetEnvironmentVariable('MICRO6_SOURCE_ENVIRONMENT')
+  $sourceKeyId = [Environment]::GetEnvironmentVariable('MICRO6_SOURCE_VERIFICATION_KEY_ID')
+  if ($sourceManifest.schema -ne 'task-source-manifest/v1' -or
       $sourceManifest.task_key -ne 'FISHING_TRAINING' -or
-      [string]$sourceManifest.client_build_id -ne $micro6Revision -or
+      $sourceManifest.status -ne 'AVAILABLE' -or
+      [string]$sourceManifest.environment -ne $sourceEnvironment -or
+      [string]$sourceManifest.repository.repository_id -ne 'micro6' -or
+      [string]$sourceManifest.repository.commit_id -ne $micro6Revision -or
+      [string]$sourceManifest.repository.tree_id -ne $micro6Tree -or
+      $sourceManifest.repository.clean -ne $true -or
+      [string]$sourceManifest.build.build_id -ne $micro6Revision -or
+      [string]$sourceManifest.build.artifact_digest -ne $artifactDigest -or
+      $sourceManifest.signature.algorithm -ne 'Ed25519' -or
+      [string]$sourceManifest.signature.key_id -ne $sourceKeyId -or
+      [string]$manifestEntries[0].source_manifest_hash -ne $sourceHash -or
+      [string]$manifestEntries[0].source_snapshot_id -ne $sourceSnapshotId -or
       $sourceSnapshotId -notmatch '^srcsnap_[0-9a-f]{24}$' -or
       $sourceHash -notmatch '^sha256:[0-9a-f]{64}$' -or
       $sourceSnapshotId -ne ('srcsnap_' + $sourceHash.Substring(7,24))) {
-    throw "Micro6 packaged Fishing source identity is invalid or stale for '$Name'"
+    throw "Authoritative Micro6 Fishing source identity is invalid or stale for '$Name'"
   }
   $sourcePath = Join-Path $OutputDirectory 'source-manifest.json'
   [IO.File]::WriteAllBytes($sourcePath, $sourceBytes)
@@ -179,6 +234,12 @@ function Initialize-Sc968ManagedCaptureIdentity {
     ExecutorInstanceId = [string]$manifest.micro6_instance_id
     SourceSnapshotId = $sourceSnapshotId
     SourceManifestHash = $sourceHash
+    SourceRepositoryId = [string]$sourceManifest.repository.repository_id
+    SourceCommitId = [string]$sourceManifest.repository.commit_id
+    SourceTreeId = [string]$sourceManifest.repository.tree_id
+    SourceBuildId = [string]$sourceManifest.build.build_id
+    SourceArtifactDigest = [string]$sourceManifest.build.artifact_digest
+    SourceSignatureVerified = $true
     SourceManifestPath = $sourcePath
   }
 }

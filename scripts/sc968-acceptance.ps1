@@ -27,7 +27,7 @@ $executionMicro6Root = if ([string]::IsNullOrWhiteSpace($RuntimeMicro6Root)) { $
 
 try {
   Assert-NativeJava17
-  foreach ($requiredName in @('SC968_CAPTURE_TOKEN','SC968_OPERATOR_TOKEN','SC968_OPERATOR_ID','SC968_REGISTRY_TOKEN','SC968_PUBLIC_KEY_RING','SC968_REGISTRY_TRUSTED_KEYS_DIR','SC968_MICRO6_LAUNCH_SCRIPT','SC968_RUNELITE_LAUNCH_SCRIPT','SC968_SIGNING_PRIVATE_KEY_PATH','SC968_SIGNING_PUBLIC_KEY_PATH','SC968_SIGNING_KEY_ID','SC968_EXPECTED_ARTIFACT_NAME')) {
+  foreach ($requiredName in @('SC968_CAPTURE_TOKEN','SC968_OPERATOR_TOKEN','SC968_OPERATOR_ID','SC968_REGISTRY_TOKEN','SC968_PUBLIC_KEY_RING','SC968_REGISTRY_TRUSTED_KEYS_DIR','SC968_MICRO6_LAUNCH_SCRIPT','SC968_RUNELITE_LAUNCH_SCRIPT','SC968_SIGNING_PRIVATE_KEY_PATH','SC968_SIGNING_PUBLIC_KEY_PATH','SC968_SIGNING_KEY_ID','SC968_EXPECTED_ARTIFACT_NAME','MICRO6_SOURCE_BUNDLE_ROOT','MICRO6_SOURCE_SIGNING_PRIVATE_KEY_BASE64','MICRO6_SOURCE_SIGNING_KEY_ID','MICRO6_SOURCE_VERIFICATION_PUBLIC_KEY_BASE64','MICRO6_SOURCE_VERIFICATION_KEY_ID','MICRO6_SOURCE_ENVIRONMENT','CHROMASCAPE_SOURCE_REQUIRE_SIGNATURE','CHROMASCAPE_SOURCE_ALLOW_LEGACY','CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64','CHROMASCAPE_SOURCE_PUBLIC_KEY_ID','CHROMASCAPE_SOURCE_ENVIRONMENT')) {
     if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($requiredName))) { throw "$requiredName is required for native SC-968 acceptance" }
   }
   if (-not (Test-Path -LiteralPath $RuntimeDriver -PathType Leaf)) { throw "SC-968 runtime driver is missing: $RuntimeDriver" }
@@ -130,6 +130,10 @@ try {
   } (Join-Path $logs 'chromascape-acceptance-contract-test.log') $gates
   $null = Invoke-Gate 'micro6_capture_tests' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:test --tests 'net.runelite.client.plugins.airoutinecapture.*' --tests 'net.runelite.client.plugins.microbot.accountbuilder.RemoteAccountBuilderManagerTest' --tests 'net.runelite.client.plugins.microbot.accountbuilder.integration.builder.SourceManifestCatalogTest' "-PaiRoutineCaptureContractsDir=$captureContracts" } (Join-Path $logs 'micro6-test.log') $gates
   $null = Invoke-Gate 'micro6_shadowjar' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:shadowJar "-PaiRoutineCaptureContractsDir=$captureContracts" } (Join-Path $logs 'micro6-shadowjar.log') $gates
+  $null = Invoke-Gate 'micro6_source_bundle' $Micro6Root {
+    $ErrorActionPreference = 'Continue'
+    .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:generateAllTaskSourceBundles "-PaiRoutineCaptureContractsDir=$captureContracts"
+  } (Join-Path $logs 'micro6-source-bundle.log') $gates
   $null = Invoke-Gate 'micro6_sbom' $Micro6Root { $ErrorActionPreference = 'Continue'; .\gradlew.bat --no-daemon --no-watch-fs --build-cache :client:generateRuntimeSbom "-PaiRoutineCaptureContractsDir=$captureContracts" } (Join-Path $logs 'micro6-sbom.log') $gates
   $null = Invoke-Gate 'runelite_capture_tests' $RuneLiteRoot {
     $ErrorActionPreference = 'Continue'

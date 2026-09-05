@@ -288,6 +288,47 @@ if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to encode the Ed25519 public ke
 Copy-Item -LiteralPath $publicKey -Destination (Join-Path $trustedRoot "$keyId.pem")
 $publicRing = $keyId + '=' + [Convert]::ToBase64String([IO.File]::ReadAllBytes($publicDer))
 
+# Source provenance has its own trust boundary. Use a separate ephemeral Ed25519 key so the
+# signed authoritative Micro6 source bundle cannot be confused with the candidate registry key.
+# Private key bytes remain process-scoped and are never written to acceptance evidence logs.
+$sourceKeyId = 'sc968-source-local-acceptance'
+$sourcePrivateKey = Join-Path $secretRoot 'source-private-key.pem'
+$sourcePublicKey = Join-Path $secretRoot 'source-public-key.pem'
+$sourcePublicDer = Join-Path $secretRoot 'source-public-key.der'
+$sourcePrivateDer = Join-Path $secretRoot 'source-private-key.der'
+& $opensslPath genpkey -algorithm ED25519 -out $sourcePrivateKey
+if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to generate the source Ed25519 private key' }
+& $opensslPath pkey -in $sourcePrivateKey -pubout -out $sourcePublicKey
+if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to derive the source Ed25519 public key' }
+& $opensslPath pkey -pubin -in $sourcePublicKey -outform DER -out $sourcePublicDer
+if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to encode the source Ed25519 public key' }
+& $opensslPath pkey -in $sourcePrivateKey -outform DER -out $sourcePrivateDer
+if ($LASTEXITCODE -ne 0) { throw 'OpenSSL failed to encode the source Ed25519 private key' }
+$sourcePublicBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($sourcePublicDer))
+$sourcePrivateBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($sourcePrivateDer))
+$sourceEnvironment = 'sc968-native-acceptance'
+$sourceBundleRoot = Join-Path $outputRoot 'source-bundle'
+
+$env:MICRO6_SOURCE_BUNDLE_ROOT = $sourceBundleRoot
+$env:MICRO6_SOURCE_SIGNING_PRIVATE_KEY_BASE64 = $sourcePrivateBase64
+$env:MICRO6_SOURCE_SIGNING_KEY_ID = $sourceKeyId
+$env:MICRO6_SOURCE_VERIFICATION_PUBLIC_KEY_BASE64 = $sourcePublicBase64
+$env:MICRO6_SOURCE_VERIFICATION_KEY_ID = $sourceKeyId
+$env:MICRO6_SOURCE_ENVIRONMENT = $sourceEnvironment
+
+# ChromaScape consumes the same trust material and environment through its canonical source
+# properties. Keep the legacy aliases identical because startup validation rejects split trust
+# configuration instead of allowing the two services to disagree.
+$env:CHROMASCAPE_SOURCE_REQUIRE_SIGNATURE = 'true'
+$env:CHROMASCAPE_SOURCE_ALLOW_LEGACY = 'false'
+$env:CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64 = $sourcePublicBase64
+$env:CHROMASCAPE_SOURCE_PUBLIC_KEY_ID = $sourceKeyId
+$env:CHROMASCAPE_SOURCE_ENVIRONMENT = $sourceEnvironment
+$env:MICRO6_SOURCE_REQUIRE_SIGNATURE = 'true'
+$env:MICRO6_SOURCE_ALLOW_LEGACY = 'false'
+$env:MICRO6_SOURCE_PUBLIC_KEY_BASE64 = $sourcePublicBase64
+$env:MICRO6_SOURCE_PUBLIC_KEY_ID = $sourceKeyId
+
 Set-DefaultEnvironment 'SC968_CAPTURE_TOKEN' ([Guid]::NewGuid().ToString('N'))
 Set-DefaultEnvironment 'SC968_OPERATOR_TOKEN' ([Guid]::NewGuid().ToString('N'))
 Set-DefaultEnvironment 'SC968_OPERATOR_ID' 'sc968-local-operator'

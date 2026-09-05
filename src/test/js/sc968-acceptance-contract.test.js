@@ -157,8 +157,11 @@ test('SC-968 Micro6 captures bind certified stabilization and source provenance'
   assert.match(micro6, /--args=\$arguments" 2>&1 \| Out-Host/);
   assert.match(micro6, /certification_status -ne 'CERTIFIED'/);
   assert.match(micro6, /SC968_EXECUTOR_INSTANCE_ID/);
-  assert.match(micro6, /fishing-source-manifest\.json/);
-  assert.match(micro6, /sourceManifest\.client_build_id -ne \$micro6Revision/);
+  assert.match(micro6, /task-source-current\/v1/);
+  assert.match(micro6, /FISHING_TRAINING\.json/);
+  assert.match(micro6, /sourceManifest\.repository\.commit_id -ne \$micro6Revision/);
+  assert.match(micro6, /sourceManifest\.build\.artifact_digest -ne \$artifactDigest/);
+  assert.match(micro6, /sourceManifest\.signature\.algorithm -ne 'Ed25519'/);
   assert.match(micro6, /SourceSnapshotId = \$sourceSnapshotId/);
   assert.doesNotMatch(micro6, /stabilization_manifest_hash/);
   assert.doesNotMatch(runtime, /stabilization\/ingest-report/);

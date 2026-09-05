@@ -182,6 +182,14 @@ function Require-CaptureIdentity([object] $Status, [string] $ExpectedClientKind)
   if ($ExpectedClientKind -eq 'MICRO6_MANAGED') {
     if ([string]::IsNullOrWhiteSpace([string](Field $run 'attempt_id')) -or $null -eq (Field $run 'entry_id') -or [string]::IsNullOrWhiteSpace([string](Field $run 'executor_instance_id'))) { throw 'Micro6 capture is missing executor-bound run identity' }
     if ((Field $client 'adapter_contract') -ne 'micro6-builder/v2' -or (Field $client 'domain') -ne 'MICRO6') { throw 'Micro6 capture capability identity is invalid' }
+    if ([string]::IsNullOrWhiteSpace([string](Field $source 'repository_id')) -or
+        [string](Field $source 'commit_id') -notmatch '^[0-9a-f]{40}$' -or
+        [string](Field $source 'tree_id') -notmatch '^[0-9a-f]{40}$' -or
+        [string]::IsNullOrWhiteSpace([string](Field $source 'build_id')) -or
+        [string](Field $source 'artifact_digest') -notmatch '^sha256:[0-9a-f]{64}$' -or
+        (Field $source 'signature_verified') -ne $true) {
+      throw 'Micro6 capture is missing verified authoritative source provenance'
+    }
   } else {
     if ($null -ne (Field $run 'attempt_id') -or $null -ne (Field $run 'entry_id') -or $null -ne (Field $run 'executor_instance_id')) { throw 'RuneLite capture fabricated Micro6 executor identity' }
     if ((Field $client 'adapter_contract') -ne 'runelite-capture/v1' -or (Field $client 'domain') -ne 'RUNELITE') { throw 'RuneLite capture capability identity is invalid' }
@@ -196,6 +204,9 @@ $temporaryEnvironmentNames = @(
   'SC968_CAPTURE_START_FILE',
   'SC968_TASK_KEY','SC968_SETTINGS_HASH','SC968_PROFILE_ID','SC968_PROFILE_HASH','SC968_CATALOG_HASH','SC968_CLIENT_ID',
   'SC968_RUN_ID','SC968_ATTEMPT_ID','SC968_ENTRY_ID','SC968_EXECUTOR_INSTANCE_ID','SC968_SOURCE_SNAPSHOT_ID','SC968_SOURCE_MANIFEST_HASH',
+  'MICRO6_SOURCE_BUNDLE_ROOT','MICRO6_SOURCE_SIGNING_PRIVATE_KEY_BASE64','MICRO6_SOURCE_SIGNING_KEY_ID','MICRO6_SOURCE_VERIFICATION_PUBLIC_KEY_BASE64','MICRO6_SOURCE_VERIFICATION_KEY_ID','MICRO6_SOURCE_ENVIRONMENT',
+  'MICRO6_SOURCE_PUBLIC_KEY_BASE64','MICRO6_SOURCE_PUBLIC_KEY_ID','MICRO6_SOURCE_REQUIRE_SIGNATURE','MICRO6_SOURCE_ALLOW_LEGACY',
+  'CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64','CHROMASCAPE_SOURCE_PUBLIC_KEY_ID','CHROMASCAPE_SOURCE_REQUIRE_SIGNATURE','CHROMASCAPE_SOURCE_ALLOW_LEGACY','CHROMASCAPE_SOURCE_ENVIRONMENT',
   'MICRO6_REMOTE_ACCOUNTBUILDER_ENABLED','MICRO6_REMOTE_ACCOUNTBUILDER_BASE_URL','MICRO6_REMOTE_ACCOUNTBUILDER_CANDIDATE_ID',
   'MICRO6_REMOTE_ACCOUNTBUILDER_TOKEN','MICRO6_REMOTE_PUBLIC_KEY_RING','AI_ROUTINE_CAPTURE_TOKEN','AI_ROUTINE_OPERATOR_TOKEN',
   'AI_ROUTINE_OPERATOR_ID','SC967_CANDIDATE_BUILDS_ENABLED','SC967_CANDIDATE_STAGING_ROOT','LEEUWBOT_CANDIDATE_REGISTRY_URL',
