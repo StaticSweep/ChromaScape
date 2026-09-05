@@ -42,6 +42,68 @@ function Sha256Bytes([byte[]] $Bytes) {
   return 'sha256:' + (($digest | ForEach-Object { $_.ToString('x2') }) -join '')
 }
 
+# Prove that the exact acceptance-owned executor serves the exact signed manifest already
+# validated from the promoted bundle. This runs before asking the operator to log in, so a missing
+# environment header, stale process, unloadable bundle, oversized response, or byte mismatch fails
+# without consuming a human gameplay phase.
+function Wait-LiveSourceManifest {
+  param(
+    [Parameter(Mandatory=$true)][string] $ExecutorUrl,
+    [Parameter(Mandatory=$true)][object] $SourceIdentity,
+    [Parameter(Mandatory=$true)][string] $EvidencePath,
+    [int] $TimeoutSeconds = 180
+  )
+  $expectedBytes = [IO.File]::ReadAllBytes([string]$SourceIdentity.SourceManifestPath)
+  $expectedHash = Sha256Bytes $expectedBytes
+  if ($expectedHash -ne [string]$SourceIdentity.SourceManifestHash) {
+    throw 'The packaged source manifest bytes differ from the validated managed identity'
+  }
+  $headers = @{
+    'X-Source-Actor' = 'sc968-native-acceptance'
+    'X-Source-Purpose' = 'MANIFEST'
+    'X-Correlation-ID' = ('sc968-source-' + [Guid]::NewGuid().ToString('N'))
+    'X-Source-Environment' = (Require 'MICRO6_SOURCE_ENVIRONMENT')
+  }
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  $lastStatus = $null
+  $lastBody = ''
+  do {
+    try {
+      $response = Invoke-Sc968Http -BaseUrl $ExecutorUrl `
+        -Path '/api/v1/source-manifests/FISHING_TRAINING' -RequestHeaders $headers
+      $lastStatus = $response.StatusCode
+      $lastBody = $response.BodyText
+      if ($response.StatusCode -eq 200) {
+        if (-not (BytesEqual $expectedBytes $response.BodyBytes)) {
+          throw 'Live executor source manifest is not byte-identical to the promoted bundle'
+        }
+        Write-JsonFile $EvidencePath ([ordered]@{
+          schema = 'sc968-live-source-probe/v1'
+          status = 'PASS'
+          http_status = 200
+          executor_url = $ExecutorUrl
+          task_key = 'FISHING_TRAINING'
+          source_snapshot_id = [string]$SourceIdentity.SourceSnapshotId
+          source_manifest_hash = $expectedHash
+          size_bytes = $expectedBytes.Length
+          byte_equal = $true
+        })
+        return
+      }
+    } catch {
+      $lastBody = $_.Exception.Message
+    }
+    Start-Sleep -Milliseconds 500
+  } while ([DateTimeOffset]::UtcNow -lt $deadline)
+  Write-JsonFile $EvidencePath ([ordered]@{
+    schema = 'sc968-live-source-probe/v1'
+    status = 'FAIL'
+    http_status = $lastStatus
+    response = $lastBody
+  })
+  throw "Acceptance-owned Micro6 did not serve the authoritative Fishing source manifest (HTTP $lastStatus): $lastBody"
+}
+
 function BytesEqual([byte[]] $Left, [byte[]] $Right) {
   if ($Left.Length -ne $Right.Length) { return $false }
   for ($index = 0; $index -lt $Left.Length; $index++) { if ($Left[$index] -ne $Right[$index]) { return $false } }
@@ -434,6 +496,9 @@ try {
   # come after RECORDING was already reached. The 2026-08-28 09:45 run failed exactly here: the
   # client sat on LOGIN_SCREEN for the whole 1800 s wait with nothing on screen asking for a login.
   $null = Wait-CaptureClientReady $baselineStatusFile $runtimeTimeout $micro.Pid
+  Wait-LiveSourceManifest -ExecutorUrl $acceptanceExecutorUrl `
+    -SourceIdentity $baselineManagedIdentity `
+    -EvidencePath (Join-Path $output 'baseline-live-source-probe.json')
   Write-Host 'LOG IN NOW (1/3): log into the baseline Micro6 client, then do nothing until the FISH prompt.' -ForegroundColor Cyan
   $null = Wait-CaptureLogin $baselineStatusFile $runtimeTimeout
   Start-CaptureWindow $baselineStartTrigger
@@ -561,6 +626,9 @@ try {
   $owned += $candidateMicro
   Wait-LogMarkers $candidateLog $candidateMicro.Pid @('verified exact registry manifest','verified candidate artifact','immediate pre-load artifact rehash passed','applied remote AccountBuilder candidate') $runtimeTimeout
   $null = Wait-CaptureClientReady $candidateStatusFile $runtimeTimeout $candidateMicro.Pid
+  Wait-LiveSourceManifest -ExecutorUrl $acceptanceExecutorUrl `
+    -SourceIdentity $candidateManagedIdentity `
+    -EvidencePath (Join-Path $output 'candidate-live-source-probe.json')
   Write-Host 'LOG IN NOW (2/3): log into the candidate Micro6 client, then do nothing until the FISH prompt.' -ForegroundColor Cyan
   $null = Wait-CaptureLogin $candidateStatusFile $runtimeTimeout
   Start-CaptureWindow $candidateStartTrigger

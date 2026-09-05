@@ -17,6 +17,8 @@ const isolatedPatchWorker = fs.readFileSync(path.join(root,
   'src/main/java/com/chromascape/web/aiplayer/routine/service/IsolatedPatchWorker.java'), 'utf8');
 const operatorWebConfig = fs.readFileSync(path.join(root,
   'src/main/java/com/chromascape/web/aiplayer/routine/config/AiRoutineOperatorWebConfig.java'), 'utf8');
+const sourceContract = fs.readFileSync(path.join(root,
+  'src/main/java/com/chromascape/web/aiplayer/routine/source/SourceManifestContract.java'), 'utf8');
 const managedSeedPlan = JSON.parse(fs.readFileSync(
   path.join(root, 'src/test/resources/sc968/micro6-managed-stabilization-plan.json'), 'utf8'));
 
@@ -165,6 +167,25 @@ test('SC-968 Micro6 captures bind certified stabilization and source provenance'
   assert.match(micro6, /SourceSnapshotId = \$sourceSnapshotId/);
   assert.doesNotMatch(micro6, /stabilization_manifest_hash/);
   assert.doesNotMatch(runtime, /stabilization\/ingest-report/);
+});
+
+test('SC-968 verifies the acceptance-owned live source boundary before login', () => {
+  assert.match(sourceContract, /MAX_MANIFEST_BYTES = 20_000_000/);
+  assert.match(runtime, /function Wait-LiveSourceManifest/);
+  assert.match(runtime, /X-Source-Environment/);
+  assert.match(runtime, /BytesEqual \$expectedBytes \$response\.BodyBytes/);
+  assert.match(runtime, /baseline-live-source-probe\.json/);
+  assert.match(runtime, /candidate-live-source-probe\.json/);
+  const baselineProbe = runtime.indexOf(
+    "-EvidencePath (Join-Path $output 'baseline-live-source-probe.json')");
+  const baselinePrompt = runtime.indexOf('LOG IN NOW (1/3)');
+  const candidateProbe = runtime.indexOf(
+    "-EvidencePath (Join-Path $output 'candidate-live-source-probe.json')");
+  const candidatePrompt = runtime.indexOf('LOG IN NOW (2/3)');
+  assert.ok(baselineProbe >= 0 && baselineProbe < baselinePrompt,
+    'baseline live source probe must finish before the login prompt');
+  assert.ok(candidateProbe >= 0 && candidateProbe < candidatePrompt,
+    'candidate live source probe must finish before the login prompt');
 });
 
 test('SC-968 certified fixture identity matches the pass executor contract', () => {

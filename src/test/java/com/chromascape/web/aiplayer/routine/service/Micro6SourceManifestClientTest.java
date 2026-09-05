@@ -18,6 +18,24 @@ import org.junit.jupiter.api.Test;
 
 class Micro6SourceManifestClientTest {
   @Test
+  void acceptsABoundedProductionSizedManifestResponse() throws Exception {
+    // The authoritative Fishing closure is currently about 15.3 MB. Exercise the transport bound
+    // with comparable bytes so a smaller stale consumer cap cannot strand managed run creation.
+    byte[] manifest = new byte[15_500_000];
+    java.util.Arrays.fill(manifest, (byte) 'x');
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/api/v1/source-manifests/EXAMPLE_TASK",
+        exchange -> respond(exchange, 200, manifest));
+    server.start();
+    try {
+      assertEquals(manifest.length,
+          client(server).manifest("EXAMPLE_TASK").getBytes(StandardCharsets.UTF_8).length);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
   void resolvesAnIndexedSymbolFromTheExactSnapshot() throws Exception {
     ObjectMapper mapper = new ObjectMapper();
     ObjectNode manifest = SourceManifestTestFixtures.manifest();
