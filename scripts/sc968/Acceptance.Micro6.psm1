@@ -81,6 +81,7 @@ function Set-Sc968RuneLiteEnvironment {
 function Initialize-Sc968ManagedCaptureIdentity {
   param(
     [Parameter(Mandatory=$true)][string] $Micro6Root,
+    [string] $ArtifactMicro6Root = '',
     [Parameter(Mandatory=$true)][string] $ContractsRoot,
     [Parameter(Mandatory=$true)][string] $BaseUrl,
     [Parameter(Mandatory=$true)][string] $PlanPath,
@@ -198,7 +199,21 @@ function Initialize-Sc968ManagedCaptureIdentity {
   $sourceSnapshotId = [string]$sourceManifest.source_snapshot_id
   $sourceHash = [string]$sourceManifest.source_manifest_hash
   $micro6Tree = (& git -C $Micro6Root rev-parse 'HEAD^{tree}' 2>$null).Trim()
-  $artifactIdentityPath = Join-Path $Micro6Root 'runelite-client\build\identity\micro6-artifact.properties'
+  # RuntimeMicro6Root may be a separate clean checkout used only for the interactive clients. The
+  # signed source bundle and its shaded artifact are produced by the gated Micro6 checkout before
+  # the runtime driver starts, so resolve artifact identity from that checkout while continuing to
+  # bind repository commit/tree identity to the runtime checkout. Require both checkouts to be the
+  # same immutable revision and tree before trusting the preflight artifact identity.
+  $artifactRoot = if ([string]::IsNullOrWhiteSpace($ArtifactMicro6Root)) { $Micro6Root } else { $ArtifactMicro6Root }
+  if (-not (Test-Path -LiteralPath $artifactRoot -PathType Container)) {
+    throw "Gated Micro6 artifact checkout is missing for '$Name': $artifactRoot"
+  }
+  $artifactRevision = (& $git.Source -C $artifactRoot rev-parse HEAD).Trim()
+  $artifactTree = (& $git.Source -C $artifactRoot rev-parse 'HEAD^{tree}' 2>$null).Trim()
+  if ($LASTEXITCODE -ne 0 -or $artifactRevision -ne $micro6Revision -or $artifactTree -ne $micro6Tree) {
+    throw "Gated and runtime Micro6 source identities do not match for '$Name'"
+  }
+  $artifactIdentityPath = Join-Path $artifactRoot 'runelite-client\build\identity\micro6-artifact.properties'
   $artifactDigestLine = if (Test-Path -LiteralPath $artifactIdentityPath -PathType Leaf) {
     Get-Content -LiteralPath $artifactIdentityPath | Where-Object { $_ -match '^artifact_digest=' } | Select-Object -First 1
   } else { $null }

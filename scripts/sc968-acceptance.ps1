@@ -184,7 +184,7 @@ try {
     $ErrorActionPreference = 'Continue'
     & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $RuntimeDriver `
       -ContractsRoot $ContractsRoot -LeeuwBotRoot $LeeuwBotRoot -ChromaScapeRoot $ChromaScapeRoot `
-      -Micro6Root $executionMicro6Root -RuneLiteRoot $RuneLiteRoot -OutputRoot $OutputRoot
+      -Micro6Root $executionMicro6Root -SourceMicro6Root $Micro6Root -RuneLiteRoot $RuneLiteRoot -OutputRoot $OutputRoot
   } (Join-Path $logs 'runtime-acceptance.log') $gates
   foreach ($name in @('baseline','assistant','runelite','candidate','shadow')) {
     $path = Join-Path $OutputRoot ("runtime/$name.json")

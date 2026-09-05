@@ -163,6 +163,9 @@ test('SC-968 Micro6 captures bind certified stabilization and source provenance'
   assert.match(micro6, /FISHING_TRAINING\.json/);
   assert.match(micro6, /sourceManifest\.repository\.commit_id -ne \$micro6Revision/);
   assert.match(micro6, /sourceManifest\.build\.artifact_digest -ne \$artifactDigest/);
+  assert.match(micro6, /\$artifactRevision -ne \$micro6Revision/);
+  assert.match(micro6, /\$artifactTree -ne \$micro6Tree/);
+  assert.match(micro6, /Join-Path \$artifactRoot 'runelite-client\\build\\identity\\micro6-artifact\.properties'/);
   assert.match(micro6, /sourceManifest\.signature\.algorithm -ne 'Ed25519'/);
   assert.match(micro6, /SourceSnapshotId = \$sourceSnapshotId/);
   assert.doesNotMatch(micro6, /stabilization_manifest_hash/);
@@ -226,6 +229,8 @@ test('SC-968 entrypoint and manifests require all five runtime evidence document
   assert.match(entry, /:client:generateRuntimeSbom "-PaiRoutineCaptureContractsDir=\$captureContracts"/);
   assert.match(entry, /RuntimeMicro6Root/);
   assert.match(entry, /-Micro6Root \$executionMicro6Root/);
+  assert.match(entry, /-SourceMicro6Root \$Micro6Root/);
+  assert.match(runtime, /-ArtifactMicro6Root \$SourceMicro6Root/);
   assert.match(entry, /Runtime Micro6 checkout must be clean before live acceptance/);
   assert.match(runtime, /SC968_CAPTURE_CONTRACTS_DIR/);
   assert.match(evidence, /assistant = \$Runtime\.assistant/);
