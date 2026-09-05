@@ -101,8 +101,18 @@ function Initialize-Sc968ManagedCaptureIdentity {
   $seedExitCode = 1
   Push-Location $Micro6Root
   try {
-    & $gradle --no-daemon --no-watch-fs "-PaiRoutineCaptureContractsDir=$captureContracts" ":client:micro6StabilizationHarness" "-Pmicro6.stabilization.plan=$PlanPath" "--args=$arguments" 2>&1 | Out-Host
-    $seedExitCode = $LASTEXITCODE
+    # Windows PowerShell 5.1 turns native stderr into NativeCommandError records when the
+    # caller uses ErrorActionPreference=Stop. Gradle emits valid compiler warnings on stderr,
+    # so keep those diagnostics visible without confusing them with a failed build; the native
+    # exit code remains the only success criterion for this seed.
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = 'Continue'
+      & $gradle --no-daemon --no-watch-fs "-PaiRoutineCaptureContractsDir=$captureContracts" ":client:micro6StabilizationHarness" "-Pmicro6.stabilization.plan=$PlanPath" "--args=$arguments" 2>&1 | Out-Host
+      $seedExitCode = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $previousErrorActionPreference
+    }
   } finally {
     Pop-Location
   }

@@ -132,6 +132,13 @@ test('SC-968 status reads allow the Java sidecar to be atomically replaced on Wi
   assert.doesNotMatch(micro6, /Get-Content -LiteralPath \$StatusFile -Raw/);
 });
 
+test('SC-968 stabilization seeds keep Gradle diagnostics separate from the exit code', () => {
+  assert.match(micro6, /\$previousErrorActionPreference = \$ErrorActionPreference/);
+  assert.match(micro6, /\$ErrorActionPreference = 'Continue'/);
+  assert.match(micro6, /\$seedExitCode = \$LASTEXITCODE/);
+  assert.match(micro6, /\$ErrorActionPreference = \$previousErrorActionPreference/);
+});
+
 test('SC-968 Micro6 captures bind certified stabilization and source provenance', () => {
   assert.match(runtime, /Initialize-Sc968ManagedCaptureIdentity/);
   assert.match(runtime, /-ManagedIdentity \$baselineManagedIdentity/);
