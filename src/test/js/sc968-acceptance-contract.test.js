@@ -43,6 +43,16 @@ test('SC-968 native approval accepts exact confirmation and rejects invalid/stal
   assert.match(result.stdout, /PASS all eight native human-approval cases/);
 });
 
+test('SC-968 native live-source probe separates canonical identity from signed transport bytes', {skip: process.platform !== 'win32'}, () => {
+  const {spawnSync} = require('node:child_process');
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+    path.join(root, 'scripts/sc968/Test-LiveSourceProbe.ps1')], {encoding:'utf8', timeout:30000});
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PASS all four native source-probe cases/);
+  assert.match(micro6, /SourceManifestFileHash =/);
+  assert.match(runtime, /expectedHash -ne \[string\]\$SourceIdentity.SourceManifestFileHash/);
+});
+
 test('SC-968 runtime requires Assistant acceptance and a real RuneLite capture', () => {
   assert.match(runtime, /Wait-AssistantProposal/);
   assert.match(runtime, /assistant\/proposals\/\$proposalId\/accept/);

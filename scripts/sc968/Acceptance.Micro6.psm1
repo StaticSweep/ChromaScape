@@ -249,6 +249,9 @@ function Initialize-Sc968ManagedCaptureIdentity {
     ExecutorInstanceId = [string]$manifest.micro6_instance_id
     SourceSnapshotId = $sourceSnapshotId
     SourceManifestHash = $sourceHash
+    # The canonical source identity excludes envelope/signature fields. It is not the
+    # SHA-256 of the signed JSON transport bytes; retain both trust boundaries.
+    SourceManifestFileHash = 'sha256:' + ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($sourceBytes))).Replace('-','').ToLowerInvariant()
     SourceRepositoryId = [string]$sourceManifest.repository.repository_id
     SourceCommitId = [string]$sourceManifest.repository.commit_id
     SourceTreeId = [string]$sourceManifest.repository.tree_id

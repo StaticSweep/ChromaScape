@@ -57,7 +57,7 @@ function Wait-LiveSourceManifest {
   )
   $expectedBytes = [IO.File]::ReadAllBytes([string]$SourceIdentity.SourceManifestPath)
   $expectedHash = Sha256Bytes $expectedBytes
-  if ($expectedHash -ne [string]$SourceIdentity.SourceManifestHash) {
+  if ($expectedHash -ne [string]$SourceIdentity.SourceManifestFileHash) {
     throw 'The packaged source manifest bytes differ from the validated managed identity'
   }
   $headers = @{
@@ -86,7 +86,8 @@ function Wait-LiveSourceManifest {
           executor_url = $ExecutorUrl
           task_key = 'FISHING_TRAINING'
           source_snapshot_id = [string]$SourceIdentity.SourceSnapshotId
-          source_manifest_hash = $expectedHash
+          source_manifest_hash = [string]$SourceIdentity.SourceManifestHash
+          transport_sha256 = $expectedHash
           size_bytes = $expectedBytes.Length
           byte_equal = $true
         })
