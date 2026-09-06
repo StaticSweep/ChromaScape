@@ -227,7 +227,7 @@ function Wait-CaptureTicks([string] $BaseUrl, [string] $Token, [string] $Session
 function Require-CompletedCapture([object] $Status, [string] $Name, [int] $MinimumTicks) {
   if ($Status.status -ne 'COMPLETED') { throw "$Name capture did not complete" }
   if ([int]$Status.tick_count -lt $MinimumTicks) { throw "$Name capture has too few ticks" }
-  if ([int]$Status.action_count -lt 1) { throw "$Name capture has no observed action" }
+  if ([int]$Status.action_count -ne 1) { throw "$Name capture must contain exactly one observed action; found $($Status.action_count)" }
   if ([string]::IsNullOrWhiteSpace([string]$Status.recording_id)) { throw "$Name capture has no recording ID" }
   if ([string]::IsNullOrWhiteSpace([string]$Status.recording_hash) -or [string]$Status.recording_hash -notmatch '^sha256:[0-9a-f]{64}$') { throw "$Name capture has no finalized recording hash" }
   if ($Status.control_allowed -ne $false) { throw "$Name capture control_allowed is not false" }

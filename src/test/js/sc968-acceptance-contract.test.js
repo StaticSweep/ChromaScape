@@ -23,6 +23,14 @@ const sourceContract = fs.readFileSync(path.join(root,
 const managedSeedPlan = JSON.parse(fs.readFileSync(
   path.join(root, 'src/test/resources/sc968/micro6-managed-stabilization-plan.json'), 'utf8'));
 
+test('SC-968 rejects captures with zero or multiple actions before graph generation', {skip: process.platform !== 'win32'}, () => {
+  const {spawnSync} = require('node:child_process');
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+    path.join(root, 'scripts/sc968/Test-SingleActionCapture.ps1')], {encoding:'utf8', timeout:30000});
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PASS all four native single-action cases/);
+});
+
 test('SC-968 waits for proposal-bound human approval before approving or building', () => {
   const gate = runtime.indexOf('$humanApproval = Wait-Sc968HumanPatchApproval');
   const approve = runtime.indexOf('patches/$patchProposalId/approve');
