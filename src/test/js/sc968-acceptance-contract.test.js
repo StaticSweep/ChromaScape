@@ -115,6 +115,8 @@ test('SC-968 candidate evidence uses and validates the signed nested manifest id
 });
 
 test('SC-967 isolated candidate clones support tracked Windows long paths', () => {
+  assert.match(finish, /Set-DefaultEnvironment 'SC967_GRADLE_USER_HOME' \$candidateCacheSeed/);
+  assert.match(finish, /caches\/modules-2/);
   assert.match(isolatedPatchWorker,
     /request\.micro6Root\(\)\.toAbsolutePath\(\)\.normalize\(\)/);
   assert.match(isolatedPatchWorker, /ISOLATED_SOURCE_NOT_FOUND/);
@@ -125,6 +127,7 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
   assert.match(isolatedPatchWorker, /ISOLATED_CHECKOUT_FAILED/);
   assert.match(isolatedPatchWorker, /resolveSibling\("contracts"\)\.resolve\("java"\)/);
   assert.match(isolatedPatchWorker, /CAPTURE_CONTRACTS_NOT_FOUND/);
+  assert.match(isolatedPatchWorker, /resolveCaptureContracts\(source, System.getenv\("SC968_CAPTURE_CONTRACTS_DIR"\)\)/);
   assert.match(isolatedPatchWorker,
     /"-PaiRoutineCaptureContractsDir=" \+ captureContracts/);
   assert.match(isolatedPatchWorker,

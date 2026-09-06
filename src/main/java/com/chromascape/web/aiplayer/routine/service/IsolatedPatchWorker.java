@@ -1,6 +1,7 @@
 package com.chromascape.web.aiplayer.routine.service;
 
 import com.chromascape.web.aiplayer.contract.CanonicalJsonHasher;
+import com.chromascape.web.aiplayer.routine.source.SourceManifestContract;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -62,8 +63,7 @@ public class IsolatedPatchWorker {
       Path patch = temp.resolve("candidate.patch");
       Path source = request.micro6Root().toAbsolutePath().normalize();
       if (!Files.isDirectory(source)) throw new IOException("ISOLATED_SOURCE_NOT_FOUND");
-      Path captureContracts = source.resolveSibling("contracts").resolve("java").normalize();
-      if (!Files.isDirectory(captureContracts)) throw new IOException("CAPTURE_CONTRACTS_NOT_FOUND");
+      Path captureContracts = resolveCaptureContracts(source, System.getenv("SC968_CAPTURE_CONTRACTS_DIR"));
       String commonGitDirectory = capture(List.of("git", "-C", source.toString(), "rev-parse",
           "--path-format=absolute", "--git-common-dir"), temp).trim();
       Path repository = commonGitDirectory.isBlank() ? null : Path.of(commonGitDirectory).toAbsolutePath().normalize();
@@ -76,7 +76,7 @@ public class IsolatedPatchWorker {
       // client and Gradle gates still have files open there.
       runCommand(List.of("git", "clone", "--no-checkout", "--config", "core.longpaths=true", "--no-hardlinks",
           repository.toString(), repo.toString()), temp, "ISOLATED_CLONE_FAILED");
-      runCommand(List.of("git", "-C", repo.toString(), "checkout", "--detach", request.baseCommit()), temp, "ISOLATED_CHECKOUT_FAILED");
+      checkoutPinnedCommit(repository, repo, request.baseCommit(), temp);
       if (!capture(List.of("git", "-C", repo.toString(), "status", "--porcelain"), temp).isBlank()) {
         return failed(request, changed, "ISOLATED_TREE_DIRTY");
       }
@@ -125,6 +125,38 @@ public class IsolatedPatchWorker {
       }
     }
     return result;
+  }
+
+  /** Retrieve and verify the immutable approved commit even when no branch references it. */
+  static void checkoutPinnedCommit(Path repository, Path repo, String baseCommit, Path temp)
+      throws IOException, InterruptedException {
+    if (baseCommit == null || !baseCommit.matches("[0-9a-f]{40}")) throw new IOException("BASE_COMMIT_INVALID");
+    // A linked detached worktree's commit need not be reachable from any cloned branch.
+    // Fetch exactly the approved object from its common local repository, not a moving ref.
+    runCommand(List.of("git", "-C", repo.toString(), "fetch", "--no-tags", repository.toString(), baseCommit),
+        temp, "ISOLATED_BASE_FETCH_FAILED");
+    runCommand(List.of("git", "-C", repo.toString(), "checkout", "--detach", baseCommit), temp, "ISOLATED_CHECKOUT_FAILED");
+    if (!baseCommit.equals(capture(List.of("git", "-C", repo.toString(), "rev-parse", "HEAD"), temp).trim())) {
+      throw new IOException("ISOLATED_BASE_COMMIT_MISMATCH");
+    }
+  }
+
+  /** Explicit acceptance configuration must not silently fall back to a different contract tree. */
+  static Path resolveCaptureContracts(Path source, String configured) throws IOException {
+    Path contracts;
+    if (configured == null || configured.isBlank()) {
+      contracts = source.resolveSibling("contracts").resolve("java");
+    } else {
+      try {
+        contracts = Path.of(configured);
+      } catch (java.nio.file.InvalidPathException invalid) {
+        throw new IOException("CAPTURE_CONTRACTS_PATH_INVALID", invalid);
+      }
+      if (!contracts.isAbsolute()) throw new IOException("CAPTURE_CONTRACTS_PATH_NOT_ABSOLUTE");
+    }
+    contracts = contracts.toAbsolutePath().normalize();
+    if (!Files.isDirectory(contracts)) throw new IOException("CAPTURE_CONTRACTS_NOT_FOUND");
+    return contracts;
   }
 
   private static BuildResult failed(BuildRequest request, List<String> changed, String code) {
@@ -429,23 +461,34 @@ public class IsolatedPatchWorker {
     return CanonicalJsonHasher.canonical(certification).getBytes(StandardCharsets.UTF_8);
   }
 
-  private static void verifyCompleteSourceManifest(Path repo, BuildRequest request) throws Exception {
+  static void verifyCompleteSourceManifest(Path repo, BuildRequest request) throws Exception {
     JsonNode manifest = CanonicalJsonHasher.parse(request.sourceManifestJson().getBytes(StandardCharsets.UTF_8));
-    ObjectNode unsigned = (ObjectNode) manifest.deepCopy();
-    unsigned.remove("source_manifest_hash");
-    unsigned.remove("source_snapshot_id");
-    if (!request.sourceManifestHash().equals(CanonicalJsonHasher.hash(unsigned, null)) || !request.sourceSnapshotId().equals(manifest.path("source_snapshot_id").asText()) || !request.baseCommit().equals(manifest.path("client_build_id").asText())) throw new IOException("SOURCE_MANIFEST_MISMATCH");
-    if (!manifest.path("files").isArray() || manifest.path("files").isEmpty()) throw new IOException("SOURCE_MANIFEST_INVALID");
+    // Signature verification occurs when the proposal binds this persisted manifest. Recheck
+    // the same canonical content identity here; the signature is not part of that checksum.
+    if (!SourceManifestContract.SCHEMA.equals(manifest.path("schema").asText())
+        || !"AVAILABLE".equals(manifest.path("status").asText())
+        || !request.sourceManifestHash().equals(hash(SourceManifestContract.canonicalHashBytes(manifest)))
+        || !request.sourceManifestHash().equals(SourceManifestContract.declaredManifestHash(manifest))
+        || !request.sourceSnapshotId().equals(SourceManifestContract.snapshotForHash(request.sourceManifestHash()))
+        || !request.sourceSnapshotId().equals(manifest.path("source_snapshot_id").asText())
+        || !request.baseCommit().equals(manifest.path("repository").path("commit_id").asText())
+        || !request.baseCommit().equals(manifest.path("build").path("build_id").asText())
+        || !manifest.path("repository").path("clean").isBoolean()
+        || !manifest.path("repository").path("clean").asBoolean()) throw new IOException("SOURCE_MANIFEST_MISMATCH");
+    if (!manifest.path("files").isArray() || manifest.path("files").isEmpty()
+        || manifest.path("files").size() > SourceManifestContract.MAX_FILES) throw new IOException("SOURCE_MANIFEST_INVALID");
+    Path root = repo.toRealPath();
     boolean selected = false;
     for (JsonNode entry : manifest.path("files")) {
       String relative = entry.path("relative_path").asText();
       String expectedHash = entry.path("content_hash").asText();
       long expectedSize = entry.path("size_bytes").asLong(-1);
-      Path file = repo.resolve("runelite-client").resolve(relative).normalize();
-      if (!file.startsWith(repo.resolve("runelite-client").normalize()) || !Files.isRegularFile(file)) throw new IOException("SOURCE_FILE_MISSING_" + relative);
+      if (!SourceManifestContract.isSafeRelativePath(relative)) throw new IOException("SOURCE_FILE_PATH_INVALID");
+      Path file = root.resolve(relative).normalize();
+      if (!file.startsWith(root) || !Files.isRegularFile(file) || !file.toRealPath().startsWith(root)) throw new IOException("SOURCE_FILE_MISSING_" + relative);
       byte[] normalized = normalize(Files.readAllBytes(file));
       if (!expectedHash.equals(hash(normalized)) || expectedSize != normalized.length) throw new IOException("SOURCE_MANIFEST_FILE_MISMATCH_" + relative);
-      if (("runelite-client/" + relative).equals(request.sourceFile())) selected = true;
+      if (relative.equals(request.sourceFile())) selected = true;
     }
     if (!selected) throw new IOException("SOURCE_SELECTED_FILE_MISMATCH");
   }

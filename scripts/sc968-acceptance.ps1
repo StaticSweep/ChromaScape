@@ -19,6 +19,11 @@ Import-Module $common -Force
 Import-Module $evidenceModule -Force
 New-Item -ItemType Directory -Force -Path $OutputRoot, (Join-Path $OutputRoot 'logs') | Out-Null
 $logs = Join-Path $OutputRoot 'logs'
+# Native Git subprocess tests use acceptance-owned temporary state, like the runtime worker.
+$gateTemp = Join-Path $OutputRoot '.gate-temp'
+New-Item -ItemType Directory -Force -Path $gateTemp | Out-Null
+$env:TEMP = $gateTemp
+$env:TMP = $gateTemp
 $gates = @{}
 $tests = $gates
 $runtime = [ordered]@{ baseline = $null; assistant = $null; runelite = $null; candidate = $null; shadow = $null }
@@ -117,6 +122,7 @@ try {
       --tests 'com.chromascape.web.aiplayer.routine.dto.*' `
       --tests 'com.chromascape.web.aiplayer.routine.source.SourceManifestTextPersistenceTest' `
       --tests 'com.chromascape.web.aiplayer.routine.service.CandidateRegistryClientTest' `
+      --tests 'com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest' `
       --tests 'com.chromascape.web.aiplayer.routine.service.PatchCandidateManifestV2Test' `
       --tests 'com.chromascape.web.aiplayer.routine.service.PatchCandidateWorkflowServiceTest' `
       --tests 'com.chromascape.web.aiplayer.routine.service.DeterministicRoutineAssistantProviderTest' `

@@ -354,6 +354,14 @@ if ($null -eq $microVersionLine) {
 $microVersionMatch = [regex]::Match([string]$microVersionLine, '^project\.build\.version=(.+)$')
 if (-not $microVersionMatch.Success) { throw 'Micro6 project.build.version is malformed' }
 Set-DefaultEnvironment 'SC968_EXPECTED_ARTIFACT_NAME' ("client-{0}-shaded.jar" -f $microVersionMatch.Groups[1].Value.Trim())
+# The isolated worker uses this only as a read-only dependency seed, never as its writable home.
+$candidateCacheSeed = $env:GRADLE_USER_HOME
+if ([string]::IsNullOrWhiteSpace($candidateCacheSeed)) { $candidateCacheSeed = Join-Path $env:USERPROFILE '.gradle' }
+Set-DefaultEnvironment 'SC967_GRADLE_USER_HOME' $candidateCacheSeed
+if (-not [IO.Path]::IsPathRooted($env:SC967_GRADLE_USER_HOME) -or
+    -not (Test-Path -LiteralPath (Join-Path $env:SC967_GRADLE_USER_HOME 'caches/modules-2') -PathType Container)) {
+  throw 'Candidate read-only Gradle dependency cache is missing or not absolute; configure SC967_GRADLE_USER_HOME before acceptance'
+}
 Set-DefaultEnvironment 'SC968_MICRO6_LAUNCH_SCRIPT' $microLauncher
 Set-DefaultEnvironment 'SC968_RUNELITE_LAUNCH_SCRIPT' $runeliteLauncher
 Set-DefaultEnvironment 'SC968_CHROMASCAPE_URL' 'http://127.0.0.1:18090'
