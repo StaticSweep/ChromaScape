@@ -31,7 +31,7 @@ class IsolatedPatchWorkerTest {
       Path file = temporary.resolve(relative);
       Files.createDirectories(file.getParent());
       Files.writeString(file, "class Fish {}\r\n");
-      files.addObject().put("relative_path", relative).put("size_bytes", 14)
+      files.addObject().put("relative_path", relative).put("file_id", relative.equals(SELECTED) ? "selected" : "other").put("size_bytes", 14)
           .put("content_hash", digest("class Fish {}\n".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
     rehash(manifest);
@@ -49,9 +49,45 @@ class IsolatedPatchWorkerTest {
   }
 
   private IsolatedPatchWorker.BuildRequest manifestRequest(com.fasterxml.jackson.databind.JsonNode manifest, String selected) {
+    return manifestRequest(manifest, selected, "");
+  }
+
+  private IsolatedPatchWorker.BuildRequest manifestRequest(com.fasterxml.jackson.databind.JsonNode manifest, String selected, String preimage) {
     return new IsolatedPatchWorker.BuildRequest(temporary, BASE, "", java.util.Set.of(), java.util.List.of(),
-        manifest.path("source_snapshot_id").asText(), selected, 1, 1, "", "", "", "", "",
+        manifest.path("source_snapshot_id").asText(), selected, 1, 1, preimage, "", "", "", "",
         manifest.path("source_manifest_hash").asText(), manifest.toString(), "", "candidate.jar");
+  }
+
+  @Test
+  void validatesExactUtf8BytePreimageInsteadOfWholeLines() throws Exception {
+    var manifest = sourceManifest();
+    Files.writeString(temporary.resolve(SELECTED), "/*\u03c0*/ Fish\r\n");
+    manifest.putArray("symbols").addObject().put("file_id", "selected")
+        .put("start_line", 1).put("end_line", 1).put("start_byte", 7).put("end_byte", 11);
+    String preimage = digest("Fish".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    assertTrue(IsolatedPatchWorker.verifySourcePreimage(temporary, manifestRequest(manifest, SELECTED, preimage)));
+    assertFalse(IsolatedPatchWorker.verifySourcePreimage(temporary, manifestRequest(manifest, SELECTED, digest("wrong".getBytes()))));
+  }
+
+  @Test
+  void rejectsMissingAmbiguousAndInvalidByteRanges() throws Exception {
+    var manifest = sourceManifest();
+    String preimage = digest("Fish".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    assertFalse(IsolatedPatchWorker.verifySourcePreimage(temporary, manifestRequest(manifest, SELECTED, preimage)));
+    var symbols = manifest.putArray("symbols");
+    var symbol = symbols.addObject().put("file_id", "selected").put("start_line", 1).put("end_line", 1)
+        .put("start_byte", 6).put("end_byte", 10);
+    assertTrue(IsolatedPatchWorker.verifySourcePreimage(temporary, manifestRequest(manifest, SELECTED, preimage)));
+    symbols.add(symbol.deepCopy());
+    assertFalse(IsolatedPatchWorker.verifySourcePreimage(temporary, manifestRequest(manifest, SELECTED, preimage)));
+    symbols.remove(1);
+    for (int end : new int[]{-1, 6, 999}) {
+      symbol.put("end_byte", end);
+      assertFalse(IsolatedPatchWorker.verifySourcePreimage(temporary, manifestRequest(manifest, SELECTED, preimage)));
+    }
+    Files.writeString(temporary.resolve(SELECTED), "/*\u03c0*/ Fish\n");
+    symbol.put("start_byte", 3).put("end_byte", 11);
+    assertFalse(IsolatedPatchWorker.verifySourcePreimage(temporary, manifestRequest(manifest, SELECTED, preimage)));
   }
 
   @Test

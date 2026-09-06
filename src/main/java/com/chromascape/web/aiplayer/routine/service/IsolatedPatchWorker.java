@@ -493,14 +493,35 @@ public class IsolatedPatchWorker {
     if (!selected) throw new IOException("SOURCE_SELECTED_FILE_MISMATCH");
   }
 
-  private static boolean verifySourcePreimage(Path repo, BuildRequest request) throws Exception {
+  static boolean verifySourcePreimage(Path repo, BuildRequest request) throws Exception {
     if (request.sourceFile() == null || request.preimageHash() == null || request.startLine() <= 0 || request.endLine() < request.startLine()) return false;
-    Path file = repo.resolve(request.sourceFile()).normalize();
-    if (!file.startsWith(repo.normalize()) || !Files.isRegularFile(file)) return false;
-    List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-    if (request.endLine() > lines.size()) return false;
-    String span = String.join("\n", lines.subList(request.startLine() - 1, request.endLine()));
-    return request.preimageHash().equals(hash(span.getBytes(StandardCharsets.UTF_8)));
+    Path root = repo.toRealPath();
+    if (!SourceManifestContract.isSafeRelativePath(request.sourceFile())) return false;
+    Path file = root.resolve(request.sourceFile()).normalize();
+    if (!file.startsWith(root) || !Files.isRegularFile(file) || !file.toRealPath().startsWith(root)) return false;
+    JsonNode manifest = CanonicalJsonHasher.parse(request.sourceManifestJson().getBytes(StandardCharsets.UTF_8));
+    List<String> fileIds = new ArrayList<>();
+    for (JsonNode entry : manifest.path("files")) {
+      if (request.sourceFile().equals(entry.path("relative_path").asText())) fileIds.add(entry.path("file_id").asText());
+    }
+    if (fileIds.size() != 1 || fileIds.get(0).isBlank()) return false;
+    List<JsonNode> symbols = new ArrayList<>();
+    for (JsonNode symbol : manifest.path("symbols")) {
+      if (fileIds.get(0).equals(symbol.path("file_id").asText())
+          && request.startLine() == symbol.path("start_line").asInt(-1)
+          && request.endLine() == symbol.path("end_line").asInt(-1)) symbols.add(symbol);
+    }
+    if (symbols.size() != 1) return false;
+    JsonNode symbol = symbols.get(0);
+    if (!symbol.path("start_byte").isIntegralNumber() || !symbol.path("end_byte").isIntegralNumber()
+        || !symbol.path("start_byte").canConvertToInt() || !symbol.path("end_byte").canConvertToInt()) return false;
+    byte[] bytes = normalize(Files.readAllBytes(file));
+    int start = symbol.path("start_byte").asInt();
+    int end = symbol.path("end_byte").asInt();
+    if (start < 0 || end <= start || end > bytes.length
+        || (bytes[start] & 0xc0) == 0x80 || (end < bytes.length && (bytes[end] & 0xc0) == 0x80)) return false;
+    // The producer indexes UTF-8 bytes, not reconstructed whole lines (which include indentation).
+    return request.preimageHash().equals(hash(java.util.Arrays.copyOfRange(bytes, start, end)));
   }
 
   private static byte[] normalize(byte[] bytes) { return new String(bytes, StandardCharsets.UTF_8).replace("\r\n", "\n").replace("\r", "\n").getBytes(StandardCharsets.UTF_8); }
