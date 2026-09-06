@@ -493,7 +493,7 @@ class ReplayTickBatchReceiptIntegrationTest {
               new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
           Files.writeString(
               directory.resolve(script),
-              rewriteMigrationForIsolatedSchema(content),
+              content,
               java.nio.charset.StandardCharsets.UTF_8);
         }
       }
@@ -512,39 +512,8 @@ class ReplayTickBatchReceiptIntegrationTest {
     }
   }
 
-  /**
-   * Token-aware rewrite of the checked-in migrations for one isolated schema.
-   *
-   * <p>Qualified {@code public.table} references are replaced first. Bare table names are then
-   * qualified only when they are true table references: the negative lookbehind skips
-   * already-qualified names (preceded by {@code .} or {@code "}) and the trailing word guard skips
-   * substrings inside longer constraint/index identifiers. Catalog guards comparing {@code
-   * schema_ref.nspname = 'public'} are retargeted to the isolated schema so V37/V38 conditional
-   * logic recognizes the test schema.
-   */
-  private String rewriteMigrationForIsolatedSchema(String content) {
-    String rewritten =
-        content
-            .replace(
-                "public.replay_tick_batch_receipts",
-                "\"" + schema + "\".replay_tick_batch_receipts")
-            .replace("public.debug_sessions", "\"" + schema + "\".debug_sessions")
-            .replace(
-                "public.idx_replay_tick_batch_receipt_session_tick",
-                "\"" + schema + "\".idx_replay_tick_batch_receipt_session_tick")
-            .replace("schema_ref.nspname = 'public'", "schema_ref.nspname = '" + schema + "'");
-    rewritten =
-        rewritten.replaceAll(
-            "(?<![\"\\w.])replay_tick_batch_receipts(?![\\w])",
-            "\"" + schema + "\".replay_tick_batch_receipts");
-    rewritten =
-        rewritten.replaceAll(
-            "(?<![\"\\w.])debug_sessions(?![\\w])", "\"" + schema + "\".debug_sessions");
-    rewritten =
-        rewritten.replaceAll(
-            "(?<![\"\\w.])tick_snapshots(?![\\w])", "\"" + schema + "\".tick_snapshots");
-    return rewritten;
-  }
+  // Flyway's defaultSchema owns the search_path: migrate the exact production SQL bytes.
+  // Regex-qualifying table names also rewrites SQL string literals in catalog predicates.
 
   /** Asserts the schema-local Flyway history contains exactly the expected versions in order. */
   private void assertFlywayVersions(Connection connection, String... versions) throws SQLException {
@@ -595,10 +564,11 @@ class ReplayTickBatchReceiptIntegrationTest {
   private String foreignKeyDeleteRule(Connection connection) throws SQLException {
     try (var statement =
         connection.prepareStatement(
-            "SELECT rc.delete_rule FROM information_schema.referential_constraints rc "
-                + "JOIN information_schema.table_constraints tc ON tc.constraint_name = rc.constraint_name "
-                + "WHERE tc.table_schema = ? AND tc.table_name = 'replay_tick_batch_receipts' "
-                + "AND tc.constraint_name = 'fk_replay_tick_batch_receipt_session'")) {
+            "SELECT c.confdeltype FROM pg_constraint c "
+                + "JOIN pg_class t ON t.oid = c.conrelid "
+                + "JOIN pg_namespace n ON n.oid = t.relnamespace "
+                + "WHERE n.nspname = ? AND t.relname = 'replay_tick_batch_receipts' "
+                + "AND c.conname = 'fk_replay_tick_batch_receipt_session'")) {
       statement.setString(1, schema);
       try (ResultSet result = statement.executeQuery()) {
         assertTrue(result.next(), "receipt session FK must exist");
