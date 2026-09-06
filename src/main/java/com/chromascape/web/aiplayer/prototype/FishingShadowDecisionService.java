@@ -612,6 +612,12 @@ public class FishingShadowDecisionService {
     String firstObservedAt = null;
     String lastObservedAt = null;
     int count = 0;
+    // A run is registered in memory before its first decision is persisted.  Its JSONL file is
+    // therefore legitimately absent during discovery; report an empty run until the writer
+    // creates it instead of turning a normal startup race into HISTORY_READ_FAILED.
+    if (!Files.exists(file)) {
+      return null;
+    }
     ReentrantReadWriteLock.ReadLock readLock = writer.readLock();
     readLock.lock();
     try {

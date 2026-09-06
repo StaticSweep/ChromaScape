@@ -17,7 +17,13 @@ public final class SourceManifestContract {
   public static final int MAX_FILES = 10_000;
   public static final int MAX_SYMBOLS = 100_000;
   public static final int MAX_CLOSURE_EDGES = 50_000;
-  public static final int MAX_MANIFEST_BYTES = 5_000_000;
+  /**
+   * Bounded wire size for an authoritative manifest. A production Fishing closure currently
+   * contains roughly two thousand files and twenty-seven thousand symbols, so its canonical
+   * manifest is about 15.3 MB. Keep the transport bound above that valid producer output while
+   * retaining a hard cap against unbounded upstream responses.
+   */
+  public static final int MAX_MANIFEST_BYTES = 20_000_000;
   public static final long MAX_FILE_BYTES = 10_000_000L;
   public static final long MAX_CLOSURE_BYTES = 100_000_000L;
   public static final Pattern SNAPSHOT_ID = Pattern.compile("srcsnap_[0-9a-f]{24}");
