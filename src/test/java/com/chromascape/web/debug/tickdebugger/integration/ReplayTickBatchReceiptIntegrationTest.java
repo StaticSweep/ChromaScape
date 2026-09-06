@@ -58,6 +58,17 @@ class ReplayTickBatchReceiptIntegrationTest {
         Statement statement = admin.createStatement()) {
       statement.execute("CREATE SCHEMA \"" + schema + "\"");
     }
+    // Establish an empty history while the schema is still empty, before each test creates
+    // its deliberately minimal legacy debug_sessions table. No baseline/repair or relaxed
+    // validation is needed when the actual V35/V37/V38 resources are subsequently migrated.
+    Flyway.configure()
+        .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+        .schemas(schema)
+        .defaultSchema(schema)
+        .createSchemas(false)
+        .locations(new String[0])
+        .load()
+        .migrate();
   }
 
   @org.junit.jupiter.api.AfterEach

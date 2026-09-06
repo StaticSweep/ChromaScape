@@ -562,6 +562,8 @@ class TickBatchDurabilityIntegrationTest {
     String sessionId = "durable-" + UUID.randomUUID();
     seedSession(sessionId, 700L);
     TickBatchMessage batch = strictBatch(sessionId, UUID.randomUUID().toString(), 700L);
+    // Immutable action rows intentionally make a session ineligible for deletion (V24 RESTRICT).
+    batch.setActions(List.of());
     applyChecksum(batch);
     ingestionService.processTickBatch(batch, wireDocument(batch));
     assertEquals(
@@ -582,6 +584,24 @@ class TickBatchDurabilityIntegrationTest {
             .filter(receipt -> sessionId.equals(receipt.getSessionId()))
             .count(),
         "receipt rows must follow the documented cascade policy");
+  }
+
+  @Test
+  void retainedActionsPreventSessionDeletionWithoutLosingReceipts() {
+    String sessionId = "retained-" + UUID.randomUUID();
+    seedSession(sessionId, 701L);
+    TickBatchMessage batch = strictBatch(sessionId, UUID.randomUUID().toString(), 701L);
+    applyChecksum(batch);
+    ingestionService.processTickBatch(batch, wireDocument(batch));
+    assertThrows(
+        org.springframework.dao.DataIntegrityViolationException.class,
+        () -> tx().executeWithoutResult(status -> {
+          DebugSession session = sessionRepository.findBySessionId(sessionId).orElseThrow();
+          sessionRepository.delete(session);
+          sessionRepository.flush();
+        }));
+    assertTrue(sessionRepository.findBySessionId(sessionId).isPresent());
+    assertTrue(receiptRepository.findBySessionIdAndTick(sessionId, 701L).isPresent());
   }
 
   private void addRaceEvidence(TickBatchMessage batch, String marker) {
