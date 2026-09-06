@@ -26,6 +26,14 @@ class SourceManifestTextPersistenceTest {
         manifest.setSchemaVersion("task-source-manifest/v1");
         manifest.setManifestHash("sha256:" + "1".repeat(64));
         manifest.setSnapshotId("srcsnap_" + "1".repeat(24));
+        manifest.setRepositoryId("micro6");
+        manifest.setCommitId("2".repeat(40));
+        manifest.setTreeId("3".repeat(40));
+        manifest.setBuildId("2".repeat(40));
+        manifest.setArtifactDigest("sha256:" + "4".repeat(64));
+        manifest.setRetentionClass("CURRENT_BUILD");
+        manifest.setConfidentiality("INTERNAL");
+        manifest.setEnvironment("test");
         manifest.setVerificationState("VERIFIED");
         manifest.setSourceProvenance("MICRO6");
         manifest.setManifestJson(json);

@@ -230,7 +230,10 @@ function Initialize-Sc968ManagedCaptureIdentity {
       $sourceManifest.repository.clean -ne $true -or
       [string]$sourceManifest.build.build_id -ne $micro6Revision -or
       [string]$sourceManifest.build.artifact_digest -ne $artifactDigest -or
+      $artifactDigest -notmatch '^sha256:[0-9a-f]{64}$' -or
+      [string]$bundleJson.artifact_digest -ne $artifactDigest -or
       $sourceManifest.signature.algorithm -ne 'Ed25519' -or
+      [string]::IsNullOrWhiteSpace($sourceKeyId) -or
       [string]$sourceManifest.signature.key_id -ne $sourceKeyId -or
       [string]$manifestEntries[0].source_manifest_hash -ne $sourceHash -or
       [string]$manifestEntries[0].source_snapshot_id -ne $sourceSnapshotId -or

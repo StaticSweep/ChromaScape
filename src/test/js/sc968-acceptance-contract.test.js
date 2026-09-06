@@ -131,7 +131,7 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
   assert.match(isolatedPatchWorker,
     /"-PaiRoutineCaptureContractsDir=" \+ captureContracts/);
   assert.match(isolatedPatchWorker,
-    /":client:compileJava", ":client:sc967CandidateCheckstyleMain"/);
+    /":client:compileJava",\s*":client:sc967CandidateCheckstyleMain"/);
   assert.match(isolatedPatchWorker,
     /":client:sc967CandidateCheckstyleTest"/);
   assert.match(isolatedPatchWorker, /":client:sc967CandidateTest"/);
@@ -205,10 +205,14 @@ test('SC-968 Micro6 captures bind certified stabilization and source provenance'
   assert.match(micro6, /FISHING_TRAINING\.json/);
   assert.match(micro6, /sourceManifest\.repository\.commit_id -ne \$micro6Revision/);
   assert.match(micro6, /sourceManifest\.build\.artifact_digest -ne \$artifactDigest/);
+  assert.match(micro6, /bundleJson\.artifact_digest -ne \$artifactDigest/);
+  assert.match(micro6, /\[string\]::IsNullOrWhiteSpace\(\$sourceKeyId\)/);
   assert.match(micro6, /\$artifactRevision -ne \$micro6Revision/);
   assert.match(micro6, /\$artifactTree -ne \$micro6Tree/);
   assert.match(micro6, /Join-Path \$artifactRoot 'runelite-client\\build\\identity\\micro6-artifact\.properties'/);
   assert.match(micro6, /sourceManifest\.signature\.algorithm -ne 'Ed25519'/);
+  assert.match(micro6, /current\.json/);
+  assert.match(micro6, /task-source-manifest\/v1/);
   assert.match(micro6, /SourceSnapshotId = \$sourceSnapshotId/);
   assert.doesNotMatch(micro6, /stabilization_manifest_hash/);
   assert.doesNotMatch(runtime, /stabilization\/ingest-report/);
@@ -247,7 +251,7 @@ test('certified report bundles retain the raw servlet stream for bounded parsing
 test('managed run creation uses capture authentication, not the operator credential', () => {
   assert.match(operatorWebConfig, /\/api\/v1\/ai-routine\/runs\/from-stabilization\/\*\*/);
   assert.match(routineController,
-    /@PostMapping\("\/runs\/from-stabilization\/\{attemptId\}"\)[^\n]+@RequestHeader\(value="Authorization",required=false\)[^\n]+authorize\(authorization\)/);
+    /@PostMapping\("\/runs\/from-stabilization\/\{attemptId\}"\)\s*public ResponseEntity<Object> createRun\(\s*@RequestHeader\(value\s*=\s*"Authorization",\s*required\s*=\s*false\) String authorization,\s*@PathVariable String attemptId,\s*@RequestBody RoutineApiDtos\.StartRunRequest request\)\s*\{\s*authorize\(authorization\)/);
 });
 
 test('SC-968 entrypoint and manifests require all five runtime evidence documents', () => {
