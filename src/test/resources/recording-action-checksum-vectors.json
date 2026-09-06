@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "vectors": [
+    {
+      "name": "action-basic",
+      "canonical": "{\"actionType\":\"INTERACT_NPC\",\"arguments\":{\"option\":\"net\"},\"capturedAt\":\"2026-08-31T22:00:00Z\",\"confidence\":1,\"provenance\":\"CAPTURED\",\"recordingId\":\"recording-1\",\"schema\":\"recording-action/v1\",\"sequence\":3,\"sessionId\":\"session-1\",\"source\":\"MICRO6_SEMANTIC_DISPATCH\",\"target\":{\"kind\":\"NPC\",\"stableId\":\"npc:1518:3200:3200:0\"},\"tick\":12}",
+      "checksum": "sha256:4ef4c963fe183e1c91ac29e8d612a3e61e4a2f6dd3033fe109e0a9afc97e3547"
+    },
+    {
+      "name": "action-null-recording",
+      "canonical": "{\"actionType\":\"WALK_TO\",\"arguments\":{\"note\":\"<go> & 'fish' = \\\"net\\\"\",\"x\":3200,\"y\":3200},\"capturedAt\":\"2026-09-03T00:00:00Z\",\"confidence\":1,\"provenance\":\"CAPTURED\",\"recordingId\":null,\"schema\":\"recording-action/v1\",\"sequence\":0,\"sessionId\":\"session-1\",\"source\":\"MICRO6_SEMANTIC_DISPATCH\",\"target\":{\"kind\":\"TILE\",\"stableId\":\"tile:3200:3200:0\"},\"tick\":12}",
+      "checksum": "sha256:64b8c288a09d24a49f20048b03d17282e0a258bf94e8436fb129d0cc1ce0e6f9"
+    },
+    {
+      "name": "action-empty-target",
+      "canonical": "{\"actionType\":\"WAIT_UNTIL_TICK\",\"arguments\":{},\"capturedAt\":\"2026-09-03T00:00:00Z\",\"confidence\":1,\"provenance\":\"CAPTURED\",\"recordingId\":null,\"schema\":\"recording-action/v1\",\"sequence\":0,\"sessionId\":\"s\",\"source\":\"MICRO6_SEMANTIC_DISPATCH\",\"target\":{},\"tick\":5}",
+      "checksum": "sha256:4be9f6ce53517367ce4ab191abad81f74296865eecc0861a6dfed0abc9b183c2"
+    },
+    {
+      "name": "action-conf-0.1",
+      "canonical": "{\"actionType\":\"INTERACT_NPC\",\"arguments\":{\"option\":\"net\"},\"capturedAt\":\"2026-08-31T22:00:00Z\",\"confidence\":0.1,\"provenance\":\"CAPTURED\",\"recordingId\":\"recording-1\",\"schema\":\"recording-action/v1\",\"sequence\":3,\"sessionId\":\"session-1\",\"source\":\"MICRO6_SEMANTIC_DISPATCH\",\"target\":{\"kind\":\"NPC\",\"stableId\":\"npc:1518:3200:3200:0\"},\"tick\":12}",
+      "checksum": "sha256:e6a80e1b3daa03dec8a40914f241a5ea80408d7c55b1ffdc869c24d37cb11afd"
+    }
+  ]
+}

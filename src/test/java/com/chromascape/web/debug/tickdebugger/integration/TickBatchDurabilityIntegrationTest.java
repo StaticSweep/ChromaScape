@@ -54,10 +54,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  *
  * <p>Unlike the JDBC-only {@link ReplayTickBatchReceiptIntegrationTest}, every test here calls the
  * Spring-proxied {@link TickStreamIngestionService#processTickBatch} so the receipt lookup,
- * checksum validation, action ingestion, snapshot/log/overlay persistence, session tick bounds,
- * and post-commit publication form one transactional boundary. A late persistence failure must
- * leave every table unchanged and emit no acknowledgment; concurrent exact duplicates must
- * converge on one evidence set through the service's own conflict resolution.
+ * checksum validation, action ingestion, snapshot/log/overlay persistence, session tick bounds, and
+ * post-commit publication form one transactional boundary. A late persistence failure must leave
+ * every table unchanged and emit no acknowledgment; concurrent exact duplicates must converge on
+ * one evidence set through the service's own conflict resolution.
  */
 @DataJpaTest(
     properties = {
@@ -147,8 +147,7 @@ class TickBatchDurabilityIntegrationTest {
 
     @Bean
     com.chromascape.web.recording.service.RecordingService recordingService() {
-      return org.mockito.Mockito.mock(
-          com.chromascape.web.recording.service.RecordingService.class);
+      return org.mockito.Mockito.mock(com.chromascape.web.recording.service.RecordingService.class);
     }
 
     @Bean
@@ -159,8 +158,7 @@ class TickBatchDurabilityIntegrationTest {
 
     @Bean
     com.chromascape.web.recording.config.RecordingConfig recordingConfig() {
-      return org.mockito.Mockito.mock(
-          com.chromascape.web.recording.config.RecordingConfig.class);
+      return org.mockito.Mockito.mock(com.chromascape.web.recording.config.RecordingConfig.class);
     }
 
     @Bean
@@ -206,10 +204,8 @@ class TickBatchDurabilityIntegrationTest {
     seedSession(sessionId, 100L);
     TickBatchMessage batch = strictBatch(sessionId, batchId, 100L);
     batch.setLogs(
-        List.of(
-            new TickBatchMessage.TickLogEntry("System", "Info", null, "hello", null, null)));
-    batch.setOverlays(
-        List.of(new TickBatchMessage.TickOverlayEntry("note", Map.of("k", "v"))));
+        List.of(new TickBatchMessage.TickLogEntry("System", "Info", null, "hello", null, null)));
+    batch.setOverlays(List.of(new TickBatchMessage.TickOverlayEntry("note", Map.of("k", "v"))));
     applyChecksum(batch);
 
     TickStreamIngestionService.TickBatchAcknowledgment acknowledgment =
@@ -219,11 +215,40 @@ class TickBatchDurabilityIntegrationTest {
     assertEquals(batchId, acknowledgment.batchId());
     assertEquals(batch.getPayloadChecksum(), acknowledgment.payloadChecksum());
     assertTrue(
-        receiptRepository.findBySessionIdAndBatchId(sessionId, UUID.fromString(batchId)).isPresent(),
+        receiptRepository
+            .findBySessionIdAndBatchId(sessionId, UUID.fromString(batchId))
+            .isPresent(),
         "one receipt must exist");
+    com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceipt receipt =
+        receiptRepository
+            .findBySessionIdAndBatchId(sessionId, UUID.fromString(batchId))
+            .orElseThrow();
+    assertEquals(
+        batch.getPayloadChecksum(),
+        receipt.getPayloadChecksum(),
+        "stored receipt checksum must match the batch checksum");
+    assertEquals("tick-batch/v2", receipt.getSchemaName());
+    assertEquals(100L, receipt.getTick());
     assertEquals(1, snapshotRepository.countBySessionId(sessionId));
     assertEquals(1, logRepository.countBySessionId(sessionId));
     assertEquals(1, overlayRepository.countBySessionId(sessionId));
+    assertEquals(
+        1,
+        actionRepository.countBySessionId(sessionId),
+        "one typed action must be ingested with the batch");
+    com.chromascape.web.debug.tickdebugger.entity.ReplayRecordingAction storedAction =
+        actionRepository.findBySessionIdOrderByTickAscSequenceAsc(sessionId).stream()
+            .findFirst()
+            .orElseThrow();
+    assertEquals("WAIT_UNTIL_TICK", storedAction.getActionType());
+    assertEquals(
+        batch.getActions().get(0).getContentChecksum(),
+        storedAction.getContentChecksum(),
+        "stored action checksum must equal the producer checksum");
+    assertTrue(
+        storedAction.getContentChecksum() != null
+            && storedAction.getContentChecksum().startsWith("sha256:"),
+        "stored action content checksum must be present");
     assertEquals(
         100L,
         sessionRepository.findBySessionId(sessionId).orElseThrow().getEndTick(),
@@ -237,17 +262,28 @@ class TickBatchDurabilityIntegrationTest {
     // An overlay with a null type violates the NOT NULL overlay_type column after the receipt,
     // snapshot, logs, and actions have been written: everything must roll back together.
     TickBatchMessage batch = strictBatch(sessionId, UUID.randomUUID().toString(), 200L);
-    batch.setOverlays(
-        List.of(new TickBatchMessage.TickOverlayEntry(null, Map.of("k", "v"))));
+    batch.setOverlays(List.of(new TickBatchMessage.TickOverlayEntry(null, Map.of("k", "v"))));
     applyChecksum(batch);
 
-    assertThrows(Exception.class, () -> ingestionService.processTickBatch(batch, wireDocument(batch)));
+    assertThrows(
+        Exception.class, () -> ingestionService.processTickBatch(batch, wireDocument(batch)));
 
-    assertEquals(0, receiptRepository.findAll().stream()
-        .filter(receipt -> sessionId.equals(receipt.getSessionId())).count());
+    assertEquals(
+        0,
+        receiptRepository.findAll().stream()
+            .filter(receipt -> sessionId.equals(receipt.getSessionId()))
+            .count());
     assertEquals(0, snapshotRepository.countBySessionId(sessionId));
     assertEquals(0, logRepository.countBySessionId(sessionId));
     assertEquals(0, overlayRepository.countBySessionId(sessionId));
+    assertEquals(
+        0,
+        actionRepository.countBySessionId(sessionId),
+        "a rolled-back batch must leave no typed actions");
+    assertEquals(
+        0,
+        markerRepository.countBySessionId(sessionId),
+        "a rolled-back batch must leave no timeline markers");
     assertEquals(
         200L,
         sessionRepository.findBySessionId(sessionId).orElseThrow().getEndTick(),
@@ -268,13 +304,26 @@ class TickBatchDurabilityIntegrationTest {
         IllegalArgumentException.class,
         () -> ingestionService.processTickBatch(batch, wireDocument(batch)));
 
-    assertEquals(0, receiptRepository.findAll().stream()
-        .filter(receipt -> sessionId.equals(receipt.getSessionId())).count());
+    assertEquals(
+        0,
+        receiptRepository.findAll().stream()
+            .filter(receipt -> sessionId.equals(receipt.getSessionId()))
+            .count());
     assertEquals(0, snapshotRepository.countBySessionId(sessionId));
+    assertEquals(0, logRepository.countBySessionId(sessionId));
+    assertEquals(0, overlayRepository.countBySessionId(sessionId));
+    assertEquals(
+        0,
+        actionRepository.countBySessionId(sessionId),
+        "a tampered action must leave no typed actions");
+    assertEquals(
+        0,
+        markerRepository.countBySessionId(sessionId),
+        "a tampered action must leave no timeline markers");
   }
 
   @Test
-  void commitTimeConstraintFailureSendsNoAcknowledgment() {
+  void commitTimeConstraintFailureRollsBackAllEvidence() {
     String sessionId = "durable-" + UUID.randomUUID();
     seedSession(sessionId, 400L);
     TickBatchMessage batch = strictBatch(sessionId, UUID.randomUUID().toString(), 400L);
@@ -292,9 +341,22 @@ class TickBatchDurabilityIntegrationTest {
             || failure instanceof jakarta.persistence.PersistenceException,
         "constraint failure must surface, got " + failure.getClass());
 
-    assertEquals(0, receiptRepository.findAll().stream()
-        .filter(receipt -> sessionId.equals(receipt.getSessionId())).count());
+    assertEquals(
+        0,
+        receiptRepository.findAll().stream()
+            .filter(receipt -> sessionId.equals(receipt.getSessionId()))
+            .count());
     assertEquals(0, logRepository.countBySessionId(sessionId));
+    assertEquals(0, snapshotRepository.countBySessionId(sessionId));
+    assertEquals(0, overlayRepository.countBySessionId(sessionId));
+    assertEquals(0, actionRepository.countBySessionId(sessionId));
+    assertEquals(
+        0,
+        markerRepository.countBySessionId(sessionId),
+        "a commit-time failure must leave every evidence table empty");
+    // Handler-level no-ACK coverage lives in TickStreamWebSocketHandlerTest
+    // (dataIntegrityFailureFromServiceSendsNoAcknowledgment): the handler emits
+    // BATCH_PERSISTENCE_FAILED and never TICK_BATCH_ACK when the service throws.
   }
 
   @Test
@@ -307,20 +369,26 @@ class TickBatchDurabilityIntegrationTest {
     try {
       List<Future<TickStreamIngestionService.TickBatchAcknowledgment>> futures =
           List.of(
-              pool.submit(() -> {
-                barrier.await(10, TimeUnit.SECONDS);
-                TickBatchMessage batch = strictBatch(sessionId, batchId, 500L);
-                applyChecksum(batch);
-                return ingestionService.processTickBatch(batch, wireDocument(batch));
-              }),
-              pool.submit(() -> {
-                barrier.await(10, TimeUnit.SECONDS);
-                TickBatchMessage batch = strictBatch(sessionId, batchId, 500L);
-                applyChecksum(batch);
-                return ingestionService.processTickBatch(batch, wireDocument(batch));
-              }));
-      TickStreamIngestionService.TickBatchAcknowledgment first = futures.get(0).get(60, TimeUnit.SECONDS);
-      TickStreamIngestionService.TickBatchAcknowledgment second = futures.get(1).get(60, TimeUnit.SECONDS);
+              pool.submit(
+                  () -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    TickBatchMessage batch = strictBatch(sessionId, batchId, 500L);
+                    addRaceEvidence(batch, "duplicate");
+                    applyChecksum(batch);
+                    return ingestionService.processTickBatch(batch, wireDocument(batch));
+                  }),
+              pool.submit(
+                  () -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    TickBatchMessage batch = strictBatch(sessionId, batchId, 500L);
+                    addRaceEvidence(batch, "duplicate");
+                    applyChecksum(batch);
+                    return ingestionService.processTickBatch(batch, wireDocument(batch));
+                  }));
+      TickStreamIngestionService.TickBatchAcknowledgment first =
+          futures.get(0).get(60, TimeUnit.SECONDS);
+      TickStreamIngestionService.TickBatchAcknowledgment second =
+          futures.get(1).get(60, TimeUnit.SECONDS);
       assertEquals(first.batchId(), second.batchId());
       assertEquals(first.payloadChecksum(), second.payloadChecksum());
       assertEquals("PERSISTED", first.status());
@@ -328,9 +396,22 @@ class TickBatchDurabilityIntegrationTest {
     } finally {
       pool.shutdownNow();
     }
-    assertEquals(1, receiptRepository.findAll().stream()
-        .filter(receipt -> sessionId.equals(receipt.getSessionId())).count());
+    assertEquals(
+        1,
+        receiptRepository.findAll().stream()
+            .filter(receipt -> sessionId.equals(receipt.getSessionId()))
+            .count());
     assertEquals(1, snapshotRepository.countBySessionId(sessionId));
+    assertEquals(1, logRepository.countBySessionId(sessionId));
+    assertEquals(1, overlayRepository.countBySessionId(sessionId));
+    assertEquals(
+        1,
+        actionRepository.countBySessionId(sessionId),
+        "duplicate convergence must leave exactly one typed action set");
+    assertEquals(
+        0,
+        markerRepository.countBySessionId(sessionId),
+        "the duplicate strict batch carries no error markers");
   }
 
   @Test
@@ -341,44 +422,117 @@ class TickBatchDurabilityIntegrationTest {
     ExecutorService pool = Executors.newFixedThreadPool(2);
     String batchA = UUID.randomUUID().toString();
     String batchB = UUID.randomUUID().toString();
+    String resultA;
+    String resultB;
     try {
       List<Future<String>> futures =
           List.of(
-              pool.submit(() -> {
-                barrier.await(10, TimeUnit.SECONDS);
-                TickBatchMessage batch = strictBatch(sessionId, batchA, 600L);
-                batch.getPlayerState().put("markerA", "a");
-                applyChecksum(batch);
-                try {
-                  ingestionService.processTickBatch(batch, wireDocument(batch));
-                  return batchA;
-                } catch (IllegalArgumentException conflict) {
-                  return "conflict:" + batchA;
-                }
-              }),
-              pool.submit(() -> {
-                barrier.await(10, TimeUnit.SECONDS);
-                TickBatchMessage batch = strictBatch(sessionId, batchB, 600L);
-                batch.getPlayerState().put("markerB", "b");
-                applyChecksum(batch);
-                try {
-                  ingestionService.processTickBatch(batch, wireDocument(batch));
-                  return batchB;
-                } catch (IllegalArgumentException conflict) {
-                  return "conflict:" + batchB;
-                }
-              }));
-      String resultA = futures.get(0).get(60, TimeUnit.SECONDS);
-      String resultB = futures.get(1).get(60, TimeUnit.SECONDS);
+              pool.submit(
+                  () -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    TickBatchMessage batch = strictBatch(sessionId, batchA, 600L);
+                    batch.getPlayerState().put("markerA", "a");
+                    addRaceEvidence(batch, "A");
+                    applyChecksum(batch);
+                    try {
+                      ingestionService.processTickBatch(batch, wireDocument(batch));
+                      return batchA;
+                    } catch (IllegalArgumentException conflict) {
+                      return "conflict:" + batchA;
+                    }
+                  }),
+              pool.submit(
+                  () -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    TickBatchMessage batch = strictBatch(sessionId, batchB, 600L);
+                    batch.getPlayerState().put("markerB", "b");
+                    addRaceEvidence(batch, "B");
+                    applyChecksum(batch);
+                    try {
+                      ingestionService.processTickBatch(batch, wireDocument(batch));
+                      return batchB;
+                    } catch (IllegalArgumentException conflict) {
+                      return "conflict:" + batchB;
+                    }
+                  }));
+      resultA = futures.get(0).get(60, TimeUnit.SECONDS);
+      resultB = futures.get(1).get(60, TimeUnit.SECONDS);
       boolean exactlyOneWinner =
           (resultA.equals(batchA) && resultB.startsWith("conflict:"))
               || (resultB.equals(batchB) && resultA.startsWith("conflict:"));
-      assertTrue(exactlyOneWinner, "exactly one conflicting batch must win, got " + resultA + " / " + resultB);
+      assertTrue(
+          exactlyOneWinner,
+          "exactly one conflicting batch must win, got " + resultA + " / " + resultB);
     } finally {
       pool.shutdownNow();
     }
-    assertEquals(1, receiptRepository.findAll().stream()
-        .filter(receipt -> sessionId.equals(receipt.getSessionId())).count());
+    assertEquals(
+        1,
+        receiptRepository.findAll().stream()
+            .filter(receipt -> sessionId.equals(receipt.getSessionId()))
+            .count());
+    assertEquals(
+        1,
+        snapshotRepository.countBySessionId(sessionId),
+        "the conflict race must leave exactly one snapshot");
+    assertEquals(
+        1,
+        actionRepository.countBySessionId(sessionId),
+        "the conflict race must leave exactly one typed action set");
+    assertEquals(
+        1,
+        logRepository.countBySessionId(sessionId),
+        "the conflict winner persists its own log evidence");
+    assertEquals(
+        1,
+        overlayRepository.countBySessionId(sessionId),
+        "the conflict winner persists its own overlay evidence");
+    String winningBatchId = resultA.equals(batchA) ? batchA : batchB;
+    String losingPlayerMarker = winningBatchId.equals(batchA) ? "\"markerB\"" : "\"markerA\"";
+    String winningPlayerMarker = winningBatchId.equals(batchA) ? "\"markerA\"" : "\"markerB\"";
+    String winningLogEvent = winningBatchId.equals(batchA) ? "RACE_A" : "RACE_B";
+    String winningLogText = winningBatchId.equals(batchA) ? "race-A" : "race-B";
+    String expectedOverlayMarker = winningBatchId.equals(batchA) ? "A" : "B";
+    assertTrue(
+        snapshotRepository
+            .findBySessionIdAndTick(sessionId, 600L)
+            .map(snapshot -> snapshot.getPlayerState().toString())
+            .map(
+                playerState ->
+                    playerState.contains(winningPlayerMarker)
+                        && !playerState.contains(losingPlayerMarker))
+            .orElse(false),
+        "the stored snapshot must belong to the winning batch, never a mixture");
+    String winningLogMessage =
+        logRepository.findBySessionIdAndTick(sessionId, 600L).stream()
+            .findFirst()
+            .map(log -> winningLogEvent + "|" + log.getEventType() + "|" + log.getMessage())
+            .orElse("");
+    assertTrue(
+        logRepository.findBySessionIdAndTick(sessionId, 600L).stream()
+            .findFirst()
+            .map(
+                log ->
+                    winningLogEvent.equals(log.getEventType())
+                        && winningLogText.equals(log.getMessage()))
+            .orElse(false),
+        "the stored log must belong to the winning batch, never the loser: " + winningLogMessage);
+    String winningOverlayMarker =
+        overlayRepository.findBySessionIdAndTick(sessionId, 600L).stream()
+            .findFirst()
+            .map(overlay -> overlay.getData() != null ? overlay.getData().toString() : "")
+            .orElse("");
+    assertTrue(
+        overlayRepository.findBySessionIdAndTick(sessionId, 600L).stream()
+            .findFirst()
+            .map(
+                overlay ->
+                    "race".equals(overlay.getOverlayType())
+                        && overlay.getData() != null
+                        && expectedOverlayMarker.equals(overlay.getData().get("marker").asText()))
+            .orElse(false),
+        "the stored overlay must belong to the winning batch, never the loser: "
+            + winningOverlayMarker);
   }
 
   @Test
@@ -388,26 +542,43 @@ class TickBatchDurabilityIntegrationTest {
     TickBatchMessage batch = strictBatch(sessionId, UUID.randomUUID().toString(), 700L);
     applyChecksum(batch);
     ingestionService.processTickBatch(batch, wireDocument(batch));
-    assertEquals(1, receiptRepository.findAll().stream()
-        .filter(receipt -> sessionId.equals(receipt.getSessionId())).count());
+    assertEquals(
+        1,
+        receiptRepository.findAll().stream()
+            .filter(receipt -> sessionId.equals(receipt.getSessionId()))
+            .count());
 
-    tx().executeWithoutResult(status -> {
-      DebugSession session = sessionRepository.findBySessionId(sessionId).orElseThrow();
-      sessionRepository.delete(session);
-    });
+    tx().executeWithoutResult(
+            status -> {
+              DebugSession session = sessionRepository.findBySessionId(sessionId).orElseThrow();
+              sessionRepository.delete(session);
+            });
 
-    assertEquals(0, receiptRepository.findAll().stream()
-        .filter(receipt -> sessionId.equals(receipt.getSessionId())).count(),
+    assertEquals(
+        0,
+        receiptRepository.findAll().stream()
+            .filter(receipt -> sessionId.equals(receipt.getSessionId()))
+            .count(),
         "receipt rows must follow the documented cascade policy");
   }
 
+  private void addRaceEvidence(TickBatchMessage batch, String marker) {
+    batch.setLogs(
+        List.of(
+            new TickBatchMessage.TickLogEntry(
+                "Durability", "Info", "RACE_" + marker, "race-" + marker, null, null)));
+    batch.setOverlays(
+        List.of(new TickBatchMessage.TickOverlayEntry("race", Map.of("marker", marker))));
+  }
+
   private void seedSession(String sessionId, long startTick) {
-    tx().executeWithoutResult(status -> {
-      DebugSession session =
-          new DebugSession(sessionId, "account", "script", LocalDateTime.now(), startTick);
-      session.setEndTick(startTick);
-      sessionRepository.saveAndFlush(session);
-    });
+    tx().executeWithoutResult(
+            status -> {
+              DebugSession session =
+                  new DebugSession(sessionId, "account", "script", LocalDateTime.now(), startTick);
+              session.setEndTick(startTick);
+              sessionRepository.saveAndFlush(session);
+            });
   }
 
   private TickBatchMessage strictBatch(String sessionId, String batchId, long tick) {
@@ -493,19 +664,25 @@ class TickBatchDurabilityIntegrationTest {
 
   private void removeNulls(ObjectNode object) {
     List<String> nullFields = new ArrayList<>();
-    object.fields().forEachRemaining(entry -> {
-      if (entry.getValue() == null || entry.getValue().isNull()) {
-        nullFields.add(entry.getKey());
-      } else if (entry.getValue().isObject()) {
-        removeNulls((ObjectNode) entry.getValue());
-      } else if (entry.getValue().isArray()) {
-        entry.getValue().forEach(child -> {
-          if (child.isObject()) {
-            removeNulls((ObjectNode) child);
-          }
-        });
-      }
-    });
+    object
+        .fields()
+        .forEachRemaining(
+            entry -> {
+              if (entry.getValue() == null || entry.getValue().isNull()) {
+                nullFields.add(entry.getKey());
+              } else if (entry.getValue().isObject()) {
+                removeNulls((ObjectNode) entry.getValue());
+              } else if (entry.getValue().isArray()) {
+                entry
+                    .getValue()
+                    .forEach(
+                        child -> {
+                          if (child.isObject()) {
+                            removeNulls((ObjectNode) child);
+                          }
+                        });
+              }
+            });
     nullFields.forEach(object::remove);
   }
 }

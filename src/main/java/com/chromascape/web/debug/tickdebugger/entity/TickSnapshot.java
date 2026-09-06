@@ -76,6 +76,18 @@ public class TickSnapshot {
   @Column(name = "quest_helper")
   private JsonNode questHelper;
 
+  /** Active dialogue state and visible options as JSON object. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode dialogue;
+
+  /** Visible spell definitions as JSON array. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode spells;
+
+  /** Captured var/varbit values as JSON object. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private JsonNode vars;
+
   /** NPCs in render distance as JSON array. */
   @JdbcTypeCode(SqlTypes.JSON)
   private JsonNode npcs;
@@ -214,6 +226,30 @@ public class TickSnapshot {
 
   public void setQuestHelper(JsonNode questHelper) {
     this.questHelper = questHelper;
+  }
+
+  public JsonNode getDialogue() {
+    return dialogue;
+  }
+
+  public void setDialogue(JsonNode dialogue) {
+    this.dialogue = dialogue;
+  }
+
+  public JsonNode getSpells() {
+    return spells;
+  }
+
+  public void setSpells(JsonNode spells) {
+    this.spells = spells;
+  }
+
+  public JsonNode getVars() {
+    return vars;
+  }
+
+  public void setVars(JsonNode vars) {
+    this.vars = vars;
   }
 
   public JsonNode getNpcs() {

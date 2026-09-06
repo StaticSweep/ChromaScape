@@ -45,9 +45,16 @@ class TickBatchCanonicalChecksumServiceTest {
       String name = vector.get("name").asText();
       String wire = vector.get("wire").asText();
       JsonNode parsed = service.parseWireJson(wire);
-      assertEquals(vector.get("canonical").asText(), service.canonicalJson(parsed), "canonical mismatch: " + name);
-      assertEquals(vector.get("checksum").asText(), service.checksum(parsed), "checksum mismatch: " + name);
-      assertEquals(vector.get("checksum").asText(), service.checksumForWireJson(wire), "wire checksum mismatch: " + name);
+      assertEquals(
+          vector.get("canonical").asText(),
+          service.canonicalJson(parsed),
+          "canonical mismatch: " + name);
+      assertEquals(
+          vector.get("checksum").asText(), service.checksum(parsed), "checksum mismatch: " + name);
+      assertEquals(
+          vector.get("checksum").asText(),
+          service.checksumForWireJson(wire),
+          "wire checksum mismatch: " + name);
       asserted++;
     }
     assertTrue(asserted >= 20, "expected at least 20 canonical vectors, saw " + asserted);
@@ -56,11 +63,17 @@ class TickBatchCanonicalChecksumServiceTest {
   @Test
   void decimalAndZeroFormsCanonicalizeIdentically() {
     TickBatchCanonicalChecksumService service = service();
-    assertEquals(service.checksumForWireJson("{\"v\":1}"), service.checksumForWireJson("{\"v\":1.0}"));
-    assertEquals(service.checksumForWireJson("{\"v\":1}"), service.checksumForWireJson("{\"v\":1.0000}"));
-    assertEquals(service.checksumForWireJson("{\"v\":0}"), service.checksumForWireJson("{\"v\":-0}"));
-    assertEquals(service.checksumForWireJson("{\"v\":0}"), service.checksumForWireJson("{\"v\":-0.0}"));
-    assertEquals(service.checksumForWireJson("{\"v\":0.000000123}"), service.checksumForWireJson("{\"v\":1.23e-7}"));
+    assertEquals(
+        service.checksumForWireJson("{\"v\":1}"), service.checksumForWireJson("{\"v\":1.0}"));
+    assertEquals(
+        service.checksumForWireJson("{\"v\":1}"), service.checksumForWireJson("{\"v\":1.0000}"));
+    assertEquals(
+        service.checksumForWireJson("{\"v\":0}"), service.checksumForWireJson("{\"v\":-0}"));
+    assertEquals(
+        service.checksumForWireJson("{\"v\":0}"), service.checksumForWireJson("{\"v\":-0.0}"));
+    assertEquals(
+        service.checksumForWireJson("{\"v\":0.000000123}"),
+        service.checksumForWireJson("{\"v\":1.23e-7}"));
   }
 
   @Test
@@ -70,14 +83,19 @@ class TickBatchCanonicalChecksumServiceTest {
         service.checksumForWireJson("{\"z\":{\"b\":1,\"a\":2},\"a\":{\"y\":[3,2],\"x\":1}}"),
         service.checksumForWireJson("{\"a\":{\"x\":1,\"y\":[3,2]},\"z\":{\"a\":2,\"b\":1}}"));
     assertTrue(
-        !service.checksumForWireJson("{\"arr\":[1,2,3]}").equals(service.checksumForWireJson("{\"arr\":[3,2,1]}")),
+        !service
+            .checksumForWireJson("{\"arr\":[1,2,3]}")
+            .equals(service.checksumForWireJson("{\"arr\":[3,2,1]}")),
         "array order must be preserved");
   }
 
   @Test
   void rootPayloadChecksumIsRemovedButNestedValuesArePreserved() {
     TickBatchCanonicalChecksumService service = service();
-    String wire = "{\"payloadChecksum\":\"sha256:" + "0".repeat(64) + "\",\"nested\":{\"payloadChecksum\":\"retain\",\"n\":1}}";
+    String wire =
+        "{\"payloadChecksum\":\"sha256:"
+            + "0".repeat(64)
+            + "\",\"nested\":{\"payloadChecksum\":\"retain\",\"n\":1}}";
     String canonical = service.canonicalJson(service.parseWireJson(wire));
     assertEquals("{\"nested\":{\"n\":1,\"payloadChecksum\":\"retain\"}}", canonical);
   }
@@ -85,14 +103,16 @@ class TickBatchCanonicalChecksumServiceTest {
   @Test
   void malformedSurrogateInputIsRejected() {
     TickBatchCanonicalChecksumService service = service();
-    assertThrows(IllegalArgumentException.class, () -> service.checksumForWireJson("{\"s\":\"\\ud800\"}"));
+    assertThrows(
+        IllegalArgumentException.class, () -> service.checksumForWireJson("{\"s\":\"\\ud800\"}"));
   }
 
   @Test
   void numbersNeverPassThroughDouble() {
     TickBatchCanonicalChecksumService service = service();
-    String canonical = service.canonicalJson(
-        service.parseWireJson("{\"v\":123456789012345678901234567890.12345}"));
+    String canonical =
+        service.canonicalJson(
+            service.parseWireJson("{\"v\":123456789012345678901234567890.12345}"));
     assertEquals("{\"v\":123456789012345678901234567890.12345}", canonical);
   }
 
@@ -131,7 +151,9 @@ class TickBatchCanonicalChecksumServiceTest {
       content.put("provenance", canonical.get("provenance").asText());
       content.put("confidence", canonical.get("confidence").decimalValue());
       content.put("capturedAt", canonical.get("capturedAt").asText());
-      assertEquals(vector.get("checksum").asText(), service.checksum(content),
+      assertEquals(
+          vector.get("checksum").asText(),
+          service.checksum(content),
           "production checksum mismatch: " + name);
       asserted++;
     }
@@ -149,7 +171,9 @@ class TickBatchCanonicalChecksumServiceTest {
     while (fixtures.hasNext()) {
       JsonNode fixture = fixtures.next();
       String name = fixture.get("name").asText();
-      assertEquals(fixture.get("sha256").asText(), sha256(readResource(name)),
+      assertEquals(
+          fixture.get("sha256").asText(),
+          sha256(readResource(name)),
           "fixture " + name + " must match its manifest hash");
       asserted++;
     }
@@ -167,17 +191,20 @@ class TickBatchCanonicalChecksumServiceTest {
     content.put("tick", 12L);
     content.put("sequence", 3);
     content.put("actionType", "INTERACT_NPC");
-    content.set("target", mapper.valueToTree(Map.of("kind", "NPC", "stableId", "npc:1518:3200:3200:0")));
+    content.set(
+        "target", mapper.valueToTree(Map.of("kind", "NPC", "stableId", "npc:1518:3200:3200:0")));
     content.set("arguments", mapper.valueToTree(Map.of("option", "net")));
     content.put("source", "MICRO6_SEMANTIC_DISPATCH");
     content.put("provenance", "CAPTURED");
     content.put("confidence", new java.math.BigDecimal("1"));
     content.put("capturedAt", "2026-08-31T22:00:00Z");
-    assertEquals("sha256:4ef4c963fe183e1c91ac29e8d612a3e61e4a2f6dd3033fe109e0a9afc97e3547",
+    assertEquals(
+        "sha256:4ef4c963fe183e1c91ac29e8d612a3e61e4a2f6dd3033fe109e0a9afc97e3547",
         service.checksum(content));
     ObjectNode nulled = content.deepCopy();
     nulled.putNull("recordingId");
-    assertEquals("sha256:64b8c288a09d24a49f20048b03d17282e0a258bf94e8436fb129d0cc1ce0e6f9",
+    assertEquals(
+        "sha256:64b8c288a09d24a49f20048b03d17282e0a258bf94e8436fb129d0cc1ce0e6f9",
         service.checksum(nulled));
   }
 
@@ -191,13 +218,15 @@ class TickBatchCanonicalChecksumServiceTest {
 
   private static String readResource(String name) throws IOException {
     return new String(
-        Objects.requireNonNull(TickBatchCanonicalChecksumServiceTest.class.getResourceAsStream("/" + name))
+        Objects.requireNonNull(
+                TickBatchCanonicalChecksumServiceTest.class.getResourceAsStream("/" + name))
             .readAllBytes(),
         StandardCharsets.UTF_8);
   }
 
   private static String sha256(String value) throws Exception {
-    byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+    byte[] digest =
+        MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
     StringBuilder result = new StringBuilder(digest.length * 2);
     for (byte item : digest) {
       result.append(String.format("%02x", item & 0xff));

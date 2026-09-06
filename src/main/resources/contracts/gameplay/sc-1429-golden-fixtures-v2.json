@@ -1,0 +1,2000 @@
+{
+ "contractVersion": "sc-1429/v2",
+ "canonicalization": "UTF-8 JSON with recursively lexicographic object keys, preserved array order, no insignificant whitespace, and lowercase sha256: digests. Self-referential digest fields (catalogDigest, goalPlanDigest) are omitted when computing their own digest.",
+ "testSigningSecret": "sc-1429-fixture-secret-32-bytes-minimum",
+ "semanticAction": {
+  "kind": "START_FISHING_TASK",
+  "taskKey": "FISHING_TRAINING",
+  "settings": {
+   "targetLevel": 2,
+   "areaPolicy": "LUMBRIDGE"
+  },
+  "expectedTransition": "FISHING_XP_INCREASED",
+  "verifierId": "fishing-xp-v1",
+  "decisionId": "decision-sc1429-002"
+ },
+ "approvedScope": {
+  "contractVersion": "sc-1429/v2",
+  "mode": "LIVE_TASK",
+  "provider": "CLAUDE",
+  "modelVersion": "claude-fixture-v2",
+  "decisionId": "decision-sc1429-002",
+  "identities": {
+   "accountId": "account-sc1429",
+   "clientId": "client-sc1429",
+   "environmentId": "live-osrs",
+   "runId": "run-sc1498-001",
+   "taskId": "task-fishing-001",
+   "sessionId": "session-sc1498-001",
+   "recordingId": "recording-sc1498-001",
+   "sourceId": "source-sc1429"
+  },
+  "taskKey": "FISHING_TRAINING",
+  "settings": {
+   "targetLevel": 2,
+   "areaPolicy": "LUMBRIDGE"
+  },
+  "budgets": {
+   "maxActions": 1,
+   "maxAttempts": 1,
+   "maxElapsedMs": 60000
+  },
+  "semanticActionDigest": "sha256:1926515989b28c28651aa49f8330fd4c27728013d278cb0f9cbf4585aedade3b",
+  "expectedTransition": "FISHING_XP_INCREASED",
+  "verifierId": "fishing-xp-v1",
+  "deadline": "2026-09-03T12:10:00Z",
+  "killSwitchScope": "RUN"
+ },
+ "authority": {
+  "contractVersion": "sc-1429/v2",
+  "authorityId": "auth-sc1429-002",
+  "actorType": "HUMAN",
+  "approvedBy": "fixture-operator",
+  "approvedAt": "2026-09-03T12:00:00Z",
+  "expiresAt": "2026-09-03T12:10:00Z",
+  "envelopeDigest": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+  "scopeDigest": "sha256:8dee62c71e45f4f8bab647148f461962fb4b18bd14ba7a2e8610c14771fac614",
+  "oneUse": true,
+  "signature": "hmac-sha256:d0ff7e11fab1665d3d5a2245f4d9ea25980b1905704e699343bc6fe4422b0637"
+ },
+ "catalogSnapshot": {
+  "contractVersion": "sc-1429/v2",
+  "catalogId": "catalog-sc1429",
+  "catalogRevision": 3,
+  "catalogDigest": "sha256:07db5dbed09d713813f45e79fd266d6799ab0c6623338bfe8b1c3726ef3ddcff",
+  "capturedAt": "2026-09-03T11:00:00Z",
+  "executorArtifactId": "micro6-accountbuilder",
+  "executorBuildId": "build-sc1429",
+  "pluginId": "plugin-accountbuilder",
+  "capabilitySnapshotDigest": "sha256:7c865fc8f8e85e3c22483b3d7c7186dec85b5cca08d33801612766ca1e23f88a",
+  "tasks": [
+   {
+    "taskKey": "FISHING_TRAINING",
+    "requiredCapabilities": [
+     "FISHING_SEMANTIC_ACTION",
+     "CLIENT_OBSERVATION"
+    ],
+    "prerequisites": [
+     "ACCOUNT_IDLE"
+    ],
+    "preconditions": [
+     "OBSERVATION_CURRENT",
+     "ACCOUNT_IDLE"
+    ],
+    "expectedTransitions": [
+     "FISHING_XP_INCREASED",
+     "TARGET_LEVEL_REACHED"
+    ],
+    "verifierIds": [
+     "fishing-xp-v1"
+    ],
+    "maxPolicyBounds": {
+     "maxActions": 3,
+     "maxAttempts": 3,
+     "maxElapsedMs": 900000
+    }
+   }
+  ]
+ },
+ "semanticObservation": {
+  "contractVersion": "sc-1429/v2",
+  "observationId": "obs-sc1429-002",
+  "revision": 42,
+  "capturedAt": "2026-09-03T12:00:00Z",
+  "capturedTick": 9001,
+  "mode": "LIVE_TASK",
+  "identities": {
+   "accountId": "account-sc1429",
+   "clientId": "client-sc1429",
+   "environmentId": "live-osrs",
+   "runId": "run-sc1498-001",
+   "taskId": "task-fishing-001",
+   "sessionId": "session-sc1498-001",
+   "recordingId": "recording-sc1498-001",
+   "sourceId": "source-sc1429"
+  },
+  "catalogDigest": "sha256:07db5dbed09d713813f45e79fd266d6799ab0c6623338bfe8b1c3726ef3ddcff",
+  "catalogRevision": 3,
+  "capabilitySnapshotDigest": "sha256:7c865fc8f8e85e3c22483b3d7c7186dec85b5cca08d33801612766ca1e23f88a",
+  "policyDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "knowledgeDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "buildId": "build-sc1429",
+  "player": {
+   "worldPoint": "3222,3218,0",
+   "animation": -1,
+   "interactingTarget": null
+  },
+  "inventory": [
+   {
+    "itemId": 303,
+    "quantity": 1
+   }
+  ],
+  "skills": {
+   "fishingLevel": 1,
+   "fishingXp": 0
+  },
+  "eligibleTargets": [
+   "FISHING_TRAINING"
+  ],
+  "taskState": {
+   "revision": 7,
+   "status": "IDLE",
+   "taskKey": null
+  },
+  "freshness": {
+   "status": "CURRENT",
+   "maxAgeMs": 300000
+  },
+  "observationComplete": true,
+  "adapterObservationConfidence": 0.95,
+  "knowledgeFreshnessConfidence": 0.97,
+  "taskRevision": 7
+ },
+ "planningInput": {
+  "contractVersion": "sc-1429/v2",
+  "mode": "LIVE_TASK",
+  "catalogDigest": "sha256:07db5dbed09d713813f45e79fd266d6799ab0c6623338bfe8b1c3726ef3ddcff",
+  "catalogRevision": 3,
+  "observationDigest": "sha256:f92760147b3b29d9fbed8d6a2c4f732202c9c4bb5c7e395a8e782f21f46e899a",
+  "capabilitySnapshotDigest": "sha256:7c865fc8f8e85e3c22483b3d7c7186dec85b5cca08d33801612766ca1e23f88a",
+  "policyDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "knowledgeDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "eligibleTaskKeys": [
+   "FISHING_TRAINING"
+  ],
+  "rejectedEntries": [],
+  "budgets": {
+   "maxActions": 3,
+   "maxAttempts": 3,
+   "maxElapsedMs": 900000
+  },
+  "deadline": "2026-09-03T12:10:00Z",
+  "identities": {
+   "accountId": "account-sc1429",
+   "clientId": "client-sc1429",
+   "environmentId": "live-osrs",
+   "runId": "run-sc1498-001",
+   "taskId": "task-fishing-001",
+   "sessionId": "session-sc1498-001",
+   "recordingId": "recording-sc1498-001",
+   "sourceId": "source-sc1429"
+  },
+  "provenanceRefs": [
+   "catalog:catalog-sc1429@3",
+   "observation:obs-sc1429-002"
+  ],
+  "promptSchemaId": "sc-1429-prompt",
+  "promptSchemaVersion": "v2"
+ },
+ "eligibilityResult": {
+  "contractVersion": "sc-1429/v2",
+  "mode": "LIVE_TASK",
+  "catalogDigest": "sha256:07db5dbed09d713813f45e79fd266d6799ab0c6623338bfe8b1c3726ef3ddcff",
+  "observationDigest": "sha256:f92760147b3b29d9fbed8d6a2c4f732202c9c4bb5c7e395a8e782f21f46e899a",
+  "evaluatedAt": "2026-09-03T12:00:05Z",
+  "entries": [
+   {
+    "taskKey": "FISHING_TRAINING",
+    "status": "ELIGIBLE"
+   }
+  ]
+ },
+ "goalPlan": {
+  "contractVersion": "sc-1429/v2",
+  "goalPlanId": "goalplan-sc1429-001",
+  "goalPlanDigest": "sha256:061fb6e2213513916825044a71caf93f7c84f93ed846e1a8166774c4d35ef306",
+  "mode": "LIVE_TASK",
+  "identities": {
+   "accountId": "account-sc1429",
+   "clientId": "client-sc1429",
+   "environmentId": "live-osrs",
+   "runId": "run-sc1498-001",
+   "taskId": "task-fishing-001",
+   "sessionId": "session-sc1498-001",
+   "recordingId": "recording-sc1498-001",
+   "sourceId": "source-sc1429"
+  },
+  "sourceDecisionId": "decision-sc1429-002",
+  "deadline": "2026-09-03T12:10:00Z",
+  "terminalObjective": "TARGET_LEVEL_REACHED",
+  "aggregateBudgets": {
+   "maxActions": 3,
+   "maxAttempts": 3,
+   "maxElapsedMs": 900000
+  },
+  "nodes": [
+   {
+    "nodeId": "node-0",
+    "ordinal": 0,
+    "taskKey": "FISHING_TRAINING",
+    "taskSkillRefs": [
+     {
+      "taskSkillId": "ts-fishing-lumbridge",
+      "version": 1,
+      "artifactDigest": "sha256:ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc1",
+      "maturity": "VALIDATED",
+      "capabilityRequirements": [
+       "FISHING_SEMANTIC_ACTION"
+      ],
+      "provenance": [
+       "taskskill:ts-fishing-lumbridge@1"
+      ]
+     }
+    ],
+    "settings": {
+     "targetLevel": 2,
+     "areaPolicy": "LUMBRIDGE"
+    },
+    "prerequisiteNodeIds": [],
+    "preconditions": [
+     "OBSERVATION_CURRENT",
+     "ACCOUNT_IDLE"
+    ],
+    "expectedObservationRevision": 42,
+    "expectedTaskRevision": 7,
+    "expectedTransition": "FISHING_XP_INCREASED",
+    "verifierId": "fishing-xp-v1",
+    "budgets": {
+     "maxActions": 1,
+     "maxAttempts": 1,
+     "maxElapsedMs": 300000
+    },
+    "fallbackNodeId": "node-1",
+    "failureCode": null,
+    "evidenceRefs": [
+     "observation:obs-sc1429-002"
+    ]
+   },
+   {
+    "nodeId": "node-1",
+    "ordinal": 1,
+    "taskKey": "FISHING_TRAINING",
+    "taskSkillRefs": [
+     {
+      "taskSkillId": "ts-fishing-draynor",
+      "version": 1,
+      "artifactDigest": "sha256:ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc2",
+      "maturity": "CANDIDATE",
+      "capabilityRequirements": [
+       "FISHING_SEMANTIC_ACTION"
+      ],
+      "provenance": [
+       "taskskill:ts-fishing-draynor@1"
+      ]
+     }
+    ],
+    "settings": {
+     "targetLevel": 2,
+     "areaPolicy": "DRAYNOR"
+    },
+    "prerequisiteNodeIds": [
+     "node-0"
+    ],
+    "preconditions": [
+     "OBSERVATION_CURRENT"
+    ],
+    "expectedObservationRevision": 42,
+    "expectedTaskRevision": 7,
+    "expectedTransition": "FISHING_XP_INCREASED",
+    "verifierId": "fishing-xp-v1",
+    "budgets": {
+     "maxActions": 1,
+     "maxAttempts": 1,
+     "maxElapsedMs": 300000
+    },
+    "fallbackNodeId": "node-2",
+    "failureCode": null,
+    "evidenceRefs": [
+     "observation:obs-sc1429-002"
+    ]
+   },
+   {
+    "nodeId": "node-2",
+    "ordinal": 2,
+    "taskKey": "FISHING_TRAINING",
+    "taskSkillRefs": [
+     {
+      "taskSkillId": "ts-fishing-barbarian",
+      "version": 1,
+      "artifactDigest": "sha256:ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc3",
+      "maturity": "CANDIDATE",
+      "capabilityRequirements": [
+       "FISHING_SEMANTIC_ACTION"
+      ],
+      "provenance": [
+       "taskskill:ts-fishing-barbarian@1"
+      ]
+     }
+    ],
+    "settings": {
+     "targetLevel": 2,
+     "areaPolicy": "BARBARIAN_VILLAGE"
+    },
+    "prerequisiteNodeIds": [
+     "node-1"
+    ],
+    "preconditions": [
+     "OBSERVATION_CURRENT"
+    ],
+    "expectedObservationRevision": 42,
+    "expectedTaskRevision": 7,
+    "expectedTransition": "TARGET_LEVEL_REACHED",
+    "verifierId": "fishing-xp-v1",
+    "budgets": {
+     "maxActions": 1,
+     "maxAttempts": 1,
+     "maxElapsedMs": 300000
+    },
+    "fallbackNodeId": null,
+    "failureCode": null,
+    "evidenceRefs": [
+     "observation:obs-sc1429-002"
+    ]
+   }
+  ]
+ },
+ "claudeDecision": {
+  "contractVersion": "sc-1429/v2",
+  "kind": "SELECTED",
+  "provider": "CLAUDE",
+  "modelVersion": "claude-fixture-v2",
+  "decisionId": "decision-sc1429-002",
+  "promptId": "prompt-sc1429-002",
+  "policyConfidence": 0.9,
+  "adapterObservationConfidence": 0.95,
+  "knowledgeFreshnessConfidence": 0.97,
+  "eligibleInputDigest": "sha256:638239e655710263f3d9ca15f0988822d4691d474e9aab56926cbf07b40ef4e9",
+  "goalPlan": {
+   "contractVersion": "sc-1429/v2",
+   "goalPlanId": "goalplan-sc1429-001",
+   "goalPlanDigest": "sha256:061fb6e2213513916825044a71caf93f7c84f93ed846e1a8166774c4d35ef306",
+   "mode": "LIVE_TASK",
+   "identities": {
+    "accountId": "account-sc1429",
+    "clientId": "client-sc1429",
+    "environmentId": "live-osrs",
+    "runId": "run-sc1498-001",
+    "taskId": "task-fishing-001",
+    "sessionId": "session-sc1498-001",
+    "recordingId": "recording-sc1498-001",
+    "sourceId": "source-sc1429"
+   },
+   "sourceDecisionId": "decision-sc1429-002",
+   "deadline": "2026-09-03T12:10:00Z",
+   "terminalObjective": "TARGET_LEVEL_REACHED",
+   "aggregateBudgets": {
+    "maxActions": 3,
+    "maxAttempts": 3,
+    "maxElapsedMs": 900000
+   },
+   "nodes": [
+    {
+     "nodeId": "node-0",
+     "ordinal": 0,
+     "taskKey": "FISHING_TRAINING",
+     "taskSkillRefs": [
+      {
+       "taskSkillId": "ts-fishing-lumbridge",
+       "version": 1,
+       "artifactDigest": "sha256:ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc1",
+       "maturity": "VALIDATED",
+       "capabilityRequirements": [
+        "FISHING_SEMANTIC_ACTION"
+       ],
+       "provenance": [
+        "taskskill:ts-fishing-lumbridge@1"
+       ]
+      }
+     ],
+     "settings": {
+      "targetLevel": 2,
+      "areaPolicy": "LUMBRIDGE"
+     },
+     "prerequisiteNodeIds": [],
+     "preconditions": [
+      "OBSERVATION_CURRENT",
+      "ACCOUNT_IDLE"
+     ],
+     "expectedObservationRevision": 42,
+     "expectedTaskRevision": 7,
+     "expectedTransition": "FISHING_XP_INCREASED",
+     "verifierId": "fishing-xp-v1",
+     "budgets": {
+      "maxActions": 1,
+      "maxAttempts": 1,
+      "maxElapsedMs": 300000
+     },
+     "fallbackNodeId": "node-1",
+     "failureCode": null,
+     "evidenceRefs": [
+      "observation:obs-sc1429-002"
+     ]
+    },
+    {
+     "nodeId": "node-1",
+     "ordinal": 1,
+     "taskKey": "FISHING_TRAINING",
+     "taskSkillRefs": [
+      {
+       "taskSkillId": "ts-fishing-draynor",
+       "version": 1,
+       "artifactDigest": "sha256:ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc2",
+       "maturity": "CANDIDATE",
+       "capabilityRequirements": [
+        "FISHING_SEMANTIC_ACTION"
+       ],
+       "provenance": [
+        "taskskill:ts-fishing-draynor@1"
+       ]
+      }
+     ],
+     "settings": {
+      "targetLevel": 2,
+      "areaPolicy": "DRAYNOR"
+     },
+     "prerequisiteNodeIds": [
+      "node-0"
+     ],
+     "preconditions": [
+      "OBSERVATION_CURRENT"
+     ],
+     "expectedObservationRevision": 42,
+     "expectedTaskRevision": 7,
+     "expectedTransition": "FISHING_XP_INCREASED",
+     "verifierId": "fishing-xp-v1",
+     "budgets": {
+      "maxActions": 1,
+      "maxAttempts": 1,
+      "maxElapsedMs": 300000
+     },
+     "fallbackNodeId": "node-2",
+     "failureCode": null,
+     "evidenceRefs": [
+      "observation:obs-sc1429-002"
+     ]
+    },
+    {
+     "nodeId": "node-2",
+     "ordinal": 2,
+     "taskKey": "FISHING_TRAINING",
+     "taskSkillRefs": [
+      {
+       "taskSkillId": "ts-fishing-barbarian",
+       "version": 1,
+       "artifactDigest": "sha256:ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc3",
+       "maturity": "CANDIDATE",
+       "capabilityRequirements": [
+        "FISHING_SEMANTIC_ACTION"
+       ],
+       "provenance": [
+        "taskskill:ts-fishing-barbarian@1"
+       ]
+      }
+     ],
+     "settings": {
+      "targetLevel": 2,
+      "areaPolicy": "BARBARIAN_VILLAGE"
+     },
+     "prerequisiteNodeIds": [
+      "node-1"
+     ],
+     "preconditions": [
+      "OBSERVATION_CURRENT"
+     ],
+     "expectedObservationRevision": 42,
+     "expectedTaskRevision": 7,
+     "expectedTransition": "TARGET_LEVEL_REACHED",
+     "verifierId": "fishing-xp-v1",
+     "budgets": {
+      "maxActions": 1,
+      "maxAttempts": 1,
+      "maxElapsedMs": 300000
+     },
+     "fallbackNodeId": null,
+     "failureCode": null,
+     "evidenceRefs": [
+      "observation:obs-sc1429-002"
+     ]
+    }
+   ]
+  },
+  "evidenceRefs": [
+   "observation:obs-sc1429-002"
+  ]
+ },
+ "codexDecision": {
+  "contractVersion": "sc-1429/v2",
+  "kind": "SELECTED",
+  "provider": "CODEX",
+  "modelVersion": "codex-fixture-v2",
+  "decisionId": "decision-sc1429-002",
+  "promptId": "prompt-codex-002",
+  "policyConfidence": 0.9,
+  "adapterObservationConfidence": 0.95,
+  "knowledgeFreshnessConfidence": 0.97,
+  "eligibleInputDigest": "sha256:638239e655710263f3d9ca15f0988822d4691d474e9aab56926cbf07b40ef4e9",
+  "goalPlan": {
+   "contractVersion": "sc-1429/v2",
+   "goalPlanId": "goalplan-sc1429-001",
+   "goalPlanDigest": "sha256:061fb6e2213513916825044a71caf93f7c84f93ed846e1a8166774c4d35ef306",
+   "mode": "LIVE_TASK",
+   "identities": {
+    "accountId": "account-sc1429",
+    "clientId": "client-sc1429",
+    "environmentId": "live-osrs",
+    "runId": "run-sc1498-001",
+    "taskId": "task-fishing-001",
+    "sessionId": "session-sc1498-001",
+    "recordingId": "recording-sc1498-001",
+    "sourceId": "source-sc1429"
+   },
+   "sourceDecisionId": "decision-sc1429-002",
+   "deadline": "2026-09-03T12:10:00Z",
+   "terminalObjective": "TARGET_LEVEL_REACHED",
+   "aggregateBudgets": {
+    "maxActions": 3,
+    "maxAttempts": 3,
+    "maxElapsedMs": 900000
+   },
+   "nodes": [
+    {
+     "nodeId": "node-0",
+     "ordinal": 0,
+     "taskKey": "FISHING_TRAINING",
+     "taskSkillRefs": [
+      {
+       "taskSkillId": "ts-fishing-lumbridge",
+       "version": 1,
+       "artifactDigest": "sha256:ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc1",
+       "maturity": "VALIDATED",
+       "capabilityRequirements": [
+        "FISHING_SEMANTIC_ACTION"
+       ],
+       "provenance": [
+        "taskskill:ts-fishing-lumbridge@1"
+       ]
+      }
+     ],
+     "settings": {
+      "targetLevel": 2,
+      "areaPolicy": "LUMBRIDGE"
+     },
+     "prerequisiteNodeIds": [],
+     "preconditions": [
+      "OBSERVATION_CURRENT",
+      "ACCOUNT_IDLE"
+     ],
+     "expectedObservationRevision": 42,
+     "expectedTaskRevision": 7,
+     "expectedTransition": "FISHING_XP_INCREASED",
+     "verifierId": "fishing-xp-v1",
+     "budgets": {
+      "maxActions": 1,
+      "maxAttempts": 1,
+      "maxElapsedMs": 300000
+     },
+     "fallbackNodeId": "node-1",
+     "failureCode": null,
+     "evidenceRefs": [
+      "observation:obs-sc1429-002"
+     ]
+    },
+    {
+     "nodeId": "node-1",
+     "ordinal": 1,
+     "taskKey": "FISHING_TRAINING",
+     "taskSkillRefs": [
+      {
+       "taskSkillId": "ts-fishing-draynor",
+       "version": 1,
+       "artifactDigest": "sha256:ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc2",
+       "maturity": "CANDIDATE",
+       "capabilityRequirements": [
+        "FISHING_SEMANTIC_ACTION"
+       ],
+       "provenance": [
+        "taskskill:ts-fishing-draynor@1"
+       ]
+      }
+     ],
+     "settings": {
+      "targetLevel": 2,
+      "areaPolicy": "DRAYNOR"
+     },
+     "prerequisiteNodeIds": [
+      "node-0"
+     ],
+     "preconditions": [
+      "OBSERVATION_CURRENT"
+     ],
+     "expectedObservationRevision": 42,
+     "expectedTaskRevision": 7,
+     "expectedTransition": "FISHING_XP_INCREASED",
+     "verifierId": "fishing-xp-v1",
+     "budgets": {
+      "maxActions": 1,
+      "maxAttempts": 1,
+      "maxElapsedMs": 300000
+     },
+     "fallbackNodeId": "node-2",
+     "failureCode": null,
+     "evidenceRefs": [
+      "observation:obs-sc1429-002"
+     ]
+    },
+    {
+     "nodeId": "node-2",
+     "ordinal": 2,
+     "taskKey": "FISHING_TRAINING",
+     "taskSkillRefs": [
+      {
+       "taskSkillId": "ts-fishing-barbarian",
+       "version": 1,
+       "artifactDigest": "sha256:ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc3",
+       "maturity": "CANDIDATE",
+       "capabilityRequirements": [
+        "FISHING_SEMANTIC_ACTION"
+       ],
+       "provenance": [
+        "taskskill:ts-fishing-barbarian@1"
+       ]
+      }
+     ],
+     "settings": {
+      "targetLevel": 2,
+      "areaPolicy": "BARBARIAN_VILLAGE"
+     },
+     "prerequisiteNodeIds": [
+      "node-1"
+     ],
+     "preconditions": [
+      "OBSERVATION_CURRENT"
+     ],
+     "expectedObservationRevision": 42,
+     "expectedTaskRevision": 7,
+     "expectedTransition": "TARGET_LEVEL_REACHED",
+     "verifierId": "fishing-xp-v1",
+     "budgets": {
+      "maxActions": 1,
+      "maxAttempts": 1,
+      "maxElapsedMs": 300000
+     },
+     "fallbackNodeId": null,
+     "failureCode": null,
+     "evidenceRefs": [
+      "observation:obs-sc1429-002"
+     ]
+    }
+   ]
+  },
+  "evidenceRefs": [
+   "observation:obs-sc1429-002"
+  ]
+ },
+ "abstainDecision": {
+  "contractVersion": "sc-1429/v2",
+  "kind": "ABSTAINED",
+  "provider": "CLAUDE",
+  "modelVersion": "claude-fixture-v2",
+  "decisionId": "decision-abstain-002",
+  "promptId": "prompt-sc1429-003",
+  "policyConfidence": 0.2,
+  "adapterObservationConfidence": 0.4,
+  "knowledgeFreshnessConfidence": 0.5,
+  "eligibleInputDigest": "sha256:638239e655710263f3d9ca15f0988822d4691d474e9aab56926cbf07b40ef4e9",
+  "reason": "NO_ELIGIBLE_TASK",
+  "evidenceRefs": []
+ },
+ "executionEnvelope": {
+  "contractVersion": "sc-1429/v2",
+  "mode": "LIVE_TASK",
+  "provider": "CLAUDE",
+  "modelVersion": "claude-fixture-v2",
+  "decisionId": "decision-sc1429-002",
+  "promptId": "prompt-sc1429-002",
+  "requestId": "request-sc1429-002",
+  "idempotencyKey": "idempotency-sc1429-002",
+  "goalPlanDigest": "sha256:061fb6e2213513916825044a71caf93f7c84f93ed846e1a8166774c4d35ef306",
+  "taskSkillDigests": [
+   "sha256:ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc1"
+  ],
+  "taskKey": "FISHING_TRAINING",
+  "settings": {
+   "targetLevel": 2,
+   "areaPolicy": "LUMBRIDGE"
+  },
+  "identities": {
+   "accountId": "account-sc1429",
+   "clientId": "client-sc1429",
+   "environmentId": "live-osrs",
+   "runId": "run-sc1498-001",
+   "taskId": "task-fishing-001",
+   "sessionId": "session-sc1498-001",
+   "recordingId": "recording-sc1498-001",
+   "sourceId": "source-sc1429"
+  },
+  "catalogDigest": "sha256:07db5dbed09d713813f45e79fd266d6799ab0c6623338bfe8b1c3726ef3ddcff",
+  "catalogRevision": 3,
+  "capabilitySnapshotDigest": "sha256:7c865fc8f8e85e3c22483b3d7c7186dec85b5cca08d33801612766ca1e23f88a",
+  "schemaDigest": "sha256:1d032dc935e36af0b10ad0269330c7e3df65a26b9212c81caae5bc4afd0abf0b",
+  "policyDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "knowledgeDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "semanticActionDigest": "sha256:1926515989b28c28651aa49f8330fd4c27728013d278cb0f9cbf4585aedade3b",
+  "expectedTransition": "FISHING_XP_INCREASED",
+  "verifierId": "fishing-xp-v1",
+  "executorArtifactId": "micro6-accountbuilder",
+  "pluginId": "plugin-accountbuilder",
+  "buildId": "build-sc1429",
+  "expectedObservationRevision": 42,
+  "expectedTaskRevision": 7,
+  "leaseGeneration": 1,
+  "fence": 1,
+  "budgets": {
+   "maxActions": 1,
+   "maxAttempts": 1,
+   "maxElapsedMs": 60000
+  },
+  "deadline": "2026-09-03T12:10:00Z",
+  "killSwitchScope": "RUN",
+  "authorityId": "auth-sc1429-002",
+  "planningInputDigest": "sha256:cc6fba677a31af329a051bf9208b44c5a525ae23cc5fce19b713325bf5bb6e97",
+  "eligibilityResultDigest": "sha256:638239e655710263f3d9ca15f0988822d4691d474e9aab56926cbf07b40ef4e9"
+ },
+ "toolOperations": {
+  "catalog": {
+   "contractVersion": "sc-1429/v2",
+   "op": "CATALOG",
+   "mode": "LIVE_TASK",
+   "requestId": "request-catalog-002",
+   "idempotencyKey": "idem-catalog-002",
+   "deadline": "2026-09-03T12:10:00Z",
+   "catalogDigest": "sha256:9e0bf3b7d4602b636988d4af5b6632a20183bed059239cb7602435adad2b7e38"
+  },
+  "reserve": {
+   "contractVersion": "sc-1429/v2",
+   "op": "RESERVE",
+   "mode": "LIVE_TASK",
+   "requestId": "request-reserve-002",
+   "idempotencyKey": "idem-reserve-002",
+   "deadline": "2026-09-03T12:10:00Z",
+   "envelopeDigest": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+   "leaseGeneration": 1,
+   "fence": 1
+  },
+  "start": {
+   "contractVersion": "sc-1429/v2",
+   "op": "START",
+   "mode": "LIVE_TASK",
+   "requestId": "request-start-002",
+   "idempotencyKey": "idem-start-002",
+   "deadline": "2026-09-03T12:10:00Z",
+   "envelopeDigest": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+   "leaseGeneration": 1,
+   "fence": 1
+  },
+  "status": {
+   "contractVersion": "sc-1429/v2",
+   "op": "STATUS",
+   "mode": "LIVE_TASK",
+   "requestId": "request-status-002",
+   "idempotencyKey": "idem-status-002",
+   "deadline": "2026-09-03T12:10:00Z"
+  },
+  "stop": {
+   "contractVersion": "sc-1429/v2",
+   "op": "STOP",
+   "mode": "LIVE_TASK",
+   "requestId": "request-stop-002",
+   "idempotencyKey": "idem-stop-002",
+   "deadline": "2026-09-03T12:10:00Z",
+   "stopIntent": "OPERATOR_STOP"
+  },
+  "observe": {
+   "contractVersion": "sc-1429/v2",
+   "op": "OBSERVE",
+   "mode": "LIVE_TASK",
+   "requestId": "request-observe-002",
+   "idempotencyKey": "idem-observe-002",
+   "deadline": "2026-09-03T12:10:00Z",
+   "clientId": "client-sc1429",
+   "capabilitySnapshotDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+ },
+ "lifecycleReceipts": {
+  "reservation": {
+   "contractVersion": "sc-1429/v2",
+   "mode": "LIVE_TASK",
+   "receiptId": "receipt-reserve-002",
+   "requestId": "request-sc1429-002",
+   "envelopeDigest": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+   "phase": "RESERVATION",
+   "outcome": "HELD",
+   "failureCode": null,
+   "at": "2026-09-03T12:00:10Z",
+   "evidenceRefs": [
+    "reservation:reserve-001"
+   ],
+   "retryAllowed": false
+  },
+  "delivery": {
+   "contractVersion": "sc-1429/v2",
+   "mode": "LIVE_TASK",
+   "receiptId": "receipt-dispatch-002",
+   "requestId": "request-sc1429-002",
+   "envelopeDigest": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+   "phase": "DISPATCH",
+   "outcome": "DELIVERED",
+   "failureCode": null,
+   "at": "2026-09-03T12:00:20Z",
+   "evidenceRefs": [
+    "dispatch:dispatch-001"
+   ],
+   "retryAllowed": false
+  },
+  "confirmed": {
+   "contractVersion": "sc-1429/v2",
+   "mode": "LIVE_TASK",
+   "receiptId": "receipt-confirm-002",
+   "requestId": "request-sc1429-002",
+   "envelopeDigest": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+   "phase": "VERIFICATION",
+   "outcome": "CONFIRMED",
+   "failureCode": null,
+   "at": "2026-09-03T12:05:00Z",
+   "evidenceRefs": [
+    "verifier:fishing-xp-v1:41"
+   ],
+   "retryAllowed": false
+  },
+  "refuted": {
+   "contractVersion": "sc-1429/v2",
+   "mode": "LIVE_TASK",
+   "receiptId": "receipt-refute-002",
+   "requestId": "request-sc1429-002",
+   "envelopeDigest": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+   "phase": "VERIFICATION",
+   "outcome": "REFUTED",
+   "failureCode": "VERIFIER_MISMATCH",
+   "at": "2026-09-03T12:05:00Z",
+   "evidenceRefs": [
+    "verifier:fishing-xp-v1:40"
+   ],
+   "retryAllowed": false
+  },
+  "unverifiable": {
+   "contractVersion": "sc-1429/v2",
+   "mode": "LIVE_TASK",
+   "receiptId": "receipt-unverifiable-002",
+   "requestId": "request-sc1429-002",
+   "envelopeDigest": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+   "phase": "VERIFICATION",
+   "outcome": "UNVERIFIABLE",
+   "failureCode": "VERIFIER_EVIDENCE_MISSING",
+   "at": "2026-09-03T12:05:00Z",
+   "evidenceRefs": [],
+   "retryAllowed": true
+  },
+  "uncertain": {
+   "contractVersion": "sc-1429/v2",
+   "mode": "LIVE_TASK",
+   "receiptId": "receipt-uncertain-002",
+   "requestId": "request-sc1429-002",
+   "envelopeDigest": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+   "phase": "TASK_TERMINAL",
+   "outcome": "UNCERTAIN_OUTCOME",
+   "failureCode": "DISCONNECT_AFTER_DELIVERY",
+   "at": "2026-09-03T12:05:00Z",
+   "evidenceRefs": [],
+   "retryAllowed": false
+  },
+  "stopped": {
+   "contractVersion": "sc-1429/v2",
+   "mode": "LIVE_TASK",
+   "receiptId": "receipt-stop-002",
+   "requestId": "request-sc1429-002",
+   "envelopeDigest": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+   "phase": "TASK_TERMINAL",
+   "outcome": "STOPPED",
+   "failureCode": null,
+   "at": "2026-09-03T12:05:00Z",
+   "evidenceRefs": [
+    "stop:intent:OPERATOR_STOP",
+    "stop:kill-switch-001"
+   ],
+   "retryAllowed": false
+  }
+ },
+ "expectedDigests": {
+  "semanticAction": "sha256:1926515989b28c28651aa49f8330fd4c27728013d278cb0f9cbf4585aedade3b",
+  "catalogSnapshot": "sha256:07db5dbed09d713813f45e79fd266d6799ab0c6623338bfe8b1c3726ef3ddcff",
+  "semanticObservation": "sha256:f92760147b3b29d9fbed8d6a2c4f732202c9c4bb5c7e395a8e782f21f46e899a",
+  "planningInput": "sha256:cc6fba677a31af329a051bf9208b44c5a525ae23cc5fce19b713325bf5bb6e97",
+  "eligibilityResult": "sha256:638239e655710263f3d9ca15f0988822d4691d474e9aab56926cbf07b40ef4e9",
+  "goalPlan": "sha256:061fb6e2213513916825044a71caf93f7c84f93ed846e1a8166774c4d35ef306",
+  "executionEnvelope": "sha256:aa5edbf178c2c63008346fe0e0091c0951e695d05f9a93f6c269ddbd47b60323",
+  "approvedScope": "sha256:8dee62c71e45f4f8bab647148f461962fb4b18bd14ba7a2e8610c14771fac614",
+  "capabilitySnapshot": "sha256:7c865fc8f8e85e3c22483b3d7c7186dec85b5cca08d33801612766ca1e23f88a"
+ },
+ "cases": [
+  {
+   "id": "unknown-field-provider-decision",
+   "kind": "schema",
+   "source": "claudeDecision",
+   "mutation": {
+    "op": "add",
+    "path": "/trustScore",
+    "value": 0.9
+   },
+   "definition": "providerDecision",
+   "expected": "DENIED",
+   "failureCode": "INVALID_PROVIDER_DECISION"
+  },
+  {
+   "id": "unsupported-task-key",
+   "kind": "schema",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/nodes/0/taskKey",
+    "value": "WOODCUTTING_TRAINING"
+   },
+   "definition": "goalPlan",
+   "expected": "DENIED",
+   "failureCode": "INVALID_GOAL_PLAN"
+  },
+  {
+   "id": "settings-unknown-property",
+   "kind": "schema",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "add",
+    "path": "/settings/autoReply",
+    "value": true
+   },
+   "definition": "executionEnvelope",
+   "expected": "DENIED",
+   "failureCode": "INVALID_EXECUTION_ENVELOPE"
+  },
+  {
+   "id": "out-of-range-target-level",
+   "kind": "schema",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/settings/targetLevel",
+    "value": 100
+   },
+   "definition": "executionEnvelope",
+   "expected": "DENIED",
+   "failureCode": "INVALID_EXECUTION_ENVELOPE"
+  },
+  {
+   "id": "capability-snapshot-mismatch",
+   "kind": "eligibility",
+   "source": "semanticObservation",
+   "mutation": {
+    "op": "replace",
+    "path": "/capabilitySnapshotDigest",
+    "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "prerequisite-unmet",
+   "kind": "eligibility",
+   "source": "semanticObservation",
+   "mutation": {
+    "op": "replace",
+    "path": "/taskState/status",
+    "value": "RUNNING"
+   },
+   "expected": "DENIED",
+   "failureCode": "PREREQUISITE_UNMET"
+  },
+  {
+   "id": "no-eligible-task",
+   "kind": "eligibility",
+   "source": "semanticObservation",
+   "mutation": {
+    "op": "replace",
+    "path": "/eligibleTargets",
+    "value": []
+   },
+   "expected": "DENIED",
+   "failureCode": "NO_ELIGIBLE_TASK"
+  },
+  {
+   "id": "stale-observation",
+   "kind": "eligibility",
+   "source": "semanticObservation",
+   "mutation": {
+    "op": "replace",
+    "path": "/freshness/status",
+    "value": "STALE"
+   },
+   "expected": "DENIED",
+   "failureCode": "STALE_OBSERVATION"
+  },
+  {
+   "id": "stale-knowledge",
+   "kind": "eligibility",
+   "source": "semanticObservation",
+   "mutation": {
+    "op": "replace",
+    "path": "/knowledgeFreshnessConfidence",
+    "value": 0.3
+   },
+   "expected": "DENIED",
+   "failureCode": "STALE_KNOWLEDGE"
+  },
+  {
+   "id": "mismatched-catalog-digest",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/catalogDigest",
+    "value": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "mismatched-policy-digest",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/policyDigest",
+    "value": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "mismatched-knowledge-digest",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/knowledgeDigest",
+    "value": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "mismatched-goalplan-digest",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/goalPlanDigest",
+    "value": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "mismatched-taskskill-digest",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/taskSkillDigests/0",
+    "value": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "duplicate-node-ordinal",
+   "kind": "goal-plan",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/nodes/1/ordinal",
+    "value": 0
+   },
+   "expected": "DENIED",
+   "failureCode": "DUPLICATE_NODE_ORDINAL"
+  },
+  {
+   "id": "cyclic-fallback",
+   "kind": "goal-plan",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/nodes/2/fallbackNodeId",
+    "value": "node-0"
+   },
+   "expected": "DENIED",
+   "failureCode": "GOAL_PLAN_CYCLIC"
+  },
+  {
+   "id": "confidence-out-of-bounds",
+   "kind": "schema",
+   "source": "claudeDecision",
+   "mutation": {
+    "op": "replace",
+    "path": "/policyConfidence",
+    "value": 1.5
+   },
+   "definition": "providerDecision",
+   "expected": "DENIED",
+   "failureCode": "INVALID_PROVIDER_DECISION"
+  },
+  {
+   "id": "observation-revision-mismatch",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/expectedObservationRevision",
+    "value": 41
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "task-revision-mismatch",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/expectedTaskRevision",
+    "value": 6
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "deadline-expired",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/deadline",
+    "value": "2026-08-30T00:00:00Z"
+   },
+   "expected": "DENIED",
+   "failureCode": "DEADLINE_EXPIRED"
+  },
+  {
+   "id": "budget-exhausted",
+   "kind": "schema",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/aggregateBudgets/maxActions",
+    "value": 21
+   },
+   "definition": "goalPlan",
+   "expected": "DENIED",
+   "failureCode": "INVALID_GOAL_PLAN"
+  },
+  {
+   "id": "lease-fence-invalid",
+   "kind": "schema",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/fence",
+    "value": 0
+   },
+   "definition": "executionEnvelope",
+   "expected": "DENIED",
+   "failureCode": "INVALID_EXECUTION_ENVELOPE"
+  },
+  {
+   "id": "authority-missing-live",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/authorityId",
+    "value": null
+   },
+   "expected": "DENIED",
+   "failureCode": "AUTHORITY_MISSING"
+  },
+  {
+   "id": "authority-expired",
+   "kind": "authority-rules",
+   "source": "authority",
+   "mutation": {
+    "op": "replace",
+    "path": "/expiresAt",
+    "value": "2026-09-03T11:00:00Z"
+   },
+   "expected": "DENIED",
+   "failureCode": "AUTHORITY_EXPIRED"
+  },
+  {
+   "id": "authority-changed",
+   "kind": "authority-rules",
+   "source": "authority",
+   "mutation": {
+    "op": "replace",
+    "path": "/approvedBy",
+    "value": "other-operator"
+   },
+   "expected": "DENIED",
+   "failureCode": "AUTHORITY_CHANGED"
+  },
+  {
+   "id": "authority-reused",
+   "kind": "authority-rules",
+   "source": "authority",
+   "mutation": {
+    "op": "consume-twice",
+    "path": "/authorityId"
+   },
+   "expected": "DENIED",
+   "failureCode": "AUTHORITY_REUSED"
+  },
+  {
+   "id": "simulator-authority-live",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/identities/environmentId",
+    "value": "xrsps-simulator"
+   },
+   "expected": "DENIED",
+   "failureCode": "AUTHORITY_SOURCE_FORBIDDEN"
+  },
+  {
+   "id": "identical-idempotent-reconciliation",
+   "kind": "idempotency",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "dispatch-identical-twice"
+   },
+   "expected": "RECONCILED",
+   "failureCode": null
+  },
+  {
+   "id": "conflicting-idempotency-reuse",
+   "kind": "idempotency",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "reuse-idempotency-with-different-request"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDEMPOTENCY_CONFLICT"
+  },
+  {
+   "id": "acknowledgement-mislabeled-confirmed",
+   "kind": "receipt-rules",
+   "source": "lifecycleReceipts.delivery",
+   "mutation": {
+    "op": "replace",
+    "path": "/outcome",
+    "value": "CONFIRMED"
+   },
+   "definition": "lifecycleReceipt",
+   "expected": "DENIED",
+   "failureCode": "ACK_MISLABELED_CONFIRMED"
+  },
+  {
+   "id": "verifier-mismatch",
+   "kind": "envelope-rules",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/verifierId",
+    "value": "fishing-xp-v2"
+   },
+   "expected": "DENIED",
+   "failureCode": "VERIFIER_MISMATCH"
+  },
+  {
+   "id": "confirmed-missing-evidence",
+   "kind": "receipt-rules",
+   "source": "lifecycleReceipts.confirmed",
+   "mutation": {
+    "op": "remove",
+    "path": "/evidenceRefs/0"
+   },
+   "definition": "lifecycleReceipt",
+   "expected": "DENIED",
+   "failureCode": "VERIFIER_EVIDENCE_MISSING"
+  },
+  {
+   "id": "uncertain-retry-allowed",
+   "kind": "receipt-rules",
+   "source": "lifecycleReceipts.uncertain",
+   "mutation": {
+    "op": "replace",
+    "path": "/retryAllowed",
+    "value": true
+   },
+   "definition": "lifecycleReceipt",
+   "expected": "DENIED",
+   "failureCode": "UNCERTAIN_NON_RETRYABLE"
+  },
+  {
+   "id": "forbidden-raw-tool",
+   "kind": "schema",
+   "source": "toolOperations.reserve",
+   "mutation": {
+    "op": "add",
+    "path": "/rawMouseHandle",
+    "value": "forbidden"
+   },
+   "definition": "toolOperation",
+   "expected": "DENIED",
+   "failureCode": "INVALID_TOOL_OPERATION"
+  },
+  {
+   "id": "shadow-mode-reserve",
+   "kind": "tool-mode",
+   "source": "toolOperations.reserve",
+   "mutation": {
+    "op": "replace",
+    "path": "/mode",
+    "value": "SHADOW"
+   },
+   "definition": "toolOperation",
+   "expected": "DENIED",
+   "failureCode": "MODE_OPERATION_MISMATCH"
+  },
+  {
+   "id": "simulation-mode-start",
+   "kind": "tool-mode",
+   "source": "toolOperations.start",
+   "mutation": {
+    "op": "replace",
+    "path": "/mode",
+    "value": "SIMULATION"
+   },
+   "definition": "toolOperation",
+   "expected": "DENIED",
+   "failureCode": "MODE_OPERATION_MISMATCH"
+  },
+  {
+   "id": "unknown-field-envelope",
+   "kind": "schema",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "add",
+    "path": "/rawMethod",
+    "value": "click"
+   },
+   "definition": "executionEnvelope",
+   "expected": "DENIED",
+   "failureCode": "INVALID_EXECUTION_ENVELOPE"
+  },
+  {
+   "id": "observation-incomplete",
+   "kind": "eligibility",
+   "source": "semanticObservation",
+   "mutation": {
+    "op": "replace",
+    "path": "/observationComplete",
+    "value": false
+   },
+   "expected": "DENIED",
+   "failureCode": "STALE_OBSERVATION"
+  },
+  {
+   "id": "low-observation-confidence",
+   "kind": "eligibility",
+   "source": "semanticObservation",
+   "mutation": {
+    "op": "replace",
+    "path": "/adapterObservationConfidence",
+    "value": 0.2
+   },
+   "expected": "DENIED",
+   "failureCode": "STALE_OBSERVATION"
+  },
+  {
+   "id": "catalog-revision-mismatch",
+   "kind": "eligibility",
+   "source": "semanticObservation",
+   "mutation": {
+    "op": "replace",
+    "path": "/catalogRevision",
+    "value": 4
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "identities-mismatch",
+   "kind": "eligibility",
+   "source": "semanticObservation",
+   "mutation": {
+    "op": "replace",
+    "path": "/identities/accountId",
+    "value": "other-account"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "planning-deadline-expired",
+   "kind": "eligibility",
+   "source": "planningInput",
+   "mutation": {
+    "op": "replace",
+    "path": "/deadline",
+    "value": "2026-08-30T00:00:00Z"
+   },
+   "expected": "DENIED",
+   "failureCode": "POLICY_DENIED"
+  },
+  {
+   "id": "contradictory-planning-keys",
+   "kind": "eligibility",
+   "source": "planningInput",
+   "mutation": {
+    "op": "replace",
+    "path": "/rejectedEntries",
+    "value": [
+     {
+      "taskKey": "FISHING_TRAINING",
+      "reason": "NO_ELIGIBLE_TASK"
+     }
+    ]
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "duplicate-node-id",
+   "kind": "goal-plan",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/nodes/1/nodeId",
+    "value": "node-0"
+   },
+   "expected": "DENIED",
+   "failureCode": "DUPLICATE_NODE_ID"
+  },
+  {
+   "id": "missing-prereq-target",
+   "kind": "goal-plan",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/nodes/1/prerequisiteNodeIds/0",
+    "value": "node-99"
+   },
+   "expected": "DENIED",
+   "failureCode": "UNKNOWN_NODE_REFERENCE"
+  },
+  {
+   "id": "missing-fallback-target",
+   "kind": "goal-plan",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/nodes/0/fallbackNodeId",
+    "value": "node-99"
+   },
+   "expected": "DENIED",
+   "failureCode": "UNKNOWN_NODE_REFERENCE"
+  },
+  {
+   "id": "prereq-cycle",
+   "kind": "goal-plan",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/nodes/0/prerequisiteNodeIds",
+    "value": [
+     "node-1"
+    ]
+   },
+   "expected": "DENIED",
+   "failureCode": "GOAL_PLAN_CYCLIC"
+  },
+  {
+   "id": "ordinal-out-of-order",
+   "kind": "goal-plan",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/nodes/2/ordinal",
+    "value": 5
+   },
+   "expected": "DENIED",
+   "failureCode": "NODE_ORDINAL_OUT_OF_ORDER"
+  },
+  {
+   "id": "aggregate-overflow",
+   "kind": "goal-plan",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/aggregateBudgets/maxActions",
+    "value": 2
+   },
+   "expected": "DENIED",
+   "failureCode": "AGGREGATE_BUDGET_OVERFLOW"
+  },
+  {
+   "id": "goalplan-digest-mismatch",
+   "kind": "goal-plan",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/goalPlanDigest",
+    "value": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+   },
+   "expected": "DENIED",
+   "failureCode": "GOAL_PLAN_DIGEST_MISMATCH"
+  },
+  {
+   "id": "node-catalog-mismatch",
+   "kind": "goal-plan",
+   "source": "goalPlan",
+   "mutation": {
+    "op": "replace",
+    "path": "/nodes/0/verifierId",
+    "value": "unknown-verifier"
+   },
+   "expected": "DENIED",
+   "failureCode": "NODE_CATALOG_MISMATCH"
+  },
+  {
+   "id": "semantic-action-digest-mismatch",
+   "kind": "envelope-full",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/semanticActionDigest",
+    "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "schema-digest-mismatch",
+   "kind": "envelope-full",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/schemaDigest",
+    "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "decision-id-mismatch",
+   "kind": "envelope-full",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/decisionId",
+    "value": "other-decision"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "executor-identity-mismatch",
+   "kind": "envelope-full",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/executorArtifactId",
+    "value": "other-executor"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "abstain-eligible-reason",
+   "kind": "schema",
+   "source": "abstainDecision",
+   "mutation": {
+    "op": "replace",
+    "path": "/reason",
+    "value": "ELIGIBLE"
+   },
+   "definition": "providerDecision",
+   "expected": "DENIED",
+   "failureCode": "INVALID_PROVIDER_DECISION"
+  },
+  {
+   "id": "semantic-action-kind-unsupported",
+   "kind": "schema",
+   "source": "semanticAction",
+   "mutation": {
+    "op": "replace",
+    "path": "/kind",
+    "value": "RAW_CLICK"
+   },
+   "definition": "semanticAction",
+   "expected": "DENIED",
+   "failureCode": "INVALID_SEMANTIC_ACTION"
+  },
+  {
+   "id": "approved-scope-kill-switch",
+   "kind": "schema",
+   "source": "approvedScope",
+   "mutation": {
+    "op": "replace",
+    "path": "/killSwitchScope",
+    "value": "TASK"
+   },
+   "definition": "approvedScope",
+   "expected": "DENIED",
+   "failureCode": "INVALID_APPROVED_SCOPE"
+  },
+  {
+   "id": "envelope-planning-digest-mismatch",
+   "kind": "envelope-full",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/planningInputDigest",
+    "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "envelope-eligibility-digest-mismatch",
+   "kind": "envelope-full",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/eligibilityResultDigest",
+    "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "envelope-prompt-id-mismatch",
+   "kind": "envelope-full",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/promptId",
+    "value": "other-prompt"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "planning-eligible-keys-mismatch",
+   "kind": "envelope-full-planning",
+   "source": "planningInput",
+   "mutation": {
+    "op": "replace",
+    "path": "/eligibleTaskKeys/0",
+    "value": "OTHER_TASK"
+   },
+   "definition": "",
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "planning-rejected-envelope-task",
+   "kind": "envelope-full-planning",
+   "source": "planningInput",
+   "mutation": {
+    "op": "replace",
+    "path": "/rejectedEntries",
+    "value": [
+     {
+      "taskKey": "FISHING_TRAINING",
+      "reason": "NO_ELIGIBLE_TASK"
+     }
+    ]
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "semantic-action-decision-mismatch",
+   "kind": "envelope-full-action",
+   "source": "semanticAction",
+   "mutation": {
+    "op": "replace",
+    "path": "/decisionId",
+    "value": "other-decision"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "provider-embedded-plan-mismatch",
+   "kind": "envelope-full-decision",
+   "source": "claudeDecision",
+   "mutation": {
+    "op": "replace",
+    "path": "/goalPlan/nodes/0/settings/targetLevel",
+    "value": 99
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "eligibility-mode-mismatch",
+   "kind": "envelope-full-eligibility",
+   "source": "eligibilityResult",
+   "mutation": {
+    "op": "replace",
+    "path": "/mode",
+    "value": "SHADOW"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "eligibility-catalog-mismatch",
+   "kind": "envelope-full-eligibility",
+   "source": "eligibilityResult",
+   "mutation": {
+    "op": "replace",
+    "path": "/catalogDigest",
+    "value": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "authority-scope-digest-mismatch",
+   "kind": "authority-scope",
+   "source": "authority",
+   "mutation": {
+    "op": "replace",
+    "path": "/scopeDigest",
+    "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "expected": "DENIED",
+   "failureCode": "AUTHORITY_SCOPE_MISMATCH"
+  },
+  {
+   "id": "authority-scope-task-mismatch",
+   "kind": "authority-scope",
+   "source": "approvedScope",
+   "mutation": {
+    "op": "replace",
+    "path": "/budgets/maxActions",
+    "value": 2
+   },
+   "expected": "DENIED",
+   "failureCode": "AUTHORITY_SCOPE_MISMATCH"
+  },
+  {
+   "id": "schema-pinned-mismatch",
+   "kind": "envelope-full",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/schemaDigest",
+    "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "expected": "DENIED",
+   "failureCode": "IDENTITY_MISMATCH"
+  },
+  {
+   "id": "malformed-planning-deadline",
+   "kind": "schema",
+   "source": "planningInput",
+   "mutation": {
+    "op": "replace",
+    "path": "/deadline",
+    "value": "not-a-date"
+   },
+   "definition": "planningInput",
+   "expected": "DENIED",
+   "failureCode": "INVALID_PLANNING_INPUT"
+  },
+  {
+   "id": "malformed-observation-captured",
+   "kind": "schema",
+   "source": "semanticObservation",
+   "mutation": {
+    "op": "replace",
+    "path": "/capturedAt",
+    "value": "2026-09-03T12:00:00"
+   },
+   "definition": "semanticObservation",
+   "expected": "DENIED",
+   "failureCode": "INVALID_SEMANTIC_OBSERVATION"
+  },
+  {
+   "id": "impossible-authority-expiry",
+   "kind": "schema",
+   "source": "authority",
+   "mutation": {
+    "op": "replace",
+    "path": "/expiresAt",
+    "value": "2026-02-30T12:00:00Z"
+   },
+   "definition": "authority",
+   "expected": "DENIED",
+   "failureCode": "INVALID_AUTHORITY"
+  },
+  {
+   "id": "malformed-receipt-at",
+   "kind": "schema",
+   "source": "lifecycleReceipts.confirmed",
+   "mutation": {
+    "op": "replace",
+    "path": "/at",
+    "value": "2026-13-01T00:00:00Z"
+   },
+   "definition": "lifecycleReceipt",
+   "expected": "DENIED",
+   "failureCode": "INVALID_LIFECYCLE_RECEIPT"
+  },
+  {
+   "id": "offset-less-envelope-deadline",
+   "kind": "schema",
+   "source": "executionEnvelope",
+   "mutation": {
+    "op": "replace",
+    "path": "/deadline",
+    "value": "2026-09-03 12:10:00"
+   },
+   "definition": "executionEnvelope",
+   "expected": "DENIED",
+   "failureCode": "INVALID_EXECUTION_ENVELOPE"
+  },
+  {
+   "id": "provider-nested-cyclic-plan",
+   "kind": "schema",
+   "source": "claudeDecision",
+   "mutation": {
+    "op": "replace",
+    "path": "/goalPlan/nodes/2/fallbackNodeId",
+    "value": "node-0"
+   },
+   "definition": "providerDecision",
+   "expected": "DENIED",
+   "failureCode": "GOAL_PLAN_CYCLIC"
+  },
+  {
+   "id": "provider-nested-digest-mismatch",
+   "kind": "schema",
+   "source": "claudeDecision",
+   "mutation": {
+    "op": "replace",
+    "path": "/goalPlan/goalPlanDigest",
+    "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "definition": "providerDecision",
+   "expected": "DENIED",
+   "failureCode": "GOAL_PLAN_DIGEST_MISMATCH"
+  },
+  {
+   "id": "provider-nested-catalog-mismatch",
+   "kind": "provider-catalog",
+   "source": "claudeDecision",
+   "mutation": {
+    "op": "replace",
+    "path": "/goalPlan/nodes/0/verifierId",
+    "value": "unknown-verifier"
+   },
+   "definition": "providerDecision",
+   "expected": "DENIED",
+   "failureCode": "NODE_CATALOG_MISMATCH"
+  },
+  {
+   "id": "receipt-validation-confirmed-exact",
+   "kind": "receipt-rules",
+   "source": "lifecycleReceipts.confirmed",
+   "mutation": {
+    "op": "replace",
+    "path": "/phase",
+    "value": "VALIDATION"
+   },
+   "expected": "DENIED",
+   "failureCode": "RECEIPT_PHASE_OUTCOME_MISMATCH"
+  },
+  {
+   "id": "receipt-denied-missing-code",
+   "kind": "receipt-rules",
+   "source": "lifecycleReceipts.stopped",
+   "mutation": {
+    "op": "replace",
+    "path": "/outcome",
+    "value": "DENIED"
+   },
+   "expected": "DENIED",
+   "failureCode": "RECEIPT_FAILURE_CODE_MISSING"
+  },
+  {
+   "id": "receipt-failed-missing-code",
+   "kind": "receipt-rules",
+   "source": "lifecycleReceipts.stopped",
+   "mutation": {
+    "op": "replace",
+    "path": "/outcome",
+    "value": "FAILED"
+   },
+   "expected": "DENIED",
+   "failureCode": "RECEIPT_FAILURE_CODE_MISSING"
+  },
+  {
+   "id": "receipt-confirmed-with-failure-code",
+   "kind": "receipt-rules",
+   "source": "lifecycleReceipts.confirmed",
+   "mutation": {
+    "op": "replace",
+    "path": "/failureCode",
+    "value": "SOME_FAILURE"
+   },
+   "expected": "DENIED",
+   "failureCode": "RECEIPT_FAILURE_CODE_FORBIDDEN"
+  },
+  {
+   "id": "receipt-delivered-with-failure-code",
+   "kind": "receipt-rules",
+   "source": "lifecycleReceipts.delivery",
+   "mutation": {
+    "op": "replace",
+    "path": "/failureCode",
+    "value": "SOME_FAILURE"
+   },
+   "expected": "DENIED",
+   "failureCode": "RECEIPT_FAILURE_CODE_FORBIDDEN"
+  },
+  {
+   "id": "receipt-delivered-retry-forbidden",
+   "kind": "receipt-rules",
+   "source": "lifecycleReceipts.delivery",
+   "mutation": {
+    "op": "replace",
+    "path": "/retryAllowed",
+    "value": true
+   },
+   "expected": "DENIED",
+   "failureCode": "RECEIPT_RETRY_FORBIDDEN"
+  },
+  {
+   "id": "receipt-terminal-phase-mismatch",
+   "kind": "receipt-rules",
+   "source": "lifecycleReceipts.delivery",
+   "mutation": {
+    "op": "replace",
+    "path": "/phase",
+    "value": "TASK_TERMINAL"
+   },
+   "expected": "DENIED",
+   "failureCode": "RECEIPT_PHASE_OUTCOME_MISMATCH"
+  }
+ ],
+ "capabilitySnapshot": {
+  "capabilities": [
+   "CLIENT_OBSERVATION",
+   "FISHING_SEMANTIC_ACTION"
+  ],
+  "contractVersion": "sc-1429/v2"
+ }
+}

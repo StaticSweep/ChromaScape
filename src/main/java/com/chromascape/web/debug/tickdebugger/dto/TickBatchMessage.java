@@ -21,6 +21,12 @@ public class TickBatchMessage {
   /** Replay schema version for strict compatibility checks. */
   private Integer schemaVersion;
 
+  /** Stable session-scoped identity of the serialized delivery unit. */
+  private String batchId;
+
+  /** SHA-256 of the canonical batch payload with payloadChecksum omitted. */
+  private String payloadChecksum;
+
   /** The debug session ID. */
   private String sessionId;
 
@@ -64,6 +70,15 @@ public class TickBatchMessage {
   /** Full Quest Helper structured payload (activeQuest, currentStep, steps, requirements, ...). */
   private Map<String, Object> questHelper;
 
+  /** Active server dialogue state and visible options. */
+  private Map<String, Object> dialogue;
+
+  /** Visible spell definitions and their server-facing action metadata. */
+  private List<Map<String, Object>> spells;
+
+  /** Captured var/varbit values used by the replay initial state and expectations. */
+  private Map<String, Object> vars;
+
   /** All NPCs in render distance. */
   private List<Map<String, Object>> npcs;
 
@@ -94,10 +109,18 @@ public class TickBatchMessage {
   /** Typed semantic actions captured at client dispatch boundaries. */
   private List<RecordingAction> actions;
 
+  /** RSProx packet observations (schema 3); absent/empty for schema-v2 batches. */
+  private List<TickPacketEntry> packets;
+
+  /** Optional packet/transport-health metadata (schema 3). */
+  private TransportDiagnostics transport;
+
   @JsonCreator
   public TickBatchMessage(
       @JsonProperty("type") String type,
       @JsonProperty("schemaVersion") Integer schemaVersion,
+      @JsonProperty("batchId") String batchId,
+      @JsonProperty("payloadChecksum") String payloadChecksum,
       @JsonProperty("sessionId") String sessionId,
       @JsonProperty("tick") long tick,
       @JsonProperty("timestamp") String timestamp,
@@ -120,9 +143,16 @@ public class TickBatchMessage {
       @JsonProperty("microbotStatus") String microbotStatus,
       @JsonProperty("activeTaskKey") String activeTaskKey,
       @JsonProperty("activePluginClasses") List<String> activePluginClasses,
-      @JsonProperty("actions") List<RecordingAction> actions) {
+      @JsonProperty("actions") List<RecordingAction> actions,
+      @JsonProperty("dialogue") Map<String, Object> dialogue,
+      @JsonProperty("spells") List<Map<String, Object>> spells,
+      @JsonProperty("vars") Map<String, Object> vars,
+      @JsonProperty("packets") List<TickPacketEntry> packets,
+      @JsonProperty("transport") TransportDiagnostics transport) {
     this.type = type;
     this.schemaVersion = schemaVersion;
+    this.batchId = batchId;
+    this.payloadChecksum = payloadChecksum;
     this.sessionId = sessionId;
     this.tick = tick;
     this.timestamp = timestamp;
@@ -146,12 +176,19 @@ public class TickBatchMessage {
     this.activeTaskKey = activeTaskKey;
     this.activePluginClasses = activePluginClasses;
     this.actions = actions != null ? actions : new ArrayList<>();
+    this.dialogue = dialogue;
+    this.spells = spells;
+    this.vars = vars;
+    this.packets = packets != null ? packets : new ArrayList<>();
+    this.transport = transport;
   }
 
   /** Default constructor for programmatic construction. */
   public TickBatchMessage() {
     this.type = "TICK_BATCH";
     this.schemaVersion = 2;
+    this.batchId = null;
+    this.payloadChecksum = null;
     this.sessionId = null;
     this.tick = 0;
     this.timestamp = null;
@@ -165,6 +202,9 @@ public class TickBatchMessage {
     this.overlays = new ArrayList<>();
     this.quest = null;
     this.questHelper = null;
+    this.dialogue = null;
+    this.spells = new ArrayList<>();
+    this.vars = new HashMap<>();
     this.npcs = new ArrayList<>();
     this.gameObjects = new ArrayList<>();
     this.groundObjects = new ArrayList<>();
@@ -172,6 +212,7 @@ public class TickBatchMessage {
     this.players = new ArrayList<>();
     this.widgets = new ArrayList<>();
     this.actions = new ArrayList<>();
+    this.packets = new ArrayList<>();
     this.activePluginClasses = new ArrayList<>();
   }
 
@@ -189,6 +230,22 @@ public class TickBatchMessage {
 
   public void setSchemaVersion(Integer schemaVersion) {
     this.schemaVersion = schemaVersion;
+  }
+
+  public String getBatchId() {
+    return batchId;
+  }
+
+  public void setBatchId(String batchId) {
+    this.batchId = batchId;
+  }
+
+  public String getPayloadChecksum() {
+    return payloadChecksum;
+  }
+
+  public void setPayloadChecksum(String payloadChecksum) {
+    this.payloadChecksum = payloadChecksum;
   }
 
   public String getSessionId() {
@@ -253,6 +310,22 @@ public class TickBatchMessage {
 
   public void setActions(List<RecordingAction> actions) {
     this.actions = actions;
+  }
+
+  public List<TickPacketEntry> getPackets() {
+    return packets;
+  }
+
+  public void setPackets(List<TickPacketEntry> packets) {
+    this.packets = packets;
+  }
+
+  public TransportDiagnostics getTransport() {
+    return transport;
+  }
+
+  public void setTransport(TransportDiagnostics transport) {
+    this.transport = transport;
   }
 
   public List<Map<String, Object>> getInventory() {
@@ -325,6 +398,30 @@ public class TickBatchMessage {
 
   public void setQuestHelper(Map<String, Object> questHelper) {
     this.questHelper = questHelper;
+  }
+
+  public Map<String, Object> getDialogue() {
+    return dialogue;
+  }
+
+  public void setDialogue(Map<String, Object> dialogue) {
+    this.dialogue = dialogue;
+  }
+
+  public List<Map<String, Object>> getSpells() {
+    return spells;
+  }
+
+  public void setSpells(List<Map<String, Object>> spells) {
+    this.spells = spells;
+  }
+
+  public Map<String, Object> getVars() {
+    return vars;
+  }
+
+  public void setVars(Map<String, Object> vars) {
+    this.vars = vars;
   }
 
   public List<Map<String, Object>> getNpcs() {
@@ -443,6 +540,225 @@ public class TickBatchMessage {
 
     public Map<String, Object> getData() {
       return data;
+    }
+  }
+
+  /** One RSProx packet observation (schema 3). Field names mirror Micro6's envelope. */
+  public static class TickPacketEntry {
+    private final String schema;
+    private final String sourceSessionId;
+    private final Long sequence;
+    private final String capturedAt;
+    private final Long captureDeltaMillis;
+    private final String direction;
+    private final Integer opcode;
+    private final String protocolName;
+    private final Integer encodedSize;
+    private final String decodedType;
+    private final Map<String, Object> decoded;
+    private final String sanitizedPayloadBase64;
+    private final String decodeStatus;
+    private final String decodeError;
+    private final Boolean synthetic;
+    private final Long tick;
+
+    @JsonCreator
+    public TickPacketEntry(
+        @JsonProperty("schema") String schema,
+        @JsonProperty("sourceSessionId") String sourceSessionId,
+        @JsonProperty("sequence") Long sequence,
+        @JsonProperty("capturedAt") String capturedAt,
+        @JsonProperty("captureDeltaMillis") Long captureDeltaMillis,
+        @JsonProperty("direction") String direction,
+        @JsonProperty("opcode") Integer opcode,
+        @JsonProperty("protocolName") String protocolName,
+        @JsonProperty("encodedSize") Integer encodedSize,
+        @JsonProperty("decodedType") String decodedType,
+        @JsonProperty("decoded") Map<String, Object> decoded,
+        @JsonProperty("sanitizedPayloadBase64") String sanitizedPayloadBase64,
+        @JsonProperty("decodeStatus") String decodeStatus,
+        @JsonProperty("decodeError") String decodeError,
+        @JsonProperty("synthetic") Boolean synthetic,
+        @JsonProperty("tick") Long tick) {
+      this.schema = schema;
+      this.sourceSessionId = sourceSessionId;
+      this.sequence = sequence;
+      this.capturedAt = capturedAt;
+      this.captureDeltaMillis = captureDeltaMillis;
+      this.direction = direction;
+      this.opcode = opcode;
+      this.protocolName = protocolName;
+      this.encodedSize = encodedSize;
+      this.decodedType = decodedType;
+      this.decoded = decoded;
+      this.sanitizedPayloadBase64 = sanitizedPayloadBase64;
+      this.decodeStatus = decodeStatus;
+      this.decodeError = decodeError;
+      this.synthetic = synthetic;
+      this.tick = tick;
+    }
+
+    public String getSchema() {
+      return schema;
+    }
+
+    public String getSourceSessionId() {
+      return sourceSessionId;
+    }
+
+    public Long getSequence() {
+      return sequence;
+    }
+
+    public String getCapturedAt() {
+      return capturedAt;
+    }
+
+    public Long getCaptureDeltaMillis() {
+      return captureDeltaMillis;
+    }
+
+    public String getDirection() {
+      return direction;
+    }
+
+    public Integer getOpcode() {
+      return opcode;
+    }
+
+    public String getProtocolName() {
+      return protocolName;
+    }
+
+    public Integer getEncodedSize() {
+      return encodedSize;
+    }
+
+    public String getDecodedType() {
+      return decodedType;
+    }
+
+    public Map<String, Object> getDecoded() {
+      return decoded;
+    }
+
+    public String getSanitizedPayloadBase64() {
+      return sanitizedPayloadBase64;
+    }
+
+    public String getDecodeStatus() {
+      return decodeStatus;
+    }
+
+    public String getDecodeError() {
+      return decodeError;
+    }
+
+    public Boolean getSynthetic() {
+      return synthetic;
+    }
+
+    public Long getTick() {
+      return tick;
+    }
+  }
+
+  /** Optional packet/transport-health metadata (schema 3). */
+  public static class TransportDiagnostics {
+    private final Long droppedBatchCount;
+    private final Long firstDroppedTick;
+    private final Long lastDroppedTick;
+    private final Boolean payloadTruncated;
+    private final Integer omittedLogCount;
+    private final Integer omittedOverlayCount;
+    private final Long droppedPacketCount;
+    private final Long firstDroppedPacketSequence;
+    private final Long lastDroppedPacketSequence;
+    private final Integer omittedPacketCount;
+    private final Long omittedPacketPayloadBytes;
+    private final Long malformedPacketFrameCount;
+    private final String packetSourceStatus;
+
+    @JsonCreator
+    public TransportDiagnostics(
+        @JsonProperty("droppedBatchCount") Long droppedBatchCount,
+        @JsonProperty("firstDroppedTick") Long firstDroppedTick,
+        @JsonProperty("lastDroppedTick") Long lastDroppedTick,
+        @JsonProperty("payloadTruncated") Boolean payloadTruncated,
+        @JsonProperty("omittedLogCount") Integer omittedLogCount,
+        @JsonProperty("omittedOverlayCount") Integer omittedOverlayCount,
+        @JsonProperty("droppedPacketCount") Long droppedPacketCount,
+        @JsonProperty("firstDroppedPacketSequence") Long firstDroppedPacketSequence,
+        @JsonProperty("lastDroppedPacketSequence") Long lastDroppedPacketSequence,
+        @JsonProperty("omittedPacketCount") Integer omittedPacketCount,
+        @JsonProperty("omittedPacketPayloadBytes") Long omittedPacketPayloadBytes,
+        @JsonProperty("malformedPacketFrameCount") Long malformedPacketFrameCount,
+        @JsonProperty("packetSourceStatus") String packetSourceStatus) {
+      this.droppedBatchCount = droppedBatchCount;
+      this.firstDroppedTick = firstDroppedTick;
+      this.lastDroppedTick = lastDroppedTick;
+      this.payloadTruncated = payloadTruncated;
+      this.omittedLogCount = omittedLogCount;
+      this.omittedOverlayCount = omittedOverlayCount;
+      this.droppedPacketCount = droppedPacketCount;
+      this.firstDroppedPacketSequence = firstDroppedPacketSequence;
+      this.lastDroppedPacketSequence = lastDroppedPacketSequence;
+      this.omittedPacketCount = omittedPacketCount;
+      this.omittedPacketPayloadBytes = omittedPacketPayloadBytes;
+      this.malformedPacketFrameCount = malformedPacketFrameCount;
+      this.packetSourceStatus = packetSourceStatus;
+    }
+
+    public Long getDroppedBatchCount() {
+      return droppedBatchCount;
+    }
+
+    public Long getFirstDroppedTick() {
+      return firstDroppedTick;
+    }
+
+    public Long getLastDroppedTick() {
+      return lastDroppedTick;
+    }
+
+    public Boolean getPayloadTruncated() {
+      return payloadTruncated;
+    }
+
+    public Integer getOmittedLogCount() {
+      return omittedLogCount;
+    }
+
+    public Integer getOmittedOverlayCount() {
+      return omittedOverlayCount;
+    }
+
+    public Long getDroppedPacketCount() {
+      return droppedPacketCount;
+    }
+
+    public Long getFirstDroppedPacketSequence() {
+      return firstDroppedPacketSequence;
+    }
+
+    public Long getLastDroppedPacketSequence() {
+      return lastDroppedPacketSequence;
+    }
+
+    public Integer getOmittedPacketCount() {
+      return omittedPacketCount;
+    }
+
+    public Long getOmittedPacketPayloadBytes() {
+      return omittedPacketPayloadBytes;
+    }
+
+    public Long getMalformedPacketFrameCount() {
+      return malformedPacketFrameCount;
+    }
+
+    public String getPacketSourceStatus() {
+      return packetSourceStatus;
     }
   }
 }
