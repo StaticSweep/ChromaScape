@@ -25,7 +25,7 @@ class Micro6CatalogV2ContractTest {
   void validFullCatalogIsAccepted() {
     ValidationResult result = Micro6CatalogV2Contract.validateFull(TestMicro6Catalog.full());
     assertThat(result.valid()).as("reasons: %s", result.reasons()).isTrue();
-    assertThat(result.catalogHash()).isEqualTo(TestMicro6Catalog.GOLDEN_CATALOG_HASH);
+    assertThat(result.catalogHash()).isEqualTo(TestMicro6Catalog.GOLDEN_FULL_CATALOG_HASH);
     assertThat(result.schemaBundleHash()).isEqualTo(TestMicro6Catalog.GOLDEN_SCHEMA_BUNDLE_HASH);
   }
 

@@ -160,21 +160,22 @@ public final class Micro6CatalogV2Contract {
     // Per-task settings schema hashes must match the executor's canonicalization.
     validateSchemaHashes(payload, reasons);
 
-    // Both READY and DEGRADED full catalogs carry an attested schema bundle; only a failed or
-    // unavailable generation has none. The degraded bundle covers available schemas, non-applicable
-    // states, and schema errors, so it must be verified and required for both lifecycle states.
-    if (!"UNAVAILABLE".equalsIgnoreCase(state)) {
-      String attestedBundle = text(payload.get("schema_bundle_hash"));
-      String recomputedBundle =
-          Micro6CanonicalHash.schemaBundleHash(payload, recomputedCatalogHash);
+    // CatalogV2Publication emits a bundle only when at least one task has an object args_schema.
+    // Full catalogs containing solely NOT_APPLICABLE or ERROR entries therefore legitimately have
+    // no schema_bundle_hash; requiring one would reject a producer-valid degraded catalog.
+    String attestedBundle = text(payload.get("schema_bundle_hash"));
+    String recomputedBundle =
+        Micro6CanonicalHash.schemaBundleHash(payload, recomputedCatalogHash);
+    if (recomputedBundle != null) {
       if (attestedBundle != null
-          && recomputedBundle != null
           && !attestedBundle.equals(recomputedBundle)) {
         reasons.add("schema_bundle_hash_mismatch");
       }
       if (attestedBundle == null || !isSha256(attestedBundle)) {
         reasons.add("schema_bundle_hash_missing");
       }
+    } else if (attestedBundle != null) {
+      reasons.add("schema_bundle_hash_unexpected");
     }
 
     return new ValidationResult(

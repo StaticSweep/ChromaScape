@@ -12,11 +12,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  */
 final class TestMicro6Catalog {
   static final String GOLDEN_CATALOG_HASH =
-      "sha256:17b13670b40dba066bb869aa2d80dbaaf8f83c76113d8a53d201794ce02d5ad4";
+      "sha256:02ed8c49a6d73f9d3daa3e4502c03c8a439320eee495f48b6a4300e8756b8d2c";
+  static final String GOLDEN_FULL_CATALOG_HASH =
+      "sha256:af7fecabf0e171e02f9d996c0f25453af34987b8d217ed737cdc18c29b46f851";
   static final String GOLDEN_SETTINGS_SCHEMA_HASH =
       "sha256:95d587eacd8492a5f65e56e34fcf6085ab0c85aa2643da7f69823b9be0cf0957";
   static final String GOLDEN_SCHEMA_BUNDLE_HASH =
-      "sha256:815b527d3704999719e42c882536740f6313401b1bba9ed4422b173c04a4f100";
+      "sha256:8b2411a0a403a15ce890a866c228cba41ad4288cf2309cff2f11ed361a3e98c6";
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -39,7 +41,7 @@ final class TestMicro6Catalog {
     tasks.add(task(true));
     payload.set("tasks", tasks);
     payload.set("aliases", aliases());
-    payload.put("catalog_hash", GOLDEN_CATALOG_HASH);
+    payload.put("catalog_hash", GOLDEN_FULL_CATALOG_HASH);
     payload.put("schema_bundle_hash", GOLDEN_SCHEMA_BUNDLE_HASH);
     return payload;
   }
