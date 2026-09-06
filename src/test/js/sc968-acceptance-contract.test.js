@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '../../..');
+const approval = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Approval.psm1'), 'utf8');
 const runtime = fs.readFileSync(path.join(root, 'scripts/sc968/Acceptance.Runtime.ps1'), 'utf8');
 const entry = fs.readFileSync(path.join(root, 'scripts/sc968-acceptance.ps1'), 'utf8');
 const finish = fs.readFileSync(path.join(root, 'scripts/finish-sc967-sc968.ps1'), 'utf8');
@@ -21,6 +22,26 @@ const sourceContract = fs.readFileSync(path.join(root,
   'src/main/java/com/chromascape/web/aiplayer/routine/source/SourceManifestContract.java'), 'utf8');
 const managedSeedPlan = JSON.parse(fs.readFileSync(
   path.join(root, 'src/test/resources/sc968/micro6-managed-stabilization-plan.json'), 'utf8'));
+
+test('SC-968 waits for proposal-bound human approval before approving or building', () => {
+  const gate = runtime.indexOf('$humanApproval = Wait-Sc968HumanPatchApproval');
+  const approve = runtime.indexOf('patches/$patchProposalId/approve');
+  const build = runtime.indexOf('patches/$patchProposalId/build');
+  assert.ok(gate > 0 && approve > gate && build > approve);
+  assert.match(approval, /Refusing stale human patch approval files/);
+  assert.match(approval, /'schema','request_id','proposal_id','proposal_sha256','requested_at'/);
+  assert.match(approval, /response\.decision -cne 'APPROVE'/);
+  assert.match(approval, /human_confirmation/);
+  assert.match(approval, /Timed out waiting for explicit human patch approval/);
+});
+
+test('SC-968 native approval accepts exact confirmation and rejects invalid/stale/absent decisions', {skip: process.platform !== 'win32'}, () => {
+  const {spawnSync} = require('node:child_process');
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+    path.join(root, 'scripts/sc968/Test-HumanPatchApproval.ps1')], {encoding:'utf8', timeout:30000});
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /PASS all eight native human-approval cases/);
+});
 
 test('SC-968 runtime requires Assistant acceptance and a real RuneLite capture', () => {
   assert.match(runtime, /Wait-AssistantProposal/);

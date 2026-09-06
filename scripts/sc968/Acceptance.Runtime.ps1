@@ -15,6 +15,7 @@ Import-Module (Join-Path $PSScriptRoot 'Acceptance.Common.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'Acceptance.Http.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'Acceptance.Processes.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'Acceptance.Micro6.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'Acceptance.Approval.psm1') -Force
 
 function EnvOr([string] $Name, [string] $Default = '') {
   $value = [Environment]::GetEnvironmentVariable($Name)
@@ -565,6 +566,16 @@ try {
       base_commit=[string]$modelResponse.identity.client.client_build_id }).Json
   $patchProposalId = [string]$failure.proposal_id
   if ([string]::IsNullOrWhiteSpace($patchProposalId)) { throw 'Candidate proposal was not created' }
+  $proposalForReview = (Api $chromaUrl "/api/v1/ai-routine/patches/$patchProposalId" $operatorToken).Json
+  $proposalReviewPath = Join-Path $output 'patch-proposal.json'
+  Write-JsonFile $proposalReviewPath $proposalForReview
+  $humanApproval = Wait-Sc968HumanPatchApproval -ProposalId $patchProposalId `
+    -ProposalHash (Sha256Bytes ([IO.File]::ReadAllBytes($proposalReviewPath))) `
+    -Directory $output -TimeoutSeconds $runtimeTimeout
+  if ((Sha256Bytes ([IO.File]::ReadAllBytes($proposalReviewPath))) -cne $humanApproval.proposal_sha256) {
+    throw 'Reviewed patch proposal changed while waiting for human approval'
+  }
+  Write-JsonFile (Join-Path $output 'human-patch-approval.json') $humanApproval
   Api $chromaUrl "/api/v1/ai-routine/patches/$patchProposalId/approve" $operatorToken 'POST' | Out-Null
   Api $chromaUrl "/api/v1/ai-routine/patches/$patchProposalId/build" $operatorToken 'POST' | Out-Null
   $candidate = $null
