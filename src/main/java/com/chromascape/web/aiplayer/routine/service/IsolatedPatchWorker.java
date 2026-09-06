@@ -191,7 +191,7 @@ public class IsolatedPatchWorker {
       throw new IOException(code + ";OUTPUT_LIMIT_EXCEEDED");
     }
     if (output.exitValue() != 0) {
-      throw new IOException(code + ";OUTPUT=" + output.tail());
+      throw new IOException(code + ";EXIT=" + output.exitValue() + ";OUTPUT=" + output.tail());
     }
   }
 
