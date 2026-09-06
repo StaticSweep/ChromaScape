@@ -198,6 +198,28 @@ class TickBatchDurabilityIntegrationTest {
   }
 
   @Test
+  void nullDialogueDoesNotBypassSpellOrVarSizeBounds() {
+    String sessionId = "size-bound-" + UUID.randomUUID();
+    seedSession(sessionId, 1);
+    long before = snapshotRepository.count();
+    for (String section : List.of("spells", "vars")) {
+      var snapshot =
+          new com.chromascape.web.debug.tickdebugger.entity.TickSnapshot(
+              sessionId, 1L, LocalDateTime.now(), objectMapper.createObjectNode());
+      JsonNode oversized = objectMapper.getNodeFactory().textNode("x".repeat(262145));
+      if ("spells".equals(section)) {
+        snapshot.setSpells(oversized);
+      } else {
+        snapshot.setVars(oversized);
+      }
+      assertThrows(
+          org.springframework.dao.DataIntegrityViolationException.class,
+          () -> tx().executeWithoutResult(status -> snapshotRepository.saveAndFlush(snapshot)));
+    }
+    assertEquals(before, snapshotRepository.count());
+  }
+
+  @Test
   void successfulBatchCreatesOneReceiptSnapshotLogsOverlaysActionsAndBounds() {
     String sessionId = "durable-" + UUID.randomUUID();
     String batchId = UUID.randomUUID().toString();

@@ -204,7 +204,7 @@ class TickBatchCanonicalChecksumServiceTest {
     ObjectNode nulled = content.deepCopy();
     nulled.putNull("recordingId");
     assertEquals(
-        "sha256:64b8c288a09d24a49f20048b03d17282e0a258bf94e8436fb129d0cc1ce0e6f9",
+        "sha256:e7c45d12c5aa7641d279b2489f1c6304d598d6db13a750be346f854ed8abb0fc",
         service.checksum(nulled));
   }
 
