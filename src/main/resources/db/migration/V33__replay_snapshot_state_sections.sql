@@ -18,7 +18,7 @@ BEGIN
         ) THEN
             ALTER TABLE tick_snapshots ADD CONSTRAINT ck_tick_snapshots_replay_state_json_sizes
                 CHECK (
-                    (dialogue IS NULL OR octet_length(dialogue::text) <= 262144)
+                    dialogue IS NULL OR octet_length(dialogue::text) <= 262144
                     AND (spells IS NULL OR octet_length(spells::text) <= 262144)
                     AND (
                     vars IS NULL OR octet_length(vars::text) <= 262144
