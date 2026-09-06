@@ -302,11 +302,11 @@ class ReplayTickBatchReceiptIntegrationTest {
             "debug-race-repo",
             batchId,
             20,
-            checksum('g'),
+            checksum('1'),
             "debug-race-repo",
             batchId,
             20,
-            checksum('g'));
+            checksum('1'));
     assertEquals(1, duplicates.stream().mapToInt(Integer::intValue).sum());
     // Conflicting same-tick batches: exactly one deterministic winner.
     List<Integer> conflicts =
@@ -314,11 +314,11 @@ class ReplayTickBatchReceiptIntegrationTest {
             "debug-race-repo",
             UUID.randomUUID(),
             21,
-            checksum('h'),
+            checksum('2'),
             "debug-race-repo",
             UUID.randomUUID(),
             21,
-            checksum('i'));
+            checksum('3'));
     assertEquals(1, conflicts.stream().mapToInt(Integer::intValue).sum());
     try (Connection connection = connection()) {
       setSchema(connection);
@@ -355,13 +355,13 @@ class ReplayTickBatchReceiptIntegrationTest {
       insertSession(setup, "debug-race-service");
     }
     UUID batchId = UUID.randomUUID();
-    String checksumValue = checksum('j');
+    String checksumValue = checksum('4');
     // First insert wins through the real statement; the duplicate observes the winner row.
     assertEquals(1, insertReceiptReturningCount("debug-race-service", batchId, 30, checksumValue));
     assertEquals(0, insertReceiptReturningCount("debug-race-service", batchId, 30, checksumValue));
     // A conflicting same-tick insert loses; the winner row is unchanged.
     assertEquals(
-        0, insertReceiptReturningCount("debug-race-service", UUID.randomUUID(), 30, checksum('k')));
+        0, insertReceiptReturningCount("debug-race-service", UUID.randomUUID(), 30, checksum('5')));
     try (Connection connection = connection()) {
       setSchema(connection);
       assertEquals(
@@ -600,7 +600,7 @@ class ReplayTickBatchReceiptIntegrationTest {
 
   private int scalarInt(Connection connection, String sql) throws SQLException {
     try (var statement = connection.createStatement();
-        ResultSet result = statement.executeQuery(qualified(sql))) {
+        ResultSet result = statement.executeQuery(sql)) {
       assertTrue(result.next());
       return result.getInt(1);
     }
@@ -608,7 +608,7 @@ class ReplayTickBatchReceiptIntegrationTest {
 
   private String scalarString(Connection connection, String sql) throws SQLException {
     try (var statement = connection.createStatement();
-        ResultSet result = statement.executeQuery(qualified(sql))) {
+        ResultSet result = statement.executeQuery(sql)) {
       assertTrue(result.next());
       return result.getString(1);
     }
