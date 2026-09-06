@@ -49,6 +49,7 @@ public final class SourceManifestTestFixtures {
     root.put("status", "AVAILABLE");
     root.put("retention_class", "DEBUG");
     root.put("confidentiality", "INTERNAL");
+    root.putArray("generated_mappings");
     root.putObject("entry_point")
         .put("class_name", "com.example.Entry")
         .put("file_id", FILE_ID)

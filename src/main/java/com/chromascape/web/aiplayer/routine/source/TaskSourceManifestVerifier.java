@@ -19,7 +19,9 @@ public final class TaskSourceManifestVerifier {
       "schema", "task_key", "task_family", "catalog_version", "settings_schema_version",
       "repository", "build", "source_snapshot_id", "source_manifest_hash", "parser_version",
       "indexer_version", "status", "retention_class", "confidentiality", "environment",
-      "entry_point", "files", "closure", "symbols", "signature", "warnings", "failure");
+      "entry_point", "files", "closure", "symbols", "generated_mappings", "signature", "warnings", "failure");
+  private static final Set<String> GENERATED_MAPPING_FIELDS = Set.of(
+      "generated_file_id", "authored_file_ids", "mapping_kind", "tool", "tool_version", "description");
   private static final Set<String> REPOSITORY_FIELDS =
       Set.of("repository_id", "commit_id", "tree_id", "clean");
   private static final Set<String> BUILD_FIELDS =
@@ -153,7 +155,9 @@ public final class TaskSourceManifestVerifier {
       if (!legacy && symbols.isEmpty()) {
         invalid("source manifest symbol index is empty");
       }
-      return new Verified(manifest.deepCopy(), new TaskSourceManifest(manifest, files, symbols), legacy,
+      List<TaskSourceManifest.GeneratedMapping> generatedMappings = legacy
+          ? List.of() : parseGeneratedMappings(manifest, files);
+      return new Verified(manifest.deepCopy(), new TaskSourceManifest(manifest, files, symbols, generatedMappings), legacy,
           computedHash, signatureVerified);
     } catch (SourceManifestException exception) {
       throw exception;
@@ -183,6 +187,59 @@ public final class TaskSourceManifestVerifier {
       compare(expected.manifestHash(), verified.manifest().manifestHash(), "manifest");
     }
     return verified;
+  }
+
+  private static List<TaskSourceManifest.GeneratedMapping> parseGeneratedMappings(
+      JsonNode manifest, List<TaskSourceManifest.File> files) {
+    JsonNode mappings = manifest.get("generated_mappings");
+    if (mappings == null || !mappings.isArray()
+        || mappings.size() > SourceManifestContract.MAX_GENERATED_MAPPINGS) {
+      invalid("source generated mapping index is invalid");
+    }
+    java.util.Map<String, TaskSourceManifest.File> filesById = new java.util.HashMap<>();
+    files.forEach(file -> filesById.put(file.fileId(), file));
+    List<TaskSourceManifest.GeneratedMapping> result = new ArrayList<>();
+    Set<String> identities = new HashSet<>();
+    for (JsonNode mapping : mappings) {
+      validateKnownFields(mapping, GENERATED_MAPPING_FIELDS, "generated mapping");
+      String generatedId = text(mapping, "generated_file_id");
+      TaskSourceManifest.File generated = filesById.get(generatedId);
+      String kind = text(mapping, "mapping_kind");
+      String tool = mappingText(mapping, "tool", 200);
+      String version = mappingText(mapping, "tool_version", 80);
+      String description = mappingText(mapping, "description", 1000);
+      JsonNode authoredNode = mapping.get("authored_file_ids");
+      if (generated == null
+          || !("GENERATED".equals(generated.classification()) || "TRANSFORMED".equals(generated.classification()))
+          || !("GENERATED".equals(kind) || "TRANSFORMED".equals(kind))
+          || authoredNode == null || !authoredNode.isArray() || authoredNode.isEmpty()
+          || authoredNode.size() > SourceManifestContract.MAX_FILES) {
+        invalid("source generated mapping identity is invalid");
+      }
+      List<String> authored = new ArrayList<>();
+      Set<String> authoredSet = new HashSet<>();
+      for (JsonNode authoredValue : authoredNode) {
+        String id = authoredValue.isTextual() ? authoredValue.textValue() : null;
+        TaskSourceManifest.File file = filesById.get(id);
+        if (file == null || !"SOURCE".equals(file.classification()) || !authoredSet.add(id)) {
+          invalid("source generated mapping references invalid authored files");
+        }
+        authored.add(id);
+      }
+      String identity = generatedId + "\u0000" + String.join("\u0000", authored)
+          + "\u0000" + kind + "\u0000" + tool + "\u0000" + version + "\u0000" + description;
+      if (!identities.add(identity)) invalid("source generated mapping is duplicated");
+      result.add(new TaskSourceManifest.GeneratedMapping(generatedId, authored, kind, tool, version, description));
+    }
+    return result;
+  }
+
+  private static String mappingText(JsonNode mapping, String field, int maximum) {
+    String value = text(mapping, field);
+    if (value == null || value.isBlank() || value.length() > maximum) {
+      invalid("source generated mapping " + field + " is invalid");
+    }
+    return value;
   }
 
   private static List<TaskSourceManifest.Symbol> parseSymbols(

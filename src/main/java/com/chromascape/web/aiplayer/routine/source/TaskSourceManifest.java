@@ -13,14 +13,21 @@ public final class TaskSourceManifest {
   private final List<File> files;
   private final Map<String, File> byId;
   private final List<Symbol> symbols;
+  private final List<GeneratedMapping> generatedMappings;
 
   TaskSourceManifest(JsonNode document, List<File> files, List<Symbol> symbols) {
+    this(document, files, symbols, List.of());
+  }
+
+  TaskSourceManifest(JsonNode document, List<File> files, List<Symbol> symbols,
+      List<GeneratedMapping> generatedMappings) {
     this.document = document.deepCopy();
     this.files = List.copyOf(files);
     Map<String, File> ids = new LinkedHashMap<>();
     this.files.forEach(file -> ids.put(file.fileId(), file));
     this.byId = Collections.unmodifiableMap(ids);
     this.symbols = List.copyOf(symbols);
+    this.generatedMappings = List.copyOf(generatedMappings);
   }
 
   public JsonNode document() { return document.deepCopy(); }
@@ -39,6 +46,7 @@ public final class TaskSourceManifest {
   public List<File> files() { return files; }
   public Map<String, File> filesById() { return byId; }
   public List<Symbol> symbols() { return symbols; }
+  public List<GeneratedMapping> generatedMappings() { return generatedMappings; }
   public File file(String fileId) { return byId.get(fileId); }
 
   public List<Symbol> symbolsForFile(String fileId) {
@@ -69,4 +77,16 @@ public final class TaskSourceManifest {
       int startColumn,
       int endColumn,
       boolean generated) {}
+
+  public record GeneratedMapping(
+      String generatedFileId,
+      List<String> authoredFileIds,
+      String mappingKind,
+      String tool,
+      String toolVersion,
+      String description) {
+    public GeneratedMapping {
+      authoredFileIds = List.copyOf(authoredFileIds);
+    }
+  }
 }

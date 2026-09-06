@@ -17,6 +17,7 @@ public final class SourceManifestContract {
   public static final int MAX_FILES = 10_000;
   public static final int MAX_SYMBOLS = 100_000;
   public static final int MAX_CLOSURE_EDGES = 50_000;
+  public static final int MAX_GENERATED_MAPPINGS = 10_000;
   /**
    * Bounded wire size for an authoritative manifest. A production Fishing closure currently
    * contains roughly two thousand files and twenty-seven thousand symbols, so its canonical

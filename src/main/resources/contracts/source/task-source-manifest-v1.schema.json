@@ -20,17 +20,12 @@
     "files",
     "entry_point",
     "symbols",
+    "generated_mappings",
     "status",
     "retention_class",
-    "confidentiality"
+    "confidentiality",
+    "signature"
   ],
-  "if": {
-    "properties": {"status": {"const": "AVAILABLE"}},
-    "required": ["status"]
-  },
-  "then": {
-    "required": ["signature"]
-  },
   "properties": {
     "schema": {"const": "task-source-manifest/v1"},
     "task_key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,159}$"},
@@ -133,6 +128,29 @@
           "start_column": {"type": "integer", "minimum": 1},
           "end_column": {"type": "integer", "minimum": 1},
           "generated": {"type": "boolean"}
+        }
+      }
+    },
+    "generated_mappings": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["generated_file_id", "authored_file_ids", "mapping_kind", "tool", "tool_version", "description"],
+        "properties": {
+          "generated_file_id": {"type": "string", "pattern": "^file_[0-9a-f]{16,64}$"},
+          "authored_file_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10000,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^file_[0-9a-f]{16,64}$"}
+          },
+          "mapping_kind": {"enum": ["GENERATED", "TRANSFORMED"]},
+          "tool": {"type": "string", "minLength": 1, "maxLength": 200},
+          "tool_version": {"type": "string", "minLength": 1, "maxLength": 80},
+          "description": {"type": "string", "minLength": 1, "maxLength": 1000}
         }
       }
     },
