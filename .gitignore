@@ -32,6 +32,7 @@ build/
 
 # Gradle cache and wrappers
 .gradle/
+/.gradle-home/
 !gradle/wrapper/gradle-wrapper.jar
 
 # IntelliJ IDEA
@@ -55,6 +56,11 @@ Thumbs.db
 *.tmp
 *.swp
 *~
+/javac.*.args
+/app_yml_*.patch
+
+# Local task diagnostics
+/.sc810-debug/
 
 # Templates
 /src/main/resources/fonts/
