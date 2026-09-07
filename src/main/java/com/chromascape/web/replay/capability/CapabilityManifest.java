@@ -28,11 +28,39 @@ public record CapabilityManifest(
     boolean openRuneAvailable,
     boolean certifiable,
     Fidelity fidelity,
-    List<String> supportedActions) {
+    List<String> supportedActions,
+    String viewerTraceSchema) {
 
-  /** Legacy viewer capability retained for replay-v2 clients. */
-  public String viewerTraceSchema() {
-    return "xrsps-replay-trace/v1";
+  /** Compatibility constructor for pre-observer capability callers. */
+  public CapabilityManifest(
+      int schemaVersion,
+      boolean controlAllowed,
+      CapabilityModes modes,
+      List<Integer> scenarioSchemaVersions,
+      List<Integer> semanticActionVersions,
+      List<Integer> snapshotVersions,
+      List<Integer> projectionVersions,
+      List<String> hashVersions,
+      XrspsIdentity xrsps,
+      boolean openRuneAvailable,
+      boolean certifiable,
+      Fidelity fidelity,
+      List<String> supportedActions) {
+    this(
+        schemaVersion,
+        controlAllowed,
+        modes,
+        scenarioSchemaVersions,
+        semanticActionVersions,
+        snapshotVersions,
+        projectionVersions,
+        hashVersions,
+        xrsps,
+        openRuneAvailable,
+        certifiable,
+        fidelity,
+        supportedActions,
+        "xrsps-replay-trace/v1");
   }
 
   /** Closed provenance set for simulation capabilities. */
@@ -41,9 +69,50 @@ public record CapabilityManifest(
     XRSPS_AUTHORITATIVE
   }
 
-  /** Exact action surface implemented by the pinned v1 replay-kernel worker. */
+  /** Scenario manifests accepted by the pinned authoritative replay-kernel worker. */
+  public static final List<Integer> SUPPORTED_SCENARIO_SCHEMA_VERSIONS = List.of(1, 2);
+
+  /** Exact version vector for semantic actions, snapshots, and projections. */
+  public static final List<Integer> SUPPORTED_SINGLE_VERSION = List.of(1);
+
+  /**
+   * Closed semantic action vocabulary understood by this protocol version.
+   *
+   * <p>A worker capability is allowed to advertise a duplicate-free subset of this list while
+   * individual manifests remain responsible for requiring every action they contain. Keeping the
+   * vocabulary separate from a worker's attested subset prevents an incomplete adapter from
+   * claiming support merely because an action name is part of the wire contract.
+   */
   public static final List<String> V1_SUPPORTED_ACTIONS =
-      List.of("WAIT_UNTIL_TICK", "INTERACT_NPC");
+      List.of(
+          "WAIT_UNTIL_TICK",
+          "WALK_TO",
+          "INTERACT_NPC",
+          "INTERACT_OBJECT",
+          "INTERACT_GROUND_ITEM",
+          "INTERACT_INVENTORY_ITEM",
+          "INTERACT_WIDGET",
+          "SELECT_DIALOGUE_OPTION",
+          "CAST_SPELL",
+          "EQUIP_ITEM");
+
+  /** Returns whether an action belongs to the closed v1 semantic vocabulary. */
+  public static boolean isSupportedAction(String action) {
+    return action != null && V1_SUPPORTED_ACTIONS.contains(action);
+  }
+
+  /**
+   * Returns whether a worker declaration is a non-empty, duplicate-free subset of the vocabulary.
+   * Ordering is intentionally not significant at this boundary; manifest action order remains the
+   * deterministic execution order.
+   */
+  public static boolean isValidSupportedActionSubset(List<String> actions) {
+    if (actions == null || actions.isEmpty()) {
+      return false;
+    }
+    return actions.stream().allMatch(CapabilityManifest::isSupportedAction)
+        && actions.size() == new java.util.HashSet<>(actions).size();
+  }
 
   /** Server-produced manifest: forbidden capabilities are hardcoded off, never parameterized. */
   public static CapabilityManifest current(
@@ -52,16 +121,17 @@ public record CapabilityManifest(
         /* schemaVersion */ 1,
         /* controlAllowed */ false,
         modes,
-        List.of(1),
-        List.of(1),
-        List.of(1),
-        List.of(1),
+        SUPPORTED_SCENARIO_SCHEMA_VERSIONS,
+        SUPPORTED_SINGLE_VERSION,
+        SUPPORTED_SINGLE_VERSION,
+        SUPPORTED_SINGLE_VERSION,
         List.of("sha256-canonical-json-v1"),
         xrsps,
         /* openRuneAvailable */ false,
         certifiable,
         Fidelity.SYNTHETIC_CONTRACT,
-        V1_SUPPORTED_ACTIONS);
+        V1_SUPPORTED_ACTIONS,
+        "xrsps-replay-trace/v1");
   }
 
   public record CapabilityModes(

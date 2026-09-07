@@ -2,8 +2,8 @@ package com.chromascape.web.replay.certification;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -19,9 +19,8 @@ import com.chromascape.web.replay.artifact.PublishedArtifact;
 import com.chromascape.web.replay.artifact.ReplayArtifactService;
 import com.chromascape.web.replay.artifact.entity.ArtifactRef;
 import com.chromascape.web.replay.artifact.repository.ArtifactRefRepository;
-import com.chromascape.web.replay.capability.ReplayCapabilityService;
-import com.chromascape.web.replay.config.ReplayProperties;
 import com.chromascape.web.replay.compiler.ScenarioManifestInsertService;
+import com.chromascape.web.replay.config.ReplayProperties;
 import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.chromascape.web.replay.error.ReplayException;
 import com.chromascape.web.replay.kernel.KernelProtocolCodec.KernelMessage;
@@ -107,15 +106,15 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Profile;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.ContextConfiguration;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -186,8 +185,7 @@ class ReplayStressCertificationTest {
   };
 
   private static final Path MIGRATION_DIRECTORY = createMigrationDirectory();
-  private static final String WORKER_EXECUTABLE =
-      envOrDefault("REPLAY_XRSPS_EXECUTABLE", "node");
+  private static final String WORKER_EXECUTABLE = envOrDefault("REPLAY_XRSPS_EXECUTABLE", "node");
   private static final String WORKER_ENTRYPOINT =
       envOrDefault(
           "REPLAY_XRSPS_ENTRYPOINT",
@@ -206,8 +204,7 @@ class ReplayStressCertificationTest {
                   .toAbsolutePath()
                   .toString()));
   private static final Path RUNTIME_FIXTURE_ROOT =
-      Path.of("build", "replay-certification", "runtime-fixtures", INVOCATION_ID)
-          .toAbsolutePath();
+      Path.of("build", "replay-certification", "runtime-fixtures", INVOCATION_ID).toAbsolutePath();
   private static RuntimeIdentity liveIdentity;
   private static JsonNode liveCapabilities;
 
@@ -221,8 +218,7 @@ class ReplayStressCertificationTest {
     registry.add("spring.datasource.username", POSTGRES::getUsername);
     registry.add("spring.datasource.password", POSTGRES::getPassword);
     registry.add(
-        "spring.flyway.locations",
-        () -> "filesystem:" + MIGRATION_DIRECTORY.toAbsolutePath());
+        "spring.flyway.locations", () -> "filesystem:" + MIGRATION_DIRECTORY.toAbsolutePath());
   }
 
   @Autowired ReplayRunRepository runRepository;
@@ -357,7 +353,8 @@ class ReplayStressCertificationTest {
     RunEvidence baseline = evidence.get(0);
     for (int index = 1; index < evidence.size(); index++) {
       assertEquals(baseline.chainHash(), evidence.get(index).chainHash(), "chain hash " + index);
-      assertEquals(baseline.stateHashes(), evidence.get(index).stateHashes(), "state hashes " + index);
+      assertEquals(
+          baseline.stateHashes(), evidence.get(index).stateHashes(), "state hashes " + index);
       assertEquals(baseline.eventPayloadHashes(), evidence.get(index).eventPayloadHashes());
       assertEquals(baseline.checkpointRows(), evidence.get(index).checkpointRows());
       assertEquals(baseline.artifactRows(), evidence.get(index).artifactRows());
@@ -388,8 +385,7 @@ class ReplayStressCertificationTest {
             .count());
     output.put("failureCount", 0);
     output.put(
-        "elapsedDurationMs",
-        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos));
+        "elapsedDurationMs", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos));
     ObjectNode workerIdentity = output.putObject("workerIdentity");
     workerIdentity.put("adapterVersion", liveIdentity.xrspsAdapterVersion());
     workerIdentity.put("buildCommit", liveIdentity.xrspsBuildCommit());
@@ -406,8 +402,7 @@ class ReplayStressCertificationTest {
     output.set("stateHashes", mapper.valueToTree(baseline.stateHashes()));
     output.set("orderedStateHashes", mapper.valueToTree(baseline.stateHashes()));
     output.set("eventPayloadHashes", mapper.valueToTree(baseline.eventPayloadHashes()));
-    output.set(
-        "orderedEventPayloadHashes", mapper.valueToTree(baseline.eventPayloadHashes()));
+    output.set("orderedEventPayloadHashes", mapper.valueToTree(baseline.eventPayloadHashes()));
     output.set("checkpointRows", mapper.valueToTree(baseline.checkpointRows()));
     output.set("artifactRows", mapper.valueToTree(baseline.artifactRows()));
     output.set(
@@ -422,8 +417,13 @@ class ReplayStressCertificationTest {
     output.set("canonicalTransientFreeTrace", baseline.trace());
     output.put("processCountBefore", processCountBefore);
     output.put("processCountAfter", countProcessesContaining("replay-kernel"));
-    output.put("activeLeaseCountAfter", scalarCount("SELECT COUNT(*) FROM replay_attempts WHERE state = 'RUNNING' OR lease_expires_at IS NOT NULL"));
-    output.put("stagingReferenceCountAfter", scalarCount("SELECT COUNT(*) FROM artifact_refs WHERE state = 'STAGING'"));
+    output.put(
+        "activeLeaseCountAfter",
+        scalarCount(
+            "SELECT COUNT(*) FROM replay_attempts WHERE state = 'RUNNING' OR lease_expires_at IS NOT NULL"));
+    output.put(
+        "stagingReferenceCountAfter",
+        scalarCount("SELECT COUNT(*) FROM artifact_refs WHERE state = 'STAGING'"));
     output.put("reportArtifactsExcludedBecauseRunScoped", true);
     output.put(
         "reportArtifactNote",
@@ -435,9 +435,13 @@ class ReplayStressCertificationTest {
   @Order(2)
   void failureInjectionBatteryFailsClosedAndLeavesNoFalseSuccess() throws Exception {
     List<ObjectNode> results = new ArrayList<>();
-    results.add(runRepeatedFixtureCase("exit-before-capabilities", EXIT_BEFORE_CAPABILITIES, "capabilities"));
+    results.add(
+        runRepeatedFixtureCase(
+            "exit-before-capabilities", EXIT_BEFORE_CAPABILITIES, "capabilities"));
     results.add(runRepeatedFixtureCase("exit-during-reset", EXIT_DURING_RESET, "reset"));
-    results.add(runRepeatedFixtureCase("exit-between-step-and-snapshot", EXIT_BETWEEN_STEP_AND_SNAPSHOT, "snapshot"));
+    results.add(
+        runRepeatedFixtureCase(
+            "exit-between-step-and-snapshot", EXIT_BETWEEN_STEP_AND_SNAPSHOT, "snapshot"));
     results.add(runRepeatedFixtureCase("malformed-stdout", MALFORMED_STDOUT, "malformed"));
     results.add(runRepeatedFixtureCase("request-timeout", REQUEST_TIMEOUT, "timeout"));
 
@@ -550,7 +554,8 @@ class ReplayStressCertificationTest {
       throw new IllegalStateException(
           "worker supportedActions must be exactly [WAIT_UNTIL_TICK, INTERACT_NPC]");
     }
-    for (String field : List.of("network", "networking", "policy", "browser", "account", "liveGame")) {
+    for (String field :
+        List.of("network", "networking", "policy", "browser", "account", "liveGame")) {
       if (capability.path(field).isBoolean() && capability.path(field).asBoolean()) {
         throw new IllegalStateException("forbidden capability surface is enabled: " + field);
       }
@@ -570,7 +575,8 @@ class ReplayStressCertificationTest {
     String root = gitLine(WORKER_WORKING_DIRECTORY, "rev-parse", "--show-toplevel");
     String head = gitLine(root, "rev-parse", "HEAD");
     if (!head.equals(identity.xrspsBuildCommit())) {
-      throw new IllegalStateException("worker identity is stale: " + identity.xrspsBuildCommit() + " != " + head);
+      throw new IllegalStateException(
+          "worker identity is stale: " + identity.xrspsBuildCommit() + " != " + head);
     }
     if (!gitLine(root, "status", "--porcelain").isBlank()) {
       throw new IllegalStateException("xRSPS certification worktree is dirty: " + root);
@@ -587,8 +593,8 @@ class ReplayStressCertificationTest {
 
   /**
    * The generated identity is only certifiable when these inputs were inventoried. Recheck their
-   * presence at the certification boundary so a stale generated file cannot hide a missing cache
-   * or content input in the worktree used by the worker.
+   * presence at the certification boundary so a stale generated file cannot hide a missing cache or
+   * content input in the worktree used by the worker.
    */
   private static void verifyRuntimeInputs(Path workerRoot) {
     requireNonEmptyDirectory(workerRoot.resolve("server").resolve("cache"), "server/cache");
@@ -702,16 +708,22 @@ class ReplayStressCertificationTest {
       Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
       if (!process.waitFor(30, TimeUnit.SECONDS)) {
         process.destroyForcibly();
-        throw new IllegalStateException("Diagnostic command timed out: " + String.join(" ", command));
+        throw new IllegalStateException(
+            "Diagnostic command timed out: " + String.join(" ", command));
       }
-      String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+      String output =
+          new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
       if (process.exitValue() != 0) {
         throw new IllegalStateException(
-            "Diagnostic command failed (" + process.exitValue() + "): " + String.join(" ", command));
+            "Diagnostic command failed ("
+                + process.exitValue()
+                + "): "
+                + String.join(" ", command));
       }
       return output.replace('\n', '|');
     } catch (IOException e) {
-      throw new IllegalStateException("Diagnostic command could not start: " + String.join(" ", command), e);
+      throw new IllegalStateException(
+          "Diagnostic command could not start: " + String.join(" ", command), e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Diagnostic command interrupted", e);
@@ -735,7 +747,13 @@ class ReplayStressCertificationTest {
 
     List<String> stateHashes =
         states.stream()
-            .map(sample -> sample.getId().getTick() + ":" + sample.getId().getSequence() + ":" + sample.getStateHash())
+            .map(
+                sample ->
+                    sample.getId().getTick()
+                        + ":"
+                        + sample.getId().getSequence()
+                        + ":"
+                        + sample.getStateHash())
             .toList();
     List<String> eventPayloadHashes =
         events.stream()
@@ -850,7 +868,8 @@ class ReplayStressCertificationTest {
 
   // ── failure injection ──
 
-  private ObjectNode runRepeatedFixtureCase(String name, String source, String sequence) throws Exception {
+  private ObjectNode runRepeatedFixtureCase(String name, String source, String sequence)
+      throws Exception {
     long before = countProcessesContaining(name);
     Path script = writeFixture(name, source);
     FailureObservation first = runFixture(script, sequence);
@@ -899,7 +918,10 @@ class ReplayStressCertificationTest {
         "deterministic",
         first.code().equals(second.code())
             && durableFirst.run().getState() == durableSecond.run().getState()
-            && durableFirst.run().getTerminalReason().equals(durableSecond.run().getTerminalReason())
+            && durableFirst
+                .run()
+                .getTerminalReason()
+                .equals(durableSecond.run().getTerminalReason())
             && durableFirst.report().getOutcome() == durableSecond.report().getOutcome());
     result.put("falseSuccess", "NO_FAILURE".equals(first.code()));
     result.put("processesReleased", !hasProcessContaining(name));
@@ -929,8 +951,10 @@ class ReplayStressCertificationTest {
     return result;
   }
 
-  /** Drives the same failure fixture through the real worker so the durable fail-closed contract is
-   * checked in addition to the direct kernel protocol observation above. */
+  /**
+   * Drives the same failure fixture through the real worker so the durable fail-closed contract is
+   * checked in addition to the direct kernel protocol observation above.
+   */
   private DurableFailureObservation runWorkerFixture(Path script, String key) {
     ReplayProperties.Xrsps xrsps = properties.getXrsps();
     String originalEntrypoint = xrsps.getEntrypoint();
@@ -943,23 +967,26 @@ class ReplayStressCertificationTest {
           createRun(seedPublishedManifest(key, actionCount, liveIdentity.xrspsBuildCommit()), key);
       ReplayRun terminal = awaitTerminal(created.runId(), Duration.ofSeconds(60));
       assertTrue(terminal.isTerminal(), "fixture worker run must become terminal: " + key);
-      assertNotEquals(ReplayRunState.SUCCEEDED, terminal.getState(), "fixture cannot succeed: " + key);
+      assertNotEquals(
+          ReplayRunState.SUCCEEDED, terminal.getState(), "fixture cannot succeed: " + key);
       ReplayReport report = reportRepository.findByRunId(terminal.getId()).orElseThrow();
-      assertNotEquals(ReplayOutcome.PASSED, report.getOutcome(), "fixture report cannot pass: " + key);
+      assertNotEquals(
+          ReplayOutcome.PASSED, report.getOutcome(), "fixture report cannot pass: " + key);
       assertEquals(terminal.getId(), report.getRunId());
       ReplayAttempt attempt =
           attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(terminal.getId()).orElseThrow();
-      boolean leaseReleased = attempt.getLeaseExpiresAt() == null && !"RUNNING".equals(attempt.getState());
+      boolean leaseReleased =
+          attempt.getLeaseExpiresAt() == null && !"RUNNING".equals(attempt.getState());
       boolean stagingReferencesEmpty =
           artifactRefRepository
               .findByRunIdAndState(terminal.getId(), ArtifactRef.STATE_STAGING)
               .isEmpty();
       int finalizedReferenceCount = finalizedReferenceCount(terminal.getId());
-      boolean finalizedReferencesValid =
-          finalizedReferencesValid(terminal.getId(), 1);
+      boolean finalizedReferencesValid = finalizedReferencesValid(terminal.getId(), 1);
       assertTrue(leaseReleased, "fixture worker lease must be released: " + key);
       assertTrue(stagingReferencesEmpty, "fixture worker cannot leave staging refs: " + key);
-      assertTrue(finalizedReferencesValid, "fixture worker finalized refs must be readable: " + key);
+      assertTrue(
+          finalizedReferencesValid, "fixture worker finalized refs must be readable: " + key);
       return new DurableFailureObservation(
           terminal,
           report,
@@ -974,9 +1001,7 @@ class ReplayStressCertificationTest {
   }
 
   private int finalizedReferenceCount(UUID runId) {
-    return artifactRefRepository
-        .findByRunIdAndState(runId, ArtifactRef.STATE_FINALIZED)
-        .size();
+    return artifactRefRepository.findByRunIdAndState(runId, ArtifactRef.STATE_FINALIZED).size();
   }
 
   private boolean finalizedReferencesValid(UUID runId, int expectedCount) {
@@ -1012,7 +1037,11 @@ class ReplayStressCertificationTest {
           sendOrFail(
               kernel,
               "step",
-              mapper.createObjectNode().put("expectedTick", 0).put("maxTicks", 1).putObject("action"));
+              mapper
+                  .createObjectNode()
+                  .put("expectedTick", 0)
+                  .put("maxTicks", 1)
+                  .putObject("action"));
           sendOrFail(kernel, "snapshot", null);
         }
         case "malformed", "timeout" -> sendOrFail(kernel, "ping", null);
@@ -1032,18 +1061,21 @@ class ReplayStressCertificationTest {
   private void sendOrFail(XrspsKernelProcess kernel, String method, JsonNode params) {
     KernelMessage response = kernel.send(method, params, 750);
     if (response.isError()) {
-      String code = response.error() != null ? response.error().path("code").asText("UNKNOWN") : "UNKNOWN";
+      String code =
+          response.error() != null ? response.error().path("code").asText("UNKNOWN") : "UNKNOWN";
       throw new FixtureFailure(code, "fixture returned an error for " + method);
     }
   }
 
   private ObjectNode runArtifactFailure(String name, boolean corrupt) throws Exception {
-    WorkerArtifactFailureObservation first =
-        runArtifactFailureOnce(name + "-1", corrupt);
-    WorkerArtifactFailureObservation second =
-        runArtifactFailureOnce(name + "-2", corrupt);
-    assertEquals(first.error(), second.error(), "artifact failure code must be deterministic: " + name);
-    assertEquals(first.runState(), second.runState(), "artifact failure state must be deterministic: " + name);
+    WorkerArtifactFailureObservation first = runArtifactFailureOnce(name + "-1", corrupt);
+    WorkerArtifactFailureObservation second = runArtifactFailureOnce(name + "-2", corrupt);
+    assertEquals(
+        first.error(), second.error(), "artifact failure code must be deterministic: " + name);
+    assertEquals(
+        first.runState(),
+        second.runState(),
+        "artifact failure state must be deterministic: " + name);
     assertEquals(
         first.terminalReason(),
         second.terminalReason(),
@@ -1085,8 +1117,7 @@ class ReplayStressCertificationTest {
     result.put("finalizedReferenceCount", first.finalizedReferenceCount());
     result.put("secondFinalizedReferenceCount", second.finalizedReferenceCount());
     result.put(
-        "recoveryOrFailClosed",
-        first.recoveryOrFailClosed() && second.recoveryOrFailClosed());
+        "recoveryOrFailClosed", first.recoveryOrFailClosed() && second.recoveryOrFailClosed());
     return result;
   }
 
@@ -1159,14 +1190,18 @@ class ReplayStressCertificationTest {
   }
 
   private String failureCodeForArtifactFault(boolean corrupt) {
-    return corrupt ? ReplayErrorCode.CHECKSUM_MISMATCH.name() : ReplayErrorCode.ARTIFACT_PUBLICATION_FAILED.name();
+    return corrupt
+        ? ReplayErrorCode.CHECKSUM_MISMATCH.name()
+        : ReplayErrorCode.ARTIFACT_PUBLICATION_FAILED.name();
   }
 
   private ObjectNode runRealSnapshotFailure(String name, boolean runtimeMismatch) throws Exception {
     SnapshotFailureObservation first = runRealSnapshotFailureOnce(name + "-1", runtimeMismatch);
     SnapshotFailureObservation second = runRealSnapshotFailureOnce(name + "-2", runtimeMismatch);
-    assertEquals(first.error(), second.error(), "real snapshot error must be deterministic: " + name);
-    assertEquals(first.runState(), second.runState(), "real snapshot state must be deterministic: " + name);
+    assertEquals(
+        first.error(), second.error(), "real snapshot error must be deterministic: " + name);
+    assertEquals(
+        first.runState(), second.runState(), "real snapshot state must be deterministic: " + name);
     assertEquals(
         first.terminalReason(),
         second.terminalReason(),
@@ -1195,7 +1230,9 @@ class ReplayStressCertificationTest {
     assertEquals(1, first.finalizedReferenceCount(), name);
     assertEquals(1, second.finalizedReferenceCount(), name);
     assertTrue(first.processesReleased() && second.processesReleased(), "process leak: " + name);
-    assertNoActiveLeasesOrStaging(List.of(first.parentRunId(), first.childRunId(), second.parentRunId(), second.childRunId()));
+    assertNoActiveLeasesOrStaging(
+        List.of(
+            first.parentRunId(), first.childRunId(), second.parentRunId(), second.childRunId()));
     ObjectNode result = mapper.createObjectNode();
     result.put("case", name);
     result.put("error", first.error());
@@ -1240,12 +1277,15 @@ class ReplayStressCertificationTest {
       throws Exception {
     long processCountBefore = countProcessesContaining("replay-kernel");
     UUID parentRunId =
-        createRun(seedPublishedManifest(key + "-parent", 1, liveIdentity.xrspsBuildCommit()), key + "-parent")
+        createRun(
+                seedPublishedManifest(key + "-parent", 1, liveIdentity.xrspsBuildCommit()),
+                key + "-parent")
             .runId();
     ReplayRun parent = awaitTerminal(parentRunId, Duration.ofSeconds(90));
     assertEquals(ReplayRunState.SUCCEEDED, parent.getState(), "snapshot parent must succeed");
     assertEquals(ReplayOutcome.PASSED, parent.getOutcome(), "snapshot parent must pass");
-    assertTrue(reportRepository.findByRunId(parentRunId).isPresent(), "snapshot parent report missing");
+    assertTrue(
+        reportRepository.findByRunId(parentRunId).isPresent(), "snapshot parent report missing");
 
     ReplayCheckpoint checkpoint =
         checkpointRepository
@@ -1268,20 +1308,19 @@ class ReplayStressCertificationTest {
       injectRuntimeMismatchedSnapshot(parentRunId, checkpoint, originalBytes);
     } else {
       tx().executeWithoutResult(
-          status -> {
-            ReplayCheckpoint current = checkpointRepository.findById(checkpoint.getId()).orElseThrow();
-            current.setSnapshotChecksum("sha256:" + "0".repeat(64));
-            checkpointRepository.saveAndFlush(current);
-          });
+              status -> {
+                ReplayCheckpoint current =
+                    checkpointRepository.findById(checkpoint.getId()).orElseThrow();
+                current.setSnapshotChecksum("sha256:" + "0".repeat(64));
+                checkpointRepository.saveAndFlush(current);
+              });
     }
 
     ReplayRunResponse child =
         runService.branch(
             parentRunId,
             new BranchReplayRunRequest(
-                checkpoint.getId().toString(),
-                "stress-" + key,
-                "snapshot-" + key),
+                checkpoint.getId().toString(), "stress-" + key, "snapshot-" + key),
             "stress-owner");
     createdRunIds.add(child.runId());
     ReplayRun terminal = awaitTerminal(child.runId(), Duration.ofSeconds(90));
@@ -1292,9 +1331,12 @@ class ReplayStressCertificationTest {
     ReplayReport report = reportRepository.findByRunId(child.runId()).orElseThrow();
     ReplayAttempt attempt =
         attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(child.runId()).orElseThrow();
-    boolean leaseReleased = attempt.getLeaseExpiresAt() == null && !"RUNNING".equals(attempt.getState());
+    boolean leaseReleased =
+        attempt.getLeaseExpiresAt() == null && !"RUNNING".equals(attempt.getState());
     boolean stagingReferencesEmpty =
-        artifactRefRepository.findByRunIdAndState(child.runId(), ArtifactRef.STATE_STAGING).isEmpty();
+        artifactRefRepository
+            .findByRunIdAndState(child.runId(), ArtifactRef.STATE_STAGING)
+            .isEmpty();
     int finalizedReferenceCount = finalizedReferenceCount(child.runId());
     boolean finalizedReferencesValid = finalizedReferencesValid(child.runId(), 1);
     waitForNoAdditionalProcesses(processCountBefore, "replay-kernel");
@@ -1315,7 +1357,9 @@ class ReplayStressCertificationTest {
         parent.getState() == ReplayRunState.SUCCEEDED);
   }
 
-  /** Publishes a valid-but-runtime-incompatible snapshot through the real content-addressed store. */
+  /**
+   * Publishes a valid-but-runtime-incompatible snapshot through the real content-addressed store.
+   */
   private void injectRuntimeMismatchedSnapshot(
       UUID parentRunId, ReplayCheckpoint checkpoint, byte[] originalBytes) throws Exception {
     ObjectNode snapshot = (ObjectNode) mapper.readTree(originalBytes);
@@ -1329,12 +1373,13 @@ class ReplayStressCertificationTest {
     byte[] mutatedBytes = projection.canonicalJsonBytes(snapshot);
     ArtifactRef injected = publishInjectedSnapshot(parentRunId, mutatedBytes);
     tx().executeWithoutResult(
-        status -> {
-          ReplayCheckpoint current = checkpointRepository.findById(checkpoint.getId()).orElseThrow();
-          current.setSnapshotChecksum(internalChecksum);
-          current.setSnapshotArtifactChecksum(injected.getChecksum());
-          checkpointRepository.saveAndFlush(current);
-        });
+            status -> {
+              ReplayCheckpoint current =
+                  checkpointRepository.findById(checkpoint.getId()).orElseThrow();
+              current.setSnapshotChecksum(internalChecksum);
+              current.setSnapshotArtifactChecksum(injected.getChecksum());
+              checkpointRepository.saveAndFlush(current);
+            });
   }
 
   /** Stages, publishes, and then explicitly finalizes a test-only injected checkpoint artifact. */
@@ -1343,25 +1388,30 @@ class ReplayStressCertificationTest {
         artifactService.prepareArtifact(runId, ArtifactKind.SNAPSHOT, bytes, "application/json");
     ArtifactRef ref =
         new ArtifactRef(
-            prepared.proposedReferenceId(), runId, ArtifactKind.SNAPSHOT, prepared.checksum(), bytes.length);
+            prepared.proposedReferenceId(),
+            runId,
+            ArtifactKind.SNAPSHOT,
+            prepared.checksum(),
+            bytes.length);
     ref.setMediaType("application/json");
     ref.setCreatedAt(databaseInstant());
     tx().executeWithoutResult(status -> artifactRefRepository.saveAndFlush(ref));
     try {
       artifactService.publishArtifacts(runId);
       tx().executeWithoutResult(
-          status -> {
-            ArtifactRef current = artifactRefRepository.findById(ref.getId()).orElseThrow();
-            current.setState(ArtifactRef.STATE_FINALIZED);
-            current.setFinalizedAt(databaseInstant());
-            artifactRefRepository.saveAndFlush(current);
-          });
+              status -> {
+                ArtifactRef current = artifactRefRepository.findById(ref.getId()).orElseThrow();
+                current.setState(ArtifactRef.STATE_FINALIZED);
+                current.setFinalizedAt(databaseInstant());
+                artifactRefRepository.saveAndFlush(current);
+              });
     } catch (RuntimeException failure) {
       artifactService.discardPrepared(prepared);
       throw failure;
     }
     return artifactRefRepository.findById(ref.getId()).orElseThrow();
   }
+
   private ObjectNode runManifestPinFailure() throws Exception {
     ObjectNode first = runManifestPinFailureOnce("manifest-pin-failure-1");
     ObjectNode second = runManifestPinFailureOnce("manifest-pin-failure-2");
@@ -1374,11 +1424,25 @@ class ReplayStressCertificationTest {
     first.put("secondTerminalReason", second.path("terminalReason").asText());
     first.put("secondReportOutcome", second.path("reportOutcome").asText());
     first.put("deterministic", true);
-    first.put("processesReleased", first.path("processesReleased").asBoolean() && second.path("processesReleased").asBoolean());
-    first.put("leaseReleased", first.path("leaseReleased").asBoolean() && second.path("leaseReleased").asBoolean());
-    first.put("stagingReferencesEmpty", first.path("stagingReferencesEmpty").asBoolean() && second.path("stagingReferencesEmpty").asBoolean());
-    first.put("finalizedReferencesValid", first.path("finalizedReferencesValid").asBoolean() && second.path("finalizedReferencesValid").asBoolean());
-    first.put("recoveryOrFailClosed", first.path("recoveryOrFailClosed").asBoolean() && second.path("recoveryOrFailClosed").asBoolean());
+    first.put(
+        "processesReleased",
+        first.path("processesReleased").asBoolean()
+            && second.path("processesReleased").asBoolean());
+    first.put(
+        "leaseReleased",
+        first.path("leaseReleased").asBoolean() && second.path("leaseReleased").asBoolean());
+    first.put(
+        "stagingReferencesEmpty",
+        first.path("stagingReferencesEmpty").asBoolean()
+            && second.path("stagingReferencesEmpty").asBoolean());
+    first.put(
+        "finalizedReferencesValid",
+        first.path("finalizedReferencesValid").asBoolean()
+            && second.path("finalizedReferencesValid").asBoolean());
+    first.put(
+        "recoveryOrFailClosed",
+        first.path("recoveryOrFailClosed").asBoolean()
+            && second.path("recoveryOrFailClosed").asBoolean());
     first.put("secondReportPresent", second.path("reportPresent").asBoolean());
     return first;
   }
@@ -1395,7 +1459,8 @@ class ReplayStressCertificationTest {
     assertEquals(liveIdentity.xrspsBuildCommit(), report.getXrspsBuildCommit());
     ReplayAttempt attempt =
         attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(terminal.getId()).orElseThrow();
-    boolean leaseReleased = attempt.getLeaseExpiresAt() == null && !"RUNNING".equals(attempt.getState());
+    boolean leaseReleased =
+        attempt.getLeaseExpiresAt() == null && !"RUNNING".equals(attempt.getState());
     assertTrue(leaseReleased);
     assertTrue(
         artifactRefRepository
@@ -1411,8 +1476,10 @@ class ReplayStressCertificationTest {
     result.put("terminalReason", terminal.getTerminalReason());
     result.put("error", terminal.getTerminalReason());
     result.put("deterministic", true);
-    result.put("falseSuccess", terminal.isTerminal() && terminal.getState() == ReplayRunState.SUCCEEDED);
-    result.put("processesReleased", countProcessesContaining("replay-kernel") <= processCountBefore);
+    result.put(
+        "falseSuccess", terminal.isTerminal() && terminal.getState() == ReplayRunState.SUCCEEDED);
+    result.put(
+        "processesReleased", countProcessesContaining("replay-kernel") <= processCountBefore);
     result.put("reportPresent", true);
     result.put("reportOutcome", report.getOutcome().name());
     result.put("leaseReleased", leaseReleased);
@@ -1432,8 +1499,12 @@ class ReplayStressCertificationTest {
     first.put("secondError", second.path("error").asText());
     first.put("secondReportOutcome", second.path("reportOutcome").asText());
     first.put("secondRunState", second.path("runState").asText());
-    first.put("deterministic", first.path("deterministic").asBoolean() && second.path("deterministic").asBoolean());
-    first.put("falseSuccess", first.path("falseSuccess").asBoolean() || second.path("falseSuccess").asBoolean());
+    first.put(
+        "deterministic",
+        first.path("deterministic").asBoolean() && second.path("deterministic").asBoolean());
+    first.put(
+        "falseSuccess",
+        first.path("falseSuccess").asBoolean() || second.path("falseSuccess").asBoolean());
     first.put("secondReports", second.path("reports").asLong());
     first.put("secondUniqueConflictObserved", second.path("uniqueConflictObserved").asBoolean());
     return first;
@@ -1467,7 +1538,9 @@ class ReplayStressCertificationTest {
     result.put("reportPresent", true);
     result.put("reportOutcome", report.getOutcome().name());
     result.put("leaseReleased", true);
-    result.put("stagingReferencesEmpty", artifactRefRepository.findByRunIdAndState(runId, ArtifactRef.STATE_STAGING).isEmpty());
+    result.put(
+        "stagingReferencesEmpty",
+        artifactRefRepository.findByRunIdAndState(runId, ArtifactRef.STATE_STAGING).isEmpty());
     result.put("finalizedReferenceCount", finalizedReferenceCount(runId));
     result.put("finalizedReferencesValid", finalizedReferencesValid(runId, 0));
     result.put("recoveryOrFailClosed", uniqueConflict.observed() && reports == 1);
@@ -1483,23 +1556,23 @@ class ReplayStressCertificationTest {
   private UniquenessConflictObservation provokeReportUniquenessConflict(UUID runId) {
     try {
       tx().executeWithoutResult(
-          status ->
-              entityManager
-                  .createNativeQuery(
-                      "INSERT INTO replay_reports (run_id, attempt_id, mode, manifest_checksum, outcome, "
-                          + "executed_action_count, checkpoint_count, mismatch_hard_count, "
-                          + "mismatch_soft_count, mismatch_info_count, final_state_hash, final_chain_hash, "
-                          + "terminal_reason, xrsps_adapter_version, xrsps_build_commit, cache_revision, "
-                          + "content_revision, report_json, report_checksum, control_allowed, started_at, "
-                          + "terminal_at, finalized_at) "
-                          + "SELECT run_id, attempt_id, mode, manifest_checksum, outcome, executed_action_count, "
-                          + "checkpoint_count, mismatch_hard_count, mismatch_soft_count, mismatch_info_count, "
-                          + "final_state_hash, final_chain_hash, terminal_reason, xrsps_adapter_version, "
-                          + "xrsps_build_commit, cache_revision, content_revision, report_json, report_checksum, "
-                          + "control_allowed, started_at, terminal_at, finalized_at "
-                          + "FROM replay_reports WHERE run_id = :runId")
-                  .setParameter("runId", runId)
-                  .executeUpdate());
+              status ->
+                  entityManager
+                      .createNativeQuery(
+                          "INSERT INTO replay_reports (run_id, attempt_id, mode, manifest_checksum, outcome, "
+                              + "executed_action_count, checkpoint_count, mismatch_hard_count, "
+                              + "mismatch_soft_count, mismatch_info_count, final_state_hash, final_chain_hash, "
+                              + "terminal_reason, xrsps_adapter_version, xrsps_build_commit, cache_revision, "
+                              + "content_revision, report_json, report_checksum, control_allowed, started_at, "
+                              + "terminal_at, finalized_at) "
+                              + "SELECT run_id, attempt_id, mode, manifest_checksum, outcome, executed_action_count, "
+                              + "checkpoint_count, mismatch_hard_count, mismatch_soft_count, mismatch_info_count, "
+                              + "final_state_hash, final_chain_hash, terminal_reason, xrsps_adapter_version, "
+                              + "xrsps_build_commit, cache_revision, content_revision, report_json, report_checksum, "
+                              + "control_allowed, started_at, terminal_at, finalized_at "
+                              + "FROM replay_reports WHERE run_id = :runId")
+                      .setParameter("runId", runId)
+                      .executeUpdate());
       fail("the duplicate replay report insert must violate replay_reports.run_id uniqueness");
       return new UniquenessConflictObservation(false, "NO_CONFLICT", "");
     } catch (RuntimeException expected) {
@@ -1525,8 +1598,7 @@ class ReplayStressCertificationTest {
       final int runNumber = repetition;
       UUID runId =
           createRun(
-                  seedPublishedManifest(
-                      "claim-" + runNumber, 0, liveIdentity.xrspsBuildCommit()),
+                  seedPublishedManifest("claim-" + runNumber, 0, liveIdentity.xrspsBuildCommit()),
                   "claim-" + runNumber)
               .runId();
       List<String> racers =
@@ -1537,8 +1609,7 @@ class ReplayStressCertificationTest {
                     runService.claimAtomically(runId, "claim-racer-" + side + "-" + runNumber);
                 return claim == null ? "LOSER" : "WINNER";
               });
-      assertExactRaceOutcomes(
-          racers, Set.of("WINNER", "LOSER"), "claim-race-" + runNumber);
+      assertExactRaceOutcomes(racers, Set.of("WINNER", "LOSER"), "claim-race-" + runNumber);
       assertEquals(
           1,
           racers.stream().filter("WINNER"::equals).count(),
@@ -1559,8 +1630,7 @@ class ReplayStressCertificationTest {
           runTwoRacers(
               "recovery-race-" + runNumber,
               side -> recoveryService.recover(ids[1]).map(Enum::name).orElse("NONE"));
-      assertExactRaceOutcomes(
-          racers, Set.of("FAILED", "NONE"), "recovery-race-" + runNumber);
+      assertExactRaceOutcomes(racers, Set.of("FAILED", "NONE"), "recovery-race-" + runNumber);
       assertEquals(1, racers.stream().filter("FAILED"::equals).count());
       ReplayRun terminal = runRepository.findById(ids[0]).orElseThrow();
       assertTrue(terminal.isTerminal());
@@ -1600,9 +1670,7 @@ class ReplayStressCertificationTest {
                 }
               });
       assertExactRaceOutcomes(
-          racers,
-          Set.of("WINNER", "LOSER:23505:manifest_checksum"),
-          "manifest-race-" + runNumber);
+          racers, Set.of("WINNER", "LOSER:23505:manifest_checksum"), "manifest-race-" + runNumber);
       assertEquals(
           1,
           racers.stream().filter("WINNER"::equals).count(),
@@ -1622,8 +1690,7 @@ class ReplayStressCertificationTest {
       PublisherFixture b = preparePublisherFixture("publisher-b-" + runNumber, bytes);
       List<String> racers =
           runTwoRacers(
-              "publisher-race-" + runNumber,
-              side -> finalizePublisherFixture(side == 0 ? a : b));
+              "publisher-race-" + runNumber, side -> finalizePublisherFixture(side == 0 ? a : b));
       assertExactRaceOutcomes(
           racers,
           Set.of("FINALIZED:CREATED", "FINALIZED:REUSED_EXISTING"),
@@ -1643,9 +1710,9 @@ class ReplayStressCertificationTest {
         assertEquals(
             1L,
             finalEntries
-            .filter(Files::isRegularFile)
-            .filter(path -> path.getFileName().toString().equals(hex))
-            .count(),
+                .filter(Files::isRegularFile)
+                .filter(path -> path.getFileName().toString().equals(hex))
+                .count(),
             "one shared final content-addressed file must exist for " + a.traceChecksum());
       }
       assertTrue(
@@ -1658,8 +1725,10 @@ class ReplayStressCertificationTest {
                   .count()
               == 2,
           "publisher B must finalize its trace and report through the production fence");
-      assertTrue(artifactRefRepository.findByRunIdAndState(runA, ArtifactRef.STATE_STAGING).isEmpty());
-      assertTrue(artifactRefRepository.findByRunIdAndState(runB, ArtifactRef.STATE_STAGING).isEmpty());
+      assertTrue(
+          artifactRefRepository.findByRunIdAndState(runA, ArtifactRef.STATE_STAGING).isEmpty());
+      assertTrue(
+          artifactRefRepository.findByRunIdAndState(runB, ArtifactRef.STATE_STAGING).isEmpty());
       assertEquals(ReplayRunState.SUCCEEDED, runRepository.findById(runA).orElseThrow().getState());
       assertEquals(ReplayRunState.SUCCEEDED, runRepository.findById(runB).orElseThrow().getState());
       int finalizedReferenceCountA = finalizedReferenceCount(runA);
@@ -1674,7 +1743,9 @@ class ReplayStressCertificationTest {
     return raceSummary("two-publishers-one-content-address", observations);
   }
 
-  /** Creates a fully fenced RUNNING/FINALIZE_ARTIFACTS fixture without bypassing production doors. */
+  /**
+   * Creates a fully fenced RUNNING/FINALIZE_ARTIFACTS fixture without bypassing production doors.
+   */
   private PublisherFixture preparePublisherFixture(String key, byte[] traceBytes) {
     UUID runId =
         createRun(seedPublishedManifest(key, 0, liveIdentity.xrspsBuildCommit()), key).runId();
@@ -1687,7 +1758,8 @@ class ReplayStressCertificationTest {
     persistence.storeRuntimeIdentity(fence, liveIdentity);
 
     PreparedArtifact trace =
-        artifactService.prepareArtifact(runId, ArtifactKind.TRACE, traceBytes, "application/octet-stream");
+        artifactService.prepareArtifact(
+            runId, ArtifactKind.TRACE, traceBytes, "application/octet-stream");
     persistence.registerArtifact(fence, trace);
     ReplayWorkerPersistenceService.FinalizationReservation reservation =
         persistence.reserveSuccessfulFinalization(fence, ReplayOutcome.PASSED);
@@ -1728,11 +1800,7 @@ class ReplayStressCertificationTest {
             .findFirst()
             .orElseThrow(() -> new AssertionError("publisher receipt omitted TRACE"));
     persistence.finalizeSuccessfulRun(
-        fixture.fence(),
-        fixture.reservation(),
-        receipt,
-        fixture.report(),
-        ReplayOutcome.PASSED);
+        fixture.fence(), fixture.reservation(), receipt, fixture.report(), ReplayOutcome.PASSED);
     return "FINALIZED:" + traceDisposition;
   }
 
@@ -1768,7 +1836,9 @@ class ReplayStressCertificationTest {
               "RECOVERY_NONE"),
           "completion-race-" + runNumber);
       long completionWinners =
-          racers.stream().filter(value -> value.equals("NORMAL_WINNER") || value.equals("RECOVERY_FAILED")).count();
+          racers.stream()
+              .filter(value -> value.equals("NORMAL_WINNER") || value.equals("RECOVERY_FAILED"))
+              .count();
       assertEquals(
           1L,
           completionWinners,
@@ -1799,11 +1869,7 @@ class ReplayStressCertificationTest {
               "report-writer-race-" + repetition, side -> reportWriter.repair(runId).name());
       assertExactRaceOutcomes(
           racers,
-          Set.of(
-              "INSERTED",
-              "CONCURRENT_WINNER_ACCEPTED",
-              "ALREADY_PRESENT",
-              "LOCK_CONTENDED"),
+          Set.of("INSERTED", "CONCURRENT_WINNER_ACCEPTED", "ALREADY_PRESENT", "LOCK_CONTENDED"),
           "report-writer-race-" + repetition);
       assertEquals(
           1L,
@@ -1825,8 +1891,7 @@ class ReplayStressCertificationTest {
       final int runNumber = repetition;
       seedCatalogRows(runNumber);
       Object[] first =
-          tx().execute(
-              status -> catalogRepository.findCatalogRows(null, null, null, 1, 0).get(0));
+          tx().execute(status -> catalogRepository.findCatalogRows(null, null, null, 1, 0).get(0));
       LocalDateTime cursorTime = asLocalDateTime(first[5]);
       Long cursorId = ((Number) first[0]).longValue();
       CyclicBarrier continuationStarted = new CyclicBarrier(2);
@@ -1836,8 +1901,7 @@ class ReplayStressCertificationTest {
               side -> {
                 if (side == 0) {
                   List<Object[]> continuation =
-                      tx()
-                          .execute(
+                      tx().execute(
                               status -> {
                                 // The barrier is reached after this transaction has started. The
                                 // sleep keeps the same READ COMMITTED transaction open while the
@@ -1860,11 +1924,11 @@ class ReplayStressCertificationTest {
                 }
                 awaitBarrier(continuationStarted);
                 tx().executeWithoutResult(
-                    status ->
-                        insertCatalogSession(
-                            "newer-" + runNumber,
-                            "recording-newer-" + runNumber,
-                            LocalDateTime.of(2026, 8, 28, 5, 0)));
+                        status ->
+                            insertCatalogSession(
+                                "newer-" + runNumber,
+                                "recording-newer-" + runNumber,
+                                LocalDateTime.of(2026, 8, 28, 5, 0)));
                 return "INSERTED";
               });
       assertExactRaceOutcomes(
@@ -1884,9 +1948,9 @@ class ReplayStressCertificationTest {
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Interrupted while coordinating stress race", interrupted);
-    } catch (java.util.concurrent.BrokenBarrierException
-        | TimeoutException coordinationFailure) {
-      throw new IllegalStateException("Stress race coordination barrier failed", coordinationFailure);
+    } catch (java.util.concurrent.BrokenBarrierException | TimeoutException coordinationFailure) {
+      throw new IllegalStateException(
+          "Stress race coordination barrier failed", coordinationFailure);
     }
   }
 
@@ -1910,7 +1974,8 @@ class ReplayStressCertificationTest {
         try {
           results.add(future.get(60, TimeUnit.SECONDS));
         } catch (TimeoutException timeout) {
-          throw new AssertionError("Timed out in race " + name + ": " + databaseDiagnostics(), timeout);
+          throw new AssertionError(
+              "Timed out in race " + name + ": " + databaseDiagnostics(), timeout);
         } catch (java.util.concurrent.ExecutionException failure) {
           throw new AssertionError(
               "Racer failed in " + name + ": " + failure.getCause(), failure.getCause());
@@ -1923,7 +1988,7 @@ class ReplayStressCertificationTest {
   }
 
   /**
-   * Race helpers must never turn a failed worker into a passing observation.  Every caller gets
+   * Race helpers must never turn a failed worker into a passing observation. Every caller gets
    * exactly two results, each result is explicitly classified by the scenario, and an exception
    * returned by a racer is rejected before the scenario can be serialized as passed.
    */
@@ -1970,7 +2035,11 @@ class ReplayStressCertificationTest {
     ObjectNode summary = mapper.createObjectNode();
     summary.put("name", name);
     summary.put("repetitions", observations.size());
-    summary.put("passed", observations.size() == 25 && observations.stream().noneMatch(row -> row.stream().anyMatch(value -> value.startsWith("ERROR:"))));
+    summary.put(
+        "passed",
+        observations.size() == 25
+            && observations.stream()
+                .noneMatch(row -> row.stream().anyMatch(value -> value.startsWith("ERROR:"))));
     summary.set("observations", mapper.valueToTree(observations));
     return summary;
   }
@@ -2055,7 +2124,8 @@ class ReplayStressCertificationTest {
     return manifestId;
   }
 
-  private ObjectNode manifestDocument(UUID manifestId, UUID curationId, int actionCount, String buildCommit) {
+  private ObjectNode manifestDocument(
+      UUID manifestId, UUID curationId, int actionCount, String buildCommit) {
     ObjectNode document = mapper.createObjectNode();
     document.put("manifestVersion", 1);
     document.put("manifestId", manifestId.toString());
@@ -2141,85 +2211,101 @@ class ReplayStressCertificationTest {
         throw new AssertionError("Interrupted while waiting for run " + runId, interrupted);
       }
     }
-    throw new AssertionError("Run did not become terminal: " + runId + "\n" + databaseDiagnostics());
+    throw new AssertionError(
+        "Run did not become terminal: " + runId + "\n" + databaseDiagnostics());
   }
 
   private UUID[] seedExpiredLeaseAttempt(String key) {
-    UUID runId = createRun(seedPublishedManifest(key, 0, liveIdentity.xrspsBuildCommit()), key).runId();
-    ReplayRunService.ClaimResult claim = tx().execute(status -> runService.claimAtomically(runId, "recovery-seeder"));
+    UUID runId =
+        createRun(seedPublishedManifest(key, 0, liveIdentity.xrspsBuildCommit()), key).runId();
+    ReplayRunService.ClaimResult claim =
+        tx().execute(status -> runService.claimAtomically(runId, "recovery-seeder"));
     assertNotNull(claim);
     tx().executeWithoutResult(
-        status -> {
-          LocalDateTime now = runRepository.currentTimestamp();
-          ReplayRun run = runRepository.findByIdForUpdate(runId).orElseThrow();
-          run.setState(ReplayRunState.RUNNING);
-          run.setPhase(ReplayRunPhase.EXECUTE);
-          run.setStartedAt(now);
-          run.setXrspsAdapterVersion(liveIdentity.xrspsAdapterVersion());
-          run.setXrspsBuildCommit(liveIdentity.xrspsBuildCommit());
-          run.setCacheRevision(liveIdentity.cacheRevision());
-          run.setContentRevision(liveIdentity.contentRevision());
-          runRepository.saveAndFlush(run);
-          entityManager
-              .createNativeQuery("UPDATE replay_attempts SET lease_expires_at = CURRENT_TIMESTAMP - interval '1 second' WHERE id = :id")
-              .setParameter("id", claim.attempt().getId())
-              .executeUpdate();
-        });
+            status -> {
+              LocalDateTime now = runRepository.currentTimestamp();
+              ReplayRun run = runRepository.findByIdForUpdate(runId).orElseThrow();
+              run.setState(ReplayRunState.RUNNING);
+              run.setPhase(ReplayRunPhase.EXECUTE);
+              run.setStartedAt(now);
+              run.setXrspsAdapterVersion(liveIdentity.xrspsAdapterVersion());
+              run.setXrspsBuildCommit(liveIdentity.xrspsBuildCommit());
+              run.setCacheRevision(liveIdentity.cacheRevision());
+              run.setContentRevision(liveIdentity.contentRevision());
+              runRepository.saveAndFlush(run);
+              entityManager
+                  .createNativeQuery(
+                      "UPDATE replay_attempts SET lease_expires_at = CURRENT_TIMESTAMP - interval '1 second' WHERE id = :id")
+                  .setParameter("id", claim.attempt().getId())
+                  .executeUpdate();
+            });
     return new UUID[] {runId, claim.attempt().getId()};
   }
 
   private UUID[] seedExpiringRaceRun(String key) {
     UUID[] ids = seedExpiredLeaseAttempt(key);
     tx().executeWithoutResult(
-        status ->
-            entityManager
-                // The race barrier must never start with an unexpired lease that can lapse between
-                // the recovery eligibility check and the normal worker fence check. Start from a
-                // definitively expired lease so exactly one of the two fenced terminalizers can
-                // win; the barrier still makes their entry to the race concurrent.
-                .createNativeQuery("UPDATE replay_attempts SET lease_expires_at = CURRENT_TIMESTAMP - interval '1 second' WHERE id = :id")
-                .setParameter("id", ids[1])
-                .executeUpdate());
+            status ->
+                entityManager
+                    // The race barrier must never start with an unexpired lease that can lapse
+                    // between
+                    // the recovery eligibility check and the normal worker fence check. Start from
+                    // a
+                    // definitively expired lease so exactly one of the two fenced terminalizers can
+                    // win; the barrier still makes their entry to the race concurrent.
+                    .createNativeQuery(
+                        "UPDATE replay_attempts SET lease_expires_at = CURRENT_TIMESTAMP - interval '1 second' WHERE id = :id")
+                    .setParameter("id", ids[1])
+                    .executeUpdate());
     return ids;
   }
 
   private UUID seedTerminalRunWithoutReport() {
-    UUID runId = createRun(seedPublishedManifest("terminal-" + UUID.randomUUID(), 0, liveIdentity.xrspsBuildCommit()), "terminal").runId();
-    ReplayRunService.ClaimResult claim = tx().execute(status -> runService.claimAtomically(runId, "terminal-seeder"));
+    UUID runId =
+        createRun(
+                seedPublishedManifest(
+                    "terminal-" + UUID.randomUUID(), 0, liveIdentity.xrspsBuildCommit()),
+                "terminal")
+            .runId();
+    ReplayRunService.ClaimResult claim =
+        tx().execute(status -> runService.claimAtomically(runId, "terminal-seeder"));
     assertNotNull(claim);
     tx().executeWithoutResult(
-        status -> {
-          LocalDateTime now = runRepository.currentTimestamp();
-          ReplayRun run = runRepository.findByIdForUpdate(runId).orElseThrow();
-          runService.applyTransition(run, ReplayRunState.FAILED, ReplayRunPhase.FINALIZE_REPORT, now);
-          run.setOutcome(ReplayOutcome.INFRASTRUCTURE_FAILURE);
-          run.setTerminalReason("STRESS_SEEDED");
-          run.setStartedAt(now);
-          run.setTerminalAt(now);
-          run.setXrspsAdapterVersion(liveIdentity.xrspsAdapterVersion());
-          run.setXrspsBuildCommit(liveIdentity.xrspsBuildCommit());
-          run.setCacheRevision(liveIdentity.cacheRevision());
-          run.setContentRevision(liveIdentity.contentRevision());
-          runRepository.saveAndFlush(run);
-          ReplayAttempt attempt = attemptRepository.findByIdForUpdate(claim.attempt().getId()).orElseThrow();
-          attempt.setState(ReplayRunState.FAILED.name());
-          attempt.setTerminalAt(now);
-          attempt.setLeaseExpiresAt(null);
-          attemptRepository.saveAndFlush(attempt);
-        });
+            status -> {
+              LocalDateTime now = runRepository.currentTimestamp();
+              ReplayRun run = runRepository.findByIdForUpdate(runId).orElseThrow();
+              runService.applyTransition(
+                  run, ReplayRunState.FAILED, ReplayRunPhase.FINALIZE_REPORT, now);
+              run.setOutcome(ReplayOutcome.INFRASTRUCTURE_FAILURE);
+              run.setTerminalReason("STRESS_SEEDED");
+              run.setStartedAt(now);
+              run.setTerminalAt(now);
+              run.setXrspsAdapterVersion(liveIdentity.xrspsAdapterVersion());
+              run.setXrspsBuildCommit(liveIdentity.xrspsBuildCommit());
+              run.setCacheRevision(liveIdentity.cacheRevision());
+              run.setContentRevision(liveIdentity.contentRevision());
+              runRepository.saveAndFlush(run);
+              ReplayAttempt attempt =
+                  attemptRepository.findByIdForUpdate(claim.attempt().getId()).orElseThrow();
+              attempt.setState(ReplayRunState.FAILED.name());
+              attempt.setTerminalAt(now);
+              attempt.setLeaseExpiresAt(null);
+              attemptRepository.saveAndFlush(attempt);
+            });
     return runId;
   }
 
   private void recoverClaimedRun(UUID runId) {
-    ReplayAttempt attempt = attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(runId).orElseThrow();
+    ReplayAttempt attempt =
+        attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(runId).orElseThrow();
     tx().executeWithoutResult(
-        status ->
-            entityManager
-                .createNativeQuery(
-                    "UPDATE replay_attempts SET lease_expires_at = CURRENT_TIMESTAMP - interval '1 second' "
-                        + "WHERE id = :attemptId AND state = 'RUNNING'")
-                .setParameter("attemptId", attempt.getId())
-                .executeUpdate());
+            status ->
+                entityManager
+                    .createNativeQuery(
+                        "UPDATE replay_attempts SET lease_expires_at = CURRENT_TIMESTAMP - interval '1 second' "
+                            + "WHERE id = :attemptId AND state = 'RUNNING'")
+                    .setParameter("attemptId", attempt.getId())
+                    .executeUpdate());
     assertEquals(
         java.util.Optional.of(ReplayRunState.FAILED), recoveryService.recover(attempt.getId()));
     assertTrue(runRepository.findById(runId).orElseThrow().isTerminal());
@@ -2237,15 +2323,15 @@ class ReplayStressCertificationTest {
   private UUID seedCuration(String key) {
     UUID id = UUID.randomUUID();
     tx().executeWithoutResult(
-        status ->
-            entityManager
-                .createNativeQuery(
-                    "INSERT INTO recording_curations (id, recording_id, debug_session_id, version, state, role, content_json, content_checksum, created_by) VALUES (:id, :recording, :session, 1, 'PUBLISHED', 'TRAIN', '{}'::jsonb, :checksum, 'stress')")
-                .setParameter("id", id)
-                .setParameter("recording", "compiler-recording-" + key)
-                .setParameter("session", "compiler-session-" + key)
-                .setParameter("checksum", "sha256:" + "c".repeat(64))
-                .executeUpdate());
+            status ->
+                entityManager
+                    .createNativeQuery(
+                        "INSERT INTO recording_curations (id, recording_id, debug_session_id, version, state, role, content_json, content_checksum, created_by) VALUES (:id, :recording, :session, 1, 'PUBLISHED', 'TRAIN', '{}'::jsonb, :checksum, 'stress')")
+                    .setParameter("id", id)
+                    .setParameter("recording", "compiler-recording-" + key)
+                    .setParameter("session", "compiler-session-" + key)
+                    .setParameter("checksum", "sha256:" + "c".repeat(64))
+                    .executeUpdate());
     return id;
   }
 
@@ -2266,7 +2352,8 @@ class ReplayStressCertificationTest {
     manifest.setFixedClockOrigin(LocalDateTime.of(2026, 1, 1, 0, 0));
     manifest.setStartTick(0);
     manifest.setEndTick(1);
-    ObjectNode json = mapper.createObjectNode().put("manifestVersion", 1).put("manifestChecksum", checksum);
+    ObjectNode json =
+        mapper.createObjectNode().put("manifestVersion", 1).put("manifestChecksum", checksum);
     manifest.setManifestJson(json);
     manifest.setManifestChecksum(checksum);
     manifest.setCompleteness("COMPLETE");
@@ -2279,32 +2366,42 @@ class ReplayStressCertificationTest {
 
   private void ensureCatalogTables() {
     tx().executeWithoutResult(
-        status -> {
-          entityManager
-              .createNativeQuery("CREATE TABLE IF NOT EXISTS recording_sessions (recording_id VARCHAR(255) PRIMARY KEY)")
-              .executeUpdate();
-          entityManager
-              .createNativeQuery(
-                  "CREATE TABLE IF NOT EXISTS debug_sessions (id BIGSERIAL PRIMARY KEY, recording_id VARCHAR(255), session_id VARCHAR(255), account_name VARCHAR(255), script_name VARCHAR(255), start_time TIMESTAMP NOT NULL, end_time TIMESTAMP, start_tick BIGINT, end_tick BIGINT)")
-              .executeUpdate();
-          entityManager
-              .createNativeQuery("CREATE TABLE IF NOT EXISTS tick_snapshots (id BIGSERIAL PRIMARY KEY, session_id VARCHAR(255), tick BIGINT, player_state JSONB)")
-              .executeUpdate();
-          entityManager
-              .createNativeQuery("CREATE TABLE IF NOT EXISTS tick_logs (id BIGSERIAL PRIMARY KEY, session_id VARCHAR(255), tick BIGINT)")
-              .executeUpdate();
-        });
+            status -> {
+              entityManager
+                  .createNativeQuery(
+                      "CREATE TABLE IF NOT EXISTS recording_sessions (recording_id VARCHAR(255) PRIMARY KEY)")
+                  .executeUpdate();
+              entityManager
+                  .createNativeQuery(
+                      "CREATE TABLE IF NOT EXISTS debug_sessions (id BIGSERIAL PRIMARY KEY, recording_id VARCHAR(255), session_id VARCHAR(255), account_name VARCHAR(255), script_name VARCHAR(255), start_time TIMESTAMP NOT NULL, end_time TIMESTAMP, start_tick BIGINT, end_tick BIGINT)")
+                  .executeUpdate();
+              entityManager
+                  .createNativeQuery(
+                      "CREATE TABLE IF NOT EXISTS tick_snapshots (id BIGSERIAL PRIMARY KEY, session_id VARCHAR(255), tick BIGINT, player_state JSONB)")
+                  .executeUpdate();
+              entityManager
+                  .createNativeQuery(
+                      "CREATE TABLE IF NOT EXISTS tick_logs (id BIGSERIAL PRIMARY KEY, session_id VARCHAR(255), tick BIGINT)")
+                  .executeUpdate();
+            });
   }
 
   private void seedCatalogRows(int repetition) {
     tx().executeWithoutResult(
-        status -> {
-          entityManager
-              .createNativeQuery("TRUNCATE tick_logs, tick_snapshots, debug_sessions, recording_sessions RESTART IDENTITY CASCADE")
-              .executeUpdate();
-          insertCatalogSession("newest-" + repetition, "recording-newest-" + repetition, LocalDateTime.of(2026, 8, 28, 4, 0));
-          insertCatalogSession("older-" + repetition, "recording-older-" + repetition, LocalDateTime.of(2026, 8, 28, 3, 0));
-        });
+            status -> {
+              entityManager
+                  .createNativeQuery(
+                      "TRUNCATE tick_logs, tick_snapshots, debug_sessions, recording_sessions RESTART IDENTITY CASCADE")
+                  .executeUpdate();
+              insertCatalogSession(
+                  "newest-" + repetition,
+                  "recording-newest-" + repetition,
+                  LocalDateTime.of(2026, 8, 28, 4, 0));
+              insertCatalogSession(
+                  "older-" + repetition,
+                  "recording-older-" + repetition,
+                  LocalDateTime.of(2026, 8, 28, 3, 0));
+            });
   }
 
   private void insertCatalogSession(String sessionId, String recordingId, LocalDateTime start) {
@@ -2313,7 +2410,8 @@ class ReplayStressCertificationTest {
         .setParameter("recording", recordingId)
         .executeUpdate();
     entityManager
-        .createNativeQuery("INSERT INTO debug_sessions (recording_id, session_id, account_name, script_name, start_time, end_time, start_tick, end_tick) VALUES (:recording, :session, 'stress', 'stress', :start, :end, 0, 10)")
+        .createNativeQuery(
+            "INSERT INTO debug_sessions (recording_id, session_id, account_name, script_name, start_time, end_time, start_tick, end_tick) VALUES (:recording, :session, 'stress', 'stress', :start, :end, 0, 10)")
         .setParameter("recording", recordingId)
         .setParameter("session", sessionId)
         .setParameter("start", start)
@@ -2340,7 +2438,8 @@ class ReplayStressCertificationTest {
         continue;
       }
       if (run.isTerminal()) {
-        ReplayAttempt latest = attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(runId).orElse(null);
+        ReplayAttempt latest =
+            attemptRepository.findFirstByRunIdOrderByAttemptNoDesc(runId).orElse(null);
         if (latest != null) {
           assertTrue(!"RUNNING".equals(latest.getState()), "active attempt leaked for " + runId);
           assertTrue(latest.getLeaseExpiresAt() == null, "lease leaked for " + runId);
@@ -2362,7 +2461,8 @@ class ReplayStressCertificationTest {
         scalarCount("SELECT COUNT(*) FROM artifact_refs WHERE state = 'STAGING'");
     assertEquals(0L, activeAttempts, "no active replay leases may remain after a stress phase");
     assertEquals(0L, nonTerminalRuns, "no temporary claim may remain after a stress phase");
-    assertEquals(0L, stagingReferences, "no database staging reference may remain after a stress phase");
+    assertEquals(
+        0L, stagingReferences, "no database staging reference may remain after a stress phase");
     assertNoFilesystemStaging();
   }
 
@@ -2383,8 +2483,7 @@ class ReplayStressCertificationTest {
   }
 
   private long scalarCount(String sql) {
-    return tx()
-        .execute(
+    return tx().execute(
             status ->
                 ((Number) entityManager.createNativeQuery(sql).getSingleResult()).longValue());
   }
@@ -2409,8 +2508,7 @@ class ReplayStressCertificationTest {
   }
 
   private Path writeFixture(String name, String source) throws IOException {
-    Path directory =
-        RUNTIME_FIXTURE_ROOT.resolve(name + "-" + UUID.randomUUID()).toAbsolutePath();
+    Path directory = RUNTIME_FIXTURE_ROOT.resolve(name + "-" + UUID.randomUUID()).toAbsolutePath();
     Files.createDirectories(directory);
     Path path = directory.resolve(name + ".js");
     // The durable worker rejects placeholders just as production does.  Render the same live
@@ -2427,10 +2525,13 @@ class ReplayStressCertificationTest {
     return path;
   }
 
-  /** Wraps the certified worker from a unique fixture path so process-release evidence is scoped. */
+  /**
+   * Wraps the certified worker from a unique fixture path so process-release evidence is scoped.
+   */
   private Path writeSyntheticWorkerLauncher(String name) throws IOException {
     Path directory =
-        RUNTIME_FIXTURE_ROOT.resolve("artifact-worker-" + name + "-" + UUID.randomUUID())
+        RUNTIME_FIXTURE_ROOT
+            .resolve("artifact-worker-" + name + "-" + UUID.randomUUID())
             .toAbsolutePath();
     Files.createDirectories(directory);
     Path launcher = directory.resolve("worker-launcher-" + UUID.randomUUID() + ".js");
@@ -2442,9 +2543,7 @@ class ReplayStressCertificationTest {
   }
 
   private static String jsString(String value) {
-    return "\""
-        + value.replace("\\", "\\\\").replace("\"", "\\\"")
-        + "\"";
+    return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
   }
 
   private ReplayProperties certificationProperties(Path root) {
@@ -2486,11 +2585,11 @@ class ReplayStressCertificationTest {
     try {
       List<?> activity =
           tx().execute(
-              status ->
-                  entityManager
-                      .createNativeQuery(
-                          "SELECT pid, state, wait_event_type, wait_event, left(query, 160) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()")
-                      .getResultList());
+                  status ->
+                      entityManager
+                          .createNativeQuery(
+                              "SELECT pid, state, wait_event_type, wait_event, left(query, 160) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()")
+                          .getResultList());
       activity.forEach(
           row -> {
             if (row instanceof Object[] values) {
@@ -2532,7 +2631,8 @@ class ReplayStressCertificationTest {
     try {
       Path directory = Files.createTempDirectory("replay-stress-migrations-");
       for (String migration : REPLAY_MIGRATIONS) {
-        try (var input = ReplayStressCertificationTest.class.getResourceAsStream("/db/migration/" + migration)) {
+        try (var input =
+            ReplayStressCertificationTest.class.getResourceAsStream("/db/migration/" + migration)) {
           if (input == null) {
             throw new IllegalStateException("Missing migration resource " + migration);
           }
@@ -2727,7 +2827,8 @@ class ReplayStressCertificationTest {
     }
 
     @Bean
-    ScenarioManifestInsertService stressManifestInsertService(ScenarioManifestRepository repository) {
+    ScenarioManifestInsertService stressManifestInsertService(
+        ScenarioManifestRepository repository) {
       return new ScenarioManifestInsertService(repository);
     }
   }
@@ -2738,9 +2839,7 @@ class ReplayStressCertificationTest {
   private static final String SECRET_STDERR_MARKER = "SECRET_MARKER_7f9b2e";
 
   private static final String EXIT_BEFORE_CAPABILITIES =
-      "process.stderr.write('"
-          + SECRET_STDERR_MARKER
-          + "\\n'); process.exit(17);";
+      "process.stderr.write('" + SECRET_STDERR_MARKER + "\\n'); process.exit(17);";
 
   private static final String EXIT_DURING_RESET =
       "const rl=require('readline').createInterface({input:process.stdin});"
@@ -2758,6 +2857,5 @@ class ReplayStressCertificationTest {
   private static final String MALFORMED_STDOUT =
       "process.stdin.on('data',()=>process.stdout.write('not-json\\n'));setInterval(()=>{},60000);";
 
-  private static final String REQUEST_TIMEOUT =
-      "process.stdin.resume();setInterval(()=>{},60000);";
+  private static final String REQUEST_TIMEOUT = "process.stdin.resume();setInterval(()=>{},60000);";
 }

@@ -6,9 +6,19 @@ import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
 import com.chromascape.web.replay.capability.ReplayCapabilityService;
 import com.chromascape.web.replay.catalog.ReplayEvidenceValidator;
 import com.chromascape.web.replay.catalog.ReplayRecordingResolver;
+import com.chromascape.web.replay.compiler.action.CastSpellAction;
+import com.chromascape.web.replay.compiler.action.EquipItemAction;
+import com.chromascape.web.replay.compiler.action.InteractGroundItemAction;
+import com.chromascape.web.replay.compiler.action.InteractInventoryItemAction;
 import com.chromascape.web.replay.compiler.action.InteractNpcAction;
+import com.chromascape.web.replay.compiler.action.InteractObjectAction;
+import com.chromascape.web.replay.compiler.action.InteractWidgetAction;
+import com.chromascape.web.replay.compiler.action.InventoryAction;
+import com.chromascape.web.replay.compiler.action.SelectDialogueOptionAction;
 import com.chromascape.web.replay.compiler.action.SemanticAction;
+import com.chromascape.web.replay.compiler.action.UseItemOnNpcAction;
 import com.chromascape.web.replay.compiler.action.WaitUntilTickAction;
+import com.chromascape.web.replay.compiler.action.WalkToAction;
 import com.chromascape.web.replay.curation.entity.CuratedAction;
 import com.chromascape.web.replay.curation.entity.RecordingCuration;
 import com.chromascape.web.replay.curation.repository.CuratedActionRepository;
@@ -582,14 +592,102 @@ public class ScenarioCompiler {
         lastActionTick = ca.getTick();
         continue;
       }
-      String option = ReplayEvidenceValidator.extractOption(ca.getArgumentsJson());
       if (lastActionTick != Long.MIN_VALUE && ca.getTick() > lastActionTick + 1) {
         result.add(new WaitUntilTickAction(ca.getTick()));
       }
-      result.add(new InteractNpcAction(ca.getTargetStableId(), option));
+      result.add(toSemanticAction(ca));
       lastActionTick = ca.getTick();
     }
     return result;
+  }
+
+  /**
+   * Converts a validated curation row into the exact semantic action shape consumed by the worker.
+   * Validation deliberately happens before this method; this pass only maps evidence and never
+   * guesses a target, slot, index, or definition id.
+   */
+  private SemanticAction toSemanticAction(CuratedAction action) {
+    String type = action.getSemanticActionType();
+    JsonNode arguments = action.getArgumentsJson();
+    String stableId = action.getTargetStableId();
+    String option = ReplayEvidenceValidator.extractOption(arguments);
+    return switch (type) {
+      case "WALK_TO" -> new WalkToAction(readPosition(arguments));
+      case "INTERACT_NPC" -> new InteractNpcAction(stableId, option);
+      case "INTERACT_OBJECT" -> new InteractObjectAction(stableId, option);
+      case "INTERACT_GROUND_ITEM" -> new InteractGroundItemAction(
+          stableId, option, integerArgument(arguments, "itemId"));
+      case "INTERACT_INVENTORY_ITEM" -> new InteractInventoryItemAction(
+          stableId,
+          requiredInteger(arguments, "slot"),
+          requiredInteger(arguments, "itemId"),
+          option);
+      case "INTERACT_WIDGET" -> new InteractWidgetAction(
+          stableId,
+          option,
+          integerArgument(arguments, "widgetId"),
+          integerArgument(arguments, "widgetIndex"));
+      case "SELECT_DIALOGUE_OPTION" -> new SelectDialogueOptionAction(
+          stableId,
+          option,
+          integerArgument(arguments, "optionIndex"),
+          integerArgument(arguments, "widgetId"),
+          integerArgument(arguments, "widgetIndex"));
+      case "CAST_SPELL" -> new CastSpellAction(
+          stableId,
+          integerArgument(arguments, "spellId"),
+          option,
+          integerArgument(arguments, "widgetId"),
+          integerArgument(arguments, "widgetIndex"));
+      case "EQUIP_ITEM" -> new EquipItemAction(
+          stableId,
+          requiredInteger(arguments, "slot"),
+          requiredInteger(arguments, "itemId"),
+          option,
+          integerArgument(arguments, "equipmentSlot"));
+        // Read-only compatibility for old v1 curations. New capability manifests do not advertise
+        // these names, but preserving their exact mapping avoids changing existing manifests.
+      case "INVENTORY_ACTION" -> new InventoryAction(
+          requiredInteger(arguments, "slot"), requiredInteger(arguments, "itemId"), option);
+      case "USE_ITEM_ON_NPC" -> new UseItemOnNpcAction(
+          requiredInteger(arguments, "slot"), requiredInteger(arguments, "itemId"), stableId);
+      default -> throw ReplayException.invalid(
+          ReplayErrorCode.ACTION_UNSUPPORTED,
+          "Curation action type " + type + " is not executable");
+    };
+  }
+
+  private WalkToAction.Position readPosition(JsonNode arguments) {
+    JsonNode destination = arguments == null ? null : arguments.get("destination");
+    if (destination == null
+        || !destination.isObject()
+        || !destination.has("x")
+        || !destination.has("y")
+        || !destination.has("plane")) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.ACTION_UNSUPPORTED, "WALK_TO has no recorded destination");
+    }
+    return new WalkToAction.Position(
+        requiredInteger(destination, "x"),
+        requiredInteger(destination, "y"),
+        requiredInteger(destination, "plane"));
+  }
+
+  private static Integer integerArgument(JsonNode arguments, String key) {
+    if (arguments == null) return null;
+    JsonNode value = arguments.get(key);
+    return value != null && value.isIntegralNumber() && value.canConvertToInt()
+        ? value.asInt()
+        : null;
+  }
+
+  private static int requiredInteger(JsonNode arguments, String key) {
+    Integer value = integerArgument(arguments, key);
+    if (value == null) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.ACTION_UNSUPPORTED, "Action argument " + key + " is missing or invalid");
+    }
+    return value;
   }
 
   /** Ensures the compiled manifest never contains an action the live worker failed to declare. */

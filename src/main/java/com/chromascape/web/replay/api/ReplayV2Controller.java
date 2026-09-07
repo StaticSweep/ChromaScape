@@ -1,8 +1,8 @@
 package com.chromascape.web.replay.api;
 
-import com.chromascape.web.replay.api.dto.ViewerSessionResponse;
 import com.chromascape.web.replay.api.dto.ReplayMismatchPageResponse;
 import com.chromascape.web.replay.api.dto.ReplayMismatchResponse;
+import com.chromascape.web.replay.api.dto.ViewerSessionResponse;
 import com.chromascape.web.replay.api.dto.XrspsPreflightResponse;
 import com.chromascape.web.replay.api.dto.XrspsRunResponse;
 import com.chromascape.web.replay.api.dto.XrspsTraceFramePageResponse;
@@ -63,8 +63,7 @@ public class ReplayV2Controller {
   }
 
   @GetMapping("/runs/{runId}")
-  public ResponseEntity<XrspsRunResponse> get(
-      @PathVariable UUID runId, Principal principal) {
+  public ResponseEntity<XrspsRunResponse> get(@PathVariable UUID runId, Principal principal) {
     return ResponseEntity.ok(runService.get(runId, requirePrincipal(principal)));
   }
 
@@ -87,30 +86,24 @@ public class ReplayV2Controller {
       @PathVariable UUID runId,
       @RequestParam(defaultValue = "100") @Min(1) @Max(200) int limit,
       Principal principal) {
-    return ResponseEntity.ok(
-        runService.mismatches(runId, requirePrincipal(principal), limit));
+    return ResponseEntity.ok(runService.mismatches(runId, requirePrincipal(principal), limit));
   }
 
   @GetMapping("/runs/{runId}/mismatches/first")
   public ResponseEntity<ReplayMismatchResponse> firstMismatch(
       @PathVariable UUID runId, Principal principal) {
-    ReplayMismatchResponse mismatch =
-        runService.firstMismatch(runId, requirePrincipal(principal));
+    ReplayMismatchResponse mismatch = runService.firstMismatch(runId, requirePrincipal(principal));
     return mismatch == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(mismatch);
   }
 
   /** Download one verified immutable JSON artifact owned by the authenticated operator. */
   @GetMapping("/runs/{runId}/artifacts/{artifactName}")
   public ResponseEntity<byte[]> artifact(
-      @PathVariable UUID runId,
-      @PathVariable String artifactName,
-      Principal principal) {
+      @PathVariable UUID runId, @PathVariable String artifactName, Principal principal) {
     ReplayV2RunService.ArtifactDownload artifact =
         runService.artifact(runId, artifactName, requirePrincipal(principal));
     return ResponseEntity.ok()
-        .header(
-            "Content-Disposition",
-            "attachment; filename=\"" + artifact.filename() + "\"")
+        .header("Content-Disposition", "attachment; filename=\"" + artifact.filename() + "\"")
         .header("X-Replay-Artifact-Checksum", artifact.checksum())
         .header("Cache-Control", "no-store")
         .header("X-Content-Type-Options", "nosniff")

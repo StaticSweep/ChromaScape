@@ -220,8 +220,7 @@ public class ReplayArtifactService {
     try {
       verifyStagedFile(ref, staged);
       Files.createDirectories(finalPath.getParent());
-      PublishedArtifact.PublicationDisposition disposition =
-          moveIntoPlace(ref, staged, finalPath);
+      PublishedArtifact.PublicationDisposition disposition = moveIntoPlace(ref, staged, finalPath);
       if (!verifyFinalFile(ref, finalPath)) {
         throw new ReplayException(
             ReplayErrorCode.ARTIFACT_PUBLICATION_FAILED,
@@ -431,8 +430,7 @@ public class ReplayArtifactService {
             null);
       }
       MessageDigest digest = newDigest();
-      ByteArrayOutputStream content =
-          new ByteArrayOutputStream((int) Math.min(declared, 8192L));
+      ByteArrayOutputStream content = new ByteArrayOutputStream((int) Math.min(declared, 8192L));
       long total = 0;
       try (java.io.InputStream in = Files.newInputStream(finalPath)) {
         byte[] buffer = new byte[8192];

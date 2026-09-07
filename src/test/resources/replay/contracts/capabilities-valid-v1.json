@@ -6,7 +6,7 @@
     "policyReplay": false,
     "causalSimulation": true
   },
-  "scenarioSchemaVersions": [1],
+  "scenarioSchemaVersions": [1, 2],
   "semanticActionVersions": [1],
   "snapshotVersions": [1],
   "projectionVersions": [1],
@@ -20,5 +20,5 @@
   "openRuneAvailable": false,
   "certifiable": true,
   "fidelity": "SYNTHETIC_CONTRACT",
-  "supportedActions": ["WAIT_UNTIL_TICK", "INTERACT_NPC"]
+  "supportedActions": ["WAIT_UNTIL_TICK", "WALK_TO", "INTERACT_NPC", "INVENTORY_ACTION", "USE_ITEM_ON_NPC"]
 }

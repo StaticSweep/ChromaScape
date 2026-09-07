@@ -63,6 +63,14 @@ public class ReplayCapabilityService {
     if (m.controlAllowed() || m.openRuneAvailable()) {
       return false;
     }
+    if (m.schemaVersion() != 1
+        || !CapabilityManifest.SUPPORTED_SCENARIO_SCHEMA_VERSIONS.equals(m.scenarioSchemaVersions())
+        || !CapabilityManifest.SUPPORTED_SINGLE_VERSION.equals(m.semanticActionVersions())
+        || !CapabilityManifest.SUPPORTED_SINGLE_VERSION.equals(m.snapshotVersions())
+        || !CapabilityManifest.SUPPORTED_SINGLE_VERSION.equals(m.projectionVersions())
+        || !java.util.List.of("sha256-canonical-json-v1").equals(m.hashVersions())) {
+      return false;
+    }
     if (!m.certifiable()) {
       return false; // missing is never true
     }
@@ -72,7 +80,10 @@ public class ReplayCapabilityService {
     if (m.fidelity() != CapabilityManifest.Fidelity.XRSPS_AUTHORITATIVE) {
       return false;
     }
-    if (!CapabilityManifest.V1_SUPPORTED_ACTIONS.equals(m.supportedActions())) {
+    if (!CapabilityManifest.isValidSupportedActionSubset(m.supportedActions())) {
+      return false;
+    }
+    if (!"xrsps-replay-trace/v1".equals(m.viewerTraceSchema())) {
       return false;
     }
     CapabilityManifest.XrspsIdentity x = m.xrsps();
@@ -152,10 +163,10 @@ public class ReplayCapabilityService {
         1,
         false,
         new CapabilityManifest.CapabilityModes(false, false, false),
-        java.util.List.of(1),
-        java.util.List.of(1),
-        java.util.List.of(1),
-        java.util.List.of(1),
+        CapabilityManifest.SUPPORTED_SCENARIO_SCHEMA_VERSIONS,
+        CapabilityManifest.SUPPORTED_SINGLE_VERSION,
+        CapabilityManifest.SUPPORTED_SINGLE_VERSION,
+        CapabilityManifest.SUPPORTED_SINGLE_VERSION,
         java.util.List.of("sha256-canonical-json-v1"),
         new CapabilityManifest.XrspsIdentity("", "", "", ""),
         false,

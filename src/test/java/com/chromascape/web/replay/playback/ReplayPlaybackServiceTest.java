@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -100,8 +100,7 @@ class ReplayPlaybackServiceTest {
 
   @Test
   void catalogTrimsAccountsAndClampsLimitBounds() {
-    when(catalogRepository.findCatalogRows("account-a", null, null, 201, 0))
-        .thenReturn(List.of());
+    when(catalogRepository.findCatalogRows("account-a", null, null, 201, 0)).thenReturn(List.of());
     service.catalog("  account-a  ", Integer.MAX_VALUE, null);
     verify(catalogRepository).findCatalogRows("account-a", null, null, 201, 0);
 
@@ -165,8 +164,7 @@ class ReplayPlaybackServiceTest {
     TickLog action = log(21L, 10L, "Combat", "HitNpc", "hit");
     TickLog dialogue = log(22L, 11L, "dialogue", "ChatMessage", "talk");
     TickLog varbit = log(23L, 11L, "Game", "VarBitChanged", "changed");
-    when(tickLogRepository.findBySessionIdAndTickBetweenOrderByTickAscIdAsc(
-            "debug-1", 10L, 11L))
+    when(tickLogRepository.findBySessionIdAndTickBetweenOrderByTickAscIdAsc("debug-1", 10L, 11L))
         .thenReturn(List.of(action, dialogue, varbit));
 
     ReplayPlaybackFramePageResponse response = service.frames("recording-1", 10L, 2);
@@ -187,12 +185,10 @@ class ReplayPlaybackServiceTest {
         List.of("ACTION", "DIALOGUE"),
         response.getFrames().get(1).getLogs().get(0).getCategories());
     assertEquals(
-        List.of("ACTION", "VARBIT"),
-        response.getFrames().get(1).getLogs().get(1).getCategories());
+        List.of("ACTION", "VARBIT"), response.getFrames().get(1).getLogs().get(1).getCategories());
     verify(tickSnapshotRepository)
         .findBySessionIdAndTickGreaterThanEqualOrderByTickAscIdAsc(eq("debug-1"), eq(10L), any());
-    verify(tickLogRepository)
-        .findBySessionIdAndTickBetweenOrderByTickAscIdAsc("debug-1", 10L, 11L);
+    verify(tickLogRepository).findBySessionIdAndTickBetweenOrderByTickAscIdAsc("debug-1", 10L, 11L);
   }
 
   @Test
@@ -259,9 +255,7 @@ class ReplayPlaybackServiceTest {
         "VALIDATION_ERROR",
         assertThrows(
                 ReplayException.class,
-                () ->
-                    service.frames(
-                        "recording-1", 0L, frameCursorCodec.encode(4L, 202L), 100))
+                () -> service.frames("recording-1", 0L, frameCursorCodec.encode(4L, 202L), 100))
             .getErrorCode()
             .name());
   }
@@ -340,28 +334,18 @@ class ReplayPlaybackServiceTest {
 
   private Object[] catalogRow(long id, LocalDateTime startTime, String recordingId) {
     return new Object[] {
-      id,
-      recordingId,
-      "debug-" + id,
-      "operator",
-      "fishing",
-      startTime,
-      null,
-      0L,
-      1L,
-      1L,
-      1L,
-      1L
+      id, recordingId, "debug-" + id, "operator", "fishing", startTime, null, 0L, 1L, 1L, 1L, 1L
     };
   }
 
   private TickSnapshot snapshot(long id, long tick, String playerState) {
     try {
-      TickSnapshot snapshot = new TickSnapshot(
-          "debug-1",
-          tick,
-          LocalDateTime.of(2026, 1, 1, 0, 0),
-          new ObjectMapper().readTree(playerState));
+      TickSnapshot snapshot =
+          new TickSnapshot(
+              "debug-1",
+              tick,
+              LocalDateTime.of(2026, 1, 1, 0, 0),
+              new ObjectMapper().readTree(playerState));
       snapshot.setId(id);
       return snapshot;
     } catch (Exception e) {
@@ -372,12 +356,7 @@ class ReplayPlaybackServiceTest {
   private TickLog log(long id, long tick, String subsystem, String eventType, String message) {
     TickLog log =
         new TickLog(
-            "debug-1",
-            tick,
-            LocalDateTime.of(2026, 1, 1, 0, 0),
-            subsystem,
-            "INFO",
-            message);
+            "debug-1", tick, LocalDateTime.of(2026, 1, 1, 0, 0), subsystem, "INFO", message);
     log.setId(id);
     log.setEventType(eventType);
     return log;

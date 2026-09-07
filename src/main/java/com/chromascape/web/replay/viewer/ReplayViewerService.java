@@ -9,12 +9,14 @@ import com.chromascape.web.replay.artifact.repository.ArtifactRefRepository;
 import com.chromascape.web.replay.config.ReplayProperties;
 import com.chromascape.web.replay.error.ReplayErrorCode;
 import com.chromascape.web.replay.error.ReplayException;
+import com.chromascape.web.replay.projection.CanonicalProjectionService;
 import com.chromascape.web.replay.report.entity.ReplayReport;
 import com.chromascape.web.replay.report.repository.ReplayReportRepository;
 import com.chromascape.web.replay.run.entity.ReplayRun;
 import com.chromascape.web.replay.run.repository.ReplayRunRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
@@ -27,13 +29,14 @@ import java.util.List;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Serves only immutable, content-address-verified trace data to the read-only observer. The
- * browser never receives a mutation capability and the token is not persisted.
+ * Serves only immutable, content-address-verified trace data to the read-only observer. The browser
+ * never receives a mutation capability and the token is not persisted.
  */
 @Service
 @Transactional(readOnly = true)
@@ -49,7 +52,9 @@ public class ReplayViewerService {
   private final ReplayRunRepository runRepository;
   private final ReplayProperties properties;
   private final ObjectMapper mapper;
+  private final CanonicalProjectionService projectionService;
 
+  /** Compatibility constructor for focused tests and older callers. */
   public ReplayViewerService(
       ArtifactRefRepository artifactRepository,
       ReplayArtifactService artifactService,
@@ -57,12 +62,32 @@ public class ReplayViewerService {
       ReplayRunRepository runRepository,
       ReplayProperties properties,
       ObjectMapper mapper) {
+    this(
+        artifactRepository,
+        artifactService,
+        reportRepository,
+        runRepository,
+        properties,
+        mapper,
+        new CanonicalProjectionService());
+  }
+
+  @Autowired
+  public ReplayViewerService(
+      ArtifactRefRepository artifactRepository,
+      ReplayArtifactService artifactService,
+      ReplayReportRepository reportRepository,
+      ReplayRunRepository runRepository,
+      ReplayProperties properties,
+      ObjectMapper mapper,
+      CanonicalProjectionService projectionService) {
     this.artifactRepository = artifactRepository;
     this.artifactService = artifactService;
     this.reportRepository = reportRepository;
     this.runRepository = runRepository;
     this.properties = properties;
     this.mapper = mapper;
+    this.projectionService = projectionService;
   }
 
   public ViewerSessionResponse createSession(ReplayRun run) {
@@ -84,7 +109,8 @@ public class ReplayViewerService {
             + URLEncoder.encode(token, StandardCharsets.UTF_8);
     // Loading the document before minting is intentional: no URL is issued for an unverified
     // or corrupt trace. The local variable also makes the safety property explicit to reviewers.
-    if (trace.frames().isEmpty() && run.getViewerTraceFrameCount() != null
+    if (trace.frames().isEmpty()
+        && run.getViewerTraceFrameCount() != null
         && run.getViewerTraceFrameCount() > 0) {
       throw traceCorrupt("Trace metadata declares frames that are not readable");
     }
@@ -98,7 +124,9 @@ public class ReplayViewerService {
         runRepository
             .findById(runId)
             .orElseThrow(
-                () -> ReplayException.notFound(ReplayErrorCode.RECORDING_NOT_FOUND, "Replay run not found"));
+                () ->
+                    ReplayException.notFound(
+                        ReplayErrorCode.RECORDING_NOT_FOUND, "Replay run not found"));
     if (ownerId == null || !ownerId.equals(run.getOwnerId())) {
       requireValidViewerToken(runId, viewerToken);
     }
@@ -111,7 +139,7 @@ public class ReplayViewerService {
     return new XrspsTraceFramePageResponse(
         XrspsTraceFramePageResponse.SCHEMA,
         runId,
-        trace.checksum(),
+        trace.canonicalChecksum(),
         page,
         hasMore ? encodeCursor(end) : null,
         hasMore);
@@ -183,7 +211,15 @@ public class ReplayViewerService {
         && run.getViewerTraceFrameCount() != immutableFrames.size()) {
       throw traceCorrupt("Run trace frame count does not match the trace artifact");
     }
-    return new TraceDocument(ref.getChecksum(), List.copyOf(immutableFrames));
+    // The artifact checksum above authenticates the exact stored bytes for the server. The
+    // browser receives pages rather than those bytes, so expose a second, deterministic digest
+    // over the fixed schema plus ordered frames that the observer can recompute after pagination.
+    ObjectNode checksumBasis = mapper.createObjectNode();
+    checksumBasis.put("schema", TRACE_SCHEMA);
+    checksumBasis.set("frames", frames.deepCopy());
+    String canonicalChecksum =
+        projectionService.sha256Hex(projectionService.canonicalJsonBytes(checksumBasis));
+    return new TraceDocument(ref.getChecksum(), canonicalChecksum, List.copyOf(immutableFrames));
   }
 
   private void validateFrame(JsonNode frame, boolean strict) {
@@ -279,9 +315,10 @@ public class ReplayViewerService {
     String payload =
         runId + TOKEN_SEPARATOR + expiresAt.getEpochSecond() + TOKEN_SEPARATOR + UUID.randomUUID();
     String encodedPayload =
-        Base64.getUrlEncoder().withoutPadding().encodeToString(payload.getBytes(StandardCharsets.UTF_8));
-    String signature =
-        Base64.getUrlEncoder().withoutPadding().encodeToString(hmac(encodedPayload));
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(payload.getBytes(StandardCharsets.UTF_8));
+    String signature = Base64.getUrlEncoder().withoutPadding().encodeToString(hmac(encodedPayload));
     return encodedPayload + TOKEN_SEPARATOR + signature;
   }
 
@@ -370,5 +407,6 @@ public class ReplayViewerService {
     INVALID
   }
 
-  private record TraceDocument(String checksum, List<JsonNode> frames) {}
+  private record TraceDocument(
+      String artifactChecksum, String canonicalChecksum, List<JsonNode> frames) {}
 }
