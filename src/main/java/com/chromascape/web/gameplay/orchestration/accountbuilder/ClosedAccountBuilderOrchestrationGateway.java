@@ -2,6 +2,7 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayReceipt;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
@@ -32,20 +33,37 @@ public final class ClosedAccountBuilderOrchestrationGateway
   }
 
   @Override
-  public GatewayReceipt status(OrchestrationRequest request, String envelopeDigest, Lease lease) {
-    return unavailable(request, envelopeDigest, "STATUS");
+  public GatewayReceipt status(GatewayCorrelation correlation, Lease lease) {
+    return unavailable(correlation, "STATUS");
   }
 
   @Override
-  public GatewayReceipt stop(
-      OrchestrationRequest request, String envelopeDigest, Lease lease, String reason) {
-    return unavailable(request, envelopeDigest, "STOP");
+  public GatewayReceipt stop(GatewayCorrelation correlation, Lease lease, String reason) {
+    return unavailable(correlation, "STOP");
   }
 
   @Override
-  public GatewayReceipt reconcile(
-      OrchestrationRequest request, String envelopeDigest, Lease lease) {
-    return unavailable(request, envelopeDigest, "RECONCILIATION");
+  public GatewayReceipt reconcile(GatewayCorrelation correlation, Lease lease) {
+    return unavailable(correlation, "RECONCILIATION");
+  }
+
+  @Override
+  public GatewayReceipt reconcileReservation(GatewayCorrelation correlation) {
+    return unavailable(correlation, "RESERVATION_RECONCILIATION");
+  }
+
+  private GatewayReceipt unavailable(GatewayCorrelation correlation, String phase) {
+    return new GatewayReceipt(
+        correlation.requestId(),
+        correlation.envelopeDigest(),
+        phase,
+        State.DENIED,
+        FailureCode.GATEWAY_UNAVAILABLE,
+        false,
+        true,
+        null,
+        List.of(),
+        Instant.now());
   }
 
   private GatewayReceipt unavailable(

@@ -70,10 +70,7 @@ class AccountBuilderOrchestrationConcurrencyTest {
           executor.submit(
               () ->
                   store.consumeAuthority(
-                      first.orchestrationId(),
-                      first.authority(),
-                      envelopeDigest(first),
-                      first));
+                      first.orchestrationId(), first.authority(), envelopeDigest(first), first));
       Future<?> secondFuture =
           executor.submit(
               () ->
@@ -106,7 +103,8 @@ class AccountBuilderOrchestrationConcurrencyTest {
   }
 
   private InMemoryAccountBuilderOrchestrationStore store() {
-    return new InMemoryAccountBuilderOrchestrationStore(Clock.fixed(NOW, ZoneOffset.UTC));
+    return new InMemoryAccountBuilderOrchestrationStore(
+        Clock.fixed(NOW, ZoneOffset.UTC), (authority, envelope) -> true);
   }
 
   private OrchestrationRequest request(String suffix, String authorityId) {

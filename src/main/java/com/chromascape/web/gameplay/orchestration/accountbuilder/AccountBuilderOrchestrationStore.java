@@ -3,6 +3,7 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 import com.chromascape.web.gameplay.contract.GameplayContracts;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.AuthorityConsumption;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayReceipt;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
@@ -31,7 +32,8 @@ public interface AccountBuilderOrchestrationStore {
   /** Returns the exact currently persisted lease, rejecting stale or expired evidence. */
   Lease requireLease(String orchestrationId, Lease expected);
 
-  OrchestrationRequest request(String orchestrationId);
+  /** Returns the persisted non-secret gateway correlation; never return a redacted request here. */
+  GatewayCorrelation correlation(String orchestrationId);
 
   OrchestrationView transition(
       String orchestrationId,
@@ -50,7 +52,8 @@ public interface AccountBuilderOrchestrationStore {
 
   record NormalizedAggregate(
       OrchestrationView view,
-      OrchestrationRequest request,
+      GatewayCorrelation correlation,
+      OrchestrationRequest redactedRequestSnapshot,
       SnapshotBindings bindings,
       AuthorityConsumption authority,
       Lease lease,

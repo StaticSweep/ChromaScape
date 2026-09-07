@@ -10,6 +10,7 @@ import com.chromascape.web.gameplay.contract.GameplayContracts.Provider;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayReceipt;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
@@ -47,7 +48,7 @@ class AccountBuilderOrchestrationServiceTest {
             .build();
     canonicalJson = new CanonicalGameplayJson(objectMapper);
     Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-    validator = new AccountBuilderOrchestrationValidator(canonicalJson, clock);
+    validator = new AccountBuilderOrchestrationValidator(canonicalJson, clock, (a, e) -> true);
     properties = new AccountBuilderOrchestrationProperties();
     properties.setEnabled(true);
     properties.setLiveDeliveryEnabled(true);
@@ -98,7 +99,8 @@ class AccountBuilderOrchestrationServiceTest {
     FakeGateway gateway = new FakeGateway(State.CONFIRMED);
     gateway.failReservation = true;
     InMemoryAccountBuilderOrchestrationStore store =
-        new InMemoryAccountBuilderOrchestrationStore(Clock.fixed(NOW, ZoneOffset.UTC));
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
     AccountBuilderOrchestrationService service = service(gateway, store);
     OrchestrationRequest request = request("authority-before-reserve", Mode.BOOTSTRAP_RECORDING);
 
@@ -119,11 +121,33 @@ class AccountBuilderOrchestrationServiceTest {
   }
 
   @Test
+  void noLeaseReservationUncertaintyUsesLookupOnlyReconciliation() {
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    gateway.failReservation = true;
+    InMemoryAccountBuilderOrchestrationStore store =
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    OrchestrationRequest request = request("no-lease-reconciliation", Mode.BOOTSTRAP_RECORDING);
+
+    var uncertain = service.orchestrate(request);
+    gateway.statusState = State.DENIED;
+    var reconciled = service.reconcile(request.orchestrationId());
+
+    assertThat(uncertain.view().state()).isEqualTo(State.NEEDS_RECONCILIATION);
+    assertThat(reconciled.state()).isEqualTo(State.DENIED);
+    assertThat(gateway.reservations).hasValue(1);
+    assertThat(gateway.dispatches).hasValue(0);
+    assertThat(gateway.reservationReconciliations).hasValue(1);
+  }
+
+  @Test
   void duplicateReceiptIsIdempotentAndLeaseTupleCannotBeReplaced() {
     FakeGateway gateway = new FakeGateway(State.ACTIVE);
     gateway.statusState = State.ACTIVE;
     InMemoryAccountBuilderOrchestrationStore store =
-        new InMemoryAccountBuilderOrchestrationStore(Clock.fixed(NOW, ZoneOffset.UTC));
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
     AccountBuilderOrchestrationService service = service(gateway, store);
     OrchestrationRequest request = request("receipt-replay", Mode.BOOTSTRAP_RECORDING);
     var initial = service.orchestrate(request);
@@ -224,7 +248,8 @@ class AccountBuilderOrchestrationServiceTest {
   void terminalReceiptCannotBeRewritten() {
     FakeGateway gateway = new FakeGateway(State.CONFIRMED);
     InMemoryAccountBuilderOrchestrationStore store =
-        new InMemoryAccountBuilderOrchestrationStore(Clock.fixed(NOW, ZoneOffset.UTC));
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
     AccountBuilderOrchestrationService service = service(gateway, store);
     OrchestrationRequest request = request("terminal-immutable", Mode.BOOTSTRAP_RECORDING);
     OrchestrationView terminal = service.orchestrate(request).view();
@@ -262,7 +287,8 @@ class AccountBuilderOrchestrationServiceTest {
     FakeGateway gateway = new FakeGateway(State.ACTIVE);
     gateway.statusState = State.ACTIVE;
     InMemoryAccountBuilderOrchestrationStore store =
-        new InMemoryAccountBuilderOrchestrationStore(Clock.fixed(NOW, ZoneOffset.UTC));
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
     AccountBuilderOrchestrationService service = service(gateway, store);
     OrchestrationRequest request = request("quiescent", Mode.BOOTSTRAP_RECORDING);
     OrchestrationView uncertain = service.orchestrate(request).view();
@@ -287,7 +313,8 @@ class AccountBuilderOrchestrationServiceTest {
   void restartCanQuiesceAClaimBeforeAuthorityWithoutDelivery() {
     FakeGateway gateway = new FakeGateway(State.CONFIRMED);
     InMemoryAccountBuilderOrchestrationStore store =
-        new InMemoryAccountBuilderOrchestrationStore(Clock.fixed(NOW, ZoneOffset.UTC));
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
     AccountBuilderOrchestrationService service = service(gateway, store);
     OrchestrationRequest request = request("restart-before-authority", Mode.BOOTSTRAP_RECORDING);
     store.claim(request, request.requestFingerprint(), canonicalJson.digest(request.envelope()));
@@ -305,7 +332,9 @@ class AccountBuilderOrchestrationServiceTest {
 
   private AccountBuilderOrchestrationService service(FakeGateway gateway) {
     return service(
-        gateway, new InMemoryAccountBuilderOrchestrationStore(Clock.fixed(NOW, ZoneOffset.UTC)));
+        gateway,
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true));
   }
 
   private AccountBuilderOrchestrationService service(
@@ -426,6 +455,7 @@ class AccountBuilderOrchestrationServiceTest {
     private final AtomicInteger reservations = new AtomicInteger();
     private final AtomicInteger dispatches = new AtomicInteger();
     private final AtomicInteger statusReads = new AtomicInteger();
+    private final AtomicInteger reservationReconciliations = new AtomicInteger();
     private final State dispatchState;
     private State statusState;
     private boolean staleCapabilities;
@@ -489,22 +519,26 @@ class AccountBuilderOrchestrationServiceTest {
     }
 
     @Override
-    public GatewayReceipt status(OrchestrationRequest request, String envelopeDigest, Lease lease) {
+    public GatewayReceipt status(GatewayCorrelation correlation, Lease lease) {
       statusReads.incrementAndGet();
+      return receipt(correlation, "STATUS", statusState, lease, true, statusState.terminal());
+    }
+
+    @Override
+    public GatewayReceipt stop(GatewayCorrelation correlation, Lease lease, String reason) {
+      return receipt(correlation, "STOP", State.STOPPED, lease, true, true);
+    }
+
+    @Override
+    public GatewayReceipt reconcile(GatewayCorrelation correlation, Lease lease) {
+      return receipt(correlation, "RECONCILE", statusState, lease, true, true);
+    }
+
+    @Override
+    public GatewayReceipt reconcileReservation(GatewayCorrelation correlation) {
+      reservationReconciliations.incrementAndGet();
       return receipt(
-          request, envelopeDigest, "STATUS", statusState, lease, true, statusState.terminal());
-    }
-
-    @Override
-    public GatewayReceipt stop(
-        OrchestrationRequest request, String envelopeDigest, Lease lease, String reason) {
-      return receipt(request, envelopeDigest, "STOP", State.STOPPED, lease, true, true);
-    }
-
-    @Override
-    public GatewayReceipt reconcile(
-        OrchestrationRequest request, String envelopeDigest, Lease lease) {
-      return receipt(request, envelopeDigest, "RECONCILE", statusState, lease, true, true);
+          correlation, "RESERVATION_RECONCILE", statusState, null, true, statusState.terminal());
     }
 
     private GatewayReceipt receipt(
@@ -518,6 +552,26 @@ class AccountBuilderOrchestrationServiceTest {
       return new GatewayReceipt(
           request.requestId(),
           envelopeDigest,
+          phase,
+          state,
+          FailureCode.NONE,
+          acknowledged,
+          reconciled,
+          lease,
+          List.of("fake:" + phase.toLowerCase()),
+          NOW);
+    }
+
+    private GatewayReceipt receipt(
+        GatewayCorrelation correlation,
+        String phase,
+        State state,
+        Lease lease,
+        boolean acknowledged,
+        boolean reconciled) {
+      return new GatewayReceipt(
+          correlation.requestId(),
+          correlation.envelopeDigest(),
           phase,
           state,
           FailureCode.NONE,

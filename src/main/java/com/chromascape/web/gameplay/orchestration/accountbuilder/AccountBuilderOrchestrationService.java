@@ -3,6 +3,7 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayReceipt;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
@@ -105,7 +106,8 @@ public final class AccountBuilderOrchestrationService {
               reservation.failureCode() == FailureCode.NONE
                   ? FailureCode.RESERVATION_REJECTED
                   : reservation.failureCode();
-          return terminal(request, State.DENIED, code, reservation, false);
+          return terminal(
+              request, reservation.state(), code, withFailureCode(reservation, code), false);
         }
         return uncertain(request, FailureCode.DELIVERY_UNCERTAIN);
       }
@@ -152,11 +154,11 @@ public final class AccountBuilderOrchestrationService {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STOP_REJECTED, "A bounded stop requires active orchestration state");
     }
-    AccountBuilderOrchestrationModels.OrchestrationRequest request = store.request(orchestrationId);
     try {
+      GatewayCorrelation correlation = store.correlation(orchestrationId);
       Lease lease = store.requireLease(orchestrationId, view.lease());
-      GatewayReceipt receipt = gateway.stop(request, view.envelopeDigest(), lease, reason);
-      requireBoundReceipt(request, view.envelopeDigest(), receipt, lease);
+      GatewayReceipt receipt = gateway.stop(correlation, lease, reason);
+      requireBoundReceipt(correlation, receipt, lease);
       State state =
           receipt.terminalReconciled() && receipt.state().provenTerminal()
               ? receipt.state()
@@ -183,11 +185,21 @@ public final class AccountBuilderOrchestrationService {
     if (view.state().terminal() && view.state() != State.NEEDS_RECONCILIATION) {
       return view;
     }
-    AccountBuilderOrchestrationModels.OrchestrationRequest request = store.request(orchestrationId);
     try {
-      Lease lease = store.requireLease(orchestrationId, view.lease());
-      GatewayReceipt receipt = gateway.reconcile(request, view.envelopeDigest(), lease);
-      requireBoundReceipt(request, view.envelopeDigest(), receipt, lease);
+      AccountBuilderOrchestrationStore.NormalizedAggregate aggregate =
+          store.readAggregate(orchestrationId);
+      GatewayCorrelation correlation = aggregate.correlation();
+      if (aggregate.lease() == null) {
+        // A consumed authority with no lease is an ambiguous reservation boundary. The only
+        // permitted remote operation is a lookup keyed by the durable non-secret correlation.
+        if (!aggregate.authorityConsumed() || view.state() != State.NEEDS_RECONCILIATION) {
+          return view;
+        }
+        return reconcileReservation(orchestrationId, correlation, view);
+      }
+      Lease lease = store.requireLease(orchestrationId, aggregate.lease());
+      GatewayReceipt receipt = gateway.reconcile(correlation, lease);
+      requireBoundReceipt(correlation, receipt, lease);
       if (!receipt.terminalReconciled() || !receipt.state().provenTerminal()) {
         return store.transition(
             orchestrationId,
@@ -203,6 +215,70 @@ public final class AccountBuilderOrchestrationService {
     } catch (RuntimeException exception) {
       return view;
     }
+  }
+
+  private OrchestrationView reconcileReservation(
+      String orchestrationId, GatewayCorrelation correlation, OrchestrationView current) {
+    try {
+      GatewayReceipt receipt = gateway.reconcileReservation(correlation);
+      requireBoundReceipt(correlation, receipt, null);
+      if (receipt.state() == State.DENIED || receipt.state() == State.FAILED) {
+        FailureCode code =
+            receipt.failureCode() == FailureCode.NONE
+                ? FailureCode.RESERVATION_REJECTED
+                : receipt.failureCode();
+        if (receipt.terminalReconciled()) {
+          return store.transition(
+              orchestrationId,
+              receipt.state(),
+              code,
+              null,
+              withFailureCode(receipt, code),
+              false,
+              false);
+        }
+      } else if (receipt.terminalReconciled() && receipt.state().provenTerminal()) {
+        FailureCode code =
+            receipt.state() == State.DENIED && receipt.failureCode() == FailureCode.NONE
+                ? FailureCode.RESERVATION_REJECTED
+                : receipt.failureCode();
+        return store.transition(
+            orchestrationId,
+            receipt.state(),
+            code,
+            receipt.lease(),
+            withFailureCode(receipt, code),
+            false,
+            false);
+      } else if (receipt.state() == State.RESERVED && receipt.lease() != null) {
+        // A lookup may discover an exact remote reservation. Keep the orchestration quiescent;
+        // acquiring the lease is evidence, never permission to redispatch.
+        return store.transition(
+            orchestrationId,
+            State.NEEDS_RECONCILIATION,
+            FailureCode.DELIVERY_UNCERTAIN,
+            receipt.lease(),
+            receipt,
+            false,
+            false);
+      } else {
+        // A well-formed but non-terminal lookup response is useful evidence, but it cannot move
+        // the orchestration back into a delivery state.
+        return store.transition(
+            orchestrationId,
+            State.NEEDS_RECONCILIATION,
+            FailureCode.DELIVERY_UNCERTAIN,
+            receipt.lease(),
+            receipt,
+            false,
+            false);
+      }
+    } catch (RuntimeException exception) {
+      // Missing, malformed, cross-request and ambiguous lookup results remain quiescent. In
+      // particular, this path never invokes reserve or dispatch as a recovery fallback.
+      return current;
+    }
+    return current;
   }
 
   public List<OrchestrationView> recoverAfterRestart() {
@@ -293,8 +369,9 @@ public final class AccountBuilderOrchestrationService {
               false,
               false);
       Lease statusLease = store.requireLease(request.orchestrationId(), dispatched.lease());
-      GatewayReceipt status = gateway.status(request, envelopeDigest, statusLease);
-      requireBoundReceipt(request, envelopeDigest, status, statusLease);
+      GatewayReceipt status =
+          gateway.status(store.correlation(request.orchestrationId()), statusLease);
+      requireBoundReceipt(store.correlation(request.orchestrationId()), status, statusLease);
       if (!status.terminalReconciled() || !status.state().provenTerminal()) {
         return store.transition(
             request.orchestrationId(),
@@ -379,6 +456,39 @@ public final class AccountBuilderOrchestrationService {
       throw new AccountBuilderOrchestrationException(
           FailureCode.FENCE_MISMATCH, "Gateway receipt lease does not match the stored lease");
     }
+  }
+
+  private void requireBoundReceipt(
+      GatewayCorrelation correlation, GatewayReceipt receipt, Lease expectedLease) {
+    if (receipt == null
+        || !correlation.requestId().equals(receipt.requestId())
+        || !correlation.envelopeDigest().equals(receipt.envelopeDigest())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.BOUNDARY_VIOLATION,
+          "Gateway receipt identity does not match the persisted correlation");
+    }
+    if (expectedLease != null && !expectedLease.equals(receipt.lease())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.FENCE_MISMATCH, "Gateway receipt lease does not match the stored lease");
+    }
+  }
+
+  private GatewayReceipt withFailureCode(GatewayReceipt receipt, FailureCode failureCode) {
+    if (receipt.failureCode() == failureCode) {
+      return receipt;
+    }
+    return new GatewayReceipt(
+        receipt.requestId(),
+        receipt.envelopeDigest(),
+        receipt.phase(),
+        receipt.state(),
+        failureCode,
+        receipt.deliveryAcknowledged(),
+        receipt.terminalReconciled(),
+        receipt.lease(),
+        receipt.evidenceRefs(),
+        receipt.at(),
+        receipt.receiptId());
   }
 
   private boolean validLease(OrchestrationRequest request, Lease lease) {
