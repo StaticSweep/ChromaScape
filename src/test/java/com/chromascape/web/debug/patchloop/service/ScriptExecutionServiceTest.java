@@ -5,11 +5,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.web.debug.buildergoal.service.CanonicalSettingsHasher;
 import com.chromascape.web.instance.WebSocketStateHandler;
 import com.chromascape.web.recording.service.TaskDetectionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.chromascape.web.debug.buildergoal.service.CanonicalSettingsHasher;
 import java.io.ByteArrayOutputStream;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -84,23 +84,27 @@ class ScriptExecutionServiceTest {
     String body =
         mapper.writeValueAsString(
             Map.of(
-                "success", true,
-                "status", "ACCEPTED",
-                "entry_id", 1001,
-                "task_key", "FISHING_TRAINING",
+                "success",
+                true,
+                "status",
+                "ACCEPTED",
+                "entry_id",
+                1001,
+                "task_key",
+                "FISHING_TRAINING",
                 "settings_receipt",
-                    Map.ofEntries(
-                        Map.entry("version", "builder-settings-receipt/v1"),
-                        Map.entry("contract", "builder-settings-canonical-json/v1"),
-                        Map.entry("entry_id", 1001),
-                        Map.entry("iteration_id", "buildergoal_receipt"),
-                        Map.entry("task_key", "FISHING_TRAINING"),
-                        Map.entry("settings", Map.of()),
-                        Map.entry("settings_sha256", settingsHash),
-                        Map.entry("settings_schema_version", "1"),
-                        Map.entry("settings_schema_hash", "sha256:schema"),
-                        Map.entry("accepted_at", "2026-08-16T00:00:00Z"),
-                        Map.entry("configuration_state", "PENDING"))));
+                Map.ofEntries(
+                    Map.entry("version", "builder-settings-receipt/v1"),
+                    Map.entry("contract", "builder-settings-canonical-json/v1"),
+                    Map.entry("entry_id", 1001),
+                    Map.entry("iteration_id", "buildergoal_receipt"),
+                    Map.entry("task_key", "FISHING_TRAINING"),
+                    Map.entry("settings", Map.of()),
+                    Map.entry("settings_sha256", settingsHash),
+                    Map.entry("settings_schema_version", "1"),
+                    Map.entry("settings_schema_hash", "sha256:schema"),
+                    Map.entry("accepted_at", "2026-08-16T00:00:00Z"),
+                    Map.entry("configuration_state", "PENDING"))));
     when(executeResponse.statusCode()).thenReturn(202);
     when(executeResponse.body()).thenReturn(body);
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
@@ -110,10 +114,14 @@ class ScriptExecutionServiceTest {
         service.publishMicro6Task(
             "micro6:FISHING_TRAINING",
             Map.of(
-                "task_key", "FISHING_TRAINING",
-                "iteration_id", "buildergoal_receipt",
-                "settings", Map.of(),
-                "requires_settings_receipt", true));
+                "task_key",
+                "FISHING_TRAINING",
+                "iteration_id",
+                "buildergoal_receipt",
+                "settings",
+                Map.of(),
+                "requires_settings_receipt",
+                true));
 
     assertThat(result.published()).isTrue();
     assertThat(result.settingsReceipt()).isNotNull();
@@ -392,8 +400,9 @@ class ScriptExecutionServiceTest {
         .thenReturn(statusProbe);
 
     ScriptExecutionService.Micro6PublishResult result =
-        serviceWithProbeWindow(5000).publishMicro6Task(
-            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+        serviceWithProbeWindow(5000)
+            .publishMicro6Task(
+                "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
 
     assertThat(result.published()).isTrue();
     assertThat(result.publishStatus()).isEqualTo("RUNNING");
@@ -403,7 +412,8 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
-  @DisplayName("Micro6 conflict with mismatched task_key fails closed as DUPLICATE_OR_CONFLICTING_DISPATCH")
+  @DisplayName(
+      "Micro6 conflict with mismatched task_key fails closed as DUPLICATE_OR_CONFLICTING_DISPATCH")
   @SuppressWarnings("unchecked")
   void publishMicro6Task_conflictTaskKeyMismatchRejectsAttachment() throws Exception {
     HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
@@ -426,7 +436,8 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
-  @DisplayName("Micro6 conflict missing identity fields fails closed (never attaches on entry id alone)")
+  @DisplayName(
+      "Micro6 conflict missing identity fields fails closed (never attaches on entry id alone)")
   @SuppressWarnings("unchecked")
   void publishMicro6Task_conflictMissingIdentityFieldsFailsClosed() throws Exception {
     HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
@@ -467,7 +478,8 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
-  @DisplayName("Micro6 conflict whose polled entry id mismatches fails closed as conflicting dispatch")
+  @DisplayName(
+      "Micro6 conflict whose polled entry id mismatches fails closed as conflicting dispatch")
   @SuppressWarnings("unchecked")
   void publishMicro6Task_conflictPolledEntryIdMismatchRejectsAttachment() throws Exception {
     HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
@@ -486,8 +498,9 @@ class ScriptExecutionServiceTest {
         .thenReturn(statusProbe);
 
     ScriptExecutionService.Micro6PublishResult result =
-        serviceWithProbeWindow(5000).publishMicro6Task(
-            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+        serviceWithProbeWindow(5000)
+            .publishMicro6Task(
+                "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
 
     assertThat(result.published()).isFalse();
     assertThat(result.publishStatus()).isEqualTo("DUPLICATE_OR_CONFLICTING_DISPATCH");
@@ -507,15 +520,15 @@ class ScriptExecutionServiceTest {
     HttpResponse<String> statusProbe = org.mockito.Mockito.mock(HttpResponse.class);
     when(statusProbe.statusCode()).thenReturn(200);
     when(statusProbe.body())
-        .thenReturn(
-            "{\"status\":\"RUNNING\",\"entry_id\":1337,\"task_key\":\"mining_training\"}");
+        .thenReturn("{\"status\":\"RUNNING\",\"entry_id\":1337,\"task_key\":\"mining_training\"}");
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(conflictResponse)
         .thenReturn(statusProbe);
 
     ScriptExecutionService.Micro6PublishResult result =
-        serviceWithProbeWindow(5000).publishMicro6Task(
-            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+        serviceWithProbeWindow(5000)
+            .publishMicro6Task(
+                "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
 
     assertThat(result.published()).isFalse();
     assertThat(result.publishStatus()).isEqualTo("DUPLICATE_OR_CONFLICTING_DISPATCH");
@@ -536,8 +549,9 @@ class ScriptExecutionServiceTest {
         .thenReturn(conflictResponse);
 
     ScriptExecutionService.Micro6PublishResult result =
-        serviceWithProbeWindow(5000).publishMicro6Task(
-            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+        serviceWithProbeWindow(5000)
+            .publishMicro6Task(
+                "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
 
     assertThat(result.published()).isFalse();
     assertThat(result.publishStatus()).isEqualTo("DUPLICATE_OR_CONFLICTING_DISPATCH");
@@ -545,7 +559,8 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
-  @DisplayName("Micro6 conflict with unknown snapshot status never attaches on a later runnable poll")
+  @DisplayName(
+      "Micro6 conflict with unknown snapshot status never attaches on a later runnable poll")
   @SuppressWarnings("unchecked")
   void publishMicro6Task_conflictUnknownSnapshotStatusRejectsAttachment() throws Exception {
     HttpResponse<String> conflictResponse = org.mockito.Mockito.mock(HttpResponse.class);
@@ -583,8 +598,9 @@ class ScriptExecutionServiceTest {
         .thenReturn(notFoundProbe);
 
     ScriptExecutionService.Micro6PublishResult result =
-        serviceWithProbeWindow(100).publishMicro6Task(
-            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+        serviceWithProbeWindow(100)
+            .publishMicro6Task(
+                "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
 
     assertThat(result.published()).isFalse();
     assertThat(result.publishStatus()).isEqualTo("RECONCILING");
@@ -611,8 +627,9 @@ class ScriptExecutionServiceTest {
         .thenReturn(statusProbe);
 
     ScriptExecutionService.Micro6PublishResult result =
-        serviceWithProbeWindow(5000).publishMicro6Task(
-            "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
+        serviceWithProbeWindow(5000)
+            .publishMicro6Task(
+                "micro6:configurable_woodcutting", Map.of("task_key", "configurable_woodcutting"));
 
     assertThat(result.published()).isTrue();
     assertThat(result.publishStatus()).isEqualTo("PAUSED");
@@ -696,8 +713,7 @@ class ScriptExecutionServiceTest {
     when(statusResponse.statusCode()).thenReturn(200);
     when(statusResponse.body())
         .thenReturn(
-            "{\"status\":\"RUNNING\",\"entry_id\":1337,"
-                + "\"task_key\":\"FISHING_TRAINING\"}");
+            "{\"status\":\"RUNNING\",\"entry_id\":1337," + "\"task_key\":\"FISHING_TRAINING\"}");
     when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(statusResponse);
 
@@ -824,8 +840,14 @@ class ScriptExecutionServiceTest {
     ScriptExecutionService.Micro6ExecutorHealthResult matching =
         service.getMicro6ExecutorHealth(
             Map.of(
-                "world", 360,
-                "micro6_target", Map.of("advertised_base_url", "http://192.168.1.77:8098", "account_name", "fallbackname")));
+                "world",
+                360,
+                "micro6_target",
+                Map.of(
+                    "advertised_base_url",
+                    "http://192.168.1.77:8098",
+                    "account_name",
+                    "fallbackname")));
 
     assertThat(matching.publishReady()).isTrue();
 
@@ -848,9 +870,14 @@ class ScriptExecutionServiceTest {
     ScriptExecutionService.Micro6ExecutorHealthResult malformedHash =
         service.getMicro6ExecutorHealth(
             Map.of(
-                "world", 360,
+                "world",
+                360,
                 "micro6_target",
-                Map.of("advertised_base_url", "http://192.168.1.77:8098", "account_name", "fallbackname")));
+                Map.of(
+                    "advertised_base_url",
+                    "http://192.168.1.77:8098",
+                    "account_name",
+                    "fallbackname")));
 
     assertThat(malformedHash.publishReady()).isFalse();
     assertThat(malformedHash.readinessPhase()).isEqualTo("WAITING_FOR_ACCOUNT");
@@ -875,8 +902,14 @@ class ScriptExecutionServiceTest {
     ScriptExecutionService.Micro6ExecutorHealthResult mismatching =
         service.getMicro6ExecutorHealth(
             Map.of(
-                "world", 360,
-                "micro6_target", Map.of("advertised_base_url", "http://192.168.1.77:8098", "account_name", "fallbackname")));
+                "world",
+                360,
+                "micro6_target",
+                Map.of(
+                    "advertised_base_url",
+                    "http://192.168.1.77:8098",
+                    "account_name",
+                    "fallbackname")));
 
     assertThat(mismatching.publishReady()).isFalse();
     assertThat(mismatching.readinessPhase()).isEqualTo("WAITING_FOR_ACCOUNT");

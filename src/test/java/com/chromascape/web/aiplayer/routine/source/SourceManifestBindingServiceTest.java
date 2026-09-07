@@ -50,11 +50,21 @@ class SourceManifestBindingServiceTest {
     when(bindings.save(any(SourceRunBinding.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
-    SourceManifestBindingService service = new SourceManifestBindingService(
-        new ObjectMapper(), manifests, bindings, content, cache, runs, identities,
-        trust("production"));
-    TaskSourceManifestVerifier.Verified verified = service.verifyAndPersist(
-        "EXAMPLE_TASK", SourceManifestTestFixtures.signedManifest(SIGNING_KEY).toString(), null);
+    SourceManifestBindingService service =
+        new SourceManifestBindingService(
+            new ObjectMapper(),
+            manifests,
+            bindings,
+            content,
+            cache,
+            runs,
+            identities,
+            trust("production"));
+    TaskSourceManifestVerifier.Verified verified =
+        service.verifyAndPersist(
+            "EXAMPLE_TASK",
+            SourceManifestTestFixtures.signedManifest(SIGNING_KEY).toString(),
+            null);
     SourceManifestReference reference = captureReference(manifests);
     when(manifests.findByManifestHash(verified.manifest().manifestHash()))
         .thenReturn(Optional.of(reference));
@@ -76,14 +86,21 @@ class SourceManifestBindingServiceTest {
     other.setRunId("other-run");
     when(bindings.findByRunId("run-1")).thenReturn(Optional.empty());
     when(bindings.findByRecordingId("recording-1")).thenReturn(Optional.of(other));
-    SourceManifestBindingService service = new SourceManifestBindingService(
-        new ObjectMapper(), manifests, bindings, null, new VerifiedSourceContentCache(10_000),
-        mock(CurrentSliceRunService.class), mock(CurrentSliceIdentityValidator.class),
-        trust("production"));
+    SourceManifestBindingService service =
+        new SourceManifestBindingService(
+            new ObjectMapper(),
+            manifests,
+            bindings,
+            null,
+            new VerifiedSourceContentCache(10_000),
+            mock(CurrentSliceRunService.class),
+            mock(CurrentSliceIdentityValidator.class),
+            trust("production"));
     var manifest = SourceManifestTestFixtures.manifest();
-    var verified = new TaskSourceManifestVerifier(
-        new SourceManifestSignatureVerifier(SIGNING_KEY.getPublic(), "test-key"))
-        .verify(SourceManifestTestFixtures.signedManifest(SIGNING_KEY));
+    var verified =
+        new TaskSourceManifestVerifier(
+                new SourceManifestSignatureVerifier(SIGNING_KEY.getPublic(), "test-key"))
+            .verify(SourceManifestTestFixtures.signedManifest(SIGNING_KEY));
     SourceManifestReference reference = new SourceManifestReference();
     reference.setTaskKey("EXAMPLE_TASK");
     reference.setManifestHash(verified.manifest().manifestHash());
@@ -92,42 +109,64 @@ class SourceManifestBindingServiceTest {
     when(manifests.findByManifestHash(verified.manifest().manifestHash()))
         .thenReturn(Optional.of(reference));
 
-    SourceManifestException exception = assertThrows(SourceManifestException.class,
-        () -> service.bindRun("run-1", "recording-1", "EXAMPLE_TASK", verified));
+    SourceManifestException exception =
+        assertThrows(
+            SourceManifestException.class,
+            () -> service.bindRun("run-1", "recording-1", "EXAMPLE_TASK", verified));
     assertEquals(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH, exception.code());
   }
 
   @Test
   void expectedCommitMismatchFailsBeforePersistence() {
     SourceManifestReferenceRepository manifests = mock(SourceManifestReferenceRepository.class);
-    SourceManifestBindingService service = new SourceManifestBindingService(
-        new ObjectMapper(), manifests, mock(SourceRunBindingRepository.class),
-        null, new VerifiedSourceContentCache(10_000), mock(CurrentSliceRunService.class),
-        mock(CurrentSliceIdentityValidator.class), trust("production"));
+    SourceManifestBindingService service =
+        new SourceManifestBindingService(
+            new ObjectMapper(),
+            manifests,
+            mock(SourceRunBindingRepository.class),
+            null,
+            new VerifiedSourceContentCache(10_000),
+            mock(CurrentSliceRunService.class),
+            mock(CurrentSliceIdentityValidator.class),
+            trust("production"));
     String wrongCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    var identity = new TaskSourceManifestVerifier.ExpectedIdentity(
-        "EXAMPLE_TASK", "micro6", wrongCommit, null, "micro6-build-1", null, null, null);
+    var identity =
+        new TaskSourceManifestVerifier.ExpectedIdentity(
+            "EXAMPLE_TASK", "micro6", wrongCommit, null, "micro6-build-1", null, null, null);
 
-    SourceManifestException exception = assertThrows(SourceManifestException.class,
-        () -> service.verifyAndPersist("EXAMPLE_TASK",
-            SourceManifestTestFixtures.signedManifest(SIGNING_KEY).toString(), identity));
+    SourceManifestException exception =
+        assertThrows(
+            SourceManifestException.class,
+            () ->
+                service.verifyAndPersist(
+                    "EXAMPLE_TASK",
+                    SourceManifestTestFixtures.signedManifest(SIGNING_KEY).toString(),
+                    identity));
     assertEquals(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH, exception.code());
   }
 
   @Test
   void configuredEnvironmentMustMatchTheManifestEnvironment() throws Exception {
     SourceManifestReferenceRepository manifests = mock(SourceManifestReferenceRepository.class);
-    SourceManifestBindingService service = new SourceManifestBindingService(
-        new ObjectMapper(), manifests, mock(SourceRunBindingRepository.class),
-        null, new VerifiedSourceContentCache(10_000), mock(CurrentSliceRunService.class),
-        mock(CurrentSliceIdentityValidator.class), trust("production"));
+    SourceManifestBindingService service =
+        new SourceManifestBindingService(
+            new ObjectMapper(),
+            manifests,
+            mock(SourceRunBindingRepository.class),
+            null,
+            new VerifiedSourceContentCache(10_000),
+            mock(CurrentSliceRunService.class),
+            mock(CurrentSliceIdentityValidator.class),
+            trust("production"));
 
     var manifest = SourceManifestTestFixtures.manifest();
     manifest.put("environment", "staging");
     SourceManifestTestFixtures.resealAndSign(manifest, SIGNING_KEY);
 
-    SourceManifestException exception = assertThrows(SourceManifestException.class,
-        () -> service.verifyAndPersist("EXAMPLE_TASK", manifest.toString(), null));
+    SourceManifestException exception =
+        assertThrows(
+            SourceManifestException.class,
+            () -> service.verifyAndPersist("EXAMPLE_TASK", manifest.toString(), null));
     assertEquals(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH, exception.code());
   }
 
@@ -138,10 +177,16 @@ class SourceManifestBindingServiceTest {
     when(manifests.findBySnapshotId(any())).thenReturn(Optional.empty());
     when(manifests.saveAndFlush(any(SourceManifestReference.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
-    SourceManifestBindingService service = new SourceManifestBindingService(
-        new ObjectMapper(), manifests, mock(SourceRunBindingRepository.class),
-        null, new VerifiedSourceContentCache(10_000), mock(CurrentSliceRunService.class),
-        mock(CurrentSliceIdentityValidator.class), trust("production"));
+    SourceManifestBindingService service =
+        new SourceManifestBindingService(
+            new ObjectMapper(),
+            manifests,
+            mock(SourceRunBindingRepository.class),
+            null,
+            new VerifiedSourceContentCache(10_000),
+            mock(CurrentSliceRunService.class),
+            mock(CurrentSliceIdentityValidator.class),
+            trust("production"));
 
     var manifest = SourceManifestTestFixtures.signedManifest(SIGNING_KEY);
     manifest.put("environment", "production");
@@ -182,14 +227,20 @@ class SourceManifestBindingServiceTest {
         "current-slice-identity/v1",
         new CurrentSliceIdentity.Task("EXAMPLE_TASK", HASH, "profile", HASH, HASH),
         new CurrentSliceIdentity.Run(runId, "attempt-1", 1, "executor-1"),
-        new CurrentSliceIdentity.Client("client", "MICRO6_MANAGED", "micro6-build-1", HASH,
-            "micro6-builder/v2", "MICRO6"),
-        null, null, null, null, null, false);
+        new CurrentSliceIdentity.Client(
+            "client", "MICRO6_MANAGED", "micro6-build-1", HASH, "micro6-builder/v2", "MICRO6"),
+        null,
+        null,
+        null,
+        null,
+        null,
+        false);
   }
 
   private static SourceTrustProperties trust(String environment) {
     SourceTrustProperties trust = new SourceTrustProperties();
-    trust.setPublicKeyBase64(Base64.getEncoder().encodeToString(SIGNING_KEY.getPublic().getEncoded()));
+    trust.setPublicKeyBase64(
+        Base64.getEncoder().encodeToString(SIGNING_KEY.getPublic().getEncoded()));
     trust.setPublicKeyId("test-key");
     trust.setEnvironment(environment);
     return trust;

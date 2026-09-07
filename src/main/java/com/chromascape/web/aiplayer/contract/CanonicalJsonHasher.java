@@ -6,21 +6,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.nio.charset.StandardCharsets;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HexFormat;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 /** Cross-repository canonical JSON implementation for identity/content hashes. */
 public final class CanonicalJsonHasher {
-  private static final ObjectMapper MAPPER = new ObjectMapper()
-      .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+  private static final ObjectMapper MAPPER =
+      new ObjectMapper().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
 
   private CanonicalJsonHasher() {}
 
@@ -50,7 +47,9 @@ public final class CanonicalJsonHasher {
     }
   }
 
-  public static String canonical(JsonNode node) { return canonical(node, null); }
+  public static String canonical(JsonNode node) {
+    return canonical(node, null);
+  }
 
   public static String canonical(JsonNode node, String excludedRootField) {
     validateNumbers(node);
@@ -58,7 +57,9 @@ public final class CanonicalJsonHasher {
     if (excludedRootField != null && copy.isObject()) ((ObjectNode) copy).remove(excludedRootField);
     try {
       return MAPPER.writeValueAsString(copy);
-    } catch (Exception e) { throw new IllegalArgumentException("Unable to serialize canonical JSON", e); }
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Unable to serialize canonical JSON", e);
+    }
   }
 
   public static String hash(JsonNode node, String excludedRootField) {
@@ -71,16 +72,22 @@ public final class CanonicalJsonHasher {
   }
 
   public static byte[] digest(byte[] bytes) {
-    try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
-    catch (Exception e) { throw new IllegalStateException("SHA-256 unavailable", e); }
+    try {
+      return MessageDigest.getInstance("SHA-256").digest(bytes);
+    } catch (Exception e) {
+      throw new IllegalStateException("SHA-256 unavailable", e);
+    }
   }
 
-  public static boolean isSha256(String value) { return value != null && value.matches("sha256:[0-9a-f]{64}"); }
+  public static boolean isSha256(String value) {
+    return value != null && value.matches("sha256:[0-9a-f]{64}");
+  }
 
   private static void validateNumbers(JsonNode node) {
     if (node == null) return;
     if (node.isFloatingPointNumber() || (node.isNumber() && !node.canConvertToLong())) {
-      throw new IllegalArgumentException("Floating-point or out-of-range identity number is not allowed");
+      throw new IllegalArgumentException(
+          "Floating-point or out-of-range identity number is not allowed");
     }
     if (node.isTextual()) validateUnicode(node.textValue());
     if (node.isContainerNode()) {
@@ -120,8 +127,9 @@ public final class CanonicalJsonHasher {
     byte[] rightBytes = right.getBytes(StandardCharsets.UTF_8);
     int limit = Math.min(leftBytes.length, rightBytes.length);
     for (int index = 0; index < limit; index++) {
-      int comparison = Integer.compare(Byte.toUnsignedInt(leftBytes[index]),
-          Byte.toUnsignedInt(rightBytes[index]));
+      int comparison =
+          Integer.compare(
+              Byte.toUnsignedInt(leftBytes[index]), Byte.toUnsignedInt(rightBytes[index]));
       if (comparison != 0) return comparison;
     }
     return Integer.compare(leftBytes.length, rightBytes.length);
@@ -142,7 +150,8 @@ public final class CanonicalJsonHasher {
   }
 
   private static String strictUtf8(byte[] bytes) throws CharacterCodingException {
-    return StandardCharsets.UTF_8.newDecoder()
+    return StandardCharsets.UTF_8
+        .newDecoder()
         .onMalformedInput(CodingErrorAction.REPORT)
         .onUnmappableCharacter(CodingErrorAction.REPORT)
         .decode(java.nio.ByteBuffer.wrap(bytes))

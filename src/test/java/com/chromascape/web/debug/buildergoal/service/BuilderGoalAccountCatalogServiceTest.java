@@ -52,13 +52,78 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_withCompleteCredentialsIsLaunchReady() {
     AccountDefinition account =
-        account("1111111111111111", "user@example.test", true, "ready", Map.of("password", "s3cret"));
+        account(
+            "1111111111111111", "user@example.test", true, "ready", Map.of("password", "s3cret"));
 
     assertThat(account.isRunnable()).isTrue();
     assertThat(account.hasEmail()).isTrue();
     assertThat(account.hasPassword()).isTrue();
     assertThat(account.isLaunchReady()).isTrue();
     assertThat(account.determineLaunchDisabledReason()).isNull();
+  }
+
+  @Test
+  void accountDefinition_launcherSecretFieldsDeclareStoredPassword() {
+    // Launcher control strips secrets from the account list payload and reports only the
+    // secret_fields booleans, so a stored password is never visible as a plaintext field.
+    AccountDefinition account =
+        account(
+            "1111111111111111",
+            "user@example.test",
+            true,
+            "ready",
+            Map.of("secret_fields", Map.of("password", true)));
+
+    assertThat(account.hasPassword()).isTrue();
+    assertThat(account.isLaunchReady()).isTrue();
+    assertThat(account.determineLaunchDisabledReason()).isNull();
+  }
+
+  @Test
+  void accountDefinition_launcherSecretFieldsDeclareMissingPassword() {
+    AccountDefinition account =
+        account(
+            "1111111111111111",
+            "user@example.test",
+            true,
+            "ready",
+            Map.of("secret_fields", Map.of("password", false)));
+
+    assertThat(account.hasPassword()).isFalse();
+    assertThat(account.isLaunchReady()).isFalse();
+    assertThat(account.determineLaunchDisabledReason())
+        .isEqualTo("Add a password to this account in launcher control");
+  }
+
+  @Test
+  void accountDefinition_declaredSecretFieldsOverrideAbsentPlaintextPassword() {
+    // The regression this guards: reading only the stripped plaintext field made every
+    // launcher-backed account permanently unlaunchable.
+    AccountDefinition account =
+        account(
+            "1111111111111111",
+            "user@example.test",
+            true,
+            "ready",
+            Map.of("secret_fields", Map.of("password", true, "auth_data", true)));
+
+    assertThat(account.password()).isNull();
+    assertThat(account.hasPassword()).isTrue();
+    assertThat(account.isLaunchReady()).isTrue();
+  }
+
+  @Test
+  void accountDefinition_unparsableSecretFieldsFallBackToPlaintextPassword() {
+    AccountDefinition account =
+        account(
+            "1111111111111111",
+            "user@example.test",
+            true,
+            "ready",
+            Map.of("secret_fields", "not-a-map", "password", "s3cret"));
+
+    assertThat(account.hasPassword()).isTrue();
+    assertThat(account.isLaunchReady()).isTrue();
   }
 
   @Test
@@ -109,7 +174,8 @@ class BuilderGoalAccountCatalogServiceTest {
 
   @Test
   void accountDefinition_missingPasswordIsNotLaunchReady() {
-    AccountDefinition account = account("1111111111111111", "user@example.test", true, "ready", Map.of());
+    AccountDefinition account =
+        account("1111111111111111", "user@example.test", true, "ready", Map.of());
 
     assertThat(account.hasEmail()).isTrue();
     assertThat(account.hasPassword()).isFalse();
@@ -132,7 +198,8 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_disabledAccountIsNotRunnableAndNotLaunchReady() {
     AccountDefinition account =
-        account("1111111111111111", "user@example.test", false, "ready", Map.of("password", "s3cret"));
+        account(
+            "1111111111111111", "user@example.test", false, "ready", Map.of("password", "s3cret"));
 
     assertThat(account.isRunnable()).isFalse();
     assertThat(account.isLaunchReady()).isFalse();
@@ -143,7 +210,8 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_bannedAccountIsNotRunnableAndNotLaunchReady() {
     AccountDefinition account =
-        account("1111111111111111", "user@example.test", true, "banned", Map.of("password", "s3cret"));
+        account(
+            "1111111111111111", "user@example.test", true, "banned", Map.of("password", "s3cret"));
 
     assertThat(account.isRunnable()).isFalse();
     assertThat(account.isLaunchReady()).isFalse();
@@ -154,7 +222,12 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_tempBannedStatusCountsAsBanned() {
     AccountDefinition account =
-        account("1111111111111111", "user@example.test", true, "temp_banned", Map.of("password", "s3cret"));
+        account(
+            "1111111111111111",
+            "user@example.test",
+            true,
+            "temp_banned",
+            Map.of("password", "s3cret"));
 
     assertThat(account.isRunnable()).isFalse();
     assertThat(account.determineLaunchDisabledReason())
@@ -250,7 +323,8 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_determineDisabledReasonReturnsNullForRunnableAccount() {
     AccountDefinition account =
-        account("1111111111111111", "user@example.test", true, "ready", Map.of("password", "s3cret"));
+        account(
+            "1111111111111111", "user@example.test", true, "ready", Map.of("password", "s3cret"));
 
     assertThat(account.determineDisabledReason()).isNull();
     assertThat(account.isRunnable()).isTrue();
@@ -259,7 +333,8 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_determineDisabledReasonReportsDisabled() {
     AccountDefinition account =
-        account("1111111111111111", "user@example.test", false, "ready", Map.of("password", "s3cret"));
+        account(
+            "1111111111111111", "user@example.test", false, "ready", Map.of("password", "s3cret"));
 
     assertThat(account.determineDisabledReason())
         .isEqualTo("Account is disabled in launcher control");
@@ -269,7 +344,8 @@ class BuilderGoalAccountCatalogServiceTest {
   @Test
   void accountDefinition_determineDisabledReasonReportsBanned() {
     AccountDefinition account =
-        account("1111111111111111", "user@example.test", true, "banned", Map.of("password", "s3cret"));
+        account(
+            "1111111111111111", "user@example.test", true, "banned", Map.of("password", "s3cret"));
 
     assertThat(account.determineDisabledReason())
         .isEqualTo("Account is banned in launcher control");
@@ -346,7 +422,8 @@ class BuilderGoalAccountCatalogServiceTest {
     Map<String, Object> metadata = new java.util.LinkedHashMap<>();
     metadata.put("runtime", null);
     metadata.put("hostname", "CZC8518C27");
-    AccountDefinition account = account("1111111111111111", "user@example.test", true, "ready", metadata);
+    AccountDefinition account =
+        account("1111111111111111", "user@example.test", true, "ready", metadata);
 
     assertThat(account.metadata()).containsKey("runtime");
     assertThat(account.metadata().get("runtime")).isNull();
@@ -357,7 +434,8 @@ class BuilderGoalAccountCatalogServiceTest {
   void accountDefinition_metadataSnapshotIsImmutable() {
     Map<String, Object> metadata = new java.util.LinkedHashMap<>();
     metadata.put("runtime", null);
-    AccountDefinition account = account("1111111111111111", "user@example.test", true, "ready", metadata);
+    AccountDefinition account =
+        account("1111111111111111", "user@example.test", true, "ready", metadata);
 
     assertThatThrownBy(() -> account.metadata().put("runtime", "mutated"))
         .isInstanceOf(UnsupportedOperationException.class);

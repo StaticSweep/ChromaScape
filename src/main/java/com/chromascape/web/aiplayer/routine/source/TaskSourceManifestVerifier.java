@@ -13,16 +13,16 @@ import java.util.regex.Pattern;
 /**
  * Strict verifier for the authoritative {@code task-source-manifest/v1} contract.
  *
- * <p>The public surface of this class accepts only signed v1 documents. Every v1 document
- * must carry a valid Ed25519 signature; there is no configuration switch that can weaken
- * that rule. A caller may use {@link #verify(JsonNode)} when loading a detached manifest, or
- * {@link #verify(JsonNode, ExpectedIdentity)} when binding it to an attested run.
+ * <p>The public surface of this class accepts only signed v1 documents. Every v1 document must
+ * carry a valid Ed25519 signature; there is no configuration switch that can weaken that rule. A
+ * caller may use {@link #verify(JsonNode)} when loading a detached manifest, or {@link
+ * #verify(JsonNode, ExpectedIdentity)} when binding it to an attested run.
  */
 public final class TaskSourceManifestVerifier {
-  private static final Pattern STATUS = Pattern.compile(
-      "AVAILABLE|INDEX_PARTIAL|UNAVAILABLE|REDACTED|PRUNED|GENERATED_ONLY");
-  private static final Pattern CLASSIFICATION = Pattern.compile(
-      "SOURCE|GENERATED|TRANSFORMED|VENDOR|TEST|UNRELATED|SENSITIVE|EXCLUDED");
+  private static final Pattern STATUS =
+      Pattern.compile("AVAILABLE|INDEX_PARTIAL|UNAVAILABLE|REDACTED|PRUNED|GENERATED_ONLY");
+  private static final Pattern CLASSIFICATION =
+      Pattern.compile("SOURCE|GENERATED|TRANSFORMED|VENDOR|TEST|UNRELATED|SENSITIVE|EXCLUDED");
   private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,199}");
   private static final Pattern SAFE_ENVIRONMENT =
       Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
@@ -50,7 +50,8 @@ public final class TaskSourceManifestVerifier {
       // before any semantic or cryptographic interpretation.
       String schema = text(manifest, "schema");
       if (!SourceManifestContract.SCHEMA.equals(schema)) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SCHEMA_UNSUPPORTED,
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_SCHEMA_UNSUPPORTED,
             "source manifest schema is unsupported");
       }
       // Keep a missing signature distinguishable from a generic schema failure.  The schema still
@@ -58,7 +59,8 @@ public final class TaskSourceManifestVerifier {
       // publication is part of the trust boundary and is useful to callers deciding whether a
       // producer is merely unavailable or has emitted unauthenticated data.
       if (!manifest.has("signature")) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
             "source manifest signature is missing");
       }
       SourceManifestSchemaValidator.validate(manifest);
@@ -76,7 +78,8 @@ public final class TaskSourceManifestVerifier {
       // response could otherwise forge REDACTED/PRUNED and conceal a still-readable snapshot.
       validateSignature(manifest);
       if (signatureVerifier == null || !signatureVerifier.verify(manifest)) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
             "source manifest signature is invalid");
       }
 
@@ -92,13 +95,18 @@ public final class TaskSourceManifestVerifier {
       validateEntryPoint(manifest, filesById, symbols);
       validateStatusInvariants(manifest, status, filesById);
 
-      return new Verified(manifest.deepCopy(),
-          new TaskSourceManifest(manifest, files, symbols, generatedMappings), computedHash, true);
+      return new Verified(
+          manifest.deepCopy(),
+          new TaskSourceManifest(manifest, files, symbols, generatedMappings),
+          computedHash,
+          true);
     } catch (SourceManifestException exception) {
       throw exception;
     } catch (Exception exception) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
-          "source manifest could not be verified", exception);
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+          "source manifest could not be verified",
+          exception);
     }
   }
 
@@ -140,16 +148,21 @@ public final class TaskSourceManifestVerifier {
     }
     JsonNode files = manifest.get("files");
     JsonNode symbols = manifest.get("symbols");
-    if (files == null || !files.isArray() || files.isEmpty()
+    if (files == null
+        || !files.isArray()
+        || files.isEmpty()
         || files.size() > SourceManifestContract.MAX_FILES) {
       invalid("source file index is invalid");
     }
-    if (symbols == null || !symbols.isArray() || symbols.isEmpty()
+    if (symbols == null
+        || !symbols.isArray()
+        || symbols.isEmpty()
         || symbols.size() > SourceManifestContract.MAX_SYMBOLS) {
       invalid("source symbol index is invalid");
     }
     JsonNode generatedMappings = manifest.get("generated_mappings");
-    if (generatedMappings == null || !generatedMappings.isArray()
+    if (generatedMappings == null
+        || !generatedMappings.isArray()
         || generatedMappings.size() > SourceManifestContract.MAX_GENERATED_MAPPINGS) {
       invalid("source generated mapping index is invalid");
     }
@@ -174,8 +187,8 @@ public final class TaskSourceManifestVerifier {
     JsonNode clean = repository.get("clean");
     if (clean == null || !clean.isBoolean()) invalid("repository clean state is invalid");
     if (!clean.booleanValue()) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_DIRTY_TREE,
-          "source repository is not clean");
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_DIRTY_TREE, "source repository is not clean");
     }
     String buildId = requiredText(build, "build_id", 200);
     if (!SAFE_ID.matcher(buildId).matches()) invalid("build identity is invalid");
@@ -204,13 +217,14 @@ public final class TaskSourceManifestVerifier {
       String path = text(file, "relative_path");
       String contentHash = text(file, "content_hash");
       long size = integral(file, "size_bytes", -1L);
-      if (id == null || !SourceManifestContract.FILE_ID.matcher(id).matches()
-          || !ids.add(id)) invalid("source file identity is invalid");
+      if (id == null || !SourceManifestContract.FILE_ID.matcher(id).matches() || !ids.add(id))
+        invalid("source file identity is invalid");
       if (!SourceManifestContract.isSafeRelativePath(path) || !paths.add(path)) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_UNSAFE_PATH,
-            "source file path is unsafe");
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_UNSAFE_PATH, "source file path is unsafe");
       }
-      if (!SourceManifestContract.isHash(contentHash) || size < 0
+      if (!SourceManifestContract.isHash(contentHash)
+          || size < 0
           || size > SourceManifestContract.MAX_FILE_BYTES) {
         invalid("source file content metadata is invalid");
       }
@@ -238,8 +252,9 @@ public final class TaskSourceManifestVerifier {
       if (totalBytes > SourceManifestContract.MAX_CLOSURE_BYTES) {
         invalid("source closure is too large");
       }
-      result.add(new TaskSourceManifest.File(id, path, module, language, contentHash, size,
-          classification, reason));
+      result.add(
+          new TaskSourceManifest.File(
+              id, path, module, language, contentHash, size, classification, reason));
     }
     return result;
   }
@@ -258,8 +273,8 @@ public final class TaskSourceManifestVerifier {
       String to = text(edge, "to_path");
       if (!SourceManifestContract.isSafeRelativePath(from)
           || !SourceManifestContract.isSafeRelativePath(to)) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_UNSAFE_PATH,
-            "source closure path is unsafe");
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_UNSAFE_PATH, "source closure path is unsafe");
       }
       if (filesById.values().stream().noneMatch(file -> from.equals(file.relativePath()))
           || filesById.values().stream().noneMatch(file -> to.equals(file.relativePath()))) {
@@ -267,8 +282,12 @@ public final class TaskSourceManifestVerifier {
       }
       String kind = text(edge, "edge_kind");
       String reason = text(edge, "reason");
-      if (kind == null || kind.isBlank() || kind.length() > 40
-          || reason == null || reason.isBlank() || reason.length() > 1000) {
+      if (kind == null
+          || kind.isBlank()
+          || kind.length() > 40
+          || reason == null
+          || reason.isBlank()
+          || reason.length() > 1000) {
         invalid("source closure edge metadata is invalid");
       }
       if (!edges.add(from + "\u0000" + to + "\u0000" + kind + "\u0000" + reason)) {
@@ -300,16 +319,29 @@ public final class TaskSourceManifestVerifier {
       int startColumn = integralInt(symbol, "start_column", -1);
       int endColumn = integralInt(symbol, "end_column", -1);
       TaskSourceManifest.File file = filesById.get(fileId);
-      if (id == null || !SourceManifestContract.SYMBOL_ID.matcher(id).matches()
-          || !ids.add(id) || file == null || kind == null || kind.isBlank()
-          || kind.length() > 40 || qualifiedName == null || qualifiedName.isBlank()
-          || qualifiedName.length() > 500 || signature != null && signature.length() > 1000
-          || startByte < 0 || endByte <= startByte || endByte > file.sizeBytes()
-          || startLine < 1 || endLine < startLine || startColumn < 1 || endColumn < 1) {
+      if (id == null
+          || !SourceManifestContract.SYMBOL_ID.matcher(id).matches()
+          || !ids.add(id)
+          || file == null
+          || kind == null
+          || kind.isBlank()
+          || kind.length() > 40
+          || qualifiedName == null
+          || qualifiedName.isBlank()
+          || qualifiedName.length() > 500
+          || signature != null && signature.length() > 1000
+          || startByte < 0
+          || endByte <= startByte
+          || endByte > file.sizeBytes()
+          || startLine < 1
+          || endLine < startLine
+          || startColumn < 1
+          || endColumn < 1) {
         invalid("source symbol range or identity is invalid");
       }
-      String expectedId = SourceManifestContract.symbolId(
-          file.relativePath(), kind, qualifiedName, signature, startByte, endByte);
+      String expectedId =
+          SourceManifestContract.symbolId(
+              file.relativePath(), kind, qualifiedName, signature, startByte, endByte);
       if (!id.equals(expectedId)) invalid("source symbol identity is not deterministic");
       String enclosing = text(symbol, "enclosing_symbol_id");
       if (enclosing != null && !SourceManifestContract.SYMBOL_ID.matcher(enclosing).matches()) {
@@ -319,9 +351,21 @@ public final class TaskSourceManifestVerifier {
       if (generatedNode != null && !generatedNode.isBoolean()) {
         invalid("source generated flag is invalid");
       }
-      result.add(new TaskSourceManifest.Symbol(id, fileId, kind, qualifiedName, signature,
-          enclosing, startByte, endByte, startLine, endLine, startColumn, endColumn,
-          generatedNode != null && generatedNode.booleanValue()));
+      result.add(
+          new TaskSourceManifest.Symbol(
+              id,
+              fileId,
+              kind,
+              qualifiedName,
+              signature,
+              enclosing,
+              startByte,
+              endByte,
+              startLine,
+              endLine,
+              startColumn,
+              endColumn,
+              generatedNode != null && generatedNode.booleanValue()));
     }
     for (TaskSourceManifest.Symbol symbol : result) {
       if (symbol.enclosingSymbolId() != null && !ids.contains(symbol.enclosingSymbolId())) {
@@ -351,46 +395,70 @@ public final class TaskSourceManifestVerifier {
           || !("GENERATED".equals(generated.classification())
               || "TRANSFORMED".equals(generated.classification()))
           || !("GENERATED".equals(mappingKind) || "TRANSFORMED".equals(mappingKind))
-          || authoredNode == null || !authoredNode.isArray() || authoredNode.isEmpty()
+          || authoredNode == null
+          || !authoredNode.isArray()
+          || authoredNode.isEmpty()
           || authoredNode.size() > SourceManifestContract.MAX_FILES) {
         invalid("source generated mapping identity is invalid");
       }
       List<String> authored = new ArrayList<>();
       Set<String> authoredSet = new HashSet<>();
       for (JsonNode authoredNodeValue : authoredNode) {
-        String authoredFileId = authoredNodeValue != null && authoredNodeValue.isTextual()
-            ? authoredNodeValue.textValue() : null;
+        String authoredFileId =
+            authoredNodeValue != null && authoredNodeValue.isTextual()
+                ? authoredNodeValue.textValue()
+                : null;
         TaskSourceManifest.File authoredFile = filesById.get(authoredFileId);
-        if (authoredFile == null || !"SOURCE".equals(authoredFile.classification())
+        if (authoredFile == null
+            || !"SOURCE".equals(authoredFile.classification())
             || !authoredSet.add(authoredFileId)) {
           invalid("source generated mapping references invalid authored files");
         }
         authored.add(authoredFileId);
       }
-      String identity = generatedFileId + "\u0000" + String.join("\u0000", authored)
-          + "\u0000" + mappingKind + "\u0000" + tool + "\u0000" + toolVersion
-          + "\u0000" + description;
+      String identity =
+          generatedFileId
+              + "\u0000"
+              + String.join("\u0000", authored)
+              + "\u0000"
+              + mappingKind
+              + "\u0000"
+              + tool
+              + "\u0000"
+              + toolVersion
+              + "\u0000"
+              + description;
       if (!identities.add(identity)) invalid("source generated mapping is duplicated");
-      result.add(new TaskSourceManifest.GeneratedMapping(
-          generatedFileId, authored, mappingKind, tool, toolVersion, description));
+      result.add(
+          new TaskSourceManifest.GeneratedMapping(
+              generatedFileId, authored, mappingKind, tool, toolVersion, description));
     }
     return result;
   }
 
   private static void validateEntryPoint(
-      JsonNode manifest, Map<String, TaskSourceManifest.File> filesById,
+      JsonNode manifest,
+      Map<String, TaskSourceManifest.File> filesById,
       List<TaskSourceManifest.Symbol> symbols) {
     JsonNode entry = manifest.get("entry_point");
     String className = text(entry, "class_name");
     String fileId = text(entry, "file_id");
     String symbolId = text(entry, "source_symbol_id");
-    if (className == null || className.isBlank() || fileId == null || !filesById.containsKey(fileId)
-        || symbolId == null || !SourceManifestContract.SYMBOL_ID.matcher(symbolId).matches()) {
+    if (className == null
+        || className.isBlank()
+        || fileId == null
+        || !filesById.containsKey(fileId)
+        || symbolId == null
+        || !SourceManifestContract.SYMBOL_ID.matcher(symbolId).matches()) {
       invalid("source entry point is invalid");
     }
-    TaskSourceManifest.Symbol entrySymbol = symbols.stream()
-        .filter(symbol -> symbolId.equals(symbol.sourceSymbolId())).findFirst().orElse(null);
-    if (entrySymbol == null || !fileId.equals(entrySymbol.fileId())
+    TaskSourceManifest.Symbol entrySymbol =
+        symbols.stream()
+            .filter(symbol -> symbolId.equals(symbol.sourceSymbolId()))
+            .findFirst()
+            .orElse(null);
+    if (entrySymbol == null
+        || !fileId.equals(entrySymbol.fileId())
         || !(className.equals(entrySymbol.qualifiedName())
             || entrySymbol.qualifiedName().startsWith(className + "#"))) {
       invalid("source entry point symbol is not indexed");
@@ -403,21 +471,22 @@ public final class TaskSourceManifestVerifier {
     if (entryFile == null) invalid("source entry file is missing");
     if ("AVAILABLE".equals(status)) {
       if (!Boolean.TRUE.equals(manifest.path("repository").path("clean").booleanValue())) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_DIRTY_TREE,
-            "source repository is not clean");
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_DIRTY_TREE, "source repository is not clean");
       }
       if (!"SOURCE".equals(entryFile.classification())) {
         invalid("available source entry must be authored SOURCE");
       }
     } else {
-      SourceManifestFailureCode failure = switch (status) {
-        case "INDEX_PARTIAL" -> SourceManifestFailureCode.SOURCE_INDEX_PARTIAL;
-        case "UNAVAILABLE" -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
-        case "REDACTED" -> SourceManifestFailureCode.SOURCE_REDACTED;
-        case "PRUNED" -> SourceManifestFailureCode.SOURCE_PRUNED;
-        case "GENERATED_ONLY" -> SourceManifestFailureCode.SOURCE_GENERATED_ONLY;
-        default -> null;
-      };
+      SourceManifestFailureCode failure =
+          switch (status) {
+            case "INDEX_PARTIAL" -> SourceManifestFailureCode.SOURCE_INDEX_PARTIAL;
+            case "UNAVAILABLE" -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
+            case "REDACTED" -> SourceManifestFailureCode.SOURCE_REDACTED;
+            case "PRUNED" -> SourceManifestFailureCode.SOURCE_PRUNED;
+            case "GENERATED_ONLY" -> SourceManifestFailureCode.SOURCE_GENERATED_ONLY;
+            default -> null;
+          };
       if (failure != null) {
         // Non-AVAILABLE status is a valid authenticated publication.  It is represented in
         // Verified so callers that need the terminal state can inspect it; content reads decide
@@ -428,29 +497,37 @@ public final class TaskSourceManifestVerifier {
 
   private static void validateSignature(JsonNode manifest) {
     JsonNode signature = manifest.get("signature");
-    if (signature == null || !signature.isObject()
+    if (signature == null
+        || !signature.isObject()
         || !"Ed25519".equals(text(signature, "algorithm"))
-        || text(signature, "key_id") == null || text(signature, "key_id").isBlank()
-        || text(signature, "value") == null || text(signature, "value").isBlank()
+        || text(signature, "key_id") == null
+        || text(signature, "key_id").isBlank()
+        || text(signature, "value") == null
+        || text(signature, "value").isBlank()
         || !SourceManifestContract.isHash(text(signature, "signed_bytes_hash"))) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
           "source manifest signature is malformed");
     }
     String keyId = text(signature, "key_id");
     if (!SAFE_ID.matcher(keyId).matches()) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
           "source manifest signature key identity is invalid");
     }
     try {
       byte[] value = java.util.Base64.getDecoder().decode(text(signature, "value"));
       if (value.length != 64) throw new IllegalArgumentException("signature length");
     } catch (IllegalArgumentException exception) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
-          "source manifest signature is malformed", exception);
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+          "source manifest signature is malformed",
+          exception);
     }
     String expectedSignedBytesHash = hash(SourceManifestContract.canonicalSignatureBytes(manifest));
     if (!expectedSignedBytesHash.equals(text(signature, "signed_bytes_hash"))) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
           "source manifest signed bytes identity is invalid");
     }
   }
@@ -468,8 +545,8 @@ public final class TaskSourceManifestVerifier {
 
   private static void compareRequired(String expected, String actual, String label) {
     if (expected == null || expected.isBlank() || actual == null || !expected.equals(actual)) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
-          "source " + label + " identity differs");
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_BUILD_MISMATCH, "source " + label + " identity differs");
     }
   }
 
@@ -481,13 +558,15 @@ public final class TaskSourceManifestVerifier {
   private static long integral(JsonNode node, String field, long fallback) {
     JsonNode value = node == null ? null : node.get(field);
     return value != null && value.isIntegralNumber() && value.canConvertToLong()
-        ? value.longValue() : fallback;
+        ? value.longValue()
+        : fallback;
   }
 
   private static int integralInt(JsonNode node, String field, int fallback) {
     JsonNode value = node == null ? null : node.get(field);
     return value != null && value.isIntegralNumber() && value.canConvertToInt()
-        ? value.intValue() : fallback;
+        ? value.intValue()
+        : fallback;
   }
 
   private static String hash(byte[] bytes) {

@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import com.chromascape.web.accounttask.entity.ScriptStabilizationRun;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationRunRepository;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
-import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReference;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReferenceRepository;
@@ -30,8 +30,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -50,10 +50,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(
     classes = Sc810PostgresTestConfiguration.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@TestPropertySource(properties = {
-    "spring.flyway.target=21",
-    "spring.jpa.hibernate.ddl-auto=update"
-})
+@TestPropertySource(
+    properties = {"spring.flyway.target=21", "spring.jpa.hibernate.ddl-auto=update"})
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class SourceManifestConcurrentPersistenceIntegrationTest {
@@ -71,14 +69,18 @@ class SourceManifestConcurrentPersistenceIntegrationTest {
   private static HttpServer startStub() {
     try {
       HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-      byte[] manifest = SourceManifestTestFixtures.signedManifest(SIGNING_KEY).toString()
-          .getBytes(StandardCharsets.UTF_8);
-      server.createContext("/api/v1/source-manifests/EXAMPLE_TASK", exchange -> {
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(200, manifest.length);
-        exchange.getResponseBody().write(manifest);
-        exchange.close();
-      });
+      byte[] manifest =
+          SourceManifestTestFixtures.signedManifest(SIGNING_KEY)
+              .toString()
+              .getBytes(StandardCharsets.UTF_8);
+      server.createContext(
+          "/api/v1/source-manifests/EXAMPLE_TASK",
+          exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, manifest.length);
+            exchange.getResponseBody().write(manifest);
+            exchange.close();
+          });
       server.start();
       return server;
     } catch (IOException exception) {
@@ -89,7 +91,8 @@ class SourceManifestConcurrentPersistenceIntegrationTest {
   @DynamicPropertySource
   static void micro6BaseUrl(DynamicPropertyRegistry registry) {
     IsolatedPostgresTestDatabase.register(registry);
-    registry.add("micro6.source.transport.base-url",
+    registry.add(
+        "micro6.source.transport.base-url",
         () -> "http://127.0.0.1:" + MICRO6.getAddress().getPort());
     registry.add("micro6.source.transport.auth-token", () -> "test-source-upstream-token");
     registry.add("micro6.source.transport.actor", () -> "chromascape-test");
@@ -121,31 +124,43 @@ class SourceManifestConcurrentPersistenceIntegrationTest {
 
   @AfterEach
   void cleanCreatedRows() {
-    bindings.findAll().forEach(binding -> {
-      if (binding.getRunId() != null && binding.getRunId().startsWith("race-")) {
-        bindings.delete(binding);
-      }
-    });
-    runs.findAll().forEach(run -> {
-      if (run.getRunId() != null && run.getRunId().startsWith("race-")) {
-        runs.delete(run);
-      }
-    });
-    stabilization.findAll().forEach(run -> {
-      if (run.getRunId() != null && run.getRunId().startsWith("race-")) {
-        stabilization.delete(run);
-      }
-    });
+    bindings
+        .findAll()
+        .forEach(
+            binding -> {
+              if (binding.getRunId() != null && binding.getRunId().startsWith("race-")) {
+                bindings.delete(binding);
+              }
+            });
+    runs.findAll()
+        .forEach(
+            run -> {
+              if (run.getRunId() != null && run.getRunId().startsWith("race-")) {
+                runs.delete(run);
+              }
+            });
+    stabilization
+        .findAll()
+        .forEach(
+            run -> {
+              if (run.getRunId() != null && run.getRunId().startsWith("race-")) {
+                stabilization.delete(run);
+              }
+            });
     // LOB-bearing manifest rows must be read inside a transaction.
-    tx().executeWithoutResult(status -> {
-      manifests.findAll().forEach(reference -> {
-        if (FIXTURE_HASH.equals(reference.getManifestHash())
-            || (reference.getSnapshotId() != null
-                && reference.getSnapshotId().startsWith("snap_conflict_"))) {
-          manifests.delete(reference);
-        }
-      });
-    });
+    tx().executeWithoutResult(
+            status -> {
+              manifests
+                  .findAll()
+                  .forEach(
+                      reference -> {
+                        if (FIXTURE_HASH.equals(reference.getManifestHash())
+                            || (reference.getSnapshotId() != null
+                                && reference.getSnapshotId().startsWith("snap_conflict_"))) {
+                          manifests.delete(reference);
+                        }
+                      });
+            });
   }
 
   @Test
@@ -158,11 +173,13 @@ class SourceManifestConcurrentPersistenceIntegrationTest {
     List<Future<?>> results = new ArrayList<>();
     for (int index = 0; index < threads; index++) {
       int runIndex = index;
-      results.add(pool.submit(() -> {
-        start.await();
-        orchestration.createSourceBoundRun("attempt-1", identity("race-run-" + runIndex));
-        return null;
-      }));
+      results.add(
+          pool.submit(
+              () -> {
+                start.await();
+                orchestration.createSourceBoundRun("attempt-1", identity("race-run-" + runIndex));
+                return null;
+              }));
     }
     start.countDown();
     for (Future<?> future : results) {
@@ -172,9 +189,12 @@ class SourceManifestConcurrentPersistenceIntegrationTest {
     }
     pool.shutdownNow();
 
-    long rows = tx().execute(status -> manifests.findAll().stream()
-        .filter(reference -> FIXTURE_HASH.equals(reference.getManifestHash()))
-        .count());
+    long rows =
+        tx().execute(
+                status ->
+                    manifests.findAll().stream()
+                        .filter(reference -> FIXTURE_HASH.equals(reference.getManifestHash()))
+                        .count());
     assertEquals(1, rows, "identical immutable bytes must converge on exactly one row");
     for (int index = 0; index < threads; index++) {
       Optional<SourceRunBinding> binding = bindings.findByRunId("race-run-" + index);
@@ -187,9 +207,10 @@ class SourceManifestConcurrentPersistenceIntegrationTest {
   void sameManifestHashWithDifferentBytesIsRejectedAtTheDatabase() {
     String firstJson = SourceManifestTestFixtures.signedManifest(SIGNING_KEY).toString();
     bindingService.verifyAndPersist("EXAMPLE_TASK", firstJson, null);
-    String storedJson = tx().execute(
-        status -> manifests.findByManifestHash(FIXTURE_HASH).orElseThrow()
-            .getManifestJson());
+    String storedJson =
+        tx().execute(
+                status ->
+                    manifests.findByManifestHash(FIXTURE_HASH).orElseThrow().getManifestJson());
 
     // Identity reuse: same manifest hash, different bytes, different snapshot id. The unique
     // manifest-hash index must reject the insert before any conflicting row exists.
@@ -209,37 +230,54 @@ class SourceManifestConcurrentPersistenceIntegrationTest {
     conflicting.setConfidentiality("INTERNAL");
     conflicting.setEnvironment("production");
     conflicting.setManifestJson("{\"tampered\":true}");
-    assertThrows(Exception.class, () -> manifests.saveAndFlush(conflicting),
+    assertThrows(
+        Exception.class,
+        () -> manifests.saveAndFlush(conflicting),
         "the unique manifest-hash index must reject identity reuse with different bytes");
 
-    tx().executeWithoutResult(status -> {
-      SourceManifestReference original = manifests.findByManifestHash(FIXTURE_HASH).orElseThrow();
-      assertEquals(storedJson, original.getManifestJson(),
-          "the original immutable bytes must survive the failed conflict");
-    });
+    tx().executeWithoutResult(
+            status -> {
+              SourceManifestReference original =
+                  manifests.findByManifestHash(FIXTURE_HASH).orElseThrow();
+              assertEquals(
+                  storedJson,
+                  original.getManifestJson(),
+                  "the original immutable bytes must survive the failed conflict");
+            });
   }
 
   @Test
   void immutableTriggerRejectsAnyMutationOfAPersistedReference() {
     String firstJson = SourceManifestTestFixtures.signedManifest(SIGNING_KEY).toString();
     bindingService.verifyAndPersist("EXAMPLE_TASK", firstJson, null);
-    String storedJson = tx().execute(
-        status -> manifests.findByManifestHash(FIXTURE_HASH).orElseThrow()
-            .getManifestJson());
+    String storedJson =
+        tx().execute(
+                status ->
+                    manifests.findByManifestHash(FIXTURE_HASH).orElseThrow().getManifestJson());
 
     // Any attempted UPDATE of an immutable identity field must be rejected by the PostgreSQL
     // trigger, and the durable row must remain byte-identical afterwards.
-    assertThrows(Exception.class, () -> tx().executeWithoutResult(status -> {
-      SourceManifestReference reference = manifests.findByManifestHash(FIXTURE_HASH).orElseThrow();
-      reference.setManifestJson("{\"tampered\":true}");
-      manifests.saveAndFlush(reference);
-    }), "the SC-810 immutability trigger must reject identity mutation");
+    assertThrows(
+        Exception.class,
+        () ->
+            tx().executeWithoutResult(
+                    status -> {
+                      SourceManifestReference reference =
+                          manifests.findByManifestHash(FIXTURE_HASH).orElseThrow();
+                      reference.setManifestJson("{\"tampered\":true}");
+                      manifests.saveAndFlush(reference);
+                    }),
+        "the SC-810 immutability trigger must reject identity mutation");
 
-    tx().executeWithoutResult(status -> {
-      SourceManifestReference after = manifests.findByManifestHash(FIXTURE_HASH).orElseThrow();
-      assertEquals(storedJson, after.getManifestJson(),
-          "the immutable row must survive the rejected update");
-    });
+    tx().executeWithoutResult(
+            status -> {
+              SourceManifestReference after =
+                  manifests.findByManifestHash(FIXTURE_HASH).orElseThrow();
+              assertEquals(
+                  storedJson,
+                  after.getManifestJson(),
+                  "the immutable row must survive the rejected update");
+            });
   }
 
   private static CurrentSliceIdentity identity(String runId) {
@@ -248,8 +286,8 @@ class SourceManifestConcurrentPersistenceIntegrationTest {
         "current-slice-identity/v1",
         new CurrentSliceIdentity.Task("EXAMPLE_TASK", HASH, "profile", HASH, HASH),
         new CurrentSliceIdentity.Run(runId, "attempt-1", 1, "executor-1"),
-        new CurrentSliceIdentity.Client("client", "MICRO6_MANAGED", "micro6-build-1", ARTIFACT,
-            "micro6-builder/v2", "MICRO6"),
+        new CurrentSliceIdentity.Client(
+            "client", "MICRO6_MANAGED", "micro6-build-1", ARTIFACT, "micro6-builder/v2", "MICRO6"),
         null,
         new CurrentSliceIdentity.Source(
             manifest.path("source_snapshot_id").asText(),
@@ -258,8 +296,12 @@ class SourceManifestConcurrentPersistenceIntegrationTest {
             manifest.path("repository").path("commit_id").asText(),
             manifest.path("repository").path("tree_id").asText(),
             manifest.path("build").path("build_id").asText(),
-            manifest.path("build").path("artifact_digest").asText(), true),
-        null, null, null, false);
+            manifest.path("build").path("artifact_digest").asText(),
+            true),
+        null,
+        null,
+        null,
+        false);
   }
 
   private void seedPassStabilization(String runId, String attemptId) {

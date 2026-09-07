@@ -12,10 +12,7 @@ import java.util.Base64;
 public final class SourceManifestTestFixtures {
   public static final String RELATIVE_PATH = "src/main/java/com/example/Entry.java";
   public static final String CONTENT =
-      "package com.example;\n"
-          + "public class Entry {\n"
-          + "  public void run() {}\n"
-          + "}\n";
+      "package com.example;\n" + "public class Entry {\n" + "  public void run() {}\n" + "}\n";
   public static final String GENERATED_RELATIVE_PATH = "build/generated/EntryAdapter.java";
   public static final String GENERATED_CONTENT =
       "package com.example;\npublic final class EntryAdapter {}\n";
@@ -25,13 +22,20 @@ public final class SourceManifestTestFixtures {
   public static final String FILE_ID = SourceManifestContract.fileId(RELATIVE_PATH, CONTENT_HASH);
   public static final String GENERATED_FILE_ID =
       SourceManifestContract.fileId(GENERATED_RELATIVE_PATH, GENERATED_CONTENT_HASH);
-  public static final String CLASS_SYMBOL_ID = SourceManifestContract.symbolId(
-      RELATIVE_PATH, "CLASS", "com.example.Entry", "class Entry", 0,
-      CONTENT.getBytes(StandardCharsets.UTF_8).length);
+  public static final String CLASS_SYMBOL_ID =
+      SourceManifestContract.symbolId(
+          RELATIVE_PATH,
+          "CLASS",
+          "com.example.Entry",
+          "class Entry",
+          0,
+          CONTENT.getBytes(StandardCharsets.UTF_8).length);
   private static final int METHOD_START = CONTENT.indexOf("  public void run");
-  private static final int METHOD_END = CONTENT.indexOf("\n", CONTENT.indexOf("{}", METHOD_START)) + 1;
-  public static final String METHOD_SYMBOL_ID = SourceManifestContract.symbolId(
-      RELATIVE_PATH, "METHOD", "com.example.Entry#run", "run()", METHOD_START, METHOD_END);
+  private static final int METHOD_END =
+      CONTENT.indexOf("\n", CONTENT.indexOf("{}", METHOD_START)) + 1;
+  public static final String METHOD_SYMBOL_ID =
+      SourceManifestContract.symbolId(
+          RELATIVE_PATH, "METHOD", "com.example.Entry#run", "run()", METHOD_START, METHOD_END);
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -62,13 +66,15 @@ public final class SourceManifestTestFixtures {
     root.put("status", "AVAILABLE");
     root.put("retention_class", "DEBUG");
     root.put("confidentiality", "INTERNAL");
+    root.putArray("generated_mappings");
     root.putObject("entry_point")
         .put("class_name", "com.example.Entry")
         .put("file_id", FILE_ID)
         .put("source_symbol_id", CLASS_SYMBOL_ID);
 
     ArrayNode files = root.putArray("files");
-    files.addObject()
+    files
+        .addObject()
         .put("file_id", FILE_ID)
         .put("relative_path", RELATIVE_PATH)
         .put("module", "example-module")
@@ -78,14 +84,16 @@ public final class SourceManifestTestFixtures {
         .put("classification", "SOURCE")
         .put("inclusion_reason", "task entry source");
 
-    root.putArray("closure").addObject()
+    root.putArray("closure")
+        .addObject()
         .put("from_path", "src/main/java/com/example/Entry.java")
         .put("to_path", "src/main/java/com/example/Entry.java")
         .put("edge_kind", "ENTRY_POINT")
         .put("reason", "entry point");
 
     ArrayNode symbols = root.putArray("symbols");
-    symbols.addObject()
+    symbols
+        .addObject()
         .put("source_symbol_id", CLASS_SYMBOL_ID)
         .put("file_id", FILE_ID)
         .put("kind", "CLASS")
@@ -97,7 +105,8 @@ public final class SourceManifestTestFixtures {
         .put("end_line", 5)
         .put("start_column", 1)
         .put("end_column", 1);
-    symbols.addObject()
+    symbols
+        .addObject()
         .put("source_symbol_id", METHOD_SYMBOL_ID)
         .put("file_id", FILE_ID)
         .put("kind", "METHOD")
@@ -135,7 +144,8 @@ public final class SourceManifestTestFixtures {
   public static ObjectNode signedManifestWithGeneratedMapping(KeyPair keyPair) {
     ObjectNode manifest = manifest();
     ArrayNode files = (ArrayNode) manifest.get("files");
-    files.addObject()
+    files
+        .addObject()
         .put("file_id", GENERATED_FILE_ID)
         .put("relative_path", GENERATED_RELATIVE_PATH)
         .put("module", "example-module")

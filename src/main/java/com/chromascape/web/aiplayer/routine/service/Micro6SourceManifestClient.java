@@ -1,8 +1,8 @@
 package com.chromascape.web.aiplayer.routine.service;
 
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
-import com.chromascape.web.aiplayer.routine.source.SourceManifestContract;
 import com.chromascape.web.aiplayer.routine.source.SourceManifestCanonicalJson;
+import com.chromascape.web.aiplayer.routine.source.SourceManifestContract;
 import com.chromascape.web.aiplayer.routine.source.SourceManifestException;
 import com.chromascape.web.aiplayer.routine.source.SourceManifestFailureCode;
 import com.chromascape.web.aiplayer.routine.source.SourceManifestSignatureVerifier;
@@ -16,13 +16,12 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
-import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,37 +30,48 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Trusted, generic Micro6 source consumer. The only source selector accepted from callers is a
- * task key plus an entry/symbol contract; no filesystem path, upstream URL, branch, or mutable
- * checkout location crosses this boundary.
+ * Trusted, generic Micro6 source consumer. The only source selector accepted from callers is a task
+ * key plus an entry/symbol contract; no filesystem path, upstream URL, branch, or mutable checkout
+ * location crosses this boundary.
  */
 @Component
 public class Micro6SourceManifestClient {
-  private final HttpClient client = HttpClient.newBuilder()
-      .connectTimeout(Duration.ofSeconds(5))
-      .followRedirects(HttpClient.Redirect.NEVER)
-      .build();
+  private final HttpClient client =
+      HttpClient.newBuilder()
+          .connectTimeout(Duration.ofSeconds(5))
+          .followRedirects(HttpClient.Redirect.NEVER)
+          .build();
   private final ObjectMapper mapper;
 
   @Value("${micro6.source.transport.base-url:}")
   private String baseUrl;
+
   @Value("${micro6.source.transport.auth-token:}")
   private String authToken;
+
   @Value("${micro6.source.transport.actor:chromascape-web}")
   private String actor;
+
   /** The single canonical trust configuration; transport settings above are never trust. */
   private SourceTrustProperties trust = new SourceTrustProperties();
+
   @Autowired
   public Micro6SourceManifestClient(ObjectMapper mapper, SourceTrustProperties trust) {
     this.mapper = mapper;
     this.trust = trust;
   }
 
-  /** Fetches a manifest document without trusting it. Call {@link #resolve(SourceRequest)} to verify it. */
+  /**
+   * Fetches a manifest document without trusting it. Call {@link #resolve(SourceRequest)} to verify
+   * it.
+   */
   public String manifest(String taskKey) {
     requireTaskKey(taskKey);
-    return decodeUtf8(getBytes("/api/v1/source-manifests/" + encode(taskKey),
-        SourceManifestContract.MAX_MANIFEST_BYTES, PURPOSE_MANIFEST));
+    return decodeUtf8(
+        getBytes(
+            "/api/v1/source-manifests/" + encode(taskKey),
+            SourceManifestContract.MAX_MANIFEST_BYTES,
+            PURPOSE_MANIFEST));
   }
 
   /** Fetches a UTF-8 snapshot file; the caller must still verify it against a manifest entry. */
@@ -73,8 +83,10 @@ public class Micro6SourceManifestClient {
   public byte[] fileBytes(String snapshotId, String fileId) {
     requireSnapshotId(snapshotId);
     requireFileId(fileId);
-    return getBytes("/api/v1/source-snapshots/" + encode(snapshotId)
-        + "/files/" + encode(fileId), SourceManifestContract.MAX_FILE_BYTES, PURPOSE_FILE);
+    return getBytes(
+        "/api/v1/source-snapshots/" + encode(snapshotId) + "/files/" + encode(fileId),
+        SourceManifestContract.MAX_FILE_BYTES,
+        PURPOSE_FILE);
   }
 
   /**
@@ -84,13 +96,15 @@ public class Micro6SourceManifestClient {
    */
   public SourceBinding resolve(SourceRequest request) {
     if (request == null || !SourceManifestContract.isTaskKey(request.taskKey())) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, "task selector is required");
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, "task selector is required");
     }
     try {
       JsonNode rawManifest = parseManifest(manifest(request.taskKey()));
-      TaskSourceManifestVerifier verifier = new TaskSourceManifestVerifier(
-          SourceManifestSignatureVerifier.fromX509Base64(
-              trust.getPublicKeyBase64(), trust.getPublicKeyId()));
+      TaskSourceManifestVerifier verifier =
+          new TaskSourceManifestVerifier(
+              SourceManifestSignatureVerifier.fromX509Base64(
+                  trust.getPublicKeyBase64(), trust.getPublicKeyId()));
       TaskSourceManifestVerifier.ExpectedIdentity expected = request.expectedIdentity();
       TaskSourceManifestVerifier.Verified verified = verifier.verify(rawManifest, expected);
       enforceEnvironment(rawManifest);
@@ -101,16 +115,23 @@ public class Micro6SourceManifestClient {
       String entryClassName = text(rawManifest.get("entry_point"), "class_name");
       TaskSourceManifest.Symbol symbol = findSymbol(sourceManifest, request, entryClassName);
       if (symbol == null) {
-        throw sourceError(SourceManifestFailureCode.SOURCE_INDEX_PARTIAL,
+        throw sourceError(
+            SourceManifestFailureCode.SOURCE_INDEX_PARTIAL,
             "manifest does not contain the requested symbol index");
       }
       if (!entryFile.fileId().equals(symbol.fileId())) {
-        throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+        throw sourceError(
+            SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
             "entry symbol is not contained by the declared entry file");
       }
-      byte[] sourceBytes = getBytes("/api/v1/source-snapshots/"
-          + encode(sourceManifest.sourceSnapshotId()) + "/files/" + encode(entryFile.fileId()),
-          SourceManifestContract.MAX_FILE_BYTES, PURPOSE_FILE);
+      byte[] sourceBytes =
+          getBytes(
+              "/api/v1/source-snapshots/"
+                  + encode(sourceManifest.sourceSnapshotId())
+                  + "/files/"
+                  + encode(entryFile.fileId()),
+              SourceManifestContract.MAX_FILE_BYTES,
+              PURPOSE_FILE);
       verifyFile(entryFile, sourceBytes);
       String source = decodeUtf8(sourceBytes);
       int start = boundedIndex(sourceBytes, symbol.startByte());
@@ -120,11 +141,15 @@ public class Micro6SourceManifestClient {
       String preimage = hash(slice(sourceBytes, start, end));
       Map<String, PinnedFile> pinnedFiles = new LinkedHashMap<>();
       for (TaskSourceManifest.File file : sourceManifest.files()) {
-        pinnedFiles.put(file.relativePath(), new PinnedFile(
-            file.fileId(), file.relativePath(), file.contentHash(), file.sizeBytes()));
+        pinnedFiles.put(
+            file.relativePath(),
+            new PinnedFile(
+                file.fileId(), file.relativePath(), file.contentHash(), file.sizeBytes()));
       }
-      String module = entryFile.module() == null || entryFile.module().isBlank()
-          ? "runelite-client" : entryFile.module();
+      String module =
+          entryFile.module() == null || entryFile.module().isBlank()
+              ? "runelite-client"
+              : entryFile.module();
       return new SourceBinding(
           nestedText(rawManifest, "build", "build_id"),
           sourceManifest.sourceSnapshotId(),
@@ -147,8 +172,10 @@ public class Micro6SourceManifestClient {
     } catch (SourceManifestException exception) {
       throw exception;
     } catch (Exception exception) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_UNAVAILABLE,
-          "authoritative source could not be fetched or verified", exception);
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_UNAVAILABLE,
+          "authoritative source could not be fetched or verified",
+          exception);
     }
   }
 
@@ -164,9 +191,11 @@ public class Micro6SourceManifestClient {
         source == null ? null : source.commitId(),
         source == null ? null : source.treeId(),
         source != null && source.buildId() != null
-            ? source.buildId() : client == null ? null : client.clientBuildId(),
+            ? source.buildId()
+            : client == null ? null : client.clientBuildId(),
         source != null && source.artifactDigest() != null
-            ? source.artifactDigest() : client == null ? null : client.artifactDigest(),
+            ? source.artifactDigest()
+            : client == null ? null : client.artifactDigest(),
         source == null ? null : source.sourceSnapshotId(),
         source == null ? null : source.sourceManifestHash());
   }
@@ -176,14 +205,17 @@ public class Micro6SourceManifestClient {
     JsonNode entry = rawManifest.get("entry_point");
     String entryFileId = text(entry, "file_id");
     String entryClass = text(entry, "class_name");
-    if (request.entryClassName() != null && !request.entryClassName().isBlank()
+    if (request.entryClassName() != null
+        && !request.entryClassName().isBlank()
         && !request.entryClassName().equals(entryClass)) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "requested entry class differs from the signed manifest");
     }
     TaskSourceManifest.File file = entryFileId == null ? null : manifest.file(entryFileId);
     if (file == null) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
           "manifest entry point does not reference an allowlisted file");
     }
     return file;
@@ -195,14 +227,16 @@ public class Micro6SourceManifestClient {
       return manifest.symbols().stream()
           .filter(symbol -> request.symbolId().equals(symbol.sourceSymbolId()))
           .filter(symbol -> belongsToEntryClass(symbol, entryClassName))
-          .findFirst().orElse(null);
+          .findFirst()
+          .orElse(null);
     }
     if (request.symbolName() == null || request.symbolName().isBlank()) {
       String entrySymbolId = text(manifest.document().get("entry_point"), "source_symbol_id");
       return manifest.symbols().stream()
           .filter(symbol -> entrySymbolId != null && entrySymbolId.equals(symbol.sourceSymbolId()))
           .filter(symbol -> belongsToEntryClass(symbol, entryClassName))
-          .findFirst().orElse(null);
+          .findFirst()
+          .orElse(null);
     }
     String requested = request.symbolName().trim();
     String requestedBeforeSignature = requested;
@@ -215,15 +249,23 @@ public class Micro6SourceManifestClient {
     final String normalizedName = requested;
     final String normalizedBeforeSignature = requestedBeforeSignature;
     final String normalizedParameters = requestedParameters;
-    final String requestedMethod = normalizedBeforeSignature.substring(
-        normalizedBeforeSignature.lastIndexOf('#') + 1);
-    List<TaskSourceManifest.Symbol> matches = manifest.symbols().stream()
-        .filter(symbol -> symbolMatches(symbol, normalizedName, normalizedBeforeSignature,
-            normalizedParameters, requestedMethod))
-        .filter(symbol -> belongsToEntryClass(symbol, entryClassName))
-        .toList();
+    final String requestedMethod =
+        normalizedBeforeSignature.substring(normalizedBeforeSignature.lastIndexOf('#') + 1);
+    List<TaskSourceManifest.Symbol> matches =
+        manifest.symbols().stream()
+            .filter(
+                symbol ->
+                    symbolMatches(
+                        symbol,
+                        normalizedName,
+                        normalizedBeforeSignature,
+                        normalizedParameters,
+                        requestedMethod))
+            .filter(symbol -> belongsToEntryClass(symbol, entryClassName))
+            .toList();
     if (matches.size() > 1) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_INDEX_PARTIAL,
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_INDEX_PARTIAL,
           "manifest contains an ambiguous source symbol index");
     }
     return matches.isEmpty() ? null : matches.get(0);
@@ -243,10 +285,11 @@ public class Micro6SourceManifestClient {
       String requestedBeforeSignature,
       String requestedParameters,
       String requestedMethod) {
-    if (requested.equals(symbol.qualifiedName()) || requested.equals(symbol.signature())
+    if (requested.equals(symbol.qualifiedName())
+        || requested.equals(symbol.signature())
         || requestedBeforeSignature.equals(symbol.qualifiedName())) return true;
-    if (symbol.qualifiedName() == null
-        || !symbol.qualifiedName().endsWith("#" + requestedMethod)) return false;
+    if (symbol.qualifiedName() == null || !symbol.qualifiedName().endsWith("#" + requestedMethod))
+      return false;
     if (requestedParameters == null) return true;
     return parameterTypes(symbol.signature()).equals(parameterTypes(requestedParameters));
   }
@@ -276,38 +319,46 @@ public class Micro6SourceManifestClient {
 
   /** Stable audit purposes sent as {@code X-Source-Purpose} on every authoritative read. */
   public static final String PURPOSE_MANIFEST = "manifest-read";
+
   public static final String PURPOSE_FILE = "file-read";
 
   private byte[] getBytes(String path, long maximumBytes, String purpose) {
     try {
       if (authToken == null || authToken.isBlank()) {
-        throw sourceError(SourceManifestFailureCode.SOURCE_ACCESS_DENIED,
+        throw sourceError(
+            SourceManifestFailureCode.SOURCE_ACCESS_DENIED,
             "source transport authentication is not configured");
       }
       String environment = trust == null ? "" : trust.getEnvironment();
       if (environment.isBlank()) {
-        throw sourceError(SourceManifestFailureCode.SOURCE_ACCESS_DENIED,
-            "source environment is not configured");
+        throw sourceError(
+            SourceManifestFailureCode.SOURCE_ACCESS_DENIED, "source environment is not configured");
       }
       URI endpoint = trustedEndpoint(path);
-      HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint)
-          .timeout(Duration.ofSeconds(15)).GET();
+      HttpRequest.Builder builder =
+          HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(15)).GET();
       builder.header("Authorization", "Bearer " + authToken);
       builder.header("X-Source-Actor", boundedActor());
       builder.header("X-Source-Purpose", purpose);
       builder.header("X-Correlation-ID", correlationId());
       builder.header("X-Source-Environment", environment);
-      HttpResponse<byte[]> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
-      if (response.statusCode() != 200) throw upstreamFailure(response.statusCode(), response.body());
+      HttpResponse<byte[]> response =
+          client.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+      if (response.statusCode() != 200)
+        throw upstreamFailure(response.statusCode(), response.body());
       if (response.body().length > maximumBytes) {
-        throw sourceError(SourceManifestFailureCode.SOURCE_UNAVAILABLE, "source response exceeds the configured bound");
+        throw sourceError(
+            SourceManifestFailureCode.SOURCE_UNAVAILABLE,
+            "source response exceeds the configured bound");
       }
       return response.body();
     } catch (SourceManifestException exception) {
       throw exception;
     } catch (Exception exception) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_NETWORK_UNAVAILABLE,
-          "source endpoint is unavailable", exception);
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_NETWORK_UNAVAILABLE,
+          "source endpoint is unavailable",
+          exception);
     }
   }
 
@@ -315,7 +366,8 @@ public class Micro6SourceManifestClient {
   private String boundedActor() {
     String candidate = actor == null ? "" : actor.trim();
     if (!candidate.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_AUDIT_CONTEXT_INVALID,
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_AUDIT_CONTEXT_INVALID,
           "source actor identity is invalid");
     }
     return candidate;
@@ -329,7 +381,8 @@ public class Micro6SourceManifestClient {
     String existing = org.slf4j.MDC.get("source_correlation_id");
     if (existing != null) {
       String normalized = existing.trim();
-      if (!normalized.isBlank() && normalized.length() <= 64
+      if (!normalized.isBlank()
+          && normalized.length() <= 64
           && normalized.matches("[A-Za-z0-9._-]+")) {
         return normalized;
       }
@@ -343,44 +396,57 @@ public class Micro6SourceManifestClient {
     } catch (SourceManifestException exception) {
       throw exception;
     } catch (RuntimeException exception) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
-          "source manifest JSON is invalid", exception);
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+          "source manifest JSON is invalid",
+          exception);
     }
   }
 
   private URI trustedEndpoint(String path) {
     if (baseUrl == null || baseUrl.isBlank() || path == null || !path.startsWith("/api/v1/")) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_ACCESS_DENIED, "source endpoint is not trusted");
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_ACCESS_DENIED, "source endpoint is not trusted");
     }
     try {
       URI root = URI.create(baseUrl);
-      if (!"http".equalsIgnoreCase(root.getScheme()) && !"https".equalsIgnoreCase(root.getScheme())) {
+      if (!"http".equalsIgnoreCase(root.getScheme())
+          && !"https".equalsIgnoreCase(root.getScheme())) {
         throw new IllegalArgumentException("unsupported source endpoint scheme");
       }
-      if (root.getUserInfo() != null || root.getRawQuery() != null || root.getRawFragment() != null) {
+      if (root.getUserInfo() != null
+          || root.getRawQuery() != null
+          || root.getRawFragment() != null) {
         throw new IllegalArgumentException("source endpoint contains untrusted URI components");
       }
       String rootText = baseUrl.trim();
       while (rootText.endsWith("/")) rootText = rootText.substring(0, rootText.length() - 1);
       return URI.create(rootText + path);
     } catch (Exception exception) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_ACCESS_DENIED, "source endpoint is not trusted", exception);
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_ACCESS_DENIED,
+          "source endpoint is not trusted",
+          exception);
     }
   }
 
   private SourceManifestException upstreamFailure(int status, byte[] response) {
-    SourceManifestFailureCode code = switch (status) {
-      case 401, 403 -> SourceManifestFailureCode.SOURCE_ACCESS_DENIED;
-      case 404 -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
-      case 410 -> SourceManifestFailureCode.SOURCE_PRUNED;
-      case 429 -> SourceManifestFailureCode.SOURCE_RATE_LIMITED;
-      default -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
-    };
+    SourceManifestFailureCode code =
+        switch (status) {
+          case 401, 403 -> SourceManifestFailureCode.SOURCE_ACCESS_DENIED;
+          case 404 -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
+          case 410 -> SourceManifestFailureCode.SOURCE_PRUNED;
+          case 429 -> SourceManifestFailureCode.SOURCE_RATE_LIMITED;
+          default -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
+        };
     try {
       JsonNode body = mapper.readTree(response);
       String declared = text(body, "code");
       if (declared != null) {
-        try { code = SourceManifestFailureCode.valueOf(declared); } catch (IllegalArgumentException ignored) { }
+        try {
+          code = SourceManifestFailureCode.valueOf(declared);
+        } catch (IllegalArgumentException ignored) {
+        }
       }
     } catch (Exception ignored) {
       // Do not expose upstream response text or URLs.
@@ -390,27 +456,33 @@ public class Micro6SourceManifestClient {
 
   private static void verifyFile(TaskSourceManifest.File entry, byte[] bytes) {
     if (bytes.length != entry.sizeBytes() || !hash(bytes).equals(entry.contentHash())) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
           "source content does not match the signed file identity");
     }
   }
 
   private static int boundedIndex(byte[] bytes, int value) {
     if (value < 0 || value > bytes.length) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, "source symbol range is outside its file");
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+          "source symbol range is outside its file");
     }
     return value;
   }
 
   private static byte[] slice(byte[] bytes, int start, int end) {
-    if (end <= start) throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, "source symbol range is empty");
+    if (end <= start)
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, "source symbol range is empty");
     return java.util.Arrays.copyOfRange(bytes, start, end);
   }
 
   private static void validateUtf8Boundaries(byte[] bytes, int start, int end) {
     if ((start > 0 && start < bytes.length && isUtf8Continuation(bytes[start]))
         || (end > 0 && end < bytes.length && isUtf8Continuation(bytes[end]))) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
           "source symbol range splits a UTF-8 code point");
     }
   }
@@ -418,19 +490,25 @@ public class Micro6SourceManifestClient {
   private static void validateLineColumns(byte[] bytes, TaskSourceManifest.Symbol symbol) {
     Position start = position(bytes, symbol.startByte());
     Position end = position(bytes, symbol.endByte());
-    if (start.line != symbol.startLine() || start.column != symbol.startColumn()
-        || end.line != symbol.endLine() || end.column != symbol.endColumn()) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+    if (start.line != symbol.startLine()
+        || start.column != symbol.startColumn()
+        || end.line != symbol.endLine()
+        || end.column != symbol.endColumn()) {
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
           "source symbol line and column span does not match its bytes");
     }
   }
 
   private static Position position(byte[] bytes, int offset) {
     try {
-      String prefix = StandardCharsets.UTF_8.newDecoder()
-          .onMalformedInput(CodingErrorAction.REPORT)
-          .onUnmappableCharacter(CodingErrorAction.REPORT)
-          .decode(ByteBuffer.wrap(bytes, 0, offset)).toString();
+      String prefix =
+          StandardCharsets.UTF_8
+              .newDecoder()
+              .onMalformedInput(CodingErrorAction.REPORT)
+              .onUnmappableCharacter(CodingErrorAction.REPORT)
+              .decode(ByteBuffer.wrap(bytes, 0, offset))
+              .toString();
       int line = 1;
       int column = 1;
       for (int index = 0; index < prefix.length(); index++) {
@@ -443,7 +521,8 @@ public class Micro6SourceManifestClient {
       }
       return new Position(line, column);
     } catch (CharacterCodingException exception) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
           "source symbol span is not valid UTF-8");
     }
   }
@@ -462,13 +541,15 @@ public class Micro6SourceManifestClient {
 
   private static void requireSnapshotId(String value) {
     if (value == null || !SourceManifestContract.SNAPSHOT_ID.matcher(value).matches()) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, "snapshot identity is invalid");
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, "snapshot identity is invalid");
     }
   }
 
   private static void requireFileId(String value) {
     if (value == null || !SourceManifestContract.FILE_ID.matcher(value).matches()) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, "file identity is invalid");
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, "file identity is invalid");
     }
   }
 
@@ -478,13 +559,15 @@ public class Micro6SourceManifestClient {
 
   private static String decodeUtf8(byte[] bytes) {
     try {
-      return StandardCharsets.UTF_8.newDecoder()
+      return StandardCharsets.UTF_8
+          .newDecoder()
           .onMalformedInput(CodingErrorAction.REPORT)
           .onUnmappableCharacter(CodingErrorAction.REPORT)
           .decode(java.nio.ByteBuffer.wrap(bytes))
           .toString();
     } catch (CharacterCodingException exception) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
           "source content is not valid UTF-8");
     }
   }
@@ -492,8 +575,8 @@ public class Micro6SourceManifestClient {
   private static String cloneRelativePath(String module, String relativePath) {
     if (module == null || module.isBlank()) module = "runelite-client";
     if (!SourceManifestContract.isSafeModule(module)) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
-          "source module identity is invalid");
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, "source module identity is invalid");
     }
     if (relativePath.equals(module) || relativePath.startsWith(module + "/")) {
       return relativePath;
@@ -504,27 +587,31 @@ public class Micro6SourceManifestClient {
   private void enforceEnvironment(JsonNode manifest) {
     String environment = trust.getEnvironment();
     if (environment.isBlank()) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_ACCESS_DENIED,
-          "source environment is not configured");
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_ACCESS_DENIED, "source environment is not configured");
     }
     JsonNode declared = manifest == null ? null : manifest.get("environment");
     String expected = environment.trim();
-    if (declared == null || !declared.isTextual() || !expected.equals(declared.textValue().trim())) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
+    if (declared == null
+        || !declared.isTextual()
+        || !expected.equals(declared.textValue().trim())) {
+      throw sourceError(
+          SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "source environment identity differs from the configured environment");
     }
   }
 
   private static void rejectTerminalStatus(String status) {
     if (status == null || "AVAILABLE".equals(status)) return;
-    SourceManifestFailureCode code = switch (status) {
-      case "INDEX_PARTIAL" -> SourceManifestFailureCode.SOURCE_INDEX_PARTIAL;
-      case "UNAVAILABLE" -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
-      case "REDACTED" -> SourceManifestFailureCode.SOURCE_REDACTED;
-      case "PRUNED" -> SourceManifestFailureCode.SOURCE_PRUNED;
-      case "GENERATED_ONLY" -> SourceManifestFailureCode.SOURCE_GENERATED_ONLY;
-      default -> SourceManifestFailureCode.SOURCE_MANIFEST_INVALID;
-    };
+    SourceManifestFailureCode code =
+        switch (status) {
+          case "INDEX_PARTIAL" -> SourceManifestFailureCode.SOURCE_INDEX_PARTIAL;
+          case "UNAVAILABLE" -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
+          case "REDACTED" -> SourceManifestFailureCode.SOURCE_REDACTED;
+          case "PRUNED" -> SourceManifestFailureCode.SOURCE_PRUNED;
+          case "GENERATED_ONLY" -> SourceManifestFailureCode.SOURCE_GENERATED_ONLY;
+          default -> SourceManifestFailureCode.SOURCE_MANIFEST_INVALID;
+        };
     throw sourceError(code, "source manifest is not available");
   }
 
@@ -532,7 +619,9 @@ public class Micro6SourceManifestClient {
     return switch (code) {
       case SOURCE_ACCESS_DENIED -> org.springframework.http.HttpStatus.UNAUTHORIZED;
       case SOURCE_PRUNED -> org.springframework.http.HttpStatus.GONE;
-      case SOURCE_REDACTED, SOURCE_FILE_NOT_FOUND, SOURCE_SYMBOL_NOT_FOUND,
+      case SOURCE_REDACTED,
+          SOURCE_FILE_NOT_FOUND,
+          SOURCE_SYMBOL_NOT_FOUND,
           SOURCE_UNAVAILABLE -> org.springframework.http.HttpStatus.NOT_FOUND;
       case SOURCE_NETWORK_UNAVAILABLE -> org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE;
       case SOURCE_RATE_LIMITED -> org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
@@ -552,7 +641,8 @@ public class Micro6SourceManifestClient {
     return null;
   }
 
-  private static String nestedText(JsonNode node, String object, String field, String... alternatives) {
+  private static String nestedText(
+      JsonNode node, String object, String field, String... alternatives) {
     JsonNode nested = node == null ? null : node.get(object);
     return text(nested, field, alternatives);
   }
@@ -570,13 +660,15 @@ public class Micro6SourceManifestClient {
     }
   }
 
-  private static SourceManifestException sourceError(SourceManifestFailureCode code, String message) {
+  private static SourceManifestException sourceError(
+      SourceManifestFailureCode code, String message) {
     return new SourceManifestException(code, message);
   }
 
   private static SourceManifestException sourceError(
       SourceManifestFailureCode code, String message, Throwable cause) {
-    return new SourceManifestException(code, org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY, message, cause);
+    return new SourceManifestException(
+        code, org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY, message, cause);
   }
 
   public record SourceRequest(
@@ -585,13 +677,17 @@ public class Micro6SourceManifestClient {
       String symbolName,
       String symbolId,
       TaskSourceManifestVerifier.ExpectedIdentity expectedIdentity) {
-    public SourceRequest(String taskKey, String entryClassName, String symbolName,
+    public SourceRequest(
+        String taskKey,
+        String entryClassName,
+        String symbolName,
         TaskSourceManifestVerifier.ExpectedIdentity expectedIdentity) {
       this(taskKey, entryClassName, symbolName, null, expectedIdentity);
     }
   }
 
-  public record PinnedFile(String fileId, String relativePath, String contentHash, long sizeBytes) {}
+  public record PinnedFile(
+      String fileId, String relativePath, String contentHash, long sizeBytes) {}
 
   public record SourceBinding(
       String clientBuildId,
@@ -613,13 +709,39 @@ public class Micro6SourceManifestClient {
       String artifactDigest,
       boolean signatureVerified) {
     /** Source-compatible constructor for callers that only have the original prototype fields. */
-    public SourceBinding(String clientBuildId, String sourceSnapshotId, String sourceManifestHash,
-        String fileId, String relativePath, String cloneRelativePath, String contentHash,
-        int startLine, int endLine, String preimageHash, String source, String manifestJson,
+    public SourceBinding(
+        String clientBuildId,
+        String sourceSnapshotId,
+        String sourceManifestHash,
+        String fileId,
+        String relativePath,
+        String cloneRelativePath,
+        String contentHash,
+        int startLine,
+        int endLine,
+        String preimageHash,
+        String source,
+        String manifestJson,
         Map<String, PinnedFile> pinnedFiles) {
-      this(clientBuildId, sourceSnapshotId, sourceManifestHash, fileId, relativePath,
-          cloneRelativePath, contentHash, startLine, endLine, preimageHash, source, manifestJson,
-          pinnedFiles, null, clientBuildId, null, null, false);
+      this(
+          clientBuildId,
+          sourceSnapshotId,
+          sourceManifestHash,
+          fileId,
+          relativePath,
+          cloneRelativePath,
+          contentHash,
+          startLine,
+          endLine,
+          preimageHash,
+          source,
+          manifestJson,
+          pinnedFiles,
+          null,
+          clientBuildId,
+          null,
+          null,
+          false);
     }
   }
 }

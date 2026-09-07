@@ -13,21 +13,20 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 /**
  * Canonical JSON for the identity-bearing SC-810 source contract.
  *
- * <p>This is intentionally separate from the application's historical generic JSON hasher.
- * Source identity preserves string contents byte-for-byte, including line endings, while still
- * rejecting malformed UTF-8, duplicate keys, trailing values, floating-point numbers, and invalid
- * Unicode. Object keys are ordered by their UTF-8 bytes and array order is preserved.
+ * <p>This is intentionally separate from the application's historical generic JSON hasher. Source
+ * identity preserves string contents byte-for-byte, including line endings, while still rejecting
+ * malformed UTF-8, duplicate keys, trailing values, floating-point numbers, and invalid Unicode.
+ * Object keys are ordered by their UTF-8 bytes and array order is preserved.
  */
 public final class SourceManifestCanonicalJson {
-  private static final ObjectMapper MAPPER = new ObjectMapper()
-      .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+  private static final ObjectMapper MAPPER =
+      new ObjectMapper().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
   private static final Comparator<String> UTF8_ORDER = SourceManifestCanonicalJson::compareUtf8;
 
   private SourceManifestCanonicalJson() {}
@@ -59,8 +58,7 @@ public final class SourceManifestCanonicalJson {
   }
 
   public static String canonical(JsonNode node, String excludedRootField) {
-    return canonical(node, excludedRootField == null
-        ? Set.of() : Set.of(excludedRootField));
+    return canonical(node, excludedRootField == null ? Set.of() : Set.of(excludedRootField));
   }
 
   public static String canonical(JsonNode node, Set<String> excludedRootFields) {
@@ -101,10 +99,12 @@ public final class SourceManifestCanonicalJson {
     }
     ObjectNode object = JsonNodeFactory.instance.objectNode();
     List<String> keys = new ArrayList<>();
-    node.fieldNames().forEachRemaining(key -> {
-      validateUnicode(key);
-      keys.add(key);
-    });
+    node.fieldNames()
+        .forEachRemaining(
+            key -> {
+              validateUnicode(key);
+              keys.add(key);
+            });
     keys.sort(UTF8_ORDER);
     for (String key : keys) object.set(key, normalize(node.get(key)));
     return object;
@@ -113,7 +113,8 @@ public final class SourceManifestCanonicalJson {
   private static void validateNumbers(JsonNode node) {
     if (node == null) return;
     if (node.isFloatingPointNumber() || (node.isNumber() && !node.canConvertToLong())) {
-      throw new IllegalArgumentException("Floating-point or out-of-range source number is not allowed");
+      throw new IllegalArgumentException(
+          "Floating-point or out-of-range source number is not allowed");
     }
     if (node.isTextual()) validateUnicode(node.textValue());
     if (node.isContainerNode()) {
@@ -140,15 +141,17 @@ public final class SourceManifestCanonicalJson {
     byte[] rightBytes = right.getBytes(StandardCharsets.UTF_8);
     int limit = Math.min(leftBytes.length, rightBytes.length);
     for (int index = 0; index < limit; index++) {
-      int comparison = Integer.compare(Byte.toUnsignedInt(leftBytes[index]),
-          Byte.toUnsignedInt(rightBytes[index]));
+      int comparison =
+          Integer.compare(
+              Byte.toUnsignedInt(leftBytes[index]), Byte.toUnsignedInt(rightBytes[index]));
       if (comparison != 0) return comparison;
     }
     return Integer.compare(leftBytes.length, rightBytes.length);
   }
 
   private static String strictUtf8(byte[] bytes) throws CharacterCodingException {
-    return StandardCharsets.UTF_8.newDecoder()
+    return StandardCharsets.UTF_8
+        .newDecoder()
         .onMalformedInput(CodingErrorAction.REPORT)
         .onUnmappableCharacter(CodingErrorAction.REPORT)
         .decode(ByteBuffer.wrap(bytes))

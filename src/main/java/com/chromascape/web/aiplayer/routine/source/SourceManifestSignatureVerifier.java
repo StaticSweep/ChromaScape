@@ -1,7 +1,6 @@
 package com.chromascape.web.aiplayer.routine.source;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.Signature;
@@ -25,13 +24,16 @@ public final class SourceManifestSignatureVerifier {
 
   public static SourceManifestSignatureVerifier fromX509Base64(
       String publicKeyBase64, String expectedKeyId) {
-    if (publicKeyBase64 == null || publicKeyBase64.isBlank()
-        || expectedKeyId == null || expectedKeyId.isBlank()) {
+    if (publicKeyBase64 == null
+        || publicKeyBase64.isBlank()
+        || expectedKeyId == null
+        || expectedKeyId.isBlank()) {
       return null;
     }
     try {
-      PublicKey key = KeyFactory.getInstance("Ed25519")
-          .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyBase64)));
+      PublicKey key =
+          KeyFactory.getInstance("Ed25519")
+              .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyBase64)));
       return new SourceManifestSignatureVerifier(key, expectedKeyId);
     } catch (Exception exception) {
       throw new SourceManifestException(

@@ -9,8 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Durable worker-claim and result-persistence for the isolated candidate build. All mutations are
  * transactional and optimistic-locking; only a {@code BUILD_QUEUED} record can be claimed, only the
- * claiming worker may heartbeat or persist results, and {@code build()} can never begin from
- * {@code APPROVED}.
+ * claiming worker may heartbeat or persist results, and {@code build()} can never begin from {@code
+ * APPROVED}.
  */
 @Service
 public class PatchCandidateBuildDispatcher {
@@ -24,8 +24,8 @@ public class PatchCandidateBuildDispatcher {
   }
 
   /**
-   * Claims a queued build in a new transaction. Returns the worker attempt id, or {@code null}
-   * when the record is not claimable (already building, already terminal, or missing).
+   * Claims a queued build in a new transaction. Returns the worker attempt id, or {@code null} when
+   * the record is not claimable (already building, already terminal, or missing).
    */
   @Transactional
   public String claim(String id, Instant leaseExpiry) {
@@ -47,7 +47,8 @@ public class PatchCandidateBuildDispatcher {
   @Transactional
   public boolean heartbeat(String id, String attemptId, Instant leaseExpiry) {
     PatchCandidateRun entity = locked(id);
-    if (entity == null || !"BUILDING".equals(entity.getState())
+    if (entity == null
+        || !"BUILDING".equals(entity.getState())
         || !attemptId.equals(entity.getWorkerAttemptId())) {
       return false;
     }
@@ -58,17 +59,18 @@ public class PatchCandidateBuildDispatcher {
 
   /** Persists a terminal build result in a new transaction. */
   @Transactional
-  public boolean persistBuildResult(String id, String attemptId, IsolatedPatchWorker.BuildResult result,
-      String resultJson) {
+  public boolean persistBuildResult(
+      String id, String attemptId, IsolatedPatchWorker.BuildResult result, String resultJson) {
     PatchCandidateRun entity = locked(id);
-    if (entity == null || !"BUILDING".equals(entity.getState())
+    if (entity == null
+        || !"BUILDING".equals(entity.getState())
         || !attemptId.equals(entity.getWorkerAttemptId())) {
       return false;
     }
     entity.setWorkerCompletedAt(Instant.now());
     entity.setWorkerLeaseExpiresAt(null);
-    entity.setLastFailureCode(boundedFailureCode(
-        result == null ? "BUILD_FAILED" : result.failureCode()));
+    entity.setLastFailureCode(
+        boundedFailureCode(result == null ? "BUILD_FAILED" : result.failureCode()));
     entity.setResultJson(resultJson);
     entity.setState(result != null && "BUILT".equals(result.status()) ? "BUILT" : "BUILD_FAILED");
     repository.save(entity);
@@ -79,7 +81,8 @@ public class PatchCandidateBuildDispatcher {
   @Transactional
   public boolean persistFailure(String id, String attemptId, String code) {
     PatchCandidateRun entity = locked(id);
-    if (entity == null || !"BUILDING".equals(entity.getState())
+    if (entity == null
+        || !"BUILDING".equals(entity.getState())
         || !attemptId.equals(entity.getWorkerAttemptId())) {
       return false;
     }
@@ -88,8 +91,7 @@ public class PatchCandidateBuildDispatcher {
     String failureCode = code == null ? "BUILD_FAILED" : code;
     entity.setLastFailureCode(boundedFailureCode(failureCode));
     entity.setState("BUILD_FAILED");
-    entity.setResultJson("{\"status\":\"FAILED\",\"failure_code\":\""
-        + failureCode + "\"}");
+    entity.setResultJson("{\"status\":\"FAILED\",\"failure_code\":\"" + failureCode + "\"}");
     repository.save(entity);
     return true;
   }
@@ -101,10 +103,21 @@ public class PatchCandidateBuildDispatcher {
    * Requires the candidate to still be {@code BUILT}; a stale state is never overwritten.
    */
   @Transactional
-  public boolean commitRegistration(String id, String candidateId, String candidateHash,
-      String manifestJson, String finalIdentityJson, String stagingDirectory, String requestHash,
-      String registrationAttemptId, String manifestFileHash, String jarSha256, long jarSize,
-      String sbomSha256, long sbomSize, String certificationDocumentHash) {
+  public boolean commitRegistration(
+      String id,
+      String candidateId,
+      String candidateHash,
+      String manifestJson,
+      String finalIdentityJson,
+      String stagingDirectory,
+      String requestHash,
+      String registrationAttemptId,
+      String manifestFileHash,
+      String jarSha256,
+      long jarSize,
+      String sbomSha256,
+      long sbomSize,
+      String certificationDocumentHash) {
     PatchCandidateRun entity = locked(id);
     if (entity == null || !"BUILT".equals(entity.getState())) {
       return false;

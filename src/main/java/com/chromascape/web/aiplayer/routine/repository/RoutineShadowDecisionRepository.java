@@ -5,7 +5,11 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface RoutineShadowDecisionRepository extends JpaRepository<RoutineShadowDecision, Long> {
+public interface RoutineShadowDecisionRepository
+    extends JpaRepository<RoutineShadowDecision, Long> {
   List<RoutineShadowDecision> findByShadowRunIdOrderByDecisionOrdinal(String shadowRunId);
-  Optional<RoutineShadowDecision> findByShadowRunIdAndSourceEventKindAndSourceBatchSequenceAndSourceEventIndex(String shadowRunId, String kind, int sequence, int index);
+
+  Optional<RoutineShadowDecision>
+      findByShadowRunIdAndSourceEventKindAndSourceBatchSequenceAndSourceEventIndex(
+          String shadowRunId, String kind, int sequence, int index);
 }

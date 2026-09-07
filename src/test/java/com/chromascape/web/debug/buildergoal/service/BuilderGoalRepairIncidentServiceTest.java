@@ -43,9 +43,8 @@ class BuilderGoalRepairIncidentServiceTest {
     iteration.setSourceType("builder_goal");
     iteration.setStatus(PatchLoopStatus.RUNNING_SCRIPT);
     iteration.setRunSessionId("session-1");
-    when(
-            iterationRepository.findFirstBySourceTypeAndRunSessionIdOrderByCreatedAtDesc(
-                "builder_goal", "session-1"))
+    when(iterationRepository.findFirstBySourceTypeAndRunSessionIdOrderByCreatedAtDesc(
+            "builder_goal", "session-1"))
         .thenReturn(Optional.of(iteration));
   }
 

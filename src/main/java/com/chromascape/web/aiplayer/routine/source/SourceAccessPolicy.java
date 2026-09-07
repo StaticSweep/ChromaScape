@@ -3,7 +3,6 @@ package com.chromascape.web.aiplayer.routine.source;
 import com.chromascape.web.config.SourceTrustProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -27,7 +26,7 @@ public class SourceAccessPolicy {
   }
 
   /**
-   * Authorizes one debugger request and validates its complete audit context.  Header values are
+   * Authorizes one debugger request and validates its complete audit context. Header values are
    * never used as selectors; they only establish the identity and environment of the request.
    */
   public String authorize(
@@ -37,13 +36,17 @@ public class SourceAccessPolicy {
       String actor,
       String requestPurpose,
       String correlationId) {
-    if (purpose == null || requestPurpose == null
+    if (purpose == null
+        || requestPurpose == null
         || !purpose.wireValue().equals(requestPurpose)
-        || environment == null || trust == null
+        || environment == null
+        || trust == null
         || trust.getEnvironment().isBlank()
         || !trust.getEnvironment().equals(environment.trim())
-        || actor == null || !actor.matches(ACTOR_PATTERN)
-        || correlationId == null || !correlationId.matches(CORRELATION_PATTERN)) {
+        || actor == null
+        || !actor.matches(ACTOR_PATTERN)
+        || correlationId == null
+        || !correlationId.matches(CORRELATION_PATTERN)) {
       throw new SourceManifestException(
           SourceManifestFailureCode.SOURCE_AUDIT_CONTEXT_INVALID,
           HttpStatus.BAD_REQUEST,
@@ -74,15 +77,22 @@ public class SourceAccessPolicy {
         left.getBytes(StandardCharsets.UTF_8), right.getBytes(StandardCharsets.UTF_8));
   }
 
-  private static String normalize(String value) { return value == null ? "" : value.trim(); }
+  private static String normalize(String value) {
+    return value == null ? "" : value.trim();
+  }
 
   public enum Purpose {
-    METADATA("manifest-read"), CONTENT("file-read");
+    METADATA("manifest-read"),
+    CONTENT("file-read");
 
     private final String wireValue;
 
-    Purpose(String wireValue) { this.wireValue = wireValue; }
+    Purpose(String wireValue) {
+      this.wireValue = wireValue;
+    }
 
-    public String wireValue() { return wireValue; }
+    public String wireValue() {
+      return wireValue;
+    }
   }
 }

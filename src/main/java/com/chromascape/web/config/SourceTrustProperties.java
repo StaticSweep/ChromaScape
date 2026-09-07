@@ -9,8 +9,10 @@ import org.springframework.stereotype.Component;
 public class SourceTrustProperties {
   /** X.509 SubjectPublicKeyInfo, Base64-encoded, for the trusted Ed25519 producer key. */
   private String publicKeyBase64 = "";
+
   /** Exact producer key identifier accepted by the verifier. */
   private String publicKeyId = "";
+
   /** Exact environment in which the selected ChromaScape instance is operating. */
   private String environment = "";
 

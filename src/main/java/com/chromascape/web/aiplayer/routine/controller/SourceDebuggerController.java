@@ -25,9 +25,7 @@ public class SourceDebuggerController {
   private final SourceReadAuditService audit;
 
   public SourceDebuggerController(
-      SourceDebuggerReadService service,
-      SourceAccessPolicy access,
-      SourceReadAuditService audit) {
+      SourceDebuggerReadService service, SourceAccessPolicy access, SourceReadAuditService audit) {
     this.service = service;
     this.access = access;
     this.audit = audit;
@@ -41,11 +39,22 @@ public class SourceDebuggerController {
       @RequestHeader(value = "X-Source-Actor", required = false) String actor,
       @RequestHeader(value = "X-Source-Purpose", required = false) String purpose,
       @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
-    RequestContext context = authorize(runId, null, authorization, environment, actor, purpose,
-        correlationId, SourceAccessPolicy.Purpose.METADATA, "manifest");
-    return withCorrelation(context.correlationId(), () -> {
-      return ResponseEntity.ok(service.manifest(runId, context.actor()));
-    });
+    RequestContext context =
+        authorize(
+            runId,
+            null,
+            authorization,
+            environment,
+            actor,
+            purpose,
+            correlationId,
+            SourceAccessPolicy.Purpose.METADATA,
+            "manifest");
+    return withCorrelation(
+        context.correlationId(),
+        () -> {
+          return ResponseEntity.ok(service.manifest(runId, context.actor()));
+        });
   }
 
   @GetMapping("/runs/{runId}/files/{fileId}")
@@ -57,11 +66,22 @@ public class SourceDebuggerController {
       @RequestHeader(value = "X-Source-Actor", required = false) String actor,
       @RequestHeader(value = "X-Source-Purpose", required = false) String purpose,
       @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
-    RequestContext context = authorize(runId, fileId, authorization, environment, actor, purpose,
-        correlationId, SourceAccessPolicy.Purpose.CONTENT, "file");
-    return withCorrelation(context.correlationId(), () -> {
-      return ResponseEntity.ok(service.file(runId, fileId, context.actor()));
-    });
+    RequestContext context =
+        authorize(
+            runId,
+            fileId,
+            authorization,
+            environment,
+            actor,
+            purpose,
+            correlationId,
+            SourceAccessPolicy.Purpose.CONTENT,
+            "file");
+    return withCorrelation(
+        context.correlationId(),
+        () -> {
+          return ResponseEntity.ok(service.file(runId, fileId, context.actor()));
+        });
   }
 
   @GetMapping("/runs/{runId}/symbols")
@@ -75,11 +95,22 @@ public class SourceDebuggerController {
       @RequestHeader(value = "X-Source-Actor", required = false) String actor,
       @RequestHeader(value = "X-Source-Purpose", required = false) String purpose,
       @RequestHeader(value = "X-Correlation-ID", required = false) String correlationId) {
-    RequestContext context = authorize(runId, fileId, authorization, environment, actor, purpose,
-        correlationId, SourceAccessPolicy.Purpose.METADATA, "symbols");
-    return withCorrelation(context.correlationId(), () -> {
-      return ResponseEntity.ok(service.symbols(runId, fileId, page, limit, context.actor()));
-    });
+    RequestContext context =
+        authorize(
+            runId,
+            fileId,
+            authorization,
+            environment,
+            actor,
+            purpose,
+            correlationId,
+            SourceAccessPolicy.Purpose.METADATA,
+            "symbols");
+    return withCorrelation(
+        context.correlationId(),
+        () -> {
+          return ResponseEntity.ok(service.symbols(runId, fileId, page, limit, context.actor()));
+        });
   }
 
   private RequestContext authorize(
@@ -93,31 +124,46 @@ public class SourceDebuggerController {
       SourceAccessPolicy.Purpose expectedPurpose,
       String operation) {
     try {
-      String authorizedActor = access.authorize(
-          authorization, expectedPurpose, environment, actor, purpose, correlationId);
+      String authorizedActor =
+          access.authorize(
+              authorization, expectedPurpose, environment, actor, purpose, correlationId);
       return new RequestContext(authorizedActor, correlationId);
     } catch (SourceManifestException exception) {
       audit.record(
-          auditActor(actor), operation, auditRun(runId), null, null, null, auditFile(fileId),
-          exception.code().name(), auditCorrelation(correlationId));
+          auditActor(actor),
+          operation,
+          auditRun(runId),
+          null,
+          null,
+          null,
+          auditFile(fileId),
+          exception.code().name(),
+          auditCorrelation(correlationId));
       throw exception;
     }
   }
 
   @ExceptionHandler(SourceManifestException.class)
   public ResponseEntity<Object> sourceError(SourceManifestException exception) {
-    return ResponseEntity.status(exception.status()).body(Map.of(
-        "schema", "source-error/v1",
-        "code", exception.code().name(),
-        "message", exception.getMessage() == null ? "source request failed" : exception.getMessage()));
+    return ResponseEntity.status(exception.status())
+        .body(
+            Map.of(
+                "schema",
+                "source-error/v1",
+                "code",
+                exception.code().name(),
+                "message",
+                exception.getMessage() == null ? "source request failed" : exception.getMessage()));
   }
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<Object> unexpectedSourceError(Exception exception) {
-    return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE).body(Map.of(
-        "schema", "source-error/v1",
-        "code", "SOURCE_UNAVAILABLE",
-        "message", "source request is unavailable"));
+    return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+        .body(
+            Map.of(
+                "schema", "source-error/v1",
+                "code", "SOURCE_UNAVAILABLE",
+                "message", "source request is unavailable"));
   }
 
   private static <T> T withCorrelation(String value, Supplier<T> action) {

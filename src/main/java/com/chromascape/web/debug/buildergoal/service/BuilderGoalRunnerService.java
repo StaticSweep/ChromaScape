@@ -245,7 +245,10 @@ public class BuilderGoalRunnerService {
     if (!canonicalTaskKey.equals(normalized.taskKey())) {
       normalized =
           new NormalizedPayload(
-              canonicalTaskKey, normalized.displayName(), normalized.settings(), normalized.world());
+              canonicalTaskKey,
+              normalized.displayName(),
+              normalized.settings(),
+              normalized.world());
     }
     return buildImportResponse(normalized, catalogTask, catalogSnapshot);
   }
@@ -415,7 +418,7 @@ public class BuilderGoalRunnerService {
                   selectedAccount.accountHash(),
                   firstNonBlank(selectedAccount.launchProfileName(), selectedAccount.displayName()),
                   selectedAccount.email(),
-                  selectedAccount.password(),
+                  resolveLaunchPassword(selectedAccount),
                   world,
                   launcherMachineUuid,
                   null,
@@ -678,7 +681,10 @@ public class BuilderGoalRunnerService {
     if (!canonicalTaskKey.equals(normalized.taskKey())) {
       normalized =
           new NormalizedPayload(
-              canonicalTaskKey, normalized.displayName(), normalized.settings(), normalized.world());
+              canonicalTaskKey,
+              normalized.displayName(),
+              normalized.settings(),
+              normalized.world());
     }
     BuilderGoalAccountCatalogService.AccountDefinition selectedAccount =
         resolveSelectedAccount(accountId);
@@ -803,9 +809,9 @@ public class BuilderGoalRunnerService {
   }
 
   /**
-   * Converts an unexpected controller-bound start failure into the stable, credential-free
-   * response contract. The richer persisted recovery path can replace this compatibility method
-   * without changing the controller API.
+   * Converts an unexpected controller-bound start failure into the stable, credential-free response
+   * contract. The richer persisted recovery path can replace this compatibility method without
+   * changing the controller API.
    */
   public BuilderGoalStartException recordStartFailure(
       JsonNode payload,
@@ -1063,13 +1069,7 @@ public class BuilderGoalRunnerService {
       throw new IllegalArgumentException("TARGET_OVERRIDE_NOT_ALLOWED");
     }
     return publishOnly(
-        accountId,
-        launcherMachineUuid,
-        taskKey,
-        settings,
-        world,
-        allowLaunchFallback,
-        provenance);
+        accountId, launcherMachineUuid, taskKey, settings, world, allowLaunchFallback, provenance);
   }
 
   private void queuePendingLaunch(String iterationId) {
@@ -1175,7 +1175,7 @@ public class BuilderGoalRunnerService {
                   selectedAccount.accountHash(),
                   firstNonBlank(selectedAccount.launchProfileName(), selectedAccount.displayName()),
                   selectedAccount.email(),
-                  selectedAccount.password(),
+                  resolveLaunchPassword(selectedAccount),
                   intValue(taskMetadata.get("world")),
                   launcherMachineUuid,
                   null,
@@ -1201,14 +1201,14 @@ public class BuilderGoalRunnerService {
       Map<String, Object> storedSettings =
           taskMetadata.get("settings") instanceof Map<?, ?> settingsMap
               ? new LinkedHashMap<>(
-                  objectMapper.convertValue(settingsMap, new TypeReference<Map<String, Object>>() {}))
+                  objectMapper.convertValue(
+                      settingsMap, new TypeReference<Map<String, Object>>() {}))
               : new LinkedHashMap<>();
-      String storedTaskKey = firstNonBlank(stringValue(taskMetadata.get("task_key")), iteration.getScriptName());
+      String storedTaskKey =
+          firstNonBlank(stringValue(taskMetadata.get("task_key")), iteration.getScriptName());
       CatalogValidationResult asyncCatalogValidation =
           resolvePublishCatalogValidation(
-              storedTaskKey,
-              preparationResult.targetClient().advertisedBaseUrl(),
-              storedSettings);
+              storedTaskKey, preparationResult.targetClient().advertisedBaseUrl(), storedSettings);
       if (asyncCatalogValidation.rejectPublish()) {
         applyCatalogValidationMetadata(iteration, asyncCatalogValidation);
         Map<String, Object> invalidPublish = readPublishMetadata(taskMetadata);
@@ -2172,7 +2172,8 @@ public class BuilderGoalRunnerService {
     } else {
       mutationService.recordControlRequested(iterationId, entryId, action);
     }
-    PatchLoopIteration updated = iterationRepository.findByIterationId(iterationId).orElse(iteration);
+    PatchLoopIteration updated =
+        iterationRepository.findByIterationId(iterationId).orElse(iteration);
     Map<String, Object> response = new LinkedHashMap<>();
     response.put("success", true);
     response.put("action", action.toUpperCase(Locale.ENGLISH));
@@ -2579,7 +2580,11 @@ public class BuilderGoalRunnerService {
       String reason =
           "Micro6 /health no longer matches the selected registry client identity, world, process, or launch attempt";
       refreshTargetPreparationFromHealth(
-          iteration, taskMetadata, healthResult, Micro6TargetRelaunchService.PHASE_WAITING_FOR_ACCOUNT, reason);
+          iteration,
+          taskMetadata,
+          healthResult,
+          Micro6TargetRelaunchService.PHASE_WAITING_FOR_ACCOUNT,
+          reason);
       throw new PublishDeferredException(
           Micro6TargetRelaunchService.PHASE_WAITING_FOR_ACCOUNT, reason);
     }
@@ -2687,10 +2692,22 @@ public class BuilderGoalRunnerService {
         updates.put("account_hash_scheme", textValue(rawHealth.path("account_hash_scheme")));
         updates.put("requested_world", intValue(rawHealth.path("requested_world")));
         updates.put("current_world", intValue(rawHealth.path("current_world")));
-        updates.put("world_matched", rawHealth.path("world_matched").isBoolean() ? rawHealth.path("world_matched").asBoolean() : null);
-        updates.put("pathfinder_ready", rawHealth.path("pathfinder_ready").isBoolean() ? rawHealth.path("pathfinder_ready").asBoolean() : null);
+        updates.put(
+            "world_matched",
+            rawHealth.path("world_matched").isBoolean()
+                ? rawHealth.path("world_matched").asBoolean()
+                : null);
+        updates.put(
+            "pathfinder_ready",
+            rawHealth.path("pathfinder_ready").isBoolean()
+                ? rawHealth.path("pathfinder_ready").asBoolean()
+                : null);
         updates.put("script_lifecycle_state", textValue(rawHealth.path("script_lifecycle_state")));
-        updates.put("script_loop_alive", rawHealth.path("script_loop_alive").isBoolean() ? rawHealth.path("script_loop_alive").asBoolean() : null);
+        updates.put(
+            "script_loop_alive",
+            rawHealth.path("script_loop_alive").isBoolean()
+                ? rawHealth.path("script_loop_alive").asBoolean()
+                : null);
       }
     }
     mergeTargetPreparationMetadata(taskMetadata, updates);
@@ -2720,8 +2737,9 @@ public class BuilderGoalRunnerService {
         expectedWorld != null
             && expectedWorld.equals(requestedWorld)
             && expectedWorld.equals(currentWorld);
-    String expectedAttempt = firstNonBlank(
-        stringValue(target.get("launch_attempt_id")), stringValue(target.get("attempt_id")));
+    String expectedAttempt =
+        firstNonBlank(
+            stringValue(target.get("launch_attempt_id")), stringValue(target.get("attempt_id")));
     String actualAttempt = textValue(raw.path("launch_attempt_id"));
     Integer expectedPid = intValue(target.get("process_id"));
     Integer actualPid = intValue(raw.path("process_id"));
@@ -2732,9 +2750,8 @@ public class BuilderGoalRunnerService {
         && expectedWorld.equals(requestedWorld)
         && expectedWorld.equals(currentWorld)
         && worldMatched
-        && Boolean.FALSE.equals(raw.path("dispatch_hold").isBoolean()
-            ? raw.path("dispatch_hold").asBoolean()
-            : null)
+        && Boolean.FALSE.equals(
+            raw.path("dispatch_hold").isBoolean() ? raw.path("dispatch_hold").asBoolean() : null)
         && "accountbuilder_ready".equalsIgnoreCase(textValue(raw.path("startup_state")))
         && "logged_in".equalsIgnoreCase(textValue(raw.path("login_state")))
         && raw.path("pathfinder_ready").isBoolean()
@@ -3267,7 +3284,8 @@ public class BuilderGoalRunnerService {
     if (aliases.isArray()) {
       for (JsonNode alias : aliases) {
         String aliasValue =
-            firstNonBlank(textValue(alias.path("normalized_alias")), textValue(alias.path("alias")));
+            firstNonBlank(
+                textValue(alias.path("normalized_alias")), textValue(alias.path("alias")));
         if (aliasValue == null || !normalizeTaskKey(aliasValue).equals(normalizedTarget)) {
           continue;
         }
@@ -3375,7 +3393,8 @@ public class BuilderGoalRunnerService {
     metadata.put("source", "builder_goal_runner");
     metadata.put("settings", normalized.settings());
     metadata.put("requires_settings_receipt", true);
-    metadata.put("settings_sha256", CanonicalSettingsHasher.sha256(objectMapper, normalized.settings()));
+    metadata.put(
+        "settings_sha256", CanonicalSettingsHasher.sha256(objectMapper, normalized.settings()));
     metadata.put("settings_validation", "UNVALIDATED");
     metadata.put("world", normalized.world());
     if (targetMetadata != null && !targetMetadata.isEmpty()) {
@@ -3525,13 +3544,10 @@ public class BuilderGoalRunnerService {
     }
 
     boolean hadCachedCatalog =
-        hasCatalogPayload(targetCatalog)
-            || hasCatalogPayload(cachedTargetCatalog);
+        hasCatalogPayload(targetCatalog) || hasCatalogPayload(cachedTargetCatalog);
     if (hadCachedCatalog) {
       return CatalogValidationResult.reject(
-          "TASK_NOT_FOUND",
-          "Task is not present in the selected Micro6 catalog: " + taskKey,
-          null);
+          "TASK_NOT_FOUND", "Task is not present in the selected Micro6 catalog: " + taskKey, null);
     }
 
     return settings != null && !settings.isEmpty()
@@ -3570,12 +3586,13 @@ public class BuilderGoalRunnerService {
           "SETTINGS_SCHEMA_UNAVAILABLE", "The selected task settings schema is malformed", task);
     }
     Map<String, JsonNode> definitions = new LinkedHashMap<>();
-    fields.forEach(field -> {
-      String key = textValue(field.path("key"));
-      if (key != null) {
-        definitions.put(key, field);
-      }
-    });
+    fields.forEach(
+        field -> {
+          String key = textValue(field.path("key"));
+          if (key != null) {
+            definitions.put(key, field);
+          }
+        });
     Map<String, Object> effectiveSettings = settings == null ? Map.of() : settings;
     for (Map.Entry<String, JsonNode> definitionEntry : definitions.entrySet()) {
       if (definitionEntry.getValue().path("required").asBoolean(false)
@@ -3595,10 +3612,13 @@ public class BuilderGoalRunnerService {
       }
       JsonNode value = objectMapper.valueToTree(entry.getValue());
       String type = definition.path("type").asText("").toLowerCase(Locale.ENGLISH);
-      if (!Set.of("boolean", "integer", "number", "string", "text", "select", "enum", "multi_select")
+      if (!Set.of(
+              "boolean", "integer", "number", "string", "text", "select", "enum", "multi_select")
           .contains(type)) {
         return CatalogValidationResult.reject(
-            "INVALID_SETTINGS:TYPE", "Task setting has an unsupported type: " + entry.getKey(), task);
+            "INVALID_SETTINGS:TYPE",
+            "Task setting has an unsupported type: " + entry.getKey(),
+            task);
       }
       if (("integer".equals(type) && !value.isIntegralNumber())
           || ("number".equals(type) && !value.isNumber())) {
@@ -3628,8 +3648,7 @@ public class BuilderGoalRunnerService {
           || "enum".equals(type)
           || definition.path("options").isArray()
           || definition.path("options_by_dependency").isObject()) {
-        Set<String> allowedOptions =
-            schemaOptionValues(definition, effectiveSettings, definitions);
+        Set<String> allowedOptions = schemaOptionValues(definition, effectiveSettings, definitions);
         if (allowedOptions == null
             || !value.isTextual()
             || allowedOptions.isEmpty()
@@ -3641,8 +3660,7 @@ public class BuilderGoalRunnerService {
         }
       }
       if ("multi_select".equals(type)) {
-        Set<String> allowedOptions =
-            schemaOptionValues(definition, effectiveSettings, definitions);
+        Set<String> allowedOptions = schemaOptionValues(definition, effectiveSettings, definitions);
         if (allowedOptions == null || allowedOptions.isEmpty()) {
           return CatalogValidationResult.reject(
               "INVALID_SETTINGS:ENUM",
@@ -3661,11 +3679,15 @@ public class BuilderGoalRunnerService {
       if (value.isNumber()) {
         if (definition.has("min") && value.asDouble() < definition.path("min").asDouble()) {
           return CatalogValidationResult.reject(
-              "INVALID_SETTINGS:BOUNDS", "Task setting is below its minimum: " + entry.getKey(), task);
+              "INVALID_SETTINGS:BOUNDS",
+              "Task setting is below its minimum: " + entry.getKey(),
+              task);
         }
         if (definition.has("max") && value.asDouble() > definition.path("max").asDouble()) {
           return CatalogValidationResult.reject(
-              "INVALID_SETTINGS:BOUNDS", "Task setting exceeds its maximum: " + entry.getKey(), task);
+              "INVALID_SETTINGS:BOUNDS",
+              "Task setting exceeds its maximum: " + entry.getKey(),
+              task);
         }
       }
     }
@@ -3688,7 +3710,8 @@ public class BuilderGoalRunnerService {
       if (dependencyValue == null) {
         JsonNode dependencyDefinition = definitions.get(dependencyKey);
         if (dependencyDefinition != null && dependencyDefinition.has("default")) {
-          dependencyValue = objectMapper.convertValue(dependencyDefinition.get("default"), Object.class);
+          dependencyValue =
+              objectMapper.convertValue(dependencyDefinition.get("default"), Object.class);
         }
       }
       if (dependencyValue == null) {
@@ -3709,11 +3732,12 @@ public class BuilderGoalRunnerService {
       return values;
     }
     if (options.isArray()) {
-      options.forEach(option -> {
-        if (option.isTextual()) {
-          values.add(option.asText());
-        }
-      });
+      options.forEach(
+          option -> {
+            if (option.isTextual()) {
+              values.add(option.asText());
+            }
+          });
     }
     return values;
   }
@@ -3742,7 +3766,8 @@ public class BuilderGoalRunnerService {
     }
     JsonNode catalogTask = catalogValidation.catalogTask();
     if (catalogTask != null && catalogTask.isObject()) {
-      taskMetadata.put("settings_schema_version", textValue(catalogTask.path("settings_schema_version")));
+      taskMetadata.put(
+          "settings_schema_version", textValue(catalogTask.path("settings_schema_version")));
       taskMetadata.put("settings_schema_hash", textValue(catalogTask.path("settings_schema_hash")));
     }
     iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
@@ -5349,9 +5374,8 @@ public class BuilderGoalRunnerService {
    * published to. Requires the client to be online AND on the requested world with a live
    * AccountBuilder loop; a wrong-world or stopped-script client is never selected.
    */
-  private List<Micro6OnlineClientRegistryService.TargetClient>
-      findDispatchReadyClientsForAccount(
-          BuilderGoalAccountCatalogService.AccountDefinition account, Integer expectedWorld) {
+  private List<Micro6OnlineClientRegistryService.TargetClient> findDispatchReadyClientsForAccount(
+      BuilderGoalAccountCatalogService.AccountDefinition account, Integer expectedWorld) {
     if (account == null) {
       return List.of();
     }
@@ -5374,8 +5398,7 @@ public class BuilderGoalRunnerService {
     target.put("requested_account_id", account.accountId());
     target.put("requested_account_hash", account.accountHash());
     target.put(
-        "requested_account_name",
-        firstNonBlank(account.accountName(), account.displayName()));
+        "requested_account_name", firstNonBlank(account.accountName(), account.displayName()));
     target.put("account_hash_scheme", AccountIdentityContract.HASH_SCHEME);
     if (machine != null) {
       target.put("requested_launcher_machine_uuid", machine.machineUuid());
@@ -5403,9 +5426,7 @@ public class BuilderGoalRunnerService {
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("account_id", account.accountId());
     metadata.put("account_hash", account.accountHash());
-    metadata.put(
-        "account_hash_scheme",
-        account.accountHashScheme());
+    metadata.put("account_hash_scheme", account.accountHashScheme());
     metadata.put("account_name", firstNonBlank(account.accountName(), account.displayName()));
     metadata.put("launch_profile_name", account.launchProfileName());
     metadata.put("launcher_account_id", account.accountId());
@@ -5442,8 +5463,31 @@ public class BuilderGoalRunnerService {
     }
     return accountCatalogService
         .findAccount(accountId)
-        .map(BuilderGoalAccountCatalogService.AccountDefinition::password)
+        .map(this::resolveLaunchPassword)
         .orElse(null);
+  }
+
+  /**
+   * Resolves the plaintext launch password for an account, at launch time only.
+   *
+   * <p>Launcher control strips secrets from the account list payload, so {@link
+   * BuilderGoalAccountCatalogService.AccountDefinition#password()} only returns a value for
+   * fixtures that inline one. When launcher control declares a stored password, the authoritative
+   * value comes from the no-store reveal endpoint instead. Never call this while building the
+   * account catalog: it is served to the debug UI and must not carry credentials.
+   */
+  private String resolveLaunchPassword(BuilderGoalAccountCatalogService.AccountDefinition account) {
+    if (account == null) {
+      return null;
+    }
+    String inlinePassword = account.password();
+    if (inlinePassword != null) {
+      return inlinePassword;
+    }
+    if (!account.hasPassword()) {
+      return null;
+    }
+    return launcherControlService.revealAccountPassword(account.accountHash());
   }
 
   private BuilderGoalLauncherControlService.LauncherMachine resolveSelectedMachine(

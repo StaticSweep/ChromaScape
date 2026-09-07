@@ -16,7 +16,15 @@ public final class SourceManifestContract {
   public static final int MAX_SYMBOLS = 100_000;
   public static final int MAX_CLOSURE_EDGES = 50_000;
   public static final int MAX_GENERATED_MAPPINGS = 10_000;
+
+  /**
+   * Bounded wire size for an authoritative manifest. A production Fishing closure currently
+   * contains roughly two thousand files and twenty-seven thousand symbols, so its canonical
+   * manifest is about 15.3 MB. Keep the transport bound above that valid producer output while
+   * retaining a hard cap against unbounded upstream responses.
+   */
   public static final int MAX_MANIFEST_BYTES = 20_000_000;
+
   public static final long MAX_FILE_BYTES = 10_000_000L;
   public static final long MAX_CLOSURE_BYTES = 100_000_000L;
   public static final Pattern SNAPSHOT_ID = Pattern.compile("srcsnap_[0-9a-f]{24}");
@@ -52,7 +60,8 @@ public final class SourceManifestContract {
   public static byte[] canonicalHashBytes(JsonNode manifest) {
     ObjectNode copy = requireObject(manifest).deepCopy();
     HASH_FIELDS.forEach(copy::remove);
-    return SourceManifestCanonicalJson.canonical(copy, HASH_FIELDS).getBytes(StandardCharsets.UTF_8);
+    return SourceManifestCanonicalJson.canonical(copy, HASH_FIELDS)
+        .getBytes(StandardCharsets.UTF_8);
   }
 
   /** Canonical bytes signed by the producer after the checksum and snapshot ID are populated. */
@@ -95,7 +104,9 @@ public final class SourceManifestContract {
       if (Character.isISOControl(path.charAt(index))) return false;
     }
     for (String segment : path.split("/", -1)) {
-      if (segment.isBlank() || ".".equals(segment) || "..".equals(segment)
+      if (segment.isBlank()
+          || ".".equals(segment)
+          || "..".equals(segment)
           || segment.contains("\u0000")) return false;
     }
     return true;
@@ -112,18 +123,36 @@ public final class SourceManifestContract {
   /** Deterministic file identity used by both producer and consumer. */
   public static String fileId(String relativePath, String contentHash) {
     if (!isSafeRelativePath(relativePath) || !isHash(contentHash)) return null;
-    return "file_" + hex(SourceManifestCanonicalJson.digest(
-        (relativePath + "\u0000" + contentHash).getBytes(StandardCharsets.UTF_8)), 32);
+    return "file_"
+        + hex(
+            SourceManifestCanonicalJson.digest(
+                (relativePath + "\u0000" + contentHash).getBytes(StandardCharsets.UTF_8)),
+            32);
   }
 
   /** Deterministic symbol identity used by both producer and consumer. */
   public static String symbolId(
-      String relativePath, String kind, String qualifiedName, String signature,
-      int startByte, int endByte) {
+      String relativePath,
+      String kind,
+      String qualifiedName,
+      String signature,
+      int startByte,
+      int endByte) {
     if (!isSafeRelativePath(relativePath) || kind == null || qualifiedName == null) return null;
-    String value = relativePath + "|" + kind + "|" + qualifiedName + "|"
-        + (signature == null ? "" : signature) + "|" + startByte + "|" + endByte;
-    return "sym_" + hex(SourceManifestCanonicalJson.digest(value.getBytes(StandardCharsets.UTF_8)), 32);
+    String value =
+        relativePath
+            + "|"
+            + kind
+            + "|"
+            + qualifiedName
+            + "|"
+            + (signature == null ? "" : signature)
+            + "|"
+            + startByte
+            + "|"
+            + endByte;
+    return "sym_"
+        + hex(SourceManifestCanonicalJson.digest(value.getBytes(StandardCharsets.UTF_8)), 32);
   }
 
   private static String hex(byte[] bytes, int length) {

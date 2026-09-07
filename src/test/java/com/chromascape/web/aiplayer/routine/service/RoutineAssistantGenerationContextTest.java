@@ -28,12 +28,12 @@ import org.junit.jupiter.api.Test;
  * Pins the asynchronous proposal generator away from {@code @Lob} entities.
  *
  * <p>The generator runs on its own executor: no transaction, no open session, connection in
- * auto-commit. {@code RoutineAssistantConversation.generationMessage} and
- * {@code BehaviorGraphDefinition.identityJson} are both mapped {@code @Lob}, which failed twice
- * over -- loading the conversation threw "Unable to access lob stream", and the graph lookup's
- * {@code like} predicate threw "Large Objects may not be used in auto-commit mode". Each was caught
- * and written as a silent {@code generation.failed}, leaving the acceptance driver to poll a dead
- * conversation for its full 1800 s timeout.
+ * auto-commit. {@code RoutineAssistantConversation.generationMessage} and {@code
+ * BehaviorGraphDefinition.identityJson} are both mapped {@code @Lob}, which failed twice over --
+ * loading the conversation threw "Unable to access lob stream", and the graph lookup's {@code like}
+ * predicate threw "Large Objects may not be used in auto-commit mode". Each was caught and written
+ * as a silent {@code generation.failed}, leaving the acceptance driver to poll a dead conversation
+ * for its full 1800 s timeout.
  */
 class RoutineAssistantGenerationContextTest {
 
@@ -81,8 +81,7 @@ class RoutineAssistantGenerationContextTest {
     context.put("run_id", "run_1");
     context.put("graph_id", "graph_0123456789abcdef01234567");
     context.put(
-        "graph_hash",
-        "sha256:0000000000000000000000000000000000000000000000000000000000000000");
+        "graph_hash", "sha256:0000000000000000000000000000000000000000000000000000000000000000");
     when(store.generationContext("conv_1")).thenReturn(context);
     when(store.beginGeneration(anyString(), anyString(), anyString())).thenReturn("token_1");
     when(store.appendGenerationEvent(anyString(), anyString(), anyString(), anyString()))

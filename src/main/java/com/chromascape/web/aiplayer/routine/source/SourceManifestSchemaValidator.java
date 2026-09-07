@@ -13,14 +13,13 @@ import org.springframework.core.io.ClassPathResource;
 /**
  * The strict wire-schema gate for authoritative source manifests.
  *
- * <p>This is deliberately a separate first-stage validator.  Semantic checks must never be used
- * to make an unknown-property or wrong-shape document look like a valid v1 manifest.  The schema
- * is checked in with the application and has {@code additionalProperties: false} at every
- * contract object boundary.
+ * <p>This is deliberately a separate first-stage validator. Semantic checks must never be used to
+ * make an unknown-property or wrong-shape document look like a valid v1 manifest. The schema is
+ * checked in with the application and has {@code additionalProperties: false} at every contract
+ * object boundary.
  */
 public final class SourceManifestSchemaValidator {
-  public static final String RESOURCE =
-      "contracts/source/task-source-manifest-v1.schema.json";
+  public static final String RESOURCE = "contracts/source/task-source-manifest-v1.schema.json";
 
   private static final JsonSchema SCHEMA = load();
 
@@ -52,8 +51,7 @@ public final class SourceManifestSchemaValidator {
       // validation strict and relax only the schema-document identifier format; all instance
       // fields and additional-property rules remain enforced by the loaded schema.
       config.setSchemaIdValidator((id, rootSchema, baseLocation, idLocation, context) -> true);
-      JsonSchemaFactory factory =
-          JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
+      JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
       try (InputStream input = new ClassPathResource(RESOURCE).getInputStream()) {
         return factory.getSchema(input, config);
       }

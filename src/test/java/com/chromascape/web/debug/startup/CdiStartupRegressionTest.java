@@ -18,15 +18,15 @@ import org.springframework.test.context.ActiveProfiles;
  * Regression for the SC-1103 startup blocker.
  *
  * <p>Both {@link SourceDebuggerReadService} and {@link BuilderGoalRepairIncidentService} expose a
- * production constructor plus a package-private test-only convenience constructor. If Spring can
- * no longer resolve a single unambiguous constructor it fails with "No default constructor found"
- * and the whole context fails to refresh, exactly as seen in chroma_bootrun.log. This test fails
- * in that case, and also proves the {@code @Autowired} production constructor was selected so no
+ * production constructor plus a package-private test-only convenience constructor. If Spring can no
+ * longer resolve a single unambiguous constructor it fails with "No default constructor found" and
+ * the whole context fails to refresh, exactly as seen in chroma_bootrun.log. This test fails in
+ * that case, and also proves the {@code @Autowired} production constructor was selected so no
  * alternate (test-only) constructor silently drops a required collaborator.
  *
- * <p>RANDOM_PORT is used so the embedded servlet container registers the JSR-356
- * {@code ServerContainer} that {@code WebSocketConfig#createWebSocketContainer} requires, matching
- * how the application actually runs on port 8090.
+ * <p>RANDOM_PORT is used so the embedded servlet container registers the JSR-356 {@code
+ * ServerContainer} that {@code WebSocketConfig#createWebSocketContainer} requires, matching how the
+ * application actually runs on port 8090.
  */
 @SpringBootTest(
     classes = com.chromascape.web.ChromaScapeApplication.class,
@@ -36,7 +36,9 @@ class CdiStartupRegressionTest {
 
   @Autowired private ApplicationContext context;
 
-  /** The logging handler is outside this constructor regression and absent from the test profile. */
+  /**
+   * The logging handler is outside this constructor regression and absent from the test profile.
+   */
   @MockBean private LogWebSocketHandler logWebSocketHandler;
 
   @Test

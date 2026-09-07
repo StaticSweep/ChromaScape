@@ -97,9 +97,13 @@ public class Micro6OnlineClientRegistryService {
     return Optional.of(toTargetClient(state, false));
   }
 
-  /** Canonical generic executor readiness check; selected-account identity is checked separately. */
+  /**
+   * Canonical generic executor readiness check; selected-account identity is checked separately.
+   */
   public boolean isDispatchReady(TargetClient client) {
-    if (client == null || client.advertisedBaseUrl() == null || client.advertisedBaseUrl().isBlank()) {
+    if (client == null
+        || client.advertisedBaseUrl() == null
+        || client.advertisedBaseUrl().isBlank()) {
       return false;
     }
     boolean worldMatched =
@@ -107,20 +111,20 @@ public class Micro6OnlineClientRegistryService {
             && client.currentWorld() != null
             && client.requestedWorld().equals(client.currentWorld());
     return Micro6ExecutorReadinessEvaluator.evaluate(
-            client.dispatchHold(),
-            client.dispatchHoldReason(),
-            client.startupState(),
-            client.loginState(),
-            null,
-            null,
-            null,
-            worldMatched,
-            client.requestedWorld(),
-            client.currentWorld(),
-            Boolean.TRUE.equals(client.pathfinderReady()),
-            Boolean.TRUE.equals(client.scriptLoopAlive()),
-            client.scriptLifecycleState())
-        .publishReady()
+                client.dispatchHold(),
+                client.dispatchHoldReason(),
+                client.startupState(),
+                client.loginState(),
+                null,
+                null,
+                null,
+                worldMatched,
+                client.requestedWorld(),
+                client.currentWorld(),
+                Boolean.TRUE.equals(client.pathfinderReady()),
+                Boolean.TRUE.equals(client.scriptLoopAlive()),
+                client.scriptLifecycleState())
+            .publishReady()
         // world_matched is retained for diagnostics, but it may have been computed for an older
         // launch request. The observed requested/current values are the authoritative readiness
         // evidence for this registry snapshot.
@@ -144,7 +148,8 @@ public class Micro6OnlineClientRegistryService {
         && AccountIdentityContract.isCanonicalHash(expectedAccountHash)
         && AccountIdentityContract.isCanonicalHash(client.requestedAccountHash())
         && AccountIdentityContract.matchesCanonicalHash(client.accountHash(), expectedAccountHash)
-        && AccountIdentityContract.matchesCanonicalHash(client.requestedAccountHash(), expectedAccountHash)
+        && AccountIdentityContract.matchesCanonicalHash(
+            client.requestedAccountHash(), expectedAccountHash)
         && client.requestedWorld() != null
         && client.currentWorld() != null
         && client.requestedWorld().equals(client.currentWorld());
@@ -210,7 +215,8 @@ public class Micro6OnlineClientRegistryService {
     if (expectedWorld == null || expectedWorld <= 0) {
       return List.of();
     }
-    if (accountHash != null && !accountHash.isBlank()
+    if (accountHash != null
+        && !accountHash.isBlank()
         && !AccountIdentityContract.isCanonicalHash(accountHash)) {
       return List.of();
     }
@@ -225,9 +231,7 @@ public class Micro6OnlineClientRegistryService {
         .filter(state -> expectedWorld.equals(state.requestedWorld))
         .filter(state -> expectedWorld.equals(state.currentWorld))
         .filter(
-            state ->
-                (accountHash != null && !accountHash.isBlank())
-                    || safeForNameFallback(state))
+            state -> (accountHash != null && !accountHash.isBlank()) || safeForNameFallback(state))
         .filter(
             state ->
                 accountHash == null
@@ -263,7 +267,9 @@ public class Micro6OnlineClientRegistryService {
    * Compatibility lookup for diagnostics callers that do not have a selected world. It can never
    * select a dispatch target because readiness requires the current launch's expected world.
    */
-  /** @deprecated Dispatch selection must always provide the expected world. */
+  /**
+   * @deprecated Dispatch selection must always provide the expected world.
+   */
   @Deprecated
   public Optional<TargetClient> findDispatchReadyClientForRecovery(
       String accountHash, String accountName, Integer expectedPort, Instant seenAfter) {
@@ -408,7 +414,8 @@ public class Micro6OnlineClientRegistryService {
         state.accountHash, state.requestedAccountHash)) {
       return "Actual account hash does not match requested account hash";
     }
-    if (state.requestedWorld == null || state.currentWorld == null
+    if (state.requestedWorld == null
+        || state.currentWorld == null
         || !state.requestedWorld.equals(state.currentWorld)) {
       return "Actual world does not match expected world";
     }
@@ -435,20 +442,20 @@ public class Micro6OnlineClientRegistryService {
             && state.currentWorld != null
             && state.requestedWorld.equals(state.currentWorld);
     return Micro6ExecutorReadinessEvaluator.evaluate(
-            state.dispatchHold,
-            state.dispatchHoldReason,
-            state.startupState,
-            state.loginState,
-            null,
-            null,
-            null,
-            worldMatched,
-            state.requestedWorld,
-            state.currentWorld,
-            Boolean.TRUE.equals(state.pathfinderReady),
-            Boolean.TRUE.equals(state.scriptLoopAlive),
-            state.scriptLifecycleState)
-        .publishReady()
+                state.dispatchHold,
+                state.dispatchHoldReason,
+                state.startupState,
+                state.loginState,
+                null,
+                null,
+                null,
+                worldMatched,
+                state.requestedWorld,
+                state.currentWorld,
+                Boolean.TRUE.equals(state.pathfinderReady),
+                Boolean.TRUE.equals(state.scriptLoopAlive),
+                state.scriptLifecycleState)
+            .publishReady()
         && state.clientId != null
         && !state.clientId.isBlank()
         && state.launchAttemptId != null
@@ -752,7 +759,6 @@ public class Micro6OnlineClientRegistryService {
           accountHashScheme,
           null);
     }
-
   }
 
   private static class ClientState {

@@ -1,11 +1,11 @@
 package com.chromascape.web.aiplayer.routine.source;
 
-import com.chromascape.web.config.SourceTrustProperties;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.chromascape.web.config.SourceTrustProperties;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
@@ -16,16 +16,44 @@ class SourceAccessAndCacheTest {
     trust.setEnvironment("production");
     SourceAccessPolicy policy = new SourceAccessPolicy("metadata", "content", trust);
 
-    assertEquals("actor", policy.authorize("Bearer metadata", SourceAccessPolicy.Purpose.METADATA,
-        "production", "actor", "manifest-read", "corr-1"));
-    assertEquals("actor", policy.authorize("Bearer content", SourceAccessPolicy.Purpose.CONTENT,
-        "production", "actor", "file-read", "corr-2"));
-    assertThrows(SourceManifestException.class,
-        () -> policy.authorize("Bearer content", SourceAccessPolicy.Purpose.METADATA,
-            "production", "actor", "manifest-read", "corr-3"));
-    assertThrows(SourceManifestException.class,
-        () -> policy.authorize("Bearer metadata", SourceAccessPolicy.Purpose.CONTENT,
-            "production", "actor", "file-read", "corr-4"));
+    assertEquals(
+        "actor",
+        policy.authorize(
+            "Bearer metadata",
+            SourceAccessPolicy.Purpose.METADATA,
+            "production",
+            "actor",
+            "manifest-read",
+            "corr-1"));
+    assertEquals(
+        "actor",
+        policy.authorize(
+            "Bearer content",
+            SourceAccessPolicy.Purpose.CONTENT,
+            "production",
+            "actor",
+            "file-read",
+            "corr-2"));
+    assertThrows(
+        SourceManifestException.class,
+        () ->
+            policy.authorize(
+                "Bearer content",
+                SourceAccessPolicy.Purpose.METADATA,
+                "production",
+                "actor",
+                "manifest-read",
+                "corr-3"));
+    assertThrows(
+        SourceManifestException.class,
+        () ->
+            policy.authorize(
+                "Bearer metadata",
+                SourceAccessPolicy.Purpose.CONTENT,
+                "production",
+                "actor",
+                "file-read",
+                "corr-4"));
   }
 
   @Test
@@ -43,7 +71,8 @@ class SourceAccessAndCacheTest {
 
     assertTrue(cache.sizeBytes() <= 5);
     assertEquals(1, cache.size());
-    assertThrows(SourceManifestException.class,
+    assertThrows(
+        SourceManifestException.class,
         () -> cache.put(firstHash, "different".getBytes(StandardCharsets.UTF_8)));
   }
 }

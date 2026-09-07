@@ -18,10 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Owns compare-and-set transitions after candidate work has left the request thread.
  *
- * <p>In particular, REGISTERED is not a normal state update: the candidate row and the run
- * identity are locked and changed by this class in one database transaction. A conflict is
- * recorded as a durable candidate failure inside that transaction, so a run can never claim a
- * candidate whose registration state was not committed.
+ * <p>In particular, REGISTERED is not a normal state update: the candidate row and the run identity
+ * are locked and changed by this class in one database transaction. A conflict is recorded as a
+ * durable candidate failure inside that transaction, so a run can never claim a candidate whose
+ * registration state was not committed.
  */
 @Service
 public class PatchCandidateRegistrationDispatcher {
@@ -48,7 +48,9 @@ public class PatchCandidateRegistrationDispatcher {
   /** Applies a locked candidate transition and returns the managed row's committed view. */
   @Transactional
   public PatchCandidateRun transition(
-      String proposalId, String targetState, Map<String, Object> suppliedResult,
+      String proposalId,
+      String targetState,
+      Map<String, Object> suppliedResult,
       RegistryEvidence evidence) {
     PatchCandidateRun candidate = candidates.findWithLockByProposalId(proposalId).orElse(null);
     if (candidate == null) return null;
@@ -84,10 +86,14 @@ public class PatchCandidateRegistrationDispatcher {
   /** Applies a result only if the caller still owns the registration lease. */
   @Transactional
   public PatchCandidateRun transitionClaimed(
-      String proposalId, String attemptId, String targetState,
-      Map<String, Object> suppliedResult, RegistryEvidence evidence) {
+      String proposalId,
+      String attemptId,
+      String targetState,
+      Map<String, Object> suppliedResult,
+      RegistryEvidence evidence) {
     PatchCandidateRun candidate = candidates.findWithLockByProposalId(proposalId).orElse(null);
-    if (candidate == null || attemptId == null
+    if (candidate == null
+        || attemptId == null
         || !Objects.equals(attemptId, candidate.getRegistrationAttemptId())
         || (!REGISTERING.equals(candidate.getState())
             && !REGISTERING_UNCERTAIN.equals(candidate.getState()))) {
@@ -97,8 +103,11 @@ public class PatchCandidateRegistrationDispatcher {
   }
 
   private PatchCandidateRun transitionLocked(
-      PatchCandidateRun candidate, String targetState, Map<String, Object> suppliedResult,
-      RegistryEvidence evidence, String attemptId) {
+      PatchCandidateRun candidate,
+      String targetState,
+      Map<String, Object> suppliedResult,
+      RegistryEvidence evidence,
+      String attemptId) {
     if (attemptId != null && !Objects.equals(attemptId, candidate.getRegistrationAttemptId())) {
       return candidate;
     }
@@ -123,8 +132,10 @@ public class PatchCandidateRegistrationDispatcher {
         // This save intentionally happens in the same transaction as the locked checks. No run
         // mutation occurs before all validation succeeds, so the failed candidate is durable while
         // the run remains unchanged.
-        String code = conflict.getMessage() == null || conflict.getMessage().isBlank()
-            ? "CANDIDATE_RUN_IDENTITY_CONFLICT" : conflict.getMessage();
+        String code =
+            conflict.getMessage() == null || conflict.getMessage().isBlank()
+                ? "CANDIDATE_RUN_IDENTITY_CONFLICT"
+                : conflict.getMessage();
         candidate.setState("FAILED");
         candidate.setLastFailureCode(code.substring(0, Math.min(160, code.length())));
         result.put("registered", false);
@@ -146,7 +157,8 @@ public class PatchCandidateRegistrationDispatcher {
   @Transactional
   public boolean requeueExpiredBuild(String proposalId, Instant now) {
     PatchCandidateRun candidate = candidates.findWithLockByProposalId(proposalId).orElse(null);
-    if (candidate == null || !"BUILDING".equals(candidate.getState())
+    if (candidate == null
+        || !"BUILDING".equals(candidate.getState())
         || candidate.getWorkerLeaseExpiresAt() == null
         || candidate.getWorkerLeaseExpiresAt().isAfter(now)) {
       return false;
@@ -162,8 +174,10 @@ public class PatchCandidateRegistrationDispatcher {
   public record RegistrationClaim(String attemptId, String state) {}
 
   private void commitRegistered(PatchCandidateRun candidate) throws Exception {
-    if (candidate.getCandidateId() == null || candidate.getCandidateHash() == null
-        || candidate.getManifestFileHash() == null || candidate.getJarSha256() == null
+    if (candidate.getCandidateId() == null
+        || candidate.getCandidateHash() == null
+        || candidate.getManifestFileHash() == null
+        || candidate.getJarSha256() == null
         || candidate.getCertificationDocumentHash() == null
         || candidate.getRegistryResponseHash() == null
         || candidate.getRegistryManifestHash() == null
@@ -175,8 +189,10 @@ public class PatchCandidateRegistrationDispatcher {
       throw new IllegalStateException("REGISTRY_MANIFEST_HASH_HEADER_MISMATCH");
     }
     if (!candidate.getManifestFileHash().equals(candidate.getRegistryLookupHash())
-        || candidate.getRegistryResponseBytes() == null || candidate.getRegistryLookupBytes() == null
-        || !java.util.Arrays.equals(candidate.getRegistryResponseBytes(), candidate.getRegistryLookupBytes())) {
+        || candidate.getRegistryResponseBytes() == null
+        || candidate.getRegistryLookupBytes() == null
+        || !java.util.Arrays.equals(
+            candidate.getRegistryResponseBytes(), candidate.getRegistryLookupBytes())) {
       throw new IllegalStateException("REGISTRY_LOOKUP_MANIFEST_MISMATCH");
     }
     if (!candidate.getJarSha256().equals(candidate.getRegistryDownloadHash())) {
@@ -185,21 +201,26 @@ public class PatchCandidateRegistrationDispatcher {
     if (candidate.getFinalIdentityJson() == null || candidate.getFinalIdentityJson().isBlank()) {
       throw new IllegalStateException("CANDIDATE_FINAL_IDENTITY_MISSING");
     }
-    CurrentSliceIdentity finalIdentity = identities.validate(
-        mapper.readValue(candidate.getFinalIdentityJson(), CurrentSliceIdentity.class));
-    if (finalIdentity.run() == null || finalIdentity.run().runId() == null
+    CurrentSliceIdentity finalIdentity =
+        identities.validate(
+            mapper.readValue(candidate.getFinalIdentityJson(), CurrentSliceIdentity.class));
+    if (finalIdentity.run() == null
+        || finalIdentity.run().runId() == null
         || finalIdentity.candidate() == null) {
       throw new IllegalStateException("CANDIDATE_FINAL_IDENTITY_INVALID");
     }
     if (!candidate.getCandidateId().equals(finalIdentity.candidate().candidateId())
         || !candidate.getCandidateHash().equals(finalIdentity.candidate().candidateHash())
-        || !candidate.getCertificationDocumentHash().equals(finalIdentity.candidate().certificationHash())) {
+        || !candidate
+            .getCertificationDocumentHash()
+            .equals(finalIdentity.candidate().certificationHash())) {
       throw new IllegalStateException("CANDIDATE_FINAL_IDENTITY_MISMATCH");
     }
-    CurrentSliceRun run = runs.findWithLockByRunId(finalIdentity.run().runId())
-        .orElseThrow(() -> new IllegalStateException("CANDIDATE_RUN_NOT_FOUND"));
-    CurrentSliceIdentity current = identities.validate(
-        mapper.readValue(run.getIdentityJson(), CurrentSliceIdentity.class));
+    CurrentSliceRun run =
+        runs.findWithLockByRunId(finalIdentity.run().runId())
+            .orElseThrow(() -> new IllegalStateException("CANDIDATE_RUN_NOT_FOUND"));
+    CurrentSliceIdentity current =
+        identities.validate(mapper.readValue(run.getIdentityJson(), CurrentSliceIdentity.class));
     current.requireSameIdentity(finalIdentity);
     run.setIdentityJson(mapper.writeValueAsString(finalIdentity));
     run.setStage("CANDIDATE_REGISTERED");
@@ -218,16 +239,21 @@ public class PatchCandidateRegistrationDispatcher {
     if (evidence.manifestHash() != null) candidate.setRegistryManifestHash(evidence.manifestHash());
     if (evidence.lookupResponseBytes() != null) {
       candidate.setRegistryLookupBytes(evidence.lookupResponseBytes());
-      candidate.setRegistryLookupHash(evidence.lookupManifestHash() == null
-          ? CandidateRegistryClient.hash(evidence.lookupResponseBytes()) : evidence.lookupManifestHash());
+      candidate.setRegistryLookupHash(
+          evidence.lookupManifestHash() == null
+              ? CandidateRegistryClient.hash(evidence.lookupResponseBytes())
+              : evidence.lookupManifestHash());
     }
     if (evidence.downloadHash() != null) candidate.setRegistryDownloadHash(evidence.downloadHash());
-    candidate.setRegistryVerifiedAt(evidence.verifiedAt() == null ? Instant.now() : evidence.verifiedAt());
+    candidate.setRegistryVerifiedAt(
+        evidence.verifiedAt() == null ? Instant.now() : evidence.verifiedAt());
   }
 
   private static boolean isTerminal(String state) {
-    return "REGISTERED".equals(state) || "REJECTED".equals(state)
-        || "FAILED".equals(state) || "BUILD_FAILED".equals(state);
+    return "REGISTERED".equals(state)
+        || "REJECTED".equals(state)
+        || "FAILED".equals(state)
+        || "BUILD_FAILED".equals(state);
   }
 
   private String write(Map<String, Object> value) {
@@ -246,10 +272,22 @@ public class PatchCandidateRegistrationDispatcher {
       Instant verifiedAt,
       byte[] lookupResponseBytes,
       String lookupManifestHash) {
-    public RegistryEvidence(byte[] rawResponseBytes, String responseBody, String manifestHash,
-        String downloadHash, Instant verifiedAt) {
-      this(rawResponseBytes, responseBody, manifestHash, downloadHash, verifiedAt, rawResponseBytes, manifestHash);
+    public RegistryEvidence(
+        byte[] rawResponseBytes,
+        String responseBody,
+        String manifestHash,
+        String downloadHash,
+        Instant verifiedAt) {
+      this(
+          rawResponseBytes,
+          responseBody,
+          manifestHash,
+          downloadHash,
+          verifiedAt,
+          rawResponseBytes,
+          manifestHash);
     }
+
     public RegistryEvidence {
       rawResponseBytes = rawResponseBytes == null ? null : rawResponseBytes.clone();
       lookupResponseBytes = lookupResponseBytes == null ? null : lookupResponseBytes.clone();

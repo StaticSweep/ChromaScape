@@ -19,24 +19,42 @@ class SourceConfigurationValidatorTest {
   void publicKeyEnvironmentEndpointAndCredentialsAreMandatory() throws Exception {
     SourceTrustProperties missingKey = validTrust();
     missingKey.setPublicKeyBase64("");
-    IllegalStateException keyFailure = assertThrows(IllegalStateException.class,
-        () -> validator(missingKey).validate());
+    IllegalStateException keyFailure =
+        assertThrows(IllegalStateException.class, () -> validator(missingKey).validate());
     assertTrue(keyFailure.getMessage().contains("public-key-base64"));
 
     SourceTrustProperties unsafeEnvironment = validTrust();
     unsafeEnvironment.setEnvironment("../production");
-    IllegalStateException environmentFailure = assertThrows(IllegalStateException.class,
-        () -> validator(unsafeEnvironment).validate());
+    IllegalStateException environmentFailure =
+        assertThrows(IllegalStateException.class, () -> validator(unsafeEnvironment).validate());
     assertTrue(environmentFailure.getMessage().contains("environment"));
 
-    IllegalStateException endpointFailure = assertThrows(IllegalStateException.class,
-        () -> new SourceConfigurationValidator(validTrust(), "file:///checkout", "upstream",
-            "chromascape-web", "metadata", "content").validate());
+    IllegalStateException endpointFailure =
+        assertThrows(
+            IllegalStateException.class,
+            () ->
+                new SourceConfigurationValidator(
+                        validTrust(),
+                        "file:///checkout",
+                        "upstream",
+                        "chromascape-web",
+                        "metadata",
+                        "content")
+                    .validate());
     assertTrue(endpointFailure.getMessage().contains("base-url"));
 
-    IllegalStateException tokenFailure = assertThrows(IllegalStateException.class,
-        () -> new SourceConfigurationValidator(validTrust(), "https://micro6.example", "",
-            "chromascape-web", "metadata", "content").validate());
+    IllegalStateException tokenFailure =
+        assertThrows(
+            IllegalStateException.class,
+            () ->
+                new SourceConfigurationValidator(
+                        validTrust(),
+                        "https://micro6.example",
+                        "",
+                        "chromascape-web",
+                        "metadata",
+                        "content")
+                    .validate());
     assertTrue(tokenFailure.getMessage().contains("auth-token"));
   }
 
@@ -49,8 +67,8 @@ class SourceConfigurationValidatorTest {
     KeyPairGenerator rsa = KeyPairGenerator.getInstance("RSA");
     rsa.initialize(2048);
     SourceTrustProperties rsaTrust = validTrust();
-    rsaTrust.setPublicKeyBase64(Base64.getEncoder().encodeToString(
-        rsa.generateKeyPair().getPublic().getEncoded()));
+    rsaTrust.setPublicKeyBase64(
+        Base64.getEncoder().encodeToString(rsa.generateKeyPair().getPublic().getEncoded()));
     assertThrows(IllegalStateException.class, () -> validator(rsaTrust).validate());
   }
 
@@ -60,9 +78,17 @@ class SourceConfigurationValidatorTest {
     unsafeKeyId.setPublicKeyId("../key");
     assertThrows(IllegalStateException.class, () -> validator(unsafeKeyId).validate());
 
-    assertThrows(IllegalStateException.class, () ->
-        new SourceConfigurationValidator(validTrust(), "https://micro6.example", "upstream",
-            "../actor", "metadata", "content").validate());
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            new SourceConfigurationValidator(
+                    validTrust(),
+                    "https://micro6.example",
+                    "upstream",
+                    "../actor",
+                    "metadata",
+                    "content")
+                .validate());
   }
 
   private static SourceTrustProperties validTrust() throws Exception {
@@ -76,7 +102,12 @@ class SourceConfigurationValidatorTest {
 
   private static SourceConfigurationValidator validator(SourceTrustProperties trust)
       throws Exception {
-    return new SourceConfigurationValidator(trust, "https://micro6.example", "upstream-token",
-        "chromascape-web", "metadata-token", "content-token");
+    return new SourceConfigurationValidator(
+        trust,
+        "https://micro6.example",
+        "upstream-token",
+        "chromascape-web",
+        "metadata-token",
+        "content-token");
   }
 }

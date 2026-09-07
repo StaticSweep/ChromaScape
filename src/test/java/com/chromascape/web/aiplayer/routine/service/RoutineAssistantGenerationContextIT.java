@@ -26,9 +26,9 @@ import org.springframework.test.context.ActiveProfiles;
  *
  * <p>They did not. Every one of them was mapped {@code @Lob} on a {@code String} field, which on
  * PostgreSQL makes Hibernate write the document into {@code pg_largeobject} and store only the
- * object id — a row whose identity is a multi-kilobyte document literally held the text
- * {@code "95342"}. Three SC-968 acceptance runs on 2026-08-28 failed on the consequences: "Unable
- * to access lob stream" reading one off a transaction, then "Large Objects may not be used in
+ * object id — a row whose identity is a multi-kilobyte document literally held the text {@code
+ * "95342"}. Three SC-968 acceptance runs on 2026-08-28 failed on the consequences: "Unable to
+ * access lob stream" reading one off a transaction, then "Large Objects may not be used in
  * auto-commit mode" and "cannot execute lo_creat() in a read-only transaction" from a {@code like}
  * predicate, which matched nothing in any case because it compared against the object id. SQL over
  * these columns was silently wrong wherever it existed, and no large object was ever unlinked.
@@ -37,8 +37,8 @@ import org.springframework.test.context.ActiveProfiles;
  * Flyway declaration always said, and {@code V28__sc968_inline_json_large_objects.sql} brings
  * existing rows over. A mocked repository cannot express any of this, so these run for real.
  *
- * <p>Requires the local test PostgreSQL at {@code localhost:5433/chromascape_test}, matching
- * {@code application-test.yml} and the existing {@link Sc967FlywaySchemaTest} setup.
+ * <p>Requires the local test PostgreSQL at {@code localhost:5433/chromascape_test}, matching {@code
+ * application-test.yml} and the existing {@link Sc967FlywaySchemaTest} setup.
  */
 // A real servlet container, not the default MOCK environment: WebSocketConfig's
 // createWebSocketContainer bean needs jakarta.websocket.server.ServerContainer in the
@@ -94,7 +94,8 @@ class RoutineAssistantGenerationContextIT {
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try {
       Future<Map<String, Object>> future =
-          executor.submit((Callable<Map<String, Object>>) () -> store.generationContext(conversationId));
+          executor.submit(
+              (Callable<Map<String, Object>>) () -> store.generationContext(conversationId));
       Map<String, Object> context = future.get();
 
       assertThat(context).containsEntry("run_id", runId);
@@ -159,12 +160,14 @@ class RoutineAssistantGenerationContextIT {
       }
     }
   }
+
   @Test
   void aDocumentLargerThanAnyVarcharBoundRoundTrips() {
     // The first attempt at removing @Lob used @JdbcTypeCode(SqlTypes.LONGVARCHAR), which the
     // PostgreSQL dialect renders as varchar(32600); with ddl-auto: update Hibernate then narrowed
     // every one of these columns from text. The next capture tick batch over that bound failed with
-    // SQLSTATE 22001, the server answered 422, and the run's capture died as CAPTURE_WRITE_REJECTED.
+    // SQLSTATE 22001, the server answered 422, and the run's capture died as
+    // CAPTURE_WRITE_REJECTED.
     // A tick batch is routinely larger than 32600 characters, so size is part of the contract.
     String runId = randomId("run-", 16);
     String graphId = randomId("graph_", 24);
@@ -175,7 +178,9 @@ class RoutineAssistantGenerationContextIT {
     graph.setGraphHash("sha256:" + "d".repeat(64));
     graph.setIdentityJson(identityFor(runId));
     graph.setDefinitionJson(
-        "{\"schema\":\"behavior-graph-definition/v1\",\"nodes\":[],\"padding\":\"" + padding + "\"}");
+        "{\"schema\":\"behavior-graph-definition/v1\",\"nodes\":[],\"padding\":\""
+            + padding
+            + "\"}");
     graph.setState("PUBLISHED");
     graphs.save(graph);
 

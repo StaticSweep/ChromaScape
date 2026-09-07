@@ -3,10 +3,10 @@ package com.chromascape.web.aiplayer.routine.source;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator;
 import com.chromascape.web.aiplayer.routine.service.CurrentSliceRunService;
-import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReference;
-import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReferenceRepository;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceContentObject;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceContentObjectRepository;
+import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReference;
+import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReferenceRepository;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceRunBinding;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceRunBindingRepository;
 import com.chromascape.web.config.SourceTrustProperties;
@@ -29,6 +29,7 @@ public class SourceManifestBindingService {
   private final VerifiedSourceContentCache cache;
   private final CurrentSliceRunService runs;
   private final CurrentSliceIdentityValidator identities;
+
   /** The single canonical trust configuration; services never read legacy trust prefixes. */
   private final SourceTrustProperties trust;
 
@@ -54,8 +55,8 @@ public class SourceManifestBindingService {
 
   /**
    * Verifies and persists one manifest within the caller's transaction. The remote fetch that
-   * produced {@code manifestJson} must already have happened outside any transaction via
-   * {@link SourceManifestFetchService}; this method only verifies against the expected identity and
+   * produced {@code manifestJson} must already have happened outside any transaction via {@link
+   * SourceManifestFetchService}; this method only verifies against the expected identity and
    * writes.
    */
   @Transactional
@@ -63,21 +64,26 @@ public class SourceManifestBindingService {
       String taskKey, String manifestJson, TaskSourceManifestVerifier.ExpectedIdentity expected) {
     try {
       if (taskKey == null || taskKey.isBlank() || manifestJson == null || manifestJson.isBlank()) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
             "source task and manifest are required");
       }
-      JsonNode manifest = SourceManifestCanonicalJson.parse(
-          manifestJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      JsonNode manifest =
+          SourceManifestCanonicalJson.parse(
+              manifestJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
       TaskSourceManifestVerifier.Verified verified = verifier().verify(manifest, expected);
       // The public verifier accepts only signed v1; this guard keeps a future non-authoritative
       // result from ever reaching the manifest table even if a new decode path is added.
-      if (verified == null || !verified.signatureVerified()
+      if (verified == null
+          || !verified.signatureVerified()
           || !SourceManifestContract.SCHEMA.equals(verified.manifest().schema())) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
             "source binding requires a signed v1 manifest");
       }
       if (!taskKey.equals(verified.manifest().taskKey())) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
             "task identity differs from the requested task");
       }
       enforceEnvironment(verified.rawManifest());
@@ -96,14 +102,16 @@ public class SourceManifestBindingService {
             || !same(existing.getBuildId(), nested(manifest, "build", "build_id"))
             || !same(existing.getArtifactDigest(), nested(manifest, "build", "artifact_digest"))
             || !same(existing.getEnvironment(), manifestEnvironment)) {
-          throw new SourceManifestException(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+          throw new SourceManifestException(
+              SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
               "manifest identity was reused with different bytes");
         }
       } else {
-        SourceManifestReference sameSnapshot = manifests.findBySnapshotId(
-            verified.manifest().sourceSnapshotId()).orElse(null);
+        SourceManifestReference sameSnapshot =
+            manifests.findBySnapshotId(verified.manifest().sourceSnapshotId()).orElse(null);
         if (sameSnapshot != null && !hash.equals(sameSnapshot.getManifestHash())) {
-          throw new SourceManifestException(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+          throw new SourceManifestException(
+              SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
               "snapshot identity was reused with different manifest bytes");
         }
         SourceManifestReference reference = new SourceManifestReference();
@@ -133,8 +141,10 @@ public class SourceManifestBindingService {
     } catch (SourceManifestException exception) {
       throw exception;
     } catch (Exception exception) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
-          "source manifest could not be persisted", exception);
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+          "source manifest could not be persisted",
+          exception);
     }
   }
 
@@ -145,35 +155,47 @@ public class SourceManifestBindingService {
    */
   @Transactional
   public SourceRunBinding bindRun(
-      String runId, String recordingId, String taskKey,
+      String runId,
+      String recordingId,
+      String taskKey,
       TaskSourceManifestVerifier.Verified verified) {
-    if (runId == null || runId.isBlank() || verified == null
-        || taskKey == null || taskKey.isBlank()) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
-          "run and verified source are required");
+    if (runId == null
+        || runId.isBlank()
+        || verified == null
+        || taskKey == null
+        || taskKey.isBlank()) {
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_BUILD_MISMATCH, "run and verified source are required");
     }
     // Run binding is authoritative-only: an unsigned or unsupported result can never bind a run,
     // even when it was constructed in-process rather than through verifyAndPersist.
     if (!verified.signatureVerified()
         || !SourceManifestContract.SCHEMA.equals(verified.manifest().schema())) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
           "run binding requires a signed v1 manifest");
     }
     if (!taskKey.equals(verified.manifest().taskKey())) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "run task identity differs from the source manifest");
     }
     enforceEnvironment(verified.rawManifest());
     requireAvailable(verified.manifest().status());
     String normalizedRecordingId = normalizeOptionalIdentity(recordingId, "recording identity");
-    SourceManifestReference reference = manifests.findByManifestHash(
-        verified.manifest().manifestHash()).orElseThrow(() ->
-        new SourceManifestException(SourceManifestFailureCode.SOURCE_UNAVAILABLE,
-            "verified source manifest is not persisted"));
+    SourceManifestReference reference =
+        manifests
+            .findByManifestHash(verified.manifest().manifestHash())
+            .orElseThrow(
+                () ->
+                    new SourceManifestException(
+                        SourceManifestFailureCode.SOURCE_UNAVAILABLE,
+                        "verified source manifest is not persisted"));
     if (!same(reference.getTaskKey(), taskKey)
         || !same(reference.getSnapshotId(), verified.manifest().sourceSnapshotId())
         || !same(reference.getEnvironment(), declaredEnvironment(verified.rawManifest()))) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "persisted source manifest identity differs from the run binding");
     }
     String sourceEnvironment = reference.getEnvironment();
@@ -184,13 +206,16 @@ public class SourceManifestBindingService {
     String buildId = nested(verified.rawManifest(), "build", "build_id");
     String artifact = nested(verified.rawManifest(), "build", "artifact_digest");
     if (artifact == null || !SourceManifestContract.isHash(artifact)) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "run binding requires a verified artifact digest");
     }
     if (normalizedRecordingId != null) {
-      SourceRunBinding recordingBinding = bindings.findByRecordingId(normalizedRecordingId).orElse(null);
+      SourceRunBinding recordingBinding =
+          bindings.findByRecordingId(normalizedRecordingId).orElse(null);
       if (recordingBinding != null && !runId.equals(recordingBinding.getRunId())) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
             "recording is already bound to a different run");
       }
     }
@@ -206,8 +231,10 @@ public class SourceManifestBindingService {
           || !same(existing.getEnvironment(), sourceEnvironment)
           || !same(existing.getVerificationState(), verificationState(verified))
           || !same(existing.getSourceProvenance(), provenance(verified))
-          || (existing.getRecordingId() != null && !same(existing.getRecordingId(), normalizedRecordingId))) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
+          || (existing.getRecordingId() != null
+              && !same(existing.getRecordingId(), normalizedRecordingId))) {
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
             "run is already bound to a different source identity");
       }
       if (existing.getRecordingId() == null && normalizedRecordingId != null) {
@@ -236,9 +263,12 @@ public class SourceManifestBindingService {
   }
 
   public void cacheFile(TaskSourceManifest.File file, byte[] content) {
-    if (file == null) throw new SourceManifestException(SourceManifestFailureCode.SOURCE_FILE_NOT_FOUND, "source file is not allowlisted");
+    if (file == null)
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_FILE_NOT_FOUND, "source file is not allowlisted");
     if (content == null || content.length != file.sizeBytes()) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
           "source content size does not match the verified identity");
     }
     persistContent(file, content);
@@ -253,24 +283,28 @@ public class SourceManifestBindingService {
   @Transactional
   public void persistContent(TaskSourceManifest.File file, byte[] content) {
     if (file == null) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_FILE_NOT_FOUND,
-          "source file is not allowlisted");
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_FILE_NOT_FOUND, "source file is not allowlisted");
     }
-    if (content == null || content.length != file.sizeBytes()
+    if (content == null
+        || content.length != file.sizeBytes()
         || !file.contentHash().equals(hash(content))) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
           "source content does not match the verified identity");
     }
     if (contentObjects == null) return;
-    SourceContentObject existing = contentObjects.findByContentHash(file.contentHash()).orElse(null);
+    SourceContentObject existing =
+        contentObjects.findByContentHash(file.contentHash()).orElse(null);
     if (existing != null) {
       if (existing.getPrunedAt() != null) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_PRUNED,
-            "source snapshot has been pruned");
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_PRUNED, "source snapshot has been pruned");
       }
       if (existing.getRedactedAt() != null
           || !java.util.Arrays.equals(existing.getContentBytes(), content)) {
-        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
+        throw new SourceManifestException(
+            SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
             "source content identity was reused with different bytes");
       }
       return;
@@ -278,13 +312,20 @@ public class SourceManifestBindingService {
     contentObjects.save(SourceContentObject.create(file.contentHash(), content));
   }
 
-  public VerifiedSourceContentCache cache() { return cache; }
+  public VerifiedSourceContentCache cache() {
+    return cache;
+  }
 
   @Transactional(readOnly = true)
   public Map<String, Object> binding(String runId) {
-    SourceRunBinding binding = bindings.findByRunId(runId)
-        .orElseThrow(() -> new SourceManifestException(SourceManifestFailureCode.SOURCE_UNAVAILABLE,
-            "source binding is unavailable"));
+    SourceRunBinding binding =
+        bindings
+            .findByRunId(runId)
+            .orElseThrow(
+                () ->
+                    new SourceManifestException(
+                        SourceManifestFailureCode.SOURCE_UNAVAILABLE,
+                        "source binding is unavailable"));
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("run_id", binding.getRunId());
     result.put("recording_id", binding.getRecordingId());
@@ -299,7 +340,11 @@ public class SourceManifestBindingService {
     result.put("environment", binding.getEnvironment());
     result.put("verification_state", binding.getVerificationState());
     result.put("source_provenance", binding.getSourceProvenance());
-    result.put("created_at", binding.getCreatedAt() == null ? Instant.now().toString() : binding.getCreatedAt().toString());
+    result.put(
+        "created_at",
+        binding.getCreatedAt() == null
+            ? Instant.now().toString()
+            : binding.getCreatedAt().toString());
     return result;
   }
 
@@ -307,18 +352,30 @@ public class SourceManifestBindingService {
       String runId, TaskSourceManifestVerifier.Verified verified, String artifact) {
     try {
       Map<String, Object> current = runs.get(runId);
-      CurrentSliceIdentity base = mapper.convertValue(current.get("identity"), CurrentSliceIdentity.class);
+      CurrentSliceIdentity base =
+          mapper.convertValue(current.get("identity"), CurrentSliceIdentity.class);
       CurrentSliceIdentity.Source source = identitySource(verified);
-      CurrentSliceIdentity enriched = new CurrentSliceIdentity(
-          base.schema(), base.task(), base.run(), base.client(), base.capture(), source,
-          base.graph(), base.model(), base.candidate(), false);
+      CurrentSliceIdentity enriched =
+          new CurrentSliceIdentity(
+              base.schema(),
+              base.task(),
+              base.run(),
+              base.client(),
+              base.capture(),
+              source,
+              base.graph(),
+              base.model(),
+              base.candidate(),
+              false);
       identities.validate(enriched);
       runs.advanceIdentity(runId, enriched, "SOURCE_BOUND");
     } catch (SourceManifestException exception) {
       throw exception;
     } catch (Exception exception) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
-          "run identity could not be bound to source", exception);
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
+          "run identity could not be bound to source",
+          exception);
     }
   }
 
@@ -336,7 +393,8 @@ public class SourceManifestBindingService {
 
   private static String verificationState(TaskSourceManifestVerifier.Verified verified) {
     if (verified == null || !verified.signatureVerified()) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
           "source binding requires a verified signature");
     }
     return "VERIFIED";
@@ -344,23 +402,26 @@ public class SourceManifestBindingService {
 
   private static String provenance(TaskSourceManifestVerifier.Verified verified) {
     if (verified == null || !verified.signatureVerified()) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
           "source binding requires a verified signature");
     }
     return "VERIFIED";
   }
 
   /** Creates the source identity group from the verified v1 manifest. */
-  public CurrentSliceIdentity.Source identitySource(
-      TaskSourceManifestVerifier.Verified verified) {
-    if (verified == null || !verified.signatureVerified()
+  public CurrentSliceIdentity.Source identitySource(TaskSourceManifestVerifier.Verified verified) {
+    if (verified == null
+        || !verified.signatureVerified()
         || !SourceManifestContract.SCHEMA.equals(verified.manifest().schema())) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
           "source identity requires a verified signature");
     }
     JsonNode raw = verified.rawManifest();
     return new CurrentSliceIdentity.Source(
-        verified.manifest().sourceSnapshotId(), verified.manifest().manifestHash(),
+        verified.manifest().sourceSnapshotId(),
+        verified.manifest().manifestHash(),
         nested(raw, "repository", "repository_id"),
         nested(raw, "repository", "commit_id"),
         nested(raw, "repository", "tree_id"),
@@ -372,10 +433,12 @@ public class SourceManifestBindingService {
   private static String normalizeOptionalIdentity(String value, String label) {
     if (value == null || value.isBlank()) return null;
     String normalized = value.trim();
-    if (normalized.length() > 160 || normalized.contains("/") || normalized.contains("\\")
+    if (normalized.length() > 160
+        || normalized.contains("/")
+        || normalized.contains("\\")
         || normalized.indexOf('\u0000') >= 0) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
-          label + " is invalid");
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_BUILD_MISMATCH, label + " is invalid");
     }
     return normalized;
   }
@@ -386,14 +449,15 @@ public class SourceManifestBindingService {
 
   private static void requireAvailable(String status) {
     if ("AVAILABLE".equals(status)) return;
-    SourceManifestFailureCode code = switch (status) {
-      case "INDEX_PARTIAL" -> SourceManifestFailureCode.SOURCE_INDEX_PARTIAL;
-      case "UNAVAILABLE" -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
-      case "REDACTED" -> SourceManifestFailureCode.SOURCE_REDACTED;
-      case "PRUNED" -> SourceManifestFailureCode.SOURCE_PRUNED;
-      case "GENERATED_ONLY" -> SourceManifestFailureCode.SOURCE_GENERATED_ONLY;
-      default -> SourceManifestFailureCode.SOURCE_MANIFEST_INVALID;
-    };
+    SourceManifestFailureCode code =
+        switch (status) {
+          case "INDEX_PARTIAL" -> SourceManifestFailureCode.SOURCE_INDEX_PARTIAL;
+          case "UNAVAILABLE" -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
+          case "REDACTED" -> SourceManifestFailureCode.SOURCE_REDACTED;
+          case "PRUNED" -> SourceManifestFailureCode.SOURCE_PRUNED;
+          case "GENERATED_ONLY" -> SourceManifestFailureCode.SOURCE_GENERATED_ONLY;
+          default -> SourceManifestFailureCode.SOURCE_MANIFEST_INVALID;
+        };
     throw new SourceManifestException(code, "source manifest is not available for binding");
   }
 

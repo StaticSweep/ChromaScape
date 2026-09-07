@@ -34,33 +34,70 @@ public class CurrentSliceRunService {
 
   @Transactional
   public Map<String, Object> createRunelite(CurrentSliceIdentity identity) {
-    if (identity == null || identity.client() == null || !"RUNELITE_CAPTURE".equals(identity.client().clientKind())) throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CLIENT_CAPABILITY_INVALID", "RuneLite capture client identity is required");
-    String runId = identity.run() == null || identity.run().runId() == null || identity.run().runId().isBlank() ? "run_" + UUID.randomUUID().toString().replace("-", "") : identity.run().runId();
+    if (identity == null
+        || identity.client() == null
+        || !"RUNELITE_CAPTURE".equals(identity.client().clientKind()))
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "CLIENT_CAPABILITY_INVALID",
+          "RuneLite capture client identity is required");
+    String runId =
+        identity.run() == null || identity.run().runId() == null || identity.run().runId().isBlank()
+            ? "run_" + UUID.randomUUID().toString().replace("-", "")
+            : identity.run().runId();
     CurrentSliceIdentity.Run run = new CurrentSliceIdentity.Run(runId, null, null, null);
-    CurrentSliceIdentity enriched = new CurrentSliceIdentity(identity.schema(), identity.task(), run, identity.client(), identity.capture(), identity.source(), identity.graph(), identity.model(), identity.candidate(), false);
+    CurrentSliceIdentity enriched =
+        new CurrentSliceIdentity(
+            identity.schema(),
+            identity.task(),
+            run,
+            identity.client(),
+            identity.capture(),
+            identity.source(),
+            identity.graph(),
+            identity.model(),
+            identity.candidate(),
+            false);
     return create(null, enriched);
   }
 
   @Transactional
   public Map<String, Object> create(String attemptId, CurrentSliceIdentity identity) {
     validator.validate(identity);
-    boolean micro6 = identity.client() != null && "MICRO6_MANAGED".equals(identity.client().clientKind());
+    boolean micro6 =
+        identity.client() != null && "MICRO6_MANAGED".equals(identity.client().clientKind());
     if (micro6 && (attemptId == null || attemptId.isBlank())) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_FIELD_MISSING", "attemptId is required for MICRO6_MANAGED");
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "IDENTITY_FIELD_MISSING",
+          "attemptId is required for MICRO6_MANAGED");
     }
     if (!micro6 && attemptId != null && !attemptId.isBlank()) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CLIENT_CAPABILITY_INVALID", "RUNELITE_CAPTURE cannot claim a Micro6 attempt");
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "CLIENT_CAPABILITY_INVALID",
+          "RUNELITE_CAPTURE cannot claim a Micro6 attempt");
     }
     if (identity.run() == null || identity.run().runId() == null) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_GROUP_MISSING", "run.run_id is required");
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_GROUP_MISSING", "run.run_id is required");
     }
     if (micro6) {
       if (identity.run().attemptId() == null || !attemptId.equals(identity.run().attemptId())) {
-        throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "path attemptId does not match identity.run.attempt_id");
+        throw error(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            "IDENTITY_MISMATCH",
+            "path attemptId does not match identity.run.attempt_id");
       }
-      stabilization.getRunByRunIdAndAttemptId(identity.run().runId(), attemptId)
+      stabilization
+          .getRunByRunIdAndAttemptId(identity.run().runId(), attemptId)
           .filter(run -> "PASS".equalsIgnoreCase(run.getOutcome()))
-          .orElseThrow(() -> error(HttpStatus.UNPROCESSABLE_ENTITY, "STABILIZATION_NOT_VERIFIED", "SC-572 PASS attempt is not verified"));
+          .orElseThrow(
+              () ->
+                  error(
+                      HttpStatus.UNPROCESSABLE_ENTITY,
+                      "STABILIZATION_NOT_VERIFIED",
+                      "SC-572 PASS attempt is not verified"));
     }
 
     String runId = identity.run().runId();
@@ -74,33 +111,41 @@ public class CurrentSliceRunService {
       try {
         identity.requireSameIdentity(persisted);
       } catch (RuntimeException e) {
-        throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "run identity differs from persisted run");
+        throw error(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            "IDENTITY_MISMATCH",
+            "run identity differs from persisted run");
       }
       return response(existing, persisted);
     }
     CurrentSliceRun entity = new CurrentSliceRun();
-    entity.setRunId(runId.isBlank() ? "run_" + UUID.randomUUID().toString().replace("-", "") : runId);
+    entity.setRunId(
+        runId.isBlank() ? "run_" + UUID.randomUUID().toString().replace("-", "") : runId);
     entity.setAttemptId(micro6 ? attemptId : null);
     entity.setIdentityJson(identityJson);
     entity.setStage("BOUND");
     return response(repository.save(entity), identity);
   }
 
-  /**
-   * Advances the persisted run identity through the locked path.
-   */
+  /** Advances the persisted run identity through the locked path. */
   @Transactional
-  public CurrentSliceRun advanceIdentity(String runId, CurrentSliceIdentity enriched, String stage) {
+  public CurrentSliceRun advanceIdentity(
+      String runId, CurrentSliceIdentity enriched, String stage) {
     if (runId == null || runId.isBlank()) {
       throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_FIELD_MISSING", "run_id is required");
     }
-    CurrentSliceRun entity = repository.findWithLockByRunId(runId)
-        .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
+    CurrentSliceRun entity =
+        repository
+            .findWithLockByRunId(runId)
+            .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
     CurrentSliceIdentity persisted = read(entity.getIdentityJson());
     try {
       persisted.requireSameIdentity(enriched);
     } catch (RuntimeException e) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "identity is not a valid progressive enrichment of the persisted run");
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "IDENTITY_MISMATCH",
+          "identity is not a valid progressive enrichment of the persisted run");
     }
     entity.setIdentityJson(write(enriched));
     entity.setStage(stage);
@@ -137,23 +182,42 @@ public class CurrentSliceRunService {
    * allows an arbitrary graph overwrite.
    */
   @Transactional
-  public CurrentSliceRun advanceIdentityGraph(String runId, String supersededGraphId, CurrentSliceIdentity.Graph successor, String stage) {
+  public CurrentSliceRun advanceIdentityGraph(
+      String runId, String supersededGraphId, CurrentSliceIdentity.Graph successor, String stage) {
     if (runId == null || runId.isBlank() || successor == null) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_FIELD_MISSING", "run_id and successor graph are required");
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "IDENTITY_FIELD_MISSING",
+          "run_id and successor graph are required");
     }
-    CurrentSliceRun entity = repository.findWithLockByRunId(runId)
-        .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
+    CurrentSliceRun entity =
+        repository
+            .findWithLockByRunId(runId)
+            .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
     CurrentSliceIdentity persisted = read(entity.getIdentityJson());
     CurrentSliceIdentity.Graph current = persisted.graph();
     if (current != null && !supersededGraphId.equals(current.graphId())) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "run graph is not the superseded graph");
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "IDENTITY_MISMATCH",
+          "run graph is not the superseded graph");
     }
     if (current == null && supersededGraphId != null && !supersededGraphId.isBlank()) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "run has no graph to supersede");
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "run has no graph to supersede");
     }
-    CurrentSliceIdentity enriched = new CurrentSliceIdentity(
-        persisted.schema(), persisted.task(), persisted.run(), persisted.client(), persisted.capture(),
-        persisted.source(), successor, persisted.model(), persisted.candidate(), false);
+    CurrentSliceIdentity enriched =
+        new CurrentSliceIdentity(
+            persisted.schema(),
+            persisted.task(),
+            persisted.run(),
+            persisted.client(),
+            persisted.capture(),
+            persisted.source(),
+            successor,
+            persisted.model(),
+            persisted.candidate(),
+            false);
     entity.setIdentityJson(write(enriched));
     entity.setStage(stage);
     return repository.save(entity);
@@ -166,19 +230,37 @@ public class CurrentSliceRunService {
    * is never overwritten here — assistant successors must go through {@link #advanceIdentityGraph}.
    */
   @Transactional
-  public CurrentSliceRun advanceIdentityRootGraph(String runId, CurrentSliceIdentity.Graph rootGraph, String stage) {
+  public CurrentSliceRun advanceIdentityRootGraph(
+      String runId, CurrentSliceIdentity.Graph rootGraph, String stage) {
     if (runId == null || runId.isBlank() || rootGraph == null) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_FIELD_MISSING", "run_id and root graph are required");
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "IDENTITY_FIELD_MISSING",
+          "run_id and root graph are required");
     }
-    CurrentSliceRun entity = repository.findWithLockByRunId(runId)
-        .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
+    CurrentSliceRun entity =
+        repository
+            .findWithLockByRunId(runId)
+            .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
     CurrentSliceIdentity persisted = read(entity.getIdentityJson());
     if (persisted.graph() != null) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "run already has a graph; use the supersession path");
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "IDENTITY_MISMATCH",
+          "run already has a graph; use the supersession path");
     }
-    CurrentSliceIdentity enriched = new CurrentSliceIdentity(
-        persisted.schema(), persisted.task(), persisted.run(), persisted.client(), persisted.capture(),
-        persisted.source(), rootGraph, persisted.model(), persisted.candidate(), false);
+    CurrentSliceIdentity enriched =
+        new CurrentSliceIdentity(
+            persisted.schema(),
+            persisted.task(),
+            persisted.run(),
+            persisted.client(),
+            persisted.capture(),
+            persisted.source(),
+            rootGraph,
+            persisted.model(),
+            persisted.candidate(),
+            false);
     entity.setIdentityJson(write(enriched));
     entity.setStage(stage);
     return repository.save(entity);
@@ -186,8 +268,10 @@ public class CurrentSliceRunService {
 
   @Transactional(readOnly = true)
   public Map<String, Object> get(String runId) {
-    CurrentSliceRun entity = repository.findByRunId(runId)
-        .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
+    CurrentSliceRun entity =
+        repository
+            .findByRunId(runId)
+            .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "NOT_FOUND", "run not found"));
     return response(entity, read(entity.getIdentityJson()));
   }
 
@@ -198,7 +282,11 @@ public class CurrentSliceRunService {
     result.put("attempt_id", entity.getAttemptId());
     result.put("identity", identity);
     result.put("stage", entity.getStage());
-    result.put("created_at", entity.getCreatedAt() == null ? Instant.now().toString() : entity.getCreatedAt().toString());
+    result.put(
+        "created_at",
+        entity.getCreatedAt() == null
+            ? Instant.now().toString()
+            : entity.getCreatedAt().toString());
     result.put("control_allowed", false);
     return result;
   }
@@ -207,7 +295,8 @@ public class CurrentSliceRunService {
     try {
       return mapper.writeValueAsString(identity);
     } catch (Exception e) {
-      throw error(HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "identity cannot be serialized");
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY, "IDENTITY_MISMATCH", "identity cannot be serialized");
     }
   }
 
@@ -215,11 +304,13 @@ public class CurrentSliceRunService {
     try {
       return validator.validate(mapper.readValue(json, CurrentSliceIdentity.class));
     } catch (Exception e) {
-      throw error(HttpStatus.INTERNAL_SERVER_ERROR, "IDENTITY_MISMATCH", "persisted identity is invalid");
+      throw error(
+          HttpStatus.INTERNAL_SERVER_ERROR, "IDENTITY_MISMATCH", "persisted identity is invalid");
     }
   }
 
-  private static RoutineCaptureIngestionService.RoutineCaptureException error(HttpStatus status, String code, String message) {
+  private static RoutineCaptureIngestionService.RoutineCaptureException error(
+      HttpStatus status, String code, String message) {
     return new RoutineCaptureIngestionService.RoutineCaptureException(status, code, message);
   }
 }

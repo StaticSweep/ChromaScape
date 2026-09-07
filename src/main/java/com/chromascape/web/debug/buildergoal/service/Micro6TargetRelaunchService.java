@@ -513,12 +513,7 @@ public class Micro6TargetRelaunchService {
         // launch attempt owns this process (used to verify process ownership before replacement).
         List<String> attemptClientArgs =
             buildClientArgs(
-                accountName,
-                accountHash,
-                accountEmail,
-                accountPassword,
-                world,
-                attemptId);
+                accountName, accountHash, accountEmail, accountPassword, world, attemptId);
         command =
             buildLaunchCommand(
                 attemptClientArgs,
@@ -2138,7 +2133,8 @@ public class Micro6TargetRelaunchService {
     try {
       process = pb.start();
     } catch (IOException e) {
-      logger.warn("icacls failed to start for Builder Goal payload {}: {}", payloadFile, e.getMessage());
+      logger.warn(
+          "icacls failed to start for Builder Goal payload {}: {}", payloadFile, e.getMessage());
       return;
     }
     try (java.io.InputStream in = process.getInputStream()) {
@@ -2147,7 +2143,8 @@ public class Micro6TargetRelaunchService {
     try {
       int exitCode = process.waitFor();
       if (exitCode != 0) {
-        logger.warn("icacls returned {} while restricting Builder Goal payload {}", exitCode, payloadFile);
+        logger.warn(
+            "icacls returned {} while restricting Builder Goal payload {}", exitCode, payloadFile);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();

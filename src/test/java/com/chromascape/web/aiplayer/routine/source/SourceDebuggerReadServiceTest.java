@@ -7,15 +7,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClient;
-import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReference;
-import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReferenceRepository;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceContentObject;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceContentObjectRepository;
+import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReference;
+import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReferenceRepository;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceRunBinding;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceRunBindingRepository;
+import com.chromascape.web.config.SourceTrustProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.chromascape.web.config.SourceTrustProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -34,8 +34,8 @@ class SourceDebuggerReadServiceTest {
     ObjectNode manifest = SourceManifestTestFixtures.signedManifest(SIGNING_KEY);
     ReadModel model = model(manifest);
     model.cache.put(
-        SourceManifestTestFixtures.hash(SourceManifestTestFixtures.CONTENT
-            .getBytes(StandardCharsets.UTF_8)),
+        SourceManifestTestFixtures.hash(
+            SourceManifestTestFixtures.CONTENT.getBytes(StandardCharsets.UTF_8)),
         SourceManifestTestFixtures.CONTENT.getBytes(StandardCharsets.UTF_8));
     SourceDebuggerReadService service = model.service();
 
@@ -43,8 +43,8 @@ class SourceDebuggerReadServiceTest {
     assertEquals(SourceManifestTestFixtures.CONTENT, file.get("content"));
     assertEquals("src/main/java/com/example/Entry.java", file.get("relative_path"));
 
-    Map<String, Object> symbols = service.symbols(
-        "run-1", SourceManifestTestFixtures.FILE_ID, 0, 10, "actor");
+    Map<String, Object> symbols =
+        service.symbols("run-1", SourceManifestTestFixtures.FILE_ID, 0, 10, "actor");
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> values = (List<Map<String, Object>>) (List<?>) symbols.get("symbols");
     assertEquals(2, values.size());
@@ -60,8 +60,10 @@ class SourceDebuggerReadServiceTest {
     SourceManifestTestFixtures.resealAndSign(manifest, SIGNING_KEY);
     ReadModel model = model(manifest);
 
-    SourceManifestException exception = assertThrows(SourceManifestException.class,
-        () -> model.service().file("run-1", SourceManifestTestFixtures.FILE_ID, "actor"));
+    SourceManifestException exception =
+        assertThrows(
+            SourceManifestException.class,
+            () -> model.service().file("run-1", SourceManifestTestFixtures.FILE_ID, "actor"));
     assertEquals(SourceManifestFailureCode.SOURCE_ACCESS_DENIED, exception.code());
   }
 
@@ -69,14 +71,16 @@ class SourceDebuggerReadServiceTest {
   void durablePruneMarkerWinsOverAPreviouslyCachedCopy() {
     ObjectNode manifest = SourceManifestTestFixtures.signedManifest(SIGNING_KEY);
     byte[] bytes = SourceManifestTestFixtures.CONTENT.getBytes(StandardCharsets.UTF_8);
-    SourceContentObject object = SourceContentObject.create(
-        SourceManifestTestFixtures.hash(bytes), bytes);
+    SourceContentObject object =
+        SourceContentObject.create(SourceManifestTestFixtures.hash(bytes), bytes);
     object.setPrunedAt(Instant.now());
     ReadModel model = model(manifest, object);
     model.cache.put(object.getContentHash(), bytes);
 
-    SourceManifestException exception = assertThrows(SourceManifestException.class,
-        () -> model.service().file("run-1", SourceManifestTestFixtures.FILE_ID, "actor"));
+    SourceManifestException exception =
+        assertThrows(
+            SourceManifestException.class,
+            () -> model.service().file("run-1", SourceManifestTestFixtures.FILE_ID, "actor"));
     assertEquals(SourceManifestFailureCode.SOURCE_PRUNED, exception.code());
   }
 
@@ -84,14 +88,16 @@ class SourceDebuggerReadServiceTest {
   void durableRedactionMarkerWinsOverAPreviouslyCachedCopy() {
     ObjectNode manifest = SourceManifestTestFixtures.signedManifest(SIGNING_KEY);
     byte[] bytes = SourceManifestTestFixtures.CONTENT.getBytes(StandardCharsets.UTF_8);
-    SourceContentObject object = SourceContentObject.create(
-        SourceManifestTestFixtures.hash(bytes), bytes);
+    SourceContentObject object =
+        SourceContentObject.create(SourceManifestTestFixtures.hash(bytes), bytes);
     object.setRedactedAt(Instant.now());
     ReadModel model = model(manifest, object);
     model.cache.put(object.getContentHash(), bytes);
 
-    SourceManifestException exception = assertThrows(SourceManifestException.class,
-        () -> model.service().file("run-1", SourceManifestTestFixtures.FILE_ID, "actor"));
+    SourceManifestException exception =
+        assertThrows(
+            SourceManifestException.class,
+            () -> model.service().file("run-1", SourceManifestTestFixtures.FILE_ID, "actor"));
     assertEquals(SourceManifestFailureCode.SOURCE_REDACTED, exception.code());
   }
 
@@ -103,8 +109,8 @@ class SourceDebuggerReadServiceTest {
     ObjectMapper mapper = new ObjectMapper();
     SourceManifestReferenceRepository manifests = mock(SourceManifestReferenceRepository.class);
     SourceRunBindingRepository bindings = mock(SourceRunBindingRepository.class);
-    SourceContentObjectRepository content = durableObject == null
-        ? null : mock(SourceContentObjectRepository.class);
+    SourceContentObjectRepository content =
+        durableObject == null ? null : mock(SourceContentObjectRepository.class);
     if (content != null) {
       when(content.findByContentHash(durableObject.getContentHash()))
           .thenReturn(Optional.of(durableObject));
@@ -144,15 +150,23 @@ class SourceDebuggerReadServiceTest {
         .thenReturn(Optional.of(reference));
     VerifiedSourceContentCache cache = new VerifiedSourceContentCache(50_000);
     SourceTrustProperties trust = trust();
-    SourceDebuggerReadService service = new SourceDebuggerReadService(
-        mapper, manifests, bindings, content, cache, mock(Micro6SourceManifestClient.class),
-        mock(SourceReadAuditService.class), trust);
+    SourceDebuggerReadService service =
+        new SourceDebuggerReadService(
+            mapper,
+            manifests,
+            bindings,
+            content,
+            cache,
+            mock(Micro6SourceManifestClient.class),
+            mock(SourceReadAuditService.class),
+            trust);
     return new ReadModel(service, cache);
   }
 
   private static SourceTrustProperties trust() {
     SourceTrustProperties trust = new SourceTrustProperties();
-    trust.setPublicKeyBase64(Base64.getEncoder().encodeToString(SIGNING_KEY.getPublic().getEncoded()));
+    trust.setPublicKeyBase64(
+        Base64.getEncoder().encodeToString(SIGNING_KEY.getPublic().getEncoded()));
     trust.setPublicKeyId("test-key");
     trust.setEnvironment("production");
     return trust;

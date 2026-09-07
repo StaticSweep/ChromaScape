@@ -93,7 +93,8 @@ public class BuilderGoalRunStateMutationService {
             : new LinkedHashMap<>();
     if (recovery.get("phase") == null) {
       recovery.put("phase", "AWAITING_OPERATOR_PROMPT");
-      recovery.put("message", "Repair incident detected; review evidence before generating a patch plan");
+      recovery.put(
+          "message", "Repair incident detected; review evidence before generating a patch plan");
       recovery.put("updated_at", LocalDateTime.now().toString());
       taskMetadata.put("recovery", recovery);
     }
@@ -409,7 +410,10 @@ public class BuilderGoalRunStateMutationService {
     PatchLoopIteration iteration =
         iterationRepository
             .findByIterationIdForUpdate(iterationId)
-            .orElseThrow(() -> new IllegalArgumentException("Builder Goal iteration not found: " + iterationId));
+            .orElseThrow(
+                () ->
+                    new IllegalArgumentException(
+                        "Builder Goal iteration not found: " + iterationId));
     if (iteration.getStatus() != null && iteration.getStatus().isTerminal()) {
       throw new IllegalStateException("Run is already in a terminal state: " + iterationId);
     }
@@ -647,9 +651,7 @@ public class BuilderGoalRunStateMutationService {
       }
       taskMetadata.put("micro6_publish", publishMetadata);
 
-      if (!stopRequested
-          && error != null
-          && "SETTINGS_RECEIPT_MISMATCH".equalsIgnoreCase(error)) {
+      if (!stopRequested && error != null && "SETTINGS_RECEIPT_MISMATCH".equalsIgnoreCase(error)) {
         publishMetadata.put("status", "SETTINGS_RECEIPT_MISMATCH");
         publishMetadata.put("last_status_at", observed.toString());
         publishMetadata.put("last_error", error);

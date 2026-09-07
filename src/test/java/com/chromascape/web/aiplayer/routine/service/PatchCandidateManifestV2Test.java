@@ -23,11 +23,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * SC-967 certified-candidate/v2 contract: consumes the committed shared vectors at
- * {@code contracts/sc967/ed25519-vectors.json} (canonical manifest hash, candidate id derivation,
- * Ed25519 signature) so Java, Go, and Micro6 agree on exactly the same manifest/signature/hash.
- * The dedicated {@link Sc967CanonicalJson} is the production canonical hasher. Every positive
- * vector must pass; every negative vector must be rejected through the production v2 schema.
+ * SC-967 certified-candidate/v2 contract: consumes the committed shared vectors at {@code
+ * contracts/sc967/ed25519-vectors.json} (canonical manifest hash, candidate id derivation, Ed25519
+ * signature) so Java, Go, and Micro6 agree on exactly the same manifest/signature/hash. The
+ * dedicated {@link Sc967CanonicalJson} is the production canonical hasher. Every positive vector
+ * must pass; every negative vector must be rejected through the production v2 schema.
  */
 class PatchCandidateManifestV2Test {
 
@@ -49,12 +49,15 @@ class PatchCandidateManifestV2Test {
     JsonNode doc = readVectors();
     assertEquals("certified-candidate/v2-vector/v1", doc.path("schema").asText());
     String publicKeyPem = doc.path("public_key_pem").asText();
-    byte[] publicKeyDer = Base64.getDecoder().decode(publicKeyPem
-        .replace("-----BEGIN PUBLIC KEY-----", "")
-        .replace("-----END PUBLIC KEY-----", "")
-        .replaceAll("\\s", ""));
-    PublicKey publicKey = KeyFactory.getInstance("Ed25519")
-        .generatePublic(new X509EncodedKeySpec(publicKeyDer));
+    byte[] publicKeyDer =
+        Base64.getDecoder()
+            .decode(
+                publicKeyPem
+                    .replace("-----BEGIN PUBLIC KEY-----", "")
+                    .replace("-----END PUBLIC KEY-----", "")
+                    .replaceAll("\\s", ""));
+    PublicKey publicKey =
+        KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(publicKeyDer));
     boolean sawPositive = false;
     for (JsonNode vector : doc.path("vectors")) {
       String name = vector.path("name").asText();
@@ -67,15 +70,18 @@ class PatchCandidateManifestV2Test {
       String candidateId = vector.path("candidate_id").asText();
       String signature = vector.path("signature").asText();
       String recomputed = canonicalHash(manifest);
-      assertEquals(candidateHash, recomputed, name + ": canonical hash must match the shared vector");
-      assertEquals("cand_" + candidateHash.substring(7, 31), candidateId,
+      assertEquals(
+          candidateHash, recomputed, name + ": canonical hash must match the shared vector");
+      assertEquals(
+          "cand_" + candidateHash.substring(7, 31),
+          candidateId,
           name + ": candidate id derivation must match");
       byte[] digest = java.util.HexFormat.of().parseHex(candidateHash.substring(7));
       Signature verifier = Signature.getInstance("Ed25519");
       verifier.initVerify(publicKey);
       verifier.update(digest);
-      assertTrue(verifier.verify(Base64.getDecoder().decode(signature)),
-          name + ": signature must verify");
+      assertTrue(
+          verifier.verify(Base64.getDecoder().decode(signature)), name + ": signature must verify");
     }
     assertTrue(sawPositive, "shared vectors must include at least one positive vector");
   }
@@ -88,7 +94,9 @@ class PatchCandidateManifestV2Test {
         continue;
       }
       String recomputed = Sc967CanonicalJson.hash(removeCandidateFields(vector.path("manifest")));
-      assertEquals(vector.path("candidate_hash").asText(), recomputed,
+      assertEquals(
+          vector.path("candidate_hash").asText(),
+          recomputed,
           "Sc967CanonicalJson must agree with the committed positive vector");
     }
   }
@@ -97,9 +105,16 @@ class PatchCandidateManifestV2Test {
   void committedNegativeVectorsAreRejectedBySchemaOrHash() throws Exception {
     JsonNode doc = readVectors();
     String publicKeyPem = doc.path("public_key_pem").asText();
-    PublicKey publicKey = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(
-        Base64.getDecoder().decode(publicKeyPem.replace("-----BEGIN PUBLIC KEY-----", "")
-            .replace("-----END PUBLIC KEY-----", "").replaceAll("\\s", ""))));
+    PublicKey publicKey =
+        KeyFactory.getInstance("Ed25519")
+            .generatePublic(
+                new X509EncodedKeySpec(
+                    Base64.getDecoder()
+                        .decode(
+                            publicKeyPem
+                                .replace("-----BEGIN PUBLIC KEY-----", "")
+                                .replace("-----END PUBLIC KEY-----", "")
+                                .replaceAll("\\s", ""))));
     CertifiedCandidateV2Validator productionValidator =
         new CertifiedCandidateV2Validator(doc.path("key_id").asText());
     for (JsonNode vector : doc.path("vectors")) {
@@ -117,8 +132,12 @@ class PatchCandidateManifestV2Test {
       // The production validator also rejects on canonical-hash mismatch for the signed content.
       boolean hashRejected;
       try {
-        hashRejected = !vector.path("candidate_hash").asText().isEmpty()
-            && !vector.path("candidate_hash").asText().equals(canonicalHash(vector.path("manifest")));
+        hashRejected =
+            !vector.path("candidate_hash").asText().isEmpty()
+                && !vector
+                    .path("candidate_hash")
+                    .asText()
+                    .equals(canonicalHash(vector.path("manifest")));
       } catch (IllegalArgumentException expected) {
         hashRejected = true;
       }
@@ -132,32 +151,42 @@ class PatchCandidateManifestV2Test {
       try {
         productionValidator.validate(
             MAPPER.writeValueAsBytes(manifest),
-            Base64.getDecoder().decode(doc.path("artifacts").path("certification").path("content").asText()),
+            Base64.getDecoder()
+                .decode(doc.path("artifacts").path("certification").path("content").asText()),
             Base64.getDecoder().decode(doc.path("artifacts").path("jar").path("content").asText()),
-            Base64.getDecoder().decode(doc.path("artifacts").path("sbom").path("content").asText()));
+            Base64.getDecoder()
+                .decode(doc.path("artifacts").path("sbom").path("content").asText()));
       } catch (IllegalArgumentException expected) {
         productionRejected = true;
       }
-      assertTrue(schemaRejected || hashRejected || signatureRejected || productionRejected,
-          "negative vector " + name + " must be rejected by the production v2 schema or hash check");
+      assertTrue(
+          schemaRejected || hashRejected || signatureRejected || productionRejected,
+          "negative vector "
+              + name
+              + " must be rejected by the production v2 schema or hash check");
     }
   }
 
   @Test
   void sharedCanonicalizationVectorsUseProductionPath() throws Exception {
     JsonNode doc = readVectors();
-    assertTrue(doc.path("canonicalization_vectors").isArray(),
+    assertTrue(
+        doc.path("canonicalization_vectors").isArray(),
         "shared vectors must include canonicalization_vectors");
     for (JsonNode vector : doc.path("canonicalization_vectors")) {
       String raw = vector.path("raw").asText();
       if (!vector.path("valid").asBoolean()) {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+            IllegalArgumentException.class,
             () -> Sc967CanonicalJson.parse(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
             vector.path("name").asText());
         continue;
       }
-      JsonNode parsed = Sc967CanonicalJson.parse(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-      assertEquals(vector.path("canonical").asText(), Sc967CanonicalJson.canonical(parsed),
+      JsonNode parsed =
+          Sc967CanonicalJson.parse(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      assertEquals(
+          vector.path("canonical").asText(),
+          Sc967CanonicalJson.canonical(parsed),
           vector.path("name").asText());
     }
   }

@@ -44,24 +44,22 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * SC-810 PostgreSQL proof for capture completion and source binding.
  *
- * <p>The recorder result is supplied as a hermetic value, while the source manifest is served by
- * a local ephemeral HTTP server. The test exercises the real transaction manager and database
+ * <p>The recorder result is supplied as a hermetic value, while the source manifest is served by a
+ * local ephemeral HTTP server. The test exercises the real transaction manager and database
  * constraints: source fetch is the non-transactional phase, and every source/run/capture/operation
  * write is one rollback-safe phase followed by a separate UNCERTAIN marker transaction.
  */
 @SpringBootTest(
     classes = Sc810PostgresTestConfiguration.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@TestPropertySource(properties = {
-    "spring.flyway.target=21",
-    "spring.jpa.hibernate.ddl-auto=update"
-})
+@TestPropertySource(
+    properties = {"spring.flyway.target=21", "spring.jpa.hibernate.ddl-auto=update"})
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class CaptureSourceIntegrationTest {
@@ -85,28 +83,32 @@ class CaptureSourceIntegrationTest {
   private static HttpServer startStub() {
     try {
       HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-      byte[] manifest = SourceManifestTestFixtures.signedManifest(SIGNING_KEY).toString()
-          .getBytes(StandardCharsets.UTF_8);
-      server.createContext("/api/v1/source-manifests/EXAMPLE_TASK", exchange -> {
-        TRANSACTION_ACTIVE_DURING_FETCH.set(
-            TransactionSynchronizationManager.isActualTransactionActive());
-        FetchGate gate = FETCH_GATE.get();
-        if (gate != null) {
-          gate.entered.countDown();
-          try {
-            if (!gate.release.await(30, TimeUnit.SECONDS)) {
-              throw new IOException("capture source fetch gate timed out");
+      byte[] manifest =
+          SourceManifestTestFixtures.signedManifest(SIGNING_KEY)
+              .toString()
+              .getBytes(StandardCharsets.UTF_8);
+      server.createContext(
+          "/api/v1/source-manifests/EXAMPLE_TASK",
+          exchange -> {
+            TRANSACTION_ACTIVE_DURING_FETCH.set(
+                TransactionSynchronizationManager.isActualTransactionActive());
+            FetchGate gate = FETCH_GATE.get();
+            if (gate != null) {
+              gate.entered.countDown();
+              try {
+                if (!gate.release.await(30, TimeUnit.SECONDS)) {
+                  throw new IOException("capture source fetch gate timed out");
+                }
+              } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IOException("capture source fetch gate interrupted", exception);
+              }
             }
-          } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IOException("capture source fetch gate interrupted", exception);
-          }
-        }
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(200, manifest.length);
-        exchange.getResponseBody().write(manifest);
-        exchange.close();
-      });
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, manifest.length);
+            exchange.getResponseBody().write(manifest);
+            exchange.close();
+          });
       server.start();
       return server;
     } catch (IOException exception) {
@@ -143,18 +145,19 @@ class CaptureSourceIntegrationTest {
 
   @AfterEach
   void cleanCreatedRows() {
-    tx().executeWithoutResult(status -> {
-      bindings.deleteAll();
-      bindings.flush();
-      runs.deleteAll();
-      runs.flush();
-      operations.deleteAll();
-      operations.flush();
-      captures.deleteAll();
-      captures.flush();
-      manifests.deleteAll();
-      manifests.flush();
-    });
+    tx().executeWithoutResult(
+            status -> {
+              bindings.deleteAll();
+              bindings.flush();
+              runs.deleteAll();
+              runs.flush();
+              operations.deleteAll();
+              operations.flush();
+              captures.deleteAll();
+              captures.flush();
+              manifests.deleteAll();
+              manifests.flush();
+            });
     FETCH_GATE.set(null);
   }
 
@@ -166,16 +169,21 @@ class CaptureSourceIntegrationTest {
     // Calling the result service from a live transaction proves that its source-fetch proxy
     // suspends the caller before the remote HTTP request. The service then joins the caller only
     // for the local write phase.
-    tx().executeWithoutResult(status -> {
-      assertTrue(TransactionSynchronizationManager.isActualTransactionActive());
-      captureResults.applyComplete(fixture.operation().getId(), fixture.attemptId(), success(fixture));
-    });
+    tx().executeWithoutResult(
+            status -> {
+              assertTrue(TransactionSynchronizationManager.isActualTransactionActive());
+              captureResults.applyComplete(
+                  fixture.operation().getId(), fixture.attemptId(), success(fixture));
+            });
 
-    assertFalse(TRANSACTION_ACTIVE_DURING_FETCH.get(),
+    assertFalse(
+        TRANSACTION_ACTIVE_DURING_FETCH.get(),
         "the upstream source request must not execute with a database transaction active");
-    assertEquals("SUCCEEDED", operations.findById(fixture.operation().getId()).orElseThrow().getState());
-    assertEquals("COMPLETED", captures.findBySessionId(fixture.sessionId()).orElseThrow()
-        .getCompletionStatus());
+    assertEquals(
+        "SUCCEEDED", operations.findById(fixture.operation().getId()).orElseThrow().getState());
+    assertEquals(
+        "COMPLETED",
+        captures.findBySessionId(fixture.sessionId()).orElseThrow().getCompletionStatus());
   }
 
   @Test
@@ -185,15 +193,20 @@ class CaptureSourceIntegrationTest {
     FETCH_GATE.set(gate);
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try {
-      var completion = executor.submit(() ->
-          captureResults.applyComplete(fixture.operation().getId(), fixture.attemptId(), success(fixture)));
+      var completion =
+          executor.submit(
+              () ->
+                  captureResults.applyComplete(
+                      fixture.operation().getId(), fixture.attemptId(), success(fixture)));
       assertTrue(gate.entered.await(10, TimeUnit.SECONDS), "source fetch did not start");
 
-      tx().executeWithoutResult(status -> {
-        RoutineCaptureRecord capture = captures.findBySessionId(fixture.sessionId()).orElseThrow();
-        capture.setIdentityJson(write(identity(fixture.runId(), OTHER_HASH)));
-        captures.saveAndFlush(capture);
-      });
+      tx().executeWithoutResult(
+              status -> {
+                RoutineCaptureRecord capture =
+                    captures.findBySessionId(fixture.sessionId()).orElseThrow();
+                capture.setIdentityJson(write(identity(fixture.runId(), OTHER_HASH)));
+                captures.saveAndFlush(capture);
+              });
       gate.release.countDown();
       completion.get(30, TimeUnit.SECONDS);
     } finally {
@@ -202,12 +215,14 @@ class CaptureSourceIntegrationTest {
       executor.shutdownNow();
     }
 
-    RoutineCaptureOperation operation = operations.findById(fixture.operation().getId()).orElseThrow();
+    RoutineCaptureOperation operation =
+        operations.findById(fixture.operation().getId()).orElseThrow();
     RoutineCaptureRecord capture = captures.findBySessionId(fixture.sessionId()).orElseThrow();
     assertEquals("UNCERTAIN", operation.getState());
     assertEquals("UNCERTAIN", capture.getCompletionStatus());
     assertFalse(capture.isCompleted());
-    assertTrue(findManifest(MANIFEST_HASH).isEmpty(),
+    assertTrue(
+        findManifest(MANIFEST_HASH).isEmpty(),
         "identity change must prevent the source manifest write");
     assertTrue(bindings.findByRunId(fixture.runId()).isEmpty());
   }
@@ -217,16 +232,19 @@ class CaptureSourceIntegrationTest {
     Fixture fixture = fixture("binding-conflict");
     SourceRunBinding conflicting = persistConflictingBinding(fixture.runId());
 
-    captureResults.applyComplete(fixture.operation().getId(), fixture.attemptId(), success(fixture));
+    captureResults.applyComplete(
+        fixture.operation().getId(), fixture.attemptId(), success(fixture));
 
-    RoutineCaptureOperation operation = operations.findById(fixture.operation().getId()).orElseThrow();
+    RoutineCaptureOperation operation =
+        operations.findById(fixture.operation().getId()).orElseThrow();
     RoutineCaptureRecord capture = captures.findBySessionId(fixture.sessionId()).orElseThrow();
     assertEquals("UNCERTAIN", operation.getState());
     assertEquals("UNCERTAIN", capture.getCompletionStatus());
     assertFalse(capture.isCompleted());
     assertTrue(findManifest(MANIFEST_HASH).isEmpty());
-    assertEquals(conflicting.getManifestHash(), bindings.findByRunId(fixture.runId())
-        .orElseThrow().getManifestHash());
+    assertEquals(
+        conflicting.getManifestHash(),
+        bindings.findByRunId(fixture.runId()).orElseThrow().getManifestHash());
     assertEquals("BOUND", runs.findByRunId(fixture.runId()).orElseThrow().getStage());
   }
 
@@ -237,9 +255,11 @@ class CaptureSourceIntegrationTest {
     Fixture fixture = fixture("run-conflict", conflictingIdentity);
     String beforeIdentity = runs.findByRunId(runId).orElseThrow().getIdentityJson();
 
-    captureResults.applyComplete(fixture.operation().getId(), fixture.attemptId(), success(fixture));
+    captureResults.applyComplete(
+        fixture.operation().getId(), fixture.attemptId(), success(fixture));
 
-    RoutineCaptureOperation operation = operations.findById(fixture.operation().getId()).orElseThrow();
+    RoutineCaptureOperation operation =
+        operations.findById(fixture.operation().getId()).orElseThrow();
     RoutineCaptureRecord capture = captures.findBySessionId(fixture.sessionId()).orElseThrow();
     assertEquals("UNCERTAIN", operation.getState());
     assertEquals("UNCERTAIN", capture.getCompletionStatus());
@@ -255,35 +275,43 @@ class CaptureSourceIntegrationTest {
     Fixture fixture = fixture("capture-update-failure");
     persistDuplicateRecording(fixture.runId());
 
-    captureResults.applyComplete(fixture.operation().getId(), fixture.attemptId(), success(fixture));
+    captureResults.applyComplete(
+        fixture.operation().getId(), fixture.attemptId(), success(fixture));
 
-    RoutineCaptureOperation operation = operations.findById(fixture.operation().getId()).orElseThrow();
+    RoutineCaptureOperation operation =
+        operations.findById(fixture.operation().getId()).orElseThrow();
     RoutineCaptureRecord capture = captures.findBySessionId(fixture.sessionId()).orElseThrow();
     assertEquals("UNCERTAIN", operation.getState());
     assertEquals("UNCERTAIN", capture.getCompletionStatus());
     assertFalse(capture.isCompleted());
     assertEquals("BOUND", runs.findByRunId(fixture.runId()).orElseThrow().getStage());
     assertTrue(bindings.findByRunId(fixture.runId()).isEmpty());
-    assertTrue(findManifest(MANIFEST_HASH).isEmpty(),
+    assertTrue(
+        findManifest(MANIFEST_HASH).isEmpty(),
         "a capture update failure must roll back the earlier source writes");
-    assertEquals(fixture.recordingId(), captures.findByRecordingId(fixture.recordingId())
-        .orElseThrow().getRecordingId());
+    assertEquals(
+        fixture.recordingId(),
+        captures.findByRecordingId(fixture.recordingId()).orElseThrow().getRecordingId());
   }
 
   @Test
   void exactSuccessfulCompletionRetryReturnsTheExistingImmutableIdentity() {
     Fixture fixture = fixture("idempotent-retry");
-    captureResults.applyComplete(fixture.operation().getId(), fixture.attemptId(), success(fixture));
+    captureResults.applyComplete(
+        fixture.operation().getId(), fixture.attemptId(), success(fixture));
 
-    String captureIdentity = captures.findBySessionId(fixture.sessionId()).orElseThrow().getIdentityJson();
+    String captureIdentity =
+        captures.findBySessionId(fixture.sessionId()).orElseThrow().getIdentityJson();
     String runIdentity = runs.findByRunId(fixture.runId()).orElseThrow().getIdentityJson();
-    String recordingHash = captures.findBySessionId(fixture.sessionId()).orElseThrow().getRecordingHash();
+    String recordingHash =
+        captures.findBySessionId(fixture.sessionId()).orElseThrow().getRecordingHash();
 
     leaseAgain(fixture.operation().getId(), "retry-exact");
     captureResults.applyComplete(fixture.operation().getId(), "retry-exact", success(fixture));
 
     RoutineCaptureRecord capture = captures.findBySessionId(fixture.sessionId()).orElseThrow();
-    assertEquals("SUCCEEDED", operations.findById(fixture.operation().getId()).orElseThrow().getState());
+    assertEquals(
+        "SUCCEEDED", operations.findById(fixture.operation().getId()).orElseThrow().getState());
     assertEquals("COMPLETED", capture.getCompletionStatus());
     assertEquals(captureIdentity, capture.getIdentityJson());
     assertEquals(recordingHash, capture.getRecordingHash());
@@ -294,18 +322,26 @@ class CaptureSourceIntegrationTest {
   @Test
   void differentCompletionIdentityCannotReuseAnExistingCompletion() {
     Fixture fixture = fixture("identity-reuse");
-    captureResults.applyComplete(fixture.operation().getId(), fixture.attemptId(), success(fixture));
+    captureResults.applyComplete(
+        fixture.operation().getId(), fixture.attemptId(), success(fixture));
     RoutineCaptureRecord completed = captures.findBySessionId(fixture.sessionId()).orElseThrow();
     String identity = completed.getIdentityJson();
     String recordingHash = completed.getRecordingHash();
 
     leaseAgain(fixture.operation().getId(), "retry-different");
-    captureResults.applyComplete(fixture.operation().getId(), "retry-different",
+    captureResults.applyComplete(
+        fixture.operation().getId(),
+        "retry-different",
         new CaptureRecordingGateway.CompleteResult(
-            true, false, fixture.recordingId() + "-other", "C:\\capture\\other.mp4",
-            OTHER_VIDEO_HASH, null));
+            true,
+            false,
+            fixture.recordingId() + "-other",
+            "C:\\capture\\other.mp4",
+            OTHER_VIDEO_HASH,
+            null));
 
-    RoutineCaptureOperation operation = operations.findById(fixture.operation().getId()).orElseThrow();
+    RoutineCaptureOperation operation =
+        operations.findById(fixture.operation().getId()).orElseThrow();
     RoutineCaptureRecord after = captures.findBySessionId(fixture.sessionId()).orElseThrow();
     assertEquals("FAILED", operation.getState());
     assertEquals("COMPLETED", after.getCompletionStatus());
@@ -417,13 +453,14 @@ class CaptureSourceIntegrationTest {
   }
 
   private void leaseAgain(Long operationId, String attemptId) {
-    tx().executeWithoutResult(status -> {
-      RoutineCaptureOperation operation = operations.findById(operationId).orElseThrow();
-      operation.setState("LEASED");
-      operation.setAttemptId(attemptId);
-      operation.setLeaseExpiresAt(java.time.Instant.now().plusSeconds(60));
-      operations.saveAndFlush(operation);
-    });
+    tx().executeWithoutResult(
+            status -> {
+              RoutineCaptureOperation operation = operations.findById(operationId).orElseThrow();
+              operation.setState("LEASED");
+              operation.setAttemptId(attemptId);
+              operation.setLeaseExpiresAt(java.time.Instant.now().plusSeconds(60));
+              operations.saveAndFlush(operation);
+            });
   }
 
   private CaptureRecordingGateway.CompleteResult success(Fixture fixture) {
@@ -440,16 +477,25 @@ class CaptureSourceIntegrationTest {
         "current-slice-identity/v1",
         new CurrentSliceIdentity.Task("EXAMPLE_TASK", settingsHash, "profile", HASH, HASH),
         new CurrentSliceIdentity.Run(runId, "attempt-1", 1, "executor-1"),
-        new CurrentSliceIdentity.Client("client", "MICRO6_MANAGED", "micro6-build-1", ARTIFACT,
-            "micro6-builder/v2", "MICRO6"),
-        null, null, null, null, null, false);
+        new CurrentSliceIdentity.Client(
+            "client", "MICRO6_MANAGED", "micro6-build-1", ARTIFACT, "micro6-builder/v2", "MICRO6"),
+        null,
+        null,
+        null,
+        null,
+        null,
+        false);
   }
 
   private CurrentSliceIdentity identityWithFixtureSource(String runId) {
     CurrentSliceIdentity base = identity(runId);
     var manifest = SourceManifestTestFixtures.manifest();
     return new CurrentSliceIdentity(
-        base.schema(), base.task(), base.run(), base.client(), base.capture(),
+        base.schema(),
+        base.task(),
+        base.run(),
+        base.client(),
+        base.capture(),
         new CurrentSliceIdentity.Source(
             manifest.path("source_snapshot_id").asText(),
             manifest.path("source_manifest_hash").asText(),
@@ -457,8 +503,12 @@ class CaptureSourceIntegrationTest {
             manifest.path("repository").path("commit_id").asText(),
             manifest.path("repository").path("tree_id").asText(),
             manifest.path("build").path("build_id").asText(),
-            manifest.path("build").path("artifact_digest").asText(), true),
-        base.graph(), base.model(), base.candidate(), base.controlAllowed());
+            manifest.path("build").path("artifact_digest").asText(),
+            true),
+        base.graph(),
+        base.model(),
+        base.candidate(),
+        base.controlAllowed());
   }
 
   private CurrentSliceIdentity identityWithSource(String runId) {
@@ -466,15 +516,22 @@ class CaptureSourceIntegrationTest {
         "current-slice-identity/v1",
         new CurrentSliceIdentity.Task("EXAMPLE_TASK", HASH, "profile", HASH, HASH),
         new CurrentSliceIdentity.Run(runId, "attempt-1", 1, "executor-1"),
-        new CurrentSliceIdentity.Client("client", "MICRO6_MANAGED", "micro6-build-1", ARTIFACT,
-            "micro6-builder/v2", "MICRO6"),
+        new CurrentSliceIdentity.Client(
+            "client", "MICRO6_MANAGED", "micro6-build-1", ARTIFACT, "micro6-builder/v2", "MICRO6"),
         null,
         new CurrentSliceIdentity.Source(
-            "srcsnap_eeeeeeeeeeeeeeeeeeeeeeee", HASH, "micro6",
+            "srcsnap_eeeeeeeeeeeeeeeeeeeeeeee",
+            HASH,
+            "micro6",
             "0123456789abcdef0123456789abcdef01234567",
-            "fedcba9876543210fedcba9876543210fedcba98", "micro6-build-other",
-            OTHER_HASH, true),
-        null, null, null, false);
+            "fedcba9876543210fedcba9876543210fedcba98",
+            "micro6-build-other",
+            OTHER_HASH,
+            true),
+        null,
+        null,
+        null,
+        false);
   }
 
   private Optional<SourceManifestReference> findManifest(String hash) {

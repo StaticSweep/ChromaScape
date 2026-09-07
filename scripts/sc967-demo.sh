@@ -65,17 +65,26 @@ check_tree leeuwbotapi "$LEEUWBOT_API_ROOT"
 run_gate leeuwbot_go_tests bash -c "cd '$LEEUWBOT_API_ROOT/plugin-service' && go test ./..."
 run_gate leeuwbot_go_build bash -c "cd '$LEEUWBOT_API_ROOT/plugin-service' && go build ./..."
 run_gate chromascape_tests bash -c "cd '$ROOT' && JAVA_HOME=\"${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}\" ./gradlew --offline --no-daemon --no-watch-fs --max-workers=1 test"
-run_gate micro6_manifest_build bash -c "cd '$MICRO6_ROOT' && JAVA_HOME=\"${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}\" ./gradlew --offline --no-daemon --no-watch-fs --max-workers=1 :runelite-client:generateFishingSourceManifest --rerun-tasks"
+run_gate micro6_manifest_build bash -c "cd '$MICRO6_ROOT' && JAVA_HOME=\"${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}\" ./gradlew --offline --no-daemon --no-watch-fs --max-workers=1 :runelite-client:generateAllTaskSourceBundles --rerun-tasks"
 
 python3 - "$ROOT" "$MICRO6_ROOT" "$LEEUWBOT_API_ROOT" "$OUT_DIR" "$MICRO6_REV" "$CHROMA_REV" "$API_REV" <<'PY'
-import hashlib, json, pathlib, sys
+import hashlib, json, os, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 micro6 = pathlib.Path(sys.argv[2])
 api = pathlib.Path(sys.argv[3])
 out = pathlib.Path(sys.argv[4])
 micro6_rev, chroma_rev, api_rev = sys.argv[5:]
 
-manifest_path = micro6 / "runelite-client/build/generated/fishing-source-manifest/micro6-contracts/fishing-source-manifest.json"
+bundle_root = pathlib.Path(os.environ.get("MICRO6_SOURCE_BUNDLE_ROOT", ""))
+manifest_path = pathlib.Path()
+current_path = bundle_root / "current.json"
+if current_path.is_file():
+    try:
+        current = json.loads(current_path.read_text())
+        bundle_id = current["bundle_id"]
+        manifest_path = bundle_root / "bundles" / bundle_id / "manifests" / "FISHING_TRAINING.json"
+    except Exception:
+        manifest_path = pathlib.Path()
 fixtures = [
     root / "src/test/resources/sc967/micro6-pass-recording-v1.json",
     root / "src/test/resources/sc967/runelite-fishing-capture-v1.json",
@@ -119,7 +128,7 @@ else:
 
 # Candidate registration is derived only from an actual authenticated registry transaction and
 # canonical GET/download readback. Missing worker artifacts or credentials is a hard FAIL.
-import os, urllib.request, urllib.error
+import urllib.request, urllib.error
 candidate_manifest_path = pathlib.Path(os.environ.get("SC967_CANDIDATE_MANIFEST", ""))
 candidate_jar_path = pathlib.Path(os.environ.get("SC967_CANDIDATE_JAR", ""))
 candidate_sbom_path = pathlib.Path(os.environ.get("SC967_CANDIDATE_SBOM", ""))

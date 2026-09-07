@@ -23,15 +23,29 @@ public class RoutineCurationService {
   }
 
   @Transactional
-  public java.util.Map<String, Object> put(String recordingId, RoutineApiDtos.CurationRequest request) {
+  public java.util.Map<String, Object> put(
+      String recordingId, RoutineApiDtos.CurationRequest request) {
     captures.recording(recordingId);
     try {
-      RoutineCuration entity = repository.findByRecordingId(recordingId).orElseGet(RoutineCuration::new);
+      RoutineCuration entity =
+          repository.findByRecordingId(recordingId).orElseGet(RoutineCuration::new);
       entity.setRecordingId(recordingId);
-      entity.setIncludeRangesJson(mapper.writeValueAsString(request.includeRanges() == null ? java.util.List.of() : request.includeRanges()));
-      entity.setExcludeRangesJson(mapper.writeValueAsString(request.excludeRanges() == null ? java.util.List.of() : request.excludeRanges()));
+      entity.setIncludeRangesJson(
+          mapper.writeValueAsString(
+              request.includeRanges() == null ? java.util.List.of() : request.includeRanges()));
+      entity.setExcludeRangesJson(
+          mapper.writeValueAsString(
+              request.excludeRanges() == null ? java.util.List.of() : request.excludeRanges()));
       repository.save(entity);
-      return java.util.Map.of("recording_id", recordingId, "curation", request, "evidence_rewritten", false, "status", "CURATED");
+      return java.util.Map.of(
+          "recording_id",
+          recordingId,
+          "curation",
+          request,
+          "evidence_rewritten",
+          false,
+          "status",
+          "CURATED");
     } catch (Exception e) {
       throw new IllegalArgumentException("curation JSON is invalid", e);
     }
@@ -45,8 +59,16 @@ public class RoutineCurationService {
   private RoutineApiDtos.CurationRequest read(RoutineCuration entity) {
     try {
       return new RoutineApiDtos.CurationRequest(
-          mapper.readValue(entity.getIncludeRangesJson(), mapper.getTypeFactory().constructCollectionType(java.util.List.class, java.util.Map.class)),
-          mapper.readValue(entity.getExcludeRangesJson(), mapper.getTypeFactory().constructCollectionType(java.util.List.class, java.util.Map.class)));
+          mapper.readValue(
+              entity.getIncludeRangesJson(),
+              mapper
+                  .getTypeFactory()
+                  .constructCollectionType(java.util.List.class, java.util.Map.class)),
+          mapper.readValue(
+              entity.getExcludeRangesJson(),
+              mapper
+                  .getTypeFactory()
+                  .constructCollectionType(java.util.List.class, java.util.Map.class)));
     } catch (Exception e) {
       throw new IllegalStateException("persisted curation is invalid", e);
     }

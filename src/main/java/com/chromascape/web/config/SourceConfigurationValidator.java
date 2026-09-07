@@ -66,7 +66,8 @@ public class SourceConfigurationValidator {
     }
     requireNonBlank(metadataToken, "chromascape.source.access.metadata-token");
     requireNonBlank(contentToken, "chromascape.source.access.content-token");
-    log.info("SC-810 source trust and transport configuration validated for environment {}",
+    log.info(
+        "SC-810 source trust and transport configuration validated for environment {}",
         environment);
   }
 
@@ -74,10 +75,11 @@ public class SourceConfigurationValidator {
     requireNonBlank(value, "micro6.source.transport.base-url");
     try {
       URI uri = URI.create(value);
-      if (!("http".equalsIgnoreCase(uri.getScheme())
-          || "https".equalsIgnoreCase(uri.getScheme()))
-          || uri.getHost() == null || uri.getUserInfo() != null
-          || uri.getRawQuery() != null || uri.getRawFragment() != null) {
+      if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+          || uri.getHost() == null
+          || uri.getUserInfo() != null
+          || uri.getRawQuery() != null
+          || uri.getRawFragment() != null) {
         fail("micro6.source.transport.base-url is not a trusted HTTP(S) endpoint");
       }
     } catch (RuntimeException exception) {

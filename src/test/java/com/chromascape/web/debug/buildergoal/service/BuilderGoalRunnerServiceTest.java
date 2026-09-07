@@ -396,8 +396,7 @@ class BuilderGoalRunnerServiceTest {
                 }
                 """));
 
-    assertThat(response.get("settings"))
-        .isEqualTo(Map.of("treeType", "WILLOW", "targetLevel", 35));
+    assertThat(response.get("settings")).isEqualTo(Map.of("treeType", "WILLOW", "targetLevel", 35));
     assertThat(response.get("settingsCount")).isEqualTo(2);
   }
 
@@ -453,8 +452,7 @@ class BuilderGoalRunnerServiceTest {
                 }
                 """));
 
-    assertThat(response.get("settings"))
-        .isEqualTo(Map.of("treeType", "WILLOW", "targetLevel", 35));
+    assertThat(response.get("settings")).isEqualTo(Map.of("treeType", "WILLOW", "targetLevel", 35));
     assertThat(response.get("settingsCount")).isEqualTo(2);
   }
 
@@ -482,8 +480,7 @@ class BuilderGoalRunnerServiceTest {
                 }
                 """));
 
-    assertThat(response.get("settings"))
-        .isEqualTo(Map.of("treeType", "WILLOW"));
+    assertThat(response.get("settings")).isEqualTo(Map.of("treeType", "WILLOW"));
   }
 
   @Test
@@ -545,8 +542,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
@@ -589,7 +585,8 @@ class BuilderGoalRunnerServiceTest {
 
   private Object invokePublishIteration(PatchLoopIteration iteration) throws Exception {
     Method publishIteration =
-        BuilderGoalRunnerService.class.getDeclaredMethod("publishIteration", PatchLoopIteration.class);
+        BuilderGoalRunnerService.class.getDeclaredMethod(
+            "publishIteration", PatchLoopIteration.class);
     publishIteration.setAccessible(true);
     try {
       return publishIteration.invoke(service, iteration);
@@ -615,8 +612,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
@@ -661,8 +657,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
@@ -734,8 +729,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     when(targetPreparationService.ensureReady(
             any(Micro6TargetPreparationService.PreparationRequest.class),
@@ -766,8 +760,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     when(targetPreparationService.ensureReady(
             any(Micro6TargetPreparationService.PreparationRequest.class),
@@ -804,8 +797,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
@@ -871,8 +863,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     PatchLoopIteration activeIteration = new PatchLoopIteration();
     activeIteration.setIterationId("buildergoal_active_1");
     activeIteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
@@ -940,8 +931,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     PatchLoopIteration staleIteration = new PatchLoopIteration();
     staleIteration.setIterationId("buildergoal_stale_1");
     staleIteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
@@ -1173,7 +1163,8 @@ class BuilderGoalRunnerServiceTest {
             BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
         .thenReturn(List.of(newest, older));
 
-    Map<String, Object> config = service.getLatestConfig("1111111111111111", "configurable_woodcutting");
+    Map<String, Object> config =
+        service.getLatestConfig("1111111111111111", "configurable_woodcutting");
 
     assertThat(config.get("configAvailable")).isEqualTo(true);
     assertThat(config.get("iterationId")).isEqualTo("buildergoal_cfg0002");
@@ -1376,8 +1367,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
@@ -1699,8 +1689,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
     stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
@@ -1745,8 +1734,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
     stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
@@ -1794,8 +1782,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
     stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
@@ -1859,8 +1846,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
     stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
@@ -1996,8 +1982,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-udasu",
@@ -2117,8 +2102,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     PatchLoopIteration deferred = new PatchLoopIteration();
     deferred.setIterationId("buildergoal_publish_only_deferred");
     deferred.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
@@ -2183,8 +2167,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(
@@ -2216,8 +2199,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(
@@ -2266,8 +2248,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(() -> service.launchAccount("1111111111111111", "machine-1", 360))
@@ -2296,8 +2277,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
@@ -2339,8 +2319,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
     stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
@@ -2389,8 +2368,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             false,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(
@@ -2424,8 +2402,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(
@@ -2522,8 +2499,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     PatchLoopIteration iteration = new PatchLoopIteration();
     iteration.setIterationId("buildergoal_cancel_race");
     iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
@@ -2581,8 +2557,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     PatchLoopIteration iteration = new PatchLoopIteration();
     iteration.setIterationId("buildergoal_cancel_terminal");
     iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
@@ -2637,8 +2612,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     PatchLoopIteration iteration = new PatchLoopIteration();
     iteration.setIterationId("buildergoal_cancel_lease_loss");
     iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
@@ -2692,8 +2666,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
 
@@ -2748,8 +2721,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
@@ -2888,8 +2860,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(() -> service.launchAccount("1111111111111111", "machine-1", null))
@@ -2918,8 +2889,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(() -> service.launchAccount("1111111111111111", "machine-1", 299))
@@ -2948,8 +2918,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(() -> service.launchAccount("1111111111111111", "machine-1", 701))
@@ -2966,8 +2935,7 @@ class BuilderGoalRunnerServiceTest {
 
   @Test
   void launchAccount_acceptsWorldBounds300And700() {
-    BuilderGoalAccountCatalogService.AccountDefinition account =
-        credentialedAccount();
+    BuilderGoalAccountCatalogService.AccountDefinition account = credentialedAccount();
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     when(targetPreparationService.ensureReady(
             any(Micro6TargetPreparationService.PreparationRequest.class),
@@ -3022,8 +2990,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(() -> service.launchAccount("1111111111111111", "machine-1", 360))
@@ -3052,8 +3019,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(
@@ -3087,8 +3053,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
 
     assertThatThrownBy(() -> service.launchAccount("1111111111111111", "machine-1", 360))
@@ -3115,8 +3080,7 @@ class BuilderGoalRunnerServiceTest {
         "launcher",
         true,
         "ready",
-        Map.of("password", "s3cret")
-    );
+        Map.of("password", "s3cret"));
   }
 
   private Micro6OnlineClientRegistryService.TargetClient targetClientAt(String baseUrl) {
@@ -3568,8 +3532,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
     stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
@@ -3613,8 +3576,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
     stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
@@ -3661,8 +3623,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     BuilderGoalLauncherControlService.LauncherMachine offline =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-offline", "Machine Offline", "OFFLINE", true, false, Map.of());
@@ -3713,8 +3674,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     BuilderGoalLauncherControlService.LauncherMachine remote =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-remote", "jew (jomar)", "ONLINE", true, true, Map.of());
@@ -3765,8 +3725,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     BuilderGoalLauncherControlService.LauncherMachine disabled =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-disabled", "Machine Disabled", "ONLINE", false, true, Map.of());
@@ -3817,8 +3776,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     when(launcherControlService.findMachineByUuid("unknown-machine")).thenReturn(Optional.empty());
 
@@ -3848,8 +3806,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     BuilderGoalLauncherControlService.LauncherMachine offline =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-offline", "Machine Offline", "OFFLINE", true, false, Map.of());
@@ -3886,8 +3843,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     BuilderGoalLauncherControlService.LauncherMachine remote =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-remote", "jew (jomar)", "ONLINE", true, true, Map.of());
@@ -3924,8 +3880,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     Micro6OnlineClientRegistryService.TargetClient targetClient =
         new Micro6OnlineClientRegistryService.TargetClient(
             "client-1",
@@ -3985,8 +3940,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     BuilderGoalLauncherControlService.LauncherMachine remote =
         new BuilderGoalLauncherControlService.LauncherMachine(
             "machine-remote", "jew (jomar)", "ONLINE", true, true, Map.of());
@@ -4030,8 +3984,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of()
-        );
+            Map.of());
     when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
     stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
     stubRunnableCatalog("configurable_woodcutting", "Configurable Woodcutting", "treeType");
@@ -4465,8 +4418,7 @@ class BuilderGoalRunnerServiceTest {
             "launcher",
             true,
             "ready",
-            Map.of("password", "s3cret")
-        );
+            Map.of("password", "s3cret"));
     PatchLoopIteration iteration = new PatchLoopIteration();
     iteration.setIterationId("buildergoal_lease_wait");
     iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
