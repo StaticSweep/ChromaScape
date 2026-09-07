@@ -58,17 +58,19 @@ class ReplayTickBatchReceiptIntegrationTest {
         Statement statement = admin.createStatement()) {
       statement.execute("CREATE SCHEMA \"" + schema + "\"");
     }
-    // Establish an empty history while the schema is still empty, before each test creates
-    // its deliberately minimal legacy debug_sessions table. No baseline/repair or relaxed
-    // validation is needed when the actual V35/V37/V38 resources are subsequently migrated.
+    // Establish the exact pre-receipt V34 boundary while the schema is still empty, before each
+    // test creates its deliberately minimal legacy debug_sessions table. This makes the isolated
+    // fixture match the production V34 -> V35 upgrade path instead of recording V35 as the first
+    // migration in an otherwise empty history.
     Flyway.configure()
         .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
         .schemas(schema)
         .defaultSchema(schema)
         .createSchemas(false)
         .locations(new String[0])
+        .baselineVersion("34")
         .load()
-        .migrate();
+        .baseline();
   }
 
   @org.junit.jupiter.api.AfterEach
@@ -94,9 +96,9 @@ class ReplayTickBatchReceiptIntegrationTest {
           "V35__replay_tick_batch_receipts.sql",
           "V37__replay_tick_batch_receipt_retention.sql",
           "V38__replay_tick_batch_receipt_retention_guard.sql");
-      assertFlywayVersions(connection, "35", "37", "38");
+      assertFlywayVersions(connection, "34", "35", "37", "38");
 
-      assertEquals("c", foreignKeyDeleteRule(connection), "receipt retention must cascade");
+      assertEquals("cascade", foreignKeyDeleteRule(connection), "receipt retention must cascade");
       assertEquals(0, indexCount(connection, "idx_replay_tick_batch_receipt_session_tick"));
       assertEquals(1, constraintCount(connection, "uq_replay_tick_batch_receipt_session_tick"));
       assertEquals(1, constraintCount(connection, "uq_replay_tick_batch_receipt_session_batch"));
@@ -124,9 +126,9 @@ class ReplayTickBatchReceiptIntegrationTest {
       setSchema(connection);
       createDebugSessionsTable(connection);
       migrate("V35__replay_tick_batch_receipts.sql");
-      assertFlywayVersions(connection, "35");
+      assertFlywayVersions(connection, "34", "35");
       assertEquals(
-          "r", foreignKeyDeleteRule(connection), "V35 must retain RESTRICT before upgrade");
+          "restrict", foreignKeyDeleteRule(connection), "V35 must retain RESTRICT before upgrade");
       String sessionId = "debug-upgrade-1";
       insertSession(connection, sessionId);
       insertReceipt(connection, sessionId, UUID.randomUUID(), 7, checksum('b'));
@@ -137,7 +139,7 @@ class ReplayTickBatchReceiptIntegrationTest {
           "V35__replay_tick_batch_receipts.sql",
           "V37__replay_tick_batch_receipt_retention.sql",
           "V38__replay_tick_batch_receipt_retention_guard.sql");
-      assertFlywayVersions(connection, "35", "37", "38");
+      assertFlywayVersions(connection, "34", "35", "37", "38");
 
       assertEquals(
           1,
@@ -147,7 +149,7 @@ class ReplayTickBatchReceiptIntegrationTest {
                   "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id = '"
                       + sessionId
                       + "'")));
-      assertEquals("c", foreignKeyDeleteRule(connection));
+      assertEquals("cascade", foreignKeyDeleteRule(connection));
       assertEquals(0, indexCount(connection, "idx_replay_tick_batch_receipt_session_tick"));
       assertEquals(1, constraintCount(connection, "uq_replay_tick_batch_receipt_session_tick"));
       execute(
@@ -177,7 +179,8 @@ class ReplayTickBatchReceiptIntegrationTest {
       execute(
           connection,
           qualified(
-              "CREATE TABLE tick_snapshots (session_id varchar(100) NOT NULL, tick bigint NOT NULL)"));
+              "CREATE TABLE tick_snapshots (session_id varchar(100) NOT NULL, tick bigint NOT"
+                  + " NULL)"));
 
       connection.setAutoCommit(false);
       insertReceipt(connection, "debug-rollback-1", UUID.randomUUID(), 9, checksum('c'));
@@ -190,8 +193,9 @@ class ReplayTickBatchReceiptIntegrationTest {
             execute(
                 connection,
                 qualified(
-                    "INSERT INTO replay_tick_batch_receipts(session_id, batch_id, tick, payload_checksum, schema_name, persisted_at) "
-                        + "VALUES ('debug-rollback-1', '"
+                    "INSERT INTO replay_tick_batch_receipts(session_id, batch_id, tick,"
+                        + " payload_checksum, schema_name, persisted_at) VALUES"
+                        + " ('debug-rollback-1', '"
                         + UUID.randomUUID()
                         + "', 9, '"
                         + checksum('d')
@@ -205,7 +209,8 @@ class ReplayTickBatchReceiptIntegrationTest {
           scalarInt(
               connection,
               qualified(
-                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id = 'debug-rollback-1'")));
+                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id ="
+                      + " 'debug-rollback-1'")));
       assertEquals(
           0,
           scalarInt(
@@ -246,7 +251,8 @@ class ReplayTickBatchReceiptIntegrationTest {
           scalarInt(
               connection,
               qualified(
-                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id = 'debug-race-exact'")));
+                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id ="
+                      + " 'debug-race-exact'")));
     }
   }
 
@@ -279,7 +285,8 @@ class ReplayTickBatchReceiptIntegrationTest {
           scalarInt(
               connection,
               qualified(
-                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id = 'debug-race-conflict' AND tick = 11")));
+                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id ="
+                      + " 'debug-race-conflict' AND tick = 11")));
     }
   }
 
@@ -327,13 +334,15 @@ class ReplayTickBatchReceiptIntegrationTest {
           scalarInt(
               connection,
               qualified(
-                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id = 'debug-race-repo' AND tick = 20")));
+                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id ="
+                      + " 'debug-race-repo' AND tick = 20")));
       assertEquals(
           1,
           scalarInt(
               connection,
               qualified(
-                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id = 'debug-race-repo' AND tick = 21")));
+                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id ="
+                      + " 'debug-race-repo' AND tick = 21")));
     }
   }
 
@@ -369,7 +378,8 @@ class ReplayTickBatchReceiptIntegrationTest {
           scalarString(
               connection,
               qualified(
-                  "SELECT payload_checksum FROM replay_tick_batch_receipts WHERE session_id = 'debug-race-service' AND tick = 30")));
+                  "SELECT payload_checksum FROM replay_tick_batch_receipts WHERE session_id ="
+                      + " 'debug-race-service' AND tick = 30")));
     }
   }
 
@@ -441,9 +451,9 @@ class ReplayTickBatchReceiptIntegrationTest {
     try (var statement =
         connection.prepareStatement(
             qualified(
-                "INSERT INTO replay_tick_batch_receipts "
-                    + "(session_id, batch_id, tick, payload_checksum, schema_name, persisted_at) "
-                    + "VALUES (?, ?, ?, ?, 'tick-batch/v2', CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING"))) {
+                "INSERT INTO replay_tick_batch_receipts (session_id, batch_id, tick,"
+                    + " payload_checksum, schema_name, persisted_at) VALUES (?, ?, ?, ?,"
+                    + " 'tick-batch/v2', CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING"))) {
       statement.setString(1, sessionId);
       statement.setObject(2, batchId);
       statement.setLong(3, tick);
@@ -469,16 +479,67 @@ class ReplayTickBatchReceiptIntegrationTest {
   }
 
   /**
-   * Qualifies bare table references to the isolated schema; already-qualified names are untouched.
+   * Qualifies bare user-table references to this test's isolated schema without rewriting SQL
+   * inside single-quoted string literals or double-quoted identifiers. Migration scripts are
+   * applied unchanged through Flyway's {@code defaultSchema}; only the test's own ad-hoc JDBC
+   * statements are qualified here so they resolve inside the isolated schema regardless of the
+   * connection's search path.
    */
   private String qualified(String sql) {
-    String scoped =
-        sql.replaceAll(
-            "(?<![\"\\w.])replay_tick_batch_receipts",
-            "\"" + schema + "\".replay_tick_batch_receipts");
-    scoped = scoped.replaceAll("(?<![\"\\w.])debug_sessions", "\"" + schema + "\".debug_sessions");
-    scoped = scoped.replaceAll("(?<![\"\\w.])tick_snapshots", "\"" + schema + "\".tick_snapshots");
-    return scoped;
+    String[] tables = {"replay_tick_batch_receipts", "debug_sessions", "tick_snapshots"};
+    StringBuilder out = new StringBuilder(sql.length() + 64);
+    int index = 0;
+    while (index < sql.length()) {
+      char c = sql.charAt(index);
+      if (c == '\'') {
+        // Copy a single-quoted string literal untouched, honouring '' escapes.
+        int end = sql.indexOf('\'', index + 1);
+        while (end >= 0 && end + 1 < sql.length() && sql.charAt(end + 1) == '\'') {
+          end = sql.indexOf('\'', end + 2);
+        }
+        if (end < 0) {
+          end = sql.length() - 1;
+        }
+        out.append(sql, index, end + 1);
+        index = end + 1;
+        continue;
+      }
+      if (c == '"') {
+        // Copy a double-quoted identifier untouched.
+        int end = sql.indexOf('"', index + 1);
+        if (end < 0) {
+          end = sql.length() - 1;
+        }
+        out.append(sql, index, end + 1);
+        index = end + 1;
+        continue;
+      }
+      boolean replaced = false;
+      for (String table : tables) {
+        if (sql.startsWith(table, index)) {
+          char before = index == 0 ? 0 : sql.charAt(index - 1);
+          char after =
+              index + table.length() < sql.length() ? sql.charAt(index + table.length()) : 0;
+          boolean boundaryBefore =
+              !(Character.isLetterOrDigit(before)
+                  || before == '_'
+                  || before == '.'
+                  || before == '"');
+          boolean boundaryAfter = !(Character.isLetterOrDigit(after) || after == '_');
+          if (boundaryBefore && boundaryAfter) {
+            out.append('"').append(schema).append('"').append('.').append(table);
+            index += table.length();
+            replaced = true;
+            break;
+          }
+        }
+      }
+      if (!replaced) {
+        out.append(c);
+        index++;
+      }
+    }
+    return out.toString();
   }
 
   private void migrate(String... scripts) throws Exception {
@@ -489,12 +550,15 @@ class ReplayTickBatchReceiptIntegrationTest {
           if (input == null) {
             throw new IOException("Missing migration resource: " + script);
           }
-          String content =
-              new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-          Files.writeString(
-              directory.resolve(script),
-              content,
-              java.nio.charset.StandardCharsets.UTF_8);
+          // The checked-in migration bytes are applied unchanged. Flyway's schemas/defaultSchema
+          // configuration makes this test's isolated schema the current schema of the migration
+          // connection, so unqualified DDL and the current_schema() catalog guards in V37/V38
+          // resolve against the same schema the raw JDBC helpers use. Rewriting migration text
+          // would corrupt SQL string literals (for example table_ref.relname = 'replay_tick_batch_
+          // receipts' inside the V37/V38 catalog guards) and would obscure whether the real
+          // checked-in SQL converges, so no rewrite
+          // is performed.
+          Files.copy(input, directory.resolve(script));
         }
       }
       Flyway.configure()
@@ -502,6 +566,12 @@ class ReplayTickBatchReceiptIntegrationTest {
           .schemas(schema)
           .defaultSchema(schema)
           .createSchemas(false)
+          // The test creates the V24-owned debug_sessions dependency directly because the
+          // receipt migrations are exercised in isolation. Treat that dependency as the
+          // already-applied pre-receipt history boundary, matching the real V34 -> V35 upgrade
+          // path instead of making Flyway reject the intentionally non-empty schema.
+          .baselineOnMigrate(true)
+          .baselineVersion("34")
           .locations("filesystem:" + directory)
           .load()
           .migrate();
@@ -514,7 +584,6 @@ class ReplayTickBatchReceiptIntegrationTest {
 
   // Flyway's defaultSchema owns the search_path: migrate the exact production SQL bytes.
   // Regex-qualifying table names also rewrites SQL string literals in catalog predicates.
-
   /** Asserts the schema-local Flyway history contains exactly the expected versions in order. */
   private void assertFlywayVersions(Connection connection, String... versions) throws SQLException {
     List<String> actual = new ArrayList<>();
@@ -549,8 +618,8 @@ class ReplayTickBatchReceiptIntegrationTest {
     execute(
         connection,
         qualified(
-            "INSERT INTO replay_tick_batch_receipts "
-                + "(session_id, batch_id, tick, payload_checksum, schema_name, persisted_at) VALUES ('"
+            "INSERT INTO replay_tick_batch_receipts (session_id, batch_id, tick, payload_checksum,"
+                + " schema_name, persisted_at) VALUES ('"
                 + sessionId
                 + "', '"
                 + batchId
@@ -572,7 +641,14 @@ class ReplayTickBatchReceiptIntegrationTest {
       statement.setString(1, schema);
       try (ResultSet result = statement.executeQuery()) {
         assertTrue(result.next(), "receipt session FK must exist");
-        return result.getString(1).toLowerCase();
+        return switch (result.getString(1)) {
+          case "c" -> "cascade";
+          case "r" -> "restrict";
+          case "a" -> "no action";
+          case "n" -> "set null";
+          case "d" -> "set default";
+          default -> throw new SQLException("Unknown PostgreSQL foreign-key delete rule");
+        };
       }
     }
   }
@@ -621,6 +697,7 @@ class ReplayTickBatchReceiptIntegrationTest {
   }
 
   private static String checksum(char suffix) {
-    return "sha256:" + String.valueOf(suffix).repeat(64);
+    char hex = Character.forDigit(Math.floorMod(suffix, 16), 16);
+    return "sha256:" + String.valueOf(hex).repeat(64);
   }
 }

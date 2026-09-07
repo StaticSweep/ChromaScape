@@ -9,10 +9,11 @@ import org.hibernate.type.SqlTypes;
 /**
  * Durable RSProx packet observation (SC-1618).
  *
- * <p>One row per {@code rsprox-packet/v1} envelope, persisted in the same transaction as the
- * enclosing tick batch before the durable ACK. Unique {@code (session_id, source_session_id,
- * packet_sequence)} gives retry idempotency; a reused sequence with different content fails with
- * {@code PACKET_IDENTITY_CONFLICT}.
+ * <p>One row per RSProx observation, persisted in the same transaction as the enclosing tick batch
+ * before the durable ACK. v1 rows use the legacy packet sequence for both identities. v2 rows use
+ * {@code (schema, observation_sequence)} as delivery identity and keep the original capture
+ * sequence nullable for GAP observations. A reused observation identity with different content
+ * fails with {@code PACKET_IDENTITY_CONFLICT}.
  */
 @Entity
 @Table(
@@ -20,12 +21,18 @@ import org.hibernate.type.SqlTypes;
     uniqueConstraints = {
       @UniqueConstraint(
           name = "uq_packet_observations_session_source_sequence",
-          columnNames = {"session_id", "source_session_id", "packet_sequence"})
+          columnNames = {
+            "session_id",
+            "source_session_id",
+            "packet_schema",
+            "observation_sequence"
+          })
     },
     indexes = {
       @Index(
           name = "idx_packet_observations_session_tick_seq",
-          columnList = "session_id, tick, packet_sequence"),
+          columnList =
+              "session_id, tick, source_session_id, packet_schema, observation_sequence, id"),
       @Index(name = "idx_packet_observations_direction", columnList = "session_id, direction"),
       @Index(name = "idx_packet_observations_protocol", columnList = "session_id, protocol_name"),
       @Index(name = "idx_packet_observations_status", columnList = "session_id, decode_status")
@@ -45,7 +52,16 @@ public class PacketObservation {
   @Column(name = "source_session_id", nullable = false, length = 100)
   private String sourceSessionId;
 
-  @Column(name = "packet_sequence", nullable = false)
+  /** Wire schema that defines the meaning of the observation identity. */
+  @Column(name = "packet_schema", nullable = false, length = 32)
+  private String packetSchema;
+
+  /** Per-source observation/delivery identity. */
+  @Column(name = "observation_sequence", nullable = false)
+  private Long observationSequence;
+
+  /** Original capture identity; null is required for v2 GAP rows. */
+  @Column(name = "packet_sequence")
   private Long packetSequence;
 
   @Column(name = "captured_at")
@@ -92,9 +108,21 @@ public class PacketObservation {
 
   public PacketObservation(
       String sessionId, long tick, String sourceSessionId, long packetSequence) {
+    this(sessionId, tick, sourceSessionId, "rsprox-packet/v1", packetSequence, packetSequence);
+  }
+
+  public PacketObservation(
+      String sessionId,
+      long tick,
+      String sourceSessionId,
+      String packetSchema,
+      long observationSequence,
+      Long packetSequence) {
     this.sessionId = sessionId;
     this.tick = tick;
     this.sourceSessionId = sourceSessionId;
+    this.packetSchema = packetSchema;
+    this.observationSequence = observationSequence;
     this.packetSequence = packetSequence;
     this.createdAt = LocalDateTime.now();
   }
@@ -125,6 +153,30 @@ public class PacketObservation {
 
   public void setSourceSessionId(String sourceSessionId) {
     this.sourceSessionId = sourceSessionId;
+  }
+
+  public String getSchema() {
+    return packetSchema;
+  }
+
+  public String getPacketSchema() {
+    return packetSchema;
+  }
+
+  public void setSchema(String schema) {
+    this.packetSchema = schema;
+  }
+
+  public void setPacketSchema(String packetSchema) {
+    this.packetSchema = packetSchema;
+  }
+
+  public Long getObservationSequence() {
+    return observationSequence;
+  }
+
+  public void setObservationSequence(Long observationSequence) {
+    this.observationSequence = observationSequence;
   }
 
   public Long getPacketSequence() {

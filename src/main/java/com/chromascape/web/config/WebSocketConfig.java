@@ -1,11 +1,11 @@
 package com.chromascape.web.config;
 
-import com.chromascape.web.gateway.config.GatewayCapabilitiesProperties;
 import com.chromascape.web.debug.BotStateWebSocketHandler;
 import com.chromascape.web.debug.OverlayWebSocketHandler;
 import com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler;
 import com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler;
 import com.chromascape.web.debug.tickdebugger.websocket.TickStreamWebSocketHandler;
+import com.chromascape.web.gateway.config.GatewayCapabilitiesProperties;
 import com.chromascape.web.instance.WebSocketStateHandler;
 import com.chromascape.web.logs.LogWebSocketHandler;
 import com.chromascape.web.state.SemanticWebSocketHandler;

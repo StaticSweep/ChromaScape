@@ -547,7 +547,13 @@ public class TickBatchMessage {
   public static class TickPacketEntry {
     private final String schema;
     private final String sourceSessionId;
+
+    /** Per-source delivery identity in v2; legacy capture identity in v1. */
     private final Long sequence;
+
+    /** Original capture identity for v2 real packets; null for v2 GAPs and v1 envelopes. */
+    private final Long packetSequence;
+
     private final String capturedAt;
     private final Long captureDeltaMillis;
     private final String direction;
@@ -567,6 +573,7 @@ public class TickBatchMessage {
         @JsonProperty("schema") String schema,
         @JsonProperty("sourceSessionId") String sourceSessionId,
         @JsonProperty("sequence") Long sequence,
+        @JsonProperty("packetSequence") Long packetSequence,
         @JsonProperty("capturedAt") String capturedAt,
         @JsonProperty("captureDeltaMillis") Long captureDeltaMillis,
         @JsonProperty("direction") String direction,
@@ -583,6 +590,7 @@ public class TickBatchMessage {
       this.schema = schema;
       this.sourceSessionId = sourceSessionId;
       this.sequence = sequence;
+      this.packetSequence = packetSequence;
       this.capturedAt = capturedAt;
       this.captureDeltaMillis = captureDeltaMillis;
       this.direction = direction;
@@ -598,6 +606,44 @@ public class TickBatchMessage {
       this.tick = tick;
     }
 
+    /** Source-compatible constructor for existing v1 callers and fixtures. */
+    public TickPacketEntry(
+        String schema,
+        String sourceSessionId,
+        Long sequence,
+        String capturedAt,
+        Long captureDeltaMillis,
+        String direction,
+        Integer opcode,
+        String protocolName,
+        Integer encodedSize,
+        String decodedType,
+        Map<String, Object> decoded,
+        String sanitizedPayloadBase64,
+        String decodeStatus,
+        String decodeError,
+        Boolean synthetic,
+        Long tick) {
+      this(
+          schema,
+          sourceSessionId,
+          sequence,
+          null,
+          capturedAt,
+          captureDeltaMillis,
+          direction,
+          opcode,
+          protocolName,
+          encodedSize,
+          decodedType,
+          decoded,
+          sanitizedPayloadBase64,
+          decodeStatus,
+          decodeError,
+          synthetic,
+          tick);
+    }
+
     public String getSchema() {
       return schema;
     }
@@ -608,6 +654,10 @@ public class TickBatchMessage {
 
     public Long getSequence() {
       return sequence;
+    }
+
+    public Long getPacketSequence() {
+      return packetSequence;
     }
 
     public String getCapturedAt() {
@@ -679,6 +729,9 @@ public class TickBatchMessage {
     private final Long malformedPacketFrameCount;
     private final String packetSourceStatus;
 
+    /** Exact source-scoped loss evidence emitted by the v2 producer. */
+    private final List<PacketLossSource> packetLosses;
+
     @JsonCreator
     public TransportDiagnostics(
         @JsonProperty("droppedBatchCount") Long droppedBatchCount,
@@ -693,7 +746,8 @@ public class TickBatchMessage {
         @JsonProperty("omittedPacketCount") Integer omittedPacketCount,
         @JsonProperty("omittedPacketPayloadBytes") Long omittedPacketPayloadBytes,
         @JsonProperty("malformedPacketFrameCount") Long malformedPacketFrameCount,
-        @JsonProperty("packetSourceStatus") String packetSourceStatus) {
+        @JsonProperty("packetSourceStatus") String packetSourceStatus,
+        @JsonProperty("packetLosses") List<PacketLossSource> packetLosses) {
       this.droppedBatchCount = droppedBatchCount;
       this.firstDroppedTick = firstDroppedTick;
       this.lastDroppedTick = lastDroppedTick;
@@ -707,6 +761,7 @@ public class TickBatchMessage {
       this.omittedPacketPayloadBytes = omittedPacketPayloadBytes;
       this.malformedPacketFrameCount = malformedPacketFrameCount;
       this.packetSourceStatus = packetSourceStatus;
+      this.packetLosses = packetLosses == null ? new ArrayList<>() : packetLosses;
     }
 
     public Long getDroppedBatchCount() {
@@ -759,6 +814,102 @@ public class TickBatchMessage {
 
     public String getPacketSourceStatus() {
       return packetSourceStatus;
+    }
+
+    public List<PacketLossSource> getPacketLosses() {
+      return packetLosses;
+    }
+
+    /** Exact loss ranges for one RSProx source session. Counts are not inferred from endpoints. */
+    public static class PacketLossSource {
+      private String sourceSessionId;
+      private long count;
+      private Long firstPacketSequence;
+      private Long lastPacketSequence;
+      private boolean summaryOnly;
+      private List<PacketLossRange> ranges = new ArrayList<>();
+
+      public PacketLossSource() {}
+
+      public String getSourceSessionId() {
+        return sourceSessionId;
+      }
+
+      public void setSourceSessionId(String sourceSessionId) {
+        this.sourceSessionId = sourceSessionId;
+      }
+
+      public long getCount() {
+        return count;
+      }
+
+      public void setCount(long count) {
+        this.count = count;
+      }
+
+      public Long getFirstPacketSequence() {
+        return firstPacketSequence;
+      }
+
+      public void setFirstPacketSequence(Long firstPacketSequence) {
+        this.firstPacketSequence = firstPacketSequence;
+      }
+
+      public Long getLastPacketSequence() {
+        return lastPacketSequence;
+      }
+
+      public void setLastPacketSequence(Long lastPacketSequence) {
+        this.lastPacketSequence = lastPacketSequence;
+      }
+
+      public boolean isSummaryOnly() {
+        return summaryOnly;
+      }
+
+      public void setSummaryOnly(boolean summaryOnly) {
+        this.summaryOnly = summaryOnly;
+      }
+
+      public List<PacketLossRange> getRanges() {
+        return ranges;
+      }
+
+      public void setRanges(List<PacketLossRange> ranges) {
+        this.ranges = ranges == null ? new ArrayList<>() : ranges;
+      }
+    }
+
+    public static class PacketLossRange {
+      private long first;
+      private long last;
+      private long count;
+
+      public PacketLossRange() {}
+
+      public long getFirst() {
+        return first;
+      }
+
+      public void setFirst(long first) {
+        this.first = first;
+      }
+
+      public long getLast() {
+        return last;
+      }
+
+      public void setLast(long last) {
+        this.last = last;
+      }
+
+      public long getCount() {
+        return count;
+      }
+
+      public void setCount(long count) {
+        this.count = count;
+      }
     }
   }
 }

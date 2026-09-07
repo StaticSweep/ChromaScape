@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -285,6 +286,35 @@ class TickStreamIngestionServiceTest {
         tick);
   }
 
+  private TickBatchMessage.TickPacketEntry v2PacketEntry(
+      String sourceSessionId,
+      long observationSequence,
+      Long packetSequence,
+      long tick,
+      String protocolName,
+      String status,
+      boolean synthetic,
+      Map<String, Object> decoded) {
+    return new TickBatchMessage.TickPacketEntry(
+        "rsprox-packet/v2",
+        sourceSessionId,
+        observationSequence,
+        packetSequence,
+        "2026-09-04T18:12:34.567Z",
+        4L,
+        "SERVER_TO_CLIENT",
+        "GAP".equals(status) ? 0 : 81,
+        protocolName,
+        "GAP".equals(status) ? 0 : 137,
+        "GAP".equals(status) ? "StreamGap" : "NpcInfo",
+        decoded,
+        null,
+        status,
+        null,
+        synthetic,
+        tick);
+  }
+
   private TickBatchMessage packetBatch(
       String sessionId, String batchId, long tick, TickBatchMessage.TickPacketEntry... packets) {
     TickBatchMessage batch = strictV2Batch(sessionId, tick);
@@ -331,8 +361,9 @@ class TickStreamIngestionServiceTest {
     stored.setDecodedPayload(objectMapper.valueToTree(Map.of()));
     stored.setDecodeStatus("DECODED");
     stored.setSynthetic(false);
-    when(packetObservationRepository.findBySessionIdAndSourceSessionIdAndPacketSequence(
-            sessionId, "proxy-session", 4812L))
+    when(packetObservationRepository
+            .findBySessionIdAndSourceSessionIdAndPacketSchemaAndPacketSequence(
+                sessionId, "proxy-session", "rsprox-packet/v1", 4812L))
         .thenReturn(Optional.of(stored));
 
     TickBatchMessage batch =
@@ -358,8 +389,9 @@ class TickStreamIngestionServiceTest {
     stored.setDecodedPayload(objectMapper.valueToTree(Map.of()));
     stored.setDecodeStatus("DECODED");
     stored.setSynthetic(false);
-    when(packetObservationRepository.findBySessionIdAndSourceSessionIdAndPacketSequence(
-            sessionId, "proxy-session", 4813L))
+    when(packetObservationRepository
+            .findBySessionIdAndSourceSessionIdAndPacketSchemaAndPacketSequence(
+                sessionId, "proxy-session", "rsprox-packet/v1", 4813L))
         .thenReturn(Optional.of(stored));
 
     TickBatchMessage batch =
@@ -389,8 +421,9 @@ class TickStreamIngestionServiceTest {
     stored.setDecodedPayload(objectMapper.valueToTree(Map.of()));
     stored.setDecodeStatus("DECODED");
     stored.setSynthetic(false);
-    when(packetObservationRepository.findBySessionIdAndSourceSessionIdAndPacketSequence(
-            sessionId, "proxy-session", 4814L))
+    when(packetObservationRepository
+            .findBySessionIdAndSourceSessionIdAndPacketSchemaAndPacketSequence(
+                sessionId, "proxy-session", "rsprox-packet/v1", 4814L))
         .thenReturn(Optional.of(stored));
 
     TickBatchMessage batch =
@@ -439,6 +472,150 @@ class TickStreamIngestionServiceTest {
             packetEntry("source-b", 2L, 100L, "NPC_INFO_LARGE"));
 
     assertDoesNotThrow(() -> service.processTickBatch(batch));
+  }
+
+  @Test
+  @DisplayName("v2 real observations and GAPs preserve separate identities")
+  void packets_v2RealAndGapAreAccepted() {
+    String sessionId = "packet-v2-gap";
+    String batchId = "00000000-0000-4000-8000-000000000206";
+    stubPacketSession(sessionId);
+
+    Map<String, Object> gapDetails =
+        Map.of(
+            "droppedPacketCount", 2L,
+            "firstDroppedPacketSequence", 4813L,
+            "lastDroppedPacketSequence", 4814L,
+            "droppedPacketRanges",
+                List.of(
+                    Map.of("first", 4813L, "last", 4813L, "count", 1L),
+                    Map.of("first", 4814L, "last", 4814L, "count", 1L)));
+    TickBatchMessage batch =
+        packetBatch(
+            sessionId,
+            batchId,
+            100,
+            v2PacketEntry(
+                "source-a", 7L, 4812L, 100L, "NPC_INFO_LARGE", "DECODED", false, Map.of()),
+            v2PacketEntry("source-a", 8L, null, 100L, "STREAM_GAP", "GAP", true, gapDetails),
+            v2PacketEntry(
+                "source-a", 9L, 4815L, 100L, "NPC_INFO_LARGE", "DECODED", false, Map.of()));
+
+    assertDoesNotThrow(() -> service.processTickBatch(batch));
+    verify(packetObservationRepository, times(3)).saveAndFlush(any(PacketObservation.class));
+  }
+
+  @Test
+  @DisplayName("delayed v2 GAP markers do not fail ordinary observation ordering")
+  void packets_v2DelayedGapIsAccepted() {
+    String sessionId = "packet-v2-delayed-gap";
+    String batchId = "00000000-0000-4000-8000-000000000207";
+    stubPacketSession(sessionId);
+
+    TickBatchMessage batch =
+        packetBatch(
+            sessionId,
+            batchId,
+            100,
+            v2PacketEntry("source-a", 0L, 100L, 100L, "PLAYER_INFO", "DECODED", false, Map.of()),
+            v2PacketEntry("source-a", 2L, 102L, 100L, "NPC_INFO_LARGE", "DECODED", false, Map.of()),
+            v2PacketEntry(
+                "source-a",
+                1L,
+                null,
+                100L,
+                "STREAM_GAP",
+                "GAP",
+                true,
+                Map.of(
+                    "droppedPacketCount", 1L,
+                    "firstDroppedPacketSequence", 101L,
+                    "lastDroppedPacketSequence", 101L)));
+
+    assertDoesNotThrow(() -> service.processTickBatch(batch));
+  }
+
+  @Test
+  @DisplayName("v2 GAPs require a null capture identity and synthetic marker")
+  void packets_v2GapIdentityIsValidated() {
+    String sessionId = "packet-v2-invalid-gap";
+    String batchId = "00000000-0000-4000-8000-000000000208";
+    stubPacketSession(sessionId);
+
+    TickBatchMessage batch =
+        packetBatch(
+            sessionId,
+            batchId,
+            100,
+            v2PacketEntry("source-a", 0L, 101L, 100L, "STREAM_GAP", "GAP", true, Map.of()));
+
+    assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    verify(packetObservationRepository, never()).saveAndFlush(any(PacketObservation.class));
+  }
+
+  @Test
+  @DisplayName("v2 identity conflicts are permanent while exact retries are idempotent")
+  void packets_v2IdentityConflictAndRetryAreHandled() {
+    String sessionId = "packet-v2-identity";
+    stubPacketSession(sessionId);
+
+    PacketObservation stored =
+        new PacketObservation(sessionId, 100L, "source-a", "rsprox-packet/v2", 7L, 4812L);
+    stored.setCapturedAt(
+        java.time.LocalDateTime.ofInstant(
+            java.time.Instant.parse("2026-09-04T18:12:34.567Z"), java.time.ZoneId.systemDefault()));
+    stored.setCaptureDeltaMillis(4L);
+    stored.setDirection("SERVER_TO_CLIENT");
+    stored.setOpcode(81);
+    stored.setProtocolName("NPC_INFO_LARGE");
+    stored.setEncodedSize(137);
+    stored.setDecodedType("NpcInfo");
+    stored.setDecodedPayload(objectMapper.valueToTree(Map.of()));
+    stored.setDecodeStatus("DECODED");
+    stored.setSynthetic(false);
+
+    when(packetObservationRepository
+            .findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
+                sessionId, "source-a", "rsprox-packet/v2", 7L))
+        .thenReturn(Optional.of(stored));
+
+    TickBatchMessage identical =
+        packetBatch(
+            sessionId,
+            "00000000-0000-4000-8000-000000000209",
+            100,
+            v2PacketEntry(
+                "source-a", 7L, 4812L, 100L, "NPC_INFO_LARGE", "DECODED", false, Map.of()));
+    assertDoesNotThrow(() -> service.processTickBatch(identical));
+    verify(packetObservationRepository, never()).saveAndFlush(any(PacketObservation.class));
+
+    TickBatchMessage changed =
+        packetBatch(
+            sessionId,
+            "00000000-0000-4000-8000-000000000210",
+            100,
+            v2PacketEntry(
+                "source-a", 7L, 4813L, 100L, "NPC_INFO_LARGE", "DECODED", false, Map.of()));
+    assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(changed));
+  }
+
+  @Test
+  @DisplayName(
+      "packet tick validation rejects long overflow instead of accepting a wrapped distance")
+  void packets_tickDistanceOverflowIsRejected() {
+    String sessionId = "packet-tick-overflow";
+    stubPacketSession(sessionId);
+
+    TickBatchMessage batch =
+        packetBatch(
+            sessionId,
+            "00000000-0000-4000-8000-000000000211",
+            0L,
+            packetEntry("source-a", 0L, Long.MIN_VALUE, "NPC_INFO_LARGE"));
+
+    IllegalArgumentException failure =
+        assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    assertEquals("PACKET_TICK_OUT_OF_RANGE", failure.getMessage());
   }
 
   @Test
