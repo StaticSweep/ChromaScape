@@ -120,10 +120,10 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
   assert.match(isolatedPatchWorker,
     /request\.micro6Root\(\)\.toAbsolutePath\(\)\.normalize\(\)/);
   assert.match(isolatedPatchWorker, /ISOLATED_SOURCE_NOT_FOUND/);
-  assert.match(isolatedPatchWorker, /"--path-format=absolute", "--git-common-dir"/);
+  assert.match(isolatedPatchWorker, /"--path-format=absolute",\s*"--git-common-dir"/);
   assert.match(isolatedPatchWorker, /ISOLATED_SOURCE_REPOSITORY_NOT_FOUND/);
   assert.match(isolatedPatchWorker,
-    /List\.of\("git", "clone", "--no-checkout", "--config", "core\.longpaths=true", "--no-hardlinks"/);
+    /List\.of\(\s*"git",\s*"clone",\s*"--no-checkout",\s*"--config",\s*"core\.longpaths=true",\s*"--no-hardlinks"/);
   assert.match(isolatedPatchWorker, /ISOLATED_CHECKOUT_FAILED/);
   assert.match(isolatedPatchWorker, /resolveSibling\("contracts"\)\.resolve\("java"\)/);
   assert.match(isolatedPatchWorker, /CAPTURE_CONTRACTS_NOT_FOUND/);
