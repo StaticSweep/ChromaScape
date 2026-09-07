@@ -1,5 +1,6 @@
 package com.chromascape.web.aiplayer.routine.source;
 
+import com.chromascape.web.config.SourceTrustProperties;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -11,14 +12,20 @@ import org.junit.jupiter.api.Test;
 class SourceAccessAndCacheTest {
   @Test
   void metadataAndContentTokensAreSeparate() {
-    SourceAccessPolicy policy = new SourceAccessPolicy("metadata", "content", true);
+    SourceTrustProperties trust = new SourceTrustProperties();
+    trust.setEnvironment("production");
+    SourceAccessPolicy policy = new SourceAccessPolicy("metadata", "content", trust);
 
-    assertEquals("test", policy.authorize("Bearer metadata", SourceAccessPolicy.Purpose.METADATA));
-    assertEquals("test", policy.authorize("Bearer content", SourceAccessPolicy.Purpose.CONTENT));
+    assertEquals("actor", policy.authorize("Bearer metadata", SourceAccessPolicy.Purpose.METADATA,
+        "production", "actor", "manifest-read", "corr-1"));
+    assertEquals("actor", policy.authorize("Bearer content", SourceAccessPolicy.Purpose.CONTENT,
+        "production", "actor", "file-read", "corr-2"));
     assertThrows(SourceManifestException.class,
-        () -> policy.authorize("Bearer content", SourceAccessPolicy.Purpose.METADATA));
+        () -> policy.authorize("Bearer content", SourceAccessPolicy.Purpose.METADATA,
+            "production", "actor", "manifest-read", "corr-3"));
     assertThrows(SourceManifestException.class,
-        () -> policy.authorize("Bearer metadata", SourceAccessPolicy.Purpose.CONTENT));
+        () -> policy.authorize("Bearer metadata", SourceAccessPolicy.Purpose.CONTENT,
+            "production", "actor", "file-read", "corr-4"));
   }
 
   @Test

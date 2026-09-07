@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -23,8 +25,21 @@ public final class CanonicalJsonHasher {
   private CanonicalJsonHasher() {}
 
   public static JsonNode parse(byte[] utf8Json) {
+    if (utf8Json == null) {
+      throw new IllegalArgumentException("JSON document is null");
+    }
     try {
-      JsonNode node = MAPPER.readTree(utf8Json);
+      String json = strictUtf8(utf8Json);
+      JsonParser parser = MAPPER.getFactory().createParser(json);
+      JsonNode node;
+      try {
+        node = MAPPER.readTree(parser);
+        if (parser.nextToken() != null) {
+          throw new IllegalArgumentException("JSON document contains trailing values");
+        }
+      } finally {
+        parser.close();
+      }
       if (node == null) throw new IllegalArgumentException("JSON document is empty");
       validateNumbers(node);
       return normalize(node);
@@ -76,8 +91,15 @@ public final class CanonicalJsonHasher {
 
   private static JsonNode normalize(JsonNode node) {
     if (node == null || node.isNull() || node.isBoolean() || node.isNumber()) return node;
+    // String values are identity-bearing data.  In particular, source snippets and line-ending
+    // values must survive canonicalization byte-for-byte; canonical JSON only removes JSON
+    // syntax whitespace, never characters inside a JSON string.
     if (node.isTextual()) {
-      return JsonNodeFactory.instance.textNode(node.textValue().replace("\r\n", "\n").replace("\r", "\n"));
+      // The generic contract historically treats line endings inside JSON strings as equivalent.
+      // SC-810 source identity uses SourceManifestCanonicalJson instead and deliberately does not
+      // apply this compatibility normalization.
+      String normalized = node.textValue().replace("\r\n", "\n").replace('\r', '\n');
+      return JsonNodeFactory.instance.textNode(normalized);
     }
     if (node.isArray()) {
       ArrayNode array = JsonNodeFactory.instance.arrayNode();
@@ -117,5 +139,13 @@ public final class CanonicalJsonHasher {
         throw new IllegalArgumentException("Invalid Unicode surrogate sequence");
       }
     }
+  }
+
+  private static String strictUtf8(byte[] bytes) throws CharacterCodingException {
+    return StandardCharsets.UTF_8.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+        .decode(java.nio.ByteBuffer.wrap(bytes))
+        .toString();
   }
 }

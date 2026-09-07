@@ -45,6 +45,8 @@ public class SourceManifestException extends RuntimeException {
       case SOURCE_PRUNED -> HttpStatus.GONE;
       case SOURCE_NETWORK_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
       case SOURCE_RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
+      case SOURCE_BUILD_MISMATCH -> HttpStatus.CONFLICT;
+      case SOURCE_AUDIT_CONTEXT_INVALID -> HttpStatus.BAD_REQUEST;
       default -> HttpStatus.UNPROCESSABLE_ENTITY;
     };
   }

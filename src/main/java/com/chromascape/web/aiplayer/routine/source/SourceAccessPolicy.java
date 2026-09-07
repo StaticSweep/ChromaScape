@@ -1,5 +1,6 @@
 package com.chromascape.web.aiplayer.routine.source;
 
+import com.chromascape.web.config.SourceTrustProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,34 +11,45 @@ import org.springframework.stereotype.Component;
 /** Separate metadata/content authorization boundary for the debugger source read model. */
 @Component
 public class SourceAccessPolicy {
+  private static final String ACTOR_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]{0,159}";
+  private static final String CORRELATION_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]{0,159}";
   private final String metadataToken;
   private final String contentToken;
-  private final boolean required;
-  private final String actorId;
+  private final SourceTrustProperties trust;
 
-  @Autowired
   public SourceAccessPolicy(
       @Value("${chromascape.source.access.metadata-token:}") String metadataToken,
       @Value("${chromascape.source.access.content-token:}") String contentToken,
-      @Value("${chromascape.source.require-auth:true}") boolean required,
-      @Value("${chromascape.source.access.actor-id:debugger}") String actorId) {
+      SourceTrustProperties trust) {
     this.metadataToken = normalize(metadataToken);
     this.contentToken = normalize(contentToken);
-    this.required = required;
-    this.actorId = actorId == null || actorId.isBlank() ? "debugger" : actorId;
+    this.trust = trust;
   }
 
-  /** Test-only convenience constructor; package-private so Spring selects the @Autowired one. */
-  SourceAccessPolicy(String metadataToken, String contentToken, boolean required) {
-    this.metadataToken = normalize(metadataToken);
-    this.contentToken = normalize(contentToken);
-    this.required = required;
-    this.actorId = "test";
-  }
-
-  public String authorize(String authorization, Purpose purpose) {
+  /**
+   * Authorizes one debugger request and validates its complete audit context.  Header values are
+   * never used as selectors; they only establish the identity and environment of the request.
+   */
+  public String authorize(
+      String authorization,
+      Purpose purpose,
+      String environment,
+      String actor,
+      String requestPurpose,
+      String correlationId) {
+    if (purpose == null || requestPurpose == null
+        || !purpose.wireValue().equals(requestPurpose)
+        || environment == null || trust == null
+        || trust.getEnvironment().isBlank()
+        || !trust.getEnvironment().equals(environment.trim())
+        || actor == null || !actor.matches(ACTOR_PATTERN)
+        || correlationId == null || !correlationId.matches(CORRELATION_PATTERN)) {
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_AUDIT_CONTEXT_INVALID,
+          HttpStatus.BAD_REQUEST,
+          "source audit context is invalid");
+    }
     String expected = purpose == Purpose.CONTENT ? contentToken : metadataToken;
-    if (!required && expected.isBlank()) return actorId;
     if (expected.isBlank()) {
       throw new SourceManifestException(
           SourceManifestFailureCode.SOURCE_ACCESS_DENIED,
@@ -47,7 +59,7 @@ public class SourceAccessPolicy {
     if (authorization == null || !authorization.startsWith("Bearer ")) deny();
     String supplied = authorization.substring("Bearer ".length()).trim();
     if (!constantTimeEquals(expected, supplied)) deny();
-    return actorId;
+    return actor;
   }
 
   private static void deny() {
@@ -64,5 +76,13 @@ public class SourceAccessPolicy {
 
   private static String normalize(String value) { return value == null ? "" : value.trim(); }
 
-  public enum Purpose { METADATA, CONTENT }
+  public enum Purpose {
+    METADATA("manifest-read"), CONTENT("file-read");
+
+    private final String wireValue;
+
+    Purpose(String wireValue) { this.wireValue = wireValue; }
+
+    public String wireValue() { return wireValue; }
+  }
 }

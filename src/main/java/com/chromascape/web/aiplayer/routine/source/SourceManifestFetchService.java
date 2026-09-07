@@ -1,6 +1,5 @@
 package com.chromascape.web.aiplayer.routine.source;
 
-import com.chromascape.web.aiplayer.contract.CanonicalJsonHasher;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator;
 import com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClient;
@@ -64,21 +63,23 @@ public class SourceManifestFetchService {
       throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "run task identity differs from the requested source task");
     }
+    if (identity.source() == null || !Boolean.TRUE.equals(identity.source().signatureVerified())) {
+      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
+          "complete verified source identity is required for source binding");
+    }
     identities.validate(identity);
     String manifestJson = upstream.manifest(taskKey);
     try {
-      JsonNode raw = CanonicalJsonHasher.parse(
+      JsonNode raw = SourceManifestCanonicalJson.parse(
           manifestJson.getBytes(StandardCharsets.UTF_8));
-      String schema = raw.path("schema").asText();
-      boolean legacy = SourceManifestContract.LEGACY_SCHEMA.equals(schema)
-          || SourceManifestContract.LEGACY_SCHEMA_V2.equals(schema);
-      TaskSourceManifestVerifier.ExpectedIdentity expected = expectedIdentity(taskKey, identity, legacy);
+      TaskSourceManifestVerifier.ExpectedIdentity expected = expectedIdentity(taskKey, identity);
       TaskSourceManifestVerifier.Verified verified = verifierFor(trust).verify(raw, expected);
       if (!taskKey.equals(verified.manifest().taskKey())) {
         throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
             "task identity differs from the requested task");
       }
       enforceEnvironment(trust, raw);
+      rejectTerminalStatus(verified.manifest().status());
       return new FetchedSource(verified, manifestJson, expected);
     } catch (SourceManifestException exception) {
       throw exception;
@@ -90,21 +91,23 @@ public class SourceManifestFetchService {
 
   /** Builds the verifier from the single canonical trust configuration. */
   static TaskSourceManifestVerifier verifierFor(SourceTrustProperties trust) {
-    return new TaskSourceManifestVerifier(trust.isRequireSignature(), trust.isAllowLegacy(),
-        SourceManifestSignatureVerifier.fromX509Base64(
-            trust.getPublicKeyBase64(), trust.getPublicKeyId()));
+    if (trust == null) {
+      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+          "source manifest trust configuration is missing");
+    }
+    SourceManifestSignatureVerifier verifier = SourceManifestSignatureVerifier.fromX509Base64(
+        trust.getPublicKeyBase64(), trust.getPublicKeyId());
+    if (verifier == null) {
+      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+          "source manifest trust configuration is incomplete");
+    }
+    return new TaskSourceManifestVerifier(verifier);
   }
 
   /** Builds the expected source identity from the run's attested client identity. */
   static TaskSourceManifestVerifier.ExpectedIdentity expectedIdentity(
-      String taskKey, CurrentSliceIdentity identity, boolean legacy) {
+      String taskKey, CurrentSliceIdentity identity) {
     CurrentSliceIdentity.Source source = identity.source();
-    if (legacy) {
-      return new TaskSourceManifestVerifier.ExpectedIdentity(
-          taskKey, null, null, null, null, null,
-          source == null ? null : source.sourceSnapshotId(),
-          source == null ? null : source.sourceManifestHash());
-    }
     CurrentSliceIdentity.Client client = identity.client();
     return new TaskSourceManifestVerifier.ExpectedIdentity(
         taskKey,
@@ -121,15 +124,25 @@ public class SourceManifestFetchService {
 
   /** Fails when the manifest's declared environment differs from the configured environment. */
   static void enforceEnvironment(SourceTrustProperties trust, JsonNode manifest) {
-    String configured = trust.configuredEnvironment();
-    if (configured.isBlank()) {
-      return;
-    }
+    String configured = trust == null ? "" : trust.getEnvironment();
     String declared = declaredEnvironment(manifest);
-    if (declared == null || !configured.equals(declared)) {
+    if (configured.isBlank() || declared == null || !configured.equals(declared)) {
       throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "source environment identity differs from the configured environment");
     }
+  }
+
+  private static void rejectTerminalStatus(String status) {
+    if (status == null || "AVAILABLE".equals(status)) return;
+    SourceManifestFailureCode code = switch (status) {
+      case "INDEX_PARTIAL" -> SourceManifestFailureCode.SOURCE_INDEX_PARTIAL;
+      case "UNAVAILABLE" -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
+      case "REDACTED" -> SourceManifestFailureCode.SOURCE_REDACTED;
+      case "PRUNED" -> SourceManifestFailureCode.SOURCE_PRUNED;
+      case "GENERATED_ONLY" -> SourceManifestFailureCode.SOURCE_GENERATED_ONLY;
+      default -> SourceManifestFailureCode.SOURCE_MANIFEST_INVALID;
+    };
+    throw new SourceManifestException(code, "source manifest is not available for binding");
   }
 
   static String declaredEnvironment(JsonNode manifest) {

@@ -51,15 +51,23 @@ class PatchCandidateWorkflowServiceTest {
         "current-slice-identity/v1", task, run,
         new CurrentSliceIdentity.Client("client", "MICRO6_MANAGED", "build", hash,
             "micro6-builder/v2", "MICRO6"),
-        capture, new CurrentSliceIdentity.Source("srcsnap_aaaaaaaaaaaaaaaaaaaaaaaa", hash),
+        capture, new CurrentSliceIdentity.Source("srcsnap_aaaaaaaaaaaaaaaaaaaaaaaa", hash,
+            "micro6", "0123456789a", "fedcba987", "build", hash, true),
         graph, model, null, false);
 
+    Micro6SourceManifestClient.SourceBinding resolved = new Micro6SourceManifestClient.SourceBinding(
+        "build", "srcsnap_bbbbbbbbbbbbbbbbbbbbbbbb", "sha256:" + "b".repeat(64),
+        "file_aaaaaaaaaaaaaaaa", "Entry.java", "runelite-client/Entry.java", hash,
+        1, 2, hash, "class Entry {}", "{}", java.util.Map.of(), "micro6",
+        "0123456789a", "fedcba987", "sha256:" + "b".repeat(64), true);
     CurrentSliceIdentity rebound = PatchCandidateWorkflowService.withCandidateSource(
-        identity, "srcsnap_bbbbbbbbbbbbbbbbbbbbbbbb", "sha256:" + "b".repeat(64));
+        identity, resolved);
 
     rebound.validate();
     assertEquals(new CurrentSliceIdentity.Source(
-        "srcsnap_bbbbbbbbbbbbbbbbbbbbbbbb", "sha256:" + "b".repeat(64)), rebound.source());
+        "srcsnap_bbbbbbbbbbbbbbbbbbbbbbbb", "sha256:" + "b".repeat(64), "micro6",
+        "0123456789a", "fedcba987", "build", "sha256:" + "b".repeat(64), true),
+        rebound.source());
     assertEquals(task, rebound.task());
     assertEquals(run, rebound.run());
     assertEquals(identity.client(), rebound.client());

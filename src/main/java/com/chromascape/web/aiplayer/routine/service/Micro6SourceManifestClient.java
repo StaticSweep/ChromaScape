@@ -1,8 +1,8 @@
 package com.chromascape.web.aiplayer.routine.service;
 
-import com.chromascape.web.aiplayer.contract.CanonicalJsonHasher;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
 import com.chromascape.web.aiplayer.routine.source.SourceManifestContract;
+import com.chromascape.web.aiplayer.routine.source.SourceManifestCanonicalJson;
 import com.chromascape.web.aiplayer.routine.source.SourceManifestException;
 import com.chromascape.web.aiplayer.routine.source.SourceManifestFailureCode;
 import com.chromascape.web.aiplayer.routine.source.SourceManifestSignatureVerifier;
@@ -19,6 +19,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -42,30 +43,17 @@ public class Micro6SourceManifestClient {
       .build();
   private final ObjectMapper mapper;
 
-  @Value("${micro6.executor-catalog.base-url:http://127.0.0.1:8098}")
+  @Value("${micro6.source.transport.base-url:}")
   private String baseUrl;
-  @Value("${micro6.source-manifest.auth-token:}")
+  @Value("${micro6.source.transport.auth-token:}")
   private String authToken;
-  @Value("${micro6.source-manifest.auth-required:false}")
-  private boolean authRequired;
-  @Value("${micro6.source-manifest.actor:chromascape-web}")
+  @Value("${micro6.source.transport.actor:chromascape-web}")
   private String actor;
   /** The single canonical trust configuration; transport settings above are never trust. */
   private SourceTrustProperties trust = new SourceTrustProperties();
-
   @Autowired
   public Micro6SourceManifestClient(ObjectMapper mapper, SourceTrustProperties trust) {
     this.mapper = mapper;
-    this.trust = trust;
-  }
-
-  /** Compatibility constructor for focused tests; trust defaults to development values. */
-  Micro6SourceManifestClient(ObjectMapper mapper) {
-    this(mapper, new SourceTrustProperties());
-  }
-
-  /** Test-only trust override; production wiring always injects the canonical bean. */
-  void setTrust(SourceTrustProperties trust) {
     this.trust = trust;
   }
 
@@ -101,21 +89,13 @@ public class Micro6SourceManifestClient {
     try {
       JsonNode rawManifest = parseManifest(manifest(request.taskKey()));
       TaskSourceManifestVerifier verifier = new TaskSourceManifestVerifier(
-          trust.isRequireSignature(),
-          trust.isAllowLegacy(),
           SourceManifestSignatureVerifier.fromX509Base64(
               trust.getPublicKeyBase64(), trust.getPublicKeyId()));
       TaskSourceManifestVerifier.ExpectedIdentity expected = request.expectedIdentity();
       TaskSourceManifestVerifier.Verified verified = verifier.verify(rawManifest, expected);
       enforceEnvironment(rawManifest);
       TaskSourceManifest sourceManifest = verified.manifest();
-
-      // The checked-in Fishing fixture predates the v1 entry/symbol contract. Keep its
-      // compatibility read path deliberately narrow and mark it unverified; it must never be
-      // mistaken for a generic authoritative manifest or become a source of patch eligibility.
-      if (verified.legacy()) {
-        return resolveLegacyFishing(request, rawManifest, sourceManifest);
-      }
+      rejectTerminalStatus(sourceManifest.status());
 
       TaskSourceManifest.File entryFile = findEntryFile(sourceManifest, rawManifest, request);
       String entryClassName = text(rawManifest.get("entry_point"), "class_name");
@@ -136,6 +116,7 @@ public class Micro6SourceManifestClient {
       int start = boundedIndex(sourceBytes, symbol.startByte());
       int end = boundedIndex(sourceBytes, symbol.endByte());
       validateUtf8Boundaries(sourceBytes, start, end);
+      validateLineColumns(sourceBytes, symbol);
       String preimage = hash(slice(sourceBytes, start, end));
       Map<String, PinnedFile> pinnedFiles = new LinkedHashMap<>();
       for (TaskSourceManifest.File file : sourceManifest.files()) {
@@ -190,98 +171,6 @@ public class Micro6SourceManifestClient {
         source == null ? null : source.sourceManifestHash());
   }
 
-  /** Compatibility entry point retained for the existing Fishing prototype. */
-  @Deprecated
-  public SourceBinding resolveFishingSource() {
-    return resolve(new SourceRequest(
-        "FISHING_TRAINING",
-        "net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing.FishingExecutionTask",
-        "FishingExecutionTask#getFishType(String)",
-        null));
-  }
-
-  private SourceBinding resolveLegacyFishing(
-      SourceRequest request, JsonNode rawManifest, TaskSourceManifest manifest) throws Exception {
-    final String entryClass =
-        "net.runelite.client.plugins.microbot.accountbuilder.builderPlanStep.fishing.FishingExecutionTask";
-    final String entryPath =
-        "src/main/java/net/runelite/client/plugins/microbot/accountbuilder/builderPlanStep/fishing/FishingExecutionTask.java";
-    if (!"FISHING_TRAINING".equals(manifest.taskKey())
-        || (request.entryClassName() != null && !request.entryClassName().isBlank()
-            && !entryClass.equals(request.entryClassName()))) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_SCHEMA_UNSUPPORTED,
-          "legacy source compatibility is unavailable for this task");
-    }
-    TaskSourceManifest.File entryFile = manifest.files().stream()
-        .filter(file -> entryPath.equals(file.relativePath()))
-        .findFirst().orElse(null);
-    if (entryFile == null) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_FILE_NOT_FOUND,
-          "legacy source entry is unavailable");
-    }
-    byte[] sourceBytes = getBytes("/api/v1/source-snapshots/"
-        + encode(manifest.sourceSnapshotId()) + "/files/" + encode(entryFile.fileId()),
-        SourceManifestContract.MAX_FILE_BYTES, PURPOSE_FILE);
-    verifyFile(entryFile, sourceBytes);
-    String source = decodeUtf8(sourceBytes);
-    String requested = request.symbolName();
-    if (requested != null && !requested.isBlank()
-        && !requested.contains("getFishType")) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_SYMBOL_NOT_FOUND,
-          "legacy source symbol is unavailable");
-    }
-    String[] lines = source.split("\\r?\\n|\\r", -1);
-    int start = -1;
-    for (int index = 0; index < lines.length; index++) {
-      if (lines[index].contains("private Fish getFishType(String fishName)")) {
-        start = index;
-        break;
-      }
-    }
-    if (start < 0) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_SYMBOL_NOT_FOUND,
-          "legacy source symbol is unavailable");
-    }
-    int end = -1;
-    for (int index = start + 1; index < lines.length; index++) {
-      if (lines[index].startsWith("    @Override")
-          || lines[index].startsWith("    public String getName")) {
-        end = index;
-        break;
-      }
-    }
-    if (end < 0) {
-      throw sourceError(SourceManifestFailureCode.SOURCE_SYMBOL_NOT_FOUND,
-          "legacy source symbol range is unavailable");
-    }
-    List<String> span = new ArrayList<>();
-    for (int index = start; index < end; index++) span.add(lines[index]);
-    Map<String, PinnedFile> pinnedFiles = new LinkedHashMap<>();
-    for (TaskSourceManifest.File file : manifest.files()) {
-      pinnedFiles.put(file.relativePath(), new PinnedFile(
-          file.fileId(), file.relativePath(), file.contentHash(), file.sizeBytes()));
-    }
-    return new SourceBinding(
-        text(rawManifest, "client_build_id"),
-        manifest.sourceSnapshotId(),
-        manifest.manifestHash(),
-        entryFile.fileId(),
-        entryFile.relativePath(),
-        "runelite-client/" + entryFile.relativePath(),
-        entryFile.contentHash(),
-        start + 1,
-        end,
-        hash(String.join("\n", span).getBytes(StandardCharsets.UTF_8)),
-        source,
-        mapper.writeValueAsString(rawManifest),
-        pinnedFiles,
-        null,
-        text(rawManifest, "client_build_id"),
-        null,
-        text(rawManifest, "artifact_digest"),
-        false);
-  }
-
   private TaskSourceManifest.File findEntryFile(
       TaskSourceManifest manifest, JsonNode rawManifest, SourceRequest request) {
     JsonNode entry = rawManifest.get("entry_point");
@@ -308,7 +197,13 @@ public class Micro6SourceManifestClient {
           .filter(symbol -> belongsToEntryClass(symbol, entryClassName))
           .findFirst().orElse(null);
     }
-    if (request.symbolName() == null || request.symbolName().isBlank()) return null;
+    if (request.symbolName() == null || request.symbolName().isBlank()) {
+      String entrySymbolId = text(manifest.document().get("entry_point"), "source_symbol_id");
+      return manifest.symbols().stream()
+          .filter(symbol -> entrySymbolId != null && entrySymbolId.equals(symbol.sourceSymbolId()))
+          .filter(symbol -> belongsToEntryClass(symbol, entryClassName))
+          .findFirst().orElse(null);
+    }
     String requested = request.symbolName().trim();
     String requestedBeforeSignature = requested;
     String requestedParameters = null;
@@ -385,19 +280,23 @@ public class Micro6SourceManifestClient {
 
   private byte[] getBytes(String path, long maximumBytes, String purpose) {
     try {
+      if (authToken == null || authToken.isBlank()) {
+        throw sourceError(SourceManifestFailureCode.SOURCE_ACCESS_DENIED,
+            "source transport authentication is not configured");
+      }
+      String environment = trust == null ? "" : trust.getEnvironment();
+      if (environment.isBlank()) {
+        throw sourceError(SourceManifestFailureCode.SOURCE_ACCESS_DENIED,
+            "source environment is not configured");
+      }
       URI endpoint = trustedEndpoint(path);
       HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint)
           .timeout(Duration.ofSeconds(15)).GET();
-      if (authToken != null && !authToken.isBlank()) {
-        builder.header("Authorization", "Bearer " + authToken);
-      }
+      builder.header("Authorization", "Bearer " + authToken);
       builder.header("X-Source-Actor", boundedActor());
       builder.header("X-Source-Purpose", purpose);
       builder.header("X-Correlation-ID", correlationId());
-      String environment = trust.configuredEnvironment();
-      if (!environment.isBlank()) {
-        builder.header("X-Source-Environment", environment);
-      }
+      builder.header("X-Source-Environment", environment);
       HttpResponse<byte[]> response = client.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
       if (response.statusCode() != 200) throw upstreamFailure(response.statusCode(), response.body());
       if (response.body().length > maximumBytes) {
@@ -412,10 +311,14 @@ public class Micro6SourceManifestClient {
     }
   }
 
-  /** Bounded actor identity for Micro6 audit; an unsafe configured value falls back to the default. */
+  /** Bounded actor identity for Micro6 audit. */
   private String boundedActor() {
     String candidate = actor == null ? "" : actor.trim();
-    return candidate.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}") ? candidate : "chromascape-web";
+    if (!candidate.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")) {
+      throw sourceError(SourceManifestFailureCode.SOURCE_AUDIT_CONTEXT_INVALID,
+          "source actor identity is invalid");
+    }
+    return candidate;
   }
 
   /**
@@ -436,7 +339,7 @@ public class Micro6SourceManifestClient {
 
   private JsonNode parseManifest(String json) {
     try {
-      return CanonicalJsonHasher.parse(json.getBytes(StandardCharsets.UTF_8));
+      return SourceManifestCanonicalJson.parse(json.getBytes(StandardCharsets.UTF_8));
     } catch (SourceManifestException exception) {
       throw exception;
     } catch (RuntimeException exception) {
@@ -512,6 +415,41 @@ public class Micro6SourceManifestClient {
     }
   }
 
+  private static void validateLineColumns(byte[] bytes, TaskSourceManifest.Symbol symbol) {
+    Position start = position(bytes, symbol.startByte());
+    Position end = position(bytes, symbol.endByte());
+    if (start.line != symbol.startLine() || start.column != symbol.startColumn()
+        || end.line != symbol.endLine() || end.column != symbol.endColumn()) {
+      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+          "source symbol line and column span does not match its bytes");
+    }
+  }
+
+  private static Position position(byte[] bytes, int offset) {
+    try {
+      String prefix = StandardCharsets.UTF_8.newDecoder()
+          .onMalformedInput(CodingErrorAction.REPORT)
+          .onUnmappableCharacter(CodingErrorAction.REPORT)
+          .decode(ByteBuffer.wrap(bytes, 0, offset)).toString();
+      int line = 1;
+      int column = 1;
+      for (int index = 0; index < prefix.length(); index++) {
+        if (prefix.charAt(index) == '\n') {
+          line++;
+          column = 1;
+        } else {
+          column++;
+        }
+      }
+      return new Position(line, column);
+    } catch (CharacterCodingException exception) {
+      throw sourceError(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
+          "source symbol span is not valid UTF-8");
+    }
+  }
+
+  private record Position(int line, int column) {}
+
   private static boolean isUtf8Continuation(byte value) {
     return (value & 0xc0) == 0x80;
   }
@@ -564,14 +502,30 @@ public class Micro6SourceManifestClient {
   }
 
   private void enforceEnvironment(JsonNode manifest) {
-    String environment = trust.configuredEnvironment();
-    if (environment.isBlank()) return;
+    String environment = trust.getEnvironment();
+    if (environment.isBlank()) {
+      throw sourceError(SourceManifestFailureCode.SOURCE_ACCESS_DENIED,
+          "source environment is not configured");
+    }
     JsonNode declared = manifest == null ? null : manifest.get("environment");
     String expected = environment.trim();
     if (declared == null || !declared.isTextual() || !expected.equals(declared.textValue().trim())) {
       throw sourceError(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "source environment identity differs from the configured environment");
     }
+  }
+
+  private static void rejectTerminalStatus(String status) {
+    if (status == null || "AVAILABLE".equals(status)) return;
+    SourceManifestFailureCode code = switch (status) {
+      case "INDEX_PARTIAL" -> SourceManifestFailureCode.SOURCE_INDEX_PARTIAL;
+      case "UNAVAILABLE" -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
+      case "REDACTED" -> SourceManifestFailureCode.SOURCE_REDACTED;
+      case "PRUNED" -> SourceManifestFailureCode.SOURCE_PRUNED;
+      case "GENERATED_ONLY" -> SourceManifestFailureCode.SOURCE_GENERATED_ONLY;
+      default -> SourceManifestFailureCode.SOURCE_MANIFEST_INVALID;
+    };
+    throw sourceError(code, "source manifest is not available");
   }
 
   private static org.springframework.http.HttpStatus statusFor(SourceManifestFailureCode code) {

@@ -128,6 +128,8 @@ public class CaptureOperationResultService {
     try {
       transactions.executeWithoutResult(status ->
           applyCompleteInTransaction(operationId, attemptId, result, prepared));
+    } catch (CompletionIdentityConflictException exception) {
+      recordCompleteConflict(operationId, attemptId, exception);
     } catch (Exception exception) {
       recordCompleteUncertain(operationId, attemptId, exception);
     }
@@ -175,6 +177,20 @@ public class CaptureOperationResultService {
     if (capture == null) {
       finish(operation, "FAILED", Map.of("error", "CAPTURE_SESSION_NOT_FOUND"), "CAPTURE_SESSION_NOT_FOUND");
       return;
+    }
+    if (capture.isCompleted()) {
+      if (sameCompletedResult(capture, result)) {
+        // A retry after the original commit must return the immutable completion identity. Do not
+        // rebuild the recording hash from the already-enriched capture identity and do not touch
+        // the source/run rows a second time.
+        finish(operation, "SUCCEEDED", Map.of(
+            "recording_id", capture.getRecordingId(),
+            "recording_hash", capture.getRecordingHash(),
+            "video_sha256", capture.getVideoSha256()), null);
+        return;
+      }
+      throw new CompletionIdentityConflictException(
+          "CAPTURE_COMPLETION_IDENTITY_CONFLICT");
     }
     if (!result.success()) {
       capture.setCompletionStatus("UNCERTAIN");
@@ -282,6 +298,48 @@ public class CaptureOperationResultService {
     }
   }
 
+  /**
+   * A completed capture is immutable. A late callback with a different external identity must not
+   * downgrade that durable success to UNCERTAIN or overwrite its recording fields; only the
+   * retried operation is failed so the mismatch remains visible to reconciliation.
+   */
+  private void recordCompleteConflict(
+      Long operationId, String attemptId, CompletionIdentityConflictException exception) {
+    logger.warn("Capture completion identity conflict for operation {}: {}",
+        operationId, exception.getMessage());
+    try {
+      transactions.executeWithoutResult(status -> {
+        RoutineCaptureOperation operation = owned(operationId, attemptId);
+        if (operation == null) return;
+        RoutineCaptureRecord capture = captures.findWithLockBySessionId(operation.getSessionId())
+            .orElse(null);
+        if (capture != null && capture.isCompleted()) {
+          finish(operation, "FAILED", Map.of("error", exception.getMessage()), exception.getMessage());
+        } else {
+          // The conflict should only be raised for an already completed row. Preserve the normal
+          // recovery behavior if a concurrent state change makes that assumption false.
+          if (capture != null) {
+            capture.setCompletionStatus("UNCERTAIN");
+            capture.setCompletionError(truncate(exception.getMessage(), 500));
+            captures.save(capture);
+          }
+          finish(operation, "UNCERTAIN", Map.of("error", exception.getMessage()), exception.getMessage());
+        }
+      });
+    } catch (RuntimeException failure) {
+      logger.error("Could not record capture completion identity conflict for operation {}: {}",
+          operationId, failure.getMessage());
+    }
+  }
+
+  private static boolean sameCompletedResult(
+      RoutineCaptureRecord capture, CaptureRecordingGateway.CompleteResult result) {
+    return result != null && result.success()
+        && Objects.equals(capture.getRecordingId(), result.recordingId())
+        && Objects.equals(capture.getVideoPath(), result.videoPath())
+        && Objects.equals(capture.getVideoSha256(), result.videoSha256());
+  }
+
   private RoutineCaptureOperation owned(Long operationId, String attemptId) {
     RoutineCaptureOperation operation = operations.findWithLockById(operationId).orElse(null);
     if (operation == null || !"LEASED".equals(operation.getState())
@@ -309,5 +367,11 @@ public class CaptureOperationResultService {
         && identity.task() != null
         && (identity.source() != null || identity.client() != null
             && "MICRO6_MANAGED".equals(identity.client().clientKind()));
+  }
+
+  private static final class CompletionIdentityConflictException extends RuntimeException {
+    private CompletionIdentityConflictException(String message) {
+      super(message);
+    }
   }
 }

@@ -1,9 +1,7 @@
 package com.chromascape.web.aiplayer.routine.source;
 
-import com.chromascape.web.aiplayer.contract.CanonicalJsonHasher;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidator;
-import com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClient;
 import com.chromascape.web.aiplayer.routine.service.CurrentSliceRunService;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReference;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReferenceRepository;
@@ -31,15 +29,8 @@ public class SourceManifestBindingService {
   private final VerifiedSourceContentCache cache;
   private final CurrentSliceRunService runs;
   private final CurrentSliceIdentityValidator identities;
-  /**
-   * Retained constructor parameter only: since the fetch/persistence split, this service performs
-   * no remote I/O ({@link SourceManifestFetchService} owns the HTTP fetch), but the constructor
-   * signature is kept stable for existing tests.
-   */
-  @SuppressWarnings("unused")
-  private final Micro6SourceManifestClient upstream;
   /** The single canonical trust configuration; services never read legacy trust prefixes. */
-  private SourceTrustProperties trust = new SourceTrustProperties();
+  private final SourceTrustProperties trust;
 
   @org.springframework.beans.factory.annotation.Autowired
   public SourceManifestBindingService(
@@ -50,7 +41,6 @@ public class SourceManifestBindingService {
       VerifiedSourceContentCache cache,
       CurrentSliceRunService runs,
       CurrentSliceIdentityValidator identities,
-      Micro6SourceManifestClient upstream,
       SourceTrustProperties trust) {
     this.mapper = mapper;
     this.manifests = manifests;
@@ -59,38 +49,7 @@ public class SourceManifestBindingService {
     this.cache = cache;
     this.runs = runs;
     this.identities = identities;
-    this.upstream = upstream;
     this.trust = trust;
-  }
-
-  /** Test-only trust override; production wiring always injects the canonical bean. */
-  void setTrust(SourceTrustProperties trust) {
-    this.trust = trust;
-  }
-
-  /** Compatibility constructor for focused tests that do not provide an upstream client. */
-  public SourceManifestBindingService(
-      ObjectMapper mapper,
-      SourceManifestReferenceRepository manifests,
-      SourceRunBindingRepository bindings,
-      SourceContentObjectRepository contentObjects,
-      VerifiedSourceContentCache cache,
-      CurrentSliceRunService runs,
-      CurrentSliceIdentityValidator identities) {
-    this(mapper, manifests, bindings, contentObjects, cache, runs, identities, null,
-        new SourceTrustProperties());
-  }
-
-  /** Compatibility constructor for older isolated tests without a durable content repository. */
-  public SourceManifestBindingService(
-      ObjectMapper mapper,
-      SourceManifestReferenceRepository manifests,
-      SourceRunBindingRepository bindings,
-      VerifiedSourceContentCache cache,
-      CurrentSliceRunService runs,
-      CurrentSliceIdentityValidator identities) {
-    this(mapper, manifests, bindings, null, cache, runs, identities, null,
-        new SourceTrustProperties());
   }
 
   /**
@@ -107,21 +66,35 @@ public class SourceManifestBindingService {
         throw new SourceManifestException(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
             "source task and manifest are required");
       }
-      JsonNode manifest = CanonicalJsonHasher.parse(manifestJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      JsonNode manifest = SourceManifestCanonicalJson.parse(
+          manifestJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
       TaskSourceManifestVerifier.Verified verified = verifier().verify(manifest, expected);
+      // The public verifier accepts only signed v1; this guard keeps a future non-authoritative
+      // result from ever reaching the manifest table even if a new decode path is added.
+      if (verified == null || !verified.signatureVerified()
+          || !SourceManifestContract.SCHEMA.equals(verified.manifest().schema())) {
+        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+            "source binding requires a signed v1 manifest");
+      }
       if (!taskKey.equals(verified.manifest().taskKey())) {
         throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
             "task identity differs from the requested task");
       }
       enforceEnvironment(verified.rawManifest());
+      requireAvailable(verified.manifest().status());
       String hash = verified.manifest().manifestHash();
-      String canonicalManifest = CanonicalJsonHasher.canonical(manifest);
+      String canonicalManifest = SourceManifestCanonicalJson.canonical(manifest);
       String manifestEnvironment = declaredEnvironment(verified.rawManifest());
       SourceManifestReference existing = manifests.findByManifestHash(hash).orElse(null);
       if (existing != null) {
         if (!canonicalManifest.equals(existing.getManifestJson())
             || !same(existing.getTaskKey(), verified.manifest().taskKey())
             || !same(existing.getSnapshotId(), verified.manifest().sourceSnapshotId())
+            || !same(existing.getRepositoryId(), nested(manifest, "repository", "repository_id"))
+            || !same(existing.getCommitId(), nested(manifest, "repository", "commit_id"))
+            || !same(existing.getTreeId(), nested(manifest, "repository", "tree_id"))
+            || !same(existing.getBuildId(), nested(manifest, "build", "build_id"))
+            || !same(existing.getArtifactDigest(), nested(manifest, "build", "artifact_digest"))
             || !same(existing.getEnvironment(), manifestEnvironment)) {
           throw new SourceManifestException(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID,
               "manifest identity was reused with different bytes");
@@ -138,7 +111,7 @@ public class SourceManifestBindingService {
         reference.setSchemaVersion(verified.manifest().schema());
         reference.setManifestHash(hash);
         reference.setSnapshotId(verified.manifest().sourceSnapshotId());
-        reference.setRepositoryId(nested(manifest, "repository", "repository_id", "id"));
+        reference.setRepositoryId(nested(manifest, "repository", "repository_id"));
         reference.setCommitId(nested(manifest, "repository", "commit_id"));
         reference.setTreeId(nested(manifest, "repository", "tree_id"));
         reference.setBuildId(nested(manifest, "build", "build_id"));
@@ -179,11 +152,19 @@ public class SourceManifestBindingService {
       throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "run and verified source are required");
     }
+    // Run binding is authoritative-only: an unsigned or unsupported result can never bind a run,
+    // even when it was constructed in-process rather than through verifyAndPersist.
+    if (!verified.signatureVerified()
+        || !SourceManifestContract.SCHEMA.equals(verified.manifest().schema())) {
+      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+          "run binding requires a signed v1 manifest");
+    }
     if (!taskKey.equals(verified.manifest().taskKey())) {
       throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "run task identity differs from the source manifest");
     }
     enforceEnvironment(verified.rawManifest());
+    requireAvailable(verified.manifest().status());
     String normalizedRecordingId = normalizeOptionalIdentity(recordingId, "recording identity");
     SourceManifestReference reference = manifests.findByManifestHash(
         verified.manifest().manifestHash()).orElseThrow(() ->
@@ -197,8 +178,12 @@ public class SourceManifestBindingService {
     }
     String sourceEnvironment = reference.getEnvironment();
     SourceRunBinding existing = bindings.findByRunId(runId).orElse(null);
+    String repositoryId = nested(verified.rawManifest(), "repository", "repository_id");
+    String commitId = nested(verified.rawManifest(), "repository", "commit_id");
+    String treeId = nested(verified.rawManifest(), "repository", "tree_id");
+    String buildId = nested(verified.rawManifest(), "build", "build_id");
     String artifact = nested(verified.rawManifest(), "build", "artifact_digest");
-    if (!verified.legacy() && (artifact == null || !SourceManifestContract.isHash(artifact))) {
+    if (artifact == null || !SourceManifestContract.isHash(artifact)) {
       throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "run binding requires a verified artifact digest");
     }
@@ -213,6 +198,10 @@ public class SourceManifestBindingService {
       if (!same(existing.getTaskKey(), taskKey)
           || !same(existing.getManifestHash(), verified.manifest().manifestHash())
           || !same(existing.getSnapshotId(), verified.manifest().sourceSnapshotId())
+          || !same(existing.getRepositoryId(), repositoryId)
+          || !same(existing.getCommitId(), commitId)
+          || !same(existing.getTreeId(), treeId)
+          || !same(existing.getBuildId(), buildId)
           || !same(existing.getArtifactDigest(), artifact)
           || !same(existing.getEnvironment(), sourceEnvironment)
           || !same(existing.getVerificationState(), verificationState(verified))
@@ -233,6 +222,10 @@ public class SourceManifestBindingService {
     binding.setTaskKey(taskKey);
     binding.setManifestHash(verified.manifest().manifestHash());
     binding.setSnapshotId(verified.manifest().sourceSnapshotId());
+    binding.setRepositoryId(repositoryId);
+    binding.setCommitId(commitId);
+    binding.setTreeId(treeId);
+    binding.setBuildId(buildId);
     binding.setArtifactDigest(artifact);
     binding.setEnvironment(sourceEnvironment);
     binding.setVerificationState(verificationState(verified));
@@ -298,6 +291,10 @@ public class SourceManifestBindingService {
     result.put("task_key", binding.getTaskKey());
     result.put("source_manifest_hash", binding.getManifestHash());
     result.put("source_snapshot_id", binding.getSnapshotId());
+    result.put("repository_id", binding.getRepositoryId());
+    result.put("commit_id", binding.getCommitId());
+    result.put("tree_id", binding.getTreeId());
+    result.put("build_id", binding.getBuildId());
     result.put("artifact_digest", binding.getArtifactDigest());
     result.put("environment", binding.getEnvironment());
     result.put("verification_state", binding.getVerificationState());
@@ -338,32 +335,38 @@ public class SourceManifestBindingService {
   }
 
   private static String verificationState(TaskSourceManifestVerifier.Verified verified) {
-    if (verified.legacy()) return "LEGACY_UNVERIFIED";
-    return verified.signatureVerified() ? "VERIFIED" : "UNSIGNED";
+    if (verified == null || !verified.signatureVerified()) {
+      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+          "source binding requires a verified signature");
+    }
+    return "VERIFIED";
   }
 
   private static String provenance(TaskSourceManifestVerifier.Verified verified) {
-    if (verified.legacy()) return "UNKNOWN";
-    return verified.signatureVerified() ? "VERIFIED" : "UNSIGNED";
+    if (verified == null || !verified.signatureVerified()) {
+      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+          "source binding requires a verified signature");
+    }
+    return "VERIFIED";
   }
 
-  /** Creates the source identity group without allowing legacy data to invent provenance. */
+  /** Creates the source identity group from the verified v1 manifest. */
   public CurrentSliceIdentity.Source identitySource(
       TaskSourceManifestVerifier.Verified verified) {
-    if (verified == null) return null;
-    if (verified.legacy()) {
-      return new CurrentSliceIdentity.Source(
-          verified.manifest().sourceSnapshotId(), verified.manifest().manifestHash());
+    if (verified == null || !verified.signatureVerified()
+        || !SourceManifestContract.SCHEMA.equals(verified.manifest().schema())) {
+      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+          "source identity requires a verified signature");
     }
     JsonNode raw = verified.rawManifest();
     return new CurrentSliceIdentity.Source(
         verified.manifest().sourceSnapshotId(), verified.manifest().manifestHash(),
-        nested(raw, "repository", "repository_id", "id"),
+        nested(raw, "repository", "repository_id"),
         nested(raw, "repository", "commit_id"),
         nested(raw, "repository", "tree_id"),
         nested(raw, "build", "build_id"),
         nested(raw, "build", "artifact_digest"),
-        verified.signatureVerified());
+        Boolean.TRUE);
   }
 
   private static String normalizeOptionalIdentity(String value, String label) {
@@ -379,6 +382,19 @@ public class SourceManifestBindingService {
 
   private void enforceEnvironment(JsonNode manifest) {
     SourceManifestFetchService.enforceEnvironment(trust, manifest);
+  }
+
+  private static void requireAvailable(String status) {
+    if ("AVAILABLE".equals(status)) return;
+    SourceManifestFailureCode code = switch (status) {
+      case "INDEX_PARTIAL" -> SourceManifestFailureCode.SOURCE_INDEX_PARTIAL;
+      case "UNAVAILABLE" -> SourceManifestFailureCode.SOURCE_UNAVAILABLE;
+      case "REDACTED" -> SourceManifestFailureCode.SOURCE_REDACTED;
+      case "PRUNED" -> SourceManifestFailureCode.SOURCE_PRUNED;
+      case "GENERATED_ONLY" -> SourceManifestFailureCode.SOURCE_GENERATED_ONLY;
+      default -> SourceManifestFailureCode.SOURCE_MANIFEST_INVALID;
+    };
+    throw new SourceManifestException(code, "source manifest is not available for binding");
   }
 
   private static String declaredEnvironment(JsonNode manifest) {
@@ -402,7 +418,7 @@ public class SourceManifestBindingService {
   }
 
   private static String hash(byte[] bytes) {
-    byte[] digest = com.chromascape.web.aiplayer.contract.CanonicalJsonHasher.digest(bytes);
+    byte[] digest = SourceManifestCanonicalJson.digest(bytes);
     StringBuilder value = new StringBuilder("sha256:");
     for (byte part : digest) value.append(String.format(java.util.Locale.ROOT, "%02x", part));
     return value.toString();

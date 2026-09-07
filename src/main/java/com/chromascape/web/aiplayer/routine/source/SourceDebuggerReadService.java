@@ -7,6 +7,7 @@ import com.chromascape.web.aiplayer.routine.source.persistence.SourceContentObje
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceContentObjectRepository;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceRunBinding;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceRunBindingRepository;
+import com.chromascape.web.config.SourceTrustProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
@@ -29,8 +30,8 @@ public class SourceDebuggerReadService {
   private final VerifiedSourceContentCache cache;
   private final Micro6SourceManifestClient upstream;
   private final SourceReadAuditService audit;
-  /** The single canonical trust configuration; services never read legacy trust prefixes. */
-  private final com.chromascape.web.config.SourceTrustProperties trust;
+  /** The canonical manifest trust configuration. */
+  private final SourceTrustProperties trust;
 
   @Autowired
   public SourceDebuggerReadService(
@@ -41,7 +42,7 @@ public class SourceDebuggerReadService {
       VerifiedSourceContentCache cache,
       Micro6SourceManifestClient upstream,
       SourceReadAuditService audit,
-      com.chromascape.web.config.SourceTrustProperties trust) {
+      SourceTrustProperties trust) {
     this.mapper = mapper;
     this.manifests = manifests;
     this.bindings = bindings;
@@ -50,19 +51,6 @@ public class SourceDebuggerReadService {
     this.upstream = upstream;
     this.audit = audit;
     this.trust = trust;
-  }
-
-  /** Test-only convenience constructor without durable content storage. Package-private so Spring
-   *  production injection unambiguously selects the @Autowired constructor above. */
-  SourceDebuggerReadService(
-      ObjectMapper mapper,
-      SourceManifestReferenceRepository manifests,
-      SourceRunBindingRepository bindings,
-      VerifiedSourceContentCache cache,
-      Micro6SourceManifestClient upstream,
-      SourceReadAuditService audit) {
-    this(mapper, manifests, bindings, null, cache, upstream, audit,
-        new com.chromascape.web.config.SourceTrustProperties());
   }
 
   public java.util.Map<String, Object> manifest(String runId, String actor) {
@@ -252,15 +240,24 @@ public class SourceDebuggerReadService {
 
   private TaskSourceManifestVerifier.Verified verify(SourceManifestReference reference) {
     try {
-      JsonNode manifest = com.chromascape.web.aiplayer.contract.CanonicalJsonHasher.parse(
+      JsonNode manifest = SourceManifestCanonicalJson.parse(
           reference.getManifestJson().getBytes(StandardCharsets.UTF_8));
-      return new TaskSourceManifestVerifier(trust.isRequireSignature(), trust.isAllowLegacy(),
-          SourceManifestSignatureVerifier.fromX509Base64(
-              trust.getPublicKeyBase64(), trust.getPublicKeyId())).verify(manifest,
+      TaskSourceManifestVerifier.Verified verified =
+          new TaskSourceManifestVerifier(SourceManifestSignatureVerifier.fromX509Base64(
+          trust.getPublicKeyBase64(), trust.getPublicKeyId())).verify(manifest,
               new TaskSourceManifestVerifier.ExpectedIdentity(reference.getTaskKey(),
                   reference.getRepositoryId(), reference.getCommitId(), reference.getTreeId(),
                   reference.getBuildId(), reference.getArtifactDigest(), reference.getSnapshotId(),
                   reference.getManifestHash()));
+      // Debugger reads serve only persisted signed v1 identities. The verify call above
+      // already rejects unsupported schemas; this guard keeps a future non-authoritative
+      // result from ever being served even if storage predates the rule.
+      if (verified == null || !verified.signatureVerified()
+          || !SourceManifestContract.SCHEMA.equals(verified.manifest().schema())) {
+        throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+            "persisted source manifest is not authoritative");
+      }
+      return verified;
     } catch (SourceManifestException exception) {
       throw exception;
     } catch (Exception exception) {
@@ -280,6 +277,11 @@ public class SourceDebuggerReadService {
     if ("PRUNED".equals(binding.getVerificationState())) {
       throw new SourceManifestException(SourceManifestFailureCode.SOURCE_PRUNED,
           HttpStatus.GONE, "source snapshot has been pruned");
+    }
+    if (!"VERIFIED".equals(binding.getVerificationState())
+        || !"VERIFIED".equals(binding.getSourceProvenance())) {
+      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_SIGNATURE_INVALID,
+          HttpStatus.UNPROCESSABLE_ENTITY, "source binding is not authoritative");
     }
     audit.record(actor, operation, runId, binding.getRecordingId(), binding.getTaskKey(),
         binding.getSnapshotId(), fileId, "AUTHORIZED");
@@ -304,7 +306,12 @@ public class SourceDebuggerReadService {
         || !same(binding.getManifestHash(), reference.getManifestHash())
         || !same(binding.getArtifactDigest(), reference.getArtifactDigest())
         || !same(binding.getSourceProvenance(), reference.getSourceProvenance())
-        || !same(binding.getEnvironment(), reference.getEnvironment())) {
+        || !same(binding.getEnvironment(), reference.getEnvironment())
+        || !same(binding.getRepositoryId(), reference.getRepositoryId())
+        || !same(binding.getCommitId(), reference.getCommitId())
+        || !same(binding.getTreeId(), reference.getTreeId())
+        || !same(binding.getBuildId(), reference.getBuildId())
+        || !SourceManifestContract.SCHEMA.equals(reference.getSchemaVersion())) {
       throw new SourceManifestException(SourceManifestFailureCode.SOURCE_BUILD_MISMATCH,
           "source binding identity is inconsistent");
     }
@@ -324,8 +331,7 @@ public class SourceDebuggerReadService {
 
   private static boolean isReadable(TaskSourceManifest.File file) {
     if (file == null) return false;
-    return !"SENSITIVE".equals(file.classification())
-        && !"EXCLUDED".equals(file.classification());
+    return "SOURCE".equals(file.classification());
   }
 
   private static byte[] verifyContent(TaskSourceManifest.File file, byte[] content) {
@@ -342,7 +348,7 @@ public class SourceDebuggerReadService {
   }
 
   private static String hash(byte[] bytes) {
-    byte[] digest = com.chromascape.web.aiplayer.contract.CanonicalJsonHasher.digest(bytes);
+    byte[] digest = SourceManifestCanonicalJson.digest(bytes);
     StringBuilder value = new StringBuilder("sha256:");
     for (byte part : digest) {
       value.append(String.format(java.util.Locale.ROOT, "%02x", part));

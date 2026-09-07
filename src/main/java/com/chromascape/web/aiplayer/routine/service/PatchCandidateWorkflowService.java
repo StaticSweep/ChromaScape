@@ -269,8 +269,7 @@ public class PatchCandidateWorkflowService {
       throw error(HttpStatus.UNPROCESSABLE_ENTITY, "CANDIDATE_IDENTITY_BUILD_MISMATCH",
           "candidate identity client build differs from the authoritative source manifest");
     }
-    candidateIdentity = withCandidateSource(
-        candidateIdentity, resolved.sourceSnapshotId(), resolved.sourceManifestHash());
+    candidateIdentity = withCandidateSource(candidateIdentity, resolved);
     identities.validate(candidateIdentity);
     String requestedBase = text(request, "base_commit");
     if (requestedBase != null && !requestedBase.equals(resolved.commitId())) {
@@ -339,11 +338,20 @@ public class PatchCandidateWorkflowService {
   }
 
   /** Binds candidate provenance to the authoritative patch source without changing prior groups. */
-  static CurrentSliceIdentity withCandidateSource(CurrentSliceIdentity identity,
-      String sourceSnapshotId, String sourceManifestHash) {
+  static CurrentSliceIdentity withCandidateSource(
+      CurrentSliceIdentity identity, Micro6SourceManifestClient.SourceBinding resolved) {
+    if (identity == null || resolved == null || !resolved.signatureVerified()
+        || resolved.repositoryId() == null || resolved.commitId() == null
+        || resolved.treeId() == null || resolved.clientBuildId() == null
+        || resolved.artifactDigest() == null) {
+      throw new IllegalArgumentException("complete verified source identity is required");
+    }
     return new CurrentSliceIdentity(
         identity.schema(), identity.task(), identity.run(), identity.client(), identity.capture(),
-        new CurrentSliceIdentity.Source(sourceSnapshotId, sourceManifestHash),
+        new CurrentSliceIdentity.Source(
+            resolved.sourceSnapshotId(), resolved.sourceManifestHash(), resolved.repositoryId(),
+            resolved.commitId(), resolved.treeId(), resolved.clientBuildId(),
+            resolved.artifactDigest(), Boolean.TRUE),
         identity.graph(), identity.model(), null, false);
   }
 

@@ -56,7 +56,9 @@ class SourceRetentionServiceTest {
   @Test
   void rejectsMalformedRetentionIdentities() {
     SourceRetentionService service = new SourceRetentionService(
-        mock(SourceManifestReferenceRepository.class));
+        mock(SourceManifestReferenceRepository.class),
+        mock(SourceContentObjectRepository.class),
+        mock(SourceReadAuditService.class));
     assertThrows(SourceManifestException.class, () -> service.prune("not-a-hash"));
     assertThrows(SourceManifestException.class, () -> service.pruneContent("not-a-hash"));
   }

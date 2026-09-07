@@ -15,11 +15,10 @@ public final class TaskSourceManifest {
   private final List<Symbol> symbols;
   private final List<GeneratedMapping> generatedMappings;
 
-  TaskSourceManifest(JsonNode document, List<File> files, List<Symbol> symbols) {
-    this(document, files, symbols, List.of());
-  }
-
-  TaskSourceManifest(JsonNode document, List<File> files, List<Symbol> symbols,
+  TaskSourceManifest(
+      JsonNode document,
+      List<File> files,
+      List<Symbol> symbols,
       List<GeneratedMapping> generatedMappings) {
     this.document = document.deepCopy();
     this.files = List.copyOf(files);

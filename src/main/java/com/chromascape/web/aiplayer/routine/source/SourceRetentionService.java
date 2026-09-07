@@ -26,11 +26,6 @@ public class SourceRetentionService {
     this.audit = audit;
   }
 
-  /** Compatibility constructor for focused tests that only exercise manifest retention. */
-  public SourceRetentionService(SourceManifestReferenceRepository manifests) {
-    this(manifests, null, new SourceReadAuditService());
-  }
-
   /** Marks a manifest unavailable after retention expiry without deleting or reusing its identity. */
   @Transactional
   public SourceManifestReference prune(String manifestHash) {

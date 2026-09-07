@@ -13,8 +13,8 @@ import org.junit.jupiter.api.Test;
  * fails this test, so neither repository can silently verify against a different contract.
  *
  * <p>The Micro6 checkout is located through {@code BUILDER_GOAL_MICRO6_PROJECT_DIR} (the same
- * variable the runtime uses), falling back to the documented sibling checkout. The test fails
- * closed when the mirror cannot be found — it never waives itself.
+ * variable the runtime uses), falling back only to the canonical Windows checkout. The test fails
+ * closed when the mirror cannot be found — it never waives itself and never guesses a WSL mount.
  */
 class SourceContractSchemaEqualityTest {
 
@@ -23,15 +23,8 @@ class SourceContractSchemaEqualityTest {
   private static final String SCHEMA_IN_MICRO6 =
       "src/main/resources/micro6-contracts/task-source-manifest-v1.schema.json";
 
-  /**
-   * Documented sibling checkouts, in preference order. The Windows path is the canonical project
-   * identity; the WSL mount is the same checkout seen from Linux. A bare Windows path is not a
-   * usable {@link Path} on Linux, so listing both keeps the fallback meaningful on either platform
-   * instead of silently resolving to an unreachable relative name.
-   */
-  private static final String[] FALLBACK_ROOTS = {
-    "C:\\Dev\\IdeaProjects\\micro6", "/mnt/c/Dev/IdeaProjects/micro6",
-  };
+  /** Canonical project identity; verification is expected to run from native Windows. */
+  private static final String WINDOWS_MICRO6_ROOT = "C:\\Dev\\IdeaProjects\\micro6";
 
   private static Path schemaUnder(String root) {
     return Path.of(root).resolve("runelite-client").resolve(SCHEMA_IN_MICRO6);
@@ -45,14 +38,8 @@ class SourceContractSchemaEqualityTest {
     if (configured != null && !configured.isBlank()) {
       return schemaUnder(configured.trim());
     }
-    for (String root : FALLBACK_ROOTS) {
-      Path candidate = schemaUnder(root);
-      if (Files.isRegularFile(candidate)) {
-        return candidate;
-      }
-    }
     // Nothing resolved: return the canonical location so the assertion reports it and fails closed.
-    return schemaUnder(FALLBACK_ROOTS[0]);
+    return schemaUnder(WINDOWS_MICRO6_ROOT);
   }
 
   @Test

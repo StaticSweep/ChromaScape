@@ -3,13 +3,14 @@ package com.chromascape.web.aiplayer.routine.source;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.chromascape.web.ChromaScapeApplication;
 import com.chromascape.web.accounttask.entity.ScriptStabilizationRun;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationRunRepository;
 import com.chromascape.web.aiplayer.contract.CurrentSliceIdentity;
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import com.chromascape.web.aiplayer.routine.repository.CurrentSliceRunRepository;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReference;
 import com.chromascape.web.aiplayer.routine.source.persistence.SourceManifestReferenceRepository;
@@ -19,14 +20,19 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.util.Base64;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 
 /**
  * SC-810 transactional integration proof for the source-binding split: the Micro6 manifest is
@@ -37,9 +43,14 @@ import org.springframework.test.context.DynamicPropertySource;
  * HTTP stub serving the deterministic {@link SourceManifestTestFixtures} manifest.
  */
 @SpringBootTest(
-    classes = ChromaScapeApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+    classes = Sc810PostgresTestConfiguration.class,
+    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@TestPropertySource(properties = {
+    "spring.flyway.target=21",
+    "spring.jpa.hibernate.ddl-auto=update"
+})
 @ActiveProfiles("test")
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class SourceRunOrchestrationIntegrationTest {
 
   private static final String HASH =
@@ -48,13 +59,16 @@ class SourceRunOrchestrationIntegrationTest {
   private static final String ARTIFACT =
       SourceManifestTestFixtures.manifest().path("build").path("artifact_digest").asText();
 
+  /** Production source reads require a verifiable v1 signature; keep this fixture self-contained. */
+  private static final KeyPair SIGNING_KEY = signingKey();
+
   /** Static block so the stub address exists before the Spring context resolves properties. */
   private static final HttpServer MICRO6 = startStub();
 
   private static HttpServer startStub() {
     try {
       HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-      byte[] manifest = SourceManifestTestFixtures.manifest().toString()
+      byte[] manifest = SourceManifestTestFixtures.signedManifest(SIGNING_KEY).toString()
           .getBytes(StandardCharsets.UTF_8);
       server.createContext("/api/v1/source-manifests/EXAMPLE_TASK", exchange -> {
         exchange.getResponseHeaders().add("Content-Type", "application/json");
@@ -71,8 +85,31 @@ class SourceRunOrchestrationIntegrationTest {
 
   @DynamicPropertySource
   static void micro6BaseUrl(DynamicPropertyRegistry registry) {
+    IsolatedPostgresTestDatabase.register(registry);
+    String endpoint = "http://127.0.0.1:" + MICRO6.getAddress().getPort();
     registry.add("micro6.executor-catalog.base-url",
         () -> "http://127.0.0.1:" + MICRO6.getAddress().getPort());
+    configureSigningTrust(registry);
+    registry.add("micro6.source.transport.base-url", () -> endpoint);
+    registry.add("micro6.source.transport.auth-token", () -> "test-source-upstream-token");
+    registry.add("micro6.source.transport.actor", () -> "chromascape-test");
+  }
+
+  private static void configureSigningTrust(DynamicPropertyRegistry registry) {
+    String key = Base64.getEncoder().encodeToString(SIGNING_KEY.getPublic().getEncoded());
+    registry.add("chromascape.source.public-key-base64", () -> key);
+    registry.add("chromascape.source.public-key-id", () -> "test-key");
+    registry.add("chromascape.source.environment", () -> "production");
+    registry.add("chromascape.source.access.metadata-token", () -> "test-source-metadata-token");
+    registry.add("chromascape.source.access.content-token", () -> "test-source-content-token");
+  }
+
+  private static KeyPair signingKey() {
+    try {
+      return KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+    } catch (Exception exception) {
+      throw new IllegalStateException("Ed25519 unavailable", exception);
+    }
   }
 
   @Autowired SourceRunOrchestrationService orchestration;
@@ -107,7 +144,8 @@ class SourceRunOrchestrationIntegrationTest {
           manifests.findAll().forEach(reference -> {
             if (SourceManifestTestFixtures.manifest().path("source_manifest_hash").asText()
                     .equals(reference.getManifestHash())
-                || "snap_pre_existing_conflict".equals(reference.getSnapshotId())) {
+                || "snap_pre_existing_conflict".equals(reference.getSnapshotId())
+                || "srcsnap_aaaaaaaaaaaaaaaaaaaaaaaa".equals(reference.getSnapshotId())) {
               manifests.delete(reference);
             }
           });
@@ -162,8 +200,13 @@ class SourceRunOrchestrationIntegrationTest {
     conflicting.setManifestHash("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     conflicting.setSnapshotId("snap_pre_existing_conflict");
     conflicting.setArtifactDigest("sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
-    conflicting.setVerificationState("UNSIGNED");
-    conflicting.setSourceProvenance("UNSIGNED");
+    conflicting.setRepositoryId("micro6");
+    conflicting.setCommitId("0123456789abcdef0123456789abcdef01234567");
+    conflicting.setTreeId("fedcba9876543210fedcba9876543210fedcba98");
+    conflicting.setBuildId("micro6-build-other");
+    conflicting.setEnvironment("production");
+    conflicting.setVerificationState("VERIFIED");
+    conflicting.setSourceProvenance("VERIFIED");
     // source_run_bindings.manifest_hash references source_manifest_references, so the conflicting
     // identity needs its own durable manifest reference row first.
     SourceManifestReference conflictingManifest = new SourceManifestReference();
@@ -171,12 +214,16 @@ class SourceRunOrchestrationIntegrationTest {
     conflictingManifest.setSchemaVersion(SourceManifestContract.SCHEMA);
     conflictingManifest.setManifestHash(conflicting.getManifestHash());
     conflictingManifest.setSnapshotId(conflicting.getSnapshotId());
+    conflictingManifest.setRepositoryId("micro6");
+    conflictingManifest.setCommitId("0123456789abcdef0123456789abcdef01234567");
+    conflictingManifest.setTreeId("fedcba9876543210fedcba9876543210fedcba98");
     conflictingManifest.setBuildId("micro6-build-other");
     conflictingManifest.setArtifactDigest(conflicting.getArtifactDigest());
-    conflictingManifest.setVerificationState("UNSIGNED");
-    conflictingManifest.setSourceProvenance("UNSIGNED");
+    conflictingManifest.setVerificationState("VERIFIED");
+    conflictingManifest.setSourceProvenance("VERIFIED");
     conflictingManifest.setRetentionClass("DEBUG");
     conflictingManifest.setConfidentiality("INTERNAL");
+    conflictingManifest.setEnvironment("production");
     conflictingManifest.setManifestJson("{\"schema\":\"" + SourceManifestContract.SCHEMA + "\"}");
     manifests.saveAndFlush(conflictingManifest);
     bindings.saveAndFlush(conflicting);
@@ -228,7 +275,7 @@ class SourceRunOrchestrationIntegrationTest {
               "identical manifests converge on one durable identity");
           assertEquals(1, bindings.findByRunId(runId).stream().count(),
               "retries reuse the existing run binding");
-        });
+    });
   }
 
   private static CurrentSliceIdentity identity(String runId) {
@@ -238,7 +285,19 @@ class SourceRunOrchestrationIntegrationTest {
         new CurrentSliceIdentity.Run(runId, "attempt-1", 1, "executor-1"),
         new CurrentSliceIdentity.Client("client", "MICRO6_MANAGED", "micro6-build-1", ARTIFACT,
             "micro6-builder/v2", "MICRO6"),
-        null, null, null, null, null, false);
+        null, sourceIdentity(), null, null, null, false);
+  }
+
+  private static CurrentSliceIdentity.Source sourceIdentity() {
+    var manifest = SourceManifestTestFixtures.manifest();
+    return new CurrentSliceIdentity.Source(
+        manifest.path("source_snapshot_id").asText(),
+        manifest.path("source_manifest_hash").asText(),
+        manifest.path("repository").path("repository_id").asText(),
+        manifest.path("repository").path("commit_id").asText(),
+        manifest.path("repository").path("tree_id").asText(),
+        manifest.path("build").path("build_id").asText(),
+        manifest.path("build").path("artifact_digest").asText(), true);
   }
 
   private void seedPassStabilization(String runId, String attemptId) {
