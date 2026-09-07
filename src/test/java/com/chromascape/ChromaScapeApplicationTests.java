@@ -29,6 +29,6 @@ class ChromaScapeApplicationTests {
 
   @Test
   void contextLoadsAndUsesCurrentRepositoryMigrations() {
-    IsolatedPostgresTestDatabase.assertRepositoryHeadAndNoUnresolvedMigration16(flyway, dataSource);
+    IsolatedPostgresTestDatabase.assertRepositoryHeadAndMigration16Applied(flyway, dataSource);
   }
 }

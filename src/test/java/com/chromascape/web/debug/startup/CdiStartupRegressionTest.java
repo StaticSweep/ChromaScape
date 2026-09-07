@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import com.chromascape.web.aiplayer.routine.source.SourceDebuggerReadService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalRepairIncidentService;
 import com.chromascape.web.logs.LogWebSocketHandler;
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Regression for the SC-1103 startup blocker.
@@ -33,6 +36,11 @@ import org.springframework.test.context.ActiveProfiles;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class CdiStartupRegressionTest {
+
+  @DynamicPropertySource
+  static void registerDatabase(DynamicPropertyRegistry registry) {
+    IsolatedPostgresTestDatabase.register(registry);
+  }
 
   @Autowired private ApplicationContext context;
 

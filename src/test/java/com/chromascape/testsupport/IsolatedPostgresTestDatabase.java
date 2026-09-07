@@ -53,6 +53,7 @@ public final class IsolatedPostgresTestDatabase {
     registry.add("spring.flyway.default-schema", database::schema);
     registry.add("spring.flyway.create-schemas", () -> true);
     registry.add("spring.flyway.locations", () -> "classpath:db/migration");
+    registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     registry.add("spring.jpa.properties.hibernate.default_schema", database::schema);
   }
 
@@ -66,14 +67,14 @@ public final class IsolatedPostgresTestDatabase {
 
   public record Database(String jdbcUrl, String username, String password, String schema) {}
 
-  /** Asserts the repository migration head and rejects any unresolved migration 16 history. */
-  public static void assertRepositoryHeadAndNoUnresolvedMigration16(
+  /** Asserts the repository migration head and the intentionally preserved migration 16 receipt. */
+  public static void assertRepositoryHeadAndMigration16Applied(
       Flyway flyway, DataSource dataSource) {
     assertNotNull(flyway, "Flyway must be configured for the isolated test context");
     var current = flyway.info().current();
     assertNotNull(current, "Flyway must migrate the isolated schema");
     assertNotNull(current.getVersion(), "Flyway must expose a repository migration version");
-    assertEquals("44", current.getVersion().getVersion(), "Flyway must reach repository head V44");
+    assertEquals("45", current.getVersion().getVersion(), "Flyway must reach repository head V45");
 
     String schema = flyway.getConfiguration().getDefaultSchema();
     JdbcTemplate jdbc = new JdbcTemplate(dataSource);
@@ -85,8 +86,7 @@ public final class IsolatedPostgresTestDatabase {
                 + flyway.getConfiguration().getTable()
                 + "\" WHERE version = '16'",
             Integer.class);
-    assertEquals(
-        0, migration16Rows, "isolated Flyway history must not contain unresolved migration 16");
+    assertEquals(1, migration16Rows, "isolated Flyway history must apply migration 16 exactly once");
     assertTrue(
         flyway.info().all().length > 0,
         "isolated Flyway context must expose repository migrations");

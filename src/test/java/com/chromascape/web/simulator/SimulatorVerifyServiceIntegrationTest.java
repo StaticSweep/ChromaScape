@@ -68,7 +68,7 @@ class SimulatorVerifyServiceIntegrationTest {
 
   @BeforeEach
   void setUp() {
-    IsolatedPostgresTestDatabase.assertRepositoryHeadAndNoUnresolvedMigration16(flyway, dataSource);
+    IsolatedPostgresTestDatabase.assertRepositoryHeadAndMigration16Applied(flyway, dataSource);
     baseUrl = "http://localhost:" + port + "/api/simulator/verify";
   }
 

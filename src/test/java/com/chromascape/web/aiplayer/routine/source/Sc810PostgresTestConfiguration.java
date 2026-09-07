@@ -27,8 +27,8 @@ import com.chromascape.web.config.SourceTrustProperties;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 /**
@@ -40,7 +40,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * test fail before any source code runs. This configuration deliberately imports only the
  * source/run/capture services and scans only the repositories/entities they persist.
  */
-@Configuration(proxyBeanMethods = false)
+@TestConfiguration(proxyBeanMethods = false)
 @EnableAutoConfiguration
 @EntityScan(
     basePackageClasses = {

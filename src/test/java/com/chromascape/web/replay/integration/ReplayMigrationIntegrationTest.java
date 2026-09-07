@@ -51,6 +51,7 @@ class ReplayMigrationIntegrationTest {
   static java.nio.file.Path replayMigrationDir() throws Exception {
     java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("replay-migrations");
     String[] scripts = {
+      "V10__recording_archive.sql",
       "V11__replay_curation_and_manifest.sql",
       "V12__replay_suites_and_runs.sql",
       "V13__replay_events_checkpoints_and_hashes.sql",
@@ -60,6 +61,7 @@ class ReplayMigrationIntegrationTest {
       "V18__replay_checkpoint_artifact_checksum.sql",
       "V19__reconcile_replay_checkpoint_artifacts.sql",
       "V20__replay_finalization_reservation.sql",
+      "V24__replay_recording_actions.sql",
       "V30__replay_pre_execution_reports.sql",
       "V31__replay_playback_catalog_pagination.sql",
       "V25__replay_v2_metadata.sql",
@@ -179,14 +181,10 @@ class ReplayMigrationIntegrationTest {
       throws Exception {
     try (PostgreSQLContainer<?> pg = postgres("fresh_hibernate_playback_indexes");
         Connection connection = connect(pg)) {
-      // On a fresh application database Hibernate creates these debugger tables after Flyway has
-      // already reached V22. This is the real ordering that the post-Hibernate runner must cover.
+      // Flyway owns debug_sessions as of V24. Hibernate still creates the tick tables after Flyway,
+      // so the post-Hibernate runner must converge their indexes without disturbing the V31
+      // debug-session indexes.
       flyway(pg, replayMigrations()).migrate();
-      exec(
-          connection,
-          "CREATE TABLE debug_sessions ("
-              + "id BIGSERIAL PRIMARY KEY, start_time TIMESTAMP NOT NULL,"
-              + "account_name VARCHAR(100), recording_id VARCHAR(100))");
       exec(
           connection,
           "CREATE TABLE tick_snapshots (id BIGSERIAL PRIMARY KEY, session_id VARCHAR(100) NOT NULL,"
