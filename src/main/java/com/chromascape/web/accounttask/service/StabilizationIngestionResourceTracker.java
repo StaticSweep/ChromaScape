@@ -8,9 +8,9 @@ import java.util.UUID;
 /**
  * Tracks every staged and promoted artifact id allocated during one ingestion so file cleanup is
  * exact and loss-proof (SC-572). A promoted id is recorded immediately after each successful
- * promote, before the next artifact is promoted, so a partial promotion, staging failure, JPA
- * flush failure or commit failure can clean every prior file. On rollback every staged and
- * promoted artifact is deleted; on commit only staging/journal files are removed.
+ * promote, before the next artifact is promoted, so a partial promotion, staging failure, JPA flush
+ * failure or commit failure can clean every prior file. On rollback every staged and promoted
+ * artifact is deleted; on commit only staging/journal files are removed.
  */
 public final class StabilizationIngestionResourceTracker {
 
