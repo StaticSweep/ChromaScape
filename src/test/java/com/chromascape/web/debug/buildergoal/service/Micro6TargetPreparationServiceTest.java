@@ -33,9 +33,33 @@ class Micro6TargetPreparationServiceTest {
 
   @BeforeEach
   void setUp() {
+    lenient().when(launcherControlService.isLocalMachine(any())).thenReturn(true);
     service =
         new Micro6TargetPreparationService(
             launcherControlService, micro6TargetRelaunchService, localLaunchCoordinator);
+  }
+
+  @Test
+  void remoteMachineNeverInvokesLocalRelaunch() {
+    var remote = org.mockito.Mockito.mock(Micro6RemoteLauncherService.class);
+    org.springframework.test.util.ReflectionTestUtils.setField(service, "remoteLauncher", remote);
+    var machine = new BuilderGoalLauncherControlService.LauncherMachine(
+        "fedora", "Fedora", "online", true, true, Map.of());
+    when(launcherControlService.findMachineByUuid("fedora")).thenReturn(Optional.of(machine));
+    when(launcherControlService.isBuilderGoalRunnableMachine(machine)).thenReturn(true);
+    when(launcherControlService.isLocalMachine(machine)).thenReturn(false);
+    when(localLaunchCoordinator.holdsLease(any())).thenReturn(true);
+    var lease = new BuilderGoalLocalLaunchCoordinatorService.LeaseHandle(
+        "fedora", 8098, "0123456789abcdef", "owner", java.util.UUID.randomUUID());
+    var request = new Micro6TargetPreparationService.PreparationRequest(
+        "account", "0123456789abcdef", "DogaAGI", "test@example.invalid", "dummy", 360,
+        "fedora", null);
+    var expected = new Micro6TargetPreparationService.PreparationResult(null, Map.of(), null, null);
+    when(remote.ensureReady(eq(request), eq(machine), eq(lease.ownerToken().toString()), any(), any()))
+        .thenReturn(expected);
+    assertThat(service.ensureReady(request, lease, BuilderGoalLaunchCancellation.NONE, null))
+        .isSameAs(expected);
+    org.mockito.Mockito.verifyNoInteractions(micro6TargetRelaunchService);
   }
 
   @Test

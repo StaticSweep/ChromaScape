@@ -633,6 +633,30 @@ class Micro6OnlineClientRegistryServiceTest {
         readyHeartbeat(clientId, accountHash, world).put("account_name", accountName));
   }
 
+  @Test
+  void remoteReadinessRequiresMachineAttemptAccountWorldAndFreshHeartbeat() {
+    var service = new Micro6OnlineClientRegistryService();
+    var heartbeat = readyHeartbeat("remote", "0123456789abcdef", 360)
+        .put("machine_uuid", "fedora");
+    service.recordHeartbeat(heartbeat);
+    var before = java.time.Instant.now().minusSeconds(5);
+    assertThat(service.findRemoteReadyClient("fedora", "0123456789abcdef", 360,
+        "attempt-remote", before)).isPresent();
+    assertThat(service.findRemoteReadyClient("windows", "0123456789abcdef", 360,
+        "attempt-remote", before)).isEmpty();
+    assertThat(service.findRemoteReadyClient("fedora", "0123456789abcdef", 360,
+        "old-attempt", before)).isEmpty();
+    assertThat(service.findRemoteReadyClient("fedora", "1111111111111111", 360,
+        "attempt-remote", before)).isEmpty();
+    assertThat(service.findRemoteReadyClient("fedora", "0123456789abcdef", 361,
+        "attempt-remote", before)).isEmpty();
+    assertThat(service.findRemoteReadyClient("fedora", "0123456789abcdef", 360,
+        "attempt-remote", java.time.Instant.now().plusSeconds(1))).isEmpty();
+    service.recordHeartbeat(heartbeat.put("dispatch_hold", true));
+    assertThat(service.findRemoteReadyClient("fedora", "0123456789abcdef", 360,
+        "attempt-remote", before)).isEmpty();
+  }
+
   private com.fasterxml.jackson.databind.node.ObjectNode readyHeartbeat(
       String clientId, String accountHash, int world) {
     return (com.fasterxml.jackson.databind.node.ObjectNode)

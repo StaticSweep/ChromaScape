@@ -22,6 +22,9 @@ public class Micro6TargetPreparationService {
   public static final String PHASE_BUILDING_MICRO6 = "BUILDING_MICRO6";
   public static final String PHASE_BUILD_FAILED = "BUILD_FAILED";
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private Micro6RemoteLauncherService remoteLauncher;
+
   private final BuilderGoalLauncherControlService launcherControlService;
   private final Micro6TargetRelaunchService micro6TargetRelaunchService;
   private final BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator;
@@ -121,6 +124,11 @@ public class Micro6TargetPreparationService {
             cancellation.isCancelled()
                 || Thread.currentThread().isInterrupted()
                 || !localLaunchCoordinator.holdsLease(lease);
+
+    if (!launcherControlService.isLocalMachine(selectedMachine)) {
+      return remoteLauncher.ensureReady(request, selectedMachine, lease.ownerToken().toString(),
+          combinedCancellation, progressListener);
+    }
 
     Micro6TargetRelaunchService.RelaunchResult relaunchResult;
     try {
