@@ -6,6 +6,7 @@ import com.chromascape.web.aiplayer.routine.entity.BehaviorGraphDefinition;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
 import com.chromascape.web.aiplayer.routine.repository.BehaviorGraphDefinitionRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantConversationRepository;
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -20,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Proves the routine JSON columns hold their JSON, against a real PostgreSQL.
@@ -48,6 +51,14 @@ import org.springframework.test.context.ActiveProfiles;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class RoutineAssistantGenerationContextIT {
+
+  private static final IsolatedPostgresTestDatabase.Database DATABASE =
+      IsolatedPostgresTestDatabase.newDatabase();
+
+  @DynamicPropertySource
+  static void databaseProperties(DynamicPropertyRegistry registry) {
+    IsolatedPostgresTestDatabase.register(registry, DATABASE);
+  }
 
   @Autowired private RoutineAssistantConversationStore store;
   @Autowired private RoutineAssistantConversationRepository conversations;
@@ -123,11 +134,9 @@ class RoutineAssistantGenerationContextIT {
     String graphId = randomId("graph_", 24);
     publishedGraph(graphId, runId, "c");
 
-    String url =
-        System.getenv("SPRING_DATASOURCE_URL") == null
-            ? "jdbc:postgresql://localhost:5433/chromascape_test?sslmode=disable"
-            : System.getenv("SPRING_DATASOURCE_URL");
-    try (Connection connection = DriverManager.getConnection(url, "chromascape", "chromascape123");
+    String url = IsolatedPostgresTestDatabase.schemaJdbcUrl(DATABASE);
+    try (Connection connection =
+            DriverManager.getConnection(url, DATABASE.username(), DATABASE.password());
         Statement statement = connection.createStatement()) {
       try (ResultSet stored =
           statement.executeQuery(

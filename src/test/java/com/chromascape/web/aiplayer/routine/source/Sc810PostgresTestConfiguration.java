@@ -26,6 +26,7 @@ import com.chromascape.web.aiplayer.routine.source.persistence.SourceRunBindingR
 import com.chromascape.web.config.SourceTrustProperties;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -41,6 +42,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * source/run/capture services and scans only the repositories/entities they persist.
  */
 @TestConfiguration(proxyBeanMethods = false)
+@SpringBootConfiguration(proxyBeanMethods = false)
 @EnableAutoConfiguration
 @EntityScan(
     basePackageClasses = {

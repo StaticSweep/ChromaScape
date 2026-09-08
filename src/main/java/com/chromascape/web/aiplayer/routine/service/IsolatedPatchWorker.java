@@ -479,6 +479,23 @@ public class IsolatedPatchWorker {
     copyEnvironment(environment, "TMPDIR");
     copyEnvironment(environment, "TMP");
     copyEnvironment(environment, "TEMP");
+    if (isWindows()) {
+      for (String name :
+          List.of(
+              "HOME",
+              "USERPROFILE",
+              "HOMEDRIVE",
+              "HOMEPATH",
+              "APPDATA",
+              "LOCALAPPDATA",
+              "SystemRoot",
+              "SystemDrive",
+              "WINDIR",
+              "COMSPEC",
+              "PATHEXT")) {
+        copyEnvironmentIgnoringCase(environment, name);
+      }
+    }
     environment.put("LC_ALL", "C.UTF-8");
     environment.put("LANG", "C.UTF-8");
     environment.putAll(extra);
@@ -487,6 +504,15 @@ public class IsolatedPatchWorker {
   private static void copyEnvironment(Map<String, String> destination, String name) {
     String value = System.getenv(name);
     if (value != null && !value.isBlank()) destination.put(name, value);
+  }
+
+  private static void copyEnvironmentIgnoringCase(
+      Map<String, String> destination, String name) {
+    System.getenv().entrySet().stream()
+        .filter(entry -> entry.getKey().equalsIgnoreCase(name))
+        .findFirst()
+        .filter(entry -> !entry.getValue().isBlank())
+        .ifPresent(entry -> destination.put(entry.getKey(), entry.getValue()));
   }
 
   private static boolean isWindows() {

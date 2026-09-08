@@ -6,7 +6,9 @@ DO $$
 DECLARE
     target_schema TEXT := '${flyway:defaultSchema}';
 BEGIN
-    IF NOT EXISTS (
+    IF to_regclass(format('%I.%I', target_schema, 'replay_recording_actions')) IS NOT NULL
+       AND to_regclass(format('%I.%I', target_schema, 'debug_sessions')) IS NOT NULL
+       AND NOT EXISTS (
         SELECT 1
         FROM pg_constraint
         WHERE conrelid = to_regclass(format('%I.%I', target_schema, 'replay_recording_actions'))
@@ -21,7 +23,9 @@ BEGIN
         );
     END IF;
 
-    IF NOT EXISTS (
+    IF to_regclass(format('%I.%I', target_schema, 'replay_recording_actions')) IS NOT NULL
+       AND to_regclass(format('%I.%I', target_schema, 'recording_sessions')) IS NOT NULL
+       AND NOT EXISTS (
         SELECT 1
         FROM pg_constraint
         WHERE conrelid = to_regclass(format('%I.%I', target_schema, 'replay_recording_actions'))
@@ -36,7 +40,9 @@ BEGIN
         );
     END IF;
 
-    IF NOT EXISTS (
+    IF to_regclass(format('%I.%I', target_schema, 'replay_tick_batch_receipts')) IS NOT NULL
+       AND to_regclass(format('%I.%I', target_schema, 'debug_sessions')) IS NOT NULL
+       AND NOT EXISTS (
         SELECT 1
         FROM pg_constraint
         WHERE conrelid = to_regclass(format('%I.%I', target_schema, 'replay_tick_batch_receipts'))
@@ -51,7 +57,9 @@ BEGIN
         );
     END IF;
 
-    IF NOT EXISTS (
+    IF to_regclass(format('%I.%I', target_schema, 'packet_observations')) IS NOT NULL
+       AND to_regclass(format('%I.%I', target_schema, 'debug_sessions')) IS NOT NULL
+       AND NOT EXISTS (
         SELECT 1
         FROM pg_constraint
         WHERE conrelid = to_regclass(format('%I.%I', target_schema, 'packet_observations'))

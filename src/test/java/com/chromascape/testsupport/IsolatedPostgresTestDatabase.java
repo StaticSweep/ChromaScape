@@ -43,18 +43,32 @@ public final class IsolatedPostgresTestDatabase {
    * <p>Call this only from a test class's static {@code @DynamicPropertySource} method.
    */
   public static void register(DynamicPropertyRegistry registry) {
-    Database database = newDatabase();
+    register(registry, newDatabase());
+  }
+
+  /** Registers a previously allocated database so a test can also make schema-scoped raw JDBC calls. */
+  public static void register(DynamicPropertyRegistry registry, Database database) {
     registry.add(
-        "spring.datasource.url", () -> database.jdbcUrl() + "?currentSchema=" + database.schema());
+        "spring.datasource.url", () -> schemaJdbcUrl(database));
     registry.add("spring.datasource.username", database::username);
     registry.add("spring.datasource.password", database::password);
     registry.add("spring.datasource.hikari.schema", database::schema);
+    // Spring's test context cache can retain dozens of application contexts in one JVM. Keep each
+    // isolated schema's pool small so the shared PostgreSQL container never exhausts max_connections.
+    registry.add("spring.datasource.hikari.maximum-pool-size", () -> 2);
+    registry.add("spring.datasource.hikari.minimum-idle", () -> 0);
     registry.add("spring.flyway.schemas", database::schema);
     registry.add("spring.flyway.default-schema", database::schema);
     registry.add("spring.flyway.create-schemas", () -> true);
     registry.add("spring.flyway.locations", () -> "classpath:db/migration");
     registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     registry.add("spring.jpa.properties.hibernate.default_schema", database::schema);
+  }
+
+  /** Returns the database URL with a correctly appended PostgreSQL current-schema parameter. */
+  public static String schemaJdbcUrl(Database database) {
+    String separator = database.jdbcUrl().contains("?") ? "&" : "?";
+    return database.jdbcUrl() + separator + "currentSchema=" + database.schema();
   }
 
   /** Allocates a schema and returns the connection properties for a manually managed context. */
