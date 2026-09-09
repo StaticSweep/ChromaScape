@@ -48,6 +48,27 @@ public final class IsolatedPostgresTestDatabase {
 
   /** Registers a previously allocated database so a test can also make schema-scoped raw JDBC calls. */
   public static void register(DynamicPropertyRegistry registry, Database database) {
+    registerWithDdlAuto(registry, database, "update");
+  }
+
+  /**
+   * Registers a new schema-backed datasource for one Spring context with Hibernate set to {@code
+   * validate} instead of {@code update}.
+   *
+   * <p>Unlike {@link #register}, Hibernate is never permitted to create or alter any schema
+   * element here: the context only starts successfully when Flyway alone has already produced
+   * every table, column, index, and constraint the JPA metamodel expects. Use this only for a
+   * dedicated migration-completeness proof; ordinary integration tests should keep using {@link
+   * #register}, which this method does not change.
+   *
+   * <p>Call this only from a test class's static {@code @DynamicPropertySource} method.
+   */
+  public static void registerFlywayValidateOnly(DynamicPropertyRegistry registry) {
+    registerWithDdlAuto(registry, newDatabase(), "validate");
+  }
+
+  private static void registerWithDdlAuto(
+      DynamicPropertyRegistry registry, Database database, String ddlAuto) {
     registry.add(
         "spring.datasource.url", () -> schemaJdbcUrl(database));
     registry.add("spring.datasource.username", database::username);
@@ -61,7 +82,7 @@ public final class IsolatedPostgresTestDatabase {
     registry.add("spring.flyway.default-schema", database::schema);
     registry.add("spring.flyway.create-schemas", () -> true);
     registry.add("spring.flyway.locations", () -> "classpath:db/migration");
-    registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
+    registry.add("spring.jpa.hibernate.ddl-auto", () -> ddlAuto);
     registry.add("spring.jpa.properties.hibernate.default_schema", database::schema);
   }
 
