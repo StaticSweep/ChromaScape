@@ -1,5 +1,7 @@
 /gradlew text eol=lf
 src/test/resources/micro6-fixtures/* text eol=lf
+/src/test/resources/tick-batch-*.json text eol=lf
+/src/test/resources/recording-action-checksum-vectors.json text eol=lf
 *.sh text eol=lf
 *.bat text eol=crlf
 *.jar binary
