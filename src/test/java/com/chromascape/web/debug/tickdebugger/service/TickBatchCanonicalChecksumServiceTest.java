@@ -16,6 +16,9 @@ import java.util.Objects;
 import org.junit.jupiter.api.Test;
 
 class TickBatchCanonicalChecksumServiceTest {
+  private static final String EXPECTED_PACKET_CHECKSUM =
+      "sha256:ea75eddba62a1c4ac1ceda2d1304e2b0c71ae635bc8e097387b6435613b0aac7";
+
   private static final String EXPECTED_CANONICAL =
       "{\"batchId\":\"00000000-0000-4000-8000-000000001199\",\"playerState\":{\"array\":[null,2,0,123456789012345678901234567890.12345],\"html\":\"<>&'=\",\"nested\":{\"n\":1,\"payloadChecksum\":\"retain\"},\"nullValue\":null,\"unicode\":\"café\"},\"schemaVersion\":2,\"sessionId\":\"session-1199\",\"tick\":42,\"timestamp\":\"2026-09-03T00:00:00Z\",\"type\":\"TICK_BATCH\"}";
   private static final String EXPECTED_CHECKSUM =
@@ -32,6 +35,21 @@ class TickBatchCanonicalChecksumServiceTest {
     assertEquals(EXPECTED_CHECKSUM, service.checksum(document));
     assertEquals(EXPECTED_CHECKSUM, service.checksumForWireJson(wire));
     assertTrue(service.canonicalJson(document).contains("\"payloadChecksum\":\"retain\""));
+  }
+
+  @Test
+  void schemaV3PacketGoldenVectorMatchesCanonicalChecksum() throws IOException {
+    TickBatchCanonicalChecksumService service = service();
+    String wire = readResource("tick-batch-v3-packet-golden.json");
+    JsonNode document = service.parseWireJson(wire);
+
+    assertEquals(EXPECTED_PACKET_CHECKSUM, document.get("payloadChecksum").asText());
+    assertEquals(document.get("payloadChecksum").asText(), service.checksum(document));
+    String canonical = service.canonicalJson(document);
+    assertTrue(canonical.contains("\"packets\""));
+    assertTrue(canonical.contains("\"packetSequence\":null"));
+    assertTrue(canonical.contains("\"CLIENT_TO_SERVER\""));
+    assertTrue(canonical.contains("\"SERVER_TO_CLIENT\""));
   }
 
   @Test

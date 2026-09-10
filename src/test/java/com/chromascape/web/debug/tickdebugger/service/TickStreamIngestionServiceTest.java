@@ -295,12 +295,36 @@ class TickStreamIngestionServiceTest {
       String status,
       boolean synthetic,
       Map<String, Object> decoded) {
+    return v2PacketEntry(
+        sourceSessionId,
+        observationSequence,
+        packetSequence,
+        tick,
+        protocolName,
+        status,
+        synthetic,
+        decoded,
+        "2026-09-04T18:12:34.567Z",
+        null);
+  }
+
+  private TickBatchMessage.TickPacketEntry v2PacketEntry(
+      String sourceSessionId,
+      long observationSequence,
+      Long packetSequence,
+      long tick,
+      String protocolName,
+      String status,
+      boolean synthetic,
+      Map<String, Object> decoded,
+      String capturedAt,
+      String sanitizedPayloadBase64) {
     return new TickBatchMessage.TickPacketEntry(
         "rsprox-packet/v2",
         sourceSessionId,
         observationSequence,
         packetSequence,
-        "2026-09-04T18:12:34.567Z",
+        capturedAt,
         4L,
         "SERVER_TO_CLIENT",
         "GAP".equals(status) ? 0 : 81,
@@ -308,7 +332,7 @@ class TickStreamIngestionServiceTest {
         "GAP".equals(status) ? 0 : 137,
         "GAP".equals(status) ? "StreamGap" : "NpcInfo",
         decoded,
-        null,
+        sanitizedPayloadBase64,
         status,
         null,
         synthetic,
@@ -343,6 +367,146 @@ class TickStreamIngestionServiceTest {
             batchReceiptRepository.insertIfAbsent(
                 eq(sessionId), any(UUID.class), anyLong(), any(), eq("tick-batch/v2"), any()))
         .thenReturn(1);
+  }
+
+  @Test
+  @DisplayName("schema 2 rejects non-empty packet lists")
+  void schema2PacketsAreRejected() {
+    String sessionId = "packet-schema-2";
+    stubPacketSession(sessionId);
+    TickBatchMessage batch = strictV2Batch(sessionId, 100L);
+    batch.setBatchId("00000000-0000-4000-8000-000000000200");
+    batch.setPackets(List.of(packetEntry("source-a", 1L, 100L, "PLAYER_INFO")));
+    applyBatchChecksum(batch);
+
+    IllegalArgumentException failure =
+        assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    assertEquals("SCHEMA_V2_PACKETS_UNSUPPORTED", failure.getMessage());
+    verify(packetObservationRepository, never()).saveAndFlush(any(PacketObservation.class));
+  }
+
+  @Test
+  @DisplayName("future schema versions are rejected even with an empty packet list")
+  void futureSchemaVersionIsRejected() {
+    String sessionId = "packet-future-schema";
+    stubPacketSession(sessionId);
+    TickBatchMessage batch = strictV2Batch(sessionId, 100L);
+    batch.setSchemaVersion(4);
+    batch.setBatchId("00000000-0000-4000-8000-000000000212");
+    applyBatchChecksum(batch);
+
+    IllegalArgumentException failure =
+        assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    assertEquals("Unsupported schemaVersion; expected 2 or 3", failure.getMessage());
+  }
+
+  @Test
+  @DisplayName("packet timestamp syntax is validated before persistence")
+  void packetTimestampSyntaxIsValidated() {
+    String sessionId = "packet-invalid-timestamp";
+    stubPacketSession(sessionId);
+    TickBatchMessage batch =
+        packetBatch(
+            sessionId,
+            "00000000-0000-4000-8000-000000000213",
+            100L,
+            v2PacketEntry(
+                "source-a",
+                1L,
+                4812L,
+                100L,
+                "NPC_INFO_LARGE",
+                "DECODED",
+                false,
+                Map.of(),
+                "not-an-instant",
+                null));
+
+    IllegalArgumentException failure =
+        assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    assertEquals("PACKET_TIMESTAMP_INVALID", failure.getMessage());
+    verify(packetObservationRepository, never()).saveAndFlush(any(PacketObservation.class));
+  }
+
+  @Test
+  @DisplayName("packet raw payload must be valid Base64")
+  void packetRawPayloadSyntaxIsValidated() {
+    String sessionId = "packet-invalid-raw";
+    stubPacketSession(sessionId);
+    TickBatchMessage batch =
+        packetBatch(
+            sessionId,
+            "00000000-0000-4000-8000-000000000214",
+            100L,
+            v2PacketEntry(
+                "source-a",
+                1L,
+                4812L,
+                100L,
+                "NPC_INFO_LARGE",
+                "DECODED",
+                false,
+                Map.of(),
+                "2026-09-04T18:12:34.567Z",
+                "not-base64!"));
+
+    IllegalArgumentException failure =
+        assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    assertEquals("PACKET_PAYLOAD_INVALID", failure.getMessage());
+  }
+
+  @Test
+  @DisplayName("decoded packet key counts are bounded")
+  void decodedPacketKeyCountIsBounded() {
+    String sessionId = "packet-key-limit";
+    stubPacketSession(sessionId);
+    Map<String, Object> decoded = new LinkedHashMap<>();
+    for (int index = 0; index < 2050; index++) {
+      decoded.put("key-" + index, index);
+    }
+    TickBatchMessage batch =
+        packetBatch(
+            sessionId,
+            "00000000-0000-4000-8000-000000000215",
+            100L,
+            v2PacketEntry(
+                "source-a", 1L, 4812L, 100L, "NPC_INFO_LARGE", "DECODED", false, decoded));
+
+    IllegalArgumentException failure =
+        assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    assertEquals("PACKET_DECODED_TOO_MANY_KEYS", failure.getMessage());
+  }
+
+  @Test
+  @DisplayName("decoded raw bytes count toward the batch packet-byte ceiling")
+  void decodedRawBytesCountTowardBatchLimit() {
+    String sessionId = "packet-byte-limit";
+    stubPacketSession(sessionId);
+    String raw = java.util.Base64.getEncoder().encodeToString(new byte[60_000]);
+    List<TickBatchMessage.TickPacketEntry> packets = new ArrayList<>();
+    for (int index = 0; index < 9; index++) {
+      packets.add(
+          v2PacketEntry(
+              "source-a",
+              index,
+              4812L + index,
+              100L,
+              "NPC_INFO_LARGE",
+              "DECODED",
+              false,
+              Map.of(),
+              "2026-09-04T18:12:34.567Z",
+              raw));
+    }
+    TickBatchMessage batch = strictV2Batch(sessionId, 100L);
+    batch.setSchemaVersion(3);
+    batch.setBatchId("00000000-0000-4000-8000-000000000216");
+    batch.setPackets(packets);
+    applyBatchChecksum(batch);
+
+    IllegalArgumentException failure =
+        assertThrows(IllegalArgumentException.class, () -> service.processTickBatch(batch));
+    assertEquals("PACKET_BATCH_BYTES_EXCEEDED", failure.getMessage());
   }
 
   @Test

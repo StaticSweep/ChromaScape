@@ -123,6 +123,36 @@ class PacketObservationMigrationIntegrationTest {
     }
   }
 
+  @Test
+  void v46NormalizesPacketSessionForeignKeyToCascade() throws Exception {
+    try (Connection connection = schemaConnection()) {
+      createDebugSessionsTable(connection);
+      migrate(
+          "V39__sc1618_packet_observations.sql",
+          "V43__sc1618_packet_observation_identity_v2.sql",
+          "V44__sc1618_packet_observation_identity_constraints.sql",
+          "V45__schema_scoped_replay_foreign_keys.sql",
+          "V46__sc1618_packet_observation_fk_cascade.sql");
+      insertSession(connection, "cascade-session");
+      insertV2(connection, "cascade-session", "source-a", 1L, 4812L, "DECODED", false);
+
+      try (var statement =
+          connection.prepareStatement(
+              "SELECT delete_rule FROM information_schema.referential_constraints "
+                  + "WHERE constraint_schema = ? AND constraint_name = ?")) {
+        statement.setString(1, schema);
+        statement.setString(2, "fk_packet_observations_session");
+        try (ResultSet result = statement.executeQuery()) {
+          assertTrue(result.next());
+          assertEquals("CASCADE", result.getString("delete_rule"));
+        }
+      }
+
+      execute(connection, "DELETE FROM debug_sessions WHERE session_id = 'cascade-session'");
+      assertEquals(0, countRows(connection, "cascade-session"));
+    }
+  }
+
   private Connection adminConnection() throws SQLException {
     return DriverManager.getConnection(
         POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());

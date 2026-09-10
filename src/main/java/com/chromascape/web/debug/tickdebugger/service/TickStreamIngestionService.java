@@ -567,8 +567,14 @@ public class TickStreamIngestionService {
   }
 
   private void validateStrictV2(TickBatchMessage batch) {
-    if (batch.getSchemaVersion() == null || batch.getSchemaVersion() < 2) {
-      throw new IllegalArgumentException("Strict replay requires schemaVersion >= 2");
+    if (batch.getSchemaVersion() == null
+        || (batch.getSchemaVersion() != 2 && batch.getSchemaVersion() != 3)) {
+      throw new IllegalArgumentException("Unsupported schemaVersion; expected 2 or 3");
+    }
+    if (batch.getSchemaVersion() == 2
+        && batch.getPackets() != null
+        && !batch.getPackets().isEmpty()) {
+      throw new IllegalArgumentException("SCHEMA_V2_PACKETS_UNSUPPORTED");
     }
     if (batch.getSessionId() == null || batch.getSessionId().isBlank()) {
       throw new IllegalArgumentException("Missing sessionId");
@@ -679,6 +685,8 @@ public class TickStreamIngestionService {
   private static final long MAX_BATCH_PACKET_BYTES = 512L * 1024;
   private static final int MAX_DECODED_BYTES = 64 * 1024;
   private static final int MAX_DECODED_DEPTH = 8;
+  private static final int MAX_DECODED_NODES = 4096;
+  private static final int MAX_DECODED_KEYS = 2048;
 
   /** Packet tick must fall within this window around the enclosing batch tick. */
   private static final long PACKET_TICK_WINDOW = 600;
@@ -692,6 +700,9 @@ public class TickStreamIngestionService {
     List<TickBatchMessage.TickPacketEntry> packets = batch.getPackets();
     if (packets == null || packets.isEmpty()) {
       return;
+    }
+    if (batch.getSchemaVersion() != 3) {
+      throw new IllegalArgumentException("SCHEMA_V2_PACKETS_UNSUPPORTED");
     }
     if (packets.size() > MAX_PACKETS_PER_BATCH) {
       throw new IllegalArgumentException("PACKET_BATCH_LIMIT_EXCEEDED");
@@ -732,6 +743,13 @@ public class TickStreamIngestionService {
       if (packet.getCaptureDeltaMillis() == null || packet.getCaptureDeltaMillis() < 0) {
         throw new IllegalArgumentException("PACKET_CAPTURE_DELTA_INVALID");
       }
+      if (packet.getCapturedAt() != null) {
+        try {
+          parsePacketTimestamp(packet.getCapturedAt());
+        } catch (RuntimeException e) {
+          throw new IllegalArgumentException("PACKET_TIMESTAMP_INVALID", e);
+        }
+      }
       if (v2) {
         if ("GAP".equals(status)) {
           if (packet.getPacketSequence() != null || !Boolean.TRUE.equals(packet.getSynthetic())) {
@@ -769,9 +787,10 @@ public class TickStreamIngestionService {
         throw new IllegalArgumentException("PACKET_DECODE_ERROR_INVALID");
       }
       if (packet.getDecoded() != null) {
-        JsonNode decodedNode = objectMapper.valueToTree(packet.getDecoded());
+        JsonNode decodedNode;
         int size;
         try {
+          decodedNode = objectMapper.valueToTree(packet.getDecoded());
           size = objectMapper.writeValueAsBytes(decodedNode).length;
         } catch (Exception e) {
           throw new IllegalArgumentException("PACKET_DECODED_INVALID");
@@ -782,11 +801,26 @@ public class TickStreamIngestionService {
         if (jsonDepth(decodedNode, 0) > MAX_DECODED_DEPTH) {
           throw new IllegalArgumentException("PACKET_DECODED_TOO_DEEP");
         }
+        if (jsonNodeCount(decodedNode) > MAX_DECODED_NODES) {
+          throw new IllegalArgumentException("PACKET_DECODED_TOO_MANY_NODES");
+        }
+        if (jsonKeyCount(decodedNode) > MAX_DECODED_KEYS) {
+          throw new IllegalArgumentException("PACKET_DECODED_TOO_MANY_KEYS");
+        }
         totalBytes += size;
       }
-      if (packet.getSanitizedPayloadBase64() != null
-          && packet.getSanitizedPayloadBase64().length() > MAX_DECODED_BYTES) {
-        throw new IllegalArgumentException("PACKET_PAYLOAD_TOO_LARGE");
+      if (packet.getSanitizedPayloadBase64() != null) {
+        byte[] sanitizedPayload;
+        try {
+          sanitizedPayload =
+              java.util.Base64.getDecoder().decode(packet.getSanitizedPayloadBase64());
+        } catch (IllegalArgumentException e) {
+          throw new IllegalArgumentException("PACKET_PAYLOAD_INVALID", e);
+        }
+        if (sanitizedPayload.length > MAX_DECODED_BYTES) {
+          throw new IllegalArgumentException("PACKET_PAYLOAD_TOO_LARGE");
+        }
+        totalBytes += sanitizedPayload.length;
       }
       // v2 real observations are strictly monotonic per source. A delayed v2 GAP is a diagnostic
       // marker and may arrive after the real observations it describes; persistence identity and
@@ -826,6 +860,43 @@ public class TickStreamIngestionService {
       max = Math.max(max, jsonDepth(fields.next().getValue(), depth + 1));
     }
     return max;
+  }
+
+  private int jsonNodeCount(JsonNode node) {
+    if (node == null || node.isValueNode()) {
+      return node == null ? 0 : 1;
+    }
+    int count = 1;
+    if (node.isArray()) {
+      for (JsonNode item : node) {
+        count += jsonNodeCount(item);
+      }
+    } else {
+      var fields = node.fields();
+      while (fields.hasNext()) {
+        count += jsonNodeCount(fields.next().getValue());
+      }
+    }
+    return count;
+  }
+
+  private int jsonKeyCount(JsonNode node) {
+    if (node == null || node.isValueNode()) {
+      return 0;
+    }
+    int count = 0;
+    if (node.isArray()) {
+      for (JsonNode item : node) {
+        count += jsonKeyCount(item);
+      }
+      return count;
+    }
+    var fields = node.fields();
+    while (fields.hasNext()) {
+      count++;
+      count += jsonKeyCount(fields.next().getValue());
+    }
+    return count;
   }
 
   /** Compares tick distance without allowing signed-long subtraction to wrap around. */
@@ -868,7 +939,8 @@ public class TickStreamIngestionService {
               packet.getSchema(),
               packet.getSequence(),
               v2 ? packet.getPacketSequence() : packet.getSequence());
-      row.setCapturedAt(parseTimestamp(packet.getCapturedAt()));
+      row.setCapturedAt(
+          packet.getCapturedAt() == null ? null : parsePacketTimestamp(packet.getCapturedAt()));
       row.setCaptureDeltaMillis(packet.getCaptureDeltaMillis());
       row.setDirection(packet.getDirection());
       row.setOpcode(packet.getOpcode());
@@ -974,7 +1046,7 @@ public class TickStreamIngestionService {
       return false;
     }
     try {
-      return stored.equals(parseTimestamp(incoming));
+      return stored.equals(parsePacketTimestamp(incoming));
     } catch (Exception e) {
       return false;
     }
@@ -1243,5 +1315,12 @@ public class TickStreamIngestionService {
       log.warn("Failed to parse timestamp: {}", timestamp);
     }
     return LocalDateTime.now();
+  }
+
+  private LocalDateTime parsePacketTimestamp(String timestamp) {
+    if (timestamp == null || timestamp.isBlank()) {
+      throw new IllegalArgumentException("packet capturedAt must be a non-blank ISO-8601 instant");
+    }
+    return LocalDateTime.ofInstant(Instant.parse(timestamp), ZoneId.systemDefault());
   }
 }

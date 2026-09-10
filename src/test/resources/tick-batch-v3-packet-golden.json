@@ -1,0 +1,113 @@
+{
+  "type": "TICK_BATCH",
+  "schemaVersion": 3,
+  "batchId": "00000000-0000-4000-8000-000000001618",
+  "sessionId": "chromascape-session-1618",
+  "tick": 12004,
+  "timestamp": "2026-09-10T12:34:56Z",
+  "playerState": {
+    "position": {
+      "x": 3200,
+      "y": 3200,
+      "plane": 0
+    }
+  },
+  "packets": [
+    {
+      "schema": "rsprox-packet/v2",
+      "sourceSessionId": "source-rsprox-a",
+      "sequence": 41,
+      "packetSequence": 4812,
+      "capturedAt": "2026-09-10T12:34:56.789Z",
+      "captureDeltaMillis": 4,
+      "direction": "SERVER_TO_CLIENT",
+      "opcode": 81,
+      "protocolName": "NPC_INFO_LARGE",
+      "encodedSize": 137,
+      "decodedType": "NpcInfo",
+      "decoded": {
+        "npcId": 1518,
+        "name": "Goblin"
+      },
+      "sanitizedPayloadBase64": null,
+      "decodeStatus": "DECODED",
+      "decodeError": null,
+      "synthetic": false,
+      "tick": 12004
+    },
+    {
+      "schema": "rsprox-packet/v2",
+      "sourceSessionId": "source-rsprox-a",
+      "sequence": 42,
+      "packetSequence": null,
+      "capturedAt": "2026-09-10T12:34:56.790Z",
+      "captureDeltaMillis": 1,
+      "direction": "SERVER_TO_CLIENT",
+      "opcode": 0,
+      "protocolName": "STREAM_GAP",
+      "encodedSize": 0,
+      "decodedType": "StreamGap",
+      "decoded": {
+        "droppedPacketCount": 1,
+        "firstDroppedPacketSequence": 4813,
+        "lastDroppedPacketSequence": 4813,
+        "droppedPacketRanges": [
+          {
+            "first": 4813,
+            "last": 4813,
+            "count": 1
+          }
+        ]
+      },
+      "sanitizedPayloadBase64": null,
+      "decodeStatus": "GAP",
+      "decodeError": null,
+      "synthetic": true,
+      "tick": 12005
+    },
+    {
+      "schema": "rsprox-packet/v2",
+      "sourceSessionId": "source-rsprox-b",
+      "sequence": 7,
+      "packetSequence": 77,
+      "capturedAt": "2026-09-10T12:34:56.791Z",
+      "captureDeltaMillis": 2,
+      "direction": "CLIENT_TO_SERVER",
+      "opcode": 14,
+      "protocolName": "MOVE_GAME",
+      "encodedSize": 12,
+      "decodedType": null,
+      "decoded": null,
+      "sanitizedPayloadBase64": null,
+      "decodeStatus": "UNKNOWN_PROTOCOL",
+      "decodeError": null,
+      "synthetic": false,
+      "tick": 12005
+    }
+  ],
+  "transport": {
+    "packetSourceStatus": "CONNECTED",
+    "droppedPacketCount": 1,
+    "firstDroppedPacketSequence": 4813,
+    "lastDroppedPacketSequence": 4813,
+    "omittedPacketCount": 0,
+    "omittedPacketPayloadBytes": 0,
+    "malformedPacketFrameCount": 0,
+    "packetLosses": [
+      {
+        "sourceSessionId": "source-rsprox-a",
+        "count": 1,
+        "firstPacketSequence": 4813,
+        "lastPacketSequence": 4813,
+        "ranges": [
+          {
+            "first": 4813,
+            "last": 4813,
+            "count": 1
+          }
+        ]
+      }
+    ]
+  },
+  "payloadChecksum": "sha256:ea75eddba62a1c4ac1ceda2d1304e2b0c71ae635bc8e097387b6435613b0aac7"
+}
