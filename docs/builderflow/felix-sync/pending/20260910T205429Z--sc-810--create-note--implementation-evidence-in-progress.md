@@ -116,13 +116,26 @@ based on the same `90f793e8`):
   promoted, signed bundle is genuinely loaded and verified by the actual application
   consumer code (`SourceManifestCatalog.Registry`), not just by the generator's own
   self-check at promotion time.
+- `runelite-client/build.gradle.kts` (M, commit `90344456`) — fixes a real, previously
+  undiscovered defect: the `shadowJar` task never wrote a `Micro6-Build-Id` manifest
+  attribute, and `micro6ArtifactIdentity`'s sidecar declared `build_id=project.version`
+  (a static string) instead of the git commit SHA `TaskSourceIdentity` uses. Confirmed
+  empirically (unzipped the previously-built JAR's manifest: no such attribute) that this
+  made `Micro6BuilderExecutorServer`'s "exact running JAR" attestation gate
+  (`packagedArtifactIdentity(true)`/`verifyPackagedJar(requireRunningArtifact=true)`)
+  unsatisfiable for any build this task produced. See "Tests" below for the fix and proof.
+- `runelite-client/src/test/java/.../Sc810RealBundleVerificationTest.java` (commit
+  `a2b58bcd33`) — repoints the hardcoded expected manifest hash/snapshot/bundle IDs at the
+  bundle regenerated after the fix above; no production code in this commit.
 
-**Note on this branch**: if the two packaging commits above are later integrated onto the
-canonical Micro6 lineage (rebased, cherry-picked, or merged), the resulting commit SHA
-changes, which means the shadow JAR digest, the bundle ID, and the signature all change too
-— the artifact described in "Tests" below (digest `bfd29589...`, bundle
-`srcbundle_a6242e2d6dd8bdc1ed1748a9`) must then be rebuilt and re-signed from that final
-integrated commit; it cannot simply be carried over.
+**Note on this branch**: the two packaging commits above (build.gradle.kts task +
+Sc810RealBundleVerificationTest) already forced one rebuild-and-re-sign cycle this session
+(digest/bundle changed from `bfd29589.../srcbundle_a6242e2d...` to
+`bcba97b4.../srcbundle_752bec0c...` — see "Tests" below for the current values). If these
+commits are later integrated onto the canonical Micro6 lineage (rebased, cherry-picked, or
+merged), the resulting commit SHA changes again, so the shadow JAR digest, bundle ID, and
+signature must be rebuilt and re-signed from that final integrated commit; they do not
+carry over automatically.
 
 ## Tests
 
@@ -142,18 +155,42 @@ integrated commit; it cannot simply be carried over.
   `checkstyleMain`/`checkstyleTest` fail on a pre-existing Checkstyle-version/modern-Java-syntax
   incompatibility in unrelated files (`AiRoutineCapturePlugin.java`, harness test files) — not
   an SC-810 defect, not fixed (out of scope).
-- Packaging: Micro6 shadow JAR built from the clean `91d213fdc6` commit, SHA-256
-  `bfd29589455c6680692e13373aa4b067d59a1b9504c3bf38da3a8a8b97911951` (cross-verified 3 ways:
-  Gradle sidecar, direct `sha256sum`, bundle-embedded digest). Fishing task-source bundle
-  `srcbundle_a6242e2d6dd8bdc1ed1748a9` generated and signed with a real, durably-provisioned
-  Ed25519 keypair (key ID `sc810-dev-ed25519-611ab9dd95a518af`; private key never printed,
-  logged, or recorded). Commit/tree/build-ID/artifact-digest/signature/source-closure all
-  independently verified; signature cryptographically re-verified twice via the tool's
-  separate verify-only (public-key) code path (idempotent re-validation of the already-promoted
-  bundle from disk). Source closure: 34 files, 1716 symbols, 173 closure edges, 0 warnings —
-  matches this engagement's original pre-session measurement exactly. Exact packaged JAR
-  launched as a scoped smoke test: clean startup, clean shutdown, no live game/ChromaScape
-  interaction attempted at that stage.
+- Packaging (superseded once, see fix below): Micro6 shadow JAR rebuilt at the final commit
+  `90344456866ad6e0ca0d30b517a8bf0259f87104`, SHA-256
+  `bcba97b460a75606a14c05fc97fbc026da14584040e226ee0e8a8ec9364112a2` (cross-verified 3 ways:
+  Gradle sidecar, direct `sha256sum`, and the JAR's own `Micro6-Build-Id` manifest attribute).
+  Fishing task-source bundle `srcbundle_752bec0ca477b3a7752b31ec` generated and signed with the
+  same real, durably-provisioned Ed25519 keypair (key ID `sc810-dev-ed25519-611ab9dd95a518af`;
+  private key never printed, logged, or recorded). Commit/tree/build-ID/artifact-digest/
+  signature/source-closure all independently verified; signature cryptographically
+  re-verified twice via the tool's separate verify-only (public-key) code path (idempotent
+  re-validation of the already-promoted bundle from disk). Source closure: 34 files, 1716
+  symbols, 173 closure edges, 0 warnings — matches this engagement's original pre-session
+  measurement exactly. Exact packaged JAR launched as a scoped smoke test: clean startup,
+  clean shutdown, no live game/ChromaScape interaction attempted at that stage. (The original
+  Phase 8 artifact, digest `bfd29589...`/bundle `srcbundle_a6242e2d...`, is superseded by the
+  running-artifact-gate fix below and is no longer the promoted bundle, though its files
+  remain on disk alongside the current one.)
+- **Running-artifact attestation gate fix and proof** (full detail in
+  `C:\Dev\SC810\package-20260910\phase-10-running-artifact-gate.md`): investigating finding 1
+  ("the test never starts or invokes `Micro6BuilderExecutorServer`") found a real,
+  previously-undiscovered defect — `shadowJar` never stamped a `Micro6-Build-Id` manifest
+  attribute, and the identity sidecar declared `build_id=project.version` instead of the git
+  commit SHA, so the server's "exact running JAR" gate
+  (`packagedArtifactIdentity(true)`/`verifyPackagedJar(requireRunningArtifact=true)`) could
+  never pass for any build this task produced. Fixed (commit `90344456`), then proved with a
+  disposable standalone verifier launched with the real shaded JAR placed first on the JVM
+  classpath (so `Micro6BuilderExecutorServer.class`'s `CodeSource` genuinely is the packaged
+  artifact — impossible from a Gradle test classpath): constructed the server with a mocked
+  plugin (no live game client, no LeeuwBot), called `start()`, and hit its real `/health`
+  endpoint. Result: `sourceInitializationError` was `null`, `start()` returned `true`, and
+  `GET /health` returned 200 with `build_id`, `artifact_digest`, and `source_snapshot_id` all
+  matching the rebuilt artifact/bundle above exactly. This is the mechanism proof that was
+  missing — finding 1 is closed. Separately (and out of SC-810's scope), that same `/health`
+  response showed `"catalog_state":"DEGRADED"` because the unrelated Builder Goal task-catalog
+  scanner throws `URI is not hierarchical` when scanning packages from inside a JAR rather
+  than exploded classes — a real, pre-existing, previously-unknown defect worth its own
+  ticket, not fixed here.
 - Live acceptance (partial): `ChromaScape-consolidation` stood up live on an isolated
   port (8190) and dedicated, disposable database (never touching any shared or another
   operator's database — confirmed by full command-line inspection before touching any
@@ -176,15 +213,16 @@ integrated commit; it cannot simply be carried over.
   inspection that a same-named `java.exe` PID belonged to a different operator's instance
   and was left untouched).
 - **Application-level bundle-loading and signature verification (closes the gap above)**:
-  `Sc810RealBundleVerificationTest` (packaging worktree, commit `4a6d499608...`) calls
+  `Sc810RealBundleVerificationTest` (packaging worktree, commits `4a6d499608...`/`a2b58bcd33`,
+  the latter repointing its expected constants at the regenerated bundle) calls
   `SourceManifestCatalog.Registry.loadBundle()` directly — the same consumer class
   `Micro6CaptureIdentityFactory` uses to bind a managed capture identity — against the
-  actual promoted, signed Phase 8 bundle (`srcbundle_a6242e2d6dd8bdc1ed1748a9`) and the real
-  provisioned verification key, not a synthetic ephemeral-key bundle. Run with the real
-  bundle root and key configured via env vars: **5/5 tests passed, 0 skipped** (0 skipped
-  confirms the `@BeforeAll` assumption gate passed, i.e. the real artifact was genuinely
-  used, not bypassed). This directly and successfully closes four of the previously-open
-  application-level gaps:
+  actual promoted, signed bundle (`srcbundle_752bec0ca477b3a7752b31ec`, current after the
+  running-artifact-gate fix below) and the real provisioned verification key, not a
+  synthetic ephemeral-key bundle. Run with the real bundle root and key configured via env
+  vars: **5/5 tests passed, 0 skipped** (0 skipped confirms the `@BeforeAll` assumption gate
+  passed, i.e. the real artifact was genuinely used, not bypassed). This directly and
+  successfully closes four of the previously-open application-level gaps:
   - real bundle loads and verifies with the real key, and file content is served content-
     addressed and hash-verified per read (not just accepted once at generation time);
   - an **untrusted verification key** (freshly generated, unrelated Ed25519 keypair) is
@@ -199,12 +237,15 @@ integrated commit; it cannot simply be carried over.
     used to construct a filesystem path, evaluated by the real application code, not a
     servlet container.
   This is the mechanism proof for "Micro6 loads the signed bundle for the exact packaged
-  artifact" — it was not previously demonstrated: Phase 8's own launch command did not
-  configure a bundle root or verification key, and Phase 9 launched ChromaScape, not this
-  Micro6 artifact, against a live launcher/executor path that remains blocked (see
-  "Remaining work"). What still is NOT proven is the full managed-capture runtime path
-  (`Micro6CaptureIdentityFactory` invoked from a real running client against a real bound
-  run) — only the underlying `Registry`/`Catalog` mechanism it depends on.
+  artifact" at the `Registry`/`Catalog` level. The stronger claim — that
+  `Micro6BuilderExecutorServer` itself, genuinely running from the packaged JAR, resolves and
+  pins this exact bundle via its own running-artifact attestation gate — is proven separately
+  below ("Running-artifact attestation gate fix and proof"), which is what actually closes
+  finding 1 from the prior review. What still is NOT proven, in either case, is the full
+  managed-capture runtime path (`Micro6CaptureIdentityFactory` invoked from a real running
+  game client against a real bound run) — both proofs above exercise the mechanism with a
+  mocked plugin and no live client, which is exactly why the live-recording items in
+  "Remaining work" stay open.
 - **Not production-deployable as configured**: the bundle above is labeled with
   `environment: production` internally, but it was signed with a locally generated
   development keypair (key ID `sc810-dev-ed25519-611ab9dd95a518af`) while ChromaScape ran
@@ -232,6 +273,13 @@ integrated commit; it cannot simply be carried over.
   Checkstyle/Java-syntax incompatibilities — not fixed, out of SC-810 scope.
 - The bundle used throughout is signed with a locally generated development key under the
   `local-development` profile — not production-deployable as-is; see "Tests" above.
+- **New, out-of-scope finding, not fixed here**: `Micro6BuilderExecutorServer`'s Builder Goal
+  task-catalog discovery (a separate mechanism from SC-810's source-manifest bundle, which
+  works correctly) throws `URI is not hierarchical` when scanning task packages from inside a
+  packaged JAR, because `UniversalTaskDiscoveryService.getClassesInPackage` uses `new
+  File(URI)`, which only handles exploded `file:` URIs, not `jar:file:...!/...` entries. The
+  real running-artifact proof above observed every skilling/quest category report 0 discovered
+  tasks and `catalog_state: "DEGRADED"` as a result. Worth its own ticket; unrelated to SC-810.
 
 **Previously listed here as blocked, now closed by `Sc810RealBundleVerificationTest`
 (application-level, against the real bundle and key — see "Tests" above) — no longer
@@ -240,6 +288,12 @@ pruned/missing bundle directory, application-level path-traversal containment. T
 originally miscategorized as needing "a real bound manifest to exercise meaningfully"; in
 fact the `Registry`/`Catalog` loading and verification mechanism is exercisable, and was
 exercised, independent of having a live bound run.
+
+**Also now closed**: finding 1 from the prior review ("the actual artifact/build comparison
+happens inside `Micro6BuilderExecutorServer`, which the test never starts or invokes") — see
+"Running-artifact attestation gate fix and proof" under "Tests" above. That investigation
+found and fixed a real defect (the running-JAR gate was unsatisfiable for any build) and then
+proved the fixed gate passes when the server is genuinely loaded from the packaged JAR.
 
 Resume once LeeuwBot connectivity and the account-record migration are available.
 
