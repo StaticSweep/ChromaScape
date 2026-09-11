@@ -77,6 +77,10 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   `6e271ce40cbccbde224fffe73a86a3f4df61a40c`, artifact digest
   `sha256:8db7a4747f6f6fe3ef9a9d959af44570d7f975ef0c80339507687208f2ef09ee` — supersedes every
   earlier digest recorded this session.
+- **Phase 7 (final signed bundle)**: `closure-plan-phase7-final-bundle-20260911.md` — bundle
+  `srcbundle_0a49cff0d280eef221c929b9`, bound to the Phase 6 artifact digest, promoted clean.
+  Rerun produced an identical bundle_id, confirming deterministic regeneration and successful
+  re-validation of the promoted bundle from disk (no dedicated verify-only CLI mode exists).
 - Phases 11+ (start ChromaScape acceptance, record a genuine Fishing run, atomic binding, live
   debugger content, negative matrix, restart persistence, cross-revision protection,
   documentation/Shortcut/Felix reconciliation, final completion gate): not reached — gated on the
