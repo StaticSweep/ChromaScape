@@ -69,6 +69,14 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   errors on modern Java syntax the tool can't parse, PMD 17,503 violations but
   non-blocking by existing config, same 5 test failures; not called green, per this phase's
   own instruction).
+- **Phase 6 (final artifact)**: `closure-plan-phase6-final-artifact-20260911.md` — found the
+  build inheriting a dirty tracked runtime-state file
+  (`.micro6/gameplay-v2-reservations/gameplay-v2-reservations.snapshot.jsonl`, mutated by
+  Phase 5's test suite), fixed by untracking it and both copies (root + `runelite-client/`)
+  and adding a `**/`-anchored `.gitignore` rule, then rebuilt clean. Final identity: commit
+  `6e271ce40cbccbde224fffe73a86a3f4df61a40c`, artifact digest
+  `sha256:8db7a4747f6f6fe3ef9a9d959af44570d7f975ef0c80339507687208f2ef09ee` — supersedes every
+  earlier digest recorded this session.
 - Phases 11+ (start ChromaScape acceptance, record a genuine Fishing run, atomic binding, live
   debugger content, negative matrix, restart persistence, cross-revision protection,
   documentation/Shortcut/Felix reconciliation, final completion gate): not reached — gated on the
