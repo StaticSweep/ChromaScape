@@ -91,6 +91,14 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   `catalog_state: DEGRADED` (same pre-existing out-of-scope defect, documented not fixed). Two
   representative negative cases (wrong environment, untrusted key) both fail closed correctly;
   the full negative-case matrix was not exhaustively run this session.
+- **Phase 9 (ChromaScape reconfirm)**: `closure-plan-phase9-chromascape-reconfirm-20260911.md` —
+  re-ran the dispatch-readiness check pointed at `micro6-sc810-integration` (not the superseded
+  packaging worktree): `/debugger` 200, machines 200, Beheerder online/runnable, ikiddoi
+  correctly excluded — unchanged from Phase 10b. `GET /api/debug/builder-goals/catalog` shows
+  `catalogAvailable: false` (no live Micro6 client connected to this instance) — Fishing
+  Training visibility *through ChromaScape itself* needs a live-launched client, a distinct
+  runtime action not attempted here; Phase 8 already proved this independently against the
+  executor's own `/health`.
 - Phases 11+ (start ChromaScape acceptance, record a genuine Fishing run, atomic binding, live
   debugger content, negative matrix, restart persistence, cross-revision protection,
   documentation/Shortcut/Felix reconciliation, final completion gate): not reached — gated on the
