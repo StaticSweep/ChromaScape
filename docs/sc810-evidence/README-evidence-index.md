@@ -110,9 +110,23 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   `builder_queues` collision resolved (`id=1` retained, `id=2` removed), both migration and
   dedupe audit rows present, no active-assignment collision. Full row-level CSV backup at
   `C:\Dev\SC810\session-scratch\account-migration-backup\`.
-- Phases 11+ (start ChromaScape acceptance, record a genuine Fishing run, atomic binding, live
-  debugger content, negative matrix, restart persistence, cross-revision protection,
-  documentation/Shortcut/Felix reconciliation, final completion gate): not reached — gated on the
-  account-record migration (Phase 9, still on hold; explicit authorization required, not yet
-  given). See `sc810-remaining-work-plan-20260911.md` in this directory for the full step-by-step
-  plan and exactly what gate blocks each remaining step.
+- **Phases 4-5 of the newer 16-phase closure plan (isolated instance + identity reconfirm)**:
+  `closure-plan-phase5-identity-reconfirm-and-credential-blocker.md` — started the isolated
+  ChromaScape instance on port 8195 with the corrected `local-development` trust environment
+  (Flyway schema 45, up to date; `/debugger` 200); reconfirmed the migrated account through
+  ChromaScape's own `/api/debug/builder-goals/accounts` and `/machines` endpoints (not just raw
+  DB/launcher queries): old hash `3720a9a3b5c9f57b` has zero occurrences anywhere in the catalog,
+  new hash `b01c7f006bace664` (`udasuAvuco`) present exactly once, Beheerder machine
+  online/runnable/builderGoalRunnable, `ikiddoi` machines correctly excluded.
+- **New blocker found (pre-existing, not caused by this session's migration): the migrated
+  account has no launcher-managed password.** Verified three ways (direct DB query on
+  `launcher_accounts`, empty `launcher_account_secrets`, and the pre-migration backup CSV already
+  showing blank credentials as of 2026-08-28 — two weeks before today's migration touched
+  anything). Root-caused via `launcher_account_audit` to an unrelated credential/account-reset
+  event on 2026-08-22/08-28, well before this session. **This blocks Phase 7 (genuine Fishing
+  recording)** — no password exists to authenticate this account, and setting one is outside the
+  scope of the migration authorization already given. SC-810 remains In Progress; Phases 7+
+  (genuine recording, atomic binding, debugger byte verification, negative-matrix completion,
+  restart/cross-revision proofs, final Felix/Shortcut closure) cannot proceed until the user
+  resolves this credential gap or gives different direction. See
+  `sc810-remaining-work-plan-20260911.md` in this directory for the full step-by-step plan.
