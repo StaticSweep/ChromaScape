@@ -1,0 +1,12 @@
+# SC-810 evidence checksums, generated 2026-09-11 from the machine-local originals under
+# C:\Dev\SC810\package-20260910 before this committed copy was made. Verify with:
+#   sha256sum -c SHA256SUMS.txt
+# A mismatch means a file was edited after this checksum was recorded -- treat as tampered
+# or superseded evidence, not as current, without checking why it changed.
+26150c9be8a9c658894f368f692d462694a2ee2d4079d287c595a8e9402cc0c2 *README-evidence-index.md
+12711f6a6d2430e8d528fd737ce499bd6a4154d396d5f2e72cda0e5b25630284 *closure-plan-phase10-leeuwbot-connectivity-check.md
+c5ec1d06e53f411ae605c2927ca2a7c282b08a4909f014f76b0bd92ee7d89af4 *closure-plan-phase2-catalog-discovery-fix.md
+56c97f45198603fd9aca450f8bf531181fca96fb777494274799326702870783 *closure-plan-phase3-5-6-7-8-integration-and-final-artifact.md
+308ea37805ee5c2e91487747229b6e2c58fc9c033519256c82cef4ed88404df1 *phase-10-running-artifact-gate.md
+be9c8d49f9eb8fbea59517c02a3ff930312f03d5e6f4166a4fc337a1ed2a4c82 *phase-8-evidence.md
+2da17d4689af80f7cda8eaf337843e9b84a7cc110c219fd5748a0822a4ff6503 *phase-9-evidence.md
