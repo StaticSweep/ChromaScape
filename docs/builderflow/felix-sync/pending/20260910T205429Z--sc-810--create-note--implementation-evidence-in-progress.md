@@ -62,6 +62,17 @@ complete implementation inventory. Everything below is additive: reconciliation 
 regression/completeness proofs, packaging, signing, and partial live verification on top of
 that pre-existing implementation.
 
+This note documents work through the initial packaging/signing/live-acceptance pass and the
+subsequent accuracy-review corrections. Later work in the same session (the running-artifact
+gate fix, the packaged-JAR catalog-discovery fix, integration onto `sc-572-remediation`, the
+final rebuilt artifact/bundle, and the LeeuwBot connectivity re-check) is evidenced separately
+under `docs\sc810-evidence\` in this repository (durable, committed copy of what was originally
+machine-local evidence under `C:\Dev\SC810\package-20260910`, with a SHA-256 checksum manifest
+at `docs\sc810-evidence\SHA256SUMS.txt` so later edits to either copy are detectable). Start at
+`docs\sc810-evidence\README-evidence-index.md`, which maps both phase-numbering schemes in use
+(the original Phase 8→9→10 delivery-verification plan, and the later, separate Phase 1→20
+"SC-810 remaining implementation and closure plan") to their evidence files.
+
 ## Changed files (this session's delta only)
 
 ChromaScape (`wip/chromascape-consolidation-20260907`, commit `c1758c71e72ada19604d1627031ae267e4d5951a`,
