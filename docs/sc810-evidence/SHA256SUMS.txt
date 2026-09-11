@@ -3,8 +3,10 @@
 #   sha256sum -c SHA256SUMS.txt
 # A mismatch means a file was edited after this checksum was recorded -- treat as tampered
 # or superseded evidence, not as current, without checking why it changed.
-ce1075cf9239a33931a4b3efd5ad97927f1906cc0deb24bdab98cca50e63fb25 *README-evidence-index.md
+c346e1b9dae2a6ed06e84ebd7c8f2a8a969f2fc026fa858f084cc6b0fa3a41b7 *README-evidence-index.md
 12711f6a6d2430e8d528fd737ce499bd6a4154d396d5f2e72cda0e5b25630284 *closure-plan-phase10-leeuwbot-connectivity-check.md
+67b7e388060163084adee341b645db3471f86ccf6e195b3ff7d95a519c5508f1 *closure-plan-phase10b-dispatch-readiness-confirmed.md
+3f18cef35c0cfd8129761b374d673f89538a8d34829ec6194b146c9248b238a9 *closure-plan-phase3-5-6-7-8-rebuild-20260911.md
 c5ec1d06e53f411ae605c2927ca2a7c282b08a4909f014f76b0bd92ee7d89af4 *closure-plan-phase2-catalog-discovery-fix.md
 56c97f45198603fd9aca450f8bf531181fca96fb777494274799326702870783 *closure-plan-phase3-5-6-7-8-integration-and-final-artifact.md
 308ea37805ee5c2e91487747229b6e2c58fc9c033519256c82cef4ed88404df1 *phase-10-running-artifact-gate.md
