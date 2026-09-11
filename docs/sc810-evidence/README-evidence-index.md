@@ -38,14 +38,23 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   stale `ikiddoi` registration for the same hostname correctly shows not runnable. Read-only;
   no launch/dispatch/publish call made; instance and dedicated Postgres container stopped
   afterward, data preserved.
-- Repository hygiene: `micro6-sc810-package` commit `0325bc64fd` removed 45 accidentally-tracked
-  generated files (JVM crash dumps, tick-replay run logs, 18 stray root-level copies of the
-  `microbotReleaseJar` build output) and added narrow `.gitignore` rules. This changed the
-  commit/tree identity, so the Phase 8 artifact was rebuilt and re-signed from the new commit —
-  `closure-plan-phase3-5-6-7-8-rebuild-20260911.md` documents the new artifact digest
-  (`sha256:12ef96ad055097a469f80a052b36eab7375e6a0f96f293fb9db01bb398d97f3c`) and bundle
-  (`srcbundle_1f0d63ec65164d6d5c7daa62`), which supersede the original Phase 8 identity for all
-  purposes from this point forward.
+- Repository hygiene, round 1: `micro6-sc810-package` commit `0325bc64fd` removed 45
+  accidentally-tracked generated files (JVM crash dumps, tick-replay run logs, 18 stray
+  root-level copies of the `microbotReleaseJar` build output) and added narrow `.gitignore`
+  rules. This changed the commit/tree identity, so the Phase 8 artifact was rebuilt and
+  re-signed from the new commit — `closure-plan-phase3-5-6-7-8-rebuild-20260911.md` documents
+  that artifact digest (`sha256:12ef96ad055097a469f80a052b36eab7375e6a0f96f293fb9db01bb398d97f3c`)
+  and bundle (`srcbundle_1f0d63ec65164d6d5c7daa62`) — **since superseded, see round 2 below**.
+- Repository hygiene, round 2: a full `git ls-files` inventory
+  (`closure-plan-phase2-artifact-classification-20260911.md`) found more accidentally-tracked
+  generated content the first round missed: Gradle's own `.gradle/` version-catalog-accessor
+  cache (53 files), 37 duplicated `build/reports/dependency-verification/` report directories
+  (185 files), `build/test-golden-{fail,pass}/` (14 files — verified via `GoldenManifestTest.java`
+  to be the test harness's own output directory, not a fixture; the real fixtures at
+  `micro6-harness/golden/` are untouched), and 24 loose `.class` files beside `.java` source or
+  orphaned entirely. Removed in commit `9d5f103399` after per-file classification; added a
+  global `*.class` ignore rule. This again changed the commit/tree identity — the artifact and
+  bundle must be rebuilt and re-signed once more from this final clean commit before use.
 - Phases 11+ (start ChromaScape acceptance, record a genuine Fishing run, atomic binding, live
   debugger content, negative matrix, restart persistence, cross-revision protection,
   documentation/Shortcut/Felix reconciliation, final completion gate): not reached — gated on the
