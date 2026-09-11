@@ -1,7 +1,14 @@
 ---
 schema_version: 1
 offline_record_id: offline_sc810_20260910T205429Z_implementation_evidence_7a41f9c3
-sync_status: pending
+sync_status: synced
+synced_at: '2026-09-11T18:26:00Z'
+actual_felix_task_id: task_1789150942895_n6onsmm80
+actual_felix_note_ids:
+  - note_1789150998012_9104c812 # SC-810 Architecture
+  - note_1789151004580_c853508c # SC-810 ERD
+  - note_1789151013478_9741adef # SC-810 API Contract
+  - note_1789151133720_14486f7e # SC-810 Implementation Evidence -- 2026-09-11 session
 project: 'C:\Dev\IdeaProjects\ChromaScape'
 shortcut_story_id: 810
 shortcut_tag: 'shortcut:sc-810'
@@ -352,3 +359,40 @@ idempotency). Set Felix task state to `in_progress`/`spec_ready` (already the in
 not an advance). Do not touch Shortcut further (already synced manually — see above). Then
 mark this record `sync_status: synced`, record the actual `felix_task_id` and `felix_note_id`,
 and move it to `synced/sc-810/`.
+
+## Sync result (replayed 2026-09-11)
+
+**Deviation from this record's instructions, noted here rather than silently followed:**
+`felix_task_id` `task_1787544447065_1qv4uilz`, referenced by the planning note
+(`note_1787866248248_c4812448`) as the task this work belongs under, **does not exist in
+Felix** — confirmed by direct `tasks get` lookup returning "Task not found." Searched
+exhaustively (tag filter, keyword listing of all tasks in both `ChromaScape` and `micro6`
+projects, semantic search) before concluding this. Per the outbox protocol ("If no task
+exists, create it from the exact recorded task payload"), created a new task instead of
+nesting this note under the orphaned planning note as originally instructed:
+`task_1789150942895_n6onsmm80`, workflow `shortcut_delivery`, tags `shortcut:sc-810` /
+`change:multi-repo`, linked to `shortcut_story` `810`.
+
+Populated the workflow's required Scope Definition, Acceptance Criteria, Implementation
+Checklist, and Test Verification checklists with real content (not placeholders), and three
+linked documentation notes (Architecture, ERD, API Contract — the diagrams reproduced verbatim
+from the existing planning note; the API contract newly written as real OpenAPI 3.1 for the two
+actually-implemented endpoints). All three workflow validation bundles
+(`planning_ready`/`spec_ready`/`implementation_ready`) passed genuinely (`validated_by:
+"system"`, not overridden or waived) — transitioned `planning -> spec_ready -> in_progress`
+for real. Checked 5/6 Implementation Checklist items and 4/4 Test Verification items that are
+genuinely evidenced; left the schema-drift item unchecked (open defect). Attached the
+Implementation Evidence note (`note_1789151133720_14486f7e`) with the required `## Changed
+files` / `## Tests` / `## Remaining work` headings.
+
+**Did NOT** transition to `in_review` or `done` — real gaps remain (account migration
+unauthorized; genuine Fishing recording, atomic binding, live debugger bytes, most of the
+negative matrix, and restart/cross-revision protection all unattempted). Task correctly remains
+`in_progress`.
+
+**Did NOT** touch Shortcut further — per this record, story 810's transition to "In Progress"
+and evidence comment were already applied manually last session; not re-applied or reposted.
+
+Old planning note (`note_1787866248248_c4812448`) left untouched, not retroactively linked to
+the new task — it remains available as background/history but is superseded as the task's
+attached-notes source of truth by the three new linked notes above.
