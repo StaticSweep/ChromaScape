@@ -143,6 +143,31 @@ public final class GameplayV2ReconciliationReceipt {
       String keyId,
       Instant expiresAt,
       String signingSecret) {
+    return issueTrusted(
+        idempotencyKey,
+        requestId,
+        envelopeDigest,
+        externalOutcome,
+        verifierIdentity,
+        confirmedAt,
+        keyId,
+        expiresAt,
+        confirmedAt,
+        signingSecret);
+  }
+
+  /** Deterministic issuance overload used by conformance vectors and clock-boundary tests. */
+  public static GameplayV2ReconciliationReceipt issueTrusted(
+      String idempotencyKey,
+      String requestId,
+      String envelopeDigest,
+      String externalOutcome,
+      String verifierIdentity,
+      Instant confirmedAt,
+      String keyId,
+      Instant expiresAt,
+      Instant now,
+      String signingSecret) {
     if (idempotencyKey == null
         || idempotencyKey.isBlank()
         || requestId == null
@@ -165,11 +190,12 @@ public final class GameplayV2ReconciliationReceipt {
           "IDENTITY_MISMATCH",
           "Reconciliation receipt carries an unknown external outcome: " + externalOutcome);
     }
-    if (confirmedAt.isAfter(Instant.now().plusSeconds(60))) {
+    if (now == null || confirmedAt.isAfter(now.plusSeconds(60))) {
       throw new GameplayV2ContractValidator.GameplayV2ContractViolation(
           "IDENTITY_MISMATCH", "Reconciliation receipt confirmation time is in the future");
     }
-    if (!expiresAt.isAfter(confirmedAt)
+    if (!expiresAt.isAfter(now)
+        || !expiresAt.isAfter(confirmedAt)
         || expiresAt.isAfter(confirmedAt.plusSeconds(MAX_TTL_SECONDS))) {
       throw new GameplayV2ContractValidator.GameplayV2ContractViolation(
           "IDENTITY_MISMATCH", "Trusted reconciliation receipt expiry is out of bounds");

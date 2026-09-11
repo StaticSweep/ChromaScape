@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import org.springframework.stereotype.Component;
 
 /**
@@ -77,10 +78,15 @@ public final class GameplayV2EligibilityFilter {
       return EligibilityStatus.STALE_OBSERVATION.name();
     }
     JsonNode freshness = observation.path("freshness");
+    Instant capturedAt;
+    try {
+      capturedAt = Instant.parse(observation.path("capturedAt").asText());
+    } catch (Exception exception) {
+      return EligibilityStatus.STALE_OBSERVATION.name();
+    }
     if ("STALE".equals(freshness.path("status").asText())
-        || Instant.parse(observation.path("capturedAt").asText())
-            .plusMillis(freshness.path("maxAgeMs").asLong())
-            .isBefore(evaluatedAt)) {
+        || capturedAt.isAfter(evaluatedAt)
+        || capturedAt.plusMillis(freshness.path("maxAgeMs").asLong()).isBefore(evaluatedAt)) {
       return EligibilityStatus.STALE_OBSERVATION.name();
     }
     if (observation.path("knowledgeFreshnessConfidence").asDouble() < MINIMUM_KNOWLEDGE_CONFIDENCE
@@ -226,7 +232,7 @@ public final class GameplayV2EligibilityFilter {
       return EligibilityStatus.BUDGET_EXHAUSTED;
     }
     String environment =
-        planningInput.path("identities").path("environmentId").asText("").toUpperCase();
+        planningInput.path("identities").path("environmentId").asText("").toUpperCase(Locale.ROOT);
     if ("LIVE_TASK".equals(planningInput.path("mode").asText())
         && (environment.contains("SIM") || environment.contains("XRSPS"))) {
       return EligibilityStatus.POLICY_DENIED;

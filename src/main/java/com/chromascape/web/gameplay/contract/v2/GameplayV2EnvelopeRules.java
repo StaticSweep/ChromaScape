@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
@@ -63,7 +64,8 @@ public final class GameplayV2EnvelopeRules {
     if (!"LIVE_TASK".equals(mode) && !authorityId.isNull()) {
       return "AUTHORITY_FORBIDDEN";
     }
-    String environment = envelope.path("identities").path("environmentId").asText("").toUpperCase();
+    String environment =
+        envelope.path("identities").path("environmentId").asText("").toUpperCase(Locale.ROOT);
     if ("LIVE_TASK".equals(mode)
         && (environment.contains("SIM") || environment.contains("XRSPS"))) {
       return "AUTHORITY_SOURCE_FORBIDDEN";
@@ -609,7 +611,11 @@ public final class GameplayV2EnvelopeRules {
       String signingSecret,
       Instant now,
       Set<String> consumedAuthorityIds) {
-    if (envelope == null || envelope.isMissingNode() || envelope.isNull()) {
+    if (authority == null
+        || approvedScope == null
+        || envelope == null
+        || envelope.isMissingNode()
+        || envelope.isNull()) {
       return "AUTHORITY_SCOPE_MISMATCH";
     }
     if (approvedScope == null || approvedScope.isMissingNode() || approvedScope.isNull()) {

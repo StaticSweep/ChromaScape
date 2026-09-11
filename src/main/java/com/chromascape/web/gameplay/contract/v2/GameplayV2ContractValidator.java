@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -71,7 +72,8 @@ public final class GameplayV2ContractValidator {
    * INVALID_PROVIDER_DECISION}.
    */
   static String failureCode(String definition) {
-    return "INVALID_" + definition.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toUpperCase();
+    return "INVALID_"
+        + definition.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toUpperCase(Locale.ROOT);
   }
 
   /**
@@ -385,8 +387,8 @@ public final class GameplayV2ContractValidator {
       if (authorityId.isNull() || authorityId.asText().isBlank()) {
         throw violation("AUTHORITY_MISSING", "LIVE_TASK envelopes require an authorityId");
       }
-      if (environment(envelope).toUpperCase().contains("SIM")
-          || environment(envelope).toUpperCase().contains("XRSPS")) {
+      if (environment(envelope).toUpperCase(Locale.ROOT).contains("SIM")
+          || environment(envelope).toUpperCase(Locale.ROOT).contains("XRSPS")) {
         throw violation(
             "AUTHORITY_SOURCE_FORBIDDEN", "Simulator identity cannot authorize live delivery");
       }
