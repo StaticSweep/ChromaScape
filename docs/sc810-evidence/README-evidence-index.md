@@ -101,6 +101,15 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   Training visibility *through ChromaScape itself* needs a live-launched client, a distinct
   runtime action not attempted here; Phase 8 already proved this independently against the
   executor's own `/health`.
+- **Account-record migration (2026-09-11)**: `closure-plan-phase9-account-migration.md` — the
+  account migration is **complete**. `3720a9a3b5c9f57b` → `b01c7f006bace664`, executed via a
+  temporary Go test reusing the existing tested internal migration functions (not handwritten
+  SQL), after the entire `leeuwbot-*` Docker stack had to be restored first (found fully
+  removed, unrelated to this session). Verified directly against the live database: exactly one
+  canonical `launcher_accounts` row, `account_bank_data` moved with no collision, the
+  `builder_queues` collision resolved (`id=1` retained, `id=2` removed), both migration and
+  dedupe audit rows present, no active-assignment collision. Full row-level CSV backup at
+  `C:\Dev\SC810\session-scratch\account-migration-backup\`.
 - Phases 11+ (start ChromaScape acceptance, record a genuine Fishing run, atomic binding, live
   debugger content, negative matrix, restart persistence, cross-revision protection,
   documentation/Shortcut/Felix reconciliation, final completion gate): not reached — gated on the
