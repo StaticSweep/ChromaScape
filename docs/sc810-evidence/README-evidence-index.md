@@ -61,6 +61,14 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   identical repository-hygiene cleanup onto the integration branch (commit `95e7bd20da`, tree
   `278a6a51f0`). **Both rebuilds above are superseded** — the final artifact must be built from
   `micro6-sc810-integration` at commit `95e7bd20da618f0c4b4919b0009ca26f1f53e5a6`.
+- **Phase 5 (final native verification)**: `closure-plan-phase5-verification-20260911.md`
+  (compile clean; `:client:test` — 1595 completed, 5 failed, 6 skipped, all 5 failures
+  pre-existing and unrelated — schema/mirror drift and missing Lombok-processorpath Gradle
+  wiring; `Sc810RealBundleVerificationTest` passed) and
+  `closure-plan-phase5b-check-20260911.md` (`:client:check` FAILED — two Checkstyle parser
+  errors on modern Java syntax the tool can't parse, PMD 17,503 violations but
+  non-blocking by existing config, same 5 test failures; not called green, per this phase's
+  own instruction).
 - Phases 11+ (start ChromaScape acceptance, record a genuine Fishing run, atomic binding, live
   debugger content, negative matrix, restart persistence, cross-revision protection,
   documentation/Shortcut/Felix reconciliation, final completion gate): not reached — gated on the
