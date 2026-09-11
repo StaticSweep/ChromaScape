@@ -118,15 +118,18 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   DB/launcher queries): old hash `3720a9a3b5c9f57b` has zero occurrences anywhere in the catalog,
   new hash `b01c7f006bace664` (`udasuAvuco`) present exactly once, Beheerder machine
   online/runnable/builderGoalRunnable, `ikiddoi` machines correctly excluded.
-- **New blocker found (pre-existing, not caused by this session's migration): the migrated
-  account has no launcher-managed password.** Verified three ways (direct DB query on
-  `launcher_accounts`, empty `launcher_account_secrets`, and the pre-migration backup CSV already
-  showing blank credentials as of 2026-08-28 — two weeks before today's migration touched
-  anything). Root-caused via `launcher_account_audit` to an unrelated credential/account-reset
-  event on 2026-08-22/08-28, well before this session. **This blocks Phase 7 (genuine Fishing
-  recording)** — no password exists to authenticate this account, and setting one is outside the
-  scope of the migration authorization already given. SC-810 remains In Progress; Phases 7+
-  (genuine recording, atomic binding, debugger byte verification, negative-matrix completion,
-  restart/cross-revision proofs, final Felix/Shortcut closure) cannot proceed until the user
-  resolves this credential gap or gives different direction. See
-  `sc810-remaining-work-plan-20260911.md` in this directory for the full step-by-step plan.
+- **Blocker found and resolved: the migrated account had no launcher-managed password**
+  (pre-existing, not caused by this session's migration — verified via direct DB query, empty
+  `launcher_account_secrets`, and the pre-migration backup CSV already showing blank credentials
+  as of 2026-08-28, two weeks before the migration ran). User authorized restoring the real
+  password (option 1: restore, not fabricate/reset, not switch accounts) and supplied it
+  directly. `closure-plan-phase7-credential-restore.md` documents the restore via the real
+  launcher-control API (`PUT /api/v1/accounts/{hash}/secrets`, revision-gated, not a raw SQL
+  write) and the resulting verification: `hasPassword`/`launchReady` both flipped `false` →
+  `true`, `launchDisabledReason` cleared, confirmed read-only through ChromaScape's own
+  `/api/debug/builder-goals/accounts`. Credential value itself was never stored in any evidence
+  file or echoed back.
+- Phases 7+ (genuine Fishing recording, atomic binding, debugger byte verification,
+  negative-matrix completion, restart/cross-revision proofs, final Felix/Shortcut closure): now
+  unblocked, in progress. See `sc810-remaining-work-plan-20260911.md` in this directory for the
+  full step-by-step plan.
