@@ -88,9 +88,11 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   Ran a from-scratch disposable acceptance harness (the prior session's was never committed,
   didn't survive) with the real shaded JAR on the classpath: `start()` true, `/health` 200,
   build_id/artifact_digest/source_snapshot_id all match, Fishing Training discoverable,
-  `catalog_state: DEGRADED` (same pre-existing out-of-scope defect, documented not fixed). Two
-  representative negative cases (wrong environment, untrusted key) both fail closed correctly;
-  the full negative-case matrix was not exhaustively run this session.
+  `catalog_state: DEGRADED` (same pre-existing out-of-scope defect, documented not fixed). 8 of
+  the full matrix of startup-time negative cases (wrong environment, untrusted key, missing
+  metadata/content token, missing bundle root, tampered artifact digest, wrong build_id,
+  missing/pruned bundle root) all fail closed correctly. The remaining cases are mostly live,
+  bound-run debugger-API negatives gated on the account migration.
 - **Phase 9 (ChromaScape reconfirm)**: `closure-plan-phase9-chromascape-reconfirm-20260911.md` —
   re-ran the dispatch-readiness check pointed at `micro6-sc810-integration` (not the superseded
   packaging worktree): `/debugger` 200, machines 200, Beheerder online/runnable, ikiddoi

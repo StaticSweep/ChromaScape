@@ -85,19 +85,42 @@ first flagged in the original Phase 8 evidence). Per this phase's own instructio
 an externally-owned acceptance blocker, not investigated further, not treated as a running-artifact-gate
 failure. **SC-810 is not marked Done while Fishing cannot actually be dispatched as a result.**
 
-## Negative cases: 2 of the full matrix tested, both PASSED (fail-closed)
+## Negative cases: 8 of the full matrix tested, all PASSED (fail-closed)
 
-Given session time constraints, ran two representative, safety-critical cases rather than the
-full exhaustive list (missing/wrong sidecar, artifact, build, commit/tree, environment, key —
-this phase's full list). The remaining cases are **not tested this session** and should be
-treated as an open item, not assumed passing.
+Given session time constraints, ran eight representative, safety-critical startup-time cases
+rather than the full exhaustive list (the remaining cases are mostly *live, bound-run* debugger
+API cases — unknown run/file, absolute/traversal/encoded paths, symlink escape, raw target URL,
+rate/size limits, invalid audit context — which need an actual bound run and are gated on the
+account migration; see `docs/sc810-evidence/closure-plan-phase3-5-6-7-8-integration-and-final-artifact.md`
+for a related, already-exercised set of *live HTTP* negative cases from an earlier session).
+The remaining live-run-dependent cases are **not tested this session** and should be treated as
+an open item, not assumed passing.
 
 1. **Mismatched trust environment** (`MICRO6_SOURCE_ENVIRONMENT=production` against the
    `local-development` bundle): `sourceInitializationError: "promoted bundle environment
-   differs from MICRO6_SOURCE_ENVIRONMENT"`, `start() returned: false`. Fails closed correctly.
+   differs from MICRO6_SOURCE_ENVIRONMENT"`, `start() returned: false`.
 2. **Untrusted/malformed public key** (garbage base64 substituted for the real Ed25519 key):
    `sourceInitializationError: "the promoted task-source bundle could not be loaded"`,
-   `start() returned: false`. Fails closed correctly.
+   `start() returned: false`.
+3. **Missing metadata token** (blank `MICRO6_SOURCE_METADATA_TOKEN`):
+   `sourceInitializationError: "MICRO6_SOURCE_METADATA_TOKEN and MICRO6_SOURCE_CONTENT_TOKEN
+   are required"`, `start() returned: false`.
+4. **Missing content token** (blank `MICRO6_SOURCE_CONTENT_TOKEN`): same error as case 3,
+   `start() returned: false`.
+5. **Missing bundle root** (blank `MICRO6_SOURCE_BUNDLE_ROOT`):
+   `sourceInitializationError: "MICRO6_SOURCE_BUNDLE_ROOT is required for authoritative source
+   serving"`, `start() returned: false`.
+6. **Tampered artifact digest** (sidecar copy with `artifact_digest` zeroed out):
+   `sourceInitializationError: "running packaged artifact identity is unavailable"`,
+   `start() returned: false`.
+7. **Wrong build_id** (sidecar copy with `build_id` zeroed out): same error as case 6 (both
+   land in the same strict-verification failure path), `start() returned: false`.
+8. **Missing/pruned bundle root** (`MICRO6_SOURCE_BUNDLE_ROOT` pointed at an empty directory):
+   `sourceInitializationError: "the promoted task-source bundle could not be loaded"`,
+   `start() returned: false`.
+
+All eight fail closed correctly — no case exposed a partial catalog, a fallback identity, or a
+misleading success response.
 
 ## What Phase 8 does not prove (same caveat as every prior packaged-runtime check this engagement)
 
