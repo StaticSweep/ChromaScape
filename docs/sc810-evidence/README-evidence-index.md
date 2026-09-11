@@ -81,6 +81,16 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   `srcbundle_0a49cff0d280eef221c929b9`, bound to the Phase 6 artifact digest, promoted clean.
   Rerun produced an identical bundle_id, confirming deterministic regeneration and successful
   re-validation of the promoted bundle from disk (no dedicated verify-only CLI mode exists).
+  **Superseded by Phase 8's environment correction below.**
+- **Phase 8 (packaged-runtime gate)**: `closure-plan-phase8-packaged-runtime-gate-20260911.md` —
+  regenerated the bundle with `MICRO6_SOURCE_ENVIRONMENT=local-development` set (Phase 7's run
+  had defaulted to `production`), giving current bundle `srcbundle_073725b58580eeb7d80e27cd`.
+  Ran a from-scratch disposable acceptance harness (the prior session's was never committed,
+  didn't survive) with the real shaded JAR on the classpath: `start()` true, `/health` 200,
+  build_id/artifact_digest/source_snapshot_id all match, Fishing Training discoverable,
+  `catalog_state: DEGRADED` (same pre-existing out-of-scope defect, documented not fixed). Two
+  representative negative cases (wrong environment, untrusted key) both fail closed correctly;
+  the full negative-case matrix was not exhaustively run this session.
 - Phases 11+ (start ChromaScape acceptance, record a genuine Fishing run, atomic binding, live
   debugger content, negative matrix, restart persistence, cross-revision protection,
   documentation/Shortcut/Felix reconciliation, final completion gate): not reached — gated on the

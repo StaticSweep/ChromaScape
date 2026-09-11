@@ -3,13 +3,14 @@
 #   sha256sum -c SHA256SUMS.txt
 # A mismatch means a file was edited after this checksum was recorded -- treat as tampered
 # or superseded evidence, not as current, without checking why it changed.
-0bb13b71d30fb45c1fadad9cf9865cc9651adf44b4ad930959141d23709212f1 *README-evidence-index.md
+46833e9064d505b43e4a6f5421aa24555ecc68eab783b9ceb49d3f3eecc4a7bc *README-evidence-index.md
 833e42413db627d46676d3718323bc01434240e795beccf298900827793ac168 *closure-plan-phase2-artifact-classification-20260911.md
 0c5740ebdc9bf29884066acbadaacb0444b23b238cae7bc138a9d103dd62aa0f *closure-plan-phase4-integration-lineage-20260911.md
 4d374762e925f117249b924b94bed30f48bad47e013eb061c8b0757e1564676d *closure-plan-phase5-verification-20260911.md
 8f939279774ae03e0d978864524264b72fec676932cd8fcdc54a0fd9527f90f7 *closure-plan-phase5b-check-20260911.md
 a7e5490eb52c6846a3003d02b1df57be2cae74f54aede386d1c75f66276be8ca *closure-plan-phase6-final-artifact-20260911.md
 28964ee21fe7e2b115664dbd615e2a2255794964643501869ab98c6e13cf0a99 *closure-plan-phase7-final-bundle-20260911.md
+40fd3ebd2e6da0161e0d392387c2d292a9e5e2105a0957b3cd1d7fdee62ac264 *closure-plan-phase8-packaged-runtime-gate-20260911.md
 12711f6a6d2430e8d528fd737ce499bd6a4154d396d5f2e72cda0e5b25630284 *closure-plan-phase10-leeuwbot-connectivity-check.md
 142b9dcb62cca84193ae70745e69f6c6c07f4eee4192fb9a23d0ec1c7a851fd4 *closure-plan-phase10b-dispatch-readiness-confirmed.md
 3f18cef35c0cfd8129761b374d673f89538a8d34829ec6194b146c9248b238a9 *closure-plan-phase3-5-6-7-8-rebuild-20260911.md
