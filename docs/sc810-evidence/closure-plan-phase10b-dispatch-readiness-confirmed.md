@@ -8,6 +8,9 @@ endpoint. Read-only only — no launch/dispatch/publish call was made.
 
 ## Environment
 
+- ChromaScape-consolidation source commit `56465cfbbe3ca89f25493e87da20df3ee1e8d0a1` (the parent
+  of the commit that added this evidence file — no source changed between running the check and
+  documenting it).
 - Isolated `ChromaScape-consolidation` instance, dedicated port `8195`, dedicated
   `chromascape-sc810-p9-postgres` container (port `15435`, existing data preserved, never
   touched any shared database).
@@ -40,6 +43,13 @@ endpoint. Read-only only — no launch/dispatch/publish call was made.
    `phase-9-evidence.md`'s equivalent finding).
 
 ## Result: `GET http://localhost:8195/api/debug/builder-goals/machines` — HTTP 200
+
+Request timestamp `2026-09-11T13:27:22.690+02:00` (`2026-09-11T11:27:22.690Z`), confirmed
+directly from ChromaScape's own DEBUG dispatcher log
+(`http-nio-8195-exec-7 ... DispatcherServlet - GET "/api/debug/builder-goals/machines"`),
+handled by `BuilderGoalRunnerController.listMachines()`. This is ~262ms after the returned
+machine's own `last_seen` (`2026-09-11T11:27:22.428381Z`) — consistent with the heartbeat
+being current at request time, not stale data served from a cache.
 
 Raw response (full machine list, 12 entries) confirms, through ChromaScape's own dispatch
 selection logic — not just the raw launcher endpoint:

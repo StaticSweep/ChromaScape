@@ -5,7 +5,7 @@
 # or superseded evidence, not as current, without checking why it changed.
 c346e1b9dae2a6ed06e84ebd7c8f2a8a969f2fc026fa858f084cc6b0fa3a41b7 *README-evidence-index.md
 12711f6a6d2430e8d528fd737ce499bd6a4154d396d5f2e72cda0e5b25630284 *closure-plan-phase10-leeuwbot-connectivity-check.md
-67b7e388060163084adee341b645db3471f86ccf6e195b3ff7d95a519c5508f1 *closure-plan-phase10b-dispatch-readiness-confirmed.md
+142b9dcb62cca84193ae70745e69f6c6c07f4eee4192fb9a23d0ec1c7a851fd4 *closure-plan-phase10b-dispatch-readiness-confirmed.md
 3f18cef35c0cfd8129761b374d673f89538a8d34829ec6194b146c9248b238a9 *closure-plan-phase3-5-6-7-8-rebuild-20260911.md
 c5ec1d06e53f411ae605c2927ca2a7c282b08a4909f014f76b0bd92ee7d89af4 *closure-plan-phase2-catalog-discovery-fix.md
 56c97f45198603fd9aca450f8bf531181fca96fb777494274799326702870783 *closure-plan-phase3-5-6-7-8-integration-and-final-artifact.md
