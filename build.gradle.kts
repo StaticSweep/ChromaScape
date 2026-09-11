@@ -22,6 +22,7 @@ repositories {
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter")
 	implementation("org.springframework.boot:spring-boot-starter-web")
+	implementation("com.networknt:json-schema-validator:1.5.1")
 	implementation("com.github.kwhat:jnativehook:2.2.2")
 	implementation("commons-io:commons-io:2.14.0")
 	implementation("net.java.dev.jna:jna:5.13.0")
@@ -53,5 +54,9 @@ spotless {
 
 tasks.named("check") {
 	dependsOn("spotlessCheck", "checkstyleMain")
+}
+
+tasks.test {
+	useJUnitPlatform()
 }
 
