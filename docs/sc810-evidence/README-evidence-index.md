@@ -53,8 +53,14 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   to be the test harness's own output directory, not a fixture; the real fixtures at
   `micro6-harness/golden/` are untouched), and 24 loose `.class` files beside `.java` source or
   orphaned entirely. Removed in commit `9d5f103399` after per-file classification; added a
-  global `*.class` ignore rule. This again changed the commit/tree identity — the artifact and
-  bundle must be rebuilt and re-signed once more from this final clean commit before use.
+  global `*.class` ignore rule.
+- **Integration-lineage correction**: `closure-plan-phase4-integration-lineage-20260911.md`
+  found that `sc810-package-20260910` (where every rebuild above happened) had diverged from
+  `sc810-integration-20260911`, the actual `sc-572-remediation`-based delivery lineage, missing
+  real content (`UniversalTaskDiscoveryService` changes, a 250-line test file). Mirrored the
+  identical repository-hygiene cleanup onto the integration branch (commit `95e7bd20da`, tree
+  `278a6a51f0`). **Both rebuilds above are superseded** — the final artifact must be built from
+  `micro6-sc810-integration` at commit `95e7bd20da618f0c4b4919b0009ca26f1f53e5a6`.
 - Phases 11+ (start ChromaScape acceptance, record a genuine Fishing run, atomic binding, live
   debugger content, negative matrix, restart persistence, cross-revision protection,
   documentation/Shortcut/Felix reconciliation, final completion gate): not reached — gated on the
