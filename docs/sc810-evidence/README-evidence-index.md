@@ -144,6 +144,19 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   launch deviation with self-generated `launch-attempt-id`, and verified dispatch readiness
   through ChromaScape (`dispatchReady: true`, `selectedAccountEligible: true`). `catalog_state`
   is no longer DEGRADED once a live client connects.
+- **Genuine Fishing run (2026-09-12)**: `closure-plan-genuine-fishing-run.md` — a real
+  `FISHING_TRAINING` run dispatched **through ChromaScape** onto a live logged-in client running
+  the signed packaged artifact, with `reusedExecutor: true` (ChromaScape reused the client instead
+  of relaunching it): run `buildergoal_3958a3af`, session
+  `debug_a3b56cb6f4b9479d82607762f43b6d29`, recording `recording_2a98057f`, account
+  `649bd3950515bd2f` on world 380, artifact `sha256:9c5fe625...`, snapshot
+  `srcsnap_1c1527f1843cf6e36d490e0c`. Required fixing a 5s PowerShell port-probe timeout in
+  `Micro6TargetRelaunchService` (measured 8.4s cold on this machine) that was fail-closing into
+  both `owner=unknown` replacement blocks and silent refusal to reuse a healthy executor. Also
+  documents four observed, unpatched defects: advertised-vs-effective stop-target default
+  divergence, an integer setting rejected as an enum because its schema carries `options`, an
+  inconsistent fish/location dependency map (`TROUT` maps only to `Random`), and a custom queue
+  that stays halted after a task failure.
 - Phases 7+ (genuine Fishing recording, atomic binding, debugger byte verification,
   negative-matrix completion, restart/cross-revision proofs, final Felix/Shortcut closure): now
   unblocked, in progress. See `sc810-remaining-work-plan-20260911.md` in this directory for the
