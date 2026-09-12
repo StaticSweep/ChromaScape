@@ -129,6 +129,21 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   `true`, `launchDisabledReason` cleared, confirmed read-only through ChromaScape's own
   `/api/debug/builder-goals/accounts`. Credential value itself was never stored in any evidence
   file or echoed back.
+- **Heartbeat fix, artifact re-issue, and account substitution (2026-09-12)**:
+  `closure-plan-heartbeat-fix-and-account-substitution.md` — fixed a real defect where the
+  executor's ChromaScape heartbeat was never scheduled when `plugin.getConfig()` was unavailable
+  at startup (permanently suppressing client registration), added `/health` heartbeat
+  diagnostics and 7 tests (95 tests, 0 failures), then rebuilt and re-signed: new build_id
+  `04718fe3bf0f86a27f8eb9d18d769f721748727d`, artifact digest
+  `sha256:9c5fe625ff57807f4d059afbe756e0727c2daf323707c8891b6f754f686b8319`, bundle
+  `srcbundle_7c5226066eb527205273c425` — **supersedes `sha256:8db7a474...` /
+  `srcbundle_073725b58580eeb7d80e27cd`**. Also records the **explicit account substitution**
+  (`udasuAvuco`/`b01c7f006bace664` → `TheSomaliMan`/`649bd3950515bd2f`, same character renamed,
+  confirmed by live login and hash computation, user-authorized), the discovery that this fork
+  reads config from `~/.runelite/microbot-profiles/` (not `profiles2/`), the manual packaged-JAR
+  launch deviation with self-generated `launch-attempt-id`, and verified dispatch readiness
+  through ChromaScape (`dispatchReady: true`, `selectedAccountEligible: true`). `catalog_state`
+  is no longer DEGRADED once a live client connects.
 - Phases 7+ (genuine Fishing recording, atomic binding, debugger byte verification,
   negative-matrix completion, restart/cross-revision proofs, final Felix/Shortcut closure): now
   unblocked, in progress. See `sc810-remaining-work-plan-20260911.md` in this directory for the
