@@ -201,6 +201,21 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   for all 8 rows), so its being null is correct and it can never carry dispatch-run provenance.
   `closure-plan-restart-persistence.md` has been annotated with a pointer to this, since it
   narrows that proof's significance.
-- Phases 7+ (atomic binding, debugger byte verification, final Felix/Shortcut closure): in
-  progress. See `sc810-remaining-work-plan-20260911.md` in this directory for the full
+- **Source-binding gap closed (2026-09-12)**: `closure-plan-source-binding-fix.md` — commit
+  `f7700a81`. Builder-goal dispatch now writes a verified `source_run_bindings` row, closing the
+  finding above. The gap was a wiring omission in SC-810's own code: the table came from
+  `V21__sc810_source_provenance.sql` and `SourceManifestBindingService` already did all the
+  verification, but only the AI-player flow ever called it, so the dispatch path SC-810's
+  acceptance run took wrote nothing. The fix routes dispatch through that same verified path
+  rather than duplicating it. `V46` adds `source_binding_state` (BOUND / NOT_CONFIGURED / FAILED)
+  so an unbound run is explicit; historical rows are deliberately not backfilled. 788 tests pass
+  across buildergoal/patch-loop/startup plus 13 new ones, and V46 migrates empty-to-head against a
+  real Postgres container. Two decisions flagged for review in the document: a binding failure
+  records `FAILED` rather than killing an already-executing run, and binding is currently
+  **unpinned** because the heartbeat carries no artifact identity — the manifest's own values are
+  deliberately not echoed back as "expected", since that would be a tautology reading as
+  verification. **Not verified live**: the stack was stopped before the fix was written, so no run
+  has yet been bound against a running executor; the document names the exact check still owed.
+- Phases 7+ (debugger byte verification, live confirmation of the binding fix, final Felix/Shortcut
+  closure): in progress. See `sc810-remaining-work-plan-20260911.md` in this directory for the full
   step-by-step plan.
