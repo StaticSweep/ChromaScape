@@ -169,6 +169,20 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   continuing to execute the same Fishing task. Records its own limits: registration is
   re-established by heartbeat rather than persisted, `micro6RevisionId` is still `null`, and only
   the ChromaScape process was restarted.
-- Phases 7+ (atomic binding, debugger byte verification, negative-matrix completion,
-  cross-revision proof, final Felix/Shortcut closure): in progress. See
-  `sc810-remaining-work-plan-20260911.md` in this directory for the full step-by-step plan.
+- **Cross-revision protection (2026-09-12)**: `closure-plan-cross-revision-protection.md` — 50
+  live cases against the running executor, all 50 behaving correctly. The bundle root holds
+  **seven genuine historical revisions**, all complete and signed, so every refusal is a refusal
+  to serve data that is present on disk rather than a trivial 404. All six prior snapshot ids and
+  all six prior manifest hashes pinned on the manifest endpoint → `409 SOURCE_BUILD_MISMATCH`;
+  prior snapshot ids on file and symbol reads → `404 SOURCE_UNAVAILABLE`; the two pins are
+  enforced independently. Section H additionally proves a pin cannot be *dropped*: misspelled
+  keys, unknown extra params and duplicate keys (in both orders) all `400` rather than being
+  silently ignored or resolved last-wins. Records two corrected expectations of the proof itself
+  (a prefix-stripped hash is rejected at `400` by syntax validation before comparison — stricter
+  than the predicted `409`; and symbol-read requires the content token, not the metadata token)
+  and its own limits: the six prior revisions carry *identical* task-source content, so what is
+  proved is revision-identity binding rather than content divergence, and audit-record writing on
+  rejection is asserted from code inspection only, not observed.
+- Phases 7+ (atomic binding, debugger byte verification, negative-matrix completion, final
+  Felix/Shortcut closure): in progress. See `sc810-remaining-work-plan-20260911.md` in this
+  directory for the full step-by-step plan.
