@@ -3,8 +3,9 @@
 #   sha256sum -c SHA256SUMS.txt
 # A mismatch means a file was edited after this checksum was recorded -- treat as tampered
 # or superseded evidence, not as current, without checking why it changed.
-bb8af9cf48a268746d5203a54b89f5a851a0b0cc9a15f7b1d957f69a3c1cacf2 *README-evidence-index.md
+0e39c1da30eca199ed8623273208ed2cee1c6c31b2cea8a2c793de12cbb91ee9 *README-evidence-index.md
 644779f1324423545df718b75ebca44c464c792a151352759baf83e8652bd8fa *closure-plan-genuine-fishing-run.md
+bf04607fe57b8734149c82eb63f08a9c9143a7755037cf806ecae9b7903a7049 *closure-plan-restart-persistence.md
 5735338f38cdd49da910240a7b7ce5d954f162c516789474e3dd5fc688afc8c1 *closure-plan-heartbeat-fix-and-account-substitution.md
 f890746901ff9952f4649a7f321ca84bd30f65a7f8bccce522176a6bb2a856b0 *closure-plan-phase7-credential-restore.md
 9477aeeb1e0b04908d76f37dc15d9b9e07ffe37c8e7856e254793eaffa100403 *closure-plan-phase5-identity-reconfirm-and-credential-blocker.md

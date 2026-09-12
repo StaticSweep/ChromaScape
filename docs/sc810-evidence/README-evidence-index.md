@@ -157,7 +157,18 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   divergence, an integer setting rejected as an enum because its schema carries `options`, an
   inconsistent fish/location dependency map (`TROUT` maps only to `Random`), and a custom queue
   that stays halted after a task failure.
-- Phases 7+ (genuine Fishing recording, atomic binding, debugger byte verification,
-  negative-matrix completion, restart/cross-revision proofs, final Felix/Shortcut closure): now
-  unblocked, in progress. See `sc810-remaining-work-plan-20260911.md` in this directory for the
-  full step-by-step plan.
+- **Restart persistence (2026-09-12)**: `closure-plan-restart-persistence.md` — the ChromaScape
+  process (port 8195 only) was stopped and restarted while Postgres and the live client kept
+  running. Flyway history is byte-identical across the restart (48 rows,
+  `e726bffa...`, *"Schema is up to date. No migration necessary."*, 0 ERROR-level lines); the
+  in-flight run record `buildergoal_3958a3af` returned 161 leaf fields of which 159 are unchanged,
+  the only two differences being `lastPollAt`/`lastSuccessfulPollAt`, which must advance; the
+  source manifest re-fetched from the executor is still byte-identical
+  (`10086419...`, 833,754 bytes) to the signed bundle; and the client re-registered itself through
+  the fixed heartbeat path (last success `04:27:38Z`, after the `04:25:35Z` restart) while
+  continuing to execute the same Fishing task. Records its own limits: registration is
+  re-established by heartbeat rather than persisted, `micro6RevisionId` is still `null`, and only
+  the ChromaScape process was restarted.
+- Phases 7+ (atomic binding, debugger byte verification, negative-matrix completion,
+  cross-revision proof, final Felix/Shortcut closure): in progress. See
+  `sc810-remaining-work-plan-20260911.md` in this directory for the full step-by-step plan.
