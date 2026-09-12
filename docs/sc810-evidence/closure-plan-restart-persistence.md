@@ -18,7 +18,8 @@ lifecycle event.
    in-flight Fishing run, and the live source manifest.
 2. Stopped the ChromaScape JVM (PIDs `27808`, `84400`, `48412`); confirmed port 8195 free, the
    Postgres container untouched (`Up 8 hours`), and the game client (PID `81552`) still alive.
-3. Restarted ChromaScape (new PID `143276`, log `chroma_sc810_restart2.log`).
+3. Restarted ChromaScape (new PID `143276`, log `chroma_sc810_restart2.log.gz` — gzipped during
+   cleanup, 481,217 lines; read it with `zcat`/`gzip -dc`, not a plain editor).
 4. Re-ran each baseline measurement and compared.
 
 Restart timeline from the log (local time): Flyway validate `06:24:48.530`, Tomcat bound to 8195

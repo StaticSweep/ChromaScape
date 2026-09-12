@@ -3,8 +3,9 @@
 ## Phase 4 — isolated ChromaScape acceptance instance started
 
 Started natively on Windows from `C:\Dev\IdeaProjects\ChromaScape-consolidation` via
-`gradlew.bat --no-daemon bootRun`, log at `chroma_sc810_phase4_bootrun.log` (repo-root,
-untracked/gitignored build output — not committed). Environment used the **corrected**
+`gradlew.bat --no-daemon bootRun`, log at `chroma_sc810_phase4_bootrun.log.gz` (repo-root,
+untracked/gitignored build output — not committed; gzipped during cleanup, 5,923,516 lines, read
+with `zcat`/`gzip -dc`). Environment used the **corrected**
 `CHROMASCAPE_SOURCE_ENVIRONMENT=local-development` (the user's Phase 3 instruction text said
 `production`; this was flagged and corrected in the prior Phase 3/5-8 evidence and is repeated
 here for the same reason — the bundle itself was generated with
