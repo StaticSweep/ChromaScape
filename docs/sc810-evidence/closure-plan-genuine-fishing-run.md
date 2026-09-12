@@ -103,9 +103,42 @@ as observed defects; none were patched.
 {"stopCondition": "Unlimited", "targetFish": "SHRIMP", "locationName": "Al Kharid"}
 ```
 
-## Still outstanding
+## Byte-for-byte source verification against the signed bundle (performed live, mid-run)
 
-- Debugger byte-for-byte verification of this run's source against the signed bundle.
+The authoritative source endpoints were exercised against the **running** executor while the
+Fishing task was executing. They require a complete audit context, so each read carried
+`X-Source-Actor`, `X-Source-Purpose`, `X-Correlation-ID` and `X-Source-Environment:
+local-development`, plus the matching bearer token (metadata token for `manifest-read`, content
+token for `file-read`).
+
+**1. Manifest identity — byte-identical.** `GET /api/v1/source-manifests/FISHING_TRAINING` from the
+live executor, compared with the promoted bundle's manifest on disk
+(`bundles/srcbundle_7c5226066eb527205273c425/manifests/FISHING_TRAINING.json`):
+
+| Source | SHA-256 | Bytes |
+|---|---|---|
+| live executor response | `10086419fce0d0c1903401874702ca2c56b2b0b2186d152836b7ac1ed9cb9820` | 833,754 |
+| signed bundle on disk | `10086419fce0d0c1903401874702ca2c56b2b0b2186d152836b7ac1ed9cb9820` | 833,754 |
+
+`cmp` reports no difference. The served manifest also declares
+`artifact_digest: sha256:9c5fe625...` and `build_id: 04718fe3bf...`, matching the running artifact.
+
+**2. File content — hash matches the signed manifest.** `GET
+/api/v1/source-snapshots/srcsnap_1c1527f1843cf6e36d490e0c/files/file_1a4614c082f9642c8c0cbb75f1fcf9a2`
+(20,492 bytes) against the `content_hash` that manifest declares for that file id:
+
+| Value | SHA-256 |
+|---|---|
+| declared in signed manifest | `sha256:6fb83c3e162695ded50a44e2f519fa2a5103298c1b78320524d4e6b314093a6e` |
+| computed from served bytes | `sha256:6fb83c3e162695ded50a44e2f519fa2a5103298c1b78320524d4e6b314093a6e` |
+| response `ETag` header | `sha256:6fb83c3e162695ded50a44e2f519fa2a5103298c1b78320524d4e6b314093a6e` |
+
+This closes the chain end to end: the running process is the signed artifact; the source it serves
+is byte-identical to the signed bundle's manifest; and the file bytes it returns hash to exactly
+what that signed manifest declares. Note this verifies the *served* source against the *bundle*,
+not against the developer checkout — the checkout is never consulted by these endpoints.
+
+## Still outstanding
 - The remaining negative-security matrix, restart-persistence and cross-revision protection proofs.
 - `micro6RevisionId` is null on this run; source-binding provenance still needs to be asserted
   explicitly rather than inferred from `source_snapshot_id`.

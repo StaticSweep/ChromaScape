@@ -4,7 +4,7 @@
 # A mismatch means a file was edited after this checksum was recorded -- treat as tampered
 # or superseded evidence, not as current, without checking why it changed.
 bb8af9cf48a268746d5203a54b89f5a851a0b0cc9a15f7b1d957f69a3c1cacf2 *README-evidence-index.md
-877cc7bc06e528a3a45eef6d85e5ad7f8dc2089f4737df3b126f301a3e357d0c *closure-plan-genuine-fishing-run.md
+644779f1324423545df718b75ebca44c464c792a151352759baf83e8652bd8fa *closure-plan-genuine-fishing-run.md
 5735338f38cdd49da910240a7b7ce5d954f162c516789474e3dd5fc688afc8c1 *closure-plan-heartbeat-fix-and-account-substitution.md
 f890746901ff9952f4649a7f321ca84bd30f65a7f8bccce522176a6bb2a856b0 *closure-plan-phase7-credential-restore.md
 9477aeeb1e0b04908d76f37dc15d9b9e07ffe37c8e7856e254793eaffa100403 *closure-plan-phase5-identity-reconfirm-and-credential-blocker.md
