@@ -3,10 +3,11 @@
 #   sha256sum -c SHA256SUMS.txt
 # A mismatch means a file was edited after this checksum was recorded -- treat as tampered
 # or superseded evidence, not as current, without checking why it changed.
-29ff09f20b3da78e98ade64292739d5fd565c9761fa61980f9e6674053e1cb30 *README-evidence-index.md
+9323951c164d3647c93280733b7828bceabf9cfad4987c8ef9f55ebf317c16fc *README-evidence-index.md
 644779f1324423545df718b75ebca44c464c792a151352759baf83e8652bd8fa *closure-plan-genuine-fishing-run.md
-bf04607fe57b8734149c82eb63f08a9c9143a7755037cf806ecae9b7903a7049 *closure-plan-restart-persistence.md
+da9cc7b8fda1cd0e9141f814d390fd634feb0f1adec9202a622ec09badc06158 *closure-plan-restart-persistence.md
 a4c6ca451c0f3ded87a3b5a6bc45c1c5bc1d0bf33658985731ac74502eb29110 *closure-plan-cross-revision-protection.md
+22715e5192d23ca234df6c8e821ee97866d55b40b2f94059fb16ff96cd5ad0e8 *closure-plan-negative-matrix-and-binding-provenance.md
 5735338f38cdd49da910240a7b7ce5d954f162c516789474e3dd5fc688afc8c1 *closure-plan-heartbeat-fix-and-account-substitution.md
 f890746901ff9952f4649a7f321ca84bd30f65a7f8bccce522176a6bb2a856b0 *closure-plan-phase7-credential-restore.md
 9477aeeb1e0b04908d76f37dc15d9b9e07ffe37c8e7856e254793eaffa100403 *closure-plan-phase5-identity-reconfirm-and-credential-blocker.md

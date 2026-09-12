@@ -183,6 +183,24 @@ Evidenced in files prefixed `closure-plan-phaseN-...`:
   and its own limits: the six prior revisions carry *identical* task-source content, so what is
   proved is revision-identity binding rather than content divergence, and audit-record writing on
   rejection is asserted from code inspection only, not observed.
-- Phases 7+ (atomic binding, debugger byte verification, negative-matrix completion, final
-  Felix/Shortcut closure): in progress. See `sc810-remaining-work-plan-20260911.md` in this
-  directory for the full step-by-step plan.
+- **Negative matrix, restart completion, and binding provenance (2026-09-12)**:
+  `closure-plan-negative-matrix-and-binding-provenance.md` — 29 live negative cases against the
+  running artifact, all correct (audit context `422`, token `401`, environment `403`, method `405`
+  checked before auth, path/selector containment `400`, size limits `400`, and a rate-limit burst
+  that produced exactly 118 × `200` then `429` from request #119 against the configured 120/min).
+  Closes the content/symbol/duplicate-row gaps the restart proof left open. Records which cases
+  from the plan were deliberately **not** run live and why (bundle-mutation cases would destroy the
+  live run's evidence; caller-supplied-URL/rebinding cases are not applicable to this surface).
+  **Contains the session's most significant finding — read section 3**: the accepted run's source
+  binding is *not persisted anywhere*. A positively-controlled search of every text/varchar/json
+  column in the schema found zero occurrences of the snapshot id, artifact digest or build id,
+  while the same query found the run, recording and account identifiers across six columns. The
+  binding is real at execution time and was verified byte-for-byte live, but it exists only in
+  executor memory and cannot be audited after the client stops. Also establishes that
+  `micro6RevisionId` is a patch-lineage field (two call sites, both on the patch/import path, NULL
+  for all 8 rows), so its being null is correct and it can never carry dispatch-run provenance.
+  `closure-plan-restart-persistence.md` has been annotated with a pointer to this, since it
+  narrows that proof's significance.
+- Phases 7+ (atomic binding, debugger byte verification, final Felix/Shortcut closure): in
+  progress. See `sc810-remaining-work-plan-20260911.md` in this directory for the full
+  step-by-step plan.

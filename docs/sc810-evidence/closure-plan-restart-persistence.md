@@ -127,6 +127,14 @@ The last heartbeat success (`04:27:38Z` = `06:27:38` local) is **after** the res
 client kept running the Fishing task throughout — `current_task` is unchanged and the run is still
 `RUNNING`.
 
+> **Later correction (same day).** The run record survived this restart unchanged — but subsequent
+> investigation established that what survived **contains no source binding at all**: neither the
+> snapshot id, nor the artifact digest, nor the build id is persisted anywhere in the database. See
+> section 3 of `closure-plan-negative-matrix-and-binding-provenance.md`. The persistence result
+> below stands exactly as measured; its *significance* is narrower than it first appears, because
+> the record whose stability was proved never carried the binding in the first place. The
+> content/symbol/duplicate-row checks that this document left open are also completed there.
+
 ## Caveats — what this does *not* prove
 
 - **Client registration is re-established, not persisted.** The registry entry came back because
