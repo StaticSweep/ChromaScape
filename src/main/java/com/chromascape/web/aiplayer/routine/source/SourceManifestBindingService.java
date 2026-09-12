@@ -379,8 +379,14 @@ public class SourceManifestBindingService {
     }
   }
 
-  /** True when the caller may safely retry a whole short transaction after a manifest conflict. */
-  static boolean isManifestConflict(Throwable throwable) {
+  /**
+   * True when the caller may safely retry a whole short transaction after a manifest conflict.
+   *
+   * <p>Public so orchestrators outside this package (builder-goal dispatch binding) can apply the
+   * same retry rule rather than reimplementing it. This is a pure predicate over a throwable chain:
+   * it grants no access to manifests, bindings or trust configuration.
+   */
+  public static boolean isManifestConflict(Throwable throwable) {
     for (Throwable cause = throwable; cause != null; cause = cause.getCause()) {
       if (cause instanceof DataIntegrityViolationException) return true;
     }

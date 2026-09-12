@@ -99,6 +99,9 @@ class BuilderGoalRunnerServiceTest {
         mutationService,
         launchOperations,
         coordinator,
+        // Source binding is exercised by BuilderGoalSourceBindingWiringTest; this focused test
+        // covers dispatch behaviour and passes null, which the response path renders as no binding.
+        null,
         objectMapper,
         Runnable::run,
         launchExecutor,

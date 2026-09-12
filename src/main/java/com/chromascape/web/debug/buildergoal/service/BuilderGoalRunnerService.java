@@ -52,6 +52,7 @@ import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -137,6 +138,10 @@ public class BuilderGoalRunnerService {
   private final BuilderGoalRunStateMutationService mutationService;
   private final BuilderGoalLaunchOperationService launchOperationService;
   private final BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator;
+
+  /** Read-only here: exposes a run's durable source binding. Optional so focused tests can omit. */
+  private final BuilderGoalSourceBindingService sourceBindingService;
+
   private final ObjectMapper objectMapper;
   private final Executor patchLoopExecutor;
   private final Executor launchExecutor;
@@ -201,6 +206,7 @@ public class BuilderGoalRunnerService {
       BuilderGoalRunStateMutationService mutationService,
       BuilderGoalLaunchOperationService launchOperationService,
       BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator,
+      @Autowired(required = false) BuilderGoalSourceBindingService sourceBindingService,
       ObjectMapper objectMapper,
       @Qualifier("patchLoopExecutor") Executor patchLoopExecutor,
       @Qualifier("builderGoalLaunchExecutor") Executor launchExecutor,
@@ -227,6 +233,7 @@ public class BuilderGoalRunnerService {
     this.mutationService = mutationService;
     this.launchOperationService = launchOperationService;
     this.localLaunchCoordinator = localLaunchCoordinator;
+    this.sourceBindingService = sourceBindingService;
     this.objectMapper = objectMapper;
     this.patchLoopExecutor = patchLoopExecutor;
     this.launchExecutor = launchExecutor;
@@ -4214,6 +4221,15 @@ public class BuilderGoalRunnerService {
     response.put("parentIterationId", iteration.getParentIterationId());
     response.put("micro6RevisionId", iteration.getMicro6RevisionId());
     response.put("micro6PatchedAt", iteration.getMicro6PatchedAt());
+    // micro6RevisionId above is patch lineage and is null for any run that never patched source;
+    // it is not this run's source binding. The binding is below, and is durable: it survives the
+    // executor stopping, which in-memory executor identity does not.
+    response.put("sourceBindingState", iteration.getSourceBindingState());
+    response.put(
+        "sourceBinding",
+        sourceBindingService == null
+            ? null
+            : sourceBindingService.binding(iteration.getIterationId()));
     response.put("createdAt", iteration.getCreatedAt());
     response.put("completedAt", iteration.getCompletedAt());
     response.put("runStartTime", iteration.getRunStartTime());
