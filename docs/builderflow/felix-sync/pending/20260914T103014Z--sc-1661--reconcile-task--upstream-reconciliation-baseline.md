@@ -120,7 +120,7 @@ the carried Fedora launcher routing; copying entire dirty trees; `docs/builderfl
 - [x] `./gradlew tasks` — exit 0
 - [x] `./gradlew compileJava` — exit 0
 - [x] `./gradlew compileTestJava` — exit 0
-- [x] `./gradlew checkstyleMain` — exit 0 (3280 warnings, warning severity only)
+- [x] `./gradlew checkstyleMain` — candidate exit 0 (3280 warnings / 561 files); **reconciled exit 0 (3291 / 563)** — the carried files add 11 `MissingJavadoc*` findings, severity `warning`, recorded not fixed
 - [x] `./gradlew spotlessCheck` — exit 1, **16 pre-existing files**; unchanged by this story
 - [x] `./gradlew test` — exit 1, 2250 → 2255 tests, 110 failed, 13 skipped (identical failing set)
 - [x] `./gradlew replayTest` — exit 1, 280 tests, 12 failed (identical failing set)
@@ -154,7 +154,11 @@ Documents:
 - `docs/upstream-integration/sc-1661/compatibility-map.md`
 - `docs/upstream-integration/sc-1661/baseline-validation.md`
 - `docs/upstream-integration/sc-1661/integration-base.md`
-- `docs/upstream-integration/sc-1661/evidence/**` (raw check logs)
+- `docs/upstream-integration/sc-1661/deferred-findings.md` (SC-1661-D1, SC-1661-D2)
+- `docs/upstream-integration/sc-1661/evidence/**` — tracked run logs, the complete Spotless
+  offending sets, the extracted failing-test identity sets, the checkstyle delta, and `index.md`,
+  which records each run's code revision, command, result and SHA-256 (the `*.log` files are
+  unignored by one scoped negation in `.gitignore`)
 - `docs/builderflow/felix-sync/pending/20260914T103014Z--sc-1661--reconcile-task--upstream-reconciliation-baseline.md`
 
 Branch `codex/sc-1661-chromascape-upstream-reconciliation`, worktree
@@ -184,8 +188,8 @@ Branch `codex/sc-1661-chromascape-upstream-reconciliation`, worktree
    Of the 9, `V32` is dispositioned Superseded (the dirty `DROP CONSTRAINT` is not idempotent)
    and **`V33` is an explicit deferral**: the candidate baseline's CHECK grouping is logically
    weaker (`dialogue IS NULL OR (…AND…)` leaves `spells`/`vars` unbounded), but V33 is already
-   committed and Flyway-checksummed, so the remedy is a forward migration owned by the
-   SC-1662–SC-1668 integration stream.
+   committed and Flyway-checksummed, so the remedy is a forward migration. Tracked as
+   **SC-1661-D1** in `deferred-findings.md`; owning story not yet established.
 5. **The two outstanding custom commits are resolved.** `d5b2d82` was carried as `45f943f`
    (verified via `git check-attr`: exactly the five intended fixture paths, no blob change).
    The Fedora routing was adapted as `966e0e3`. The `97284f1` vs `ced7487` expression difference
@@ -195,8 +199,10 @@ Branch `codex/sc-1661-chromascape-upstream-reconciliation`, worktree
    `ced7487`'s field access is correct.
 6. **The SC-1199 durable tick-batch lineage is already in the baseline** — `16a3d72` merges
    `origin/main` (fully contained) with `d5b2d82` at merge base `e5cdf81`.
-7. **The true upstream fork point is `46db1c4`**; the candidate baseline is 292 commits ahead of
-   it while only 15 commits are upstream-only.
+7. **The true upstream fork point is `46db1c4`**; the candidate baseline `583a05b` is 292 commits
+   ahead of it and the reconciled baseline `966e0e3` is **296** ahead, while only 15 commits are
+   upstream-only either way. The extra 4 are the two documentation commits and the two carries;
+   commit counts include documentation and do not measure the functional difference.
 8. **All 15 upstream commits now have an actual implementation owner or an explicit deferral**:
    10 adapt/merge with owners drawn from the corrected scopes, 5 explicit deferrals
    (three version bumps, one README, one demo-script change). No commit is assigned to a story
@@ -216,21 +222,34 @@ resolver.
 |---|---|---|
 | `./gradlew tasks` | exit 0 | exit 0 |
 | `./gradlew compileJava` | exit 0 | exit 0 (with `compileTestJava`) |
-| `./gradlew checkstyleMain` | exit 0 (3280 warnings) | — |
-| `./gradlew spotlessCheck` | exit 1 — 16 files | exit 1 — the **same 16** files |
+| `./gradlew checkstyleMain` | exit 0 (3280 warnings / 561 files) | exit 0 (3291 / 563; carried files add 11) |
+| `./gradlew spotlessCheck` | exit 1 — 16 files | exit 1 — the **same 16** files (complete sets byte-identical) |
 | `./gradlew test` | exit 1 — 2250 / 110 failed / 13 skipped | exit 1 — 2255 / 110 / 13 |
 | `./gradlew replayTest` | exit 1 — 280 / 12 failed | exit 1 — 280 / 12 |
 | focused launcher suites | — | exit 0 — **175 / 0 failures** |
+| single-class review run (`*Micro6RemoteLauncherServiceTest`) | — | exit 0 — **3 / 0 failures** |
 
-**No regression was introduced.** The strongest comparison is the failing *set*, not the counts:
-the sorted `FAILED` test names are **identical** before and after for both `test` and `replayTest`
-(`diff` returns empty). The reconciled branch adds 5 tests, and all 5 pass.
+**No additional failures were observed in the executed checks.** The comparison is the failing
+*set*, not the counts, and it is retained rather than kept in `/tmp`: the sorted `FAILED` test
+identities are **identical** before and after for both `test` (110 identities) and `replayTest`
+(12 identities). The reconciled branch adds 5 tests — **3** in `Micro6RemoteLauncherServiceTest`,
+**1** in `Micro6OnlineClientRegistryServiceTest`, **1** in `Micro6TargetPreparationServiceTest` — and
+all 5 pass. (An earlier revision attributed all five to `Micro6RemoteLauncherServiceTest`, which
+contains three tests.)
+
+This claim is **bounded**: Docker and PostgreSQL are absent, so 92 of the 110 `test` failures and all
+12 `replayTest` failures are environmental, and the suites that would exercise database-, migration-
+and container-backed behaviour never ran on either revision. Blocked tests are not evidence that no
+regression exists.
 
 Failure classification (identical on both revisions): 34 Docker-unavailable, 10 PostgreSQL-refused
-(`localhost:5433`), 48 ApplicationContext cascade from those, and 18 pre-existing gameplay
-contract/provider assertion failures unrelated to SC-1661. Docker and PostgreSQL are unavailable on
-this host, so database/migration/concurrency evidence cannot be produced here; that limitation is
-recorded rather than hidden.
+(`localhost:5433`), 48 ApplicationContext cascade from those, and 18 non-environmental failures —
+**16** in the gameplay/provider family and 2 elsewhere (`SourceContractSchemaEqualityTest`,
+`Micro6TargetRelaunchServiceTest`), unrelated to SC-1661. Their root cause is **not confirmed**:
+this host cannot separate a baseline defect from environment sensitivity, so they are not called a
+definitive code defect. Exact identities and the intended tracker record are in `deferred-findings.md`
+as **SC-1661-D2**. Docker and PostgreSQL are unavailable on this host, so database/migration/
+concurrency evidence cannot be produced here; that limitation is recorded rather than hidden.
 
 `./gradlew test` additionally needs the SC-967 fixture path on Linux
 (`-Psc967VectorsPath=…`); without it the task fails before running any test. That is a documented
@@ -245,10 +264,15 @@ override the build itself provides, not a build change.
 2. **Publish the pinned baseline `966e0e3`** to the epic and SC-1662–SC-1668 with the corrected
    ownership table (Felix + Shortcut MCP are unavailable in this session — replay the outbox
    record first).
-3. **Hand the `V33` constraint finding onward** to the SC-1662–SC-1668 integration stream as the
-   accountable owner of a forward migration.
-4. **Decide the 18 pre-existing gameplay/provider test failures.** They are not SC-1661's and were
-   left untouched; the integration stream must classify them.
+3. **Create the accountable follow-up for the `V33` constraint finding** — tracked as
+   **SC-1661-D1** in `deferred-findings.md` with the two predicates, seven database validation cases,
+   the forward-migration requirement and the delivery impact. Owning story is **not yet established**
+   (nearest existing owner: SC-1668); a dedicated schema-hardening ticket is required and does not
+   exist yet.
+4. **Create the accountable defect for the 18 pre-existing non-environmental test failures** —
+   tracked as **SC-1661-D2** in `deferred-findings.md` with all 18 identities, both reproduction
+   logs and the open root-cause question. They are not SC-1661's and were left untouched; neither
+   fixing them nor classifying them is part of this story.
 
 ## Checklist reconciliation
 
@@ -281,6 +305,10 @@ Felix/Shortcut MCP). No item is checked speculatively.
   capture and screen API compatibility; SC-1666 recording, debugger, and remote-launch integration;
   SC-1667 Fedora startup and attachment diagnostics; SC-1668 host qualification and integration PR.
 - Record SC-1661's branch, the two carry commits, and the review link on the story.
+- **Create and link the two deferred-finding tickets**: `SC-1661-D1` (V33 constraint; forward
+  migration; dedicated schema-hardening follow-up, nearest existing owner SC-1668) and `SC-1661-D2`
+  (18 non-environmental test failures; dedicated defect, root cause unconfirmed). Both are described
+  in `deferred-findings.md`; neither ticket exists yet.
 - `blocked` and `cancelled` ids are `null` in the mapping, so those transitions are skipped.
 - **No Shortcut call was made.** No credential or MCP transport is available in this session.
   Nothing may be recorded as synchronized until the MCP call actually succeeds.

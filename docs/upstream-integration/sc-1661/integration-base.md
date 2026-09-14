@@ -68,7 +68,7 @@ Every relevant custom change now has one of the four allowed dispositions. Nothi
 | Change | Reason |
 |---|---|
 | `69ff913` RemoteInput integration | **Deferred to SC-1662–SC-1667** (split by the corrected ownership table below). Vendors a whole native project (350 files, ~95k insertions) including editor state; deletes `Kinput.java` and `WindowHandler.java` that the baseline still uses |
-| **`V33` CHECK-constraint strengthening** | **Explicit deferral.** The candidate baseline's `ck_tick_snapshots_replay_state_json_sizes` is logically weaker than the dirty draft (`dialogue IS NULL OR (…AND…)` short-circuits the `spells`/`vars` bounds). V33 is already committed and Flyway-checksummed, so the remedy is a new forward migration, not an in-place edit. Not a prerequisite for the Linux/RemoteInput work. **Accountable owner: the SC-1662–SC-1668 integration stream (dedicated schema follow-up).** Full evidence in `custom-change-reconciliation.md` |
+| **`V33` CHECK-constraint strengthening** | **Explicit deferral.** The candidate baseline's `ck_tick_snapshots_replay_state_json_sizes` is logically weaker than the dirty draft (`dialogue IS NULL OR (…AND…)` short-circuits the `spells`/`vars` bounds). V33 is already committed and Flyway-checksummed, so the remedy is a new forward migration, not an in-place edit. Not a prerequisite for the Linux/RemoteInput work. **Tracked as `SC-1661-D1` in `deferred-findings.md`** with the two predicates, seven database validation cases, the forward-migration requirement and the delivery impact. **Owning story not yet established** — no SC-1662–SC-1668 story owns migrations; nearest existing owner is SC-1668, and a dedicated schema-hardening ticket is required. **No tracker ticket exists yet** (no Felix/Shortcut MCP in the preparing session), so "handed to the integration stream" is not claimed |
 | Unrelated upstream demo-script commits (`88b7b5f`, `6038886`) | Demo scripts and their failsafe logic have no Linux-port requirement; assigning them to a port story would give that story a different purpose. Explicit deferral |
 | Upstream version-string commits (`b7feca0`, `ac06b03`, `c4de3f4`), README (`c662806`) | No porting requirement |
 | `.gradle-home/` (1,734 untracked files), `.commandcode/**`, consolidation `.micro6/` | Generated caches, tool configuration and runtime state — excluded, never committed |
@@ -76,16 +76,33 @@ Every relevant custom change now has one of the four allowed dispositions. Nothi
 
 ## Divergence counts (recomputed against the pinned upstream)
 
-| Comparison | Merge base | Ahead | Behind |
-|---|---|---|---|
-| Reconciled branch `966e0e3` vs Fedora `97284f1` | `7ab2a80` | 79 | **1** (now carried) |
-| Reconciled branch `966e0e3` vs durable-current `16a3d72` | `e5cdf81` | 31 | **3** (2 non-merge: `ced7487`, `d5b2d82` — both now carried) |
-| Reconciled branch `966e0e3` vs upstream `5ea3b99` | `46db1c4` | 294 | **15** |
-| vs main checkout / main2 | — | — | **0** each |
+Every row is measured from the **reconciled code baseline `966e0e3`** and is reproducible with the
+command given beside it.
 
-The baseline is **292 commits ahead of the true upstream fork point**; the carried work adds 2.
-The "15 upstream commits" is the upstream-only set to adapt; the ~294 is the custom fork surface.
-These are different numbers and must not be conflated.
+| Comparison | Command | Merge base | Ahead | Behind |
+|---|---|---|---|---|
+| Reconciled branch `966e0e3` vs Fedora `97284f1` | `git rev-list --left-right --count 966e0e3...97284f1` | `7ab2a80` | **81** | **1** (now carried) |
+| Reconciled branch `966e0e3` vs durable-current `16a3d72` | `git rev-list --left-right --count 966e0e3...16a3d72` | `e5cdf81` | **33** | **3** (2 non-merge: `ced7487`, `d5b2d82` — both now carried) |
+| Reconciled branch `966e0e3` vs upstream `5ea3b99` | `git rev-list --left-right --count 966e0e3...5ea3b99` | `46db1c4` | **296** | **15** |
+| vs main checkout / main2 | `git rev-list --left-right --count 966e0e3...7ab2a80` | — | — | **0** each |
+
+**Correction.** An earlier revision recorded `79 / 31 / 294`. Those figures were derived from
+`583a05b` and then adjusted by hand, and the adjustment omitted two documentation commits
+(`65af3c9`, `4e0a3d5`). Measured against `966e0e3` the counts are **81 / 33 / 296**. The older set is
+not wrong about `583a05b` — `583a05b...5ea3b99` really is `292 / 15` — but it answers a different
+question, so a count is only meaningful next to the revision it was measured from.
+
+**How to read these numbers.**
+
+- Git commit counts include documentation commits. `966e0e3` is four commits ahead of `583a05b`
+  (`65af3c9` and `4e0a3d5` are documentation; `45f943f` and `966e0e3` are the carries), so every
+  "ahead" figure measured from `966e0e3` is exactly 4 higher than the same figure from `583a05b`.
+- **An adapted change can be present in behaviour while its original source commit remains
+  ancestry-unique.** `ced7487` and `d5b2d82` still count as "behind" the reconciled branch because
+  the carry created a new commit; it did not merge them.
+- **Commit counts do not measure the size of the functional difference.** "296 vs 15" says nothing
+  about how many files or behaviours differ — the per-commit ledger in `upstream-commit-ledger.md`
+  does. 296 is the custom fork surface; 15 is the upstream-only set to adapt.
 
 ## Baseline validation (summary — details and evidence in `baseline-validation.md`)
 
@@ -124,8 +141,12 @@ No failure is attributable to SC-1661; every one reproduces at the pristine cand
    does not mask an introduced regression, but it also cannot *prove* the adapted launcher code
    under a real database. The focused launcher suites (175 tests, 0 failures) run without a
    database and do cover the adapted routing logic.
-3. **18 pre-existing non-environmental test failures** in the gameplay contract/provider area.
-   These are unrelated to SC-1661 and are handed to the integration stream unowned.
+3. **18 pre-existing non-environmental test failures** — 16 in the gameplay/provider family, 2
+   elsewhere (`SourceContractSchemaEqualityTest`, `Micro6TargetRelaunchServiceTest`). Unrelated to
+   SC-1661. Tracked as **`SC-1661-D2` in `deferred-findings.md`** with the exact identities of all
+   18, both reproduction logs, the environment, and an **unconfirmed** root cause (baseline defect
+   versus environment sensitivity is not yet separated). **Owning story not yet established**; a
+   dedicated defect ticket is required and does **not** exist yet.
 4. **The Fedora adaptation is validated by compilation and unit tests only.** End-to-end remote
    launch against a real Fedora agent is owned by SC-1667.
 5. **Felix/Shortcut handoff is not yet synced** — no MCP transport in this session.
@@ -177,17 +198,18 @@ Estimates are now expressed as ranges with their basis, rather than a single uns
 | Story | Estimate | Basis |
 |---|---|---|
 | SC-1662 | **Medium–large** | The RemoteInput commit is 350 files / ~95k insertions including a vendored native tree and editor state; the build and library-loading work must be separated from the Java seam |
-| SC-1663 | **Medium–large** | Highest-risk capture boundary: three separate upstream rewrites of `ScreenManager` (`db17529`, `69ff913`, `cad0847`) must be reconciled per-hunk |
+| SC-1663 | **Medium** | **Process discovery and explicit target selection.** It owns the `WindowHandler` deletion, the platform-neutral target identity, and the selection-semantics tests from `69ff913`. It does **not** own capture — the three `ScreenManager` rewrites are SC-1665's |
 | SC-1664 | **Medium** | Bounded to the input seam, but it must land after SC-1662's abstraction exists |
-| SC-1665 | **Medium** | Coordinate and capture API compatibility; bounded by the `toClient*` seam |
+| SC-1665 | **Medium–large** | Highest-risk capture boundary: three separate upstream rewrites of `ScreenManager` (`db17529`, `69ff913`, `cad0847`) must be reconciled per-hunk, plus the `toClient*` coordinate-conversion seam |
 | SC-1666 | **Medium** | Recording/debugger/remote-launch wiring; depends on the capture and input seams |
 | SC-1667 | **Small–medium** | The routing itself is already carried; remaining work is real-agent diagnostics and startup behaviour |
 | SC-1668 | **Medium** | Qualification requires a Linux host with Docker/PostgreSQL, neither available here |
 | SC-1661 remaining | **Small** | Only the Felix/Shortcut handoff and the PR remain; no source work is outstanding |
 
-The uncertainty is concentrated in SC-1662/SC-1663 because the upstream native project has not been
-reviewed for inclusion, and in SC-1668 because its evidence environment is not present on this
-host. Per-story estimates should be re-cut once SC-1662 audits the vendored tree.
+The uncertainty is concentrated in SC-1662/SC-1665 because the upstream native project has not been
+reviewed for inclusion and the capture boundary is the largest single rewrite, and in SC-1668 because
+its evidence environment is not present on this host. Per-story estimates should be re-cut once
+SC-1662 audits the vendored tree.
 
 ## Acceptance status
 
@@ -197,8 +219,11 @@ host. Per-story estimates should be re-cut once SC-1662 audits the vendored tree
 | No relevant custom change merely "probable"/"candidate"/"needs review" | **Done** — 13/13 files and both custom commits dispositioned |
 | Source equivalence claims have behavioural evidence | **Done** — per-file conditions, literals, bodies, schema constraints and test assertions reviewed; the Fedora question settled by a compile experiment |
 | Downstream ownership consistent with Shortcut | **Done in the documents** — see the corrected table above, `compatibility-map.md` and `upstream-commit-ledger.md` |
-| Baseline validation has actual results and no introduced regressions | **Done** — see `baseline-validation.md`; the reconciled failure set matches the candidate baseline |
+| Baseline validation has actual results and no **additional** observed failures | **Done** — see `baseline-validation.md`; the failing identity sets are identical and the blocked (Docker/PostgreSQL) suites are stated as *not verified* rather than as passing |
 | Final code baseline pinned | **Done** — `966e0e3` |
+| Validation evidence is durable and independently inspectable | **Done** — tracked artifacts with per-run revision, command, result and SHA-256 in `evidence/index.md`; the reviewed `.log` files are unignored by a single scoped negation |
+| Final-code `checkstyleMain` recorded | **Done** — exit 0, 3291 warnings / 563 files; the 11 added findings in carried files are recorded (`evidence/index.md`, row 13) |
+| Deferred findings are accountable | **Partial** — `SC-1661-D1` (V33) and `SC-1661-D2` (18 failures) written in `deferred-findings.md` with scope, evidence, validation cases and the intended tracker record; the tracker tickets do **not** exist yet |
 | Epic and dependent stories reference it | **Pending** — Felix/Shortcut MCP unavailable in this session; outbox record written |
-| Required delivery evidence and review complete | **Partial** — evidence committed; PR not yet raised |
+| Required delivery evidence and review complete | **Partial** — evidence is tracked and indexed; PR not yet raised |
 | Felix and Shortcut reflect the verified outcome | **Pending** — same transport limitation |

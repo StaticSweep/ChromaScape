@@ -96,10 +96,19 @@ revision moved, so no earlier evidence is invalidated.
 | Pinned upstream SHA | `5ea3b995f5d13e19c592a6399973fe7dadb5e656` (`StaticSweep/main`, tag `v0.5.0`) |
 | Upstream merge base | `46db1c462752d39bd0c04da630bfe5d35edc117a` |
 
-Divergence recomputed against the pinned upstream revision: candidate baseline vs `5ea3b99` is
-**292 ahead / 15 behind** at merge base `46db1c4`. The 292 is the custom fork surface; the 15 is
-the upstream-only set to adapt. The two carries do not change the upstream-only commit count,
-because neither touches upstream ancestry.
+Divergence recomputed against the pinned upstream revision, at merge base `46db1c4`:
+
+| Measured from | Command | Ahead | Behind |
+|---|---|---|---|
+| Candidate baseline `583a05b` | `git rev-list --left-right --count 583a05b...5ea3b99` | **292** | **15** |
+| Reconciled code baseline `966e0e3` | `git rev-list --left-right --count 966e0e3...5ea3b99` | **296** | **15** |
+
+The two carries do not change the upstream-only count (15), because neither touches upstream
+ancestry. The ahead count differs by exactly the four commits between `583a05b` and `966e0e3` — two
+documentation commits (`65af3c9`, `4e0a3d5`) and the two carries (`45f943f`, `966e0e3`). 296 is the
+custom fork surface; 15 is the upstream-only set to adapt. **Commit counts include documentation
+commits and do not measure the size of the functional difference**; see `integration-base.md` for the
+full comparison and the correction notice.
 
 ## Worktree integrity
 

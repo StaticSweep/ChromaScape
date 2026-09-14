@@ -378,7 +378,7 @@ Per-file dispositions for the 9:
 | `ReplayNpcPinValidator.java` | Formatting plus two imports (`HashSet`, `Set`) present in the dirty copy and unused there | **Superseded** — dead imports in the dirty copy |
 | `InteractGroundItemAction.java` | Record-header line wrap only | **Already included** |
 | `V32__sc1431_recovery_correlation.sql` | `DROP CONSTRAINT ab_binding_digest_check` vs baseline `DROP CONSTRAINT IF EXISTS ab_binding_digest_check` | **Superseded** — the dirty form is not idempotent and fails on a re-run |
-| `V33__replay_snapshot_state_sections.sql` | **Real semantic difference in the CHECK grouping** — see below | **Explicitly deferred** (follow-up required) |
+| `V33__replay_snapshot_state_sections.sql` | **Real semantic difference in the CHECK grouping** — see below | **Explicitly deferred** — tracked as `SC-1661-D1` (follow-up required) |
 | `AccountBuilderOrchestrationPostgresConcurrencyTest.java` | `@SpringBootConfiguration TestApplication` + `@ActiveProfiles("test")` vs baseline's `TestBootstrap` / `sc1431-postgres-concurrency` profile gate and `spring.flyway.target=32` | **Superseded** — the baseline deliberately gates this test behind a profile |
 | `AccountBuilderOrchestrationRestartTest.java` | No `flyway.target(32)`, head asserted "33", no `sc1431-jpa` profile, extra authority-secret argument | **Superseded** — baseline is the reworked, profile-gated variant |
 | `AccountBuilderOrchestrationRollbackTest.java` | `JpaTestApplication` + `@ActiveProfiles("test")` vs baseline `JpaTestBootstrap` + `{"test","sc1431-jpa"}`, no flyway target | **Superseded** — same reason |
@@ -424,12 +424,18 @@ Reason:                           V33 is an already-committed, Flyway-checksumme
 Verification:                     Operator-precedence analysis of both predicates; git ls-tree
                                   583a05b src/main/resources/db/migration confirms V33 is committed;
                                   the file is untracked in the main checkout
-Resulting commit or follow-up:    FOLLOW-UP REQUIRED — owner: the SC-1662–SC-1668 integration
-                                  stream (dedicated schema follow-up, accountable there).
+Resulting commit or follow-up:    FOLLOW-UP REQUIRED — tracked as **SC-1661-D1** in
+                                  `deferred-findings.md`, which carries the two predicates, the
+                                  expected independent bounds for dialogue/spells/vars, the seven
+                                  database validation cases, the forward-migration requirement and the
+                                  delivery impact. Owning story: **not yet established** — no
+                                  SC-1662–SC-1668 story owns migrations; nearest existing owner is
+                                  SC-1668. A dedicated schema-hardening ticket is required and does
+                                  **not** exist yet (no Felix/Shortcut MCP in the preparing session).
                                   Deliverable: a forward migration re-creating
                                   ck_tick_snapshots_replay_state_json_sizes with the independent
                                   grouping, plus a migration-completeness re-proof. Also recorded as
-                                  a residual baseline risk in integration-base.md
+                                  a residual baseline risk in `integration-base.md`
 ```
 
 ## Outstanding custom commits — both resolved

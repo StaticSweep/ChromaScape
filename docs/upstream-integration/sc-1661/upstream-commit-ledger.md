@@ -12,6 +12,19 @@ $ git rev-list --left-right --count 583a05b...5ea3b99
 292     15
 ```
 
+Measured from the reconciled code baseline instead, the ahead count is 4 higher — the four commits
+between `583a05b` and `966e0e3` are two documentation commits and the two carries:
+
+```
+$ git rev-list --left-right --count 966e0e3...5ea3b99
+296     15
+```
+
+The 15 upstream-only commits — the set this ledger dispositions — are unchanged either way, because
+none of the four intervening commits touches upstream ancestry. Report a count only next to the
+revision it was measured from: commit counts include documentation and do not measure the size of the
+functional difference. See `integration-base.md` for the full divergence table.
+
 ## Authoritative owning-story scopes
 
 The earlier revision of this ledger assigned owners that do not match the actual stories. These
