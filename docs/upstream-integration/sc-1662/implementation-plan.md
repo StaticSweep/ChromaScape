@@ -204,4 +204,3 @@ Resolve Felix canonical project registration and persist scope, this spec, accep
 implementation/test checklists and rule links (AGENTS.md and compatibility map);
 satisfy genuine gates without waivers. User asked to plan the next task, not implement
 it in this turn.
-
