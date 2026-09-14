@@ -910,6 +910,14 @@ public class BuilderGoalRunnerService {
     Map<String, Object> acceptedSettings = normalizeSettings(settings);
     List<Micro6OnlineClientRegistryService.TargetClient> matchingClients =
         findDispatchReadyClientsForAccount(selectedAccount, world);
+    if (selectedMachine != null && !launcherControlService.isLocalMachine(selectedMachine)) {
+      matchingClients =
+          matchingClients.stream()
+              .filter(
+                  client ->
+                      clientRegistryService.belongsToMachine(client, selectedMachine.machineUuid()))
+              .toList();
+    }
     Micro6OnlineClientRegistryService.TargetClient matchingClient =
         matchingClients.size() == 1 ? matchingClients.get(0) : null;
     // Resolve aliases only after an exact target exists. A deferred publish must not fetch the
@@ -1441,7 +1449,15 @@ public class BuilderGoalRunnerService {
     updates.put("launch_failure_kind", progress.launchFailureKind());
     updates.put("launch_failure_detail", progress.launchFailureDetail());
     updates.put("attempt_id", progress.attemptId());
-    updates.put("launch_mode", "local_micro6_project");
+    Map<String, Object> launchAccount = readAccountMetadata(taskMetadata);
+    boolean remoteLaunch = launchAccount.get("launcher_endpoint") != null;
+    updates.put("launch_mode", remoteLaunch ? "remote_micro6_agent" : "local_micro6_project");
+    if (remoteLaunch) {
+      updates.put("launcher_command_id", progress.attemptId());
+      updates.put("launcher_endpoint", launchAccount.get("launcher_endpoint"));
+      updates.put("agent_version", launchAccount.get("agent_version"));
+      updates.put("agent_capabilities", launchAccount.get("agent_capabilities"));
+    }
     updates.put("launcher_machine_uuid", launcherMachineUuid);
     updates.put(
         "launcher_machine_name",
@@ -5419,6 +5435,9 @@ public class BuilderGoalRunnerService {
     if (machine != null) {
       target.put("requested_launcher_machine_uuid", machine.machineUuid());
       target.put("requested_launcher_machine_name", machine.displayName());
+      target.put("launcher_endpoint", machine.metadata().get("launcher_endpoint"));
+      target.put("agent_version", machine.metadata().get("agent_version"));
+      target.put("agent_capabilities", machine.metadata().get("capabilities"));
     }
     return target;
   }
@@ -5461,6 +5480,11 @@ public class BuilderGoalRunnerService {
     metadata.put("enabled", account.enabled());
     metadata.put("status", account.status());
     metadata.put("launcher_machine_uuid", machine != null ? machine.machineUuid() : null);
+    if (machine != null) {
+      metadata.put("launcher_endpoint", machine.metadata().get("launcher_endpoint"));
+      metadata.put("agent_version", machine.metadata().get("agent_version"));
+      metadata.put("agent_capabilities", machine.metadata().get("capabilities"));
+    }
     metadata.put("launcher_machine_name", machine != null ? machine.displayName() : null);
     metadata.put("launcher_base_url", account.metadata().get("launcherBaseUrl"));
     return metadata;

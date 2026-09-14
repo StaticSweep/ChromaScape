@@ -93,3 +93,8 @@ output/*
 
 # recordings
 recordings/
+
+# SC-1661 baseline-validation evidence is deliberately tracked: each file below was
+# reviewed for credentials/account identifiers before being retained. Scoped negation
+# only -- this must not unignore *.log anywhere else in the repository.
+!docs/upstream-integration/sc-1661/evidence/*.log

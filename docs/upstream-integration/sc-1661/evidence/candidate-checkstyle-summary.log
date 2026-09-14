@@ -1,0 +1,53 @@
+# SC-1661 candidate-baseline checkstyleMain — condensed
+# Full log was 848 KB (3280 warnings across 561 files).
+# Command: ./gradlew checkstyleMain --console=plain   (exit 0)
+# Full machine-readable report: build/reports/checkstyle/main.xml|main.html
+
+## First 12 lines
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources
+> Task :classes
+
+> Task :checkstyleMain
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/utils/actions/Idler.java:64:3: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/utils/core/screen/topology/ColourContours.java:145:3: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/utils/core/screen/window/WindowController.java:31:3: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/utils/core/screen/window/ScreenManagerInitializer.java:22:3: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/utils/core/screen/window/WindowHandler.java:106:5: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/utils/core/screen/window/WindowHandler.java:734: Line is longer than 100 characters (found 171). [LineLength]
+
+## Summary lines
+Checkstyle files with violations: 561
+Checkstyle violations by severity: [warning:3280]
+BUILD SUCCESSFUL in 53s
+3 actionable tasks: 2 executed, 1 up-to-date
+
+## Last 5 warning lines
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/web/gameplay/contract/GameplayContractValidator.java:27:3: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/web/gameplay/contract/GameplayContractValidator.java:39:3: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/web/gameplay/contract/GameplayContractValidator.java:60:3: Missing a Javadoc comment. [MissingJavadocType]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/web/gameplay/contract/GameplayContractValidator.java:63:5: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/web/gameplay/contract/GameplayContractValidator.java:68:5: Missing a Javadoc comment. [MissingJavadocMethod]
+
+## Distinct rule names and counts
+   1442 [MissingJavadocMethod]
+    711 [NeedBraces]
+    373 [SummaryJavadoc]
+    277 [MissingJavadocType]
+    138 [VariableDeclarationUsageDistance]
+    138 [LineLength]
+     73 [AvoidStarImport]
+     30 [FileTabCharacter]
+     15 [OneTopLevelClass]
+      8 [JavadocParagraph]
+      7 [OverloadMethodsDeclarationOrder]
+      7 [MethodName]
+      7 [LocalVariableName]
+      6 [EmptyCatchBlock]
+      5 [ParameterName]
+      5 [MissingSwitchDefault]
+      4 [RecordComponentName]
+      4 [MultipleVariableDeclarations]
+      4 [InvalidJavadocPosition]
+      4 [ConstructorsDeclarationGrouping]

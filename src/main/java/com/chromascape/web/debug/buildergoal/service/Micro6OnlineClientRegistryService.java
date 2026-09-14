@@ -30,6 +30,7 @@ public class Micro6OnlineClientRegistryService {
 
     ClientState state = new ClientState();
     state.clientId = clientId;
+    state.machineUuid = textValue(payload.path("machine_uuid"));
     state.accountName = textValue(payload.path("account_name"));
     state.accountHash = textValue(payload.path("account_hash"));
     // The canonical launch-selected hash is requested_account_hash (producer contract). The legacy
@@ -73,6 +74,27 @@ public class Micro6OnlineClientRegistryService {
 
     clients.put(clientId, state);
     return toSummary(state, false);
+  }
+
+  public boolean belongsToMachine(TargetClient target, String machineUuid) {
+    ClientState state = clients.get(target.clientId());
+    return state != null
+        && machineUuid.equals(state.machineUuid)
+        && java.util.Objects.equals(target.launchAttemptId(), state.launchAttemptId);
+  }
+
+  /** Machine and attempt are checked against the same heartbeat snapshot as readiness. */
+  public Optional<TargetClient> findRemoteReadyClient(
+      String machineUuid, String accountHash, Integer world, String attemptId, Instant seenAfter) {
+    return clients.values().stream()
+        .filter(state -> machineUuid.equals(state.machineUuid))
+        .filter(state -> attemptId.equals(state.launchAttemptId))
+        .filter(state -> state.lastSeenAt.isAfter(seenAfter) && isDispatchReady(state))
+        .map(state -> toTargetClient(state, false))
+        .filter(client -> isSelectedAccountEligible(client, accountHash))
+        .filter(
+            client -> world.equals(client.currentWorld()) && world.equals(client.requestedWorld()))
+        .findFirst();
   }
 
   public List<Map<String, Object>> listClients() {
@@ -349,6 +371,7 @@ public class Micro6OnlineClientRegistryService {
     summary.put("accountName", state.accountName);
     summary.put("accountHash", state.accountHash);
     summary.put("actualAccountHash", state.accountHash);
+    summary.put("machineUuid", state.machineUuid);
     summary.put("requestedAccountHash", state.requestedAccountHash);
     summary.put("accountHashScheme", state.accountHashScheme);
     summary.put("advertisedBaseUrl", state.advertisedBaseUrl);
@@ -762,6 +785,7 @@ public class Micro6OnlineClientRegistryService {
   }
 
   private static class ClientState {
+    private String machineUuid;
     private String clientId;
     private String accountName;
     private String accountHash;

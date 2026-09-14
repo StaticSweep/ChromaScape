@@ -113,6 +113,7 @@ class BuilderGoalRunnerServiceTest {
 
   @BeforeEach
   void setUp() {
+    lenient().when(launcherControlService.isLocalMachine(any())).thenReturn(true);
     savedIterations.clear();
     mutationDelegate =
         new BuilderGoalRunStateMutationService(

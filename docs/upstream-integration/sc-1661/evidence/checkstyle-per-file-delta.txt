@@ -1,0 +1,20 @@
+# SC-1661 checkstyleMain per-file warning delta (candidate 583a05b -> reconciled 966e0e3)
+# Method: awk over build/reports/checkstyle/main.xml of each revision, counting <error> per <file>,
+#         then normalizing the worktree prefix to /src/main/java/...
+#     awk -F'"' '/<file name=/{f=$2} /<error /{c[f]++} END{for (k in c) print c[k]"\t"k}' build/reports/checkstyle/main.xml | sort
+# Both runs exit 0; every finding is severity=warning.
+
+files-with-violations: candidate=561 reconciled=563
+total warnings:        candidate=3280 reconciled=3291
+
+## delta (candidate -> reconciled)
+162a163
+> 3	/src/main/java/com/chromascape/web/debug/buildergoal/controller/Micro6RemoteLauncherController.java   (new carried file)
+179c180,181
+< 10	/src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6OnlineClientRegistryService.java
+---
+> 11	/src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6OnlineClientRegistryService.java   (+1 new method)
+> 7	/src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6RemoteLauncherService.java        (new carried file)
+
+All 11 added findings are MissingJavadocType / MissingJavadocMethod in carried files.
+No other file's warning count changed.
