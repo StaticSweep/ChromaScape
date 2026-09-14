@@ -1,0 +1,16 @@
+M src/main/java/com/chromascape/web/aiplayer/routine/service/IsolatedPatchWorker.java
+M src/main/java/com/chromascape/web/ChromaScapeApplication.java
+M src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchService.java
+M src/main/java/com/chromascape/web/gameplay/orchestration/v2/GameplayV2LiveGateService.java
+M src/main/java/com/chromascape/web/integration/micro6/service/Micro6CanonicalHash.java
+M src/main/java/com/chromascape/web/integration/micro6/service/Micro6CatalogV2Contract.java
+M src/test/java/com/chromascape/testsupport/IsolatedPostgresTestDatabase.java
+M src/test/java/com/chromascape/web/aiplayer/routine/service/RoutineAssistantGenerationContextIT.java
+M src/test/java/com/chromascape/web/aiplayer/routine/source/Sc810FlywayOnlyMigrationCompletenessTest.java
+M src/test/java/com/chromascape/web/aiplayer/routine/source/Sc810NarrowContextIsolationTest.java
+M src/test/java/com/chromascape/web/aiplayer/routine/source/Sc810PostgresTestConfiguration.java
+M src/test/java/com/chromascape/web/aiplayer/routine/source/TaskSourceManifestVerifierTest.java
+M src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchServiceTest.java
+M src/test/java/com/chromascape/web/debug/startup/CdiStartupRegressionTest.java
+M src/test/java/com/chromascape/web/integration/micro6/service/Micro6ContractFixtureCompatibilityTest.java
+M src/test/java/com/chromascape/web/simulator/SimulatorVerifyServiceIntegrationTest.java

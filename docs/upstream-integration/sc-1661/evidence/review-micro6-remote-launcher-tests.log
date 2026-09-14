@@ -1,0 +1,35 @@
+
+> Task :compileJava
+Note: Processing Log4j annotations
+Note: Annotations processed
+Note: Processing Log4j annotations
+Note: No elements to process
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources
+> Task :classes
+
+> Task :compileTestJava
+/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/test/java/com/chromascape/web/debug/startup/CdiStartupRegressionTest.java:50: warning: [removal] MockBean in org.springframework.boot.test.mock.mockito has been deprecated and marked for removal
+  @MockBean private LogWebSocketHandler logWebSocketHandler;
+   ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+1 warning
+
+> Task :processTestResources
+> Task :testClasses
+
+> Task :test
+SC-967 vectors: /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/ed25519-vectors.json
+
+[Incubating] Problems report is available at: file:///run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 34s
+5 actionable tasks: 5 executed
