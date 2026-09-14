@@ -697,12 +697,16 @@ public class TickStreamIngestionService {
       throw new IllegalArgumentException("PACKET_BATCH_LIMIT_EXCEEDED");
     }
     long totalBytes = 0;
-    java.util.Map<String, Long> lastSequenceBySource = new java.util.HashMap<>();
+    // A source session normally emits one schema, but keep the schema in the local ordering key
+    // so a rolling v1/v2 upgrade cannot make an otherwise valid legacy sequence look regressive.
+    java.util.Map<String, Long> lastSequenceBySourceAndSchema = new java.util.HashMap<>();
     for (TickBatchMessage.TickPacketEntry packet : packets) {
       if (packet == null) {
         throw new IllegalArgumentException("PACKET_ENVELOPE_INVALID");
       }
-      if (!"rsprox-packet/v1".equals(packet.getSchema())) {
+      boolean v1 = "rsprox-packet/v1".equals(packet.getSchema());
+      boolean v2 = "rsprox-packet/v2".equals(packet.getSchema());
+      if (!v1 && !v2) {
         throw new IllegalArgumentException("PACKET_SCHEMA_UNSUPPORTED");
       }
       String direction = packet.getDirection();
@@ -719,8 +723,29 @@ public class TickStreamIngestionService {
       if (packet.getSourceSessionId() == null || packet.getSourceSessionId().isBlank()) {
         throw new IllegalArgumentException("PACKET_SOURCE_INVALID");
       }
+      if (packet.getSourceSessionId().length() > 100) {
+        throw new IllegalArgumentException("PACKET_SOURCE_INVALID");
+      }
       if (packet.getSequence() == null || packet.getSequence() < 0) {
         throw new IllegalArgumentException("PACKET_SEQUENCE_INVALID");
+      }
+      if (packet.getCaptureDeltaMillis() == null || packet.getCaptureDeltaMillis() < 0) {
+        throw new IllegalArgumentException("PACKET_CAPTURE_DELTA_INVALID");
+      }
+      if (v2) {
+        if ("GAP".equals(status)) {
+          if (packet.getPacketSequence() != null || !Boolean.TRUE.equals(packet.getSynthetic())) {
+            throw new IllegalArgumentException("PACKET_GAP_IDENTITY_INVALID");
+          }
+        } else if (packet.getPacketSequence() == null || packet.getPacketSequence() < 0) {
+          throw new IllegalArgumentException("PACKET_CAPTURE_SEQUENCE_INVALID");
+        }
+      } else if (packet.getPacketSequence() != null) {
+        // v1 has one legacy identity. Do not silently reinterpret it as a v2 pair.
+        throw new IllegalArgumentException("PACKET_V1_CAPTURE_SEQUENCE_INVALID");
+      }
+      if ("GAP".equals(status) && !Boolean.TRUE.equals(packet.getSynthetic())) {
+        throw new IllegalArgumentException("PACKET_GAP_SYNTHETIC_INVALID");
       }
       if (packet.getOpcode() == null || packet.getOpcode() < 0) {
         throw new IllegalArgumentException("PACKET_OPCODE_INVALID");
@@ -729,7 +754,7 @@ public class TickStreamIngestionService {
         throw new IllegalArgumentException("PACKET_SIZE_INVALID");
       }
       if (packet.getTick() == null
-          || Math.abs(packet.getTick() - batch.getTick()) > PACKET_TICK_WINDOW) {
+          || tickDistanceExceedsWindow(packet.getTick(), batch.getTick())) {
         throw new IllegalArgumentException("PACKET_TICK_OUT_OF_RANGE");
       }
       if (packet.getProtocolName() == null
@@ -763,14 +788,22 @@ public class TickStreamIngestionService {
           && packet.getSanitizedPayloadBase64().length() > MAX_DECODED_BYTES) {
         throw new IllegalArgumentException("PACKET_PAYLOAD_TOO_LARGE");
       }
-      // Monotonic sequence per source session across the whole received list: interleaved
-      // sources each keep their own high-water mark, so a duplicate or regression on any
-      // one source is rejected even when other sources' packets sit between the two rows.
-      Long previousSequence = lastSequenceBySource.get(packet.getSourceSessionId());
-      if (previousSequence != null && packet.getSequence() <= previousSequence) {
+      // v2 real observations are strictly monotonic per source. A delayed v2 GAP is a diagnostic
+      // marker and may arrive after the real observations it describes; persistence identity and
+      // content comparison still make conflicting reuse permanent. Legacy v1 GAPs retain their
+      // historical marker semantics and do not advance the v1 high-water mark.
+      String orderingKey = packet.getSourceSessionId() + "\u0000" + packet.getSchema();
+      Long previousSequence = lastSequenceBySourceAndSchema.get(orderingKey);
+      boolean delayedV2Gap = v2 && "GAP".equals(status);
+      if (previousSequence != null
+          && packet.getSequence() <= previousSequence
+          && !delayedV2Gap
+          && !(v1 && "GAP".equals(status))) {
         throw new IllegalArgumentException("PACKET_SEQUENCE_NOT_MONOTONIC");
       }
-      lastSequenceBySource.put(packet.getSourceSessionId(), packet.getSequence());
+      if (previousSequence == null || packet.getSequence() > previousSequence) {
+        lastSequenceBySourceAndSchema.put(orderingKey, packet.getSequence());
+      }
     }
     if (totalBytes > MAX_BATCH_PACKET_BYTES) {
       throw new IllegalArgumentException("PACKET_BATCH_BYTES_EXCEEDED");
@@ -795,22 +828,46 @@ public class TickStreamIngestionService {
     return max;
   }
 
+  /** Compares tick distance without allowing signed-long subtraction to wrap around. */
+  private boolean tickDistanceExceedsWindow(long packetTick, long batchTick) {
+    if (packetTick == batchTick) {
+      return false;
+    }
+    long distance = packetTick > batchTick ? packetTick - batchTick : batchTick - packetTick;
+    // A negative result means the positive mathematical distance exceeded Long.MAX_VALUE and
+    // wrapped during subtraction; that is necessarily outside the small configured window.
+    return distance < 0 || distance > PACKET_TICK_WINDOW;
+  }
+
   /** Persists packet rows idempotently; conflicting reuse fails permanently. */
   private void saveTickPackets(String sessionId, LocalDateTime timestamp, TickBatchMessage batch) {
     if (packetRepository == null) {
       throw new IllegalStateException("BATCH_PERSISTENCE_FAILED: packet store unavailable");
     }
     for (TickBatchMessage.TickPacketEntry packet : batch.getPackets()) {
+      boolean v2 = "rsprox-packet/v2".equals(packet.getSchema());
       var existing =
-          packetRepository.findBySessionIdAndSourceSessionIdAndPacketSequence(
-              sessionId, packet.getSourceSessionId(), packet.getSequence());
+          v2
+              ? packetRepository
+                  .findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
+                      sessionId,
+                      packet.getSourceSessionId(),
+                      packet.getSchema(),
+                      packet.getSequence())
+              : packetRepository.findBySessionIdAndSourceSessionIdAndPacketSchemaAndPacketSequence(
+                  sessionId, packet.getSourceSessionId(), packet.getSchema(), packet.getSequence());
       if (existing.isPresent()) {
         ensurePacketMatches(existing.get(), sessionId, batch.getTick(), packet);
         continue;
       }
       com.chromascape.web.debug.tickdebugger.entity.PacketObservation row =
           new com.chromascape.web.debug.tickdebugger.entity.PacketObservation(
-              sessionId, packet.getTick(), packet.getSourceSessionId(), packet.getSequence());
+              sessionId,
+              packet.getTick(),
+              packet.getSourceSessionId(),
+              packet.getSchema(),
+              packet.getSequence(),
+              v2 ? packet.getPacketSequence() : packet.getSequence());
       row.setCapturedAt(parseTimestamp(packet.getCapturedAt()));
       row.setCaptureDeltaMillis(packet.getCaptureDeltaMillis());
       row.setDirection(packet.getDirection());
@@ -837,9 +894,19 @@ public class TickStreamIngestionService {
       } catch (org.springframework.dao.DataIntegrityViolationException e) {
         // Lost-ACK retry racing a concurrent insert: re-read and compare idempotently.
         var winner =
-            packetRepository
-                .findBySessionIdAndSourceSessionIdAndPacketSequence(
-                    sessionId, packet.getSourceSessionId(), packet.getSequence())
+            (v2
+                    ? packetRepository
+                        .findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
+                            sessionId,
+                            packet.getSourceSessionId(),
+                            packet.getSchema(),
+                            packet.getSequence())
+                    : packetRepository
+                        .findBySessionIdAndSourceSessionIdAndPacketSchemaAndPacketSequence(
+                            sessionId,
+                            packet.getSourceSessionId(),
+                            packet.getSchema(),
+                            packet.getSequence()))
                 .orElseThrow(() -> e);
         ensurePacketMatches(winner, sessionId, batch.getTick(), packet);
       }
@@ -853,7 +920,13 @@ public class TickStreamIngestionService {
       TickBatchMessage.TickPacketEntry packet) {
     if (!row.getSessionId().equals(sessionId)
         || !row.getSourceSessionId().equals(packet.getSourceSessionId())
-        || !row.getPacketSequence().equals(packet.getSequence())
+        || !java.util.Objects.equals(row.getPacketSchema(), packet.getSchema())
+        || !java.util.Objects.equals(row.getObservationSequence(), packet.getSequence())
+        || !java.util.Objects.equals(
+            row.getPacketSequence(),
+            "rsprox-packet/v2".equals(packet.getSchema())
+                ? packet.getPacketSequence()
+                : packet.getSequence())
         || !java.util.Objects.equals(row.getTick(), packet.getTick())
         || !java.util.Objects.equals(row.getDirection(), packet.getDirection())
         || !java.util.Objects.equals(row.getOpcode(), packet.getOpcode())

@@ -221,8 +221,17 @@ public class ScriptExecutionService {
         boolean attachedToExisting,
         String micro6BaseUrl,
         String errorMessage) {
-      this(published, backend, publishStatus, executorStatus, activationState, entryId,
-          attachedToExisting, micro6BaseUrl, errorMessage, null);
+      this(
+          published,
+          backend,
+          publishStatus,
+          executorStatus,
+          activationState,
+          entryId,
+          attachedToExisting,
+          micro6BaseUrl,
+          errorMessage,
+          null);
     }
 
     public static Micro6PublishResult success(
@@ -232,8 +241,14 @@ public class ScriptExecutionService {
         String publishStatus,
         String executorStatus,
         String activationState) {
-      return success(entryId, attachedToExisting, micro6BaseUrl, publishStatus, executorStatus,
-          activationState, null);
+      return success(
+          entryId,
+          attachedToExisting,
+          micro6BaseUrl,
+          publishStatus,
+          executorStatus,
+          activationState,
+          null);
     }
 
     public static Micro6PublishResult success(
@@ -542,8 +557,7 @@ public class ScriptExecutionService {
 
       long deadline = System.currentTimeMillis() + timeoutMs;
       while (System.currentTimeMillis() <= deadline) {
-        Micro6RunStatusResult statusResult =
-            getMicro6RunStatus(taskMetadata, trackedEntryId);
+        Micro6RunStatusResult statusResult = getMicro6RunStatus(taskMetadata, trackedEntryId);
         if (statusResult.found()) {
           String status = statusResult.status();
           if ("COMPLETED".equalsIgnoreCase(status)) {
@@ -724,9 +738,7 @@ public class ScriptExecutionService {
       if (body == null || !body.isObject()) {
         return null;
       }
-      if (!body.has("existing_entry_id")
-          || !body.has("task_key")
-          || !body.has("existing_status")) {
+      if (!body.has("existing_entry_id") || !body.has("task_key") || !body.has("existing_status")) {
         return null;
       }
       JsonNode existingEntryNode = body.get("existing_entry_id");
@@ -740,10 +752,14 @@ public class ScriptExecutionService {
       String taskKey = rawTextNode(body, "task_key");
       String existingStatus = textNode(body, "existing_status");
       String existingIterationId = textNode(body, "existing_iteration_id");
-      if (taskKey == null || taskKey.isBlank() || existingStatus == null || existingStatus.isBlank()) {
+      if (taskKey == null
+          || taskKey.isBlank()
+          || existingStatus == null
+          || existingStatus.isBlank()) {
         return null;
       }
-      return new Micro6ConflictIdentity(existingEntryId, taskKey, existingStatus, existingIterationId);
+      return new Micro6ConflictIdentity(
+          existingEntryId, taskKey, existingStatus, existingIterationId);
     } catch (Exception e) {
       logger.debug("Failed to parse Micro6 conflict response: {}", e.getMessage());
       return null;
@@ -897,7 +913,7 @@ public class ScriptExecutionService {
           targetBaseUrl,
           "Micro6 duplicate entry "
               + conflict.existingEntryId()
-            + " returned a mismatched task identity");
+              + " returned a mismatched task identity");
     }
     String requestedIterationId = stringMetadata(taskMetadata, "iteration_id");
     if (requestedIterationId == null) {
@@ -929,8 +945,7 @@ public class ScriptExecutionService {
       // The conflict snapshot raced the status poll. A second identity/status-confirming poll is
       // required before attach; one transient state change is not stable evidence.
       Micro6RunStatusResult secondPoll =
-          getMicro6RunStatus(
-              taskMetadata, conflict.existingEntryId());
+          getMicro6RunStatus(taskMetadata, conflict.existingEntryId());
       String mismatchReason =
           confirmedStatusIdentityMismatchReason(
               secondPoll.rawResponse(), conflict.existingEntryId(), taskKey, requestedIterationId);
@@ -1058,7 +1073,8 @@ public class ScriptExecutionService {
       String receiptError =
           hasConfirmedReceiptIdentity(accepted, entryId, taskKey)
               ? "SETTINGS_RECEIPT_MISMATCH"
-              : "Micro6 execute response did not contain a valid settings receipt for entry " + entryId;
+              : "Micro6 execute response did not contain a valid settings receipt for entry "
+                  + entryId;
       return Micro6PublishResult.reconciling(entryId, targetBaseUrl, receiptError);
     }
     String executorStatus = firstNonBlank(textNode(accepted, "status"), "ACCEPTED");
@@ -1116,8 +1132,8 @@ public class ScriptExecutionService {
     if (settings == null || !settings.isObject()) {
       return null;
     }
-    Integer receiptEntryId = receipt.path("entry_id").isIntegralNumber()
-        ? receipt.path("entry_id").asInt() : null;
+    Integer receiptEntryId =
+        receipt.path("entry_id").isIntegralNumber() ? receipt.path("entry_id").asInt() : null;
     String receiptIterationId = textNode(receipt, "iteration_id");
     String expectedIterationId = stringMetadata(taskMetadata, "iteration_id");
     if (expectedIterationId == null) {
@@ -1266,8 +1282,7 @@ public class ScriptExecutionService {
     long deadline = System.currentTimeMillis() + micro6TimeoutRecoveryProbeMs;
     while (System.currentTimeMillis() < deadline) {
       try {
-        Micro6RunStatusResult statusResult =
-            getMicro6RunStatus(taskMetadata, entryId);
+        Micro6RunStatusResult statusResult = getMicro6RunStatus(taskMetadata, entryId);
         // A status value alone is not proof that the reserved entry was accepted. The executor
         // must echo the exact entry id and canonical task key before timeout recovery can attach
         // the persisted run to that status.
@@ -1821,13 +1836,7 @@ public class ScriptExecutionService {
           validateStatusIdentity(payload, entryId, expectedTaskKey, expectedIterationId);
       if (identityError != null) {
         return new Micro6RunStatusResult(
-            false,
-            "RECONCILING",
-            identityError,
-            payload,
-            targetBaseUrl,
-            entryId,
-            null);
+            false, "RECONCILING", identityError, payload, targetBaseUrl, entryId, null);
       }
       Micro6SettingsReceipt receipt =
           parseSettingsReceipt(payload, taskMetadata, entryId, receiptTaskKey);
@@ -2231,7 +2240,9 @@ public class ScriptExecutionService {
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() >= 400) {
         return new Micro6ControlResult(
-            false, null, "Micro6 " + action + " request failed (HTTP " + response.statusCode() + ")");
+            false,
+            null,
+            "Micro6 " + action + " request failed (HTTP " + response.statusCode() + ")");
       }
       if (response.body() == null || response.body().isBlank()) {
         return new Micro6ControlResult(true, null, null);

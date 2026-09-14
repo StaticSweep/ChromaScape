@@ -136,6 +136,57 @@ class AccountBuilderOrchestrationSnapshotBindingEntity {
   long expectedTaskRevision;
 }
 
+/** Immutable, non-secret correlation used to address post-reservation gateway calls. */
+@Entity(name = "AccountBuilderGatewayCorrelationEntity")
+@Table(name = "ab_gateway_correlation")
+class AccountBuilderGatewayCorrelationEntity {
+  @Id
+  @Column(name = "orchestration_id", nullable = false, length = 128)
+  String orchestrationId;
+
+  @Column(name = "contract_version", nullable = false, length = 32)
+  String contractVersion;
+
+  @Column(name = "request_id", nullable = false, length = 128)
+  String requestId;
+
+  @Column(name = "idempotency_key", nullable = false, length = 128)
+  String idempotencyKey;
+
+  @Column(name = "envelope_digest", nullable = false, length = 80)
+  String envelopeDigest;
+
+  @Column(name = "mode", nullable = false, length = 32)
+  String mode;
+
+  @Column(name = "source_type", nullable = false, length = 128)
+  String sourceType;
+
+  @Column(name = "task_key", nullable = false, length = 128)
+  String taskKey;
+
+  @Column(name = "authority_id", nullable = false, length = 128)
+  String authorityId;
+
+  @Column(name = "identities_digest", nullable = false, length = 80)
+  String identitiesDigest;
+
+  @Column(name = "settings_digest", nullable = false, length = 80)
+  String settingsDigest;
+
+  @Column(name = "budgets_digest", nullable = false, length = 80)
+  String budgetsDigest;
+
+  @Column(name = "expected_observation_revision", nullable = false)
+  long expectedObservationRevision;
+
+  @Column(name = "expected_task_revision", nullable = false)
+  long expectedTaskRevision;
+
+  @Column(name = "deadline_at", nullable = false)
+  Instant deadline;
+}
+
 /** Durable lease, generation, fence and expiry for one orchestration claim. */
 @Entity(name = "AccountBuilderOrchestrationLeaseEntity")
 @Table(name = "ab_orchestration_lease")

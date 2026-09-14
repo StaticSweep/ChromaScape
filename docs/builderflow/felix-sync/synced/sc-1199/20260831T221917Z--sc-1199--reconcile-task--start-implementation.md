@@ -1,11 +1,12 @@
 ---
 schema_version: 1
 offline_record_id: offline_sc1199_20260831T221917Z_reconcile_task_7f3b2e91
-sync_status: pending
+sync_status: synced
 project: 'C:\Dev\IdeaProjects\ChromaScape'
 shortcut_story_id: 1199
 shortcut_tag: 'shortcut:sc-1199'
-felix_task_id: task_1788137869927_5y6pxvp
+felix_task_id: task_1788264505764_479zgp12
+synced_at: '2026-09-01T12:11:33Z'
 operation: reconcile_task
 target_note_id: null
 title: 'SC-1199 — reconcile implementation start and Shortcut state'
@@ -34,18 +35,18 @@ intended_entity_links:
     link_strength: secondary
 task_selector:
   stable_tag: 'shortcut:sc-1199'
-  known_task_id: task_1788137869927_5y6pxvp
+  known_task_id: task_1788264505764_479zgp12
 workflow: shortcut_delivery
 created_at: '2026-08-31T22:19:17Z'
 intended_felix_task_state: in_progress
 intended_felix_spec_state: spec_ready
 intended_shortcut_transition: '500000007 (To Do) -> 500000008 (In Progress)'
-intended_shortcut_idempotency_marker: '[felix-sync:task_1788137869927_5y6pxvp:started]'
+intended_shortcut_idempotency_marker: '[felix-sync:task_1788264505764_479zgp12:started]'
 ---
 
 ## Task resolution
 
-Resolve `task_1788137869927_5y6pxvp` in the canonical Felix project `C:\Dev\IdeaProjects\ChromaScape`.
+Resolve `task_1788137869927_5y6pxvp5` in the canonical Felix project `C:\Dev\IdeaProjects\ChromaScape`.
 If the task lookup is unavailable, search the project by the stable tag `shortcut:sc-1199`; never
 create a second task. The task is a `shortcut_delivery` task for Shortcut
 [SC-1199](https://app.shortcut.com/leeuwbot/story/1199),
@@ -415,6 +416,66 @@ required rule intents are `spec_before_implementation`, `architecture_required_f
 
 ## State reconciliation
 
+### 2026-09-01 remaining execution update for Luna Max (extra-high reasoning)
+
+Treat the following as the exact remaining implementation order. Preserve all existing work and do
+not recreate already-implemented ChromaScape v2 orchestration.
+
+1. Inventory and isolate the three repositories before editing. ChromaScape is on
+   `integration/chromascape-consolidated-20260901` at
+   `4c9c41752b8c0f15165d89f77ac6d7aa8f696fde`; xRSPS is on `main` at
+   `c64ac9a770c851ad2ad20a1744abafebfb8e67ef`; Micro6 is on `sc-572-remediation` at
+   `4a2564a6218df2a144e6f3bd68c52891aca40f9b`. Preserve unrelated edits. In xRSPS, the observer,
+   trace contract/recorder, and `client/index.tsx` integration are uncommitted work that must be
+   reviewed and retained, not overwritten or bulk-committed with line-ending noise.
+2. Replace the xRSPS synthetic world implementation with an isolated authoritative adapter over the
+   actual xRSPS server services. The adapter must provide `reset`, `step`, `observe`, `snapshot`,
+   `restore`, `trace`, and `dispose`; use a virtual clock, seeded RNG, deterministic IDs, scoped state,
+   and no login socket, SQLite account, autosave, global ticker, or normal-player route. Capabilities
+   may report `XRSPS_AUTHORITATIVE` only when the exact committed build, cache, content, and adapter
+   identities are certifiable.
+3. Expand semantic action support to every action needed by the complete Fishing fixture. Dispatch
+   through the same xRSPS domain services used by normal server behavior. Reject unknown actions and
+   ambiguous targets; never silently skip or approximate a certified action. Add differential tests
+   that apply identical initial state/actions through normal xRSPS services and the replay adapter and
+   compare ordered effects plus canonical observations.
+4. Implement native Micro6 `recording-action/v1` capture at semantic dispatch boundaries. Persist
+   recording/session identity, tick, monotonic sequence, action type, stable target kind/ID, bounded
+   arguments, source/provenance, confidence, capture time, and content checksum. Never record raw
+   mouse/keyboard events, packets, WebSocket frames, or binary protocol data. Test on native Windows
+   only, as required by Micro6's repository rules.
+5. Produce immutable complete and deliberately incomplete Fishing fixtures. The complete fixture must
+   have finalized identity, ordered typed actions, required initial world/resource state, tick bounds,
+   build/schema identity, and checksums. The incomplete fixture must remain usable for observed
+   playback but return actionable gaps and be permanently ineligible for `CERTIFIED` simulation.
+6. Finish ChromaScape integration using the existing V24-V26 schema, v2 controller, conversion,
+   manifest, durable-run, artifact, viewer-token, and debugger code. Verify ingestion idempotency,
+   `(session_id,tick,sequence)` uniqueness, provenance/gap preservation, capability pins, owner
+   authorization, cancellation/retry/recovery, lease fencing, terminal-state monotonicity, immutable
+   artifact publication, viewer-token expiry/revocation, and bounded cursor reads on PostgreSQL 16.
+7. Finish the read-only xRSPS WebGL observer. It may fetch only immutable verified trace pages and may
+   change only local pause/speed/seek/presentation state. Add Playwright network/input assertions
+   proving it opens no login/gameplay socket, imports no normal gameplay connection path, sends no
+   mutating replay request, and exposes no gameplay controls.
+8. Replace synthetic certification expectations in ChromaScape `build.gradle.kts` only after the real
+   adapter exists. Certification must require `XRSPS_AUTHORITATIVE`, the exact committed xRSPS build,
+   the complete supported-action set, and a clean `certifiable=true` capability manifest. A passing
+   `SYNTHETIC_CONTRACT` harness is development evidence, never completion evidence.
+9. Run the full evidence gates: xRSPS unit/integration/client/Playwright tests; native Micro6 capture
+   tests; PostgreSQL migration, concurrency, recovery, isolation, and failure injection; full
+   ChromaScape playback/replay regression; one complete and one incomplete Fishing E2E; and 100
+   identical authoritative runs with equal ordered state/event hashes, chain hash, trace, snapshots,
+   artifacts, and terminal report. Record exact commands, versions, discovered/executed/pass/skip/fail
+   counts, capability manifest, commits, and artifact paths.
+10. Keep `REPLAY_ENABLED=false` and `REPLAY_WORKER_ENABLED=false` until every gate passes. Do not merge,
+    deploy, enable flags, remove legacy playback, or use OpenRune/live Micro6 control. Move Felix to
+    `in_review` only after every implementation item is evidenced; move to `done` only after separate
+    Verification Evidence proves every acceptance and test item.
+
+The intended executor remains Luna Max using extra-high reasoning. Continue autonomously through this
+order, but obey repository-specific runtime authorization: do not compile, test, or launch Micro6
+unless the current user request explicitly authorizes that exact native-Windows action.
+
 Replay these operations in order, stopping on a validation conflict:
 
 1. Resolve the existing task by `felix_task_id` or `shortcut:sc-1199`; never create a duplicate.
@@ -439,13 +500,13 @@ Current verified state: SC-1199 is `To Do` (`workflow_state_id=500000007`), bloc
 planned marker comment. The intended state after a successful Felix `in_progress` transition is
 `In Progress` (`workflow_state_id=500000008`). Search comments for this exact marker before posting:
 
-`[felix-sync:task_1788137869927_5y6pxvp:started]`
+`[felix-sync:task_1788137869927_5y6pxvp5:started]`
 
 The exact intended comment is:
 
 ```text
-[felix-sync:task_1788137869927_5y6pxvp:started]
-Felix task task_1788137869927_5y6pxvp is in_progress under C:\Dev\IdeaProjects\ChromaScape. Outcome: replay v2 orchestration, deterministic conversion/manifest metadata, immutable trace/report/viewer APIs, fail-closed capability validation, and the read-only xRSPS observer implementation are present and locally verified. Remaining blocker: the certification-path xRSPS authoritative service adapter, complete native fixture/E2E/differential gates, and Felix transport recovery remain outstanding; the current worker truthfully remains SYNTHETIC_CONTRACT/non-certifiable.
+[felix-sync:task_1788137869927_5y6pxvp5:started]
+Felix task task_1788137869927_5y6pxvp5 is in_progress under C:\Dev\IdeaProjects\ChromaScape. Outcome: replay v2 orchestration, deterministic conversion/manifest metadata, immutable trace/report/viewer APIs, fail-closed capability validation, and the read-only xRSPS observer implementation are present and locally verified. Remaining blocker: the certification-path xRSPS authoritative service adapter, complete native fixture/E2E/differential gates, and Felix transport recovery remain outstanding; the current worker truthfully remains SYNTHETIC_CONTRACT/non-certifiable.
 ```
 
 Do not post this marker, change Shortcut state, or claim synchronization until the corresponding
@@ -453,10 +514,9 @@ Felix transition succeeds. The existing planned marker is already present and mu
 
 ## Sync result
 
-Pending. Felix reads/writes currently return `Error: Project not found: C:\Dev\IdeaProjects\ChromaScape`.
-No Felix state transition, note write, checklist write, or Shortcut started synchronization has
-succeeded from this recovery record. On recovery, replay this record oldest-first, write actual IDs and
-timestamps here, then move it to
-`C:\Dev\IdeaProjects\ChromaScape\docs\builderflow\felix-sync\synced\sc-1199\` with
-`sync_status: synced`. If the existing task or notes conflict with this payload, set
-`sync_status: conflict`, preserve Felix content, leave this record pending, and report the conflict.
+Synced on 2026-09-01. The original task was absent from the recovered Felix index, so recovery created
+`task_1788264505764_479zgp12` with the same `shortcut:sc-1199` identity under the restored
+`shortcut_delivery` workflow. The task reached `in_progress/spec_ready` at 100% specification
+completeness. Shortcut SC-1199 moved to In Progress and comment activity 1595 recorded exact marker
+`[felix-sync:task_1788264505764_479zgp12:started]`. The historical task ID remains only in prior
+evidence; no duplicate live task was present in the recovered index.

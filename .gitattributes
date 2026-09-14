@@ -6,3 +6,6 @@ src/test/resources/micro6-fixtures/* text eol=lf
 docs/MCP_QUICK_START.md text eol=lf
 src/main/resources/templates/debugger.html text eol=lf
 src/main/resources/contracts/source/task-source-manifest-v1.schema.json text eol=lf
+src/test/resources/task-source-canonical-json-v1-vectors.json text eol=lf
+src/main/resources/contracts/gameplay/sc-1429-gameplay-contract-v2.schema.json text eol=lf
+src/main/resources/contracts/gameplay/sc-1429-golden-fixtures-v2.json text eol=lf

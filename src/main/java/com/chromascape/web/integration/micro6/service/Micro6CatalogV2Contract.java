@@ -226,8 +226,8 @@ public final class Micro6CatalogV2Contract {
    * <p>{@code AVAILABLE} requires an object {@code args_schema}, a valid schema hash, and a {@code
    * settings_schema_version}. {@code NOT_REQUESTED} must not carry schema content. {@code
    * NOT_APPLICABLE} requires a non-empty {@code schema_not_applicable_reason}. {@code ERROR}
-   * requires a non-empty {@code schema_error_reason} and is never usable as {@code READY}. Any other
-   * state is invalid. Lightweight mode requires {@code NOT_REQUESTED} for every task.
+   * requires a non-empty {@code schema_error_reason} and is never usable as {@code READY}. Any
+   * other state is invalid. Lightweight mode requires {@code NOT_REQUESTED} for every task.
    */
   private static void validateTaskSchemaState(
       JsonNode task, boolean full, String taskKey, List<String> reasons) {
@@ -311,7 +311,8 @@ public final class Micro6CatalogV2Contract {
    * {@code catalog_state: READY} requires {@code catalog_valid: true}. A {@code DEGRADED} catalog
    * may allow some schema failures; {@code UNAVAILABLE} must never be treated as usable.
    */
-  private static void validateStateConsistency(JsonNode payload, String state, List<String> reasons) {
+  private static void validateStateConsistency(
+      JsonNode payload, String state, List<String> reasons) {
     JsonNode catalogValid = payload.get("catalog_valid");
     if (catalogValid == null || !catalogValid.isBoolean()) {
       reasons.add("catalog_valid_missing");

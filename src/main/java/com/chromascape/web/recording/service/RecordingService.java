@@ -438,8 +438,8 @@ public class RecordingService implements FrameListener {
   }
 
   /**
-   * Stops a recording only when it is still the recording identified by {@code recordingId}.
-   * This prevents rollback for one session from stopping a newer process-wide recording.
+   * Stops a recording only when it is still the recording identified by {@code recordingId}. This
+   * prevents rollback for one session from stopping a newer process-wide recording.
    */
   public synchronized boolean stopRecordingIfCurrent(String recordingId) {
     if (recordingId == null || recordingId.isBlank() || !recording.get()) {

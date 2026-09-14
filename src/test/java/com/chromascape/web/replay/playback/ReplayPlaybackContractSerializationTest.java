@@ -48,8 +48,10 @@ class ReplayPlaybackContractSerializationTest {
 
   @BeforeAll
   static void loadSchemas() throws IOException {
-    catalogSchemaDocument = readResource("/contracts/replay/replay-playback-catalog-v1.schema.json");
-    frameSchemaDocument = readResource("/contracts/replay/replay-playback-frame-page-v1.schema.json");
+    catalogSchemaDocument =
+        readResource("/contracts/replay/replay-playback-catalog-v1.schema.json");
+    frameSchemaDocument =
+        readResource("/contracts/replay/replay-playback-frame-page-v1.schema.json");
     JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
     SchemaValidatorsConfig config = new SchemaValidatorsConfig();
     config.setFailFast(false);
@@ -62,8 +64,7 @@ class ReplayPlaybackContractSerializationTest {
     assertEquals(CATALOG_SCHEMA_ID, catalogSchemaDocument.path("$id").asText());
     assertEquals(FRAME_SCHEMA_ID, frameSchemaDocument.path("$id").asText());
     assertEquals(
-        Set.of("schema", "entries", "nextCursor", "hasMore"),
-        requiredNames(catalogSchemaDocument));
+        Set.of("schema", "entries", "nextCursor", "hasMore"), requiredNames(catalogSchemaDocument));
     assertEquals(
         Set.of(
             "schema",
@@ -97,7 +98,8 @@ class ReplayPlaybackContractSerializationTest {
     JsonNode frameProperties = frameSchemaDocument.path("properties");
     assertFalse(frameProperties.has("nextFromTick"));
     assertTypeIncludesNull(frameProperties.path("nextCursor"));
-    assertTypeIncludesNull(frameSchemaDocument.path("$defs").path("frame").path("properties").path("timestamp"));
+    assertTypeIncludesNull(
+        frameSchemaDocument.path("$defs").path("frame").path("properties").path("timestamp"));
     JsonNode logProperties = frameSchemaDocument.path("$defs").path("tickLog").path("properties");
     assertTypeIncludesNull(logProperties.path("timestamp"));
     assertTypeIncludesNull(logProperties.path("correlationId"));
@@ -134,7 +136,8 @@ class ReplayPlaybackContractSerializationTest {
   void emptyAndPopulatedPagesValidateWithTheApplicationWireMapper() throws Exception {
     ReplayPlaybackCatalogResponse emptyCatalog = new ReplayPlaybackCatalogResponse();
     ReplayPlaybackFramePageResponse emptyFrames =
-        new ReplayPlaybackFramePageResponse("recording-empty", "session-empty", List.of(), null, false);
+        new ReplayPlaybackFramePageResponse(
+            "recording-empty", "session-empty", List.of(), null, false);
     assertValid(catalogSchema, MAPPER.readTree(MAPPER.writeValueAsString(emptyCatalog)));
     assertValid(frameSchema, MAPPER.readTree(MAPPER.writeValueAsString(emptyFrames)));
 
@@ -212,8 +215,7 @@ class ReplayPlaybackContractSerializationTest {
   void schemasRejectUnexpectedPropertiesAndUnknownLogCategories() throws Exception {
     ObjectNode extra =
         (ObjectNode)
-            MAPPER.readTree(
-                MAPPER.writeValueAsString(new ReplayPlaybackCatalogResponse()));
+            MAPPER.readTree(MAPPER.writeValueAsString(new ReplayPlaybackCatalogResponse()));
     extra.put("unexpected", true);
     assertFalse(catalogSchema.validate(extra).isEmpty());
 

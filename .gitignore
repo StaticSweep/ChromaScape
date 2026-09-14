@@ -1,8 +1,9 @@
 # Java class files
 *.class
 
-# Log files
+# Log files (including archived ones -- *.log does not match *.log.gz)
 *.log
+*.log.gz
 
 # Runtime log artifact accidentally named with a Windows-style variable
 /%log%
@@ -32,6 +33,7 @@ build/
 
 # Gradle cache and wrappers
 .gradle/
+/.gradle-home/
 !gradle/wrapper/gradle-wrapper.jar
 
 # IntelliJ IDEA
@@ -55,6 +57,11 @@ Thumbs.db
 *.tmp
 *.swp
 *~
+/javac.*.args
+/app_yml_*.patch
+
+# Local task diagnostics
+/.sc810-debug/
 
 # Templates
 /src/main/resources/fonts/

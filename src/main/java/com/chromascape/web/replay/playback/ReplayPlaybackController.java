@@ -16,8 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * xRSPS-neutral observed-playback endpoints for captured debugger evidence.
  *
- * <p>The versioned routes are canonical. The unversioned routes are one-cycle compatibility
- * aliases and intentionally delegate to exactly the same service and DTO schemas.
+ * <p>The versioned routes are canonical. The unversioned routes are one-cycle compatibility aliases
+ * and intentionally delegate to exactly the same service and DTO schemas.
  */
 @RestController
 @RequestMapping("/api/replay/playback")
@@ -77,8 +77,7 @@ public class ReplayPlaybackController {
       @RequestParam(required = false, defaultValue = "100") int limit) {
     principalService.requirePrincipal(principal);
     return ResponseEntity.ok(
-        playbackService.frames(
-            requireRecordingIdForLink(recordingId), fromTick, cursor, limit));
+        playbackService.frames(requireRecordingIdForLink(recordingId), fromTick, cursor, limit));
   }
 
   /** Deprecated unversioned frame alias using the exact v1 response schema. */
@@ -106,8 +105,7 @@ public class ReplayPlaybackController {
 
   private static String requireRecordingIdForLink(String recordingId) {
     if (recordingId == null || recordingId.isBlank()) {
-      throw ReplayException.badRequest(
-          ReplayErrorCode.VALIDATION_ERROR, "recordingId is required");
+      throw ReplayException.badRequest(ReplayErrorCode.VALIDATION_ERROR, "recordingId is required");
     }
     return recordingId.trim();
   }

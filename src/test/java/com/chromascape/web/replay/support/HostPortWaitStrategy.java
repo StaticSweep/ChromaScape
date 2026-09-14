@@ -16,8 +16,8 @@ import org.testcontainers.containers.wait.strategy.AbstractWaitStrategy;
  * <p>The stock Testcontainers PostgreSQL wait strategy executes a port probe inside the container.
  * Docker Desktop's WSL bridge can leave that exec stream open after PostgreSQL is already ready,
  * which makes a test hang until the retry budget expires. A bare TCP connect is not sufficient:
- * Docker can publish the port before PostgreSQL accepts startup packets. The probe below waits
- * for any valid PostgreSQL response (authentication or an SQL error both prove that the server is
+ * Docker can publish the port before PostgreSQL accepts startup packets. The probe below waits for
+ * any valid PostgreSQL response (authentication or an SQL error both prove that the server is
  * accepting connections) and has an explicit bounded deadline.
  */
 public final class HostPortWaitStrategy extends AbstractWaitStrategy {

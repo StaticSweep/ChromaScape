@@ -4,7 +4,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletInputStream;
-import jakarta.servlet.ServletRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
@@ -21,15 +20,15 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * so authentication always runs before any multipart parsing.
  *
  * <p>The read token authorizes GET requests; the write token authorizes every POST (complete report
- * ingestion included). Tokenless access is permitted only when the active profile is exactly
- * {@code local-development} and the direct peer is loopback; forwarded address headers are never
- * trusted without an explicit trusted-proxy configuration. Outside {@code local-development},
- * application startup fails when either token is blank.
+ * ingestion included). Tokenless access is permitted only when the active profile is exactly {@code
+ * local-development} and the direct peer is loopback; forwarded address headers are never trusted
+ * without an explicit trusted-proxy configuration. Outside {@code local-development}, application
+ * startup fails when either token is blank.
  *
- * <p>After authorization succeeds, non-multipart request bodies are wrapped in a bounded
- * {@link ServletInputStream} that enforces {@code stabilization.auth.max-json-bytes} for both
- * known-length and chunked requests, throwing a mapped 413. Multipart report bundles are sized by
- * the bundle reader's own part/total limits, never by this filter.
+ * <p>After authorization succeeds, non-multipart request bodies are wrapped in a bounded {@link
+ * ServletInputStream} that enforces {@code stabilization.auth.max-json-bytes} for both known-length
+ * and chunked requests, throwing a mapped 413. Multipart report bundles are sized by the bundle
+ * reader's own part/total limits, never by this filter.
  */
 @Component
 public class StabilizationAuthFilter extends OncePerRequestFilter {
@@ -57,7 +56,8 @@ public class StabilizationAuthFilter extends OncePerRequestFilter {
     this.localDevelopment =
         activeProfiles.size() == 1 && "local-development".equals(activeProfiles.get(0));
     if (!localDevelopment && (this.authToken.isBlank() || this.writeToken.isBlank())) {
-      throw new IllegalStateException("stabilization read and write tokens are required outside local-development");
+      throw new IllegalStateException(
+          "stabilization read and write tokens are required outside local-development");
     }
   }
 
@@ -74,8 +74,9 @@ public class StabilizationAuthFilter extends OncePerRequestFilter {
   }
 
   @Override
-  protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-      FilterChain filterChain) throws ServletException, IOException {
+  protected void doFilterInternal(
+      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+      throws ServletException, IOException {
     String supplied = request.getHeader(AUTH_HEADER);
     boolean writeRequest = isWriteRequest(request);
     String requiredToken = writeRequest ? writeToken : authToken;
@@ -111,8 +112,9 @@ public class StabilizationAuthFilter extends OncePerRequestFilter {
    * installed only after authorization succeeds; a known-length body beyond the JSON bound is
    * rejected with 413 immediately, and a chunked body is bounded while it is read.
    */
-  private void doFilterAuthorized(HttpServletRequest request, HttpServletResponse response,
-      FilterChain filterChain) throws ServletException, IOException {
+  private void doFilterAuthorized(
+      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+      throws ServletException, IOException {
     if (!isMultipart(request) && request.getContentLengthLong() > maxJsonBytes) {
       response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
       response.setContentType("application/json");
@@ -154,8 +156,9 @@ public class StabilizationAuthFilter extends OncePerRequestFilter {
     BoundedRequestWrapper(HttpServletRequest request, long maxBytes) throws IOException {
       super(request);
       this.maxBytes = maxBytes;
-      this.boundedStream = new BoundedServletInputStream(
-          ((HttpServletRequest) getRequest()).getInputStream(), maxBytes);
+      this.boundedStream =
+          new BoundedServletInputStream(
+              ((HttpServletRequest) getRequest()).getInputStream(), maxBytes);
     }
 
     @Override
@@ -198,7 +201,8 @@ public class StabilizationAuthFilter extends OncePerRequestFilter {
       }
       count++;
       if (count > maxBytes) {
-        throw new RequestBodyTooLargeException("request body exceeds the " + maxBytes + " byte JSON bound");
+        throw new RequestBodyTooLargeException(
+            "request body exceeds the " + maxBytes + " byte JSON bound");
       }
       return value;
     }
@@ -215,7 +219,8 @@ public class StabilizationAuthFilter extends OncePerRequestFilter {
       }
       count += read;
       if (count > maxBytes) {
-        throw new RequestBodyTooLargeException("request body exceeds the " + maxBytes + " byte JSON bound");
+        throw new RequestBodyTooLargeException(
+            "request body exceeds the " + maxBytes + " byte JSON bound");
       }
       return read;
     }
@@ -238,8 +243,10 @@ public class StabilizationAuthFilter extends OncePerRequestFilter {
     }
   }
 
-  /** True for multipart/form-data bodies (report bundles), matched on the exact normalized base
-   *  type so substring tricks can never bypass the multipart sizing path. */
+  /**
+   * True for multipart/form-data bodies (report bundles), matched on the exact normalized base type
+   * so substring tricks can never bypass the multipart sizing path.
+   */
   private static boolean isMultipart(HttpServletRequest request) {
     String contentType = request.getContentType();
     if (contentType == null) {
@@ -277,7 +284,8 @@ public class StabilizationAuthFilter extends OncePerRequestFilter {
     if (address == null) {
       return false;
     }
-    if ("localhost".equalsIgnoreCase(address) || "::1".equals(address)
+    if ("localhost".equalsIgnoreCase(address)
+        || "::1".equals(address)
         || "0:0:0:0:0:0:0:1".equals(address)) {
       return true;
     }

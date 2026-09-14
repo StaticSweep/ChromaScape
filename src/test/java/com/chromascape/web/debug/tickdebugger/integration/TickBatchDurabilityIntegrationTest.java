@@ -8,6 +8,7 @@ import com.chromascape.web.debug.tickdebugger.dto.RecordingAction;
 import com.chromascape.web.debug.tickdebugger.dto.TickBatchMessage;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSessionRepository;
+import com.chromascape.web.debug.tickdebugger.entity.PacketObservationRepository;
 import com.chromascape.web.debug.tickdebugger.entity.ReplayRecordingActionRepository;
 import com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceiptRepository;
 import com.chromascape.web.debug.tickdebugger.entity.TickLogRepository;
@@ -61,7 +62,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @DataJpaTest(
     properties = {
-      "spring.jpa.hibernate.ddl-auto=validate",
+      // tick_logs/tick_snapshots remain Hibernate-managed; Flyway owns the durable receipt and
+      // packet tables. The disposable integration database must create the former before JPA
+      // validates the complete entity model.
+      // Flyway owns replay_tick_batch_receipts and packet_observations, including their
+      // PostgreSQL UUID defaults. Hibernate must update the remaining entity tables without
+      // recreating those Flyway-owned tables as default-less JPA tables.
+      "spring.jpa.hibernate.ddl-auto=update",
       "spring.flyway.enabled=true",
       "spring.main.lazy-initialization=true",
       "spring.datasource.hikari.maximum-pool-size=16",
@@ -190,6 +197,7 @@ class TickBatchDurabilityIntegrationTest {
   @Autowired TimelineMarkerRepository markerRepository;
   @Autowired ReplayTickBatchReceiptRepository receiptRepository;
   @Autowired ReplayRecordingActionRepository actionRepository;
+  @Autowired PacketObservationRepository packetObservationRepository;
   @Autowired PlatformTransactionManager txManager;
   @Autowired ObjectMapper objectMapper;
 
@@ -349,6 +357,8 @@ class TickBatchDurabilityIntegrationTest {
     String sessionId = "durable-" + UUID.randomUUID();
     seedSession(sessionId, 400L);
     TickBatchMessage batch = strictBatch(sessionId, UUID.randomUUID().toString(), 400L);
+    batch.setSchemaVersion(3);
+    batch.setPackets(List.of(packetEntry("packet-source", 0L, 4812L, 400L, "DECODED", false)));
     // Null message violates the NOT NULL tick_logs.message column at flush time.
     batch.setLogs(
         List.of(new TickBatchMessage.TickLogEntry("System", "Info", null, null, null, null)));
@@ -372,6 +382,7 @@ class TickBatchDurabilityIntegrationTest {
     assertEquals(0, snapshotRepository.countBySessionId(sessionId));
     assertEquals(0, overlayRepository.countBySessionId(sessionId));
     assertEquals(0, actionRepository.countBySessionId(sessionId));
+    assertEquals(0, packetObservationRepository.countBySessionId(sessionId));
     assertEquals(
         0,
         markerRepository.countBySessionId(sessionId),
@@ -379,6 +390,41 @@ class TickBatchDurabilityIntegrationTest {
     // Handler-level no-ACK coverage lives in TickStreamWebSocketHandlerTest
     // (dataIntegrityFailureFromServiceSendsNoAcknowledgment): the handler emits
     // BATCH_PERSISTENCE_FAILED and never TICK_BATCH_ACK when the service throws.
+  }
+
+  @Test
+  void successfulPacketBatchAcknowledgesOnlyAfterDurableInsertAndRetryIsIdempotent() {
+    String sessionId = "durable-packets-" + UUID.randomUUID();
+    String batchId = UUID.randomUUID().toString();
+    seedSession(sessionId, 450L);
+    TickBatchMessage batch = strictBatch(sessionId, batchId, 450L);
+    batch.setSchemaVersion(3);
+    batch.setActions(List.of());
+    batch.setPackets(
+        List.of(
+            packetEntry("packet-source", 7L, 4812L, 450L, "DECODED", false),
+            packetEntry("packet-source", 8L, null, 450L, "GAP", true)));
+    applyChecksum(batch);
+    JsonNode originalWireDocument = wireDocument(batch);
+
+    TickStreamIngestionService.TickBatchAcknowledgment acknowledgment =
+        ingestionService.processTickBatch(batch, originalWireDocument);
+
+    assertEquals("PERSISTED", acknowledgment.status());
+    assertEquals(2, packetObservationRepository.countBySessionId(sessionId));
+    assertTrue(
+        packetObservationRepository
+            .findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
+                sessionId, "packet-source", "rsprox-packet/v2", 8L)
+            .map(row -> row.getPacketSequence() == null && row.isSynthetic())
+            .orElse(false));
+
+    // A lost ACK replay reaches the durable receipt before packet insertion and cannot duplicate
+    // either observation.
+    TickStreamIngestionService.TickBatchAcknowledgment retry =
+        ingestionService.processTickBatch(batch, originalWireDocument);
+    assertEquals(acknowledgment.payloadChecksum(), retry.payloadChecksum());
+    assertEquals(2, packetObservationRepository.countBySessionId(sessionId));
   }
 
   @Test
@@ -562,7 +608,8 @@ class TickBatchDurabilityIntegrationTest {
     String sessionId = "durable-" + UUID.randomUUID();
     seedSession(sessionId, 700L);
     TickBatchMessage batch = strictBatch(sessionId, UUID.randomUUID().toString(), 700L);
-    // Immutable action rows intentionally make a session ineligible for deletion (V24 RESTRICT).
+    // The action table intentionally retains sessions with ON DELETE RESTRICT. This test is
+    // specifically about receipt retention, so keep the batch free of unrelated durable actions.
     batch.setActions(List.of());
     applyChecksum(batch);
     ingestionService.processTickBatch(batch, wireDocument(batch));
@@ -595,11 +642,14 @@ class TickBatchDurabilityIntegrationTest {
     ingestionService.processTickBatch(batch, wireDocument(batch));
     assertThrows(
         org.springframework.dao.DataIntegrityViolationException.class,
-        () -> tx().executeWithoutResult(status -> {
-          DebugSession session = sessionRepository.findBySessionId(sessionId).orElseThrow();
-          sessionRepository.delete(session);
-          sessionRepository.flush();
-        }));
+        () ->
+            tx().executeWithoutResult(
+                    status -> {
+                      DebugSession session =
+                          sessionRepository.findBySessionId(sessionId).orElseThrow();
+                      sessionRepository.delete(session);
+                      sessionRepository.flush();
+                    }));
     assertTrue(sessionRepository.findBySessionId(sessionId).isPresent());
     assertTrue(receiptRepository.findBySessionIdAndTick(sessionId, 701L).isPresent());
   }
@@ -654,6 +704,34 @@ class TickBatchDurabilityIntegrationTest {
     batch.setQuest(quest);
     batch.setActions(List.of(action(sessionId, tick, 0)));
     return batch;
+  }
+
+  private TickBatchMessage.TickPacketEntry packetEntry(
+      String sourceSessionId,
+      long observationSequence,
+      Long packetSequence,
+      long tick,
+      String status,
+      boolean synthetic) {
+    boolean gap = "GAP".equals(status);
+    return new TickBatchMessage.TickPacketEntry(
+        "rsprox-packet/v2",
+        sourceSessionId,
+        observationSequence,
+        packetSequence,
+        "2026-09-04T00:00:00Z",
+        0L,
+        "SERVER_TO_CLIENT",
+        gap ? 0 : 81,
+        gap ? "STREAM_GAP" : "NPC_INFO_LARGE",
+        gap ? 0 : 137,
+        gap ? "StreamGap" : "NpcInfo",
+        Map.of(),
+        null,
+        status,
+        null,
+        synthetic,
+        tick);
   }
 
   private RecordingAction action(String sessionId, long tick, int sequence) {

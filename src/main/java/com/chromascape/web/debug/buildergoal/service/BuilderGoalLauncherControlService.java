@@ -110,6 +110,41 @@ public class BuilderGoalLauncherControlService {
     }
   }
 
+  /**
+   * Reveals the stored launch password for one account.
+   *
+   * <p>Launcher control strips every secret from the account list payload, so the password can only
+   * be obtained through the explicit no-store reveal endpoint. This is deliberately not folded into
+   * {@link #listAccounts()}: the catalog is cached and served to the debug UI, and pulling
+   * plaintext credentials for every account into it would disclose far more than a single launch
+   * needs. Call this only at launch time, for the account actually being launched.
+   *
+   * @return the stored password, or {@code null} when launcher control holds none
+   */
+  public String revealAccountPassword(String accountHash) {
+    ensureBaseUrlConfigured();
+    String normalized = AccountIdentityContract.normalizeHash(accountHash);
+    if (!AccountIdentityContract.isCanonicalHash(normalized)) {
+      throw new IllegalArgumentException(
+          "A canonical 16-hex game-account hash is required to reveal launcher credentials");
+    }
+    try {
+      JsonNode root =
+          sendPost(
+              accountsPath + "/" + normalized + "/secrets/reveal",
+              objectMapper.writeValueAsString(Map.of("fields", List.of("password"))));
+      if (root == null) {
+        return null;
+      }
+      return normalizeOptional(textValue(root.path("secrets").path("password")));
+    } catch (Exception e) {
+      // The cause is sanitized for the same reason the response body is never logged: this call
+      // carries a credential and must not leak one through an error path.
+      throw new IllegalStateException(
+          "Failed to reveal launcher account credentials: " + sanitizedCause(e), e);
+    }
+  }
+
   public List<Map<String, Object>> listMachineSummaries() {
     return listMachines().stream().map(this::toMachineSummary).toList();
   }
@@ -327,9 +362,7 @@ public class BuilderGoalLauncherControlService {
       return null;
     }
     String accountHash =
-        firstNonBlank(
-            textValue(item.path("account_hash")),
-            textValue(item.path("accountHash")));
+        firstNonBlank(textValue(item.path("account_hash")), textValue(item.path("accountHash")));
     String displayName =
         firstNonBlank(
             textValue(item.path("display_name")),
@@ -363,10 +396,8 @@ public class BuilderGoalLauncherControlService {
             displayName);
     String accountHashScheme =
         firstNonBlank(
-            textValue(item.path("account_hash_scheme")),
-            textValue(item.path("accountHashScheme")));
-    if (accountHashScheme == null
-        && AccountIdentityContract.isCanonicalHash(accountHash)) {
+            textValue(item.path("account_hash_scheme")), textValue(item.path("accountHashScheme")));
+    if (accountHashScheme == null && AccountIdentityContract.isCanonicalHash(accountHash)) {
       // Launcher payloads predate the scheme field; their account_hash values are produced by
       // the same accountconnector identity pipeline and are attested by the canonical 16-hex
       // form itself. Non-canonical hashes keep a null scheme and stay launch-blocked.

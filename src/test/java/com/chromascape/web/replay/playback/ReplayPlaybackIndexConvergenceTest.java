@@ -75,7 +75,9 @@ class ReplayPlaybackIndexConvergenceTest {
     when(statement.execute(anyString())).thenThrow(new SQLException("permission denied"));
 
     IllegalStateException failure =
-        assertThrows(IllegalStateException.class, () -> new ReplayPlaybackIndexConvergence(dataSource).run(null));
+        assertThrows(
+            IllegalStateException.class,
+            () -> new ReplayPlaybackIndexConvergence(dataSource).run(null));
 
     assertTrue(failure.getMessage().contains("refusing application startup"));
     assertTrue(failure.getCause().getMessage().contains("permission denied"));
@@ -83,10 +85,14 @@ class ReplayPlaybackIndexConvergenceTest {
 
   @Test
   void existingIndexDefinitionDriftFailsStartupClosed() throws Exception {
-    DataSource dataSource = mockPostgresDataSource("CREATE INDEX idx_debug_sessions_playback_keyset ON debug_sessions (id)");
+    DataSource dataSource =
+        mockPostgresDataSource(
+            "CREATE INDEX idx_debug_sessions_playback_keyset ON debug_sessions (id)");
 
     IllegalStateException failure =
-        assertThrows(IllegalStateException.class, () -> new ReplayPlaybackIndexConvergence(dataSource).run(null));
+        assertThrows(
+            IllegalStateException.class,
+            () -> new ReplayPlaybackIndexConvergence(dataSource).run(null));
 
     assertTrue(failure.getCause().getMessage().contains("Playback index definition drift"));
     assertTrue(failure.getCause().getMessage().contains("idx_debug_sessions_playback_keyset"));

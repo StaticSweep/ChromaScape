@@ -41,7 +41,19 @@ class Micro6ExecutorReadinessEvaluatorTest {
     // script loop is alive, because readiness ordering is login → world → script → dispatch.
     Micro6ExecutorReadinessEvaluator.Evaluation result =
         Micro6ExecutorReadinessEvaluator.evaluate(
-            false, null, "accountbuilder_ready", "auto_login_in_progress", 1, 3, null, true, 360, 360, true, true, "RUNNING");
+            false,
+            null,
+            "accountbuilder_ready",
+            "auto_login_in_progress",
+            1,
+            3,
+            null,
+            true,
+            360,
+            360,
+            true,
+            true,
+            "RUNNING");
     assertThat(result.phase()).isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_LOGIN);
     assertThat(result.publishReady()).isFalse();
   }
@@ -50,7 +62,19 @@ class Micro6ExecutorReadinessEvaluatorTest {
   void missingLoginStateFailsClosed() {
     Micro6ExecutorReadinessEvaluator.Evaluation result =
         Micro6ExecutorReadinessEvaluator.evaluate(
-            false, null, ACCOUNTBUILDER_READY, null, null, null, null, true, 360, 360, true, true, "RUNNING");
+            false,
+            null,
+            ACCOUNTBUILDER_READY,
+            null,
+            null,
+            null,
+            null,
+            true,
+            360,
+            360,
+            true,
+            true,
+            "RUNNING");
     assertThat(result.publishReady()).isFalse();
     assertThat(result.phase()).isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_LOGIN);
   }
@@ -59,7 +83,19 @@ class Micro6ExecutorReadinessEvaluatorTest {
   void blankLoginStateFailsClosed() {
     Micro6ExecutorReadinessEvaluator.Evaluation result =
         Micro6ExecutorReadinessEvaluator.evaluate(
-            false, null, ACCOUNTBUILDER_READY, "   ", null, null, null, true, 360, 360, true, true, "RUNNING");
+            false,
+            null,
+            ACCOUNTBUILDER_READY,
+            "   ",
+            null,
+            null,
+            null,
+            true,
+            360,
+            360,
+            true,
+            true,
+            "RUNNING");
     assertThat(result.publishReady()).isFalse();
   }
 
@@ -75,7 +111,19 @@ class Micro6ExecutorReadinessEvaluatorTest {
   void worldMismatchIsNotReady() {
     Micro6ExecutorReadinessEvaluator.Evaluation result =
         Micro6ExecutorReadinessEvaluator.evaluate(
-            false, null, ACCOUNTBUILDER_READY, LOGGED_IN, null, null, null, false, 360, 301, true, true, "RUNNING");
+            false,
+            null,
+            ACCOUNTBUILDER_READY,
+            LOGGED_IN,
+            null,
+            null,
+            null,
+            false,
+            360,
+            301,
+            true,
+            true,
+            "RUNNING");
     assertThat(result.phase()).isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_WORLD);
     assertThat(result.publishReady()).isFalse();
   }
@@ -86,7 +134,19 @@ class Micro6ExecutorReadinessEvaluatorTest {
     // never be reported as ready even when the script loop is live.
     Micro6ExecutorReadinessEvaluator.Evaluation result =
         Micro6ExecutorReadinessEvaluator.evaluate(
-            false, null, ACCOUNTBUILDER_READY, LOGGED_IN, null, null, null, false, 360, 360, true, true, "RUNNING");
+            false,
+            null,
+            ACCOUNTBUILDER_READY,
+            LOGGED_IN,
+            null,
+            null,
+            null,
+            false,
+            360,
+            360,
+            true,
+            true,
+            "RUNNING");
     // worldMatched=false means the caller observed a mismatch; fail closed regardless of equality.
     assertThat(result.publishReady()).isFalse();
     assertThat(result.phase()).isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_WORLD);
@@ -96,7 +156,19 @@ class Micro6ExecutorReadinessEvaluatorTest {
   void deadScriptLoopIsNotReady() {
     Micro6ExecutorReadinessEvaluator.Evaluation result =
         Micro6ExecutorReadinessEvaluator.evaluate(
-            false, null, ACCOUNTBUILDER_READY, LOGGED_IN, null, null, null, true, 360, 360, true, false, "RUNNING");
+            false,
+            null,
+            ACCOUNTBUILDER_READY,
+            LOGGED_IN,
+            null,
+            null,
+            null,
+            true,
+            360,
+            360,
+            true,
+            false,
+            "RUNNING");
     assertThat(result.phase()).isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_SCRIPT);
     assertThat(result.publishReady()).isFalse();
   }
@@ -105,7 +177,19 @@ class Micro6ExecutorReadinessEvaluatorTest {
   void nonRunningLifecycleIsNotReady() {
     Micro6ExecutorReadinessEvaluator.Evaluation result =
         Micro6ExecutorReadinessEvaluator.evaluate(
-            false, null, ACCOUNTBUILDER_READY, LOGGED_IN, null, null, null, true, 360, 360, true, true, "STOPPED");
+            false,
+            null,
+            ACCOUNTBUILDER_READY,
+            LOGGED_IN,
+            null,
+            null,
+            null,
+            true,
+            360,
+            360,
+            true,
+            true,
+            "STOPPED");
     assertThat(result.phase()).isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_SCRIPT);
     assertThat(result.publishReady()).isFalse();
   }
@@ -115,7 +199,8 @@ class Micro6ExecutorReadinessEvaluatorTest {
     Micro6ExecutorReadinessEvaluator.Evaluation result =
         evaluate(true, LOGGED_IN, ACCOUNTBUILDER_READY, true);
     assertThat(result.publishReady()).isFalse();
-    assertThat(result.phase()).isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_DISPATCH);
+    assertThat(result.phase())
+        .isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_DISPATCH);
   }
 
   @Test
@@ -123,13 +208,13 @@ class Micro6ExecutorReadinessEvaluatorTest {
     Micro6ExecutorReadinessEvaluator.Evaluation result =
         evaluate(false, LOGGED_IN, "initializing_bot_logic", true);
     assertThat(result.publishReady()).isFalse();
-    assertThat(result.phase()).isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_DISPATCH);
+    assertThat(result.phase())
+        .isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_DISPATCH);
   }
 
   @Test
   void missingStartupStateFailsClosed() {
-    Micro6ExecutorReadinessEvaluator.Evaluation result =
-        evaluate(false, LOGGED_IN, null, true);
+    Micro6ExecutorReadinessEvaluator.Evaluation result = evaluate(false, LOGGED_IN, null, true);
     assertThat(result.publishReady()).isFalse();
   }
 
@@ -138,6 +223,7 @@ class Micro6ExecutorReadinessEvaluatorTest {
     Micro6ExecutorReadinessEvaluator.Evaluation result =
         evaluate(false, LOGGED_IN, ACCOUNTBUILDER_READY, false);
     assertThat(result.publishReady()).isFalse();
-    assertThat(result.phase()).isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_DISPATCH);
+    assertThat(result.phase())
+        .isEqualTo(Micro6ExecutorReadinessEvaluator.PHASE_WAITING_FOR_DISPATCH);
   }
 }

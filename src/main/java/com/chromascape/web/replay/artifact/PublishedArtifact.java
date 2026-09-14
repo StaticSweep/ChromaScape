@@ -39,12 +39,6 @@ public record PublishedArtifact(
       long sizeBytes,
       String mediaType) {
     this(
-        artifactRefId,
-        runId,
-        kind,
-        checksum,
-        sizeBytes,
-        mediaType,
-        PublicationDisposition.UNKNOWN);
+        artifactRefId, runId, kind, checksum, sizeBytes, mediaType, PublicationDisposition.UNKNOWN);
   }
 }

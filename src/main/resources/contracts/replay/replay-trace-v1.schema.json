@@ -54,6 +54,7 @@
       "properties": {
         "frameVersion": { "type": "integer", "const": 1 },
         "ordinal": { "type": "integer", "minimum": 0 },
+        "frameOrdinal": { "type": "integer", "minimum": 0 },
         "tick": { "type": "integer", "minimum": 0 },
         "observation": { "$ref": "#/$defs/observation" },
         "player": { "type": "object" },
@@ -85,6 +86,7 @@
         "previousChainHash": { "type": "string", "minLength": 1 },
         "stateHash": { "type": "string", "minLength": 1 },
         "actionDigest": { "type": ["string", "null"] },
+        "actionHash": { "type": ["string", "null"] },
         "chainHash": { "type": "string", "minLength": 1 },
         "sourceActionIndex": { "type": ["integer", "null"], "minimum": 0 }
       },

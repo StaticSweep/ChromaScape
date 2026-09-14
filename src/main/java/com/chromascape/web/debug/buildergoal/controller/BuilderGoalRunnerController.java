@@ -38,8 +38,7 @@ public class BuilderGoalRunnerController {
   private final Micro6OnlineClientRegistryService clientRegistryService;
   private final ObjectMapper objectMapper;
 
-  @Autowired
-  private BuilderGoalRepairPatchExportService repairPatchExportService;
+  @Autowired private BuilderGoalRepairPatchExportService repairPatchExportService;
 
   public BuilderGoalRunnerController(
       BuilderGoalRunnerService builderGoalRunnerService,
@@ -170,8 +169,7 @@ public class BuilderGoalRunnerController {
       // returns HTTP 202 immediately; the browser polls the operation via statusUrl.
       Map<String, Object> launchResponse =
           forceRelaunch
-              ? builderGoalRunnerService.launchAccount(
-                  accountId, launcherMachineUuid, world, true)
+              ? builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world, true)
               : builderGoalRunnerService.launchAccount(accountId, launcherMachineUuid, world);
       return ResponseEntity.accepted().body(launchResponse);
     } catch (BuilderGoalRunnerService.LaunchSubmissionException e) {
@@ -226,14 +224,16 @@ public class BuilderGoalRunnerController {
   public ResponseEntity<Object> runPayload(@RequestBody JsonNode payload) {
     try {
       if (payload == null || !payload.isObject()) {
-        return ResponseEntity.badRequest().body(Map.of("error", "run payload must be a JSON object"));
+        return ResponseEntity.badRequest()
+            .body(Map.of("error", "run payload must be a JSON object"));
       }
       ResponseEntity<Object> targetOverride = rejectTargetOverride(payload);
       if (targetOverride != null) {
         return targetOverride;
       }
       if (payload.has("forceRelaunch")) {
-        return ResponseEntity.badRequest().body(Map.of("error", "forceRelaunch is only supported by /launch-account"));
+        return ResponseEntity.badRequest()
+            .body(Map.of("error", "forceRelaunch is only supported by /launch-account"));
       }
       JsonNode settingsNode = payload.get("settings");
       if (settingsNode != null && !settingsNode.isObject()) {
@@ -246,11 +246,13 @@ public class BuilderGoalRunnerController {
           return nestedTargetOverride;
         }
         if (nestedBuilderPayload.has("forceRelaunch")) {
-          return ResponseEntity.badRequest().body(Map.of("error", "forceRelaunch is only supported by /launch-account"));
+          return ResponseEntity.badRequest()
+              .body(Map.of("error", "forceRelaunch is only supported by /launch-account"));
         }
         JsonNode nestedSettings = nestedBuilderPayload.get("settings");
         if (nestedSettings != null && !nestedSettings.isObject()) {
-          return ResponseEntity.badRequest().body(Map.of("error", "settings must be a JSON object"));
+          return ResponseEntity.badRequest()
+              .body(Map.of("error", "settings must be a JSON object"));
         }
       }
       String accountId = textValue(payload.path("accountId"));
@@ -323,7 +325,8 @@ public class BuilderGoalRunnerController {
   public ResponseEntity<Object> publishTask(@RequestBody JsonNode payload) {
     try {
       if (payload == null || !payload.isObject()) {
-        return ResponseEntity.badRequest().body(Map.of("error", "publish payload must be a JSON object"));
+        return ResponseEntity.badRequest()
+            .body(Map.of("error", "publish payload must be a JSON object"));
       }
       ResponseEntity<Object> targetOverride = rejectTargetOverride(payload);
       if (targetOverride != null) {
@@ -355,9 +358,7 @@ public class BuilderGoalRunnerController {
       }
       @SuppressWarnings("unchecked")
       Map<String, Object> settings =
-          settingsNode == null
-              ? Map.of()
-              : objectMapper.convertValue(settingsNode, Map.class);
+          settingsNode == null ? Map.of() : objectMapper.convertValue(settingsNode, Map.class);
       Map<String, Object> provenance = extractProvenance(payload);
       return ResponseEntity.ok(
           builderGoalRunnerService.publishOnly(
@@ -703,7 +704,8 @@ public class BuilderGoalRunnerController {
           .body(Map.of("error", sanitizeMessage(e.getMessage())));
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-          .body(Map.of("error", "Failed to resume builder goal run", "details", sanitizeFailure(e)));
+          .body(
+              Map.of("error", "Failed to resume builder goal run", "details", sanitizeFailure(e)));
     }
   }
 
@@ -770,15 +772,16 @@ public class BuilderGoalRunnerController {
           .body(
               Map.of(
                   "error", "TARGET_OVERRIDE_NOT_ALLOWED",
-                  "details", "Dispatch targets are selected only from a matching ready registry client."));
+                  "details",
+                      "Dispatch targets are selected only from a matching ready registry client."));
     }
     return null;
   }
 
   /**
-   * Caller-selected executor URLs are forbidden at every nesting level, including task_metadata
-   * and queue preview envelopes.  Checking only the top-level field leaves a bypass for clients
-   * that serialize the old builder_execution shape.
+   * Caller-selected executor URLs are forbidden at every nesting level, including task_metadata and
+   * queue preview envelopes. Checking only the top-level field leaves a bypass for clients that
+   * serialize the old builder_execution shape.
    */
   private boolean containsNonBlankTargetOverride(JsonNode node) {
     if (node == null || node.isNull()) {

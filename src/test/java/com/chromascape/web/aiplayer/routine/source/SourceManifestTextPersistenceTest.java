@@ -13,12 +13,13 @@ class SourceManifestTextPersistenceTest {
   void productionSizedJsonRoundTripsAsInlineText() throws Exception {
     try (var postgres = new PostgreSQLContainer<>("postgres:16-alpine")) {
       postgres.start();
-      var configuration = new Configuration()
-          .addAnnotatedClass(SourceManifestReference.class)
-          .setProperty("hibernate.connection.url", postgres.getJdbcUrl())
-          .setProperty("hibernate.connection.username", postgres.getUsername())
-          .setProperty("hibernate.connection.password", postgres.getPassword())
-          .setProperty("hibernate.hbm2ddl.auto", "create-drop");
+      var configuration =
+          new Configuration()
+              .addAnnotatedClass(SourceManifestReference.class)
+              .setProperty("hibernate.connection.url", postgres.getJdbcUrl())
+              .setProperty("hibernate.connection.username", postgres.getUsername())
+              .setProperty("hibernate.connection.password", postgres.getPassword())
+              .setProperty("hibernate.hbm2ddl.auto", "create-drop");
       try (var factory = configuration.buildSessionFactory()) {
         String json = "{\"source\":\"" + "x".repeat(15_300_000) + "\"}";
         var manifest = new SourceManifestReference();
@@ -44,13 +45,18 @@ class SourceManifestTextPersistenceTest {
         }
         // Reading outside an explicit transaction also proves JDBC is not dereferencing an OID.
         try (var session = factory.openSession()) {
-          assertEquals(json, session.find(SourceManifestReference.class, manifest.getId()).getManifestJson());
+          assertEquals(
+              json,
+              session.find(SourceManifestReference.class, manifest.getId()).getManifestJson());
         }
-        try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(),
-            postgres.getUsername(), postgres.getPassword());
+        try (var connection =
+                DriverManager.getConnection(
+                    postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
             var statement = connection.createStatement();
-            var result = statement.executeQuery("SELECT pg_typeof(manifest_json)::text, "
-                + "octet_length(manifest_json) FROM source_manifest_references")) {
+            var result =
+                statement.executeQuery(
+                    "SELECT pg_typeof(manifest_json)::text, "
+                        + "octet_length(manifest_json) FROM source_manifest_references")) {
           org.junit.jupiter.api.Assertions.assertTrue(result.next());
           assertEquals("text", result.getString(1));
           assertEquals(json.length(), result.getInt(2));

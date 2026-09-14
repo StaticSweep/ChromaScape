@@ -32,6 +32,9 @@ import java.util.TreeMap;
 final class Micro6CanonicalHash {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String SHA_256 = "SHA-256";
+  private static final String DEFAULT_CAPABILITY_VERSION = "micro6-executor/v1";
+  private static final Set<String> DEFAULT_EXCLUSIONS =
+      Set.of("generated_at", "source_timestamp", "ingest_timestamp", "run_id", "attempt_id");
   private static final String SCHEMA_STATE_AVAILABLE = "AVAILABLE";
   private static final String SCHEMA_STATE_NOT_APPLICABLE = "NOT_APPLICABLE";
   private static final String SCHEMA_STATE_ERROR = "ERROR";
@@ -55,9 +58,9 @@ final class Micro6CanonicalHash {
   }
 
   /**
-   * Canonical task summary fields used by {@link #catalogHash}. Must match the Micro6 {@code
-   * CanonicalCatalogModel.TASK_KEYS} exactly. The executor's catalog hash deliberately includes
-   * schema metadata, so this list must track the producer rather than a summary-only projection.
+   * Canonical task summary fields used by {@link #catalogHash}. These match Micro6's stable
+   * catalog identity projection: schema-bearing fields are excluded so lightweight, full, and
+   * health attestations retain one catalog hash while schema changes move the bundle hash.
    */
   static final Set<String> CATALOG_HASH_TASK_FIELDS =
       Set.of(
@@ -65,23 +68,20 @@ final class Micro6CanonicalHash {
           "task_key",
           "name",
           "display_name",
+          "panel_display_name",
           "category",
           "category_family",
           "enabled",
           "runnable",
+          "disabled_reason",
           "task_type",
           "type",
-          "target_enum",
           "search_aliases",
-          "args_schema",
-          "settings_schema_version",
-          "supports_task_metadata",
           "stability_tier",
           "tags",
           "membership",
           "primary_skill",
-          "description",
-          "certification_allowed");
+          "description");
 
   /**
    * Recomputes the canonical catalog hash over a parsed catalog payload. The stable map includes
@@ -92,7 +92,10 @@ final class Micro6CanonicalHash {
     String catalogVersion =
         firstNonBlank(text(payload.get("catalog_version")), text(payload.get("version")), "2");
     String capabilityVersion =
-        firstNonBlank(text(payload.get("capability_version")), defaultCapabilityVersion, "");
+        firstNonBlank(
+            text(payload.get("capability_version")),
+            defaultCapabilityVersion,
+            DEFAULT_CAPABILITY_VERSION);
 
     List<JsonNode> tasks = new ArrayList<>();
     JsonNode tasksNode = payload.get("tasks");
@@ -118,16 +121,13 @@ final class Micro6CanonicalHash {
     }
     List<Map<String, Object>> summaryAliases = new ArrayList<>();
     for (JsonNode alias : aliases) {
-      JsonNode aliasValue = alias.get("alias");
-      JsonNode taskKey = alias.get("task_key");
-      if (aliasValue != null && !aliasValue.isNull() && taskKey != null && !taskKey.isNull()) {
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("alias", nodeValue(aliasValue));
-        summary.put("task_key", nodeValue(taskKey));
-        summaryAliases.add(summary);
-      }
+      Map<String, Object> summary = new LinkedHashMap<>();
+      summary.put("alias", nodeValue(alias.get("alias")));
+      summary.put("normalized_alias", nodeValue(alias.get("normalized_alias")));
+      summary.put("task_key", nodeValue(alias.get("task_key")));
+      summaryAliases.add(summary);
     }
-    summaryAliases.sort(Comparator.comparing(row -> String.valueOf(row.get("alias"))));
+    summaryAliases.sort(Comparator.comparing(row -> String.valueOf(row.get("normalized_alias"))));
 
     Map<String, Object> stable = new LinkedHashMap<>();
     stable.put("catalog_version", catalogVersion);
@@ -163,7 +163,9 @@ final class Micro6CanonicalHash {
       entry.put("task_key", nodeValue(task.get("task_key")));
       entry.put("settings_schema_version", nodeValue(task.get("settings_schema_version")));
       entry.put("settings_schema_hash", nodeValue(task.get("settings_schema_hash")));
-      entry.put("args_schema", nodeValue(argsSchema));
+      // Micro6 publishes a canonical schema already; applying the same canonicalization again is
+      // idempotent and also keeps verification deterministic for equivalent JSON field ordering.
+      entry.put("args_schema", nodeValue(canonicalizeSchema(argsSchema)));
       schemaTasks.add(entry);
     }
     if (schemaTasks.isEmpty()) {
@@ -200,7 +202,7 @@ final class Micro6CanonicalHash {
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> entry = fields.next();
         String key = normalize(entry.getKey());
-        if (key == null) {
+        if (key == null || DEFAULT_EXCLUSIONS.contains(key)) {
           continue;
         }
         sorted.put(key, entry.getValue());

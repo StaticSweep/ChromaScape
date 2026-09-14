@@ -3,12 +3,12 @@ package com.chromascape.web.accounttask.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.web.accounttask.entity.StabilizationArtifact;
+import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
-import com.chromascape.web.accounttask.entity.StabilizationArtifact;
-import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,7 +31,8 @@ class StabilizationRecoverySweeperTest {
   @Test
   @DisplayName("orphaned final and staging files are removed while verified artifacts are kept")
   void sweeperRemovesOrphansAndKeepsVerified() throws Exception {
-    StabilizationArtifactStore store = new StabilizationArtifactStore(tempDir.resolve("store").toString());
+    StabilizationArtifactStore store =
+        new StabilizationArtifactStore(tempDir.resolve("store").toString());
     Path baseDir = store.baseDir();
     Files.createDirectories(baseDir);
     Path staging = store.stagingDir();

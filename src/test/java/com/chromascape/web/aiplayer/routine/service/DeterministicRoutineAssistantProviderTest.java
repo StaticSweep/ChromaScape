@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,7 +36,8 @@ class DeterministicRoutineAssistantProviderTest {
     return proposal;
   }
 
-  private static Map<String, Object> node(String id, String type, long ordinal, Map<String, Object> semantics) {
+  private static Map<String, Object> node(
+      String id, String type, long ordinal, Map<String, Object> semantics) {
     Map<String, Object> node = new LinkedHashMap<>();
     node.put("id", id);
     node.put("type", type);

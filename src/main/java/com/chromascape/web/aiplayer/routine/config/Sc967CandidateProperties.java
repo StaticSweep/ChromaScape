@@ -8,11 +8,11 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Typed binding for the SC-967 candidate build gate.
  *
- * <p>Relaxed binding means the documented environment variables bind directly:
- * {@code SC967_CANDIDATE_BUILDS_ENABLED} → {@code sc967.candidate.builds-enabled} and
- * {@code SC967_CANDIDATE_STAGING_ROOT} → {@code sc967.candidate.staging-root}. The previous
- * flattened {@code @Value} keys ({@code sc967.candidate-builds-enabled}) never matched the YAML
- * tree and silently defaulted the gate to disabled.
+ * <p>Relaxed binding means the documented environment variables bind directly: {@code
+ * SC967_CANDIDATE_BUILDS_ENABLED} → {@code sc967.candidate.builds-enabled} and {@code
+ * SC967_CANDIDATE_STAGING_ROOT} → {@code sc967.candidate.staging-root}. The previous flattened
+ * {@code @Value} keys ({@code sc967.candidate-builds-enabled}) never matched the YAML tree and
+ * silently defaulted the gate to disabled.
  *
  * <p>Bean validation is conditional: the cross-field constraint only fires when candidate builds
  * are enabled. With builds disabled (the default) an empty staging root is valid. The {@link
@@ -31,7 +31,9 @@ public class Sc967CandidateProperties {
    */
   private boolean buildsEnabled = false;
 
-  /** Persistent root for durable candidate registration bundles (required when builds are enabled). */
+  /**
+   * Persistent root for durable candidate registration bundles (required when builds are enabled).
+   */
   private String stagingRoot = "";
 
   public boolean isBuildsEnabled() {
@@ -51,7 +53,9 @@ public class Sc967CandidateProperties {
   }
 
   /** A staging root is only required when candidate builds are enabled. */
-  @AssertTrue(message = "sc967.candidate.staging-root (SC967_CANDIDATE_STAGING_ROOT) is required when candidate builds are enabled")
+  @AssertTrue(
+      message =
+          "sc967.candidate.staging-root (SC967_CANDIDATE_STAGING_ROOT) is required when candidate builds are enabled")
   public boolean isStagingRootValidWhenBuildsEnabled() {
     return !buildsEnabled || (stagingRoot != null && !stagingRoot.isBlank());
   }

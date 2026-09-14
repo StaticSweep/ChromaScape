@@ -11,8 +11,12 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PacketObservationRepository extends JpaRepository<PacketObservation, Long> {
 
-  Optional<PacketObservation> findBySessionIdAndSourceSessionIdAndPacketSequence(
-      String sessionId, String sourceSessionId, Long packetSequence);
+  Optional<PacketObservation> findBySessionIdAndSourceSessionIdAndPacketSchemaAndPacketSequence(
+      String sessionId, String sourceSessionId, String packetSchema, Long packetSequence);
+
+  Optional<PacketObservation>
+      findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
+          String sessionId, String sourceSessionId, String packetSchema, Long observationSequence);
 
   List<PacketObservation> findBySessionIdAndTickOrderByPacketSequenceAsc(
       String sessionId, Long tick);
@@ -48,6 +52,48 @@ public interface PacketObservationRepository extends JpaRepository<PacketObserva
       @Param("search") String search,
       @Param("resumeTick") Long resumeTick,
       @Param("resumeSequence") Long resumeSequence,
+      @Param("resumeId") Long resumeId,
+      org.springframework.data.domain.Pageable pageable);
+
+  /**
+   * Deterministic v2-aware pagination order. The cursor fields are deliberately identical to the
+   * ORDER BY tuple so a row can neither be skipped nor returned twice when sources are interleaved.
+   */
+  @Query(
+      "SELECT p FROM PacketObservation p WHERE p.sessionId = :sessionId"
+          + " AND (:tick IS NULL OR p.tick = :tick)"
+          + " AND (:startTick IS NULL OR p.tick >= :startTick)"
+          + " AND (:endTick IS NULL OR p.tick <= :endTick)"
+          + " AND (:direction IS NULL OR p.direction = :direction)"
+          + " AND (:protocolName IS NULL OR LOWER(p.protocolName) LIKE LOWER(CONCAT('%', :protocolName, '%')))"
+          + " AND (:opcode IS NULL OR p.opcode = :opcode)"
+          + " AND (:decodeStatus IS NULL OR p.decodeStatus = :decodeStatus)"
+          + " AND (:search IS NULL OR LOWER(p.protocolName) LIKE LOWER(CONCAT('%', :search, '%'))"
+          + " OR (p.decodedType IS NOT NULL AND LOWER(p.decodedType) LIKE LOWER(CONCAT('%', :search, '%')))"
+          + " OR (p.decodeError IS NOT NULL AND LOWER(p.decodeError) LIKE LOWER(CONCAT('%', :search, '%'))))"
+          + " AND (:resumeTick IS NULL OR p.tick > :resumeTick"
+          + " OR (p.tick = :resumeTick AND (p.sourceSessionId > :resumeSourceSessionId"
+          + " OR (p.sourceSessionId = :resumeSourceSessionId AND p.packetSchema > :resumeSchema)"
+          + " OR (p.sourceSessionId = :resumeSourceSessionId AND p.packetSchema = :resumeSchema"
+          + " AND p.observationSequence > :resumeObservationSequence)"
+          + " OR (p.sourceSessionId = :resumeSourceSessionId AND p.packetSchema = :resumeSchema"
+          + " AND p.observationSequence = :resumeObservationSequence AND p.id > :resumeId))))"
+          + " ORDER BY p.tick ASC, p.sourceSessionId ASC, p.packetSchema ASC,"
+          + " p.observationSequence ASC, p.id ASC")
+  List<PacketObservation> searchPacketsPageOrdered(
+      @Param("sessionId") String sessionId,
+      @Param("tick") Long tick,
+      @Param("startTick") Long startTick,
+      @Param("endTick") Long endTick,
+      @Param("direction") String direction,
+      @Param("protocolName") String protocolName,
+      @Param("opcode") Integer opcode,
+      @Param("decodeStatus") String decodeStatus,
+      @Param("search") String search,
+      @Param("resumeTick") Long resumeTick,
+      @Param("resumeSourceSessionId") String resumeSourceSessionId,
+      @Param("resumeSchema") String resumeSchema,
+      @Param("resumeObservationSequence") Long resumeObservationSequence,
       @Param("resumeId") Long resumeId,
       org.springframework.data.domain.Pageable pageable);
 

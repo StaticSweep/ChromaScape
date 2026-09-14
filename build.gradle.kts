@@ -105,6 +105,7 @@ dependencies {
 
 tasks.test {
 	useJUnitPlatform()
+	maxHeapSize = providers.gradleProperty("testMaxHeapSize").orElse("512m").get()
 	// Required for Mockito inline mock-maker to attach to running JVM
 	// Used by tests that mock final classes and static methods
 	jvmArgs("-Djdk.attach.allowAttachSelf=true")

@@ -11,7 +11,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -104,7 +103,7 @@ class ProviderRuntimeBoundaryTest {
   }
 
   @Test
-  void processRunnerBoundsOutputAndClassifiesTimeoutAsUncertain() {
+  void processRunnerBoundsOutputAndClassifiesTimeoutAsUncertain() throws Exception {
     ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
     properties.setWorkRoot(temporary.resolve("work"));
     properties.setMaxStdoutBytes(4096);
@@ -116,11 +115,15 @@ class ProviderRuntimeBoundaryTest {
         runner.run("turn-success", echo, List.of(), "decision", Instant.now().plusSeconds(10));
     assertTrue(success.submitted());
     assertTrue(success.terminal());
-    assertEquals("decision", success.stdout());
+    assertEquals("decision", success.stdout().strip(), success::toString);
 
     var overflow =
         runner.run(
-            "turn-overflow", echo, List.of(), "x".repeat(5000), Instant.now().plusSeconds(10));
+            "turn-overflow",
+            fixtureCommand("overflow"),
+            List.of(),
+            "x".repeat(5000),
+            Instant.now().plusSeconds(10));
     assertEquals(ProviderRuntimeModels.FailureCode.INVALID_OUTPUT, overflow.failureCode());
 
     var timeout =
@@ -130,17 +133,28 @@ class ProviderRuntimeBoundaryTest {
     assertEquals(ProviderRuntimeModels.FailureCode.UNKNOWN_PROVIDER_OUTCOME, timeout.failureCode());
   }
 
-  private List<String> fixtureCommand(String mode) {
-    List<String> command = new ArrayList<>();
-    command.add(
+  private List<String> fixtureCommand(String mode) throws Exception {
+    if (isWindows()) {
+      String command =
+          switch (mode) {
+            case "sleep" -> "ping -n 11 127.0.0.1 >nul";
+            case "overflow" -> "echo " + "x".repeat(5000);
+            default -> "echo decision";
+          };
+      return List.of(System.getenv("ComSpec"), "/d", "/c", command);
+    }
+    return List.of(
+        ProcessHandle.current().info().command().orElseThrow(),
+        "-cp",
         java.nio.file.Path.of(
-                System.getProperty("java.home"), "bin", isWindows() ? "java.exe" : "java")
-            .toString());
-    command.add("-cp");
-    command.add(System.getProperty("java.class.path"));
-    command.add(ProviderProcessFixture.class.getName());
-    command.add(mode);
-    return command;
+                ProviderProcessFixture.class
+                    .getProtectionDomain()
+                    .getCodeSource()
+                    .getLocation()
+                    .toURI())
+            .toString(),
+        ProviderProcessFixture.class.getName(),
+        mode);
   }
 
   private boolean isWindows() {

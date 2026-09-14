@@ -35,9 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Reads captured debugger evidence for observed playback.
  *
- * <p>This service is deliberately independent of any runtime process. Causal simulation is
- * provided by the xRSPS worker; this path only exposes the original recording's bounded,
- * read-only tick frames to the debugger.
+ * <p>This service is deliberately independent of any runtime process. Causal simulation is provided
+ * by the xRSPS worker; this path only exposes the original recording's bounded, read-only tick
+ * frames to the debugger.
  */
 @Service
 @Transactional(readOnly = true)
@@ -271,6 +271,9 @@ public class ReplayPlaybackService {
     frame.setCooldowns(objectOrEmpty(snapshot.getCooldowns()));
     frame.setQuest(objectOrEmpty(snapshot.getQuest()));
     frame.setQuestHelper(objectOrEmpty(snapshot.getQuestHelper()));
+    frame.setDialogue(objectOrEmpty(snapshot.getDialogue()));
+    frame.setSpells(arrayOrEmpty(snapshot.getSpells()));
+    frame.setVars(objectOrEmpty(snapshot.getVars()));
     frame.setNpcs(arrayOrEmpty(snapshot.getNpcs()));
     frame.setGameObjects(arrayOrEmpty(snapshot.getGameObjects()));
     frame.setGroundObjects(arrayOrEmpty(snapshot.getGroundObjects()));
@@ -368,8 +371,7 @@ public class ReplayPlaybackService {
   private static String requireRecordingId(String recordingId) {
     String normalized = normalizeOptional(recordingId);
     if (normalized == null) {
-      throw ReplayException.badRequest(
-          ReplayErrorCode.VALIDATION_ERROR, "recordingId is required");
+      throw ReplayException.badRequest(ReplayErrorCode.VALIDATION_ERROR, "recordingId is required");
     }
     return normalized;
   }
@@ -411,7 +413,8 @@ public class ReplayPlaybackService {
       Long cursorId = asLong(row[0]);
       LocalDateTime startTime = asDateTime(row[5]);
       if (cursorId == null || cursorId <= 0 || startTime == null) {
-        throw new IllegalStateException("Playback catalog projection returned an invalid cursor tuple");
+        throw new IllegalStateException(
+            "Playback catalog projection returned an invalid cursor tuple");
       }
       return new CatalogRow(
           cursorId,
