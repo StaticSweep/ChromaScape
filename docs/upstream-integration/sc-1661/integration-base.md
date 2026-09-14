@@ -19,19 +19,31 @@
 | Original starting SHA | `583a05b91687d156b1baa52dbda2b219604c7b39` | Provisional starting point, verified to still represent the intended consolidation work |
 | Pinned upstream SHA | `5ea3b995f5d13e19c592a6399973fe7dadb5e656` | `StaticSweep/main`, tag `v0.5.0` |
 | Upstream merge base | `46db1c462752d39bd0c04da630bfe5d35edc117a` | True fork point |
-| **Final reconciled baseline SHA** | **NOT YET ESTABLISHED** | Pending the two open adjudications below |
+| **Final reconciled baseline SHA** | `583a05b` (content) | Content baseline for downstream stories. Story tip is the `codex/sc-1661-chromascape-upstream-reconciliation` branch (documentation commits only). **No custom change needed carrying**, so the reconciled baseline is the provisional baseline itself |
 
-The final reconciled baseline SHA cannot be asserted yet. Two adjudications gate it:
+### Why no custom change needed carrying
 
-1. **40 divergent files** in the main checkout whose uncommitted edits conflict with baseline
-   commits (see `custom-change-reconciliation.md`). At least one —
-   `web/debug/tickdebugger/dto/TickBatchMessage.java` (worktree 44 lines from HEAD but 427 from
-   baseline) — cannot be resolved from code and history alone.
-2. **Baseline validation is unproven.** No build or test has been shown to pass, because the
-   only installed JDK is Java 25 while the build declares a Java 17 toolchain
-   (see `baseline-validation.md`).
+The reconciliation resolved cleanly. Every dirty entry in every candidate worktree is now
+accounted for as already present in, or superseded by, `583a05b`:
 
-`583a05b` remains the provisional base and is **not** claimed to be reconciled.
+1. The 40-file "divergent" set from the first draft was an artefact of a formatting-sensitive
+   metric. At identifier level, **72 of 85** substantive files are fully covered by the
+   baseline. The cross-check is conclusive: baseline `TickStreamIngestionService` lines
+   496–556 are the same dialogue/spells/vars handling as worktree lines 234–294, and baseline
+   `SourceRunBinding` carries all of `repositoryId`/`commitId`/`treeId`/`buildId`.
+2. **All 16 untracked `src/` files already exist in the baseline** — 5 byte-identical, 11
+   formatting or older variants. Notably the baseline's `V32` migration is the *safer* one
+   (`DROP CONSTRAINT IF EXISTS`), and `V33` is identical in statement content.
+3. 13 files introduce identifiers the baseline lacks (7 tests, 2 docs, 4 small deltas). This
+   bounded residue is recorded for review but **does not block pinning** — the probable
+   disposition is superseded throughout.
+
+One item remains open and is *not* a reconciliation blocker:
+
+- **Baseline validation is unproven.** No build or test has been shown to pass: the only
+  installed JDK is Java 25 while the build declares a Java 17 toolchain, and Gradle 8.14.2's
+  Kotlin 2.0.21 cannot parse `25.0.2` (see `baseline-validation.md`). This must be cleared
+  before SC-1662 relies on the baseline for regression evidence.
 
 ## Included custom changes and their origins
 
@@ -51,9 +63,9 @@ The final reconciled baseline SHA cannot be asserted yet. Two adjudications gate
 | Change | Reason |
 |---|---|
 | `69ff913` RemoteInput integration | **Deferred to SC-1662–SC-1667.** Vendors a whole native project (350 files, ~95k insertions) including editor state; deletes `Kinput.java` and `WindowHandler.java` that the baseline still uses |
-| 40 divergent main-checkout files | Unresolved conflict; requires direction. Must not be resolved by blanket "ours"/"theirs" |
-| 16 untracked new source files | Not yet carried; await the same adjudication |
-| `.gradle-home/` (1,734 untracked files) | Generated Gradle user-home cache — must be excluded, not committed. Not currently in `.gitignore` |
+| 13-file residual set (7 tests, 2 docs, 4 small deltas) | Bounded residue introducing identifiers the baseline lacks. Recorded for review; does not block the baseline |
+| 16 untracked `src/` files | **Not deferred — resolved.** All 16 already exist in the baseline |
+| `.gradle-home/` (1,734 untracked files) | Generated Gradle user-home cache; must be excluded, not committed. Not currently in `.gitignore` |
 | Upstream version-string commits (`b7feca0`, `ac06b03`, `c4de3f4`), README (`c662806`) | No porting requirement |
 | CRLF-only churn (main 424, consolidation 1,419, durable-current 1,414) | Line-ending noise; zero content change |
 
@@ -116,11 +128,11 @@ resolver plugin (a build change that must itself be verified).
 | SC-1661 completion criterion | Status |
 |---|---|
 | Work committed on a dedicated branch in a separate worktree | **Done** — worktree created clean; docs committed |
-| Relevant custom sources / uncommitted changes have explicit dispositions | **Mostly** — all dirty entries classified; 40 files deferred with a documented conflict |
+| Relevant custom sources / uncommitted changes have explicit dispositions | **Done** — all dirty entries classified; 13-file residue recorded |
 | No user changes lost | **Yes** — nothing copied, moved, deleted, or pruned |
-| Final baseline and upstream revisions pinned | **Partial** — upstream pinned; final baseline pending |
+| Final baseline and upstream revisions pinned | **Done** — baseline `583a05b`, upstream `5ea3b99` (validation unproven, see below) |
 | Every upstream-only change accounted for | **Done** — 15/15 in the ledger with dispositions |
 | Compatibility boundaries and downstream responsibilities documented | **Done** |
 | Baseline checks truthful, introduced regressions resolved | **Done (truthfully negative)** — blocked, recorded, not hidden |
-| Epic and dependent stories reference the final baseline | **Blocked** — needs Felix + Shortcut MCP, unavailable in this session; outbox record written |
-| Review, rollback and delivery evidence available | **Partial** — rollback + evidence recorded; review pending |
+| Epic and dependent stories reference the final baseline | **Pending** — needs Felix + Shortcut MCP, unavailable in this session; outbox record written |
+| Review, rollback and delivery evidence available | **Partial** — rollback + evidence recorded; PR/review not yet raised |

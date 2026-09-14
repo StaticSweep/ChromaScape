@@ -45,49 +45,76 @@ baseline (`583a05b`):
 | Classification | Count | Meaning |
 |---|---|---|
 | `ALREADY-IN-BASELINE` | 21 | Worktree content is byte-identical to the baseline; the edit is already represented by baseline commits |
-| `NEW-UNCOMMITTED-WORK` | **0** | No file exists whose edit is absent from an unchanged baseline |
+| `NEW-UNCOMMITTED-WORK` | **0** | This test required `HEAD == baseline` and so never fired; it proves nothing on its own. See the identifier-level analysis below for the real residue (13 files) |
 | `BOTH-CHANGED-REVIEW` | 64 | Baseline and worktree both moved; requires per-file adjudication |
 | `deleted in worktree, absent from baseline` | 2 | Two SC-1199 outbox records moved out of `felix-sync/pending/` |
 
-**No uncommitted edit in the main checkout is uniquely held.** Every one of the 87 either
-already exists in the baseline or overlaps a baseline commit.
+### Adjudication of the 64 both-changed files
 
-The 64 overlapping files were further split by which revision the worktree is closer to:
+Four progressively stricter tests were run. Each overturned the previous one's conclusion, so
+the final result is materially narrower than the first passes suggested. **The first two
+readings recorded in earlier drafts of this document were wrong and are corrected here.**
 
-| Sub-classification | Count | Meaning |
-|---|---|---|
-| Superseded by baseline (`wt_vs_base < wt_vs_head`) | 24 | Baseline absorbed the edit; worktree is an earlier state |
-| Divergent, review needed (`wt_vs_base > wt_vs_head`) | 40 | Baseline took a different path; content conflicts with the worktree edit |
-
-All 64 have at least one baseline commit touching them since `7ab2a80`, which is consistent
-with the baseline having been cut from the same edit sessions.
-
-Representative evidence:
-
-| File | lines wt↔baseline | lines wt↔HEAD | Reading |
+| Test | Method | Result | Why it is not decisive on its own |
 |---|---|---|---|
-| `web/config/SourceTrustProperties.java` | 2 | 62 | Baseline effectively equals the worktree edit — superseded |
-| `web/replay/worker/ReplayWorker.java` | 15 | 33 | Baseline close to worktree — superseded |
-| `web/debug/tickdebugger/dto/TickBatchMessage.java` | 427 | 44 | Baseline diverged substantially; worktree edit not reflected |
+| Raw line-count | `wt_vs_base` vs `wt_vs_head` | 24 superseded / 40 "divergent" | Cannot separate "the baseline rewrote more" from "the worktree holds unique work" |
+| Three-way merge | `git merge-file` (worktree, HEAD, baseline) | 5 clean / **35 conflict** | A conflict is *expected* when the baseline committed a superset of the same edits — both sides touched the same regions |
+| Whole-line set | lines added by the worktree that are absent from the baseline | 53 files | Formatting-sensitive: any leading-whitespace difference counts as "unique" |
+| **Identifier set** | identifiers added by the worktree that are absent from the baseline | **13 files** | Identifiers survive reformatting — decisive |
 
-The 40 divergent files are dominated by the SC-810 source-provenance surface
-(`routine/source/*`, `SourceManifest*`, `Source*Test`) and the `TickBatchMessage` /
-`TickStreamIngestionService` durable tick-batch pair.
+The decisive cross-check, which exposes why the earlier tests over-reported:
 
-### Unresolved conflict requiring direction
+- Baseline `TickStreamIngestionService` lines 496–556 are the **same** dialogue/spells/vars
+  handling as worktree lines 234–294 — same section checks, same snapshot setters.
+- Baseline `SourceRunBinding` carries **all** of `repositoryId`, `commitId`, `treeId`,
+  `buildId`; the worktree only writes them as compact
+  `@Column(...) private String x;` one-liners where the baseline uses separate annotated
+  lines. Identical feature, different formatting.
+- `TickSnapshot` is byte-comparable in both.
 
-`src/main/java/com/chromascape/web/debug/tickdebugger/dto/TickBatchMessage.java` cannot be
-resolved from code and history alone:
+The worktree edits are therefore early, smaller, differently-formatted stages of work the
+baseline later completed and committed. All 64 overlapping files have at least one baseline
+commit touching them since `7ab2a80`, consistent with the baseline having been cut from the
+same edit sessions.
 
-- main worktree carries a 44-line uncommitted edit against `7ab2a80`;
-- the baseline is 427 lines away from that worktree state and has 2 commits touching the
-  file since `7ab2a80` (the SC-1199 durable tick-batch lineage);
-- the worktree edit is therefore neither present in nor obviously superseded by the
-  baseline's rewritten version.
+Representative sizes — worktree's own edit versus the baseline's change, both measured against
+`7ab2a80`. In every one of the 40 the baseline's change is far larger, which is the signature
+of the worktree holding an earlier, smaller stage of the same work:
 
-Per the story instructions this specific conflict is recorded rather than silently resolved
-with a blanket "ours"/"theirs" choice. The same adjudication is required, en bloc, for the 40
-divergent files before the main checkout can be declared fully reconciled.
+| File | Worktree edit | Baseline change | Identifier verdict |
+|---|---|---|---|
+| `.../routine/service/PatchCandidateWorkflowService.java` | 18 | 1001 | covered by baseline |
+| `.../tickdebugger/service/TickStreamIngestionService.java` | 11 | 863 | covered by baseline |
+| `.../tickdebugger/dto/TickBatchMessage.java` | 44 | 469 | covered by baseline |
+| `.../routine/source/SourceRetentionService.java` | 5 | 79 | covered by baseline |
+
+### Residual work needing direction (13 files, bounded)
+
+Not everything is cleanly superseded. Exactly **13 of the 85** substantive modified files
+introduce identifiers the baseline lacks. Only these require adjudication:
+
+| File | Identifiers absent from baseline | Reading |
+|---|---|---|
+| `src/test/.../source/SourceRunOrchestrationIntegrationTest.java` | 106 | Different test-method names (e.g. `captureCompletionRollsBackSourceRunAndCaptureWritesBeforeRecordingUncertain`) and injected services (`CaptureOperationResultService`, `CaptureRecordingGateway`) |
+| `src/main/.../source/TaskSourceManifestVerifier.java` | 16 | `ByteBuffer`, `StandardCharsets`, `CodingErrorAction`, `CharacterCodingException`, `charset`, `supportedSchema` — a charset-decoding **implementation** difference, not a missing feature |
+| `docs/SC-810-SOURCE-PROVENANCE.md` | 10 | Prose |
+| `docs/adr/SC-810-source-provenance-and-signing.md` | 9 | Prose |
+| `src/test/.../source/TaskSourceManifestVerifierTest.java` | 3 | Test naming |
+| `src/test/.../capability/XrspsStartupValidatorTest.java` | 3 | Test naming |
+| `src/test/.../capability/XrspsStartupValidatorCapabilityContractTest.java` | 3 | Test naming |
+| `src/main/.../replay/capability/CapabilityManifest.java` | 2 | Small |
+| `src/test/.../source/SourceFetchTransactionSuspensionTest.java` | 2 | Test naming |
+| `src/test/.../source/SourceManifestConcurrentPersistenceIntegrationTest.java` | 2 | Test naming |
+| `src/main/.../source/SourceManifestContract.java` | 1 | Small |
+| `src/main/.../accountbuilder/InMemoryAccountBuilderOrchestrationStore.java` | 1 | Small |
+| `src/test/.../testsupport/IsolatedPostgresTestDatabase.java` | 1 | Small |
+
+Seven are test files, two are design documents, and four are one- or two-identifier deltas.
+The probable disposition is *superseded* throughout, but whether the baseline's later rewrite
+intentionally dropped the worktree's test coverage or its stricter charset-decoding variant is
+a judgement call. It is recorded rather than resolved with a blanket "ours"/"theirs" choice.
+
+This residue is small and does **not** block pinning the baseline.
 
 ## Uncommitted work inventory (required fields)
 
@@ -95,21 +122,36 @@ divergent files before the main checkout can be declared fully reconciled.
 |---|---|---|---|---|---|---|
 | Main checkout | 424 CRLF-only modified files | unstaged | none (EOL only) | n/a | **Defer / drop** — no content change | `git diff --ignore-cr-at-eol` empty for these paths |
 | Main checkout | 21 files identical to baseline | unstaged | SC-810 source provenance, replay capability | **Yes** — baseline `583a05b` | **Already included** | `diff --strip-trailing-cr` = identical |
-| Main checkout | 24 files closer to baseline than HEAD | unstaged | SC-810 / replay / orchestration | **Yes** — baseline commits since `7ab2a80` | **Superseded** (confirm per-file before closing) | `both64.txt` evidence, supersession metric |
-| Main checkout | 40 divergent files (SC-810 source surface, `TickBatchMessage`, tick ingestion) | unstaged | Source-manifest trust, tick-batch DTO | **Partial / conflict** | **Defer — needs direction** | listed in `both64.txt`; see conflict above |
+| Main checkout | 51 files whose worktree edit is fully covered by the baseline at whole-line level (72 of 85 at identifier level) | unstaged | SC-810 source provenance, replay, orchestration | **Yes** — baseline commits since `7ab2a80` | **Superseded** | identifier-set test; see adjudication above |
+| Main checkout | 13 files introducing identifiers the baseline lacks (7 tests, 2 docs, 4 small) | unstaged | Test coverage, source-manifest charset decoding | **Partial** | **Defer — bounded residue, needs direction** | `ident-missing.txt`; see residual section |
 | Main checkout | `docs/builderflow/felix-sync/pending/*sc-1199*.md` (2) | unstaged deletion | Felix outbox bookkeeping | Yes — records now under `felix-sync/synced/sc-1199/` | **Already included** (deletion consistent with baseline) | absent from `583a05b`; synced copies present |
 | Main checkout | `.gradle-home/` (1,734 files) | untracked | none — Gradle user-home cache | n/a | **Exclude — generated** | `caches/8.14.2/...*.bin`, `*.pom`, `*.marker`; not yet in `.gitignore` |
-| Main checkout | 16 new source files under `src/` | untracked | see below | **No** | **Carry — deliberate** | see next table |
+| Main checkout | 16 untracked files under `src/` | untracked | schema validation, replay actions, migrations, orchestration tests | **Yes** — all 16 exist in the baseline (5 byte-identical, 11 formatting/older variants) | **Already included — nothing to carry** | `git cat-file -e 583a05b:<path>` for all 16; see next section |
 | Main checkout | 59 untracked files under `docs/` | untracked | Felix notes, felix-sync outbox records, SC-810 spec | No | **Carry selectively — bookkeeping, not code** | `felix-notes/`, `felix-sync/` |
 | Consolidation | 1,419 modified files | unstaged | none (EOL only) | n/a | **Already included** | `git diff --ignore-cr-at-eol --stat` empty |
 | Consolidation | 1 untracked entry (2 files) | untracked | n/a | n/a | **Defer — inspect before any copy** | counted, not copied |
 | Durable-current | 1,414 modified files | unstaged | none (EOL only) | n/a | **Already included** | `git diff --ignore-cr-at-eol --stat` empty |
 | Fedora worktree | none | — | — | — | clean worktree | `git status --porcelain` = 0 |
 
-### Untracked new source in the main checkout (16 files, not in the baseline)
+### Untracked source in the main checkout (16 files — all already in the baseline)
 
-These are genuinely new files with no committed representation and are the only main-checkout
-source additions eligible to be carried forward:
+These present as new files in the main checkout, but **every one already exists in the
+baseline**. Five are byte-identical; eleven differ only in formatting, or in the baseline
+being the improved version:
+
+| File | Verdict |
+|---|---|
+| `.../accountbuilder/AccountBuilderAuthorityVerifier.java` | byte-identical |
+| `.../compiler/action/InteractInventoryItemAction.java` | byte-identical |
+| `.../compiler/action/InteractWidgetAction.java` | byte-identical |
+| `.../compiler/action/SelectDialogueOptionAction.java` | byte-identical |
+| `.../accountbuilder/AccountBuilderPostgresTestFixtures.java` | byte-identical |
+| `.../db/migration/V32__sc1431_recovery_correlation.sql` | baseline uses `DROP CONSTRAINT IF EXISTS`; worktree uses the non-idempotent `DROP CONSTRAINT`. **Baseline is safer** |
+| `.../db/migration/V33__replay_snapshot_state_sections.sql` | identical statement content; diff is only CHECK-constraint line wrapping |
+| the remaining 9 (schema validator, NPC-pin validator, 6 action classes, 3 orchestration tests, manifest test) | formatting-level differences only |
+
+So **nothing from this group needs carrying** — the earlier draft's claim that these were
+"genuinely new files with no committed representation" was wrong.
 
 - `src/main/java/com/chromascape/web/aiplayer/routine/source/SourceManifestSchemaValidator.java`
 - `src/main/java/com/chromascape/web/gameplay/orchestration/accountbuilder/AccountBuilderAuthorityVerifier.java`
@@ -128,9 +170,9 @@ source additions eligible to be carried forward:
 - `src/test/java/com/chromascape/web/gameplay/orchestration/accountbuilder/AccountBuilderPostgresTestFixtures.java`
 - `src/test/java/com/chromascape/web/replay/manifest/ScenarioManifestV2CompilerTest.java`
 
-**Not yet carried.** These 16 files plus the 40 divergent files require the adjudication
-decision recorded above before they are committed to the story branch. They were deliberately
-*not* copied wholesale, per the instruction not to copy entire dirty trees.
+**Nothing is carried from this group.** The list is retained only to show the files were
+individually examined, not copied wholesale, per the instruction not to copy entire dirty
+trees.
 
 ## Secrets check
 
@@ -173,7 +215,7 @@ must be an **Adapt**, not a blind cherry-pick. The Fedora `97284f1` is the publi
 | `origin/main` / `origin/main2` | **Already included** | 0 target-only commits vs baseline |
 | Consolidation CRLF noise | **Already included / drop** | EOL-only |
 | Main-checkout CRLF noise | **Drop** | EOL-only |
-| Main-checkout 40 divergent files | **Defer** | Conflict recorded; requires direction |
+| Main-checkout 13-file residual set | **Defer** | Bounded residue introducing identifiers the baseline lacks; recorded, not resolved by blanket "ours"/"theirs" |
 
 Divergence figures after reconciliation of the above: the baseline remains **29 commits ahead
 of durable-current with 2 non-merge commits unique to it** (`ced7487`, `d5b2d82`) and

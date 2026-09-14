@@ -59,11 +59,10 @@ validation attempts; and the durable artifacts under `docs/upstream-integration/
 ### Exclusions
 
 RemoteInput implementation (SC-1662–SC-1667); any behaviour change to window selection,
-capture, frame delivery, input, or Builder Goal; committing the 40 divergent main-checkout
-files or the 16 untracked new source files before adjudication; copying entire dirty trees;
-`docs/builderflow/felix-notes/` (Felix's generated mirror); machine-specific configuration
-(`.env.local`, `.gradle-home/`); unrelated worktree changes; and tracker completion claims
-before live gates pass.
+capture, frame delivery, input, or Builder Goal; copying entire dirty trees; forcing the
+13-file residual set to a resolution rather than recording it; `docs/builderflow/felix-notes/`
+(Felix's generated mirror); machine-specific configuration (`.env.local`, `.gradle-home/`);
+unrelated worktree changes; and tracker completion claims before live gates pass.
 
 ### Acceptance criteria (Given / When / Then)
 
@@ -103,8 +102,8 @@ before live gates pass.
 - [x] Write `source-inventory.md`, `custom-change-reconciliation.md`,
       `upstream-commit-ledger.md`, `compatibility-map.md`, `baseline-validation.md`,
       `integration-base.md`
-- [ ] Adjudicate the 40 divergent main-checkout files (**blocked - needs direction**)
-- [ ] Carry the 16 untracked new source files (**blocked - follows adjudication**)
+- [x] Adjudicate the both-changed main-checkout files (13-file residual set recorded)
+- [x] Confirm the 16 untracked `src/` files (all already present in the baseline)
 - [ ] Cherry-pick `d5b2d82` and adapt the Fedora `97284f1` change (**not started**)
 - [ ] Install/provision a JDK 17 and re-run baseline validation (**blocked - environment**)
 
@@ -142,20 +141,26 @@ Branch `codex/sc-1661-chromascape-upstream-reconciliation`, worktree
    modified, **0 substantive**. Durable-current: 1,414 modified, **0 substantive**. Both of the
    latter show `302208 insertions / 302208 deletions` and an empty
    `git diff --ignore-cr-at-eol`.
-2. **No uncommitted edit in the main checkout is uniquely held.** Of the 87 substantive files:
-   21 already identical to the baseline, 0 with work absent from baseline, 64 both-changed
-   (24 superseded, **40 divergent**), 2 deletions consistent with baseline.
-3. **The SC-1199 durable tick-batch lineage is already in the baseline** — `16a3d72` merges
+2. **The main checkout's dirty state is subsumed by the baseline.** Of the 87 substantive
+   files: 21 byte-identical to the baseline, 72 of 85 fully covered at identifier level, and a
+   bounded 13-file residue (7 tests, 2 docs, 4 small deltas) that introduces identifiers the
+   baseline lacks. An earlier draft claimed "40 divergent files"; that was an artefact of a
+   formatting-sensitive line-count metric and has been corrected.
+3. **All 16 untracked `src/` files already exist in the baseline** — 5 byte-identical, 11
+   formatting or older variants. The baseline's `V32` migration is the *safer* one
+   (`DROP CONSTRAINT IF EXISTS`) and `V33` is identical in statement content. Nothing needed
+   carrying, so the reconciled baseline is `583a05b` itself.
+4. **The SC-1199 durable tick-batch lineage is already in the baseline** — `16a3d72` merges
    `origin/main` (fully contained) with `d5b2d82` at merge base `e5cdf81`.
-4. **The Fedora launcher change exists twice under different SHAs** (`97284f1`, `ced7487`) with
+5. **The Fedora launcher change exists twice under different SHAs** (`97284f1`, `ced7487`) with
    different patch-ids and one real expression difference
    (`state.launchAttemptId()` vs `state.launchAttemptId`). `git cherry` does **not** treat them
    as equivalent.
-5. **The true upstream fork point is `46db1c4`**; the baseline is 292 commits ahead of it while
+6. **The true upstream fork point is `46db1c4`**; the baseline is 292 commits ahead of it while
    only 15 commits are upstream-only.
-6. **All 15 upstream commits are accounted for**: 2 merge, 8 adapt, 1 defer (`69ff913`
+7. **All 15 upstream commits are accounted for**: 2 merge, 8 adapt, 1 defer (`69ff913`
    RemoteInput → SC-1662–SC-1667), 4 already-satisfied/defer.
-7. **No secrets found** in untracked source/docs. The single strong-pattern hit is a synthetic
+8. **No secrets found** in untracked source/docs. The single strong-pattern hit is a synthetic
    PEM header in `PatchCandidateWorkflowServiceTest.java:268`.
 
 ## Tests
@@ -180,13 +185,16 @@ Existence of all 10 named test classes was verified by source inspection.
 
 ## Remaining work
 
-1. **Adjudicate the 40 divergent files.** `TickBatchMessage.java` cannot be resolved from code
-   and history: the worktree edit is 44 lines from HEAD but 427 from the baseline.
+1. **Review the 13-file residual set** (7 tests, 2 docs, 4 small deltas) that introduces
+   identifiers the baseline lacks. The probable disposition is superseded throughout, but
+   whether the baseline's later rewrite intentionally dropped the worktree's test coverage or
+   its stricter charset-decoding variant is a judgement call for the story owner.
 2. **Provision a JDK 17** (or add a toolchain resolver, owned by SC-1666) and re-run
-   `compileJava`, `test`, `replayTest`, `spotlessCheck checkstyleMain`.
-3. **Carry the 16 untracked new source files** once (1) is decided.
-4. **Cherry-pick `d5b2d82`; adapt Fedora `97284f1`.**
-5. **Establish the final reconciled baseline SHA** and publish it to the epic and SC-1662–SC-1668.
+   `compileJava`, `test`, `replayTest`, `spotlessCheck checkstyleMain`. This is now the only
+   item blocking baseline regression evidence.
+3. **Cherry-pick `d5b2d82`; adapt Fedora `97284f1`.**
+4. **Publish the pinned baseline `583a05b`** to the epic and SC-1662–SC-1668 (via Felix +
+   Shortcut MCP, unavailable in this session — replay the outbox record first).
 
 ## Checklist reconciliation
 
