@@ -8,6 +8,8 @@ Base branch: `codex/sc-1661-consolidation-base`, pinned at `583a05b91687d156b1ba
 Head: `codex/sc-1661-chromascape-upstream-reconciliation`.
 The base has its own consolidation PR to `integration/chromascape-consolidated-20260901`; no existing target branch is advanced outside that review.
 
+Prerequisite: https://github.com/ikiddoi/ChromaScape/pull/3. This story: https://github.com/ikiddoi/ChromaScape/pull/4.
+
 Historical measurement at exact head `0387c4d` against `471262b`: 49 commits / 510 changed files, comprising 41 inherited consolidation commits and 8 SC-1661 commits. Against `583a05b`, the SC-1661 PR excludes those inherited commits. Later evidence/documentation commits change the counts; the live GitHub diff is authoritative.
 
 ## Revisions and changes

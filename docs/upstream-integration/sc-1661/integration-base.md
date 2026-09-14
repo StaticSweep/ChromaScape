@@ -10,7 +10,10 @@ implementation tasks are checked. Workflow states have not been advanced through
 Felix is reachable but rejects the mandated canonical project as `Project not found` because its
 Linux resolver expects the absent `/mnt/c/Dev/IdeaProjects/ChromaScape`. No Felix task or
 transition was created. Resolve that existing identity before replaying the pending record;
-do not create a second POSIX project identity. Stacked PR publication is the next handoff step.
+do not create a second POSIX project identity. Stacked draft PRs are published:
+[consolidation prerequisite #3](https://github.com/ikiddoi/ChromaScape/pull/3) and
+[SC-1661 reconciliation #4](https://github.com/ikiddoi/ChromaScape/pull/4).
+Neither is merged; review and canonical Felix reconciliation remain pending.
 
 ## Identity
 

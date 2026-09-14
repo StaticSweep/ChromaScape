@@ -308,10 +308,10 @@ Felix/Shortcut MCP). No item is checked speculatively.
 - **Create and link the two deferred-finding tickets**: `SC-1661-D1` (V33 constraint; forward
   migration; dedicated schema-hardening follow-up, nearest existing owner SC-1668) and `SC-1661-D2`
   (18 non-environmental test failures; dedicated defect, root cause unconfirmed). Both are described
-  in `deferred-findings.md`; neither ticket exists yet.
+  in `deferred-findings.md`; now created as SC-1696 and SC-1697 respectively. Reuse those IDs.
 - `blocked` and `cancelled` ids are `null` in the mapping, so those transitions are skipped.
-- **No Shortcut call was made.** No credential or MCP transport is available in this session.
-  Nothing may be recorded as synchronized until the MCP call actually succeeds.
+- Historical pre-handoff state: no Shortcut call had been made. This is superseded by the
+  successful direct Shortcut updates recorded below; Felix synchronization is still pending.
 
 ## Sync result
 
@@ -331,4 +331,6 @@ Partially reconciled on 2026-09-14; Felix remains pending.
   derivations are historical, not the authority for execution counts.
 - Review uses stacked PRs: base branch codex/sc-1661-consolidation-base at 583a05b, followed by
   codex/sc-1661-chromascape-upstream-reconciliation. Do not merge or force-advance the target.
+- Published draft PRs: https://github.com/ikiddoi/ChromaScape/pull/3 (prerequisite) and
+  https://github.com/ikiddoi/ChromaScape/pull/4 (SC-1661). Both await review.
 - Remaining: canonical Felix project resolution and live gated reconciliation, PR review/merge.
