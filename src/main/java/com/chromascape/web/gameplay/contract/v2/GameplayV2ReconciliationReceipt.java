@@ -152,7 +152,7 @@ public final class GameplayV2ReconciliationReceipt {
         confirmedAt,
         keyId,
         expiresAt,
-        confirmedAt,
+        Instant.now(),
         signingSecret);
   }
 

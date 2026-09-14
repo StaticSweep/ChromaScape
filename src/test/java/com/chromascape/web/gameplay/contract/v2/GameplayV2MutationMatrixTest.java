@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import javax.crypto.Mac;
@@ -379,6 +380,7 @@ class GameplayV2MutationMatrixTest {
               confirmedAt,
               "sc-1449-test-key",
               confirmedAt.plusSeconds(600),
+              confirmedAt,
               "test-signing-secret-0123456789abcdef-0123456789");
       assertThat(
               GameplayV2EnvelopeRules.confirmLegacyReconciliation(
@@ -597,6 +599,31 @@ class GameplayV2MutationMatrixTest {
                 NOW,
                 Set.of()))
         .isNull();
+  }
+
+  @Test
+  void missingAuthorityInputsFailClosedWithoutConsumption() {
+    Set<String> consumed = new HashSet<>();
+    JsonNode authority = fixtures.path("authority");
+    JsonNode scope = fixtures.path("approvedScope");
+    JsonNode envelope = fixtures.path("executionEnvelope");
+    String digest = fixtures.path("expectedDigests").path("executionEnvelope").asText();
+    String authorityId = envelope.path("authorityId").asText();
+    String secret = fixtures.path("testSigningSecret").asText();
+
+    assertThat(
+            GameplayV2EnvelopeRules.checkAuthority(
+                null, scope, envelope, digest, authorityId, secret, NOW, consumed))
+        .isEqualTo("AUTHORITY_SCOPE_MISMATCH");
+    assertThat(
+            GameplayV2EnvelopeRules.checkAuthority(
+                authority, null, envelope, digest, authorityId, secret, NOW, consumed))
+        .isEqualTo("AUTHORITY_SCOPE_MISMATCH");
+    assertThat(
+            GameplayV2EnvelopeRules.checkAuthority(
+                authority, scope, null, digest, authorityId, secret, NOW, consumed))
+        .isEqualTo("AUTHORITY_SCOPE_MISMATCH");
+    assertThat(consumed).isEmpty();
   }
 
   @Test
