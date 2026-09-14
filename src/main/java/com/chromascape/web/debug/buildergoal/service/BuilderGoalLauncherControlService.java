@@ -33,6 +33,9 @@ public class BuilderGoalLauncherControlService {
       LoggerFactory.getLogger(BuilderGoalLauncherControlService.class);
   private static final List<String> TERMINAL_STATUSES = List.of("succeeded", "failed", "expired");
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private Micro6RemoteLauncherService remoteLauncher;
+
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient;
   private final String baseUrl;
@@ -177,7 +180,11 @@ public class BuilderGoalLauncherControlService {
   }
 
   public boolean isBuilderGoalRunnableMachine(LauncherMachine machine) {
-    return machine != null && machine.enabled() && machine.online() && isLocalMachine(machine);
+    return machine != null
+        && machine.enabled()
+        && machine.online()
+        && (isLocalMachine(machine)
+            || (remoteLauncher != null && remoteLauncher.supports(machine)));
   }
 
   public String getBuilderGoalMachineDisabledReason(LauncherMachine machine) {
@@ -190,8 +197,8 @@ public class BuilderGoalLauncherControlService {
     if (!machine.online()) {
       return "Launcher machine is offline";
     }
-    if (!isLocalMachine(machine)) {
-      return "Builder Goal local dev launches only run on the local ChromaScape host";
+    if (!isLocalMachine(machine) && (remoteLauncher == null || !remoteLauncher.supports(machine))) {
+      return "Remote machine must advertise builder-goal-launch-v2 through a configured agent";
     }
     return null;
   }
@@ -222,8 +229,15 @@ public class BuilderGoalLauncherControlService {
           machines.add(machine);
         }
       }
+      if (remoteLauncher != null) {
+        machines.removeIf(remoteLauncher::isConfiguredMachine);
+        machines.addAll(remoteLauncher.machines());
+      }
       return machines;
     } catch (Exception e) {
+      if (remoteLauncher != null && !remoteLauncher.machines().isEmpty()) {
+        return remoteLauncher.machines();
+      }
       throw new IllegalStateException(
           "Failed to load launcher machines: " + sanitizeUpstreamError(sanitizedCause(e)), e);
     }

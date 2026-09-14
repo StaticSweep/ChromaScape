@@ -158,6 +158,12 @@ chromascape:
     task-sync-interval-ms: ${CHROMASCAPE_PATCHLOOP_TASK_SYNC_INTERVAL_MS:5000}
 
 builder-goal:
+  remote:
+    machine-uuid: ${BUILDER_GOAL_REMOTE_MACHINE_UUID:}
+    endpoint: ${BUILDER_GOAL_REMOTE_ENDPOINT:}
+    executor-url: ${BUILDER_GOAL_REMOTE_EXECUTOR_URL:}
+    token: ${BUILDER_GOAL_REMOTE_TOKEN:}
+    timeout-seconds: ${BUILDER_GOAL_REMOTE_TIMEOUT_SECONDS:1800}
   run-timeout-ms: ${BUILDER_GOAL_RUN_TIMEOUT_MS:300000}
   status-sync-max-consecutive-failures: ${BUILDER_GOAL_STATUS_SYNC_MAX_CONSECUTIVE_FAILURES:3}
   status-sync-failure-grace-ms: ${BUILDER_GOAL_STATUS_SYNC_FAILURE_GRACE_MS:15000}
