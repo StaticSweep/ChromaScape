@@ -1,5 +1,17 @@
 # SC-1661 — Integration Base
 
+## Current handoff status (2026-09-14; supersedes historical pending statements below)
+
+The evidence caveat is corrected. The six-suite rerun has retained JUnit extracts: 175 tests,
+0 failures/errors/skips. The code baseline remains `966e0e3e47db71fe5d57629205efcb23cd11e026`.
+D1/D2 now exist as SC-1696 and SC-1697 in epic SC-1660, owned by the delivery team.
+Shortcut epic and all eight story descriptions now contain the pinned baseline; SC-1661's three
+implementation tasks are checked. Workflow states have not been advanced through Felix.
+Felix is reachable but rejects the mandated canonical project as `Project not found` because its
+Linux resolver expects the absent `/mnt/c/Dev/IdeaProjects/ChromaScape`. No Felix task or
+transition was created. Resolve that existing identity before replaying the pending record;
+do not create a second POSIX project identity. Stacked PR publication is the next handoff step.
+
 ## Identity
 
 | Field | Value |
@@ -10,7 +22,7 @@
 | Felix tag | `shortcut:sc-1661` |
 | Branch | `codex/sc-1661-chromascape-upstream-reconciliation` |
 | Worktree | `/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation` |
-| Intended PR target | `integration/chromascape-consolidated-20260901` (`origin` = `ikiddoi/ChromaScape`) |
+| Intended PR target | `codex/sc-1661-consolidation-base` pinned at `583a05b`; stacked on its consolidation PR to `integration/chromascape-consolidated-20260901` |
 
 ## Revisions
 
@@ -68,7 +80,7 @@ Every relevant custom change now has one of the four allowed dispositions. Nothi
 | Change | Reason |
 |---|---|
 | `69ff913` RemoteInput integration | **Deferred to SC-1662–SC-1667** (split by the corrected ownership table below). Vendors a whole native project (350 files, ~95k insertions) including editor state; deletes `Kinput.java` and `WindowHandler.java` that the baseline still uses |
-| **`V33` CHECK-constraint strengthening** | **Explicit deferral.** The candidate baseline's `ck_tick_snapshots_replay_state_json_sizes` is logically weaker than the dirty draft (`dialogue IS NULL OR (…AND…)` short-circuits the `spells`/`vars` bounds). V33 is already committed and Flyway-checksummed, so the remedy is a new forward migration, not an in-place edit. Not a prerequisite for the Linux/RemoteInput work. **Tracked as `SC-1661-D1` in `deferred-findings.md`** with the two predicates, seven database validation cases, the forward-migration requirement and the delivery impact. **Owning story not yet established** — no SC-1662–SC-1668 story owns migrations; nearest existing owner is SC-1668, and a dedicated schema-hardening ticket is required. **No tracker ticket exists yet** (no Felix/Shortcut MCP in the preparing session), so "handed to the integration stream" is not claimed |
+| **`V33` CHECK-constraint strengthening** | **Explicit deferral.** The candidate baseline's `ck_tick_snapshots_replay_state_json_sizes` is logically weaker than the dirty draft (`dialogue IS NULL OR (…AND…)` short-circuits the `spells`/`vars` bounds). V33 is already committed and Flyway-checksummed, so the remedy is a new forward migration, not an in-place edit. Not a prerequisite for the Linux/RemoteInput work. **Tracked as `SC-1661-D1` in `deferred-findings.md`** with the two predicates, seven database validation cases, the forward-migration requirement and the delivery impact. **Owning story: SC-1696**, assigned to the delivery team. **Tracker: [SC-1696](https://app.shortcut.com/leeuwbot/story/1696)**, so "handed to the integration stream" is not claimed |
 | Unrelated upstream demo-script commits (`88b7b5f`, `6038886`) | Demo scripts and their failsafe logic have no Linux-port requirement; assigning them to a port story would give that story a different purpose. Explicit deferral |
 | Upstream version-string commits (`b7feca0`, `ac06b03`, `c4de3f4`), README (`c662806`) | No porting requirement |
 | `.gradle-home/` (1,734 untracked files), `.commandcode/**`, consolidation `.micro6/` | Generated caches, tool configuration and runtime state — excluded, never committed |
@@ -204,7 +216,7 @@ Estimates are now expressed as ranges with their basis, rather than a single uns
 | SC-1666 | **Medium** | Recording/debugger/remote-launch wiring; depends on the capture and input seams |
 | SC-1667 | **Small–medium** | The routing itself is already carried; remaining work is real-agent diagnostics and startup behaviour |
 | SC-1668 | **Medium** | Qualification requires a Linux host with Docker/PostgreSQL, neither available here |
-| SC-1661 remaining | **Small** | Only the Felix/Shortcut handoff and the PR remain; no source work is outstanding |
+| SC-1661 remaining | **Small** | Source work is complete; review and canonical Felix project resolution remain |
 
 The uncertainty is concentrated in SC-1662/SC-1665 because the upstream native project has not been
 reviewed for inclusion and the capture boundary is the largest single rewrite, and in SC-1668 because

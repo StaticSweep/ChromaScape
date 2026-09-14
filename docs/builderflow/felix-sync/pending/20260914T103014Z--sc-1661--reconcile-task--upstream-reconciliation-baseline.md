@@ -315,4 +315,20 @@ Felix/Shortcut MCP). No item is checked speculatively.
 
 ## Sync result
 
-Pending.
+Partially reconciled on 2026-09-14; Felix remains pending.
+
+- Felix `tasks list` returned no SC-1661 task. Task creation and notes lookup both failed with
+  `Project not found: C:\Dev\IdeaProjects\ChromaScape`. This is an identity-resolution error,
+  not a transport outage. Linux mapping expects absent `/mnt/c/Dev/IdeaProjects/ChromaScape`.
+- No task/note was created, no gate passed, and no Felix synchronization marker was posted.
+- Direct user-authorized Shortcut updates succeeded: epic 1660 and stories 1661–1668 now pin
+  `966e0e3e47db71fe5d57629205efcb23cd11e026`; tasks 1669/1670/1671 are completed. Workflow states
+  remain unchanged. Preserve these writes when replaying; read before writing.
+- D1 created as SC-1696; D2 as SC-1697. Both are related to SC-1661 and owned by the delivery
+  team in epic 1660. Do not duplicate them.
+- Six-suite rerun at code-equivalent HEAD 0387c4d measured 175 tests / 0 failures / 0 errors /
+  0 skips; sanitized JUnit extracts are retained in evidence/launcher-junit. Earlier source-count
+  derivations are historical, not the authority for execution counts.
+- Review uses stacked PRs: base branch codex/sc-1661-consolidation-base at 583a05b, followed by
+  codex/sc-1661-chromascape-upstream-reconciliation. Do not merge or force-advance the target.
+- Remaining: canonical Felix project resolution and live gated reconciliation, PR review/merge.

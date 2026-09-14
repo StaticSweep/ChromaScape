@@ -4,11 +4,7 @@ SC-1661 does not fix the two findings below. Each is recorded here with scope, e
 tracker record, and its delivery impact, so that "deferred" means *owned and traceable*, not
 *handed to a stream*.
 
-**Tracker linkage status: outstanding.** No Felix or Shortcut MCP transport was available in the
-session that produced this file, so **no ticket was created and none is claimed**. Each record below
-carries the exact intended tracker operation. Until that ticket exists, the durable reference for
-each finding is this document plus the named commit/artifact, and the tracker link is explicitly
-missing rather than assumed.
+**Tracker linkage status: created and related to SC-1661.** D1 is [SC-1696](https://app.shortcut.com/leeuwbot/story/1696); D2 is [SC-1697](https://app.shortcut.com/leeuwbot/story/1697). Both belong to epic SC-1660 and nathan gemieee's Team; individual owners are unassigned. These tickets own the deferred work.
 
 Reference revisions: candidate baseline `583a05b91687d156b1baa52dbda2b219604c7b39`; reconciled code
 baseline `966e0e3e47db71fe5d57629205efcb23cd11e026`; intended PR target
@@ -82,12 +78,9 @@ None of these can run on the SC-1661 host: no Docker and no PostgreSQL.
 
 ### Accountability and delivery impact
 
-- **Owning story:** *not yet established* — no story in SC-1662–SC-1668 owns database migrations.
-  The nearest by existing scope is **SC-1668** (host qualification and integration PR), which owns
-  the integration PR and the migration-completeness re-proof, but a **dedicated schema-hardening
-  follow-up ticket** is required and must be linked from SC-1661 and epic SC-1660.
+- **Owning story:** [SC-1696](https://app.shortcut.com/leeuwbot/story/1696), dedicated schema follow-up.
 - **Individual assignment:** not established; do not infer one.
-- **Intended tracker operation:** create a defect linked to `shortcut:sc-1661` with the constraint
+- **Completed tracker operation:** created a defect linked to `shortcut:sc-1661` with the constraint
   name, the two predicates, the seven validation cases above, the forward-migration requirement, and
   this document as the evidence reference.
 - **Does it block this baseline handoff?** **No.** It is a data-integrity hardening of an
@@ -159,10 +152,9 @@ reproduces them on a host with the required infrastructure.**
 
 ### Accountability and delivery impact
 
-- **Owning story:** *not yet established* — no SC-1662–SC-1668 story owns the gameplay/provider area.
-  A **dedicated defect record** is required and must be linked from SC-1661 and epic SC-1660.
+- **Owning story:** [SC-1697](https://app.shortcut.com/leeuwbot/story/1697), dedicated diagnosis follow-up.
 - **Individual assignment:** not established.
-- **Intended tracker operation:** create a defect linked to `shortcut:sc-1661` listing the 18
+- **Completed tracker operation:** created a defect linked to `shortcut:sc-1661` listing the 18
   identities, both reproduction logs, the environment, and the open classification question.
 - **Delivery impact on SC-1661:** **none.** They are pre-existing, unchanged by the carries, and
   outside the story's scope. They are recorded as residual baseline risk so the integration baseline

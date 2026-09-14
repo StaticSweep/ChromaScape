@@ -122,7 +122,7 @@ time, result, tests, failure classification, artifact, integrity (see §Artifact
 | Time (UTC) | not captured |
 | Result | **exit 1** |
 | Tests | **2250 executed / 110 failed / 13 skipped** |
-| Failure classification | 92 environmental (34 Docker, 10 PostgreSQL, 48 ApplicationContext cascade) + 18 pre-existing gameplay/provider (see `deferred-findings.md` SC-1661-D2) |
+| Failure classification | 92 environmental (34 Docker, 10 PostgreSQL, 48 ApplicationContext cascade) + 18 pre-existing assertion/behavior failures: 16 gameplay/provider and 2 other (see `deferred-findings.md` SC-1661-D2) |
 | Artifact | `candidate-test.log`; complete failing-test identities in `test-failures-candidate.txt` |
 
 ### C7 — candidate `replayTest`
@@ -155,7 +155,7 @@ time, result, tests, failure classification, artifact, integrity (see §Artifact
 | Command | `./gradlew test --tests '*<six launcher classes>' -Psc967VectorsPath=… --console=plain` |
 | Time (UTC) | not captured |
 | Result | **exit 0** |
-| Tests | **175 executed / 0 failed / 0 skipped** |
+| Tests | **Historical execution count not retained; 175 source test methods. Superseded by V4's measured 175 executed / 0 failed / 0 skipped.** |
 | Derivation | 175 = 3 + 28 + 9 + 26 + 96 + 13 `@Test` methods in the six classes at `966e0e3` (the console log does not print a count; the sum is a property of the tested revision, not of the log) |
 | Artifact | `reconciled-launcher-tests.log` |
 
@@ -245,17 +245,37 @@ the 175-test focused launcher suite (R2) and must not be presented as one.
 | No additional replay-test failure | `replayTest-failures-candidate.txt` vs `replayTest-failures-reconciled.txt`: 12 identities each, `diff` empty |
 | Same formatting violations | complete sets (V2), identical |
 | Reconciled code compiles | C6/R1/R2 exit codes and logs |
-| Focused launcher tests pass | R2 (175/0) |
+| Focused launcher tests pass | V4: retained JUnit results, 175 executed / 0 failures / 0 skips / 0 errors |
 | Final code passes `checkstyleMain` | V1 (exit 0, warnings only) |
 
 **What is *not* claimed.** Database-, migration-, concurrency- and Docker-backed behaviour is **not**
 verified: Docker and PostgreSQL are absent, so 92 of the 110 `test` failures and all 12 `replayTest`
-failures are environmental, and **tests that never executed cannot conceal an introduced
-regression**. Compilation plus unit-test success is not end-to-end Fedora qualification.
+failures are environmental, and **tests that never executed can leave an introduced
+regression undetected**. Compilation plus unit-test success is not end-to-end Fedora qualification.
+
+## V4 — six-suite independent rerun with retained JUnit results
+
+Code baseline: `966e0e3e47db71fe5d57629205efcb23cd11e026`; worktree HEAD at invocation: `0387c4d`, clean. JDK/Gradle and fixture configuration as above. Command:
+
+```bash
+./gradlew test --tests '*BuilderGoalLauncherControlServiceTest' --tests '*BuilderGoalRunnerServiceTest' --tests '*Micro6OnlineClientRegistryServiceTest' --tests '*Micro6TargetPreparationServiceTest' --tests '*Micro6RemoteLauncherServiceTest' --tests '*Micro6ExecutorReadinessEvaluatorTest' -Psc967VectorsPath=/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/ed25519-vectors.json --console=plain --rerun-tasks
+```
+
+Exit 0; Gradle duration 49s; 5 actionable tasks executed. JUnit suite timestamps: 2026-09-14T12:36:19.561Z through 2026-09-14T12:36:26.106Z (suite starts, not command start/end).
+Measured XML totals: **175 tests, 0 failures, 0 errors, 0 skipped**.
+Per-suite counts: launcher control 26; runner 96; readiness evaluator 13; registry 28; remote launcher 3; target preparation 9.
+
+Retained in `launcher-junit/TEST-*.xml`: original testsuite attributes and all testcase elements; properties and system output omitted to avoid unnecessary runtime data. These are sanitized JUnit result extracts, not untouched full reports. Counts are verified against 175 testcase elements. Test names mentioning tokens/passwords describe assertions and contain no credential values.
 
 ## Artifact integrity (SHA-256)
 
 ```
+b68f67e9b7d00023bd07e023b60a1bac911fb3cfbda55d39702cc64d31dd0f11  launcher-junit/TEST-com.chromascape.web.debug.buildergoal.service.BuilderGoalLauncherControlServiceTest.xml
+35b366cb5db872f02d91f6bdb73ee9f7bb643a6f9753d3860714a938a7eaa656  launcher-junit/TEST-com.chromascape.web.debug.buildergoal.service.BuilderGoalRunnerServiceTest.xml
+0e0ea1e5ff941866121a4de1efdd255f251a6e896f8d99a5791e0b6080ff2240  launcher-junit/TEST-com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest.xml
+be0b17ed3858415369c95cb068d0bc3f8be7b534580a13ac0c98b69932c7ce7d  launcher-junit/TEST-com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest.xml
+d4ad0ec34b43b25b004b39b8893d2a293815d03ad1728fa99390ed4ec6468241  launcher-junit/TEST-com.chromascape.web.debug.buildergoal.service.Micro6RemoteLauncherServiceTest.xml
+265b93f9aa560e696ca72431b45a75e76d8a67f2b0062de8b2f37beba8bef7a9  launcher-junit/TEST-com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest.xml
 90baeb34ac83cd64c0e9e9d8ed61b4d0c043027482e10afacf7903e3c30d37c4  candidate-checkstyle-summary.log
 69f810b70b1f4460cf8b3e91a535bcab91ebf82a2b651f992260a5a2cfa27816  candidate-compileJava.log
 d5aeab8ff3d662bcbc6d7e35a51a5f7d40aeeea25142ad6442a496994882fda7  candidate-replayTest.log
