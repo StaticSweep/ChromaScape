@@ -2,113 +2,173 @@
 
 ## Environment
 
+Both the candidate baseline and the reconciled branch were tested with the **same** environment.
+
 | Item | Value |
 |---|---|
-| Tested commit | `583a05b91687d156b1baa52dbda2b219604c7b39` (story branch tip, **no SC-1661 changes applied**) |
 | Worktree | `/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation` |
 | OS | Linux 6.19.10-300.fc44.x86_64 |
-| Gradle | 8.14.2 (wrapper; distribution reused from the main checkout's cached `.gradle-home`) |
-| Launcher JVM | OpenJDK 25.0.2 (Red Hat 25.0.2+10) |
+| Gradle | 8.14.2 (wrapper, **unchanged** — no wrapper upgrade) |
+| Launcher JVM / toolchain | Corretto `17.0.20.1` (`JAVA_HOME=/home/ikiddoi/.jdks/corretto-17.0.20.1`) |
 | `GRADLE_USER_HOME` | `/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape/.gradle-home` |
-| JDK 17 | **Not installed.** `/usr/lib/jvm` contains only `java-25-openjdk` / `jre-25` |
-| Declared toolchain | `build.gradle.kts:29-30` — `languageVersion.set(JavaLanguageVersion.of(17))` |
+| Declared toolchain | `build.gradle.kts` — `languageVersion.set(JavaLanguageVersion.of(17))` |
+| Candidate-baseline commit | `4e0a3d5b56ae7d3d50bd4ce878b31dd541540a23` (= `583a05b` + SC-1661 docs only) |
+| Reconciled commit | `966e0e3` (candidate baseline + `45f943f` + `966e0e3` carries) |
+| Docker | **Not available** on this host |
+| Local PostgreSQL | **Not available** (`localhost:5432`, `:5433` closed) |
+| Evidence directory | `docs/upstream-integration/sc-1661/evidence/` (committed) |
 
-## Result summary
+### Launcher-JDK blocker — resolved
 
-**No check could be executed.** All Gradle invocations fail during **Kotlin DSL script
-compilation**, before any task is selected or any Java is compiled. This is a single
-environmental root cause, not four independent failures.
+The previously recorded blocker was that Gradle's Kotlin DSL script compilation aborted under
+JDK 25 with `java.lang.IllegalArgumentException: 25.0.2` (Kotlin 2.0.21's bundled IntelliJ
+`JavaVersion.parse`). The launcher JVM was the cause, so the launcher JVM was fixed first:
 
-| # | Exact tested commit | Command | Exit | Tests run / failed / skipped | First causal failure | Pre-existing or introduced | Evidence |
-|---|---|---|---|---|---|---|---|
-| 1 | `583a05b` | `./gradlew compileJava --console=plain` | 1 | 0 / 0 / 0 | `java.lang.IllegalArgumentException: 25.0.2` | **Pre-existing (environmental)** | `shellout/2026-09-14T10-28-07-930Z-s0ouagjx.log` |
-| 2 | `583a05b` | `./gradlew spotlessCheck --console=plain` | 1 | 0 / 0 / 0 | same | Pre-existing (environmental) | re-run, this session |
-| 3 | `583a05b` | `./gradlew checkstyleMain --console=plain` | 1 | 0 / 0 / 0 | same | Pre-existing (environmental) | re-run, this session |
-| 4 | `583a05b` | `./gradlew replayTest --console=plain` | 1 | 0 / 0 / 0 | same | Pre-existing (environmental) | re-run, this session |
-| 5 | `583a05b` | `./gradlew test --console=plain` | **not run** | — | blocked by the same cause | — | — |
-| 6 | `583a05b` | `./gradlew tasks --console=plain` | 1 | 0 / 0 / 0 | same | Pre-existing (environmental) | re-run, this session |
+1. A compatible JDK was **already present** on the host: `/home/ikiddoi/.jdks/corretto-17.0.20.1`.
+   No provisioning was required.
+2. `JAVA_HOME` and `PATH` were set to it for every command below.
+3. `java -version` → `openjdk version "17.0.20.1" 2026-08-18 LTS`; `javac -version` → `17.0.20.1`.
+4. `./gradlew --version` → `Launcher JVM: 17.0.20.1 (Amazon.com Inc.)`, `Gradle 8.14.2`.
 
-## First causal failure
+**No Gradle wrapper upgrade and no toolchain resolver plugin was added.** The build files are
+untouched by SC-1661; the fix is entirely environmental, exactly as the plan required.
+
+### SC-967 fixture path
+
+`test` has a `doFirst` gate that requires the SC-967 vectors fixture to be a regular file. The
+build defaults to the Windows path `C:\Dev\IdeaProjects\contracts\sc967\ed25519-vectors.json`, and
+the build file itself documents a supported override (`sc967VectorsPath` / `SC967_VECTORS_PATH`)
+"for CI and WSL path translation". The equivalent Linux path exists, so the override was supplied.
+This is a **documented configuration input, not a build change**.
 
 ```
-FAILURE: Build failed with an exception.
-
-* What went wrong:
-25.0.2
-
-* Exception is:
-java.lang.IllegalArgumentException: 25.0.2
-	at org.jetbrains.kotlin.com.intellij.util.lang.JavaVersion.parse(JavaVersion.java:307)
-	at org.jetbrains.kotlin.com.intellij.util.lang.JavaVersion.current(JavaVersion.java:176)
-	at org.jetbrains.kotlin.cli.jvm.modules.JavaVersionUtilsKt.isAtLeastJava9(javaVersionUtils.kt:11)
-	at org.jetbrains.kotlin.cli.jvm.modules.CoreJrtFileSystem.globalJrtFsCache$lambda$2(CoreJrtFileSystem.kt:83)
-	...
-	at org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment$Companion.createForProduction(KotlinCoreEnvironment.kt:468)
-
-BUILD FAILED in 1s
+-Psc967VectorsPath=/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/contracts/sc967/ed25519-vectors.json
 ```
 
-**Diagnosis.** Gradle 8.14.2 ships Kotlin 2.0.21. Its bundled IntelliJ `JavaVersion.parse`
-cannot parse the JDK version string `25.0.2`, so Kotlin DSL script compilation of
-`build.gradle.kts` aborts. Because `build.gradle.kts` is a Kotlin script, **no task can run at
-all** — including `tasks`, which proves the failure is independent of task selection and of
-any Java source content.
+## Result summary — candidate baseline (`4e0a3d5`)
 
-## Evidence that this is pre-existing, not introduced by reconciliation
+| # | Command | Exit | Tests run / failed / skipped | First causal failure | Classification | Evidence |
+|---|---|---|---|---|---|---|
+| 1 | `./gradlew tasks --console=plain` | **0** | — | — | **PASS** — build evaluates; all custom tasks register | `evidence/candidate-tasks.log` |
+| 2 | `./gradlew compileJava --console=plain` | **0** | — | — | **PASS** | `evidence/candidate-compileJava.log` |
+| 3 | `./gradlew checkstyleMain --console=plain` | **0** | — | 3280 warnings / 561 files, severity `warning` only | **PASS** (warnings do not fail the task) | `evidence/candidate-checkstyle-summary.log` (full 848 KB log condensed; report at `build/reports/checkstyle/main.xml`) |
+| 4 | `./gradlew spotlessCheck --console=plain` | **1** | — | 16 files need formatting | **Pre-existing** | `evidence/candidate-spotless.log` |
+| 5 | `./gradlew test --console=plain` (no fixture override) | **1** | 0 / 0 / 0 | `Resolved SC-967 fixture is not a regular file: …/C:/Dev/IdeaProjects/contracts/sc967/ed25519-vectors.json` | **Pre-existing (environment/configuration)** — fails before any test runs | `evidence/candidate-test.log` (first run) |
+| 6 | `./gradlew test … -Psc967VectorsPath=…` | **1** | **2250 / 110 / 13** | see failure classification | Pre-existing failures only — no SC-1661 change present | `evidence/candidate-test.log` |
+| 7 | `./gradlew replayTest --console=plain` | **1** | **280 / 12 / 0** | Docker unavailable | Pre-existing (environmental) | `evidence/candidate-replayTest.log` |
 
-1. It reproduces at `583a05b` **with zero SC-1661 modifications applied** — the worktree was
-   clean (0 porcelain entries) at the time of every run.
-2. It fails for `./gradlew tasks`, which neither compiles Java nor runs tests.
-3. The failing frame is Kotlin compiler bootstrap (`KotlinCoreEnvironment.createForProduction`),
-   reached while evaluating the build script — not project code.
+## Result summary — reconciled branch (`966e0e3`)
 
-No regression was introduced by this story; equally, **no baseline check has been proven to
-pass**, and none may be reported as passing.
+| # | Command | Exit | Tests run / failed / skipped | Classification | Evidence |
+|---|---|---|---|---|---|
+| 8 | `./gradlew compileJava compileTestJava --console=plain` | **0** | — | **PASS** — the adapted launcher code compiles | `evidence/reconciled-compile.log` |
+| 9 | focused launcher suites (6 classes, `--tests`) | **0** | **175 / 0 / 0** | **PASS** | `evidence/reconciled-launcher-tests.log` |
+| 10 | `./gradlew spotlessCheck --console=plain` | **1** | — | 16 files — **the same 16 as the candidate baseline** | `evidence/reconciled-spotless.log` |
+| 11 | `./gradlew test … -Psc967VectorsPath=…` | **1** | **2255 / 110 / 13** | Identical failing-test **set** to the candidate baseline | `evidence/reconciled-test.log` |
+| 12 | `./gradlew replayTest --console=plain` | **1** | **280 / 12 / 0** | Identical failing-test set | `evidence/reconciled-replayTest.log` |
 
-## Blocking prerequisite
+Focused launcher suites used in #9: `BuilderGoalLauncherControlServiceTest`,
+`BuilderGoalRunnerServiceTest`, `Micro6OnlineClientRegistryServiceTest`,
+`Micro6TargetPreparationServiceTest`, `Micro6RemoteLauncherServiceTest`,
+`Micro6ExecutorReadinessEvaluatorTest`.
 
-A **JDK 17** must be available for the declared toolchain. Installing or provisioning one is a
-system-level change and was deliberately **not** performed without direction. Two routes:
+The reconciled run executes **5 more tests** than the candidate baseline (2255 vs 2250) — the
+`Micro6RemoteLauncherServiceTest` tests contributed by the carry — and all 5 pass.
 
-- install a JDK 17 and point Gradle at it (`org.gradle.java.installations.paths` or
-  `JAVA_HOME`), or
-- add a toolchain resolver to `build.gradle.kts` — itself a build-file change owned by SC-1666.
+## Introduced vs pre-existing
 
-Until then, `compileJava`, `test`, `replayTest`, `spotlessCheck`, `checkstyleMain` and
-`replayCertificationTest` remain **unverified**, not failed-in-code.
+**No regression was introduced.** The strongest available comparison is not the counts but the
+*failing test set*: extracting every `FAILED` test name from both logs and diffing the sorted sets
+returns **no differences** for either `test` or `replayTest`.
 
-## Named test classes — existence confirmed
+```
+$ diff /tmp/candidate-test.log.fails /tmp/reconciled-test.log.fails
+    (empty — IDENTICAL FAILING TEST SET)
+$ diff /tmp/candidate-replayTest.log.fails /tmp/reconciled-replayTest.log.fails
+    (empty — IDENTICAL REPLAY FAILING SET)
+```
 
-All ten classes the story plan names were located in the baseline. **Existence verified;
-execution not possible under the current toolchain.**
+`spotlessCheck` is likewise unchanged: 16 offending files before, 16 after, and the same files.
+The adaptation's own files were formatted so they contribute **zero** new violations, and the
+pre-existing violating files were deliberately left as found (fixing them would smuggle an
+unrelated reformat into this diff).
 
-| Test class | Path in baseline |
+## Failure classification — candidate baseline (identical on the reconciled branch)
+
+Docker is unavailable and there is no local PostgreSQL, so Testcontainers-backed suites cannot
+start. The 110 `test` failures decompose as:
+
+| Signature | Count | Root cause | Classification |
+|---|---|---|---|
+| Docker environment unavailable | 34 | Testcontainers cannot find a Docker daemon | Environmental |
+| PostgreSQL connection refused (`localhost:5433`) | 10 | `Sc967FlywaySchemaTest` expects a pre-provisioned database | Environmental |
+| ApplicationContext failure-threshold cascade | 48 | Consequence of the two above; Spring skips re-loading the failed context | Environmental (cascade) |
+| Gameplay contract / provider-output assertions | 18 | e.g. `GameplayContractValidator$GameplayContractViolation: $: null found, object expected`; `canonicalResourcesHaveFrozenByteDigests` expecting `c55ad78a…` but seeing `ff9ad17f…` | **Pre-existing code failures**, unrelated to SC-1661 |
+| `replayTest` failures | 12 | All Docker (`ReplayMigrationIntegrationTest`, `ReplayPostgresIntegrationTest`, `ReplayPlayback*IntegrationTest`) | Environmental |
+
+**Reproducibility.** Each signature was reproduced twice — once at the pristine candidate baseline
+and once on the reconciled branch — with the identical failing-test set. The 18 gameplay/
+provider failures also occur with no SC-1661 change present, so they are demonstrably not
+introduced by this story. They are recorded, not fixed, and are **not** owned by SC-1661; the
+integration stream must decide whether they are environment-sensitive or a genuine baseline
+defect.
+
+**No exclusions were added** to reach a green result, and **no skipped check is reported as a
+pass**.
+
+## Delivery impact
+
+- **Green:** build evaluation, compilation (main + test), checkstyle, and the focused launcher
+  suites. The candidate baseline is now demonstrably buildable on Linux, which is what SC-1662+
+  needs from this story.
+- **Red but pre-existing:** `spotlessCheck` (16 files) and the 18 gameplay/provider tests.
+- **Cannot be proven on this host:** database, migration, concurrency and Docker-backed
+  integration evidence. This bounds confidence in the *adapted launcher* code to compilation plus
+  unit-test level; end-to-end remote-launch behaviour is SC-1667's to prove.
+- The `test` gate's SC-967 fixture requirement means a Linux CI runner must set
+  `SC967_VECTORS_PATH`, or the task fails before executing anything.
+
+## Named test classes — existence and execution
+
+All ten classes the story plan names exist in the baseline. Under the JDK 17 launcher they are
+now **compiled**; those that do not require Docker/PostgreSQL also execute:
+
+| Test class | Status |
 |---|---|
-| `WindowHandlerTest` | `src/test/java/com/chromascape/utils/core/screen/window/WindowHandlerTest.java` |
-| `WindowControllerTest` | `src/test/java/com/chromascape/utils/core/screen/window/WindowControllerTest.java` |
-| `ScreenCaptureServiceTest` | `src/test/java/com/chromascape/web/viewport/service/ScreenCaptureServiceTest.java` |
-| `RecordingControllerMetadataTest` | `src/test/java/com/chromascape/web/recording/controller/RecordingControllerMetadataTest.java` |
-| `RecordingConfigInitialFrameTest` | `src/test/java/com/chromascape/web/recording/config/RecordingConfigInitialFrameTest.java` |
-| `RecordingServiceInitialFrameReadinessTest` | `src/test/java/com/chromascape/web/recording/service/RecordingServiceInitialFrameReadinessTest.java` |
-| `RecordingServiceAutoStartGateTest` | `src/test/java/com/chromascape/web/recording/service/RecordingServiceAutoStartGateTest.java` |
-| `RecordingSessionMetadataServiceTest` | `src/test/java/com/chromascape/web/recording/service/RecordingSessionMetadataServiceTest.java` |
-| `BuilderGoalLauncherControlServiceTest` | `src/test/java/com/chromascape/web/debug/buildergoal/service/BuilderGoalLauncherControlServiceTest.java` |
-| `Micro6ExecutorReadinessEvaluatorTest` | `src/test/java/com/chromascape/web/debug/buildergoal/service/Micro6ExecutorReadinessEvaluatorTest.java` |
+| `WindowHandlerTest` | Compiled; executed (no DB requirement) |
+| `WindowControllerTest` | Compiled; executed |
+| `ScreenCaptureServiceTest` | Compiled; executed |
+| `RecordingControllerMetadataTest` | Compiled; executed |
+| `RecordingConfigInitialFrameTest` | Compiled; executed |
+| `RecordingServiceInitialFrameReadinessTest` | Compiled; executed |
+| `RecordingServiceAutoStartGateTest` | Compiled; executed |
+| `RecordingSessionMetadataServiceTest` | Compiled; executed |
+| `BuilderGoalLauncherControlServiceTest` | Compiled; executed (part of the 175 focused tests — PASS) |
+| `Micro6ExecutorReadinessEvaluatorTest` | Compiled; executed (part of the 175 focused tests — PASS) |
 
-## Custom build tasks — existence confirmed, execution not verified
+## Custom build tasks — confirmed
 
-`build.gradle.kts` registers `replayTest` (151), `replayCertificationTest` (173),
-`replayStressCertificationTest` (255), `cleanChromascape` (506), `cleanAll` (522),
-`copyNativeLibraries` (459), and wires `check` to `dependsOn("spotlessCheck", "checkstyleMain")`.
-`config/checkstyle/google_checks.xml` and `checkstyle-suppressions.xml` are present.
+`./gradlew tasks` now enumerates them (exit 0):
 
-These are confirmed **by source inspection only**. `./gradlew tasks` cannot enumerate them
-under the current JDK.
+```
+replayTest, replayCertificationTest, replayStressCertificationTest,
+cleanChromascape, cleanAll, copyNativeLibraries
+```
+
+`check` is wired to `dependsOn("spotlessCheck", "checkstyleMain")`. `config/checkstyle/google_checks.xml`
+and `checkstyle-suppressions.xml` are present.
+
+`replayCertificationTest` and `replayStressCertificationTest` are **Windows-only hard gates** that
+throw on a non-Windows host, and they additionally require PostgreSQL and a synthetic xRSPS worker.
+They are correctly **not run** here; that is their designed behaviour, not a skip.
 
 ## Honest status statement
 
-- **Verified:** source inventory, ancestry figures, dirty-tree decomposition, upstream ledger,
-  compatibility boundaries, test-class existence.
-- **Not verified:** compilation, unit tests, replay tests, formatting, checkstyle — all blocked
-  by the JDK 25 / Kotlin 2.0.21 incompatibility.
-- **No exclusions were added** and **no skipped check is reported as a pass.**
+- **Verified by execution:** build evaluation, `compileJava`, `compileTestJava`, `checkstyleMain`,
+  `test` (2250/2255), `replayTest` (280), `spotlessCheck`, and the focused launcher suites.
+- **Verified as pre-existing:** the 16 spotless violations, the 92 Docker/PostgreSQL failures, and
+  the 18 gameplay/provider failures.
+- **Not verified:** any database-, migration- or Docker-backed evidence; the Windows-only
+  certification gates.
+- **No regressions introduced by SC-1661:** the failing test sets are byte-identical before and
+  after, and the reconciled branch adds 5 passing tests.

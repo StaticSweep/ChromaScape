@@ -62,6 +62,45 @@ contains the main checkout and the published consolidated branch with zero commi
 3. The Fedora launcher-routing change exists twice under different SHAs (`97284f1` and
    `ced7487`) — see `custom-change-reconciliation.md`.
 
+## Re-observation during reconciliation (2026-09-14, second pass)
+
+The observations above are historical and are **not replaced**. This pass re-verified them before
+any source edit was made.
+
+| Check | Result |
+|---|---|
+| SC-1661 branch / HEAD | `codex/sc-1661-chromascape-upstream-reconciliation` @ `4e0a3d5` — unchanged |
+| SC-1661 worktree cleanliness | `git status --porcelain` = 0 entries — clean, no new changes to inspect |
+| `git fetch --all --prune` | exit 0; 23 remote-tracking refs before and after, **diff is empty — no ref moved** |
+| All seven pinned SHAs | Re-resolved today; every one matches the pinned value. Nothing moved |
+| Main checkout | `7ab2a80` on `integration/chromascape-consolidated-20260901`, 583 porcelain entries |
+| Consolidation | `583a05b` on `wip/chromascape-consolidation-20260907`, 1,420 porcelain entries |
+| Fedora remote | `97284f1` on `codex/fedora-remote-executor`, clean |
+| Durable-current | `16a3d72` on `integration/sc1199-durable-current`, 1,414 porcelain entries |
+
+**Porcelain-count drift, recorded not hidden.** The main checkout now reports **583** porcelain
+entries against the 578 recorded above. `git diff --ignore-cr-at-eol --name-only` is still **87
+files**, so the substantive modified set has not changed. The extra entries are untracked
+tooling/configuration that appeared after the first pass — `.commandcode/settings.json` and four
+`.commandcode/taste/**` directories — plus reclassification of the two worktree deletions. This is
+agent/tool configuration, not story source, and must be kept out of the story branch. No pinned
+revision moved, so no earlier evidence is invalidated.
+
+## Pinned outcome (reconciliation complete)
+
+| Role | Value |
+|---|---|
+| **Candidate baseline (content)** | `583a05b91687d156b1baa52dbda2b219604c7b39` |
+| **Reconciled code baseline SHA** | `966e0e3` — branch tip after carrying the two custom changes. Its content baseline is still `583a05b`; the two commits are additive source carries, so downstream stories branch from `966e0e3` |
+| Documentation / review tip | Recorded separately from the code baseline, so the artifact does not need to contain its own commit hash |
+| Pinned upstream SHA | `5ea3b995f5d13e19c592a6399973fe7dadb5e656` (`StaticSweep/main`, tag `v0.5.0`) |
+| Upstream merge base | `46db1c462752d39bd0c04da630bfe5d35edc117a` |
+
+Divergence recomputed against the pinned upstream revision: candidate baseline vs `5ea3b99` is
+**292 ahead / 15 behind** at merge base `46db1c4`. The 292 is the custom fork surface; the 15 is
+the upstream-only set to adapt. The two carries do not change the upstream-only commit count,
+because neither touches upstream ancestry.
+
 ## Worktree integrity
 
 - The new story worktree was created clean: `git status --porcelain` = 0 entries at
