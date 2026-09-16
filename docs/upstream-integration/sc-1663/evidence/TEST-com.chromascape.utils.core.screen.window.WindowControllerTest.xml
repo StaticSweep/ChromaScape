@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.WindowControllerTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-16T23:51:41.682Z" hostname="fedora" time="0.022">
+  <properties/>
+  <testcase name="getCurrentWindowReturnsNoContentWhenNoWindowIsSelected()" classname="com.chromascape.utils.core.screen.window.WindowControllerTest" time="0.013"/>
+  <testcase name="getCurrentWindowReturnsSelectedWindowPayload()" classname="com.chromascape.utils.core.screen.window.WindowControllerTest" time="0.008"/>
+  <system-out><![CDATA[01:51:41.704 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: RuneLite - test
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

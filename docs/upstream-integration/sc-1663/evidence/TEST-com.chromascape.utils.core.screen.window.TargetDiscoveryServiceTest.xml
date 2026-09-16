@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-16T23:51:41.652Z" hostname="fedora" time="0.028">
+  <properties/>
+  <testcase name="resolutionReportsNoEligibleTargetWhenNothingMatches()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.003"/>
+  <testcase name="resolutionReportsUnsupportedPlatforms()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.001"/>
+  <testcase name="resolutionRefusesMultipleCandidatesWithoutSelection()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.005"/>
+  <testcase name="resolutionRefusesSelectionThatMatchesNoCandidate()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.004"/>
+  <testcase name="resolutionHonorsAnExplicitSelectionAmongMultipleCandidates()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.004"/>
+  <testcase name="resolutionReturnsOneCandidate()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.003"/>
+  <testcase name="linuxCandidatesCarryTheNeutralShapeWithoutWindowHandles()" classname="com.chromascape.utils.core.screen.window.TargetDiscoveryServiceTest" time="0.004"/>
+  <system-out><![CDATA[01:51:41.654 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 0 eligible local target(s) from 0 procfs entries (0 unreadable)
+01:51:41.661 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 2 eligible local target(s) from 2 procfs entries (0 unreadable)
+01:51:41.664 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+01:51:41.665 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+01:51:41.669 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+01:51:41.671 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 2 eligible local target(s) from 2 procfs entries (0 unreadable)
+01:51:41.675 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+01:51:41.678 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
