@@ -194,11 +194,17 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
                   promptBuilder.build(session, request),
                   request.deadline()));
       if (!result.terminal()) {
+        if (result.submitted()) {
+          store.markStreaming(request.turnId());
+        }
         store.markNeedsReconciliation(request.turnId(), FailureCode.NEEDS_RECONCILIATION);
         return;
       }
       RedactedTranscriptStore.Artifact artifact = transcripts.store(result.redactedTranscript());
       store.recordTranscript(request.turnId(), artifact.reference(), artifact.byteLength());
+      if (result.submitted()) {
+        store.markStreaming(request.turnId());
+      }
       if (result.failureCode() != FailureCode.NONE) {
         TurnState failureState =
             result.failureCode() == FailureCode.PROVIDER_UNAVAILABLE

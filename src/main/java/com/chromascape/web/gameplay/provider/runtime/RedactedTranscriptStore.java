@@ -5,6 +5,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
@@ -30,7 +33,8 @@ public final class RedactedTranscriptStore {
     bounded = BEARER.matcher(bounded).replaceAll("$1[REDACTED]");
     bounded = SECRET.matcher(bounded).replaceAll("$1$2[REDACTED]");
     byte[] content = bounded.getBytes(StandardCharsets.UTF_8);
-    String digest = canonicalJson.digest(bounded);
+    // Hash the exact stored bytes so the recorded digest always matches the artifact.
+    String digest = "sha256:" + HexFormat.of().formatHex(sha256(content));
     try {
       Path root = properties.getTranscriptRoot().toAbsolutePath().normalize();
       Files.createDirectories(root);
@@ -50,4 +54,12 @@ public final class RedactedTranscriptStore {
   }
 
   public record Artifact(String reference, long byteLength) {}
+
+  private static byte[] sha256(byte[] content) {
+    try {
+      return MessageDigest.getInstance("SHA-256").digest(content);
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 is required for transcript digests", exception);
+    }
+  }
 }

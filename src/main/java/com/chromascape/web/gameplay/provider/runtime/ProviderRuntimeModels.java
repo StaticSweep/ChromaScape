@@ -57,7 +57,7 @@ public final class ProviderRuntimeModels {
     public boolean submitted() {
       return switch (this) {
         case SUBMITTED, STREAMING, NORMALIZING -> true;
-        default -> terminal() && this != PROVIDER_UNAVAILABLE && this != BUDGET_EXHAUSTED;
+        default -> false;
       };
     }
   }

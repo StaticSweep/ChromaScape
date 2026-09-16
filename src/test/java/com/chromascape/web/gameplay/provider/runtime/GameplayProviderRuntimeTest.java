@@ -346,6 +346,11 @@ class GameplayProviderRuntimeTest {
     }
 
     @Override
+    public synchronized void markStreaming(String turnId) {
+      replace(turnId, TurnState.STREAMING, FailureCode.NONE, null, null, null, null, null);
+    }
+
+    @Override
     public synchronized TurnView finish(
         String turnId,
         TurnState state,

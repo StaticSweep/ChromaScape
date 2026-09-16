@@ -214,6 +214,14 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
 
   @Override
   @Transactional
+  public void markStreaming(String turnId) {
+    ProviderTurnEntity turn = mutableTurn(turnId);
+    transition(turn, TurnState.STREAMING, FailureCode.NONE);
+    appendEvent(turnId, "STREAMING", canonicalJson.digest(turnId));
+  }
+
+  @Override
+  @Transactional
   public TurnView finish(
       String turnId,
       TurnState state,
@@ -250,6 +258,15 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
     if (usage != null) {
       chargeUsage(turn, usage);
     }
+    ProviderSessionEntity session = entityManager.find(ProviderSessionEntity.class, turn.sessionId);
+    session.state =
+        switch (state) {
+          case DECIDED, ABSTAINED -> SessionState.COMPLETED.name();
+          case CANCELLED -> SessionState.CANCELLED.name();
+          case NEEDS_RECONCILIATION -> SessionState.NEEDS_RECONCILIATION.name();
+          default -> SessionState.FAILED.name();
+        };
+    session.updatedAt = clock.instant();
     appendEvent(turnId, "TURN_" + state.name(), canonicalJson.digest(failureCode.name()));
     entityManager.flush();
     return turnView(turn);
@@ -369,6 +386,7 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
     boolean allowed =
         switch (state) {
           case SUBMITTED -> current == TurnState.RESERVED;
+          case STREAMING -> current == TurnState.SUBMITTED;
           case NORMALIZING -> current == TurnState.SUBMITTED || current == TurnState.STREAMING;
           default -> state.terminal()
               && (!current.terminal() || current == TurnState.NEEDS_RECONCILIATION);

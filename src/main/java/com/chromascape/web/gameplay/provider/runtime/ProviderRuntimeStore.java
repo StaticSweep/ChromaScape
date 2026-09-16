@@ -28,6 +28,8 @@ public interface ProviderRuntimeStore {
   void markSubmitted(
       String turnId, String providerSessionRef, String providerTurnRef, List<String> events);
 
+  void markStreaming(String turnId);
+
   void markNormalizing(String turnId);
 
   TurnView finish(
