@@ -1,5 +1,6 @@
 package com.chromascape.web.debug;
 
+import com.chromascape.utils.core.screen.window.TargetDiscoveryService;
 import com.chromascape.utils.core.screen.window.WindowHandler;
 import com.chromascape.utils.core.screen.window.WindowInfo;
 import com.sun.jna.Native;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,6 +29,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class WindowDebugController {
 
   private static final Logger logger = LoggerFactory.getLogger(WindowDebugController.class);
+
+  private final TargetDiscoveryService targetDiscoveryService;
+
+  /**
+   * Creates the debug controller.
+   *
+   * @param targetDiscoveryService single read path to discovery
+   */
+  @Autowired
+  public WindowDebugController(TargetDiscoveryService targetDiscoveryService) {
+    this.targetDiscoveryService = targetDiscoveryService;
+  }
 
   /** JNA interface for accessing low-level Win32 User32 functions. */
   public interface User32 extends com.sun.jna.win32.StdCallLibrary {
@@ -139,8 +153,8 @@ public class WindowDebugController {
    */
   @GetMapping("/targets")
   public ResponseEntity<List<TargetWindowDebugInfo>> getTargetWindows() {
-    logger.info("Getting target windows via WindowHandler.getAllTargetWindows()...");
-    List<WindowInfo> windows = WindowHandler.getAllTargetWindows();
+    logger.info("Getting target windows via TargetDiscoveryService...");
+    List<WindowInfo> windows = targetDiscoveryService.listAllTargetWindows();
     logger.info("Found {} target windows", windows.size());
     List<TargetWindowDebugInfo> response =
         windows.stream()
