@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.RoutineReplayShadowServiceTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:35.777Z" hostname="fedora" time="0.009">
+  <properties/>
+  <testcase name="anExactTranscriptStillPasses()" classname="com.chromascape.web.aiplayer.routine.service.RoutineReplayShadowServiceTest" time="0.002"/>
+  <testcase name="aModelThatClaimsNothingDoesNotPassByAbstainingOnEverything()" classname="com.chromascape.web.aiplayer.routine.service.RoutineReplayShadowServiceTest" time="0.001"/>
+  <testcase name="aModelIsAllowedToAbstainOnTheOperatorsIncidentalClicks()" classname="com.chromascape.web.aiplayer.routine.service.RoutineReplayShadowServiceTest" time="0.002"/>
+  <testcase name="orderIsStillEnforced()" classname="com.chromascape.web.aiplayer.routine.service.RoutineReplayShadowServiceTest" time="0.001"/>
+  <testcase name="anActionTheRecordingNeverShowsIsADivergence()" classname="com.chromascape.web.aiplayer.routine.service.RoutineReplayShadowServiceTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,4 @@
+build/dist/linux-x86_64/application.jar
+build/dist/linux-x86_64/launcher
+build/dist/linux-x86_64/licenses
+build/dist/linux-x86_64/licenses/ChromaScape-LICENSE

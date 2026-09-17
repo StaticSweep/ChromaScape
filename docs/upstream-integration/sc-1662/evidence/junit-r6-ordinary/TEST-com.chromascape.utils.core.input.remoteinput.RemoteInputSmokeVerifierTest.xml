@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:09.457Z" hostname="fedora" time="0.031">
+  <properties/>
+  <testcase name="structurallyInvalidManifestFailsBeforeLoading(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.012"/>
+  <testcase name="malformedExpectedHashIsAUsageError()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.001"/>
+  <testcase name="unknownModeIsAUsageError()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.001"/>
+  <testcase name="absentManifestFailsBeforeTheLibraryIsLoaded(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.003"/>
+  <testcase name="optionWithoutValueIsAUsageError()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.001"/>
+  <testcase name="explicitLibraryIsVerifiedAgainstItsOwnSiblingManifest(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.005"/>
+  <testcase name="modeDefaultsToDevelopmentAndAcceptsPackaged()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.0"/>
+  <testcase name="unknownArgumentIsAUsageError()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.0"/>
+  <testcase name="manifestThatDisagreesWithTheArtifactFailsBeforeLoading(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.002"/>
+  <testcase name="verificationPathReferencesNoApplicationServicesOrNativeSymbols()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.001"/>
+  <testcase name="missingArtifactFailsWithoutReportingSuccess(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputSmokeVerifierTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SMOKE_USAGE --expect-sha256 must be a 64-character lowercase hex digest
+SMOKE_USAGE --mode must be 'development' or 'packaged', got: ship-it
+SMOKE_USAGE --mode requires a value
+SMOKE_USAGE unknown argument: --not-an-option
+SMOKE_FAILED diagnostic=MISSING_LIBRARY message=[MISSING_LIBRARY] staged artifact does not exist (selected path: /tmp/junit-13823054513566280457/native/linux-x86_64/libRemoteInput.so) (expected: linux-x86_64 ELF 64-bit LSB shared object)
+]]></system-err>
+</testsuite>

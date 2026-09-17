@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-09-15T03:10:25.844Z" hostname="fedora" time="0.012">
+  <properties/>
+  <testcase name="dispatchHoldIsNotReady()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.002"/>
+  <testcase name="missingLoginStateFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.001"/>
+  <testcase name="unknownLoginStateFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.0"/>
+  <testcase name="loginStateTakesPrecedenceOverWorldAndScript()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.0"/>
+  <testcase name="deadScriptLoopIsNotReady()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.0"/>
+  <testcase name="nonRunningLifecycleIsNotReady()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.0"/>
+  <testcase name="blankLoginStateFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.0"/>
+  <testcase name="worldMismatchIsNotReady()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.001"/>
+  <testcase name="missingStartupStateFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.001"/>
+  <testcase name="worldMatchIsComputedFromObservedWorldNotHeartbeatFlag()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.0"/>
+  <testcase name="startupStateMustBeAccountbuilderReady()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.0"/>
+  <testcase name="pathfinderIncompleteIsNotReady()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.0"/>
+  <testcase name="readyWhenAllDispatchRequirementsSatisfied()" classname="com.chromascape.web.debug.buildergoal.service.Micro6ExecutorReadinessEvaluatorTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

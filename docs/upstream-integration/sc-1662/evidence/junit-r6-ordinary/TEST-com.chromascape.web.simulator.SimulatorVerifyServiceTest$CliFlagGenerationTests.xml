@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="CLI Flag Generation Tests" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:56.142Z" hostname="fedora" time="0.004">
+  <properties/>
+  <testcase name="Should build args string with correct camelCase flags (TC1)" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$CliFlagGenerationTests" time="0.001"/>
+  <testcase name="Should build args string without API key when blank" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$CliFlagGenerationTests" time="0.001"/>
+  <testcase name="Should build args string without API key when empty string" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$CliFlagGenerationTests" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

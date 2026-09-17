@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.controller.BuilderGoalCodexControllerTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:37.307Z" hostname="fedora" time="0.119">
+  <properties/>
+  <testcase name="createSession_returnsOk()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalCodexControllerTest" time="0.101"/>
+  <testcase name="getRunLogs_returnsOk()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalCodexControllerTest" time="0.002"/>
+  <testcase name="startRun_returnsOk()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalCodexControllerTest" time="0.003"/>
+  <testcase name="getReplayTick_returnsBadRequestWhenSessionMissing()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalCodexControllerTest" time="0.002"/>
+  <testcase name="processMessage_conflictReturns409()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalCodexControllerTest" time="0.003"/>
+  <testcase name="getReplayContext_returnsOk()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalCodexControllerTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

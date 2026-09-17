@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Missing Report Error Path Tests" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:56.100Z" hostname="fedora" time="0.006">
+  <properties/>
+  <testcase name="Should build synthetic error report when report file missing and no JSON in output" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$MissingReportErrorTests" time="0.003"/>
+  <testcase name="Should extract session not found error when session invalid" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$MissingReportErrorTests" time="0.001"/>
+  <testcase name="Should use extractErrorMessage when report file not found and no JSON" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$MissingReportErrorTests" time="0.001"/>
+  <testcase name="Should extract bridge unreachable error when bridge is down" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$MissingReportErrorTests" time="0.001"/>
+  <system-out><![CDATA[12:41:56.102 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'reportsDir' of type [null] on target object [SimulatorVerifierProperties{enabled=true, openruneRoot='/mnt/f/Dev/IdeaProjects/OpenRune-Server', invocationMode='jar', verifierJarPath='simulator-verifier/build/libs/simulator-verifier-all.jar', defaultBridgeUrl='http://localhost:8092', reportsDir='output/simulator-reports', maxConcurrentJobs=2, jobTimeoutSeconds=300}] or target class [class com.chromascape.web.simulator.SimulatorVerifierProperties] to value [reports]
+12:41:56.102 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'openruneRoot' of type [null] on target object [SimulatorVerifierProperties{enabled=true, openruneRoot='/mnt/f/Dev/IdeaProjects/OpenRune-Server', invocationMode='jar', verifierJarPath='simulator-verifier/build/libs/simulator-verifier-all.jar', defaultBridgeUrl='http://localhost:8092', reportsDir='reports', maxConcurrentJobs=2, jobTimeoutSeconds=300}] or target class [class com.chromascape.web.simulator.SimulatorVerifierProperties] to value [/tmp/synthetic-report-test6591656718763911770]
+12:41:56.102 [Test worker] WARN  com.chromascape.web.simulator.SimulatorVerifyService - Report file not found at /tmp/synthetic-report-test6591656718763911770/reports/synthetic-test.json, attempting to parse from output
+12:41:56.102 [Test worker] INFO  com.chromascape.web.simulator.SimulatorVerifyService - Built synthetic error report for job synthetic-test from verifier output
+12:41:56.102 [Test worker] INFO  com.chromascape.web.simulator.SimulatorVerifyService - Persisted report from verifier output to /tmp/synthetic-report-test6591656718763911770/reports/synthetic-test.json
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,15 @@
+# command: ./gradlew --offline compileJava compileTestJava --console=plain -Psc967VectorsPath=<contracts>/ed25519-vectors.json
+# utc: 2026-09-15T03:08:55Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 2f0bb57467474316cdf6ee2974d3e4ed181cf9a6b2b08dd5616d8695f32bb652
+# run_sequence: 2 (post-review fixes; run 1 logs retained unmodified)
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+
+BUILD SUCCESSFUL in 1s
+3 actionable tasks: 3 up-to-date
+# exit_code: 0
+# elapsed_seconds: 2

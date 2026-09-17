@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidatorTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:15.881Z" hostname="fedora" time="0.021">
+  <properties/>
+  <testcase name="acceptsMicro6Identity()" classname="com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidatorTest" time="0.004"/>
+  <testcase name="acceptsRuneLiteWithoutExecutorFields()" classname="com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidatorTest" time="0.001"/>
+  <testcase name="rejectsRequestedControl()" classname="com.chromascape.web.aiplayer.contract.CurrentSliceIdentityValidatorTest" time="0.015"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

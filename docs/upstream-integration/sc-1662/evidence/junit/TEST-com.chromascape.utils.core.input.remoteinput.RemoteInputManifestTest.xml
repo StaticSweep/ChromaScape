@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-15T03:07:08.865Z" hostname="fedora" time="0.031">
+  <properties/>
+  <testcase name="manifestWithoutArtifactObjectIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.023"/>
+  <testcase name="truncatedManifestIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.003"/>
+  <testcase name="readsTheReportedFields(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.002"/>
+  <testcase name="missingManifestIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

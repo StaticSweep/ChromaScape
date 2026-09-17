@@ -1,0 +1,24 @@
+# command: ./gradlew --offline verifyRemoteInputDistributionLicenceMatrix --console=plain
+# utc: 2026-09-16T00:42:10Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 4a8acee11127562d70219a4472b560ade014a8186228bfd8b73a6bd7a9beb845
+# run_sequence: 5 (fourth-review fixes; runs 1-4 retained unmodified apart from redaction)
+
+
+> Task :verifyRemoteInputDistributionLicenceMatrix
+PASS: unresolved + no licence -> unresolved
+PASS: unresolved + non-empty licence -> unresolved
+PASS: resolved + missing licence -> unresolved
+PASS: resolved + empty licence -> unresolved
+PASS: resolved + non-empty licence -> closed
+PASS: missing marker -> unresolved
+PASS: malformed marker -> unresolved
+PASS: duplicate marker -> unresolved
+PASS: missing provenance file -> unresolved
+licence gate matrix: 9/9 states behaved as documented
+
+BUILD SUCCESSFUL in 1s
+1 actionable task: 1 executed
+
+# exit: 0
+# elapsed_seconds: 2

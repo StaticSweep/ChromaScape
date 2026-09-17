@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:40:16.977Z" hostname="fedora" time="40.156">
+  <properties/>
+  <testcase name="healthCheck() returns unhealthy when healthy field is invalid/non-boolean" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.009"/>
+  <testcase name="healthCheck() handles response with metadata" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.005"/>
+  <testcase name="healthCheck() respects max-retries configuration" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.108"/>
+  <testcase name="healthCheck() retries on transient failures" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.314"/>
+  <testcase name="healthCheck() throws INVALID_RESPONSE on malformed JSON" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.006"/>
+  <testcase name="healthCheck() throws TIMEOUT on connection timeout" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="4.01"/>
+  <testcase name="healthCheck() returns false when MCP server returns unhealthy status" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.008"/>
+  <testcase name="healthCheck() throws CONNECTION_REFUSED or TIMEOUT on connection refused" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="15.314"/>
+  <testcase name="analyze() throws SERIALIZATION_ERROR on null request" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="15.323"/>
+  <testcase name="Constructor initializes HttpClient with correct configuration" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.002"/>
+  <testcase name="healthCheck() returns true when MCP server returns healthy status" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.008"/>
+  <testcase name="analyze() returns valid response on success" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.016"/>
+  <testcase name="analyze() throws HTTP_ERROR on 500 with retry" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.318"/>
+  <testcase name="analyze() throws TIMEOUT on timeout" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="4.009"/>
+  <testcase name="healthCheck() handles missing optional fields" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.008"/>
+  <testcase name="healthCheck() throws CONFIGURATION_ERROR on 400 status code" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.01"/>
+  <testcase name="healthCheck() throws AUTH_FAILED on 401" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.008"/>
+  <testcase name="healthCheck() throws AUTH_FAILED on 403" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.007"/>
+  <testcase name="healthCheck() throws RATE_LIMIT on 429 with isRetryable=true" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.316"/>
+  <testcase name="healthCheck() throws HTTP_ERROR on 500 status code" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.316"/>
+  <testcase name="healthCheck() returns unhealthy when healthy field is missing" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.006"/>
+  <testcase name="analyze() throws INVALID_RESPONSE on malformed JSON" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.007"/>
+  <testcase name="analyze() throws AUTH_FAILED on 401" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.006"/>
+  <testcase name="analyze() throws AUTH_FAILED on 403" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.006"/>
+  <testcase name="healthCheck() returns structured unhealthy payload from non-2xx health response" classname="com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClientTest" time="0.006"/>
+  <system-out><![CDATA[12:40:16.980 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:36839, timeout: 5s, maxRetries: 2
+12:40:16.980 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:36839/health
+12:40:16.986 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check successful (attempt 1): status 200
+12:40:16.988 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:43645, timeout: 5s, maxRetries: 2
+12:40:16.989 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:43645/health
+12:40:16.992 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check successful (attempt 1): status 200
+12:40:16.994 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:43955, timeout: 5s, maxRetries: 2
+12:40:16.995 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:43955, timeout: 5s, maxRetries: 1
+12:40:16.995 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:43955/health
+12:40:16.998 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 1): HTTP 503
+12:40:16.998 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 100ms
+12:40:17.100 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 2): HTTP 503
+12:40:17.104 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:34975, timeout: 5s, maxRetries: 2
+12:40:17.105 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:34975/health
+12:40:17.110 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 1): HTTP 503
+12:40:17.110 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 100ms
+12:40:17.212 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 2): HTTP 503
+12:40:17.212 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 200ms
+12:40:17.415 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check successful (attempt 3): status 200
+12:40:17.418 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:34375, timeout: 5s, maxRetries: 2
+12:40:17.419 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:34375/health
+12:40:17.422 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check successful (attempt 1): status 200
+12:40:17.424 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:32915, timeout: 5s, maxRetries: 2
+12:40:17.425 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:32915, timeout: 1s, maxRetries: 2
+12:40:17.425 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:32915/health
+12:40:18.428 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 1): Timeout
+12:40:18.428 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 100ms
+12:40:19.530 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 2): Timeout
+12:40:19.531 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 200ms
+12:40:20.733 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 3): Timeout
+12:40:21.434 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:38029, timeout: 5s, maxRetries: 2
+12:40:21.435 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:38029/health
+12:40:21.439 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check successful (attempt 1): status 200
+12:40:21.442 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:38973, timeout: 5s, maxRetries: 2
+12:40:21.442 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:38973/health
+12:40:26.445 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 1): Timeout
+12:40:26.445 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 100ms
+12:40:31.549 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 2): Timeout
+12:40:31.549 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 200ms
+12:40:36.754 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 3): Timeout
+12:40:36.757 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:34395, timeout: 5s, maxRetries: 2
+12:40:36.758 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP analysis: http://localhost:34395/analyze
+12:40:41.764 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze failed (attempt 1): Timeout
+12:40:41.764 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP analyze in 100ms
+12:40:46.874 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze failed (attempt 2): Timeout
+12:40:46.874 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP analyze in 200ms
+12:40:52.077 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze failed (attempt 3): Timeout
+12:40:52.081 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:41963, timeout: 5s, maxRetries: 2
+12:40:52.083 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:45149, timeout: 5s, maxRetries: 2
+12:40:52.084 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:45149/health
+12:40:52.088 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check successful (attempt 1): status 200
+12:40:52.091 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:42995, timeout: 5s, maxRetries: 2
+12:40:52.092 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP analysis: http://localhost:42995/analyze
+12:40:52.099 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze successful (attempt 1): status 200
+12:40:52.108 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:37431, timeout: 5s, maxRetries: 2
+12:40:52.108 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP analysis: http://localhost:37431/analyze
+12:40:52.112 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze failed (attempt 1): HTTP 500
+12:40:52.112 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP analyze in 100ms
+12:40:52.215 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze failed (attempt 2): HTTP 500
+12:40:52.215 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP analyze in 200ms
+12:40:52.418 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze successful (attempt 3): status 200
+12:40:52.426 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:42805, timeout: 5s, maxRetries: 2
+12:40:52.426 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:42805, timeout: 1s, maxRetries: 2
+12:40:52.428 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP analysis: http://localhost:42805/analyze
+12:40:53.431 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze failed (attempt 1): Timeout
+12:40:53.431 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP analyze in 100ms
+12:40:54.532 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze failed (attempt 2): Timeout
+12:40:54.532 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP analyze in 200ms
+12:40:55.735 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze failed (attempt 3): Timeout
+12:40:56.436 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:32845, timeout: 5s, maxRetries: 2
+12:40:56.437 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:32845/health
+12:40:56.441 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check successful (attempt 1): status 200
+12:40:56.444 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:37191, timeout: 5s, maxRetries: 2
+12:40:56.445 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:37191/health
+12:40:56.451 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 1): HTTP 400
+12:40:56.454 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:37445, timeout: 5s, maxRetries: 2
+12:40:56.456 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:37445/health
+12:40:56.460 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 1): HTTP 401
+12:40:56.463 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:35557, timeout: 5s, maxRetries: 2
+12:40:56.464 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:35557/health
+12:40:56.468 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 1): HTTP 403
+12:40:56.470 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:42933, timeout: 5s, maxRetries: 2
+12:40:56.471 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:42933/health
+12:40:56.477 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 1): HTTP 429
+12:40:56.477 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 100ms
+12:40:56.580 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 2): HTTP 429
+12:40:56.581 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 200ms
+12:40:56.783 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 3): HTTP 429
+12:40:56.786 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:40057, timeout: 5s, maxRetries: 2
+12:40:56.787 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:40057/health
+12:40:56.791 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 1): HTTP 500
+12:40:56.791 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 100ms
+12:40:56.896 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 2): HTTP 500
+12:40:56.896 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Retrying MCP health check in 200ms
+12:40:57.100 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check failed (attempt 3): HTTP 500
+12:40:57.103 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:34343, timeout: 5s, maxRetries: 2
+12:40:57.104 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:34343/health
+12:40:57.107 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check successful (attempt 1): status 200
+12:40:57.109 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:35995, timeout: 5s, maxRetries: 2
+12:40:57.110 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP analysis: http://localhost:35995/analyze
+12:40:57.114 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze successful (attempt 1): status 200
+12:40:57.116 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:45697, timeout: 5s, maxRetries: 2
+12:40:57.117 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP analysis: http://localhost:45697/analyze
+12:40:57.120 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze failed (attempt 1): HTTP 401
+12:40:57.122 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:46757, timeout: 5s, maxRetries: 2
+12:40:57.124 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP analysis: http://localhost:46757/analyze
+12:40:57.127 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP analyze failed (attempt 1): HTTP 403
+12:40:57.129 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:46499, timeout: 5s, maxRetries: 2
+12:40:57.130 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - Performing MCP health check: http://localhost:46499/health
+12:40:57.133 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - MCP health check returned HTTP 503 with structured payload (healthy=false)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

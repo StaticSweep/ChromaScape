@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT" tests="4" skipped="0" failures="4" errors="0" timestamp="2026-09-16T10:39:06.441Z" hostname="fedora" time="0.006">
+  <properties/>
+  <testcase name="aDocumentLargerThanAnyVarcharBoundRoundTrips()" classname="com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT" time="0.002">
+    <failure message="java.lang.ExceptionInInitializerError" type="java.lang.ExceptionInInitializerError">java.lang.ExceptionInInitializerError
+	at java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:500)
+	at java.base/java.lang.reflect.Constructor.newInstance(Constructor.java:481)
+	at java.base/java.util.Optional.orElseGet(Optional.java:364)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+Caused by: java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.testsupport.IsolatedPostgresTestDatabase.start(IsolatedPostgresTestDatabase.java:195)
+	at com.chromascape.testsupport.IsolatedPostgresTestDatabase.newDatabase(IsolatedPostgresTestDatabase.java:97)
+	at com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT.&lt;clinit&gt;(RoutineAssistantGenerationContextIT.java:56)
+	... 5 more
+</failure>
+  </testcase>
+  <testcase name="resolvesTheRunsPublishedGraphFromOffRequestThread()" classname="com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT" time="0.001">
+    <failure message="java.lang.NoClassDefFoundError: Could not initialize class com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT" type="java.lang.NoClassDefFoundError">java.lang.NoClassDefFoundError: Could not initialize class com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT
+	at java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:500)
+	at java.base/java.lang.reflect.Constructor.newInstance(Constructor.java:481)
+	at java.base/java.util.Optional.orElseGet(Optional.java:364)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+Caused by: java.lang.ExceptionInInitializerError: Exception java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration [in thread &quot;Test worker&quot;]
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.testsupport.IsolatedPostgresTestDatabase.start(IsolatedPostgresTestDatabase.java:195)
+	at com.chromascape.testsupport.IsolatedPostgresTestDatabase.newDatabase(IsolatedPostgresTestDatabase.java:97)
+	at com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT.&lt;clinit&gt;(RoutineAssistantGenerationContextIT.java:56)
+	... 5 more
+</failure>
+  </testcase>
+  <testcase name="theColumnHoldsTheJsonSoSqlOverItWorks()" classname="com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT" time="0.001">
+    <failure message="java.lang.NoClassDefFoundError: Could not initialize class com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT" type="java.lang.NoClassDefFoundError">java.lang.NoClassDefFoundError: Could not initialize class com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT
+	at java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:500)
+	at java.base/java.lang.reflect.Constructor.newInstance(Constructor.java:481)
+	at java.base/java.util.Optional.orElseGet(Optional.java:364)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+Caused by: java.lang.ExceptionInInitializerError: Exception java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration [in thread &quot;Test worker&quot;]
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.testsupport.IsolatedPostgresTestDatabase.start(IsolatedPostgresTestDatabase.java:195)
+	at com.chromascape.testsupport.IsolatedPostgresTestDatabase.newDatabase(IsolatedPostgresTestDatabase.java:97)
+	at com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT.&lt;clinit&gt;(RoutineAssistantGenerationContextIT.java:56)
+	... 5 more
+</failure>
+  </testcase>
+  <testcase name="jsonColumnsAreReadableOutsideATransaction()" classname="com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT" time="0.001">
+    <failure message="java.lang.NoClassDefFoundError: Could not initialize class com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT" type="java.lang.NoClassDefFoundError">java.lang.NoClassDefFoundError: Could not initialize class com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT
+	at java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:500)
+	at java.base/java.lang.reflect.Constructor.newInstance(Constructor.java:481)
+	at java.base/java.util.Optional.orElseGet(Optional.java:364)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+Caused by: java.lang.ExceptionInInitializerError: Exception java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration [in thread &quot;Test worker&quot;]
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.testsupport.IsolatedPostgresTestDatabase.start(IsolatedPostgresTestDatabase.java:195)
+	at com.chromascape.testsupport.IsolatedPostgresTestDatabase.newDatabase(IsolatedPostgresTestDatabase.java:97)
+	at com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT.&lt;clinit&gt;(RoutineAssistantGenerationContextIT.java:56)
+	... 5 more
+</failure>
+  </testcase>
+  <system-out><![CDATA[12:39:06.430 [Test worker] DEBUG org.springframework.boot.test.context.SpringBootTestContextBootstrapper - Neither @ContextConfiguration nor @ContextHierarchy found for test class [RoutineAssistantGenerationContextIT]: using SpringBootContextLoader
+12:39:06.431 [Test worker] DEBUG org.springframework.test.context.support.AbstractContextLoader - Could not detect default resource locations for test class [com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextIT]: no resource found for suffixes {-context.xml, Context.groovy}.
+12:39:06.432 [Test worker] DEBUG org.springframework.boot.test.context.SpringBootTestContextBootstrapper - Using ContextCustomizerFactory implementations for test class [RoutineAssistantGenerationContextIT]: [OnFailureConditionReportContextCustomizerFactory, OverrideAutoConfigurationContextCustomizerFactory, ObservabilityContextCustomizerFactory, TypeExcludeFiltersContextCustomizerFactory, PropertyMappingContextCustomizerFactory, WebDriverContextCustomizerFactory, ImportsContextCustomizerFactory, ExcludeFilterContextCustomizerFactory, HttpGraphQlTesterContextCustomizerFactory, DuplicateJsonObjectContextCustomizerFactory, MockitoContextCustomizerFactory, TestRestTemplateContextCustomizerFactory, WebTestClientContextCustomizerFactory, DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory, MockServerContainerContextCustomizerFactory, DynamicPropertiesContextCustomizerFactory]
+12:39:06.434 [Test worker] DEBUG org.springframework.boot.test.context.SpringBootTestContextBootstrapper - Using ContextCustomizers for test class [RoutineAssistantGenerationContextIT]: [OnFailureConditionReportContextCustomizer, DisableObservabilityContextCustomizer, PropertyMappingContextCustomizer, WebDriverContextCustomizer, ExcludeFilterContextCustomizer, DuplicateJsonObjectContextCustomizer, MockitoContextCustomizer, TestRestTemplateContextCustomizer, DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer, DynamicPropertiesContextCustomizer]
+12:39:06.437 [Test worker] DEBUG org.springframework.test.context.util.TestContextSpringFactoriesUtils - Skipping candidate TestExecutionListener [org.springframework.test.context.observation.MicrometerObservationRegistryTestExecutionListener] due to a missing dependency. Specify custom TestExecutionListener classes or make the default TestExecutionListener classes and their required dependencies available. Offending class: io.micrometer.context.ThreadLocalAccessor. MicrometerObservationRegistryTestExecutionListener requires io.micrometer:micrometer-observation:1.10.8 or higher and io.micrometer:context-propagation:1.0.3 or higher.
+12:39:06.437 [Test worker] DEBUG org.springframework.boot.test.context.SpringBootTestContextBootstrapper - Using TestExecutionListeners for test class [RoutineAssistantGenerationContextIT]: [ServletTestExecutionListener, DirtiesContextBeforeModesTestExecutionListener, ApplicationEventsTestExecutionListener, MockitoTestExecutionListener, DependencyInjectionTestExecutionListener, DirtiesContextTestExecutionListener, TransactionalTestExecutionListener, SqlScriptsTestExecutionListener, EventPublishingTestExecutionListener, RestDocsTestExecutionListener, MockRestServiceServerResetTestExecutionListener, MockMvcPrintOnlyOnFailureTestExecutionListener, WebDriverTestExecutionListener, MockWebServiceServerTestExecutionListener, ResetMocksTestExecutionListener]
+12:39:06.437 [Test worker] DEBUG org.springframework.test.context.support.DirtiesContextBeforeModesTestExecutionListener - Before test class: class [RoutineAssistantGenerationContextIT], class annotated with @DirtiesContext [false] with mode [null]
+12:39:06.438 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+12:39:06.448 [Test worker] DEBUG org.springframework.test.context.support.DirtiesContextTestExecutionListener - After test class: class [RoutineAssistantGenerationContextIT], class annotated with @DirtiesContext [false] with mode [null]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

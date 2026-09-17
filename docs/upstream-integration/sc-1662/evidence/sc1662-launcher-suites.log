@@ -1,0 +1,20 @@
+# command: ./gradlew test --tests *BuilderGoalLauncherControlServiceTest --tests *BuilderGoalRunnerServiceTest --tests *Micro6OnlineClientRegistryServiceTest --tests *Micro6TargetPreparationServiceTest --tests *Micro6RemoteLauncherServiceTest --tests *Micro6ExecutorReadinessEvaluatorTest -Psc967VectorsPath=<contracts>/ed25519-vectors.json --console=plain
+# utc: 2026-09-14T14:19:49Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses UP-TO-DATE
+
+> Task :test
+SC-967 vectors: <contracts>/ed25519-vectors.json
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+BUILD SUCCESSFUL in 17s
+5 actionable tasks: 1 executed, 4 up-to-date
+# exit_code: 0
+# elapsed_seconds: 17

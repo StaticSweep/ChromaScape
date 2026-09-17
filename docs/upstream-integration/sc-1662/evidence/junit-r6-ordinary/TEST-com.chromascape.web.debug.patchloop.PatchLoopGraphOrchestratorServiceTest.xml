@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:40:12.784Z" hostname="fedora" time="0.89">
+  <properties/>
+  <testcase name="RETRY_FROM_NODE rejected from CREATED state" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.776"/>
+  <testcase name="RESUME rejected from RUNNING state" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.005"/>
+  <testcase name="RESUME uses async worker and returns immediately" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.006"/>
+  <testcase name="RESUME calls execution-scoped resumeScript with executionId" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.004"/>
+  <testcase name="RETRY_FROM_NODE allowed from COMPLETED state" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.01"/>
+  <testcase name="RELAUNCH_IF_CREATED rejected from non-CREATED state" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.005"/>
+  <testcase name="PAUSE calls execution-scoped pauseScript with executionId" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.017"/>
+  <testcase name="RESUME allowed from PAUSED state" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.007"/>
+  <testcase name="RETRY_FROM_NODE allowed from PAUSED state" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.007"/>
+  <testcase name="CANCEL calls execution-scoped stopScript with executionId and reason" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.004"/>
+  <testcase name="executeGraph reuses existing iteration when iterationId is provided (E6.5)" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.012"/>
+  <testcase name="RELAUNCH_IF_CREATED uses async worker when execution has not started" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.007"/>
+  <testcase name="RETRY_FROM_NODE rejected from RUNNING state" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.004"/>
+  <testcase name="RETRY_FROM_NODE uses async worker and returns immediately" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.007"/>
+  <testcase name="RELAUNCH_IF_CREATED rejected when nodes already started" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.007"/>
+  <testcase name="getArtifacts includes scriptRuns derived from RUN_SCRIPT node states" classname="com.chromascape.web.debug.patchloop.PatchLoopGraphOrchestratorServiceTest" time="0.008"/>
+  <system-out><![CDATA[12:40:13.587 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService - Cleared 1 nodes (including retry node) from ANALYZE
+12:40:13.623 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService - Cleared 1 nodes (including retry node) from ANALYZE
+12:40:13.633 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService - Executing graph for script: TestScript
+12:40:13.633 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService - Reusing existing iteration: existing_iter_123
+12:40:13.658 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopGraphOrchestratorService - Cleared 1 nodes (including retry node) from ANALYZE
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
