@@ -258,6 +258,11 @@ checkout created for that purpose.
 
 ### PR status
 
-- Branch `codex/sc-1663-review-remediation` — pushed / PR opened state is recorded in the story
-  close-out; the PR is review-required and explicitly stacked on `codex/sc-1662-linux-remoteinput`
-  (see above).
+- Branch `codex/sc-1663-review-remediation` pushed to `github.com/ikiddoi/ChromaScape`.
+- PR opened and review-required: **https://github.com/ikiddoi/ChromaScape/pull/6** — base
+  `codex/sc-1662-linux-remoteinput`, explicitly stacked (see the SC-1662 prerequisite above); the
+  PR body carries the stacked declaration, the verification summary and the explicit waivers.
+  Merge is blocked on review and on SC-1662 landing.
+- Shortcut story update (final evidence summary, merged PR link, waiver record, accurate PASS/NOT
+  RUN statuses) and the Felix `shortcut:sc-1663` resolution: NOT RUN — no Shortcut/Felix tooling
+  is available in this session; left as the next operator step, consistent with the r1 record.
