@@ -58,6 +58,37 @@ class ProviderRuntimeHardeningTest {
   }
 
   @Test
+  void sessionStateAggregationKeepsParallelWorkNonTerminal() {
+    assertEquals(
+        SessionState.ACTIVE,
+        JpaProviderRuntimeStore.aggregateSessionState(
+            List.of(TurnState.DECIDED, TurnState.STREAMING)));
+    assertEquals(
+        SessionState.NEEDS_RECONCILIATION,
+        JpaProviderRuntimeStore.aggregateSessionState(
+            List.of(TurnState.DECIDED, TurnState.NEEDS_RECONCILIATION)));
+  }
+
+  @Test
+  void sessionStateAggregationUsesStableTerminalPrecedence() {
+    assertEquals(
+        SessionState.FAILED,
+        JpaProviderRuntimeStore.aggregateSessionState(
+            List.of(TurnState.DECIDED, TurnState.INVALID_OUTPUT)));
+    assertEquals(
+        SessionState.COMPLETED,
+        JpaProviderRuntimeStore.aggregateSessionState(
+            List.of(TurnState.DECIDED, TurnState.CANCELLED)));
+    assertEquals(
+        SessionState.CANCELLED,
+        JpaProviderRuntimeStore.aggregateSessionState(
+            List.of(TurnState.CANCELLED, TurnState.CANCELLED)));
+    assertEquals(
+        SessionState.FAILED,
+        JpaProviderRuntimeStore.aggregateSessionState(List.of(TurnState.BUDGET_EXHAUSTED)));
+  }
+
+  @Test
   void transcriptDigestMatchesExactStoredBytes() throws Exception {
     ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
     properties.setTranscriptRoot(temporary.resolve("transcripts"));
@@ -66,7 +97,8 @@ class ProviderRuntimeHardeningTest {
 
     RedactedTranscriptStore.Artifact artifact = store.store("result=ok");
     java.nio.file.Path target =
-        temporary.resolve("transcripts/" + artifact.reference().substring("sha256:".length()) + ".json");
+        temporary.resolve(
+            "transcripts/" + artifact.reference().substring("sha256:".length()) + ".json");
     byte[] stored = Files.readAllBytes(target);
     String expected =
         "sha256:" + HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(stored));
@@ -98,7 +130,8 @@ class ProviderRuntimeHardeningTest {
         store.store("api_key=super-secret-value password: hunter2 token abc123 result=ok");
     String stored =
         Files.readString(
-            temporary.resolve("transcripts/" + artifact.reference().substring("sha256:".length()) + ".json"));
+            temporary.resolve(
+                "transcripts/" + artifact.reference().substring("sha256:".length()) + ".json"));
     assertTrue(stored.contains("[REDACTED]"));
     assertFalse(stored.contains("super-secret-value"));
     assertFalse(stored.contains("hunter2"));
@@ -109,13 +142,19 @@ class ProviderRuntimeHardeningTest {
     ProviderRuntimeController controller = new ProviderRuntimeController(null, null);
     assertEquals(
         HttpStatus.UNAUTHORIZED,
-        controller.providerError(new ProviderRuntimeException("OPERATOR_UNAUTHORIZED", "x")).getStatusCode());
+        controller
+            .providerError(new ProviderRuntimeException("OPERATOR_UNAUTHORIZED", "x"))
+            .getStatusCode());
     assertEquals(
         HttpStatus.NOT_FOUND,
-        controller.providerError(new ProviderRuntimeException("SESSION_NOT_FOUND", "x")).getStatusCode());
+        controller
+            .providerError(new ProviderRuntimeException("SESSION_NOT_FOUND", "x"))
+            .getStatusCode());
     assertEquals(
         HttpStatus.CONFLICT,
-        controller.providerError(new ProviderRuntimeException("IDEMPOTENCY_CONFLICT", "x")).getStatusCode());
+        controller
+            .providerError(new ProviderRuntimeException("IDEMPOTENCY_CONFLICT", "x"))
+            .getStatusCode());
     assertEquals(
         HttpStatus.CONFLICT,
         controller
@@ -128,23 +167,28 @@ class ProviderRuntimeHardeningTest {
             .getStatusCode());
     assertEquals(
         HttpStatus.UNPROCESSABLE_ENTITY,
-        controller.providerError(new ProviderRuntimeException("BUDGET_EXHAUSTED", "x")).getStatusCode());
+        controller
+            .providerError(new ProviderRuntimeException("BUDGET_EXHAUSTED", "x"))
+            .getStatusCode());
     assertEquals(
         HttpStatus.SERVICE_UNAVAILABLE,
-        controller.providerError(new ProviderRuntimeException("RUNTIME_DISABLED", "x")).getStatusCode());
+        controller
+            .providerError(new ProviderRuntimeException("RUNTIME_DISABLED", "x"))
+            .getStatusCode());
     assertEquals(
         HttpStatus.GATEWAY_TIMEOUT,
         controller.providerError(new ProviderRuntimeException("TIMEOUT", "x")).getStatusCode());
     assertEquals(
         HttpStatus.BAD_REQUEST,
-        controller.providerError(new ProviderRuntimeException("INVALID_OUTPUT", "x")).getStatusCode());
+        controller
+            .providerError(new ProviderRuntimeException("INVALID_OUTPUT", "x"))
+            .getStatusCode());
   }
 
   @Test
   void budgetLimitsRejectUnboundedOrInvertedWindows() {
     assertThrows(
-        IllegalArgumentException.class,
-        () -> new BudgetLimits(10, 10, 1, 0, 1, 120_000, 60_000));
+        IllegalArgumentException.class, () -> new BudgetLimits(10, 10, 1, 0, 1, 120_000, 60_000));
     assertThrows(
         IllegalArgumentException.class, () -> new BudgetLimits(0, 10, 1, 0, 1, 1_000, 2_000));
   }
@@ -189,7 +233,6 @@ class ProviderRuntimeHardeningTest {
             null,
             null,
             java.time.Instant.now().plusSeconds(60));
-    assertThrows(
-        RuntimeException.class, () -> source.bind("session-1", "turn-1", request));
+    assertThrows(RuntimeException.class, () -> source.bind("session-1", "turn-1", request));
   }
 }

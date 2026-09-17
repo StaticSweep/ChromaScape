@@ -163,9 +163,8 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
       budget.providerCallsUsed++;
       budget.inputTokensUsed += request.estimatedInputTokens();
       budget.outputTokensUsed += request.estimatedOutputTokens();
-      session.state = SessionState.ACTIVE.name();
-      session.updatedAt = now;
     }
+    refreshSessionState(session);
     appendEvent(turn.turnId, "TURN_" + turn.state, turn.requestFingerprint);
     entityManager.flush();
     return new TurnReservation(turnView(turn), true);
@@ -233,6 +232,7 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
       throw new IllegalArgumentException("finish requires a terminal turn state");
     }
     ProviderTurnEntity turn = mutableTurnForFinish(turnId);
+    final ProviderSessionEntity session = lockSession(turn.sessionId);
     if (usage != null && exceedsBudget(turn, usage)) {
       state = TurnState.BUDGET_EXHAUSTED;
       failureCode = FailureCode.BUDGET_EXHAUSTED;
@@ -258,15 +258,7 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
     if (usage != null) {
       chargeUsage(turn, usage);
     }
-    ProviderSessionEntity session = entityManager.find(ProviderSessionEntity.class, turn.sessionId);
-    session.state =
-        switch (state) {
-          case DECIDED, ABSTAINED -> SessionState.COMPLETED.name();
-          case CANCELLED -> SessionState.CANCELLED.name();
-          case NEEDS_RECONCILIATION -> SessionState.NEEDS_RECONCILIATION.name();
-          default -> SessionState.FAILED.name();
-        };
-    session.updatedAt = clock.instant();
+    refreshSessionState(session);
     appendEvent(turnId, "TURN_" + state.name(), canonicalJson.digest(failureCode.name()));
     entityManager.flush();
     return turnView(turn);
@@ -276,10 +268,9 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
   @Transactional
   public TurnView markNeedsReconciliation(String turnId, FailureCode failureCode) {
     ProviderTurnEntity turn = mutableTurn(turnId);
+    ProviderSessionEntity session = lockSession(turn.sessionId);
     transition(turn, TurnState.NEEDS_RECONCILIATION, failureCode);
-    ProviderSessionEntity session = entityManager.find(ProviderSessionEntity.class, turn.sessionId);
-    session.state = SessionState.NEEDS_RECONCILIATION.name();
-    session.updatedAt = clock.instant();
+    refreshSessionState(session);
     appendEvent(turnId, "NEEDS_RECONCILIATION", canonicalJson.digest(failureCode.name()));
     return turnView(turn);
   }
@@ -434,6 +425,55 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
         || budget.toolCallsUsed + usage.toolCalls() > limits.maxToolCalls()
         || budget.elapsedMillis + usage.elapsedMillis() > limits.maxSessionMillis()
         || usage.elapsedMillis() > limits.maxTurnMillis();
+  }
+
+  private ProviderSessionEntity lockSession(String sessionId) {
+    ProviderSessionEntity session =
+        entityManager.find(ProviderSessionEntity.class, sessionId, LockModeType.PESSIMISTIC_WRITE);
+    if (session == null) {
+      throw new ProviderRuntimeException("SESSION_NOT_FOUND", "Provider session was not found");
+    }
+    return session;
+  }
+
+  private void refreshSessionState(ProviderSessionEntity session) {
+    List<TurnState> turnStates =
+        entityManager
+            .createQuery(
+                "select t.state from ProviderTurnEntity t where t.sessionId=:sessionId",
+                String.class)
+            .setParameter("sessionId", session.sessionId)
+            .getResultList()
+            .stream()
+            .map(TurnState::valueOf)
+            .toList();
+    session.state = aggregateSessionState(turnStates).name();
+    session.updatedAt = clock.instant();
+  }
+
+  static SessionState aggregateSessionState(List<TurnState> turnStates) {
+    if (turnStates.isEmpty()) {
+      return SessionState.CREATED;
+    }
+    if (turnStates.contains(TurnState.NEEDS_RECONCILIATION)) {
+      return SessionState.NEEDS_RECONCILIATION;
+    }
+    if (turnStates.stream().anyMatch(state -> !state.terminal())) {
+      return SessionState.ACTIVE;
+    }
+    if (turnStates.stream()
+        .anyMatch(
+            state ->
+                state != TurnState.DECIDED
+                    && state != TurnState.ABSTAINED
+                    && state != TurnState.CANCELLED)) {
+      return SessionState.FAILED;
+    }
+    if (turnStates.stream()
+        .anyMatch(state -> state == TurnState.DECIDED || state == TurnState.ABSTAINED)) {
+      return SessionState.COMPLETED;
+    }
+    return SessionState.CANCELLED;
   }
 
   private void appendEvent(String turnId, String eventType, String payloadDigest) {
