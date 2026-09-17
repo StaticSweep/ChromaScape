@@ -112,9 +112,14 @@ public final class ProviderRuntimeController {
               "UNKNOWN_PROVIDER_OUTCOME",
               "NEEDS_RECONCILIATION" -> HttpStatus.CONFLICT;
           case "BUDGET_EXHAUSTED", "INVALID_CONTRACT" -> HttpStatus.UNPROCESSABLE_ENTITY;
-          case "RUNTIME_DISABLED", "PROVIDER_UNAVAILABLE" -> HttpStatus.SERVICE_UNAVAILABLE;
-          case "TIMEOUT", "PROCESS_TIMEOUT_BEFORE_SUBMISSION", "DEADLINE_EXPIRED" ->
-              HttpStatus.GATEWAY_TIMEOUT;
+          case "RUNTIME_DISABLED", "PROVIDER_UNAVAILABLE", "PROCESS_START_FAILED" -> HttpStatus
+              .SERVICE_UNAVAILABLE;
+          case "TIMEOUT",
+              "PROCESS_START_TIMEOUT",
+              "FIRST_EVENT_TIMEOUT",
+              "TOOL_RESPONSE_TIMEOUT",
+              "PROCESS_TIMEOUT_BEFORE_SUBMISSION",
+              "DEADLINE_EXPIRED" -> HttpStatus.GATEWAY_TIMEOUT;
           default -> HttpStatus.BAD_REQUEST;
         };
     return ResponseEntity.status(status)

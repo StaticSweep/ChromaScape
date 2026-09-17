@@ -133,13 +133,15 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
     SessionRequest sessionRequest = read(session.requestJson, SessionRequest.class);
     BudgetLimits limits = sessionRequest.budgets();
     Instant now = clock.instant();
+    long remainingSessionMillis = limits.maxSessionMillis() - budget.elapsedMillis;
+    long allowedTurnMillis = Math.min(limits.maxTurnMillis(), remainingSessionMillis);
     boolean exhausted =
         budget.turnsUsed + 1 > limits.maxTurns()
             || budget.providerCallsUsed + 1 > limits.maxProviderCalls()
             || budget.inputTokensUsed + request.estimatedInputTokens() > limits.maxInputTokens()
             || budget.outputTokensUsed + request.estimatedOutputTokens() > limits.maxOutputTokens()
-            || budget.elapsedMillis >= limits.maxSessionMillis()
-            || request.deadline().isAfter(now.plusMillis(limits.maxTurnMillis()))
+            || allowedTurnMillis <= 0
+            || request.deadline().isAfter(now.plusMillis(Math.max(0, allowedTurnMillis)))
             || !request.deadline().isAfter(clock.instant())
             || !session.deadline.isAfter(clock.instant());
     ProviderTurnEntity turn = new ProviderTurnEntity();
@@ -290,6 +292,103 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
 
   @Override
   @Transactional
+  public ToolCallReservation reserveToolCall(
+      String turnId, String toolCallId, String toolName, String argumentsDigest) {
+    if (toolCallId == null || !toolCallId.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,159}")) {
+      throw new ProviderRuntimeException("IDENTITY_INVALID", "Tool call ID is invalid");
+    }
+    if (toolName == null || !toolName.matches("[a-z][a-z0-9_]{0,79}")) {
+      throw new ProviderRuntimeException("IDENTITY_INVALID", "Tool name is invalid");
+    }
+    if (!validDigest(argumentsDigest)) {
+      throw new ProviderRuntimeException("DIGEST_INVALID", "Tool arguments digest is invalid");
+    }
+    ProviderTurnEntity turn = entityManager.find(ProviderTurnEntity.class, turnId);
+    if (turn == null) {
+      throw new ProviderRuntimeException("TURN_NOT_FOUND", "Provider turn was not found");
+    }
+    TurnState turnState = TurnState.valueOf(turn.state);
+    if (turnState != TurnState.SUBMITTED && turnState != TurnState.STREAMING) {
+      throw new ProviderRuntimeException(
+          "ILLEGAL_STATE_TRANSITION", "Provider tool calls require submitted work");
+    }
+    ProviderSessionEntity session = lockSession(turn.sessionId);
+    ProviderToolCallEntity existing = entityManager.find(ProviderToolCallEntity.class, toolCallId);
+    if (existing != null) {
+      if (!existing.turnId.equals(turnId)
+          || !existing.toolName.equals(toolName)
+          || !existing.argumentsDigest.equals(argumentsDigest)) {
+        throw conflict("Tool call identity has different immutable arguments");
+      }
+      return new ToolCallReservation(
+          false, existing.resultDigest, "COMPLETED".equals(existing.state));
+    }
+    ProviderBudgetEntity budget =
+        entityManager.find(
+            ProviderBudgetEntity.class, turn.sessionId, LockModeType.PESSIMISTIC_WRITE);
+    BudgetLimits limits = read(session.requestJson, SessionRequest.class).budgets();
+    if (budget.toolCallsUsed + 1 > limits.maxToolCalls()) {
+      throw new ProviderRuntimeException(
+          FailureCode.BUDGET_EXHAUSTED.name(), "Provider tool-call budget is exhausted");
+    }
+    ProviderToolCallEntity toolCall = new ProviderToolCallEntity();
+    toolCall.toolCallId = toolCallId;
+    toolCall.turnId = turnId;
+    toolCall.toolName = toolName;
+    toolCall.argumentsDigest = argumentsDigest;
+    toolCall.state = "RESERVED";
+    toolCall.chargedCalls = 1;
+    toolCall.createdAt = clock.instant();
+    budget.toolCallsUsed++;
+    entityManager.persist(toolCall);
+    appendEvent(turnId, "TOOL_CALL_RESERVED", argumentsDigest);
+    entityManager.flush();
+    return new ToolCallReservation(true, null, false);
+  }
+
+  @Override
+  @Transactional
+  public void finishToolCall(String toolCallId, String resultDigest, boolean succeeded) {
+    if (!validDigest(resultDigest)) {
+      throw new ProviderRuntimeException("DIGEST_INVALID", "Tool result digest is invalid");
+    }
+    ProviderToolCallEntity toolCall =
+        entityManager.find(
+            ProviderToolCallEntity.class, toolCallId, LockModeType.PESSIMISTIC_WRITE);
+    if (toolCall == null) {
+      throw new ProviderRuntimeException("TOOL_CALL_NOT_FOUND", "Provider tool call was not found");
+    }
+    ProviderTurnEntity turn = entityManager.find(ProviderTurnEntity.class, toolCall.turnId);
+    if (turn == null) {
+      throw new ProviderRuntimeException("TURN_NOT_FOUND", "Provider turn was not found");
+    }
+    lockSession(turn.sessionId);
+    String requestedState = succeeded ? "COMPLETED" : "FAILED";
+    if (!"RESERVED".equals(toolCall.state)) {
+      if (requestedState.equals(toolCall.state)
+          && java.util.Objects.equals(resultDigest, toolCall.resultDigest)) {
+        return;
+      }
+      throw conflict("Terminal provider tool call is immutable");
+    }
+    toolCall.resultDigest = resultDigest;
+    toolCall.state = requestedState;
+    appendEvent(toolCall.turnId, "TOOL_CALL_" + requestedState, resultDigest);
+  }
+
+  @Override
+  @Transactional
+  public int toolCallCount(String turnId) {
+    return Math.toIntExact(
+        entityManager
+            .createQuery(
+                "select count(t) from ProviderToolCallEntity t where t.turnId=:turnId", Long.class)
+            .setParameter("turnId", turnId)
+            .getSingleResult());
+  }
+
+  @Override
+  @Transactional
   public List<TurnView> recoverableTurns() {
     return entityManager
         .createQuery(
@@ -403,7 +502,6 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
       budget.outputTokensUsed +=
           Math.max(0, usage.outputTokens() - request.estimatedOutputTokens());
     }
-    budget.toolCallsUsed += usage.toolCalls();
     budget.elapsedMillis += usage.elapsedMillis();
   }
 
@@ -422,7 +520,7 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
             : Math.max(0, usage.outputTokens() - request.estimatedOutputTokens());
     return budget.inputTokensUsed + additionalInput > limits.maxInputTokens()
         || budget.outputTokensUsed + additionalOutput > limits.maxOutputTokens()
-        || budget.toolCallsUsed + usage.toolCalls() > limits.maxToolCalls()
+        || usage.toolCalls() > toolCallCount(turn.turnId)
         || budget.elapsedMillis + usage.elapsedMillis() > limits.maxSessionMillis()
         || usage.elapsedMillis() > limits.maxTurnMillis();
   }
@@ -434,6 +532,10 @@ public class JpaProviderRuntimeStore implements ProviderRuntimeStore {
       throw new ProviderRuntimeException("SESSION_NOT_FOUND", "Provider session was not found");
     }
     return session;
+  }
+
+  private boolean validDigest(String value) {
+    return value != null && value.matches("sha256:[a-f0-9]{64}");
   }
 
   private void refreshSessionState(ProviderSessionEntity session) {

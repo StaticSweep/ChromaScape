@@ -17,6 +17,9 @@ public final class ProviderRuntimeProperties {
   private Path transcriptRoot = Path.of(".chromascape/provider-transcripts");
   private int maxStdoutBytes = 1_048_576;
   private int maxStderrBytes = 131_072;
+  private long processStartTimeoutMillis = 5_000;
+  private long firstEventTimeoutMillis = 30_000;
+  private long toolResponseTimeoutMillis = 5_000;
   private ProviderProcess claude =
       new ProviderProcess(
           List.of("claude"), List.of("claude-*", "sonnet", "opus"), List.of("ANTHROPIC_API_KEY"));
@@ -28,6 +31,11 @@ public final class ProviderRuntimeProperties {
   void validate() {
     if (maxStdoutBytes < 4096 || maxStderrBytes < 4096) {
       throw new IllegalStateException("Provider output limits must be at least 4096 bytes");
+    }
+    if (processStartTimeoutMillis <= 0
+        || firstEventTimeoutMillis <= 0
+        || toolResponseTimeoutMillis <= 0) {
+      throw new IllegalStateException("Provider timeout limits must be positive");
     }
     if (enabled && (operatorKey == null || operatorKey.length() < 32)) {
       throw new IllegalStateException(
@@ -80,6 +88,30 @@ public final class ProviderRuntimeProperties {
 
   public int getMaxStderrBytes() {
     return maxStderrBytes;
+  }
+
+  public long getProcessStartTimeoutMillis() {
+    return processStartTimeoutMillis;
+  }
+
+  public void setProcessStartTimeoutMillis(long processStartTimeoutMillis) {
+    this.processStartTimeoutMillis = processStartTimeoutMillis;
+  }
+
+  public long getFirstEventTimeoutMillis() {
+    return firstEventTimeoutMillis;
+  }
+
+  public void setFirstEventTimeoutMillis(long firstEventTimeoutMillis) {
+    this.firstEventTimeoutMillis = firstEventTimeoutMillis;
+  }
+
+  public long getToolResponseTimeoutMillis() {
+    return toolResponseTimeoutMillis;
+  }
+
+  public void setToolResponseTimeoutMillis(long toolResponseTimeoutMillis) {
+    this.toolResponseTimeoutMillis = toolResponseTimeoutMillis;
   }
 
   public void setMaxStderrBytes(int maxStderrBytes) {

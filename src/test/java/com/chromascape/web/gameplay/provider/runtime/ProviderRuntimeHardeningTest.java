@@ -195,8 +195,19 @@ class ProviderRuntimeHardeningTest {
             .providerError(new ProviderRuntimeException("RUNTIME_DISABLED", "x"))
             .getStatusCode());
     assertEquals(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        controller
+            .providerError(new ProviderRuntimeException("PROCESS_START_FAILED", "x"))
+            .getStatusCode());
+    assertEquals(
         HttpStatus.GATEWAY_TIMEOUT,
         controller.providerError(new ProviderRuntimeException("TIMEOUT", "x")).getStatusCode());
+    for (String code :
+        List.of("PROCESS_START_TIMEOUT", "FIRST_EVENT_TIMEOUT", "TOOL_RESPONSE_TIMEOUT")) {
+      assertEquals(
+          HttpStatus.GATEWAY_TIMEOUT,
+          controller.providerError(new ProviderRuntimeException(code, "x")).getStatusCode());
+    }
     assertEquals(
         HttpStatus.BAD_REQUEST,
         controller

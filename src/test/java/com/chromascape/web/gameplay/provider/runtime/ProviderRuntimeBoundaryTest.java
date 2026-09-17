@@ -126,11 +126,23 @@ class ProviderRuntimeBoundaryTest {
             Instant.now().plusSeconds(10));
     assertEquals(ProviderRuntimeModels.FailureCode.INVALID_OUTPUT, overflow.failureCode());
 
-    var timeout =
+    var firstEventTimeout =
         runner.run(
             "turn-timeout", fixtureCommand("sleep"), List.of(), "", Instant.now().plusMillis(100));
-    assertTrue(timeout.submitted());
-    assertEquals(ProviderRuntimeModels.FailureCode.UNKNOWN_PROVIDER_OUTCOME, timeout.failureCode());
+    assertTrue(firstEventTimeout.submitted());
+    assertEquals(
+        ProviderRuntimeModels.FailureCode.FIRST_EVENT_TIMEOUT, firstEventTimeout.failureCode());
+
+    var turnTimeout =
+        runner.run(
+            "turn-total-timeout",
+            fixtureCommand("event-then-sleep"),
+            List.of(),
+            "",
+            Instant.now().plusMillis(1_000));
+    assertTrue(turnTimeout.submitted());
+    assertEquals(
+        ProviderRuntimeModels.FailureCode.UNKNOWN_PROVIDER_OUTCOME, turnTimeout.failureCode());
   }
 
   private List<String> fixtureCommand(String mode) throws Exception {
