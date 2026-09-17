@@ -1,0 +1,32 @@
+# SC-810 evidence checksums, generated 2026-09-11 from the machine-local originals under
+# C:\Dev\SC810\package-20260910 before this committed copy was made. Verify with:
+#   sha256sum -c SHA256SUMS.txt
+# A mismatch means a file was edited after this checksum was recorded -- treat as tampered
+# or superseded evidence, not as current, without checking why it changed.
+9c7925e96f9d2930aa7b0e1e41c9fceb29ce8094e82e2990f57f2325b4cd3f18 *README-evidence-index.md
+644779f1324423545df718b75ebca44c464c792a151352759baf83e8652bd8fa *closure-plan-genuine-fishing-run.md
+bd8302026b0a4b7fbec458602adceb2f92af3812a18c60bf5064a0be0da07d19 *closure-plan-restart-persistence.md
+a4c6ca451c0f3ded87a3b5a6bc45c1c5bc1d0bf33658985731ac74502eb29110 *closure-plan-cross-revision-protection.md
+22715e5192d23ca234df6c8e821ee97866d55b40b2f94059fb16ff96cd5ad0e8 *closure-plan-negative-matrix-and-binding-provenance.md
+4ef1fbb3fd3812424b7a6a9b4e90e5fbcaec1ca21977972e8f56645c39f84be5 *closure-plan-source-binding-fix.md
+5735338f38cdd49da910240a7b7ce5d954f162c516789474e3dd5fc688afc8c1 *closure-plan-heartbeat-fix-and-account-substitution.md
+f890746901ff9952f4649a7f321ca84bd30f65a7f8bccce522176a6bb2a856b0 *closure-plan-phase7-credential-restore.md
+9321adcf1d2631993d83f4eca7672cc3a302720fa6b2c064b208fbc9671416d9 *closure-plan-phase5-identity-reconfirm-and-credential-blocker.md
+302d036decbbeacc0190ea60883858552b77502c4fd849b09704aee6f9a74c0a *closure-plan-phase9-account-migration.md
+833e42413db627d46676d3718323bc01434240e795beccf298900827793ac168 *closure-plan-phase2-artifact-classification-20260911.md
+0c5740ebdc9bf29884066acbadaacb0444b23b238cae7bc138a9d103dd62aa0f *closure-plan-phase4-integration-lineage-20260911.md
+4d374762e925f117249b924b94bed30f48bad47e013eb061c8b0757e1564676d *closure-plan-phase5-verification-20260911.md
+8f939279774ae03e0d978864524264b72fec676932cd8fcdc54a0fd9527f90f7 *closure-plan-phase5b-check-20260911.md
+a7e5490eb52c6846a3003d02b1df57be2cae74f54aede386d1c75f66276be8ca *closure-plan-phase6-final-artifact-20260911.md
+28964ee21fe7e2b115664dbd615e2a2255794964643501869ab98c6e13cf0a99 *closure-plan-phase7-final-bundle-20260911.md
+d58a23b1cb1ad620e64e10f1f24bd5446d7821709e06ceaa19757ab40a7733e0 *closure-plan-phase8-packaged-runtime-gate-20260911.md
+6bf9e879a80786049f650ab31ff1abf0462e326dab4ab27bf55459d119037f65 *closure-plan-phase9-chromascape-reconfirm-20260911.md
+12711f6a6d2430e8d528fd737ce499bd6a4154d396d5f2e72cda0e5b25630284 *closure-plan-phase10-leeuwbot-connectivity-check.md
+142b9dcb62cca84193ae70745e69f6c6c07f4eee4192fb9a23d0ec1c7a851fd4 *closure-plan-phase10b-dispatch-readiness-confirmed.md
+3f18cef35c0cfd8129761b374d673f89538a8d34829ec6194b146c9248b238a9 *closure-plan-phase3-5-6-7-8-rebuild-20260911.md
+c5ec1d06e53f411ae605c2927ca2a7c282b08a4909f014f76b0bd92ee7d89af4 *closure-plan-phase2-catalog-discovery-fix.md
+56c97f45198603fd9aca450f8bf531181fca96fb777494274799326702870783 *closure-plan-phase3-5-6-7-8-integration-and-final-artifact.md
+308ea37805ee5c2e91487747229b6e2c58fc9c033519256c82cef4ed88404df1 *phase-10-running-artifact-gate.md
+be9c8d49f9eb8fbea59517c02a3ff930312f03d5e6f4166a4fc337a1ed2a4c82 *phase-8-evidence.md
+2da17d4689af80f7cda8eaf337843e9b84a7cc110c219fd5748a0822a4ff6503 *phase-9-evidence.md
+6486df8199ea3bfb7dd2db902495256e94bf22ee9f4480b03e0a255c75edc0d1 *sc810-remaining-work-plan-20260911.md

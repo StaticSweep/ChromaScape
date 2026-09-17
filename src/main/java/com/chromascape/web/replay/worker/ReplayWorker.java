@@ -78,7 +78,9 @@ public class ReplayWorker implements AutoCloseable {
   private static final int STEP_MAX_TICKS = 10_000;
   private static final int CHECKPOINT_INTERVAL_ACTIONS = 25;
   private static final int RECOVERY_BATCH_LIMIT = 50;
-  private static final List<String> REQUIRED_WORKER_ACTIONS =
+
+  /** Closed action vocabulary; the live worker may truthfully attest only a subset. */
+  private static final List<String> WORKER_ACTION_VOCABULARY =
       CapabilityManifest.V1_SUPPORTED_ACTIONS;
 
   /** Deterministic kernel rejections: execution failed, infrastructure did not. */
@@ -341,7 +343,9 @@ public class ReplayWorker implements AutoCloseable {
         JsonNode action = actions.get(i);
         ObjectNode stepParams = mapper.createObjectNode();
         stepParams.put("expectedTick", expectedTick);
-        stepParams.set("action", action);
+        ObjectNode dispatchedAction = actionForKernel(action, i);
+        stepParams.set("action", dispatchedAction);
+        stepParams.put("sourceActionIndex", i);
         stepParams.put("maxTicks", STEP_MAX_TICKS);
         // sendWithinRunDeadline guards heartbeat + deadline BEFORE the send and rechecks the
         // database deadline IMMEDIATELY after the response.
@@ -354,7 +358,7 @@ public class ReplayWorker implements AutoCloseable {
 
         String stateHash = projectionService.stateHash(observation);
         es.lastStateHash = stateHash;
-        String actionDigest = projectionService.actionDigest(action);
+        String actionDigest = projectionService.actionDigest(dispatchedAction);
         es.chainHash = projectionService.chainHash(es.chainHash, actionDigest, stateHash);
         long tick = result.path("terminalTick").asLong(expectedTick);
         StateHashSample sample =
@@ -1118,7 +1122,7 @@ public class ReplayWorker implements AutoCloseable {
     }
     List<String> advertisedActions = new ArrayList<>();
     for (JsonNode action : supportedActionsNode) {
-      if (!action.isTextual() || !REQUIRED_WORKER_ACTIONS.contains(action.asText())) {
+      if (!action.isTextual() || !WORKER_ACTION_VOCABULARY.contains(action.asText())) {
         throw capabilityIncompatible(
             "worker supportedActions contains an unknown action: " + action);
       }
@@ -1127,9 +1131,8 @@ public class ReplayWorker implements AutoCloseable {
             "worker supportedActions contains a duplicate action: " + action.asText());
       }
     }
-    if (!REQUIRED_WORKER_ACTIONS.equals(advertisedActions)) {
-      throw capabilityIncompatible(
-          "worker supportedActions must be exactly " + REQUIRED_WORKER_ACTIONS);
+    if (advertisedActions.isEmpty()) {
+      throw capabilityIncompatible("worker supportedActions must contain at least one action");
     }
     JsonNode xrsps = capability.path("xrsps");
     if (!xrsps.isObject()) {
@@ -1172,6 +1175,33 @@ public class ReplayWorker implements AutoCloseable {
       }
     }
   }
+
+  /**
+   * Remove v2-only provenance before crossing into the strict kernel action contract.
+   *
+   * <p>The manifest remains the authoritative evidence record, while the worker dispatches only the
+   * typed semantic action. This keeps the Java and TypeScript action digests aligned and makes
+   * direct kernel {@code step} calls unable to acquire an evidence-metadata escape hatch.
+   */
+  private ObjectNode actionForKernel(JsonNode manifestAction, int actionIndex) {
+    if (manifestAction == null || !manifestAction.isObject()) {
+      throw capabilityIncompatible(
+          "manifest action at index " + actionIndex + " is not a JSON object");
+    }
+    ObjectNode action = ((ObjectNode) manifestAction).deepCopy();
+    for (String field : MANIFEST_PROVENANCE_FIELDS) {
+      action.remove(field);
+    }
+    return action;
+  }
+
+  private static final List<String> MANIFEST_PROVENANCE_FIELDS =
+      List.of(
+          "sourceActionTick",
+          "sourceActionSequence",
+          "provenance",
+          "provenanceReason",
+          "sourceEvidence");
 
   private ReplayException capabilityIncompatible(String message) {
     return new ReplayException(

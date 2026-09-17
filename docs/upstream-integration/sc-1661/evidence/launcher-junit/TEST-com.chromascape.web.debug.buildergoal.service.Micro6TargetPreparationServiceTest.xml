@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-14T12:36:26.106Z" hostname="fedora" time="0.216">
+<testcase name="ensureReady_rejectsLeaseLossBeforeRestart()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.064"/>
+<testcase name="ensureReady_propagatesCancellationUnchangedFromRelaunch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.009"/>
+<testcase name="ensureReady_cancelledBeforeRestartThrows()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.004"/>
+<testcase name="ensureReady_rejectsNullLease()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.003"/>
+<testcase name="ensureReady_rejectsNullCancellation()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.002"/>
+<testcase name="remoteMachineNeverInvokesLocalRelaunch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.098"/>
+<testcase name="ensureReady_combinedCancellationDetectsLeaseLossMidRelaunch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.005"/>
+<testcase name="ensureReady_usesLocalMicro6WorkspaceLaunch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.011"/>
+<testcase name="ensureReady_rejectsNonLocalMachineForBuilderGoalFlow()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.006"/>
+</testsuite>

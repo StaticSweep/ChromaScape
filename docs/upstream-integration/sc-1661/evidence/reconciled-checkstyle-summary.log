@@ -1,0 +1,65 @@
+# SC-1661 reconciled-branch checkstyleMain — condensed
+# Source revision: 966e0e3e47db71fe5d57629205efcb23cd11e026 (reconciled code baseline)
+# Worktree tip at run time: 283328b4125efc7a1f27c0e1455dda42fdebe55c (docs only)
+# Full log was 832 KB (3291 warnings across 563 files).
+# Command: ./gradlew checkstyleMain --console=plain --rerun-tasks   (exit 0)
+# Full machine-readable report generated at run time: build/reports/checkstyle/main.xml|main.html
+
+## First 12 lines
+
+> Task :compileJava
+Note: Processing Log4j annotations
+Note: Annotations processed
+Note: Processing Log4j annotations
+Note: No elements to process
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :copyNativeLibraries SKIPPED
+
+## Summary lines
+Checkstyle files with violations: 563
+Checkstyle violations by severity: [warning:3291]
+BUILD SUCCESSFUL in 50s
+3 actionable tasks: 3 executed
+
+## Last 5 warning lines
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/web/gameplay/contract/GameplayContractValidator.java:27:3: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/web/gameplay/contract/GameplayContractValidator.java:39:3: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/web/gameplay/contract/GameplayContractValidator.java:60:3: Missing a Javadoc comment. [MissingJavadocType]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/web/gameplay/contract/GameplayContractValidator.java:63:5: Missing a Javadoc comment. [MissingJavadocMethod]
+[ant:checkstyle] [WARN] /run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1661-reconciliation/src/main/java/com/chromascape/web/gameplay/contract/GameplayContractValidator.java:68:5: Missing a Javadoc comment. [MissingJavadocMethod]
+
+## Distinct rule names and counts
+   1452 [MissingJavadocMethod]
+    711 [NeedBraces]
+    373 [SummaryJavadoc]
+    278 [MissingJavadocType]
+    138 [VariableDeclarationUsageDistance]
+    138 [LineLength]
+     73 [AvoidStarImport]
+     30 [FileTabCharacter]
+     15 [OneTopLevelClass]
+      8 [JavadocParagraph]
+      7 [OverloadMethodsDeclarationOrder]
+      7 [MethodName]
+      7 [LocalVariableName]
+      6 [EmptyCatchBlock]
+      5 [ParameterName]
+      5 [MissingSwitchDefault]
+      4 [RecordComponentName]
+      4 [MultipleVariableDeclarations]
+      4 [InvalidJavadocPosition]
+      4 [ConstructorsDeclarationGrouping]
+      3 [SingleLineJavadoc]
+      3 [RequireEmptyLineBeforeBlockTagGroup]
+      3 [NonEmptyAtclauseDescription]
+      3 [JavadocTagContinuationIndentation]
+      3 [AtclauseOrder]
+      2 [CommentsIndentation]
+      2 [AbbreviationAsWordInName]
+      1 [JavadocMethod]
+      1 [Indentation]
+      1 [CustomImportOrder]

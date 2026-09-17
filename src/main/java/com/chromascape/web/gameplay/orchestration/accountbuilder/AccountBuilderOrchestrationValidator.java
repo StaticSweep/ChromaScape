@@ -5,7 +5,6 @@ import com.chromascape.web.gameplay.contract.GameplayContracts;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ExecutionEnvelope;
 import com.chromascape.web.gameplay.contract.GameplayContracts.HumanAuthority;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision;
-import com.chromascape.web.gameplay.authority.HumanGameplayAuthorityService;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
@@ -27,29 +26,21 @@ public final class AccountBuilderOrchestrationValidator {
   private static final String SIGNATURE_PATTERN = "hmac-sha256:[0-9a-f]{64}";
   private final CanonicalGameplayJson canonicalJson;
   private final Clock clock;
-  private final HumanGameplayAuthorityService authorityService;
-
-  public AccountBuilderOrchestrationValidator(CanonicalGameplayJson canonicalJson) {
-    this(canonicalJson, Clock.systemUTC(), null);
-  }
+  private final AccountBuilderAuthorityVerifier authorityVerifier;
 
   @Autowired
   public AccountBuilderOrchestrationValidator(
-      CanonicalGameplayJson canonicalJson, HumanGameplayAuthorityService authorityService) {
-    this(canonicalJson, Clock.systemUTC(), authorityService);
-  }
-
-  AccountBuilderOrchestrationValidator(CanonicalGameplayJson canonicalJson, Clock clock) {
-    this(canonicalJson, clock, null);
+      CanonicalGameplayJson canonicalJson, AccountBuilderAuthorityVerifier authorityVerifier) {
+    this(canonicalJson, Clock.systemUTC(), authorityVerifier);
   }
 
   AccountBuilderOrchestrationValidator(
       CanonicalGameplayJson canonicalJson,
       Clock clock,
-      HumanGameplayAuthorityService authorityService) {
+      AccountBuilderAuthorityVerifier authorityVerifier) {
     this.canonicalJson = canonicalJson;
     this.clock = clock;
-    this.authorityService = authorityService;
+    this.authorityVerifier = java.util.Objects.requireNonNull(authorityVerifier);
   }
 
   public String validateAndFingerprint(OrchestrationRequest request) {
@@ -133,7 +124,7 @@ public final class AccountBuilderOrchestrationValidator {
         || !authority.expiresAt().isAfter(clock.instant())) {
       throw failure(FailureCode.AUTHORITY_INVALID, "Exact unexpired one-use authority is required");
     }
-    if (authorityService != null && !authorityService.verifyBoundAuthority(authority, envelope)) {
+    if (!authorityVerifier.verifyBoundAuthority(authority, envelope)) {
       throw failure(FailureCode.AUTHORITY_INVALID, "Human authority signature or scope is invalid");
     }
   }

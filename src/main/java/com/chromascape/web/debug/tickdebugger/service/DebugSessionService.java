@@ -438,7 +438,8 @@ public class DebugSessionService {
       Boolean recordingEnabled,
       RecordingTriggerSource triggerSource,
       String preferredSessionId) {
-    return startSession(accountName, scriptName, recordingEnabled, triggerSource, preferredSessionId);
+    return startSession(
+        accountName, scriptName, recordingEnabled, triggerSource, preferredSessionId);
   }
 
   /**

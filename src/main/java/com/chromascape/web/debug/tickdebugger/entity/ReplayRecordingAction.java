@@ -24,8 +24,12 @@ import org.hibernate.type.SqlTypes;
             name = "uq_replay_recording_action_session_tick_sequence",
             columnNames = {"session_id", "tick", "sequence"}),
     indexes = {
-      @Index(name = "idx_replay_recording_actions_recording_tick", columnList = "recording_id, tick, sequence"),
-      @Index(name = "idx_replay_recording_actions_session_tick", columnList = "session_id, tick, sequence")
+      @Index(
+          name = "idx_replay_recording_actions_recording_tick",
+          columnList = "recording_id, tick, sequence"),
+      @Index(
+          name = "idx_replay_recording_actions_session_tick",
+          columnList = "session_id, tick, sequence")
     })
 public class ReplayRecordingAction {
 
@@ -67,6 +71,10 @@ public class ReplayRecordingAction {
 
   @Column(nullable = false, length = 64)
   private String source;
+
+  /** Exact producer provenance retained separately from the transport source. */
+  @Column(nullable = false, length = 32)
+  private String provenance;
 
   @Column(nullable = false, precision = 4, scale = 3)
   private BigDecimal confidence;
@@ -174,6 +182,14 @@ public class ReplayRecordingAction {
 
   public void setSource(String source) {
     this.source = source;
+  }
+
+  public String getProvenance() {
+    return provenance;
+  }
+
+  public void setProvenance(String provenance) {
+    this.provenance = provenance;
   }
 
   public BigDecimal getConfidence() {

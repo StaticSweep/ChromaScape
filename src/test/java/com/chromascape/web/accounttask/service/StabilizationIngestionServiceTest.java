@@ -12,7 +12,6 @@ import com.chromascape.web.accounttask.entity.ScriptStabilizationSnapshot;
 import com.chromascape.web.accounttask.repository.ScriptFailureTriageRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationRunRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationSnapshotRepository;
-import com.chromascape.web.accounttask.service.StabilizationArtifactStore;
 import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
 import com.chromascape.web.accounttask.repository.StabilizationRunAggregateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -47,21 +46,29 @@ class StabilizationIngestionServiceTest {
 
   @BeforeEach
   void setUp() {
-    service = new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository,
-            artifactStore, artifactRepository, aggregateRepository, entityManager);
+    service =
+        new StabilizationIngestionService(
+            runRepository,
+            triageRepository,
+            snapshotRepository,
+            artifactStore,
+            artifactRepository,
+            aggregateRepository,
+            entityManager);
   }
 
   @Test
   @DisplayName("direct bundle sources require an exact checksum-addressed extension")
   void directBundleSourceFilenameRequiresExtension() {
     String hex = "a".repeat(64);
-    assertThat(StabilizationIngestionService.checksumHexFromFilename(
-        "sha256_" + hex + ".ndjson")).isEqualTo(hex);
+    assertThat(StabilizationIngestionService.checksumHexFromFilename("sha256_" + hex + ".ndjson"))
+        .isEqualTo(hex);
     assertThat(StabilizationIngestionService.checksumHexFromFilename("sha256_" + hex)).isNull();
-    assertThat(StabilizationIngestionService.checksumHexFromFilename(
-        "sha256_" + hex + ".ndjson.exe")).isNull();
-    assertThat(StabilizationIngestionService.checksumHexFromFilename(
-        " sha256_" + hex + ".ndjson")).isNull();
+    assertThat(
+            StabilizationIngestionService.checksumHexFromFilename("sha256_" + hex + ".ndjson.exe"))
+        .isNull();
+    assertThat(StabilizationIngestionService.checksumHexFromFilename(" sha256_" + hex + ".ndjson"))
+        .isNull();
   }
 
   @Test
@@ -130,7 +137,8 @@ class StabilizationIngestionServiceTest {
         run("PROGRESSIVE_WOODCUTTING", "TIMEOUT", now.minusHours(2));
     ScriptStabilizationRun oldPass = run("PROGRESSIVE_WOODCUTTING", "PASS", now.minusDays(2));
 
-    when(runRepository.findByVerifiedTrueAndExecutedAtBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
+    when(runRepository.findByVerifiedTrueAndExecutedAtBetween(
+            any(LocalDateTime.class), any(LocalDateTime.class)))
         .thenReturn(List.of(recentPass, recentTimeout))
         .thenReturn(List.of(recentPass, recentTimeout, oldPass));
     when(triageRepository.findByStatusOrderByLastSeenAtDesc("OPEN"))
@@ -204,22 +212,27 @@ class StabilizationIngestionServiceTest {
     manifest.put("primary_failure_code", "task_failed");
     manifest.put("failure_signature", "sig:abc");
     manifest.put("evidence_complete", true);
-    manifest.putArray("evidence").addObject()
-        .put("type", "LOG")
-        .put("reference", "logs/task.log");
+    manifest.putArray("evidence").addObject().put("type", "LOG").put("reference", "logs/task.log");
     manifest.put("latency_ms", 1234);
-    manifest.put("manifest_hash", "sha256:" + StabilizationHashUtil.sha256(
-        manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
-    manifest.put("deterministic_content_hash", "sha256:" + StabilizationHashUtil.sha256(
-        manifest, StabilizationHashUtil.DETERMINISTIC_EXCLUSIONS));
+    manifest.put(
+        "manifest_hash",
+        "sha256:"
+            + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
+    manifest.put(
+        "deterministic_content_hash",
+        "sha256:"
+            + StabilizationHashUtil.sha256(
+                manifest, StabilizationHashUtil.DETERMINISTIC_EXCLUSIONS));
 
     when(runRepository.existsBySchemaVersionAndRunIdAndAttemptIdAndManifestHash(
-        "harness-run-manifest/v1", "run-1", "attempt-1", manifest.path("manifest_hash").asText()))
+            "harness-run-manifest/v1",
+            "run-1",
+            "attempt-1",
+            manifest.path("manifest_hash").asText()))
         .thenReturn(false);
     when(runRepository.save(any(ScriptStabilizationRun.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
-    when(triageRepository.findByTriageKey("FISH_TRAINING::sig:abc"))
-        .thenReturn(Optional.empty());
+    when(triageRepository.findByTriageKey("FISH_TRAINING::sig:abc")).thenReturn(Optional.empty());
     when(triageRepository.save(any(ScriptFailureTriage.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -248,7 +261,8 @@ class StabilizationIngestionServiceTest {
   @DisplayName("ingestHarnessManifest rejects unknown schema versions")
   void ingestHarnessManifest_rejectsUnknownSchema() throws Exception {
     JsonNode manifest =
-        objectMapper.readTree("""
+        objectMapper.readTree(
+            """
             {"schema_version": "harness-run-manifest/v999", "run_id": "run-1"}
             """);
 
@@ -293,8 +307,9 @@ class StabilizationIngestionServiceTest {
     group.put("retry_count", 1);
     group.put("comparison_status", "BASELINE");
     matrix.putArray("incomparable");
-    matrix.put("matrix_hash", "sha256:" + StabilizationHashUtil.sha256(
-        matrix, StabilizationHashUtil.MATRIX_EXCLUSIONS));
+    matrix.put(
+        "matrix_hash",
+        "sha256:" + StabilizationHashUtil.sha256(matrix, StabilizationHashUtil.MATRIX_EXCLUSIONS));
 
     when(snapshotRepository.existsByMatrixHashAndGroupKey(anyString(), anyString()))
         .thenReturn(false);
@@ -325,7 +340,8 @@ class StabilizationIngestionServiceTest {
   @DisplayName("ingestReliabilityMatrix rejects unknown schema versions")
   void ingestReliabilityMatrix_rejectsUnknownSchema() throws Exception {
     JsonNode matrix =
-        objectMapper.readTree("""
+        objectMapper.readTree(
+            """
             {"schema_version": "reliability-matrix/v999", "groups": []}
             """);
 

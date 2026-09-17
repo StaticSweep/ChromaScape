@@ -1,0 +1,76 @@
+# command: ./gradlew spotlessCheck --console=plain
+# utc: 2026-09-14T14:20:07Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :spotlessJava UP-TO-DATE
+> Task :spotlessJavaCheck FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':spotlessJavaCheck'.
+> The following files had format violations:
+      src/main/java/com/chromascape/web/ChromaScapeApplication.java
+          @@ -9,8 +9,8 @@
+           import·jakarta.annotation.PostConstruct;
+           import·org.springframework.beans.factory.annotation.Autowired;
+           import·org.springframework.boot.SpringApplication;
+          +import·org.springframework.boot.autoconfigure.AutoConfigurationExcludeFilter;
+           import·org.springframework.boot.autoconfigure.SpringBootApplication;
+          -import·org.springframework.boot.autoconfigure.AutoConfigurationExcludeFilter;
+           import·org.springframework.boot.autoconfigure.domain.EntityScan;
+           import·org.springframework.boot.context.TypeExcludeFilter;
+           import·org.springframework.context.annotation.ComponentScan;
+      src/main/java/com/chromascape/web/aiplayer/routine/service/IsolatedPatchWorker.java
+          @@ -506,8 +506,7 @@
+           ····if·(value·!=·null·&&·!value.isBlank())·destination.put(name,·value);
+           ··}
+           
+          -··private·static·void·copyEnvironmentIgnoringCase(
+          -······Map<String,·String>·destination,·String·name)·{
+          +··private·static·void·copyEnvironmentIgnoringCase(Map<String,·String>·destination,·String·name)·{
+           ····System.getenv().entrySet().stream()
+           ········.filter(entry·->·entry.getKey().equalsIgnoreCase(name))
+           ········.findFirst()
+      src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchService.java
+          @@ -41,14 +41,15 @@
+           ··private·static·final·String·DEFAULT_GRADLE_PREPARE_TASK·=·":client:prepareBuilderGoal";
+           ··private·static·final·String·CUSTOM_LAUNCH_COMMAND·=·"custom_launch_command";
+           ··private·static·final·int·MAX_LAUNCH_ATTEMPTS·=·2;
+          +
+           ··/**
+           ···*·Windows·spawns·a·fresh·PowerShell·for·every·listener·probe,·and·cold·start·alone·routinely
+          -···*·exceeds·five·seconds·on·a·loaded·workstation·(measured·at·~8.4s·while·a·Micro6·client,·a
+          -···*·second·ChromaScape·instance·and·a·Docker·stack·were·running).·The·probe·is·fail-closed:·a
+          -···*·timeout·yields·{@code·UNKNOWN},·which·both·blocks·executor·replacement·and·prevents·a·healthy
+          -···*·executor·from·being·reused,·so·an·over-tight·bound·silently·converts·transient·machine·load
+          -···*·into·spurious·dispatch·failures.·The·bound·stays·finite·so·a·genuinely·hung·probe·still·fails
+          -···*·closed·rather·than·stalling·a·launch·indefinitely.
+          +···*·exceeds·five·seconds·on·a·loaded·workstation·(measured·at·~8.4s·while·a·Micro6·client,·a·second
+          +···*·ChromaScape·instance·and·a·Docker·stack·were·running).·The·probe·is·fail-closed:·a·timeout
+          +···*·yields·{@code·UNKNOWN},·which·both·blocks·executor·replacement·and·prevents·a·healthy·executor
+          +···*·from·being·reused,·so·an·over-tight·bound·silently·converts·transient·machine·load·into
+          +···*·spurious·dispatch·failures.·The·bound·stays·finite·so·a·genuinely·hung·probe·still·fails·closed
+          +···*·rather·than·stalling·a·launch·indefinitely.
+           ···*/
+           ··private·static·final·long·PORT_PROBE_WAIT_MS·=·30_000L;
+           
+      src/main/java/com/chromascape/web/gameplay/orchestration/v2/GameplayV2LiveGateService.java
+          @@ -135,7 +135,15 @@
+           ······Clock·clock,
+           ······boolean·liveEnabled,
+           ······String·signingSecret)·{
+      ... (13 more lines that didn't fit)
+  Violations also present in 12 other files.
+  Run './gradlew :spotlessApply' to fix these violations.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 1s
+3 actionable tasks: 1 executed, 2 up-to-date
+# exit_code: 1
+# elapsed_seconds: 2

@@ -634,11 +634,17 @@ class FishingShadowDecisionWriterTest {
       "enqueue racing with stop is either accepted before DRAINING and written, or rejected")
   void enqueueRacingWithStopIsAcceptedOrRejected() throws Exception {
     FishingShadowDecisionWriter writer = newWriter();
+    // This test asserts a clean drain, not the separately covered two-second timeout path. On a
+    // loaded Windows filesystem 1,200 synchronized JSONL appends can legitimately exceed the
+    // production timeout, so give this concurrency contract enough time to observe every accepted
+    // write instead of turning host I/O speed into a race outcome.
+    ReflectionTestUtils.setField(writer, "drainTimeoutMillis", 30_000L);
     writer.start();
     int threads = 8;
     int perThread = 150;
     ExecutorService executor = Executors.newFixedThreadPool(threads);
     CountDownLatch start = new CountDownLatch(1);
+    CountDownLatch firstAccepted = new CountDownLatch(1);
     AtomicLong accepted = new AtomicLong();
     AtomicLong rejected = new AtomicLong();
     List<Future<?>> futures = new ArrayList<>();
@@ -655,6 +661,7 @@ class FishingShadowDecisionWriterTest {
                 for (long i = 0; i < perThread; i++) {
                   if (writer.enqueue(decision(session, i))) {
                     accepted.incrementAndGet();
+                    firstAccepted.countDown();
                   } else {
                     rejected.incrementAndGet();
                   }
@@ -663,7 +670,9 @@ class FishingShadowDecisionWriterTest {
               }));
     }
     start.countDown();
-    Thread.sleep(20);
+    // Scheduling latency is not the behavior under test. Establish at least one admitted write
+    // before racing shutdown with the remaining producers.
+    assertThat(firstAccepted.await(5, TimeUnit.SECONDS)).isTrue();
     writer.stop();
     for (Future<?> future : futures) {
       future.get(30, TimeUnit.SECONDS);

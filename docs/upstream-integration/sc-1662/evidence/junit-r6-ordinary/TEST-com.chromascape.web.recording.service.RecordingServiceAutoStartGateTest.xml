@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.recording.service.RecordingServiceAutoStartGateTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:22.792Z" hostname="fedora" time="0.201">
+  <properties/>
+  <testcase name="taskAuto_refused_whenTaskSessionsOff()" classname="com.chromascape.web.recording.service.RecordingServiceAutoStartGateTest" time="0.199"/>
+  <testcase name="taskAuto_allowed_whenAutoRecordOffButTaskSessionsOn()" classname="com.chromascape.web.recording.service.RecordingServiceAutoStartGateTest" time="0.001"/>
+  <testcase name="micro6Auto_refused_whenAutoRecordOffEvenIfTaskSessionsOn()" classname="com.chromascape.web.recording.service.RecordingServiceAutoStartGateTest" time="0.0"/>
+  <testcase name="manual_alwaysAllowed()" classname="com.chromascape.web.recording.service.RecordingServiceAutoStartGateTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

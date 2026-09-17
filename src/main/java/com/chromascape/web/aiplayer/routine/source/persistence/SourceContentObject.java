@@ -17,15 +17,29 @@ import java.util.UUID;
 @Entity
 @Table(name = "source_content_objects")
 public class SourceContentObject {
-  @Id @GeneratedValue(strategy = GenerationType.UUID) private UUID id;
-  @Column(name = "content_hash", nullable = false, unique = true, length = 71) private String contentHash;
-  @Column(name = "size_bytes", nullable = false) private long sizeBytes;
+  @Id
+  @GeneratedValue(strategy = GenerationType.UUID)
+  private UUID id;
+
+  @Column(name = "content_hash", nullable = false, unique = true, length = 71)
+  private String contentHash;
+
+  @Column(name = "size_bytes", nullable = false)
+  private long sizeBytes;
+
   // A byte[] basic field maps to PostgreSQL BYTEA. @Lob would select PostgreSQL large-object OIDs,
   // which would contradict the Flyway-owned content-addressed BYTEA column.
-  @Column(name = "content_bytes", nullable = false, columnDefinition = "BYTEA") private byte[] contentBytes;
-  @Column(name = "created_at", nullable = false) private Instant createdAt = Instant.now();
-  @Column(name = "pruned_at") private Instant prunedAt;
-  @Column(name = "redacted_at") private Instant redactedAt;
+  @Column(name = "content_bytes", nullable = false, columnDefinition = "BYTEA")
+  private byte[] contentBytes;
+
+  @Column(name = "created_at", nullable = false)
+  private Instant createdAt = Instant.now();
+
+  @Column(name = "pruned_at")
+  private Instant prunedAt;
+
+  @Column(name = "redacted_at")
+  private Instant redactedAt;
 
   protected SourceContentObject() {}
 
@@ -40,15 +54,39 @@ public class SourceContentObject {
     return object;
   }
 
-  public UUID getId() { return id; }
-  public String getContentHash() { return contentHash; }
-  public long getSizeBytes() { return sizeBytes; }
+  public UUID getId() {
+    return id;
+  }
+
+  public String getContentHash() {
+    return contentHash;
+  }
+
+  public long getSizeBytes() {
+    return sizeBytes;
+  }
+
   public byte[] getContentBytes() {
     return contentBytes == null ? null : Arrays.copyOf(contentBytes, contentBytes.length);
   }
-  public Instant getCreatedAt() { return createdAt; }
-  public Instant getPrunedAt() { return prunedAt; }
-  public void setPrunedAt(Instant value) { prunedAt = value; }
-  public Instant getRedactedAt() { return redactedAt; }
-  public void setRedactedAt(Instant value) { redactedAt = value; }
+
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
+
+  public Instant getPrunedAt() {
+    return prunedAt;
+  }
+
+  public void setPrunedAt(Instant value) {
+    prunedAt = value;
+  }
+
+  public Instant getRedactedAt() {
+    return redactedAt;
+  }
+
+  public void setRedactedAt(Instant value) {
+    redactedAt = value;
+  }
 }

@@ -11,13 +11,13 @@ import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.MessageDigest;
-import java.security.PublicKey;
-import java.security.KeyFactory;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyFactory;
+import java.security.MessageDigest;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Set;
@@ -28,10 +28,10 @@ import org.springframework.stereotype.Component;
 /**
  * Production validator for the signed SC-967 candidate documents.
  *
- * <p>The JSON schemas enforce the complete nested shape. The checks in this class enforce the
- * parts JSON Schema cannot express: the candidate hash/id derivation, certification bindings and
- * byte-level artifact evidence. Callers are expected to invoke this before signing, before a
- * bundle is staged, and again immediately before registry I/O.
+ * <p>The JSON schemas enforce the complete nested shape. The checks in this class enforce the parts
+ * JSON Schema cannot express: the candidate hash/id derivation, certification bindings and
+ * byte-level artifact evidence. Callers are expected to invoke this before signing, before a bundle
+ * is staged, and again immediately before registry I/O.
  */
 @Component
 public final class CertifiedCandidateV2Validator {
@@ -43,8 +43,10 @@ public final class CertifiedCandidateV2Validator {
   private final ObjectMapper mapper = new ObjectMapper();
   private final JsonSchema manifestSchema;
   private final CandidateCertificationV1Validator certificationValidator;
+
   @Value("${leeuwbot.signing.public-key-path:}")
   private String configuredPublicKeyPath = "";
+
   @Value("${leeuwbot.signing.key-id:}")
   private String configuredKeyId = "";
 
@@ -63,7 +65,8 @@ public final class CertifiedCandidateV2Validator {
   public JsonNode validate(
       byte[] manifestBytes, byte[] certificationBytes, byte[] jarBytes, byte[] sbomBytes) {
     requireSize(manifestBytes, MAX_MANIFEST_BYTES, "MANIFEST_TOO_LARGE");
-    requireSize(certificationBytes, CandidateCertificationV1Validator.MAX_BYTES, "CERTIFICATION_TOO_LARGE");
+    requireSize(
+        certificationBytes, CandidateCertificationV1Validator.MAX_BYTES, "CERTIFICATION_TOO_LARGE");
     requireSize(jarBytes, MAX_ARTIFACT_BYTES, "ARTIFACT_TOO_LARGE");
     requireSize(sbomBytes, MAX_SBOM_BYTES, "SBOM_TOO_LARGE");
     JsonNode manifest = parse(manifestBytes, "MANIFEST_INVALID");
@@ -80,14 +83,15 @@ public final class CertifiedCandidateV2Validator {
   }
 
   /**
-   * Validates every unsigned manifest field and artifact/certification binding before signing.
-   * The schema requires the derived candidate fields, so a deterministic syntactic signature
+   * Validates every unsigned manifest field and artifact/certification binding before signing. The
+   * schema requires the derived candidate fields, so a deterministic syntactic signature
    * placeholder is inserted only in a private copy; the real signature is still verified by the
    * normal byte-oriented validation after signing.
    */
   public void validateBeforeSigning(
       JsonNode unsignedManifest, byte[] certificationBytes, byte[] jarBytes, byte[] sbomBytes) {
-    requireSize(certificationBytes, CandidateCertificationV1Validator.MAX_BYTES, "CERTIFICATION_TOO_LARGE");
+    requireSize(
+        certificationBytes, CandidateCertificationV1Validator.MAX_BYTES, "CERTIFICATION_TOO_LARGE");
     requireSize(jarBytes, MAX_ARTIFACT_BYTES, "ARTIFACT_TOO_LARGE");
     requireSize(sbomBytes, MAX_SBOM_BYTES, "SBOM_TOO_LARGE");
     JsonNode certification = certificationValidator.validate(certificationBytes);
@@ -257,7 +261,8 @@ public final class CertifiedCandidateV2Validator {
   }
 
   private void validateKeyId(JsonNode manifest) {
-    if (configuredKeyId != null && !configuredKeyId.isBlank()
+    if (configuredKeyId != null
+        && !configuredKeyId.isBlank()
         && !configuredKeyId.equals(text(manifest, "key_id"))) {
       fail("CANDIDATE_KEY_ID_UNTRUSTED");
     }
@@ -267,10 +272,13 @@ public final class CertifiedCandidateV2Validator {
     if (configuredPublicKeyPath == null || configuredPublicKeyPath.isBlank()) return;
     try {
       String pem = Files.readString(Path.of(configuredPublicKeyPath));
-      pem = pem.replace("-----BEGIN PUBLIC KEY-----", "")
-          .replace("-----END PUBLIC KEY-----", "").replaceAll("\\s", "");
-      PublicKey key = KeyFactory.getInstance("Ed25519")
-          .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(pem)));
+      pem =
+          pem.replace("-----BEGIN PUBLIC KEY-----", "")
+              .replace("-----END PUBLIC KEY-----", "")
+              .replaceAll("\\s", "");
+      PublicKey key =
+          KeyFactory.getInstance("Ed25519")
+              .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(pem)));
       validateSignature(manifest, key);
     } catch (IllegalArgumentException exception) {
       throw exception;

@@ -17,6 +17,7 @@ import com.chromascape.web.integration.leeuwbot.config.LeeuwBotConfig;
 import com.chromascape.web.integration.leeuwbot.service.LeeuwBotBridgeService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -34,9 +35,10 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -60,10 +62,22 @@ public class TickStreamIngestionService {
   private final LeeuwBotBridgeService leeuwBotBridgeService;
   private final LeeuwBotConfig leeuwBotConfig;
   private final HttpClient httpClient;
+  private final com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceiptRepository
+      batchReceiptRepository;
+  private final TickBatchCanonicalChecksumService tickBatchChecksumService;
+
+  /** Result sent to Micro6 only after the surrounding transaction commits successfully. */
+  public record TickBatchAcknowledgment(
+      String batchId, String sessionId, long tick, String payloadChecksum, String status) {}
 
   /** Optional for lightweight legacy/unit construction; present in the application context. */
   @Autowired(required = false)
   private ReplayRecordingActionIngestionService actionIngestionService;
+
+  /** Packet observation store; present in the application context after V39. */
+  @Autowired(required = false)
+  private com.chromascape.web.debug.tickdebugger.entity.PacketObservationRepository
+      packetRepository;
 
   @Autowired(required = false)
   private BuilderGoalRepairIncidentService repairIncidentService;
@@ -88,10 +102,63 @@ public class TickStreamIngestionService {
         objectMapper,
         leeuwBotBridgeService,
         leeuwBotConfig,
+        null,
         null);
   }
 
   /** Constructor used by the application and by focused ingestion tests. */
+  public TickStreamIngestionService(
+      DebugSessionService sessionService,
+      TickSnapshotRepository snapshotRepository,
+      TickLogRepository logRepository,
+      TickOverlayRepository overlayRepository,
+      TimelineMarkerRepository markerRepository,
+      ObjectMapper objectMapper,
+      @Autowired(required = false) LeeuwBotBridgeService leeuwBotBridgeService,
+      @Autowired(required = false) LeeuwBotConfig leeuwBotConfig,
+      @Autowired(required = false) ReplayRecordingActionIngestionService actionIngestionService) {
+    this(
+        sessionService,
+        snapshotRepository,
+        logRepository,
+        overlayRepository,
+        markerRepository,
+        objectMapper,
+        leeuwBotBridgeService,
+        leeuwBotConfig,
+        actionIngestionService,
+        null);
+  }
+
+  /** Constructor with the durable batch receipt boundary and canonical checksum service. */
+  public TickStreamIngestionService(
+      DebugSessionService sessionService,
+      TickSnapshotRepository snapshotRepository,
+      TickLogRepository logRepository,
+      TickOverlayRepository overlayRepository,
+      TimelineMarkerRepository markerRepository,
+      ObjectMapper objectMapper,
+      @Autowired(required = false) LeeuwBotBridgeService leeuwBotBridgeService,
+      @Autowired(required = false) LeeuwBotConfig leeuwBotConfig,
+      @Autowired(required = false) ReplayRecordingActionIngestionService actionIngestionService,
+      @Autowired(required = false)
+          com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceiptRepository
+              batchReceiptRepository) {
+    this(
+        sessionService,
+        snapshotRepository,
+        logRepository,
+        overlayRepository,
+        markerRepository,
+        objectMapper,
+        leeuwBotBridgeService,
+        leeuwBotConfig,
+        actionIngestionService,
+        batchReceiptRepository,
+        null);
+  }
+
+  /** Constructor with the durable batch receipt boundary. */
   @Autowired
   public TickStreamIngestionService(
       DebugSessionService sessionService,
@@ -102,8 +169,11 @@ public class TickStreamIngestionService {
       ObjectMapper objectMapper,
       @Autowired(required = false) LeeuwBotBridgeService leeuwBotBridgeService,
       @Autowired(required = false) LeeuwBotConfig leeuwBotConfig,
+      @Autowired(required = false) ReplayRecordingActionIngestionService actionIngestionService,
       @Autowired(required = false)
-          ReplayRecordingActionIngestionService actionIngestionService) {
+          com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceiptRepository
+              batchReceiptRepository,
+      @Autowired(required = false) TickBatchCanonicalChecksumService tickBatchChecksumService) {
     this.sessionService = sessionService;
     this.snapshotRepository = snapshotRepository;
     this.logRepository = logRepository;
@@ -114,6 +184,11 @@ public class TickStreamIngestionService {
     this.leeuwBotConfig = leeuwBotConfig;
     this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(5000)).build();
     this.actionIngestionService = actionIngestionService;
+    this.batchReceiptRepository = batchReceiptRepository;
+    this.tickBatchChecksumService =
+        tickBatchChecksumService != null
+            ? tickBatchChecksumService
+            : new TickBatchCanonicalChecksumService(objectMapper);
   }
 
   /**
@@ -124,10 +199,26 @@ public class TickStreamIngestionService {
    *
    * @param batch the tick batch message
    */
-  @Async
   @Transactional
-  public void processTickBatch(TickBatchMessage batch) {
+  public TickBatchAcknowledgment processTickBatch(TickBatchMessage batch) {
+    // Compatibility for direct internal callers. WebSocket ingestion must pass the original
+    // parsed JsonNode through the overload below so DTO normalization cannot change the contract.
+    JsonNode legacyWireDocument = objectMapper.valueToTree(batch);
+    removeNullFieldsForLegacyCaller(legacyWireDocument);
+    return processTickBatch(batch, legacyWireDocument);
+  }
+
+  /** Processes a batch against the exact JSON document received from the WebSocket. */
+  @Transactional
+  public TickBatchAcknowledgment processTickBatch(
+      TickBatchMessage batch, JsonNode originalWireDocument) {
     try {
+      java.util.UUID batchId = null;
+      if (batchReceiptRepository != null) {
+        // Verify immutable wire identity before normalization changes the in-memory DTO.
+        batchId = requireBatchIdentity(batch);
+        validatePayloadChecksum(batch, originalWireDocument);
+      }
       Map<String, Object> normalizedPs = normalizePlayerState(batch.getPlayerState());
       if (batch.getMicrobotStatus() != null) {
         normalizedPs.put("microbotStatus", batch.getMicrobotStatus());
@@ -145,17 +236,56 @@ public class TickStreamIngestionService {
       // Verify session exists
       Optional<DebugSession> session = sessionService.getSession(sessionId);
       if (session.isEmpty()) {
-        log.warn(
-            "Received tick batch for unknown session: {}. Active sessions: {}",
-            sessionId,
-            sessionService.getActiveSessions().size());
-        return;
+        throw new IllegalArgumentException("Unknown debug session: " + sessionId);
+      }
+
+      // SC-1618: schema-3 packet validation runs before any persistence so a bad
+      // envelope fails the transaction with a stable permanent code and no partial rows.
+      validatePackets(batch);
+
+      if (batchReceiptRepository != null) {
+        Optional<com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceipt> existing =
+            batchReceiptRepository.findBySessionIdAndBatchId(sessionId, batchId);
+        if (existing.isPresent()) {
+          ensureReceiptMatches(existing.get(), batch);
+          return acknowledgment(existing.get());
+        }
+        Optional<com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceipt> tickWinner =
+            batchReceiptRepository.findBySessionIdAndTick(sessionId, batch.getTick());
+        if (tickWinner.isPresent()) {
+          ensureReceiptMatches(tickWinner.get(), batch);
+          return acknowledgment(tickWinner.get());
+        }
+        int inserted =
+            batchReceiptRepository.insertIfAbsent(
+                sessionId,
+                batchId,
+                batch.getTick(),
+                batch.getPayloadChecksum(),
+                "tick-batch/v2",
+                LocalDateTime.now(ZoneId.of("UTC")));
+        if (inserted == 0) {
+          com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceipt winner =
+              batchReceiptRepository
+                  .findBySessionIdAndBatchId(sessionId, batchId)
+                  .or(
+                      () ->
+                          batchReceiptRepository.findBySessionIdAndTick(sessionId, batch.getTick()))
+                  .orElseThrow(
+                      () ->
+                          new IllegalStateException(
+                              "Batch receipt conflict could not be resolved"));
+          ensureReceiptMatches(winner, batch);
+          return acknowledgment(winner);
+        }
       }
 
       // Persist typed actions before any derived replay artifact is built. The ingestion service
       // performs ownership, schema, checksum, duplicate, and conflict validation. Legacy logs are
       // still persisted below and are intentionally not used as a replacement for this stream.
-      if (actionIngestionService != null && batch.getActions() != null && !batch.getActions().isEmpty()) {
+      if (actionIngestionService != null
+          && batch.getActions() != null
+          && !batch.getActions().isEmpty()) {
         actionIngestionService.ingest(batch, session.get().getRecordingId());
       }
 
@@ -164,10 +294,9 @@ public class TickStreamIngestionService {
       // Parse timestamp
       LocalDateTime timestamp = parseTimestamp(batch.getTimestamp());
 
-      // 1. Broadcast immediately to live debugger clients (before DB writes to reduce lag)
-      broadcastToDebuggerClients(batch);
-
-      // 2. Save tick snapshot
+      // All evidence is written before the transaction returns. The WebSocket handler emits the
+      // acknowledgment only after this method's transaction commits.
+      // 1. Save tick snapshot
       saveTickSnapshot(batch, timestamp);
 
       if (repairIncidentService != null) {
@@ -193,108 +322,248 @@ public class TickStreamIngestionService {
         saveTickOverlays(sessionId, tick, overlays);
       }
 
+      // 4b. Save packet observations in the same transaction, before the ACK.
+      // Duplicate batch retries hit the receipt early-return above and never reach
+      // here, so rows are inserted exactly once.
+      if (batch.getPackets() != null && !batch.getPackets().isEmpty()) {
+        saveTickPackets(sessionId, timestamp, batch);
+      }
+
       // 5. Update session tick bounds
       sessionService.updateSessionTickBounds(sessionId, tick);
+      registerPostCommitPublication(batch);
 
-      // 6. Forward to Go backend if enabled
-      forwardToGoBackend(batch);
-
-      log.info("Processed tick batch: sessionId={}, tick={}", sessionId, tick);
+      log.info(
+          "Processed tick batch: sessionId={}, tick={}, batchId={}",
+          sessionId,
+          tick,
+          batch.getBatchId());
+      return new TickBatchAcknowledgment(
+          batch.getBatchId(), sessionId, tick, batch.getPayloadChecksum(), "PERSISTED");
 
     } catch (Exception e) {
       log.error("Error processing tick batch: {}", e.getMessage(), e);
+      throw e;
     }
+  }
+
+  private java.util.UUID requireBatchIdentity(TickBatchMessage batch) {
+    if (batch.getBatchId() == null || batch.getBatchId().isBlank()) {
+      throw new IllegalArgumentException("Missing batchId");
+    }
+    try {
+      return java.util.UUID.fromString(batch.getBatchId());
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("batchId must be a UUID", e);
+    }
+  }
+
+  /** Compatibility-only normalization for direct pre-v2 internal callers. */
+  private void removeNullFieldsForLegacyCaller(JsonNode node) {
+    if (node == null) {
+      return;
+    }
+    if (node.isObject()) {
+      ObjectNode object = (ObjectNode) node;
+      List<String> nullFields = new ArrayList<>();
+      object
+          .fields()
+          .forEachRemaining(
+              entry -> {
+                if (entry.getValue() == null || entry.getValue().isNull()) {
+                  nullFields.add(entry.getKey());
+                } else {
+                  removeNullFieldsForLegacyCaller(entry.getValue());
+                }
+              });
+      nullFields.forEach(object::remove);
+    } else if (node.isArray()) {
+      node.forEach(this::removeNullFieldsForLegacyCaller);
+    }
+  }
+
+  private void validatePayloadChecksum(TickBatchMessage batch, JsonNode originalWireDocument) {
+    if (originalWireDocument == null || !originalWireDocument.isObject()) {
+      throw new IllegalArgumentException("tick batch wire document must be an object");
+    }
+    if (batch.getPayloadChecksum() == null
+        || !batch.getPayloadChecksum().matches("^sha256:[0-9a-f]{64}$")) {
+      throw new IllegalArgumentException("payloadChecksum must be sha256:<64 lowercase hex>");
+    }
+    validateWireIdentity(batch, originalWireDocument);
+    String expected = tickBatchChecksumService.checksum(originalWireDocument);
+    if (!batch.getPayloadChecksum().equals(expected)) {
+      throw new IllegalArgumentException("BATCH_CHECKSUM_CONFLICT");
+    }
+  }
+
+  private void validateWireIdentity(TickBatchMessage batch, JsonNode wire) {
+    requireWireText(wire, "type", batch.getType());
+    JsonNode schemaVersion = wire.get("schemaVersion");
+    if (schemaVersion == null
+        || !schemaVersion.isIntegralNumber()
+        || schemaVersion.intValue() != batch.getSchemaVersion()) {
+      throw new IllegalArgumentException("BATCH_WIRE_IDENTITY_MISMATCH");
+    }
+    requireWireText(wire, "batchId", batch.getBatchId());
+    requireWireText(wire, "sessionId", batch.getSessionId());
+    if (!wire.has("tick")
+        || !wire.get("tick").isIntegralNumber()
+        || !wire.get("tick").canConvertToLong()
+        || wire.get("tick").asLong() != batch.getTick()) {
+      throw new IllegalArgumentException("BATCH_WIRE_IDENTITY_MISMATCH");
+    }
+    requireWireText(wire, "payloadChecksum", batch.getPayloadChecksum());
+  }
+
+  private void requireWireText(JsonNode wire, String field, String expected) {
+    JsonNode value = wire.get(field);
+    if (expected == null
+        || value == null
+        || value.isNull()
+        || !value.isTextual()
+        || !expected.equals(value.textValue())) {
+      throw new IllegalArgumentException("BATCH_WIRE_IDENTITY_MISMATCH");
+    }
+  }
+
+  private void ensureReceiptMatches(
+      com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceipt receipt,
+      TickBatchMessage batch) {
+    if (!receipt.getSessionId().equals(batch.getSessionId())) {
+      throw new IllegalArgumentException("BATCH_SESSION_MISMATCH");
+    }
+    if (receipt.getTick() != batch.getTick()
+        || !receipt.getBatchId().equals(UUID.fromString(batch.getBatchId()))
+        || !receipt.getPayloadChecksum().equals(batch.getPayloadChecksum())) {
+      throw new IllegalArgumentException("BATCH_CHECKSUM_CONFLICT");
+    }
+  }
+
+  private void registerPostCommitPublication(TickBatchMessage batch) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      // Direct unit construction bypasses Spring's @Transactional proxy. Keep those tests useful
+      // without weakening the production boundary: in the application context this branch is
+      // unreachable and publication remains strictly post-commit.
+      broadcastToDebuggerClients(batch);
+      forwardToGoBackend(batch);
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            broadcastToDebuggerClients(batch);
+            forwardToGoBackend(batch);
+          }
+        });
+  }
+
+  private TickBatchAcknowledgment acknowledgment(
+      com.chromascape.web.debug.tickdebugger.entity.ReplayTickBatchReceipt receipt) {
+    return new TickBatchAcknowledgment(
+        receipt.getBatchId().toString(),
+        receipt.getSessionId(),
+        receipt.getTick(),
+        receipt.getPayloadChecksum(),
+        "PERSISTED");
   }
 
   /** Save a tick snapshot to the database. */
   private void saveTickSnapshot(TickBatchMessage batch, LocalDateTime timestamp) {
-    try {
-      JsonNode playerState = objectMapper.valueToTree(batch.getPlayerState());
-      JsonNode inventory =
-          batch.getInventory() != null ? objectMapper.valueToTree(batch.getInventory()) : null;
+    JsonNode playerState = objectMapper.valueToTree(batch.getPlayerState());
+    JsonNode inventory =
+        batch.getInventory() != null ? objectMapper.valueToTree(batch.getInventory()) : null;
 
-      // Log inventory data for debugging
-      log.info(
-          "Processing tick {} inventory: {} items",
-          batch.getTick(),
-          batch.getInventory() != null ? batch.getInventory().size() : 0);
+    // Log inventory data for debugging
+    log.info(
+        "Processing tick {} inventory: {} items",
+        batch.getTick(),
+        batch.getInventory() != null ? batch.getInventory().size() : 0);
 
-      JsonNode equipment =
-          batch.getEquipment() != null ? objectMapper.valueToTree(batch.getEquipment()) : null;
-      JsonNode threats =
-          batch.getThreats() != null ? objectMapper.valueToTree(batch.getThreats()) : null;
-      JsonNode projectiles =
-          batch.getProjectiles() != null ? objectMapper.valueToTree(batch.getProjectiles()) : null;
-      JsonNode cooldowns =
-          batch.getCooldowns() != null ? objectMapper.valueToTree(batch.getCooldowns()) : null;
-      JsonNode quest = batch.getQuest() != null ? objectMapper.valueToTree(batch.getQuest()) : null;
-      JsonNode questHelper =
-          batch.getQuestHelper() != null ? objectMapper.valueToTree(batch.getQuestHelper()) : null;
+    JsonNode equipment =
+        batch.getEquipment() != null ? objectMapper.valueToTree(batch.getEquipment()) : null;
+    JsonNode threats =
+        batch.getThreats() != null ? objectMapper.valueToTree(batch.getThreats()) : null;
+    JsonNode projectiles =
+        batch.getProjectiles() != null ? objectMapper.valueToTree(batch.getProjectiles()) : null;
+    JsonNode cooldowns =
+        batch.getCooldowns() != null ? objectMapper.valueToTree(batch.getCooldowns()) : null;
+    JsonNode quest = batch.getQuest() != null ? objectMapper.valueToTree(batch.getQuest()) : null;
+    JsonNode questHelper =
+        batch.getQuestHelper() != null ? objectMapper.valueToTree(batch.getQuestHelper()) : null;
+    JsonNode dialogue =
+        batch.getDialogue() != null ? objectMapper.valueToTree(batch.getDialogue()) : null;
+    JsonNode spells =
+        batch.getSpells() != null ? objectMapper.valueToTree(batch.getSpells()) : null;
+    JsonNode vars = batch.getVars() != null ? objectMapper.valueToTree(batch.getVars()) : null;
 
-      // NEW: Convert expanded world state to JSON
-      JsonNode npcs = batch.getNpcs() != null ? objectMapper.valueToTree(batch.getNpcs()) : null;
-      JsonNode gameObjects =
-          batch.getGameObjects() != null ? objectMapper.valueToTree(batch.getGameObjects()) : null;
-      JsonNode groundObjects =
-          batch.getGroundObjects() != null
-              ? objectMapper.valueToTree(batch.getGroundObjects())
-              : null;
-      JsonNode groundItems =
-          batch.getGroundItems() != null ? objectMapper.valueToTree(batch.getGroundItems()) : null;
-      JsonNode players =
-          batch.getPlayers() != null ? objectMapper.valueToTree(batch.getPlayers()) : null;
-      JsonNode widgets =
-          batch.getWidgets() != null ? objectMapper.valueToTree(batch.getWidgets()) : null;
+    // NEW: Convert expanded world state to JSON
+    JsonNode npcs = batch.getNpcs() != null ? objectMapper.valueToTree(batch.getNpcs()) : null;
+    JsonNode gameObjects =
+        batch.getGameObjects() != null ? objectMapper.valueToTree(batch.getGameObjects()) : null;
+    JsonNode groundObjects =
+        batch.getGroundObjects() != null
+            ? objectMapper.valueToTree(batch.getGroundObjects())
+            : null;
+    JsonNode groundItems =
+        batch.getGroundItems() != null ? objectMapper.valueToTree(batch.getGroundItems()) : null;
+    JsonNode players =
+        batch.getPlayers() != null ? objectMapper.valueToTree(batch.getPlayers()) : null;
+    JsonNode widgets =
+        batch.getWidgets() != null ? objectMapper.valueToTree(batch.getWidgets()) : null;
 
-      // Log expanded data for diagnostics
-      log.info(
-          "Processing tick {} expanded data: npcs={}, gameObjects={}, groundObjects={}, groundItems={}",
-          batch.getTick(),
-          batch.getNpcs() != null ? batch.getNpcs().size() : 0,
-          batch.getGameObjects() != null ? batch.getGameObjects().size() : 0,
-          batch.getGroundObjects() != null ? batch.getGroundObjects().size() : 0,
-          batch.getGroundItems() != null ? batch.getGroundItems().size() : 0);
+    // Log expanded data for diagnostics
+    log.info(
+        "Processing tick {} expanded data: npcs={}, gameObjects={}, groundObjects={}, groundItems={}",
+        batch.getTick(),
+        batch.getNpcs() != null ? batch.getNpcs().size() : 0,
+        batch.getGameObjects() != null ? batch.getGameObjects().size() : 0,
+        batch.getGroundObjects() != null ? batch.getGroundObjects().size() : 0,
+        batch.getGroundItems() != null ? batch.getGroundItems().size() : 0);
 
-      // Diagnostic: Log missing major sections to identify Micro6 payload gaps
-      List<String> missingSections = new ArrayList<>();
-      if (batch.getPlayerState() == null) missingSections.add("playerState");
-      if (batch.getInventory() == null) missingSections.add("inventory");
-      if (batch.getNpcs() == null && batch.getThreats() == null) missingSections.add("npcs");
-      if (batch.getProjectiles() == null) missingSections.add("projectiles");
-      if (batch.getGameObjects() == null) missingSections.add("gameObjects");
-      if (batch.getGroundObjects() == null) missingSections.add("groundObjects");
-      if (batch.getGroundItems() == null) missingSections.add("groundItems");
-      if (batch.getQuest() == null) missingSections.add("quest");
-      if (batch.getQuestHelper() == null) missingSections.add("questHelper");
+    // Diagnostic: Log missing major sections to identify Micro6 payload gaps
+    List<String> missingSections = new ArrayList<>();
+    if (batch.getPlayerState() == null) missingSections.add("playerState");
+    if (batch.getInventory() == null) missingSections.add("inventory");
+    if (batch.getNpcs() == null && batch.getThreats() == null) missingSections.add("npcs");
+    if (batch.getProjectiles() == null) missingSections.add("projectiles");
+    if (batch.getGameObjects() == null) missingSections.add("gameObjects");
+    if (batch.getGroundObjects() == null) missingSections.add("groundObjects");
+    if (batch.getGroundItems() == null) missingSections.add("groundItems");
+    if (batch.getQuest() == null) missingSections.add("quest");
+    if (batch.getQuestHelper() == null) missingSections.add("questHelper");
+    if (batch.getDialogue() == null) missingSections.add("dialogue");
+    if (batch.getSpells() == null) missingSections.add("spells");
+    if (batch.getVars() == null) missingSections.add("vars");
 
-      if (!missingSections.isEmpty()) {
-        log.debug(
-            "Tick {} missing sections: {}", batch.getTick(), String.join(", ", missingSections));
-      }
-
-      TickSnapshot snapshot =
-          new TickSnapshot(batch.getSessionId(), batch.getTick(), timestamp, playerState);
-
-      snapshot.setInventory(inventory);
-      snapshot.setEquipment(equipment);
-      snapshot.setThreats(threats);
-      snapshot.setProjectiles(projectiles);
-      snapshot.setCooldowns(cooldowns);
-      snapshot.setQuest(quest);
-      snapshot.setQuestHelper(questHelper);
-      snapshot.setNpcs(npcs);
-      snapshot.setGameObjects(gameObjects);
-      snapshot.setGroundObjects(groundObjects);
-      snapshot.setGroundItems(groundItems);
-      snapshot.setPlayers(players);
-      snapshot.setWidgets(widgets);
-      snapshot.setSchemaVersion(batch.getSchemaVersion());
-
-      snapshotRepository.save(snapshot);
-
-    } catch (Exception e) {
-      log.error("Error saving tick snapshot: {}", e.getMessage(), e);
+    if (!missingSections.isEmpty()) {
+      log.debug(
+          "Tick {} missing sections: {}", batch.getTick(), String.join(", ", missingSections));
     }
+
+    TickSnapshot snapshot =
+        new TickSnapshot(batch.getSessionId(), batch.getTick(), timestamp, playerState);
+
+    snapshot.setInventory(inventory);
+    snapshot.setEquipment(equipment);
+    snapshot.setThreats(threats);
+    snapshot.setProjectiles(projectiles);
+    snapshot.setCooldowns(cooldowns);
+    snapshot.setQuest(quest);
+    snapshot.setQuestHelper(questHelper);
+    snapshot.setDialogue(dialogue);
+    snapshot.setSpells(spells);
+    snapshot.setVars(vars);
+    snapshot.setNpcs(npcs);
+    snapshot.setGameObjects(gameObjects);
+    snapshot.setGroundObjects(groundObjects);
+    snapshot.setGroundItems(groundItems);
+    snapshot.setPlayers(players);
+    snapshot.setWidgets(widgets);
+    snapshot.setSchemaVersion(batch.getSchemaVersion());
+
+    snapshotRepository.save(snapshot);
   }
 
   private void validateStrictV2(TickBatchMessage batch) {
@@ -405,41 +674,343 @@ public class TickStreamIngestionService {
   }
 
   /** Save tick logs to the database. */
+  private static final int MAX_PACKETS_PER_BATCH = 512;
+
+  private static final long MAX_BATCH_PACKET_BYTES = 512L * 1024;
+  private static final int MAX_DECODED_BYTES = 64 * 1024;
+  private static final int MAX_DECODED_DEPTH = 8;
+
+  /** Packet tick must fall within this window around the enclosing batch tick. */
+  private static final long PACKET_TICK_WINDOW = 600;
+
+  /**
+   * Validates schema-3 packet envelopes before persistence. Schema-v2 batches carry no packets and
+   * skip silently. Failures are permanent (IllegalArgumentException with a stable code);
+   * storage/transient failures surface separately as retryable persistence errors.
+   */
+  private void validatePackets(TickBatchMessage batch) {
+    List<TickBatchMessage.TickPacketEntry> packets = batch.getPackets();
+    if (packets == null || packets.isEmpty()) {
+      return;
+    }
+    if (packets.size() > MAX_PACKETS_PER_BATCH) {
+      throw new IllegalArgumentException("PACKET_BATCH_LIMIT_EXCEEDED");
+    }
+    long totalBytes = 0;
+    // A source session normally emits one schema, but keep the schema in the local ordering key
+    // so a rolling v1/v2 upgrade cannot make an otherwise valid legacy sequence look regressive.
+    java.util.Map<String, Long> lastSequenceBySourceAndSchema = new java.util.HashMap<>();
+    for (TickBatchMessage.TickPacketEntry packet : packets) {
+      if (packet == null) {
+        throw new IllegalArgumentException("PACKET_ENVELOPE_INVALID");
+      }
+      boolean v1 = "rsprox-packet/v1".equals(packet.getSchema());
+      boolean v2 = "rsprox-packet/v2".equals(packet.getSchema());
+      if (!v1 && !v2) {
+        throw new IllegalArgumentException("PACKET_SCHEMA_UNSUPPORTED");
+      }
+      String direction = packet.getDirection();
+      if (!"CLIENT_TO_SERVER".equals(direction) && !"SERVER_TO_CLIENT".equals(direction)) {
+        throw new IllegalArgumentException("PACKET_DIRECTION_INVALID");
+      }
+      String status = packet.getDecodeStatus();
+      if (!"DECODED".equals(status)
+          && !"UNKNOWN_PROTOCOL".equals(status)
+          && !"DECODE_ERROR".equals(status)
+          && !"GAP".equals(status)) {
+        throw new IllegalArgumentException("PACKET_STATUS_INVALID");
+      }
+      if (packet.getSourceSessionId() == null || packet.getSourceSessionId().isBlank()) {
+        throw new IllegalArgumentException("PACKET_SOURCE_INVALID");
+      }
+      if (packet.getSourceSessionId().length() > 100) {
+        throw new IllegalArgumentException("PACKET_SOURCE_INVALID");
+      }
+      if (packet.getSequence() == null || packet.getSequence() < 0) {
+        throw new IllegalArgumentException("PACKET_SEQUENCE_INVALID");
+      }
+      if (packet.getCaptureDeltaMillis() == null || packet.getCaptureDeltaMillis() < 0) {
+        throw new IllegalArgumentException("PACKET_CAPTURE_DELTA_INVALID");
+      }
+      if (v2) {
+        if ("GAP".equals(status)) {
+          if (packet.getPacketSequence() != null || !Boolean.TRUE.equals(packet.getSynthetic())) {
+            throw new IllegalArgumentException("PACKET_GAP_IDENTITY_INVALID");
+          }
+        } else if (packet.getPacketSequence() == null || packet.getPacketSequence() < 0) {
+          throw new IllegalArgumentException("PACKET_CAPTURE_SEQUENCE_INVALID");
+        }
+      } else if (packet.getPacketSequence() != null) {
+        // v1 has one legacy identity. Do not silently reinterpret it as a v2 pair.
+        throw new IllegalArgumentException("PACKET_V1_CAPTURE_SEQUENCE_INVALID");
+      }
+      if ("GAP".equals(status) && !Boolean.TRUE.equals(packet.getSynthetic())) {
+        throw new IllegalArgumentException("PACKET_GAP_SYNTHETIC_INVALID");
+      }
+      if (packet.getOpcode() == null || packet.getOpcode() < 0) {
+        throw new IllegalArgumentException("PACKET_OPCODE_INVALID");
+      }
+      if (packet.getEncodedSize() == null || packet.getEncodedSize() < 0) {
+        throw new IllegalArgumentException("PACKET_SIZE_INVALID");
+      }
+      if (packet.getTick() == null
+          || tickDistanceExceedsWindow(packet.getTick(), batch.getTick())) {
+        throw new IllegalArgumentException("PACKET_TICK_OUT_OF_RANGE");
+      }
+      if (packet.getProtocolName() == null
+          || packet.getProtocolName().isBlank()
+          || packet.getProtocolName().length() > 128) {
+        throw new IllegalArgumentException("PACKET_PROTOCOL_INVALID");
+      }
+      if (packet.getDecodedType() != null && packet.getDecodedType().length() > 128) {
+        throw new IllegalArgumentException("PACKET_DECODED_TYPE_INVALID");
+      }
+      if (packet.getDecodeError() != null && packet.getDecodeError().length() > 512) {
+        throw new IllegalArgumentException("PACKET_DECODE_ERROR_INVALID");
+      }
+      if (packet.getDecoded() != null) {
+        JsonNode decodedNode = objectMapper.valueToTree(packet.getDecoded());
+        int size;
+        try {
+          size = objectMapper.writeValueAsBytes(decodedNode).length;
+        } catch (Exception e) {
+          throw new IllegalArgumentException("PACKET_DECODED_INVALID");
+        }
+        if (size > MAX_DECODED_BYTES) {
+          throw new IllegalArgumentException("PACKET_DECODED_TOO_LARGE");
+        }
+        if (jsonDepth(decodedNode, 0) > MAX_DECODED_DEPTH) {
+          throw new IllegalArgumentException("PACKET_DECODED_TOO_DEEP");
+        }
+        totalBytes += size;
+      }
+      if (packet.getSanitizedPayloadBase64() != null
+          && packet.getSanitizedPayloadBase64().length() > MAX_DECODED_BYTES) {
+        throw new IllegalArgumentException("PACKET_PAYLOAD_TOO_LARGE");
+      }
+      // v2 real observations are strictly monotonic per source. A delayed v2 GAP is a diagnostic
+      // marker and may arrive after the real observations it describes; persistence identity and
+      // content comparison still make conflicting reuse permanent. Legacy v1 GAPs retain their
+      // historical marker semantics and do not advance the v1 high-water mark.
+      String orderingKey = packet.getSourceSessionId() + "\u0000" + packet.getSchema();
+      Long previousSequence = lastSequenceBySourceAndSchema.get(orderingKey);
+      boolean delayedV2Gap = v2 && "GAP".equals(status);
+      if (previousSequence != null
+          && packet.getSequence() <= previousSequence
+          && !delayedV2Gap
+          && !(v1 && "GAP".equals(status))) {
+        throw new IllegalArgumentException("PACKET_SEQUENCE_NOT_MONOTONIC");
+      }
+      if (previousSequence == null || packet.getSequence() > previousSequence) {
+        lastSequenceBySourceAndSchema.put(orderingKey, packet.getSequence());
+      }
+    }
+    if (totalBytes > MAX_BATCH_PACKET_BYTES) {
+      throw new IllegalArgumentException("PACKET_BATCH_BYTES_EXCEEDED");
+    }
+  }
+
+  private int jsonDepth(JsonNode node, int depth) {
+    if (node == null || node.isNull() || node.isValueNode()) {
+      return depth;
+    }
+    int max = depth;
+    if (node.isArray()) {
+      for (JsonNode item : node) {
+        max = Math.max(max, jsonDepth(item, depth + 1));
+      }
+      return max;
+    }
+    var fields = node.fields();
+    while (fields.hasNext()) {
+      max = Math.max(max, jsonDepth(fields.next().getValue(), depth + 1));
+    }
+    return max;
+  }
+
+  /** Compares tick distance without allowing signed-long subtraction to wrap around. */
+  private boolean tickDistanceExceedsWindow(long packetTick, long batchTick) {
+    if (packetTick == batchTick) {
+      return false;
+    }
+    long distance = packetTick > batchTick ? packetTick - batchTick : batchTick - packetTick;
+    // A negative result means the positive mathematical distance exceeded Long.MAX_VALUE and
+    // wrapped during subtraction; that is necessarily outside the small configured window.
+    return distance < 0 || distance > PACKET_TICK_WINDOW;
+  }
+
+  /** Persists packet rows idempotently; conflicting reuse fails permanently. */
+  private void saveTickPackets(String sessionId, LocalDateTime timestamp, TickBatchMessage batch) {
+    if (packetRepository == null) {
+      throw new IllegalStateException("BATCH_PERSISTENCE_FAILED: packet store unavailable");
+    }
+    for (TickBatchMessage.TickPacketEntry packet : batch.getPackets()) {
+      boolean v2 = "rsprox-packet/v2".equals(packet.getSchema());
+      var existing =
+          v2
+              ? packetRepository
+                  .findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
+                      sessionId,
+                      packet.getSourceSessionId(),
+                      packet.getSchema(),
+                      packet.getSequence())
+              : packetRepository.findBySessionIdAndSourceSessionIdAndPacketSchemaAndPacketSequence(
+                  sessionId, packet.getSourceSessionId(), packet.getSchema(), packet.getSequence());
+      if (existing.isPresent()) {
+        ensurePacketMatches(existing.get(), sessionId, batch.getTick(), packet);
+        continue;
+      }
+      com.chromascape.web.debug.tickdebugger.entity.PacketObservation row =
+          new com.chromascape.web.debug.tickdebugger.entity.PacketObservation(
+              sessionId,
+              packet.getTick(),
+              packet.getSourceSessionId(),
+              packet.getSchema(),
+              packet.getSequence(),
+              v2 ? packet.getPacketSequence() : packet.getSequence());
+      row.setCapturedAt(parseTimestamp(packet.getCapturedAt()));
+      row.setCaptureDeltaMillis(packet.getCaptureDeltaMillis());
+      row.setDirection(packet.getDirection());
+      row.setOpcode(packet.getOpcode());
+      row.setProtocolName(packet.getProtocolName());
+      row.setEncodedSize(packet.getEncodedSize());
+      row.setDecodedType(packet.getDecodedType());
+      if (packet.getDecoded() != null) {
+        row.setDecodedPayload(objectMapper.valueToTree(packet.getDecoded()));
+      }
+      if (packet.getSanitizedPayloadBase64() != null) {
+        try {
+          row.setSanitizedPayload(
+              java.util.Base64.getDecoder().decode(packet.getSanitizedPayloadBase64()));
+        } catch (IllegalArgumentException e) {
+          throw new IllegalArgumentException("PACKET_PAYLOAD_INVALID");
+        }
+      }
+      row.setDecodeStatus(packet.getDecodeStatus());
+      row.setDecodeError(packet.getDecodeError());
+      row.setSynthetic(Boolean.TRUE.equals(packet.getSynthetic()));
+      try {
+        packetRepository.saveAndFlush(row);
+      } catch (org.springframework.dao.DataIntegrityViolationException e) {
+        // Lost-ACK retry racing a concurrent insert: re-read and compare idempotently.
+        var winner =
+            (v2
+                    ? packetRepository
+                        .findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
+                            sessionId,
+                            packet.getSourceSessionId(),
+                            packet.getSchema(),
+                            packet.getSequence())
+                    : packetRepository
+                        .findBySessionIdAndSourceSessionIdAndPacketSchemaAndPacketSequence(
+                            sessionId,
+                            packet.getSourceSessionId(),
+                            packet.getSchema(),
+                            packet.getSequence()))
+                .orElseThrow(() -> e);
+        ensurePacketMatches(winner, sessionId, batch.getTick(), packet);
+      }
+    }
+  }
+
+  private void ensurePacketMatches(
+      com.chromascape.web.debug.tickdebugger.entity.PacketObservation row,
+      String sessionId,
+      long batchTick,
+      TickBatchMessage.TickPacketEntry packet) {
+    if (!row.getSessionId().equals(sessionId)
+        || !row.getSourceSessionId().equals(packet.getSourceSessionId())
+        || !java.util.Objects.equals(row.getPacketSchema(), packet.getSchema())
+        || !java.util.Objects.equals(row.getObservationSequence(), packet.getSequence())
+        || !java.util.Objects.equals(
+            row.getPacketSequence(),
+            "rsprox-packet/v2".equals(packet.getSchema())
+                ? packet.getPacketSequence()
+                : packet.getSequence())
+        || !java.util.Objects.equals(row.getTick(), packet.getTick())
+        || !java.util.Objects.equals(row.getDirection(), packet.getDirection())
+        || !java.util.Objects.equals(row.getOpcode(), packet.getOpcode())
+        || !java.util.Objects.equals(row.getProtocolName(), packet.getProtocolName())
+        || !java.util.Objects.equals(row.getEncodedSize(), packet.getEncodedSize())
+        || !java.util.Objects.equals(row.getDecodedType(), packet.getDecodedType())
+        || !java.util.Objects.equals(row.getDecodeStatus(), packet.getDecodeStatus())
+        || !java.util.Objects.equals(row.getDecodeError(), packet.getDecodeError())
+        || !java.util.Objects.equals(row.getCaptureDeltaMillis(), packet.getCaptureDeltaMillis())
+        || row.isSynthetic() != Boolean.TRUE.equals(packet.getSynthetic())
+        || !decodedPayloadMatches(row.getDecodedPayload(), packet.getDecoded())
+        || !sanitizedPayloadMatches(row.getSanitizedPayload(), packet.getSanitizedPayloadBase64())
+        || !capturedAtMatches(row.getCapturedAt(), packet.getCapturedAt())) {
+      throw new IllegalArgumentException("PACKET_IDENTITY_CONFLICT");
+    }
+  }
+
+  private boolean decodedPayloadMatches(JsonNode stored, Map<String, Object> incoming) {
+    JsonNode incomingNode = incoming == null ? null : objectMapper.valueToTree(incoming);
+    if (stored == null || stored.isNull()) {
+      return incomingNode == null || incomingNode.isNull();
+    }
+    return stored.equals(incomingNode);
+  }
+
+  private boolean sanitizedPayloadMatches(byte[] stored, String incomingBase64) {
+    if (stored == null && (incomingBase64 == null || incomingBase64.isEmpty())) {
+      return true;
+    }
+    if (stored == null || incomingBase64 == null) {
+      return false;
+    }
+    try {
+      return java.util.Arrays.equals(stored, java.util.Base64.getDecoder().decode(incomingBase64));
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
+  }
+
+  private boolean capturedAtMatches(LocalDateTime stored, String incoming) {
+    if (stored == null && (incoming == null || incoming.isEmpty())) {
+      return true;
+    }
+    if (stored == null || incoming == null) {
+      return false;
+    }
+    try {
+      return stored.equals(parseTimestamp(incoming));
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  /** Save tick logs to the database. */
   private List<TickLog> saveTickLogs(
       String sessionId, long tick, LocalDateTime timestamp, List<TickLogEntry> logs) {
 
     List<TickLog> savedLogs = new ArrayList<>();
 
     for (TickLogEntry entry : logs) {
-      try {
-        TickLog tickLog =
-            new TickLog(
-                sessionId,
-                tick,
-                timestamp,
-                entry.getSubsystem() != null ? entry.getSubsystem() : "System",
-                entry.getLevel() != null ? entry.getLevel() : "Info",
-                entry.getMessage());
+      TickLog tickLog =
+          new TickLog(
+              sessionId,
+              tick,
+              timestamp,
+              entry.getSubsystem() != null ? entry.getSubsystem() : "System",
+              entry.getLevel() != null ? entry.getLevel() : "Info",
+              entry.getMessage());
 
-        tickLog.setEventType(entry.getEventType());
+      tickLog.setEventType(entry.getEventType());
 
-        if (entry.getDetails() != null) {
-          tickLog.setDetails(objectMapper.valueToTree(entry.getDetails()));
-        }
-
-        if (entry.getCorrelationId() != null) {
-          try {
-            tickLog.setCorrelationId(UUID.fromString(entry.getCorrelationId()));
-          } catch (IllegalArgumentException e) {
-            // Invalid UUID, ignore
-          }
-        }
-
-        savedLogs.add(logRepository.save(tickLog));
-
-      } catch (Exception e) {
-        log.error("Error saving tick log: {}", e.getMessage(), e);
+      if (entry.getDetails() != null) {
+        tickLog.setDetails(objectMapper.valueToTree(entry.getDetails()));
       }
+
+      if (entry.getCorrelationId() != null) {
+        try {
+          tickLog.setCorrelationId(UUID.fromString(entry.getCorrelationId()));
+        } catch (IllegalArgumentException e) {
+          // Invalid UUID, ignore
+        }
+      }
+
+      savedLogs.add(logRepository.save(tickLog));
     }
 
     return savedLogs;
@@ -448,35 +1019,23 @@ public class TickStreamIngestionService {
   /** Save tick overlays to the database. */
   private void saveTickOverlays(String sessionId, long tick, List<TickOverlayEntry> overlays) {
     for (TickOverlayEntry entry : overlays) {
-      try {
-        JsonNode data = objectMapper.valueToTree(entry.getData());
-
-        TickOverlay overlay = new TickOverlay(sessionId, tick, entry.getType(), data);
-
-        overlayRepository.save(overlay);
-
-      } catch (Exception e) {
-        log.error("Error saving tick overlay: {}", e.getMessage(), e);
-      }
+      JsonNode data = objectMapper.valueToTree(entry.getData());
+      TickOverlay overlay = new TickOverlay(sessionId, tick, entry.getType(), data);
+      overlayRepository.save(overlay);
     }
   }
 
   /** Create a timeline marker for an error log. */
   private void createErrorMarker(String sessionId, long tick, TickLog tickLog) {
-    try {
-      TimelineMarker marker =
-          new TimelineMarker(sessionId, tick, "ERROR", "Error: " + tickLog.getSubsystem());
+    TimelineMarker marker =
+        new TimelineMarker(sessionId, tick, "ERROR", "Error: " + tickLog.getSubsystem());
 
-      marker.setSeverity("Error");
-      marker.setDescription(tickLog.getMessage());
-      marker.setLogId(tickLog.getId());
-      marker.setIsAutoGenerated(true);
+    marker.setSeverity("Error");
+    marker.setDescription(tickLog.getMessage());
+    marker.setLogId(tickLog.getId());
+    marker.setIsAutoGenerated(true);
 
-      markerRepository.save(marker);
-
-    } catch (Exception e) {
-      log.error("Error creating error marker: {}", e.getMessage(), e);
-    }
+    markerRepository.save(marker);
   }
 
   /** Broadcast tick data to live debugger clients. */
@@ -528,7 +1087,11 @@ public class TickStreamIngestionService {
     }
 
     try {
-      String json = objectMapper.writeValueAsString(batch);
+      // Packets stay out of the optional Go forwarding path by default; the local
+      // evidence is already durable and the Go contract has no versioned packet shape.
+      com.fasterxml.jackson.databind.node.ObjectNode goNode = objectMapper.valueToTree(batch);
+      goNode.remove("packets");
+      String json = objectMapper.writeValueAsString(goNode);
 
       HttpRequest request =
           HttpRequest.newBuilder()

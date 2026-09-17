@@ -1,13 +1,13 @@
 package com.chromascape.web.replay.run;
 
-import com.chromascape.web.replay.api.dto.ReplayStopPolicy;
+import com.chromascape.web.replay.api.dto.ArtifactKind;
 import com.chromascape.web.replay.api.dto.ReplayMismatchPageResponse;
 import com.chromascape.web.replay.api.dto.ReplayMismatchResponse;
+import com.chromascape.web.replay.api.dto.ReplayStopPolicy;
 import com.chromascape.web.replay.api.dto.ViewerSessionResponse;
 import com.chromascape.web.replay.api.dto.XrspsPreflightResponse;
 import com.chromascape.web.replay.api.dto.XrspsRunResponse;
 import com.chromascape.web.replay.api.dto.XrspsTraceFramePageResponse;
-import com.chromascape.web.replay.api.dto.ArtifactKind;
 import com.chromascape.web.replay.artifact.ReplayArtifactService;
 import com.chromascape.web.replay.artifact.entity.ArtifactRef;
 import com.chromascape.web.replay.artifact.repository.ArtifactRefRepository;
@@ -23,18 +23,18 @@ import com.chromascape.web.replay.error.ReplayException;
 import com.chromascape.web.replay.manifest.ScenarioManifestV2Compiler;
 import com.chromascape.web.replay.manifest.entity.ScenarioManifest;
 import com.chromascape.web.replay.manifest.repository.ScenarioManifestRepository;
+import com.chromascape.web.replay.projection.CanonicalProjectionService;
 import com.chromascape.web.replay.report.entity.ReplayReport;
 import com.chromascape.web.replay.report.repository.ReplayReportRepository;
 import com.chromascape.web.replay.run.dto.CancelReplayRunResponse;
 import com.chromascape.web.replay.run.dto.CreateXrspsRunRequest;
 import com.chromascape.web.replay.run.dto.ReplayEventPageResponse;
-import com.chromascape.web.replay.run.entity.ReplayRun;
 import com.chromascape.web.replay.run.entity.ReplayMismatch;
+import com.chromascape.web.replay.run.entity.ReplayRun;
 import com.chromascape.web.replay.run.entity.StateHashSample;
 import com.chromascape.web.replay.run.repository.ReplayMismatchRepository;
 import com.chromascape.web.replay.run.repository.StateHashSampleRepository;
 import com.chromascape.web.replay.viewer.ReplayViewerService;
-import com.chromascape.web.replay.projection.CanonicalProjectionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -110,7 +110,8 @@ public class ReplayV2RunService {
           "Sign in before starting an xRSPS replay");
     }
     if (request == null) {
-      throw ReplayException.badRequest(ReplayErrorCode.VALIDATION_ERROR, "Replay request is required");
+      throw ReplayException.badRequest(
+          ReplayErrorCode.VALIDATION_ERROR, "Replay request is required");
     }
     if (request.stopPolicy() != ReplayStopPolicy.STOP_ON_FIRST_HARD
         && request.stopPolicy() != ReplayStopPolicy.RUN_TO_END) {
@@ -119,17 +120,16 @@ public class ReplayV2RunService {
           "v2 stopPolicy must be STOP_ON_FIRST_HARD or RUN_TO_END");
     }
     String fingerprint = requestFingerprint(recordingId, request);
-    Optional<ReplayRun> existing = runService.findByIdempotencyKey(request.idempotencyKey(), ownerId);
+    Optional<ReplayRun> existing =
+        runService.findByIdempotencyKey(request.idempotencyKey(), ownerId);
     if (existing.isPresent()) {
       ReplayRun run = existing.get();
-      if (run.getRequestFingerprint() != null
-          && !fingerprint.equals(run.getRequestFingerprint())) {
+      if (run.getRequestFingerprint() != null && !fingerprint.equals(run.getRequestFingerprint())) {
         throw ReplayException.conflict(
             ReplayErrorCode.RUN_IDEMPOTENCY_CONFLICT,
             "The idempotency key was already used for a different replay request");
       }
-      ScenarioManifest oldManifest =
-          manifestRepository.findById(run.getManifestId()).orElse(null);
+      ScenarioManifest oldManifest = manifestRepository.findById(run.getManifestId()).orElse(null);
       if (oldManifest == null || !recordingId.equals(oldManifest.getRecordingId())) {
         throw ReplayException.conflict(
             ReplayErrorCode.RUN_IDEMPOTENCY_CONFLICT,
@@ -147,7 +147,8 @@ public class ReplayV2RunService {
           "Enable REPLAY_ENABLED only for a reviewed replay deployment");
     }
 
-    XrspsPreflightResponse preflight = preflightService.preflight(recordingId, request.conversionMode());
+    XrspsPreflightResponse preflight =
+        preflightService.preflight(recordingId, request.conversionMode());
     if (!preflight.simulationEligible()) {
       throw preflightFailure(preflight);
     }
@@ -172,7 +173,8 @@ public class ReplayV2RunService {
     ReplayRun run = runService.getOwnedEntity(runId, ownerId);
     if (!run.isTerminal()) {
       throw ReplayException.conflict(
-          ReplayErrorCode.RUN_STATE_INVALID, "A replay report is available only after the run is terminal");
+          ReplayErrorCode.RUN_STATE_INVALID,
+          "A replay report is available only after the run is terminal");
     }
     return runService.getReportForOwner(runId, ownerId);
   }
@@ -201,10 +203,7 @@ public class ReplayV2RunService {
         mismatchRepository.findByRunIdOrderByFirstTickAscTickSequenceAsc(run.getId());
     int boundedLimit = Math.max(1, Math.min(200, limit));
     List<ReplayMismatchResponse> page =
-        all.stream()
-            .limit(boundedLimit)
-            .map(mismatch -> projectMismatch(run, mismatch))
-            .toList();
+        all.stream().limit(boundedLimit).map(mismatch -> projectMismatch(run, mismatch)).toList();
     return new ReplayMismatchPageResponse(
         ReplayMismatchPageResponse.SCHEMA, runId, page, all.size() > page.size());
   }
@@ -220,9 +219,9 @@ public class ReplayV2RunService {
   }
 
   /**
-   * Reads a terminal artifact through the owner boundary. The hashes bundle is constructed from
-   * the durable ordered hash samples and receives its own content checksum; it is not derived
-   * from browser state.
+   * Reads a terminal artifact through the owner boundary. The hashes bundle is constructed from the
+   * durable ordered hash samples and receives its own content checksum; it is not derived from
+   * browser state.
    */
   @Transactional(readOnly = true)
   public ArtifactDownload artifact(UUID runId, String artifactName, String ownerId) {
@@ -236,16 +235,20 @@ public class ReplayV2RunService {
     if ("hashes".equals(normalized)) {
       byte[] content = hashBundle(run);
       return new ArtifactDownload(
-          content, "application/json", "replay-" + runId + "-hashes.json", artifactService.checksum(content));
+          content,
+          "application/json",
+          "replay-" + runId + "-hashes.json",
+          artifactService.checksum(content));
     }
-    ArtifactKind kind = switch (normalized) {
-      case "manifest" -> ArtifactKind.MANIFEST;
-      case "trace" -> ArtifactKind.TRACE;
-      case "report" -> ArtifactKind.REPORT;
-      default -> throw ReplayException.badRequest(
-          ReplayErrorCode.VALIDATION_ERROR,
-          "Unknown replay artifact; expected manifest, trace, hashes, or report");
-    };
+    ArtifactKind kind =
+        switch (normalized) {
+          case "manifest" -> ArtifactKind.MANIFEST;
+          case "trace" -> ArtifactKind.TRACE;
+          case "report" -> ArtifactKind.REPORT;
+          default -> throw ReplayException.badRequest(
+              ReplayErrorCode.VALIDATION_ERROR,
+              "Unknown replay artifact; expected manifest, trace, hashes, or report");
+        };
     ArtifactRef ref =
         artifactRepository
             .findFirstByRunIdAndKindAndStateOrderByCreatedAtDesc(
@@ -271,8 +274,7 @@ public class ReplayV2RunService {
       byte[] content = report.getReportJson().getBytes(StandardCharsets.UTF_8);
       if (!verifyReportDocumentChecksum(content, report.getReportChecksum())) {
         throw ReplayException.conflict(
-            ReplayErrorCode.TRACE_CORRUPT,
-            "The terminal report failed checksum verification");
+            ReplayErrorCode.TRACE_CORRUPT, "The terminal report failed checksum verification");
       }
       return new ArtifactDownload(
           content,
@@ -325,7 +327,8 @@ public class ReplayV2RunService {
     if (run.getViewerTraceChecksum() != null) {
       document.put("traceChecksum", run.getViewerTraceChecksum());
     }
-    String bundleChecksum = projectionService.sha256Hex(projectionService.canonicalJsonBytes(document));
+    String bundleChecksum =
+        projectionService.sha256Hex(projectionService.canonicalJsonBytes(document));
     document.put("bundleChecksum", bundleChecksum);
     return projectionService.canonicalJsonBytes(document);
   }
@@ -341,7 +344,8 @@ public class ReplayV2RunService {
     ObjectNode evidence = mapper.createObjectNode();
     evidence.put("kind", "recorded_expectation_vs_simulation");
     evidence.put("manifestId", run.getManifestId().toString());
-    evidence.put("manifestPath", "/expectations/" + escapeJsonPointerSegment(mismatch.getJsonPointer()));
+    evidence.put(
+        "manifestPath", "/expectations/" + escapeJsonPointerSegment(mismatch.getJsonPointer()));
     if (mismatch.getFirstTick() != null) evidence.put("tick", mismatch.getFirstTick());
     if (mismatch.getJsonPointer() != null) evidence.put("jsonPointer", mismatch.getJsonPointer());
     evidence.set("recordedValue", expected.deepCopy());
@@ -559,7 +563,8 @@ public class ReplayV2RunService {
     }
   }
 
-  public record ArtifactDownload(byte[] content, String mediaType, String filename, String checksum) {}
+  public record ArtifactDownload(
+      byte[] content, String mediaType, String filename, String checksum) {}
 
   public record Creation(XrspsRunResponse response, boolean created) {}
 }

@@ -41,7 +41,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Profile;
-import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -84,7 +83,10 @@ class ReplayPlaybackParityIntegrationTest {
   @EnableAutoConfiguration
   @EntityScan(
       basePackageClasses = {
-        DebugSession.class, TickSnapshot.class, TickLog.class, RecordingSession.class
+        DebugSession.class,
+        TickSnapshot.class,
+        TickLog.class,
+        RecordingSession.class
       })
   @EnableJpaRepositories(
       basePackageClasses = {
@@ -100,7 +102,9 @@ class ReplayPlaybackParityIntegrationTest {
   @org.springframework.beans.factory.annotation.Autowired private DebugSessionRepository sessions;
   @org.springframework.beans.factory.annotation.Autowired private TickSnapshotRepository snapshots;
   @org.springframework.beans.factory.annotation.Autowired private TickLogRepository logs;
-  @org.springframework.beans.factory.annotation.Autowired private RecordingSessionRepository recordings;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private RecordingSessionRepository recordings;
 
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
@@ -125,7 +129,8 @@ class ReplayPlaybackParityIntegrationTest {
     recording.setEndTime(start.plusSeconds(5));
     entityManager.persist(recording);
 
-    DebugSession session = new DebugSession("debug-parity", "parity-account", "parity-script", start, 100L);
+    DebugSession session =
+        new DebugSession("debug-parity", "parity-account", "parity-script", start, 100L);
     session.setRecordingId(recording.getRecordingId());
     session.setEndTime(start.plusSeconds(5));
     session.setEndTick(103L);
@@ -136,11 +141,28 @@ class ReplayPlaybackParityIntegrationTest {
     // A snapshot with no logs proves empty frame log collections serialize as arrays.
     persistSnapshot(session.getSessionId(), 103L, start.plusSeconds(3), "{\"x\":3203,\"z\":3201}");
 
-    TickLog action = persistLog(session.getSessionId(), 100L, start, "PLAYER_ACTION", "MENU_OPTION_CLICKED", "Net");
-    TickLog dialogue = persistLog(session.getSessionId(), 100L, start.plusNanos(1), "dIaLoGuE", "ChatMessage", "Talk to Cook");
-    TickLog varbit = persistLog(session.getSessionId(), 101L, start.plusSeconds(1), "Game", "vArBiT_CHANGED", "Varbit 42 = 1");
+    TickLog action =
+        persistLog(
+            session.getSessionId(), 100L, start, "PLAYER_ACTION", "MENU_OPTION_CLICKED", "Net");
+    TickLog dialogue =
+        persistLog(
+            session.getSessionId(),
+            100L,
+            start.plusNanos(1),
+            "dIaLoGuE",
+            "ChatMessage",
+            "Talk to Cook");
+    TickLog varbit =
+        persistLog(
+            session.getSessionId(),
+            101L,
+            start.plusSeconds(1),
+            "Game",
+            "vArBiT_CHANGED",
+            "Varbit 42 = 1");
     // This log must never create a synthetic legacy card or a v1 frame.
-    persistLog(session.getSessionId(), 102L, start.plusSeconds(2), "Game", "ACTION_ONLY", "no snapshot");
+    persistLog(
+        session.getSessionId(), 102L, start.plusSeconds(2), "Game", "ACTION_ONLY", "no snapshot");
     entityManager.flush();
     entityManager.clear();
 
@@ -178,20 +200,26 @@ class ReplayPlaybackParityIntegrationTest {
             new ReplayPlaybackCursorCodec(mapper),
             new ReplayPlaybackFrameCursorCodec(mapper));
     ReplayPlaybackFramePageResponse v1 = playback.frames("recording-parity", 100L, 100);
-    assertEquals(List.of(100L, 101L, 103L), v1.getFrames().stream().map(ReplayPlaybackFramePageResponse.FrameData::getTick).toList());
+    assertEquals(
+        List.of(100L, 101L, 103L),
+        v1.getFrames().stream().map(ReplayPlaybackFramePageResponse.FrameData::getTick).toList());
 
     Map<Long, TickCardData> legacyByTick =
         cards.stream().collect(Collectors.toMap(TickCardData::getTick, Function.identity()));
     for (ReplayPlaybackFramePageResponse.FrameData frame : v1.getFrames()) {
       List<TickLog> legacyLogs =
           castTickLogs(
-              legacyByTick.get(frame.getTick()).getSectionData().getOrDefault("actions", List.of()));
+              legacyByTick
+                  .get(frame.getTick())
+                  .getSectionData()
+                  .getOrDefault("actions", List.of()));
       List<Long> legacyIds = legacyLogs.stream().map(TickLog::getId).toList();
       List<Long> v1Ids = frame.getLogs().stream().map(log -> log.getId()).toList();
       assertEquals(legacyIds, v1Ids, "legacy and v1 must expose identical underlying log rows");
       assertTrue(
           frame.getLogs().stream()
-              .allMatch(log -> log.getCategories() != null && log.getCategories().contains("ACTION")));
+              .allMatch(
+                  log -> log.getCategories() != null && log.getCategories().contains("ACTION")));
     }
 
     assertEquals(
@@ -202,7 +230,9 @@ class ReplayPlaybackParityIntegrationTest {
         List.of("ACTION", "VARBIT"),
         v1.getFrames().get(1).getLogs().get(0).getCategories(),
         "varbit event matching is case-insensitive");
-    assertEquals(List.of(action.getId(), dialogue.getId()), v1.getFrames().get(0).getLogs().stream().map(l -> l.getId()).toList());
+    assertEquals(
+        List.of(action.getId(), dialogue.getId()),
+        v1.getFrames().get(0).getLogs().stream().map(l -> l.getId()).toList());
     assertEquals(varbit.getId(), v1.getFrames().get(1).getLogs().get(0).getId());
 
     JsonNode frameJson = mapper.valueToTree(v1);
@@ -231,7 +261,12 @@ class ReplayPlaybackParityIntegrationTest {
   }
 
   private TickLog persistLog(
-      String sessionId, long tick, LocalDateTime timestamp, String subsystem, String eventType, String message) {
+      String sessionId,
+      long tick,
+      LocalDateTime timestamp,
+      String subsystem,
+      String eventType,
+      String message) {
     TickLog log = new TickLog(sessionId, tick, timestamp, subsystem, "INFO", message);
     log.setEventType(eventType);
     entityManager.persist(log);

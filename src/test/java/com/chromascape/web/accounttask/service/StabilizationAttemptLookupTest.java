@@ -7,7 +7,6 @@ import com.chromascape.web.accounttask.entity.ScriptStabilizationRun;
 import com.chromascape.web.accounttask.repository.ScriptFailureTriageRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationRunRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationSnapshotRepository;
-import com.chromascape.web.accounttask.service.StabilizationArtifactStore;
 import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
 import com.chromascape.web.accounttask.repository.StabilizationRunAggregateRepository;
 import java.util.List;
@@ -35,8 +34,15 @@ class StabilizationAttemptLookupTest {
 
   @BeforeEach
   void setUp() {
-    service = new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository,
-            artifactStore, artifactRepository, aggregateRepository, entityManager);
+    service =
+        new StabilizationIngestionService(
+            runRepository,
+            triageRepository,
+            snapshotRepository,
+            artifactStore,
+            artifactRepository,
+            aggregateRepository,
+            entityManager);
   }
 
   private ScriptStabilizationRun run(String runId, String attemptId, String outcome) {

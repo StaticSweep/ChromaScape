@@ -1290,8 +1290,215 @@ body {
   border-color: #56b6c2;
 }
 
+.tick-section.section-packets {
+  border-color: #7dd3fc;
+}
+
 .tick-section.section-varbits {
   border-color: #abb2bf;
+}
+
+/* RSProx packet rows, badges, filters, and expandable detail (SC-1618). */
+.packet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.packet-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.packet-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 1px 6px;
+  border: 1px solid rgba(125, 211, 252, 0.45);
+  background: rgba(125, 211, 252, 0.12);
+  color: #e0f2fe;
+}
+
+.packet-badge-source {
+  border-color: rgba(240, 171, 252, 0.45);
+  background: rgba(240, 171, 252, 0.12);
+  color: #fae8ff;
+}
+
+.packet-badge-gap,
+.packet-badge-truncated {
+  border-color: rgba(252, 211, 77, 0.5);
+  background: rgba(252, 211, 77, 0.14);
+  color: #fef3c7;
+}
+
+.packet-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.packet-filter-select,
+.packet-filter-text {
+  font-size: 0.72rem;
+  color: #e2e8f0;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.packet-filter-text {
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+
+.packet-row {
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 6px;
+  background: rgba(125, 211, 252, 0.05);
+}
+
+.packet-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 8px;
+  font-family: monospace;
+  font-size: 0.72rem;
+}
+
+.packet-direction {
+  font-weight: 700;
+}
+
+.packet-out {
+  color: #86efac;
+}
+
+.packet-in {
+  color: #7dd3fc;
+}
+
+.packet-time,
+.packet-seq,
+.packet-opcode,
+.packet-size {
+  color: #cbd5e1;
+}
+
+.packet-name {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.packet-status-decoded {
+  border-color: rgba(134, 239, 172, 0.5);
+  background: rgba(134, 239, 172, 0.12);
+  color: #dcfce7;
+}
+
+.packet-status-unknownprotocol,
+.packet-status-decodeerror {
+  border-color: rgba(252, 165, 165, 0.5);
+  background: rgba(252, 165, 165, 0.12);
+  color: #fee2e2;
+}
+
+.packet-status-gap {
+  border-color: rgba(252, 211, 77, 0.5);
+  background: rgba(252, 211, 77, 0.14);
+  color: #fef3c7;
+}
+
+.packet-expand-btn {
+  margin-left: auto;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: #e0f2fe;
+  background: rgba(125, 211, 252, 0.12);
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  border-radius: 6px;
+  padding: 1px 7px;
+  cursor: pointer;
+}
+
+.packet-detail {
+  border-top: 1px dashed rgba(125, 211, 252, 0.3);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.packet-detail[hidden] {
+  display: none;
+}
+
+.packet-detail-row {
+  font-size: 0.72rem;
+  color: #e2e8f0;
+  word-break: break-word;
+}
+
+.packet-detail-label {
+  font-weight: 600;
+  color: #bae6fd;
+}
+
+.packet-detail-error {
+  color: #fecaca;
+}
+
+.packet-decoded {
+  font-size: 0.68rem;
+  font-family: monospace;
+  color: #e2e8f0;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 4px;
+  padding: 6px;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tick-packet-count {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(125, 211, 252, 0.16);
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  color: #e0f2fe;
+}
+
+.tick-packet-count.empty {
+  opacity: 0.45;
+}
+
+.tick-packet-count.has-gap {
+  border-color: rgba(252, 211, 77, 0.55);
+  background: rgba(252, 211, 77, 0.16);
+  color: #fef3c7;
+}
+
+@media (max-width: 720px) {
+  .packet-summary {
+    gap: 4px;
+    font-size: 0.66rem;
+  }
+
+  .packet-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 /* Per-tick toggle chips in header */

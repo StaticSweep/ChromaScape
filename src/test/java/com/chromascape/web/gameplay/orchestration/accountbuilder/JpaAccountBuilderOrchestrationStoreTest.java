@@ -3,6 +3,7 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import com.chromascape.web.gameplay.authority.HumanGameplayAuthorityService;
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContracts;
@@ -22,7 +23,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -35,51 +35,63 @@ import java.util.List;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Profile;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /** PostgreSQL/JPA proof that normalized evidence survives a fresh persistence context. */
 @SpringBootTest(
-    classes = JpaAccountBuilderOrchestrationStoreTest.JpaTestApplication.class,
+    classes = JpaAccountBuilderOrchestrationStoreTest.JpaTestBootstrap.class,
     properties = {
-      "spring.datasource.url=jdbc:postgresql://localhost:5433/chromascape_sc1431_test?sslmode=disable",
-      "spring.datasource.username=chromascape",
-      "spring.datasource.password=chromascape123",
-      "spring.flyway.enabled=false",
-      "spring.jpa.hibernate.ddl-auto=create-drop",
+      "spring.flyway.target=32",
+      "spring.jpa.hibernate.ddl-auto=validate",
       "stabilization.auth.token=sc1431-read-token",
       "stabilization.auth.write-token=sc1431-write-token",
       "gameplay.bootstrap.authority-hmac-secret=sc1431-test-authority-secret-32-bytes"
     })
 @AutoConfigureTestDatabase(replace = Replace.NONE)
-@Transactional
+@ActiveProfiles({"test", "sc1431-jpa"})
 class JpaAccountBuilderOrchestrationStoreTest {
   private static final Instant NOW = Instant.parse("2026-08-31T12:05:00Z");
   private static final String SECRET = "sc1431-test-authority-secret-32-bytes";
   private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
-  @Autowired private EntityManager entityManager;
-  @Autowired private HumanGameplayAuthorityService authorityService;
+  @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private CanonicalGameplayJson canonicalJson;
-  @Autowired private ObjectMapper mapper;
-  private JpaAccountBuilderOrchestrationStore store;
+  @Autowired private JpaAccountBuilderOrchestrationStore store;
 
-  @BeforeEach
-  void setUpStore() {
-    store =
-        new JpaAccountBuilderOrchestrationStore(
-            entityManager, mapper, canonicalJson, CLOCK, authorityService);
+  @DynamicPropertySource
+  static void isolatedPostgres(DynamicPropertyRegistry registry) {
+    IsolatedPostgresTestDatabase.register(registry);
+  }
+
+  @Test
+  void sc1431FixturesAreTestConfigurationsNotSpringBootApplications() {
+    assertThat(JpaTestApplication.class.getAnnotation(TestConfiguration.class)).isNotNull();
+    assertThat(JpaTestApplication.class.getAnnotation(SpringBootConfiguration.class)).isNull();
+    assertThat(
+            AccountBuilderOrchestrationPostgresConcurrencyTest.TestApplication.class.getAnnotation(
+                TestConfiguration.class))
+        .isNotNull();
+    assertThat(
+            AccountBuilderOrchestrationPostgresConcurrencyTest.TestApplication.class.getAnnotation(
+                SpringBootConfiguration.class))
+        .isNull();
   }
 
   @Test
@@ -91,8 +103,7 @@ class JpaAccountBuilderOrchestrationStoreTest {
         .isTrue();
     store.transition(
         request.orchestrationId(), State.VALIDATED, FailureCode.NONE, null, null, false, false);
-    store.consumeAuthority(
-        request.orchestrationId(), request.authority(), envelopeDigest, request);
+    store.consumeAuthority(request.orchestrationId(), request.authority(), envelopeDigest, request);
     store.transition(
         request.orchestrationId(), State.AUTHORIZED, FailureCode.NONE, null, null, false, false);
 
@@ -136,9 +147,6 @@ class JpaAccountBuilderOrchestrationStoreTest {
         false,
         false);
 
-    entityManager.flush();
-    entityManager.clear();
-
     AccountBuilderOrchestrationStore.NormalizedAggregate aggregate =
         store.readAggregate(request.orchestrationId());
     assertThat(aggregate.view().state()).isEqualTo(State.CONFIRMED);
@@ -146,20 +154,18 @@ class JpaAccountBuilderOrchestrationStoreTest {
     assertThat(aggregate.authority()).isNotNull();
     assertThat(aggregate.lease()).isEqualTo(lease);
     assertThat(aggregate.terminalResult()).isNotNull();
-    assertThat(count("ab_snapshot_binding")).isEqualTo(1);
-    assertThat(count("ab_authority_consumption")).isEqualTo(1);
-    assertThat(count("ab_orchestration_lease")).isEqualTo(1);
-    assertThat(count("ab_orchestration_receipt")).isEqualTo(3);
-    assertThat(count("ab_orchestration_event")).isEqualTo(8);
-    assertThat(count("ab_orchestration_terminal_result")).isEqualTo(1);
+    assertThat(count("ab_snapshot_binding", request.orchestrationId())).isEqualTo(1);
+    assertThat(count("ab_authority_consumption", request.orchestrationId())).isEqualTo(1);
+    assertThat(count("ab_orchestration_lease", request.orchestrationId())).isEqualTo(1);
+    assertThat(count("ab_orchestration_receipt", request.orchestrationId())).isEqualTo(3);
+    assertThat(count("ab_orchestration_event", request.orchestrationId())).isEqualTo(8);
+    assertThat(count("ab_orchestration_terminal_result", request.orchestrationId())).isEqualTo(1);
 
     String persistedRequest =
-        (String)
-            entityManager
-                .createNativeQuery(
-                    "select request_json from ab_orchestration where orchestration_id=:id")
-                .setParameter("id", request.orchestrationId())
-                .getSingleResult();
+        jdbcTemplate.queryForObject(
+            "select request_json from ab_orchestration where orchestration_id=?",
+            String.class,
+            request.orchestrationId());
     assertThat(persistedRequest).doesNotContain("secret-setting");
     assertThat(persistedRequest).doesNotContain("signature");
   }
@@ -171,18 +177,140 @@ class JpaAccountBuilderOrchestrationStoreTest {
     store.claim(request, request.requestFingerprint(), envelopeDigest);
     OrchestrationRequest changed = withFingerprint(request, digest("changed-fingerprint"));
 
-    assertThatThrownBy(
-            () -> store.claim(changed, changed.requestFingerprint(), envelopeDigest))
+    assertThatThrownBy(() -> store.claim(changed, changed.requestFingerprint(), envelopeDigest))
         .isInstanceOf(AccountBuilderOrchestrationException.class)
         .extracting("failureCode")
         .isEqualTo(FailureCode.IDEMPOTENCY_CONFLICT);
     assertThat(store.find(request.orchestrationId())).isPresent();
   }
 
-  private long count(String table) {
-    return ((Number)
-            entityManager.createNativeQuery("select count(*) from " + table).getSingleResult())
-        .longValue();
+  private long count(String table, String orchestrationId) {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from " + table + " where orchestration_id=?", Long.class, orchestrationId);
+  }
+
+  @Test
+  void allZeroHmacIsRejectedBeforeAuthorityOwnership() {
+    OrchestrationRequest request = request("jpa-authority-zero-hmac");
+    HumanAuthority invalid =
+        copyAuthority(request.authority(), "hmac-sha256:" + "0".repeat(64), null, null, null);
+
+    assertAuthorityRejected(request, invalid, FailureCode.AUTHORITY_INVALID);
+  }
+
+  @Test
+  void correctlyShapedButWrongHmacIsRejectedBeforeAuthorityOwnership() {
+    OrchestrationRequest request = request("jpa-authority-wrong-hmac");
+    HumanAuthority invalid =
+        copyAuthority(request.authority(), "hmac-sha256:" + "1".repeat(64), null, null, null);
+
+    assertAuthorityRejected(request, invalid, FailureCode.AUTHORITY_INVALID);
+  }
+
+  @Test
+  void authorityBoundToDifferentEnvelopeIsRejected() {
+    OrchestrationRequest request = request("jpa-authority-different-envelope");
+    HumanAuthority invalid =
+        copyAuthority(
+            request.authority(),
+            null,
+            digest("different-envelope"),
+            request.authority().scopeDigest(),
+            null);
+
+    assertAuthorityRejected(request, invalid, FailureCode.AUTHORITY_INVALID);
+  }
+
+  @Test
+  void changedApprovedScopeIsRejectedBeforeAuthorityOwnership() {
+    OrchestrationRequest request = request("jpa-authority-changed-scope");
+    HumanAuthority invalid =
+        copyAuthority(request.authority(), null, null, digest("changed-approved-scope"), null);
+
+    assertAuthorityRejected(request, invalid, FailureCode.AUTHORITY_INVALID);
+  }
+
+  @Test
+  void expiredAuthorityIsRejectedBeforeAuthorityOwnership() {
+    OrchestrationRequest request = request("jpa-authority-expired");
+    HumanAuthority invalid =
+        copyAuthority(request.authority(), null, null, null, NOW.minusSeconds(1));
+
+    assertAuthorityRejected(request, invalid, FailureCode.AUTHORITY_INVALID);
+  }
+
+  @Test
+  void cryptographicallyValidDuplicateAuthorityIdIsRejectedAcrossOrchestrations() {
+    OrchestrationRequest owner = request("jpa-authority-owner");
+    OrchestrationRequest contender =
+        withAuthorityId(request("jpa-authority-contender"), owner.authority().authorityId());
+    String ownerEnvelopeDigest = canonicalJson.digest(owner.envelope());
+    String contenderEnvelopeDigest = canonicalJson.digest(contender.envelope());
+    claimAndValidate(owner);
+    claimAndValidate(contender);
+
+    store.consumeAuthority(owner.orchestrationId(), owner.authority(), ownerEnvelopeDigest, owner);
+
+    assertThatThrownBy(
+            () ->
+                store.consumeAuthority(
+                    contender.orchestrationId(),
+                    contender.authority(),
+                    contenderEnvelopeDigest,
+                    contender))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .extracting("failureCode")
+        .isEqualTo(FailureCode.AUTHORITY_ALREADY_USED);
+    assertThat(
+            count("ab_authority_consumption", owner.orchestrationId())
+                + count("ab_authority_consumption", contender.orchestrationId()))
+        .isEqualTo(1);
+  }
+
+  private void assertAuthorityRejected(
+      OrchestrationRequest request, HumanAuthority authority, FailureCode failureCode) {
+    claimAndValidate(request);
+    assertThatThrownBy(
+            () ->
+                store.consumeAuthority(
+                    request.orchestrationId(),
+                    authority,
+                    canonicalJson.digest(request.envelope()),
+                    request))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .extracting("failureCode")
+        .isEqualTo(failureCode);
+    assertThat(count("ab_authority_consumption", request.orchestrationId())).isZero();
+  }
+
+  private void claimAndValidate(OrchestrationRequest request) {
+    assertThat(
+            store
+                .claim(
+                    request, request.requestFingerprint(), canonicalJson.digest(request.envelope()))
+                .created())
+        .isTrue();
+    store.transition(
+        request.orchestrationId(), State.VALIDATED, FailureCode.NONE, null, null, false, false);
+  }
+
+  private HumanAuthority copyAuthority(
+      HumanAuthority source,
+      String signature,
+      String envelopeDigest,
+      String scopeDigest,
+      Instant expiresAt) {
+    return new HumanAuthority(
+        source.contractVersion(),
+        source.authorityId(),
+        source.actorType(),
+        source.approvedBy(),
+        source.approvedAt(),
+        expiresAt == null ? source.expiresAt() : expiresAt,
+        envelopeDigest == null ? source.envelopeDigest() : envelopeDigest,
+        scopeDigest == null ? source.scopeDigest() : scopeDigest,
+        source.oneUse(),
+        signature == null ? source.signature() : signature);
   }
 
   private OrchestrationRequest request(String suffix) {
@@ -389,6 +517,54 @@ class JpaAccountBuilderOrchestrationStoreTest {
     return canonicalJson.digest(values);
   }
 
+  private OrchestrationRequest withAuthorityId(OrchestrationRequest request, String authorityId) {
+    ExecutionEnvelope current = request.envelope();
+    ExecutionEnvelope envelope =
+        new ExecutionEnvelope(
+            current.contractVersion(),
+            current.provider(),
+            current.modelVersion(),
+            current.decisionId(),
+            current.requestId(),
+            current.idempotencyKey(),
+            current.goalPlanDigest(),
+            current.taskSkillDigests(),
+            current.taskKey(),
+            current.settings(),
+            current.identities(),
+            current.catalogDigest(),
+            current.schemaDigest(),
+            current.policyDigest(),
+            current.knowledgeDigest(),
+            current.semanticActionDigest(),
+            current.expectedTransition(),
+            current.verifierId(),
+            current.buildId(),
+            current.expectedObservationRevision(),
+            current.expectedTaskRevision(),
+            authorityId,
+            current.leaseGeneration(),
+            current.fence(),
+            current.budgets(),
+            current.deadline(),
+            current.killSwitchScope());
+    OrchestrationRequest changed =
+        new OrchestrationRequest(
+            request.orchestrationId(),
+            request.requestId(),
+            request.idempotencyKey(),
+            null,
+            request.mode(),
+            request.sourceType(),
+            request.decision(),
+            envelope,
+            request.bindings(),
+            signedAuthority(envelope),
+            request.observation(),
+            request.deadline());
+    return withFingerprint(changed, fingerprint(changed));
+  }
+
   private OrchestrationRequest withFingerprint(OrchestrationRequest request, String fingerprint) {
     return new OrchestrationRequest(
         request.orchestrationId(),
@@ -409,13 +585,21 @@ class JpaAccountBuilderOrchestrationStoreTest {
     try {
       return "sha256:"
           + HexFormat.of()
-              .formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+              .formatHex(
+                  MessageDigest.getInstance("SHA-256")
+                      .digest(value.getBytes(StandardCharsets.UTF_8)));
     } catch (java.security.NoSuchAlgorithmException exception) {
       throw new AssertionError(exception);
     }
   }
 
-  @SpringBootConfiguration
+  @Configuration(proxyBeanMethods = false)
+  @Profile("sc1431-jpa")
+  @Import(JpaTestApplication.class)
+  static class JpaTestBootstrap {}
+
+  @TestConfiguration(proxyBeanMethods = false)
+  @Profile("sc1431-jpa")
   @EnableAutoConfiguration
   @EntityScan(basePackages = "com.chromascape.web.gameplay.orchestration.accountbuilder")
   @Import(JsonConfiguration.class)
@@ -426,9 +610,20 @@ class JpaAccountBuilderOrchestrationStoreTest {
         @Value("${gameplay.bootstrap.authority-hmac-secret}") String signingSecret) {
       return new HumanGameplayAuthorityService(canonicalJson, signingSecret);
     }
+
+    @Bean
+    JpaAccountBuilderOrchestrationStore orchestrationStore(
+        EntityManager entityManager,
+        ObjectMapper objectMapper,
+        CanonicalGameplayJson canonicalJson,
+        HumanGameplayAuthorityService authorityService) {
+      return new JpaAccountBuilderOrchestrationStore(
+          entityManager, objectMapper, canonicalJson, CLOCK, authorityService);
+    }
   }
 
   @TestConfiguration(proxyBeanMethods = false)
+  @Profile("sc1431-jpa")
   static class JsonConfiguration {
     @Bean
     ObjectMapper objectMapper() {

@@ -11,7 +11,6 @@ import com.chromascape.web.accounttask.entity.ScriptStabilizationRun;
 import com.chromascape.web.accounttask.repository.ScriptFailureTriageRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationRunRepository;
 import com.chromascape.web.accounttask.repository.ScriptStabilizationSnapshotRepository;
-import com.chromascape.web.accounttask.service.StabilizationArtifactStore;
 import com.chromascape.web.accounttask.repository.StabilizationArtifactRepository;
 import com.chromascape.web.accounttask.repository.StabilizationRunAggregateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,8 +42,15 @@ class StabilizationManifestIntegrityTest {
 
   @BeforeEach
   void setUp() {
-    service = new StabilizationIngestionService(runRepository, triageRepository, snapshotRepository,
-            artifactStore, artifactRepository, aggregateRepository, entityManager);
+    service =
+        new StabilizationIngestionService(
+            runRepository,
+            triageRepository,
+            snapshotRepository,
+            artifactStore,
+            artifactRepository,
+            aggregateRepository,
+            entityManager);
   }
 
   private JsonNode baseManifest() {
@@ -67,11 +73,11 @@ class StabilizationManifestIntegrityTest {
     manifest.put("primary_failure_code", "none");
     manifest.put("failure_signature", "sig:abc");
     manifest.put("evidence_complete", true);
-    manifest.putArray("evidence").addObject()
-        .put("type", "LOG")
-        .put("reference", "logs/task.log");
-    manifest.put("manifest_hash", "sha256:" + StabilizationHashUtil.sha256(
-        manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
+    manifest.putArray("evidence").addObject().put("type", "LOG").put("reference", "logs/task.log");
+    manifest.put(
+        "manifest_hash",
+        "sha256:"
+            + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
     return manifest;
   }
 
@@ -79,7 +85,10 @@ class StabilizationManifestIntegrityTest {
   @DisplayName("an invalid manifest hash is rejected")
   void invalidManifestHashIsRejected() {
     JsonNode manifest = baseManifest();
-    ((ObjectNode) manifest).put("manifest_hash", "sha256:0000000000000000000000000000000000000000000000000000000000000000");
+    ((ObjectNode) manifest)
+        .put(
+            "manifest_hash",
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000");
 
     assertThatThrownBy(() -> service.ingestHarnessManifest(manifest))
         .isInstanceOf(IllegalArgumentException.class)
@@ -113,8 +122,10 @@ class StabilizationManifestIntegrityTest {
   void passWithoutCompleteEvidenceRejected() {
     ObjectNode manifest = (ObjectNode) baseManifest();
     manifest.put("evidence_complete", false);
-    manifest.put("manifest_hash", "sha256:" + StabilizationHashUtil.sha256(
-        manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
+    manifest.put(
+        "manifest_hash",
+        "sha256:"
+            + StabilizationHashUtil.sha256(manifest, StabilizationHashUtil.MANIFEST_EXCLUSIONS));
 
     assertThatThrownBy(() -> service.ingestHarnessManifest(manifest))
         .isInstanceOf(IllegalArgumentException.class)
@@ -137,7 +148,8 @@ class StabilizationManifestIntegrityTest {
   @DisplayName("direct manifest ingestion can never create a verified certification record")
   void directManifestIngestionIsNeverVerified() {
     when(runRepository.existsBySchemaVersionAndRunIdAndAttemptIdAndManifestHash(
-        any(), any(), any(), any())).thenReturn(false);
+            any(), any(), any(), any()))
+        .thenReturn(false);
 
     Map<String, Object> result = service.ingestHarnessManifest(baseManifest());
     assertThat(result.get("saved")).isEqualTo(true);
@@ -146,7 +158,8 @@ class StabilizationManifestIntegrityTest {
         org.mockito.ArgumentCaptor.forClass(ScriptStabilizationRun.class);
     verify(runRepository).save(captor.capture());
     ScriptStabilizationRun saved = captor.getValue();
-    assertThat(saved.getVerified()).as("direct /harness-manifest ingestion must never be verified")
+    assertThat(saved.getVerified())
+        .as("direct /harness-manifest ingestion must never be verified")
         .isFalse();
   }
 }

@@ -7,9 +7,9 @@ import org.springframework.context.annotation.Configuration;
  * Operator authentication for the AI-routine candidate workflow.
  *
  * <p>All candidate read/mutation endpoints require {@code Authorization: Bearer <token>} matching
- * {@code ai-routine.operator-token} (compared in constant time). The configured
- * {@code ai-routine.operator-id} is the auditable operator identity persisted into approval hashes
- * and audit events; there is no servlet {@code Principal} bridge.
+ * {@code ai-routine.operator-token} (compared in constant time). The configured {@code
+ * ai-routine.operator-id} is the auditable operator identity persisted into approval hashes and
+ * audit events; there is no servlet {@code Principal} bridge.
  */
 @Configuration
 @ConfigurationProperties(prefix = "ai-routine.operator")

@@ -87,7 +87,8 @@ class AiRoutineOperatorInterceptorTest {
     HttpServletResponse response = mock(HttpServletResponse.class);
     when(request.getMethod()).thenReturn("GET");
 
-    assertTrue(interceptor.preHandle(request, response, null),
+    assertTrue(
+        interceptor.preHandle(request, response, null),
         "GET endpoints must remain unauthenticated");
   }
 
@@ -102,7 +103,8 @@ class AiRoutineOperatorInterceptorTest {
     when(request.getHeader("Authorization")).thenReturn("Bearer wrong");
     when(response.getWriter()).thenReturn(new PrintWriter(writer));
 
-    assertFalse(interceptor.preHandle(request, response, null),
+    assertFalse(
+        interceptor.preHandle(request, response, null),
         "mutations without the operator token must be rejected");
     verify(response).setStatus(401);
   }

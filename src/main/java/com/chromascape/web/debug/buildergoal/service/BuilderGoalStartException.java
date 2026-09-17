@@ -36,9 +36,7 @@ public class BuilderGoalStartException extends RuntimeException {
     this.safeDetail = safe(safeDetail);
     this.iterationId = safe(iterationId);
     this.logFile =
-        logFile != null
-            ? BuilderGoalSensitiveTextSanitizer.sanitize(logFile.toString())
-            : null;
+        logFile != null ? BuilderGoalSensitiveTextSanitizer.sanitize(logFile.toString()) : null;
     this.correlationId = safe(correlationId);
   }
 
@@ -71,10 +69,7 @@ public class BuilderGoalStartException extends RuntimeException {
   }
 
   public BuilderGoalStartFailureResponse toResponse() {
-    String statusUrl =
-        iterationId != null
-            ? "/api/debug/builder-goals/runs/" + iterationId
-            : null;
+    String statusUrl = iterationId != null ? "/api/debug/builder-goals/runs/" + iterationId : null;
     return new BuilderGoalStartFailureResponse(
         "Failed to start builder goal run",
         code,

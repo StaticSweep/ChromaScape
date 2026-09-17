@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:46.804Z" hostname="fedora" time="0.169">
+  <properties/>
+  <testcase name="catalogReportsObservedCoverageWithoutSimulatorDependencies()" classname="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" time="0.131"/>
+  <testcase name="canonicalCatalogPathIgnoresOffsetInputByUsingCursorOnlyOverload()" classname="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" time="0.001"/>
+  <testcase name="framesFailWithStableErrorWhenRecordingHasNoDebugSession()" classname="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" time="0.001"/>
+  <testcase name="catalogUsesLimitPlusOneAndReturnsTheFinalRowCursor()" classname="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" time="0.002"/>
+  <testcase name="catalogTrimsAccountsAndClampsLimitBounds()" classname="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" time="0.002"/>
+  <testcase name="framesUseBoundedPaginationAndCanonicalizeRecorderAliases()" classname="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" time="0.022"/>
+  <testcase name="frameInputClampsFromTickAndRejectsMixedContinuationParameters()" classname="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" time="0.002"/>
+  <testcase name="frameCursorContinuesThroughDuplicateTicksWithoutRepeatingRows()" classname="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" time="0.002"/>
+  <testcase name="emptyFramePageHasEmptyFramesAndDoesNotQueryLogs()" classname="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" time="0.001"/>
+  <testcase name="nestedAndScalarPlayerFieldsRemainCanonicalAndPreserved()" classname="com.chromascape.web.replay.playback.ReplayPlaybackServiceTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

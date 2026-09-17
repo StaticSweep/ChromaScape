@@ -1,6 +1,5 @@
 package com.chromascape.web.aiplayer.routine.source;
 
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -22,14 +21,16 @@ public class VerifiedSourceContentCache {
   }
 
   public synchronized void put(String contentHash, byte[] content) {
-    if (!SourceManifestContract.isHash(contentHash) || content == null
+    if (!SourceManifestContract.isHash(contentHash)
+        || content == null
         || !contentHash.equals(hash(content))) {
       throw new SourceManifestException(
           SourceManifestFailureCode.SOURCE_CONTENT_HASH_MISMATCH,
           "source cache content does not match its declared identity");
     }
     if (content.length > maxBytes) {
-      throw new SourceManifestException(SourceManifestFailureCode.SOURCE_UNAVAILABLE,
+      throw new SourceManifestException(
+          SourceManifestFailureCode.SOURCE_UNAVAILABLE,
           "source cache object exceeds the configured bound");
     }
     byte[] previous = values.remove(contentHash);
@@ -49,8 +50,13 @@ public class VerifiedSourceContentCache {
     if (removed != null) currentBytes -= removed.length;
   }
 
-  public synchronized long sizeBytes() { return currentBytes; }
-  public synchronized int size() { return values.size(); }
+  public synchronized long sizeBytes() {
+    return currentBytes;
+  }
+
+  public synchronized int size() {
+    return values.size();
+  }
 
   private void evict() {
     var iterator = values.entrySet().iterator();
@@ -63,8 +69,11 @@ public class VerifiedSourceContentCache {
 
   private static String hash(byte[] content) {
     byte[] digest;
-    try { digest = MessageDigest.getInstance("SHA-256").digest(content); }
-    catch (Exception exception) { throw new IllegalStateException("SHA-256 unavailable", exception); }
+    try {
+      digest = MessageDigest.getInstance("SHA-256").digest(content);
+    } catch (Exception exception) {
+      throw new IllegalStateException("SHA-256 unavailable", exception);
+    }
     StringBuilder result = new StringBuilder("sha256:");
     for (byte value : digest) result.append(String.format("%02x", value));
     return result.toString();

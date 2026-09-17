@@ -11,8 +11,8 @@ import java.time.LocalDateTime;
 /**
  * Dedicated aggregate persistence model keyed by {@code run_id} (SC-572). One row per verified
  * report bundle carries the top-level manifest identity, terminal outcome, aggregate manifest hash
- * and attempt count; separate {@link ScriptStabilizationRun} rows hold per-attempt metadata.
- * {@code GET /runs/{runId}} returns this aggregate; attempt endpoints return only attempt rows.
+ * and attempt count; separate {@link ScriptStabilizationRun} rows hold per-attempt metadata. {@code
+ * GET /runs/{runId}} returns this aggregate; attempt endpoints return only attempt rows.
  */
 @Entity
 @Table(name = "stabilization_run_aggregate")

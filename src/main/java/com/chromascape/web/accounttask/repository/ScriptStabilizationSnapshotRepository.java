@@ -21,7 +21,8 @@ public interface ScriptStabilizationSnapshotRepository
   Optional<ScriptStabilizationSnapshot> findFirstByScriptKeyAndFamilyOrderByCapturedAtDesc(
       String scriptKey, String family);
 
-  Optional<ScriptStabilizationSnapshot> findFirstByMatrixHashOrderByCapturedAtDesc(String matrixHash);
+  Optional<ScriptStabilizationSnapshot> findFirstByMatrixHashOrderByCapturedAtDesc(
+      String matrixHash);
 
   List<ScriptStabilizationSnapshot> findByMatrixHashOrderByGroupKeyAsc(String matrixHash);
 

@@ -419,8 +419,7 @@ class BuilderGoalRunnerControllerTest {
     assertThat(body)
         .containsEntry("error", "TARGET_OVERRIDE_NOT_ALLOWED")
         .containsEntry(
-            "details",
-            "Dispatch targets are selected only from a matching ready registry client.");
+            "details", "Dispatch targets are selected only from a matching ready registry client.");
   }
 
   @Test
@@ -428,7 +427,7 @@ class BuilderGoalRunnerControllerTest {
     com.fasterxml.jackson.databind.JsonNode payload =
         objectMapper.readTree(
             "{\"accountId\":\"hash-1\",\"taskKey\":\"FISHING_TRAINING\","
-                + "\"task_metadata\":{\"target_base_url\":\"http://127.0.0.1:8098\"}}" );
+                + "\"task_metadata\":{\"target_base_url\":\"http://127.0.0.1:8098\"}}");
 
     ResponseEntity<Object> response = controller.publishTask(payload);
 
@@ -467,9 +466,7 @@ class BuilderGoalRunnerControllerTest {
 
   @Test
   void runPayload_forwardsLegacyRawSettingsWithoutInjectingEmptyEnvelope() throws Exception {
-    when(
-            builderGoalRunnerService.startRun(
-                any(), any(), any(), any(), any(), any(), any(), any()))
+    when(builderGoalRunnerService.startRun(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(Map.of("accepted", true));
 
     JsonNode payload =
@@ -518,7 +515,7 @@ class BuilderGoalRunnerControllerTest {
     com.fasterxml.jackson.databind.JsonNode payload =
         objectMapper.readTree(
             "{\"accountId\":\"hash-1\",\"launcherMachineUuid\":\"machine-1\","
-                + "\"world\":360,\"task_metadata\":{\"targetBaseUrl\":\"http://127.0.0.1:8098\"}}" );
+                + "\"world\":360,\"task_metadata\":{\"targetBaseUrl\":\"http://127.0.0.1:8098\"}}");
 
     ResponseEntity<Object> response = controller.launchAccount(payload);
 

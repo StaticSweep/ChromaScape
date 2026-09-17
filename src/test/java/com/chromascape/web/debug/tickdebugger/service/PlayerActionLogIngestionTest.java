@@ -1,6 +1,7 @@
 package com.chromascape.web.debug.tickdebugger.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,6 +47,8 @@ class PlayerActionLogIngestionTest {
     sessionService = mock(DebugSessionService.class);
     snapshotRepository = mock(TickSnapshotRepository.class);
     logRepository = mock(TickLogRepository.class);
+    when(logRepository.save(any(TickLog.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
     TickOverlayRepository overlayRepository = mock(TickOverlayRepository.class);
     TimelineMarkerRepository markerRepository = mock(TimelineMarkerRepository.class);
 

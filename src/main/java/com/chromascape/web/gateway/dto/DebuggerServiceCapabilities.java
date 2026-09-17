@@ -6,8 +6,8 @@ import java.util.Map;
 /**
  * Sanitized, read-only capabilities published by ChromaScape for a dashboard gateway.
  *
- * <p>The dashboard gateway adds its own identity and health before exposing the public
- * {@code debugger-gateway/v1} manifest. This service response never contains origins, credentials,
+ * <p>The dashboard gateway adds its own identity and health before exposing the public {@code
+ * debugger-gateway/v1} manifest. This service response never contains origins, credentials,
  * filesystem paths, or raw exception text.
  */
 public record DebuggerServiceCapabilities(

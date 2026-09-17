@@ -67,6 +67,7 @@ public class XrspsKernelProcess implements AutoCloseable {
   private Process process;
   private BufferedWriter stdin;
   private final BlockingQueue<KernelProtocolCodec.KernelMessage> inbox;
+
   /**
    * The worker protocol is deliberately one-request-at-a-time. A shared response queue cannot
    * correlate concurrent consumers safely: either caller may otherwise remove the other caller's
@@ -74,6 +75,7 @@ public class XrspsKernelProcess implements AutoCloseable {
    * acknowledgement can never be consumed by a regular request.
    */
   private final ReentrantLock protocolLock = new ReentrantLock(true);
+
   private final AtomicBoolean shutdownInitiated = new AtomicBoolean(false);
   private volatile boolean disposed = false;
 
@@ -372,8 +374,7 @@ public class XrspsKernelProcess implements AutoCloseable {
       while ((read = raw.read(chunk)) != -1) {
         long totalBytes = stderrBytes.addAndGet(read);
         synchronized (stderrPreviewBytes) {
-          int remaining =
-              Math.max(0, MAX_DIAGNOSTIC_PREVIEW_BYTES - stderrPreviewBytes.size());
+          int remaining = Math.max(0, MAX_DIAGNOSTIC_PREVIEW_BYTES - stderrPreviewBytes.size());
           if (remaining > 0) {
             stderrPreviewBytes.write(chunk, 0, Math.min(read, remaining));
           }
@@ -460,9 +461,7 @@ public class XrspsKernelProcess implements AutoCloseable {
     return current == null ? -1L : current.pid();
   }
 
-  /**
-   * Returns the child exit code once it has exited, or {@code null} while it is still running.
-   */
+  /** Returns the child exit code once it has exited, or {@code null} while it is still running. */
   Integer processExitCode() {
     Integer observed = observedExitCode.get();
     if (observed != null) {
@@ -481,7 +480,9 @@ public class XrspsKernelProcess implements AutoCloseable {
     }
   }
 
-  /** Captures an exit status after stream EOF without allowing diagnostics to block indefinitely. */
+  /**
+   * Captures an exit status after stream EOF without allowing diagnostics to block indefinitely.
+   */
   private void captureProcessExitCode() {
     Process current = process;
     if (current == null || observedExitCode.get() != null) {
@@ -537,9 +538,7 @@ public class XrspsKernelProcess implements AutoCloseable {
     }
     if (!preview.isBlank()) {
       log.debug(
-          "xRSPS kernel stderr preview diagnosticRef={} preview={}",
-          diagnosticReference,
-          preview);
+          "xRSPS kernel stderr preview diagnosticRef={} preview={}", diagnosticReference, preview);
     }
     return preview;
   }

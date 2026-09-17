@@ -1,6 +1,37 @@
 -- V24: immutable typed semantic recording actions for replay.
 -- V22/V23 are already applied histories; this migration is additive and must not
 -- edit or renumber an earlier migration.
+--
+-- Flyway owns debug_sessions here: earlier revisions skipped the foreign keys with
+-- to_regclass guards when Hibernate-owned tables were absent, silently omitting them on
+-- fresh databases. Nothing has been deployed, so the referenced tables are created first
+-- and the constraints are applied unconditionally. All recording/debug references resolve
+-- through the CURRENT search_path schema (isolated test contexts use a per-context schema,
+-- not public), so constraints target unqualified tables.
+
+CREATE TABLE IF NOT EXISTS debug_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    session_id VARCHAR(100) NOT NULL,
+    account_name VARCHAR(100),
+    script_name VARCHAR(100),
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP,
+    start_tick BIGINT NOT NULL,
+    end_tick BIGINT,
+    recording_id VARCHAR(100),
+    created_at TIMESTAMP NOT NULL,
+    lifecycle_state VARCHAR(20),
+    failure_code VARCHAR(50),
+    failure_reason VARCHAR(500),
+    failure_context VARCHAR(2000),
+    last_state_at TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_debug_sessions_session_id
+    ON debug_sessions (session_id);
+CREATE INDEX IF NOT EXISTS idx_debug_sessions_recording_id
+    ON debug_sessions (recording_id);
+CREATE INDEX IF NOT EXISTS idx_debug_sessions_start_time
+    ON debug_sessions (start_time);
 
 CREATE TABLE IF NOT EXISTS replay_recording_actions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -41,14 +72,14 @@ CREATE TABLE IF NOT EXISTS replay_recording_actions (
 
 DO $$
 BEGIN
-    IF to_regclass('public.debug_sessions') IS NOT NULL AND NOT EXISTS (
+    IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'fk_replay_recording_actions_session'
     ) THEN
         ALTER TABLE replay_recording_actions
             ADD CONSTRAINT fk_replay_recording_actions_session
             FOREIGN KEY (session_id) REFERENCES debug_sessions(session_id) ON DELETE RESTRICT;
     END IF;
-    IF to_regclass('public.recording_sessions') IS NOT NULL AND NOT EXISTS (
+    IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'fk_replay_recording_actions_recording'
     ) THEN
         ALTER TABLE replay_recording_actions

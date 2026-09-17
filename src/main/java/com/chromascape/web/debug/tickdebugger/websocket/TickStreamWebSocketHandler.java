@@ -9,7 +9,9 @@ import com.chromascape.web.debug.tickdebugger.dto.TickBatchMessage;
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService;
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService.SessionStartOutcome;
 import com.chromascape.web.debug.tickdebugger.service.DebugSessionService.SessionStartRollbackToken;
+import com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumService;
 import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService;
+import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService.TickBatchAcknowledgment;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
@@ -65,6 +67,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
   private final TickStreamIngestionService ingestionService;
   private final DebuggerTickWebSocketHandler debuggerWebSocketHandler;
   private final FishingShadowDecisionService shadowDecisionService;
+  private final TickBatchCanonicalChecksumService tickBatchChecksumService;
   private final Set<WebSocketSession> micro6Clients = ConcurrentHashMap.newKeySet();
 
   /** Binding phase of a WebSocket-bound debug session. */
@@ -137,11 +140,34 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       TickStreamIngestionService ingestionService,
       DebuggerTickWebSocketHandler debuggerWebSocketHandler,
       FishingShadowDecisionService shadowDecisionService) {
+    this(
+        objectMapper,
+        sessionService,
+        ingestionService,
+        debuggerWebSocketHandler,
+        shadowDecisionService,
+        null);
+  }
+
+  /** Spring constructor keeps one canonical parser/writer for the WebSocket boundary. */
+  @org.springframework.beans.factory.annotation.Autowired
+  public TickStreamWebSocketHandler(
+      ObjectMapper objectMapper,
+      DebugSessionService sessionService,
+      TickStreamIngestionService ingestionService,
+      DebuggerTickWebSocketHandler debuggerWebSocketHandler,
+      FishingShadowDecisionService shadowDecisionService,
+      @org.springframework.beans.factory.annotation.Autowired(required = false)
+          TickBatchCanonicalChecksumService tickBatchChecksumService) {
     this.objectMapper = objectMapper;
     this.sessionService = sessionService;
     this.ingestionService = ingestionService;
     this.debuggerWebSocketHandler = debuggerWebSocketHandler;
     this.shadowDecisionService = shadowDecisionService;
+    this.tickBatchChecksumService =
+        tickBatchChecksumService != null
+            ? tickBatchChecksumService
+            : new TickBatchCanonicalChecksumService(objectMapper);
   }
 
   @Override
@@ -157,7 +183,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     // transport errors, and close handling can never interleave.
     synchronized (session) {
       try {
-        JsonNode root = objectMapper.readTree(message.getPayload());
+        JsonNode root = tickBatchChecksumService.parseWireJson(message.getPayload());
         String type = root.has("type") ? root.get("type").asText() : "";
 
         switch (type) {
@@ -601,7 +627,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     if (binding == null) {
       log.warn("Rejecting tick batch on connection {}: SESSION_NOT_BOUND", session.getId());
       sendErrorResponse(
-          session, "SESSION_NOT_BOUND", "Send SESSION_START before sending ticks", null);
+          session, "SESSION_NOT_BOUND", "Send SESSION_START before sending ticks", batchId(root));
       return;
     }
     if (binding.phase() != BindingPhase.ACTIVE) {
@@ -613,11 +639,12 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           session,
           "SESSION_STOPPING",
           "This connection no longer accepts ticks for its session",
-          null);
+          batchId(root));
       return;
     }
     try {
-      TickBatchMessage batch = objectMapper.treeToValue(root, TickBatchMessage.class);
+      JsonNode exactWireDocument = root;
+      TickBatchMessage batch = objectMapper.treeToValue(exactWireDocument, TickBatchMessage.class);
 
       if (!"TICK_BATCH".equals(batch.getType())) {
         log.warn("Received non-batch message in TICK_BATCH handler: {}", batch.getType());
@@ -634,7 +661,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
             session,
             "SESSION_ID_MISMATCH",
             "The tick session does not match the connection binding",
-            null);
+            batchId(root));
         return;
       }
 
@@ -645,20 +672,66 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           batch.getLogs() != null ? batch.getLogs().size() : 0,
           batch.getOverlays() != null ? batch.getOverlays().size() : 0);
 
-      // Shadow evaluation and publication run synchronously in received WebSocket order; the
-      // resulting decision is broadcast before the existing asynchronous tick-ingestion path
-      // continues. A shadow evaluation/publication failure must never prevent tick ingestion, so
-      // they live in separate error boundaries: try shadow evaluation/publication, finally process
-      // tick ingestion.
+      // Persistence is synchronous and transactional. The ACK is emitted only after the service
+      // returns successfully; a failure therefore leaves the exact client batch eligible for retry.
+      TickBatchAcknowledgment acknowledgment = ingestionService.processTickBatch(batch, root);
+      if (acknowledgment == null) {
+        throw new IllegalStateException("Tick ingestion returned no acknowledgment");
+      }
+      sendBatchAcknowledgment(session, acknowledgment);
+
+      // Shadow evaluation is observational and must never be used as persistence evidence.
       try {
         shadowDecisionService.evaluateAndPublish(
             batch, binding.shadowRunId(), this::broadcastShadowDecision);
-      } finally {
-        ingestionService.processTickBatch(batch);
+      } catch (Exception shadowFailure) {
+        log.warn(
+            "Shadow evaluation failed after persisted batch {}: {}",
+            batch.getBatchId(),
+            shadowFailure.getMessage());
       }
 
     } catch (Exception e) {
       log.error("Error handling TICK_BATCH: {}", e.getMessage(), e);
+      String errorCode = mapTickBatchError(e);
+      sendErrorResponse(session, errorCode, e.getMessage(), batchId(root));
+    }
+  }
+
+  private String batchId(JsonNode root) {
+    if (root == null || !root.has("batchId") || root.get("batchId").isNull()) {
+      return null;
+    }
+    String value = root.get("batchId").asText();
+    return value == null || value.isBlank() ? null : value;
+  }
+
+  private String mapTickBatchError(Exception error) {
+    String message = error.getMessage() == null ? "" : error.getMessage();
+    if (message.contains("BATCH_CHECKSUM_CONFLICT")) return "BATCH_CHECKSUM_CONFLICT";
+    if (message.contains("BATCH_WIRE_IDENTITY_MISMATCH")) return "BATCH_WIRE_IDENTITY_MISMATCH";
+    if (message.contains("BATCH_SESSION_MISMATCH")) return "BATCH_SESSION_MISMATCH";
+    if (message.contains("BATCH_ORDER_INVALID")) return "BATCH_ORDER_INVALID";
+    if (message.contains("ACTION_CHECKSUM_CONFLICT")) return "ACTION_CHECKSUM_CONFLICT";
+    if (message.contains("PACKET_")) return "BATCH_PACKET_INVALID";
+    return "BATCH_PERSISTENCE_FAILED";
+  }
+
+  private void sendBatchAcknowledgment(
+      WebSocketSession session, TickBatchAcknowledgment acknowledgment) {
+    try {
+      Map<String, Object> response = new java.util.LinkedHashMap<>();
+      response.put("type", "TICK_BATCH_ACK");
+      response.put("schema", "tick-batch-ack/v1");
+      response.put("batchId", acknowledgment.batchId());
+      response.put("sessionId", acknowledgment.sessionId());
+      response.put("tick", acknowledgment.tick());
+      response.put("payloadChecksum", acknowledgment.payloadChecksum());
+      response.put("status", acknowledgment.status());
+      session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+    } catch (Exception e) {
+      log.warn(
+          "Failed to send TICK_BATCH_ACK for {}: {}", acknowledgment.batchId(), e.getMessage());
     }
   }
 

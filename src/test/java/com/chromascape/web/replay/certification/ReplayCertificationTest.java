@@ -68,16 +68,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.UnaryOperator;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,9 +84,10 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Profile;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -124,7 +119,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  *
  * <ol>
  *   <li>live capability identity matches the built worker, equals the xRSPS repository HEAD, and
-       passes the production strict capability validator on its RAW JSON document;
+ *       passes the production strict capability validator on its RAW JSON document;
  *   <li>single-prefix manifest checksum: {@code sha256:<hex>} over canonical bytes, never doubled;
  *   <li>parent creation through {@link ReplayRunService#create};
  *   <li>diagnostic synthetic execution through an explicitly test-only {@link ReplayWorker}
@@ -132,9 +127,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  *       authoritative-fidelity-only;
  *   <li>branch creation through {@link ReplayRunService#branch} from a real checkpoint;
  *   <li>persisted child-chain continuation: branching from an INTERMEDIATE checkpoint, the child's
- *       first chain hash equals the recomputed
- *       {@code SHA-256(parentCheckpointChainHash || actionDigest || childStateHash)} continuation
- *       and its lineage columns are durable;
+ *       first chain hash equals the recomputed {@code SHA-256(parentCheckpointChainHash ||
+ *       actionDigest || childStateHash)} continuation and its lineage columns are durable;
  *   <li>artifact publication and readback: every FINALIZED artifact re-reads and re-verifies;
  *   <li>final report verification: schema-shaped, single-prefix checksum, matching run/outcome;
  *   <li>fifteen negative restore/identity/artifact/lineage cases, including five finalized-snapshot
@@ -409,8 +403,8 @@ class ReplayCertificationTest {
 
   /**
    * Writes the certification environment record (xRSPS commit, adapter version, revisions, git
-   * HEAD, PostgreSQL image) for the Gradle task's doLast logging. The file is deleted by the
-   * task's doFirst, so its presence proves the logged environment belongs to THIS run.
+   * HEAD, PostgreSQL image) for the Gradle task's doLast logging. The file is deleted by the task's
+   * doFirst, so its presence proves the logged environment belongs to THIS run.
    */
   private static void recordCertificationEnvironment() {
     Path environmentDir = Path.of("build", "replay-certification");
@@ -418,18 +412,18 @@ class ReplayCertificationTest {
       Files.createDirectories(environmentDir);
       Files.writeString(
           environmentDir.resolve("identity.properties"),
-              "xrps.commit="
-                  + liveIdentity.xrspsBuildCommit()
-                  + "\n"
-                  + "xrps.adapterVersion="
-                  + liveIdentity.xrspsAdapterVersion()
-                  + "\n"
-                  + "xrps.cacheRevision="
-                  + liveIdentity.cacheRevision()
-                  + "\n"
-                  + "xrps.contentRevision="
-                  + liveIdentity.contentRevision()
-                  + "\n"
+          "xrps.commit="
+              + liveIdentity.xrspsBuildCommit()
+              + "\n"
+              + "xrps.adapterVersion="
+              + liveIdentity.xrspsAdapterVersion()
+              + "\n"
+              + "xrps.cacheRevision="
+              + liveIdentity.cacheRevision()
+              + "\n"
+              + "xrps.contentRevision="
+              + liveIdentity.contentRevision()
+              + "\n"
               + "worker.fidelity="
               + liveCapabilityManifest.fidelity()
               + "\n"
@@ -438,15 +432,15 @@ class ReplayCertificationTest {
               + "\n"
               + "evidence.class=synthetic-harness-contract"
               + "\n"
-                  + "xrps.gitHead="
-                  + xrpsRepoHeadCommit
-                  + "\n"
-                  + "xrps.repositoryRoot="
-                  + xrpsRepoRoot
-                  + "\n"
-                  + "postgres.image="
-                  + POSTGRES.getDockerImageName()
-                  + "\n");
+              + "xrps.gitHead="
+              + xrpsRepoHeadCommit
+              + "\n"
+              + "xrps.repositoryRoot="
+              + xrpsRepoRoot
+              + "\n"
+              + "postgres.image="
+              + POSTGRES.getDockerImageName()
+              + "\n");
     } catch (Exception e) {
       throw new IllegalStateException("could not record the certification environment", e);
     }
@@ -472,14 +466,20 @@ class ReplayCertificationTest {
         String stderr =
             new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8).trim();
         throw new IllegalStateException(
-            "git command failed (exit " + process.exitValue() + "): " + description + ": " + stderr);
+            "git command failed (exit "
+                + process.exitValue()
+                + "): "
+                + description
+                + ": "
+                + stderr);
       }
       return stdout;
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("git command interrupted: " + description, e);
     } catch (java.io.IOException e) {
-      throw new IllegalStateException("git command could not start (git required on PATH): " + description, e);
+      throw new IllegalStateException(
+          "git command could not start (git required on PATH): " + description, e);
     }
   }
 
@@ -498,8 +498,7 @@ class ReplayCertificationTest {
             mismatchRepository,
             persistence,
             new ReplayLeaseHeartbeat(
-                new ReplayLeaseRenewalService(attemptRepository, properties),
-                properties),
+                new ReplayLeaseRenewalService(attemptRepository, properties), properties),
             recoveryService,
             new com.chromascape.web.replay.artifact.ReplayArtifactService(
                 artifactRefRepository, properties),
@@ -737,8 +736,7 @@ class ReplayCertificationTest {
         "certification-owner");
   }
 
-  private ReplayRunResponse createBranchRun(
-      UUID parentRunId, UUID checkpointId, String branchKey) {
+  private ReplayRunResponse createBranchRun(UUID parentRunId, UUID checkpointId, String branchKey) {
     return runService.branch(
         parentRunId,
         new BranchReplayRunRequest(
@@ -824,7 +822,8 @@ class ReplayCertificationTest {
 
     // Recompute the checksum from the STORED JSONB document (key order may differ in jsonb): the
     // canonical projection must reproduce the same single-prefix address.
-    String recomputed = projection.sha256Hex(projection.canonicalJsonBytes(manifest.getManifestJson()));
+    String recomputed =
+        projection.sha256Hex(projection.canonicalJsonBytes(manifest.getManifestJson()));
     assertNotEquals(manifest.getManifestChecksum(), "sha256:" + recomputed);
   }
 
@@ -862,17 +861,16 @@ class ReplayCertificationTest {
     verifyReport(created.runId(), ReplayOutcome.PASSED, checkpoint.getChainHash());
 
     // Persisted lineage root: a main-branch run has no parent.
-    assertEquals(
-        ReplayRunService.MAIN_BRANCH, terminal.getBranchKey(), "parent must be on main");
+    assertEquals(ReplayRunService.MAIN_BRANCH, terminal.getBranchKey(), "parent must be on main");
     assertTrue(terminal.getParentRunId() == null, "parent has no parent run");
     assertTrue(terminal.getParentCheckpointId() == null, "parent has no parent checkpoint");
   }
 
   /**
    * 6 + 7 + 8: branch creation from an INTERMEDIATE checkpoint, real continued execution, and the
-   * persisted child-chain continuation proof: the child's FIRST chain hash is the recomputed
-   * {@code SHA-256(parentCheckpointChainHash || actionDigest || childStateHash)} continuation —
-   * never a mere copy of the parent checkpoint chain hash.
+   * persisted child-chain continuation proof: the child's FIRST chain hash is the recomputed {@code
+   * SHA-256(parentCheckpointChainHash || actionDigest || childStateHash)} continuation — never a
+   * mere copy of the parent checkpoint chain hash.
    */
   @Test
   @Order(3)
@@ -884,7 +882,8 @@ class ReplayCertificationTest {
             .orElseThrow(() -> new AssertionError("manifest"))
             .getManifestJson()
             .path("actions");
-    assertTrue(actions.isArray() && actions.size() > 1, "fixture must contain at least two actions");
+    assertTrue(
+        actions.isArray() && actions.size() > 1, "fixture must contain at least two actions");
 
     ReplayRunResponse parent = createParentRun(manifestId);
     ReplayRun parentTerminal = awaitTerminal(parent.runId(), 120);
@@ -940,15 +939,14 @@ class ReplayCertificationTest {
     // without incorrectly treating the reset marker as post-checkpoint gameplay evidence.
     List<ReplayEvent> childEvents = eventRepository.findByRunIdOrderByOrdinalAsc(child.runId());
     List<ReplayEvent> continuationEvents =
-        childEvents.stream()
-            .filter(event -> event.getTick() > parentCheckpoint.getTick())
-            .toList();
-    assertFalse(
-        continuationEvents.isEmpty(), "the child must persist events after the checkpoint");
+        childEvents.stream().filter(event -> event.getTick() > parentCheckpoint.getTick()).toList();
+    assertFalse(continuationEvents.isEmpty(), "the child must persist events after the checkpoint");
 
     // The child's FINAL chain hash extends the restored parent checkpoint chain.
     ReplayReport parentReport =
-        reportRepository.findByRunId(parent.runId()).orElseThrow(() -> new AssertionError("report"));
+        reportRepository
+            .findByRunId(parent.runId())
+            .orElseThrow(() -> new AssertionError("report"));
     ReplayReport childReport =
         reportRepository.findByRunId(child.runId()).orElseThrow(() -> new AssertionError("report"));
     assertNotNull(parentReport.getFinalChainHash());
@@ -1194,8 +1192,7 @@ class ReplayCertificationTest {
     xrsps.put("contentRevision", liveIdentity.contentRevision());
     ObjectNode result = mapper.createObjectNode();
     result.set("capabilities", capability);
-    KernelMessage caps =
-        new KernelMessage("1", null, result, null, false, false);
+    KernelMessage caps = new KernelMessage("1", null, result, null, false, false);
 
     ReplayException ex =
         assertThrows(
@@ -1230,8 +1227,7 @@ class ReplayCertificationTest {
     ReplayException ex =
         assertThrows(
             ReplayException.class,
-            () ->
-                createBranchRun(run.runId(), UUID.randomUUID(), "branch-x"));
+            () -> createBranchRun(run.runId(), UUID.randomUUID(), "branch-x"));
     assertEquals(ReplayErrorCode.RUN_STATE_INVALID, ex.getErrorCode());
   }
 
@@ -1252,11 +1248,7 @@ class ReplayCertificationTest {
     ReplayException ex =
         assertThrows(
             ReplayException.class,
-            () ->
-                createBranchRun(
-                    otherRunId,
-                    checkpoint.getId(),
-                    "branch-foreign"));
+            () -> createBranchRun(otherRunId, checkpoint.getId(), "branch-foreign"));
     assertEquals(ReplayErrorCode.RECORDING_NOT_FOUND, ex.getErrorCode());
   }
 
@@ -1301,7 +1293,9 @@ class ReplayCertificationTest {
     return checkpoints.get(0);
   }
 
-  /** Content-addressed finalized location for an artifact checksum (matches the artifact service). */
+  /**
+   * Content-addressed finalized location for an artifact checksum (matches the artifact service).
+   */
   private Path artifactContentPath(String checksum) {
     String hex = checksum.substring("sha256:".length());
     return Path.of(properties.getArtifacts().getRoot()).resolve(hex.substring(0, 2)).resolve(hex);
@@ -1317,10 +1311,13 @@ class ReplayCertificationTest {
     ArtifactRef oldRef =
         artifactRefRepository
             .findByRunIdAndKindAndChecksum(
-                checkpoint.getRunId(), ArtifactKind.SNAPSHOT, checkpoint.getSnapshotArtifactChecksum())
+                checkpoint.getRunId(),
+                ArtifactKind.SNAPSHOT,
+                checkpoint.getSnapshotArtifactChecksum())
             .orElseThrow(() -> new AssertionError("finalized snapshot ref"));
     byte[] original =
-        new com.chromascape.web.replay.artifact.ReplayArtifactService(artifactRefRepository, properties)
+        new com.chromascape.web.replay.artifact.ReplayArtifactService(
+                artifactRefRepository, properties)
             .readFinalized(oldRef);
     JsonNode parsed = mapper.readTree(original);
     assertTrue(parsed.isObject(), "stored snapshot must be a JSON object");
@@ -1346,7 +1343,8 @@ class ReplayCertificationTest {
           ref.setState(ArtifactRef.STATE_FINALIZED);
           ref.setCreatedAt(Instant.now());
           artifactRefRepository.saveAndFlush(ref);
-          ReplayCheckpoint attached = checkpointRepository.findById(checkpoint.getId()).orElseThrow();
+          ReplayCheckpoint attached =
+              checkpointRepository.findById(checkpoint.getId()).orElseThrow();
           attached.setSnapshotChecksum(internalChecksum);
           attached.setSnapshotArtifactChecksum(contentAddress);
           checkpointRepository.saveAndFlush(attached);
@@ -1369,7 +1367,9 @@ class ReplayCertificationTest {
     ArtifactRef snapRef =
         artifactRefRepository
             .findByRunIdAndKindAndChecksum(
-                checkpoint.getRunId(), ArtifactKind.SNAPSHOT, checkpoint.getSnapshotArtifactChecksum())
+                checkpoint.getRunId(),
+                ArtifactKind.SNAPSHOT,
+                checkpoint.getSnapshotArtifactChecksum())
             .orElseThrow(() -> new AssertionError("finalized snapshot ref"));
     Path finalPath = artifactContentPath(snapRef.getChecksum());
     byte[] bytes = Files.readAllBytes(finalPath);
@@ -1382,8 +1382,8 @@ class ReplayCertificationTest {
   }
 
   /**
-   * N12 (REAL restore): preserved bytes with an ALTERED checkpoint-internal snapshot checksum
-   * must fail a real branch restore through the production worker with CHECKSUM_MISMATCH.
+   * N12 (REAL restore): preserved bytes with an ALTERED checkpoint-internal snapshot checksum must
+   * fail a real branch restore through the production worker with CHECKSUM_MISMATCH.
    */
   @Test
   @Order(21)
@@ -1395,7 +1395,8 @@ class ReplayCertificationTest {
     // The stored bytes stay perfect; only the checkpoint's recorded INTERNAL checksum changes.
     tx.execute(
         status -> {
-          ReplayCheckpoint attached = checkpointRepository.findById(checkpoint.getId()).orElseThrow();
+          ReplayCheckpoint attached =
+              checkpointRepository.findById(checkpoint.getId()).orElseThrow();
           attached.setSnapshotChecksum("sha256:" + "9".repeat(64));
           checkpointRepository.saveAndFlush(attached);
           return null;
@@ -1406,8 +1407,8 @@ class ReplayCertificationTest {
   }
 
   /**
-   * N13 (REAL restore, kernel defense): a snapshot whose embedded runtime identity was STRIPPED
-   * is self-consistent for every stored checksum, so it reaches the KERNEL restore, where the
+   * N13 (REAL restore, kernel defense): a snapshot whose embedded runtime identity was STRIPPED is
+   * self-consistent for every stored checksum, so it reaches the KERNEL restore, where the
    * production snapshot validator rejects it with SNAPSHOT_INCOMPATIBLE before any state loads.
    */
   @Test
@@ -1555,9 +1556,9 @@ class ReplayCertificationTest {
   }
 
   /**
-   * N16: the production strict capability validator must reject every forbidden capability
-   * surface — control, OpenRune, policy replay, missing causal simulation, version-vector drift,
-   * malformed revisions, and development identity placeholders.
+   * N16: the production strict capability validator must reject every forbidden capability surface
+   * — control, OpenRune, policy replay, missing causal simulation, version-vector drift, malformed
+   * revisions, and development identity placeholders.
    */
   @Test
   @Order(26)
@@ -1571,7 +1572,8 @@ class ReplayCertificationTest {
     ObjectNode control = validCapabilityDocument();
     control.put("controlAllowed", true);
     assertFalse(
-        rawValidationProblems(validator, control).isEmpty(), "controlAllowed=true must be rejected");
+        rawValidationProblems(validator, control).isEmpty(),
+        "controlAllowed=true must be rejected");
 
     ObjectNode openRune = validCapabilityDocument();
     openRune.put("openRuneAvailable", true);
@@ -1653,15 +1655,16 @@ class ReplayCertificationTest {
   private void seedCheckpointWithoutArtifactChecksum(UUID runId) {
     tx.execute(
         status -> {
-          ReplayCheckpoint cp = new ReplayCheckpoint(
-              UUID.randomUUID(),
-              runId,
-              UUID.randomUUID(),
-              7L,
-              "sha256:" + "f".repeat(64),
-              "sha256:" + "1".repeat(64),
-              "sha256:" + "2".repeat(64),
-              "main");
+          ReplayCheckpoint cp =
+              new ReplayCheckpoint(
+                  UUID.randomUUID(),
+                  runId,
+                  UUID.randomUUID(),
+                  7L,
+                  "sha256:" + "f".repeat(64),
+                  "sha256:" + "1".repeat(64),
+                  "sha256:" + "2".repeat(64),
+                  "main");
           // Leave snapshotArtifactChecksum null by bypassing the constructor's non-null path:
           cp.setSnapshotArtifactChecksum(null);
           checkpointRepository.saveAndFlush(cp);

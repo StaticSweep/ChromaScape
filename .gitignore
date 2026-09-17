@@ -1,8 +1,9 @@
 # Java class files
 *.class
 
-# Log files
+# Log files (including archived ones -- *.log does not match *.log.gz)
 *.log
+*.log.gz
 
 # Runtime log artifact accidentally named with a Windows-style variable
 /%log%
@@ -30,8 +31,13 @@ out/
 build/
 !third_party/minhook/build/
 
+# Python bytecode (SC-1662 helper/test scripts)
+__pycache__/
+*.pyc
+
 # Gradle cache and wrappers
 .gradle/
+/.gradle-home/
 !gradle/wrapper/gradle-wrapper.jar
 
 # IntelliJ IDEA
@@ -55,6 +61,11 @@ Thumbs.db
 *.tmp
 *.swp
 *~
+/javac.*.args
+/app_yml_*.patch
+
+# Local task diagnostics
+/.sc810-debug/
 
 # Templates
 /src/main/resources/fonts/
@@ -74,6 +85,9 @@ output/*
 /.felix.*.db-shm
 /.felix.*.db-wal
 
+# SC-1662 local launcher environment (machine-specific, never commit)
+/scripts/sc1662-env.sh
+
 # custom user scripts
 /src/main/java/com/chromascape/scripts/*/
 /scripts/*/
@@ -86,3 +100,35 @@ output/*
 
 # recordings
 recordings/
+
+# SC-1661 baseline-validation evidence is deliberately tracked: each file below was
+# reviewed for credentials/account identifiers before being retained. Scoped negation
+# only -- this must not unignore *.log anywhere else in the repository.
+!docs/upstream-integration/sc-1661/evidence/*.log
+
+# SC-1662 native build tooling is deliberately tracked. `/scripts/*/` above excludes a
+# directory, and git never descends into an excluded directory, so the directory itself has to be
+# re-included before anything inside it can be tracked. Re-including the directory exposes
+# everything below it, so its contents are excluded again and only the reviewed files are named
+# explicitly. Scoped to the reviewed files -- this must not unignore scripts/*, user scripts, or
+# any file added to scripts/native/ later without review.
+!/scripts/native/
+/scripts/native/*
+!/scripts/native/build-remoteinput-linux.sh
+!/scripts/native/remoteinput_metadata.py
+!/scripts/native/staging-regressions.sh
+!/scripts/native/staging-shell-regressions.sh
+!/scripts/native/distribution-exclusion-regressions.sh
+!/scripts/native/tests/
+/scripts/native/tests/*
+!/scripts/native/tests/test_remoteinput_metadata.py
+!/scripts/native/tests/staging_regression_fixtures.py
+
+# SC-1662 reviewed evidence is deliberately tracked: each log below was reviewed for
+# credentials/account identifiers before being retained. Scoped negation only -- this must
+# not unignore *.log anywhere else in the repository, and must not cover build outputs.
+!docs/upstream-integration/sc-1662/evidence/*.log
+!docs/upstream-integration/sc-1662/evidence/r6-distribution-tree.txt
+!docs/upstream-integration/sc-1662/evidence/r6-container-identity.txt
+!docs/upstream-integration/sc-1662/evidence/r6-failure-identity-delta.txt
+!docs/upstream-integration/sc-1662/evidence/r6-spotless-offending-files-complete.txt
