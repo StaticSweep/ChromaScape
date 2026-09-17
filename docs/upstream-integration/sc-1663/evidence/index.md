@@ -25,3 +25,13 @@ Per-file SHA-256 in `checksums.sha256`; regenerate with
 
 All host-derived evidence in this directory is structural (test result XML); no command lines,
 account identifiers or credentials are stored.
+
+## r2 remediation run (2026-09-17)
+
+Remediation verification artifacts (branch `codex/sc-1663-review-remediation`, clean committed
+tree): `junit-r2/` (focused run JUnit XML, SHA-256 in `checksums-r2.sha256`), plus
+`r2-focused-tests.log`, `r2-launcher-tests.log`, `r2-ordinary-tests.log` (base + head),
+`r2-replay-tests.log` (base + head), `r2-checkstyle.log`, `r2-spotless.log` (with the complete
+post-remediation offender set), `r2-failure-identity-delta.txt` and
+`r2-live-process-mapping.txt` (explicit SC-1664 attachment waiver). All host-derived paths are
+redacted; hashes were generated after redaction.

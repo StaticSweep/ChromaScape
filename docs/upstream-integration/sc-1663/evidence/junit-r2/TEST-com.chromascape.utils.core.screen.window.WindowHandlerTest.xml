@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.WindowHandlerTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-17T11:58:05.492Z" hostname="fedora" time="0.027">
+  <properties/>
+  <testcase name="extractAccountNameSupportsVersionedLeeuwbotTitles()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.002"/>
+  <testcase name="selectBestWindowPrefersCaptureableRuneliteWindowOverLargerLeeuwbotWrapper()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.005"/>
+  <testcase name="deduplicateWindowsByPidFallsBackToWrapperWhenNoRenderClientExists()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.003"/>
+  <testcase name="selectBestWindowAmongRenderClientsUsesCaptureSignatureBeforeArea()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
+  <testcase name="deduplicateWindowsByPidKeepsBestWindowPerProcess()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.005"/>
+  <testcase name="selectBestWindowPrefersCaptureableWrapperOverZeroCanvasRenderClient()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
+  <testcase name="selectBestWindowPrefersVisibleWindowOverHiddenSibling()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
+  <testcase name="supportedClientTitleClassifierAcceptsLeeuwbotButRejectsBrowserTabs()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.0"/>
+  <testcase name="selectBestWindowFallsBackToRuneliteTitleWhenNoCanvasIsDetected()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
+  <testcase name="uiCandidatesFallBackToJavaWindowListWhenStrictTargetListIsEmpty()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
+  <system-out><![CDATA[13:58:05.518 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowHandler - No strict supported-client windows found; exposing 1 fallback Java window candidates
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
