@@ -1,6 +1,16 @@
 # SC-1662 — Linux RemoteInput build and load: implementation specification
 
-Status: planned only; no production implementation or SC-1662 test pass is claimed.
+> **Frozen pre-implementation planning record (written 2026-09-14).** This is the specification as
+> written *before* any SC-1662 code existed. Its substantive plan is retained for that record; only
+> this banner and explicit historical qualifiers were added. Its status line, test checklist and
+> closing "plan ... not implement" note describe the plan, not the current tree.
+> Current implementation state and executed evidence are in
+> [`implementation-evidence.md`](./implementation-evidence.md) and
+> [`verification-evidence.md`](./verification-evidence.md) (run 6 is the latest retained bundle);
+> nothing below should be read as a
+> current status claim.
+
+Status when written: planned only; no production implementation or SC-1662 test pass existed.
 Story: https://app.shortcut.com/leeuwbot/story/1662
 Canonical project: C:\Dev\IdeaProjects\ChromaScape
 Classification: change:runtime. Intended workflow: shortcut_delivery.
@@ -167,7 +177,8 @@ Java mappings. Restrict this story to the binding seam needed for load verificat
 7. Given the fork build, when task enumeration and targeted checks run, then all
    protected tasks/wiring survive and changed-code tests pass.
 
-Test execution checklist (all currently unrun for SC-1662):
+Test execution checklist (all unrun at the time of writing; see `verification-evidence.md` for the
+current, executed status):
 - [ ] Resolver precedence/path/platform tests, loader failure tests and no-attach tests.
 - [ ] Clean Fedora configure/build, ELF/dependency/export inspection and repeat build.
 - [ ] Actual development and packaged subprocess load tests from unrelated cwd.
@@ -202,5 +213,5 @@ staging artifacts. Windows KInput remains intact. No DB migration or server API
 change is planned. User review and actual acceptance evidence are required to finish.
 Resolve Felix canonical project registration and persist scope, this spec, acceptance,
 implementation/test checklists and rule links (AGENTS.md and compatibility map);
-satisfy genuine gates without waivers. User asked to plan the next task, not implement
-it in this turn.
+satisfy genuine gates without waivers. At the time of writing, the user asked to plan the
+next task and not implement it in that turn (historical — see the frozen-record notice above).

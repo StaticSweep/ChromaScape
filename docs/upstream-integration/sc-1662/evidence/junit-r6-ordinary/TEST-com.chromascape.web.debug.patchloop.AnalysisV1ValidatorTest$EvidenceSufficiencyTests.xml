@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Evidence Sufficiency" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:58.529Z" hostname="fedora" time="0.002">
+  <properties/>
+  <testcase name="Request with logs has minimum evidence" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$EvidenceSufficiencyTests" time="0.001"/>
+  <testcase name="Null request lacks minimum evidence" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$EvidenceSufficiencyTests" time="0.001"/>
+  <testcase name="Request with null evidence lacks minimum evidence" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$EvidenceSufficiencyTests" time="0.0"/>
+  <testcase name="Request with no evidence lacks minimum evidence" classname="com.chromascape.web.debug.patchloop.AnalysisV1ValidatorTest$EvidenceSufficiencyTests" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

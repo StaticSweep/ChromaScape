@@ -1,0 +1,31 @@
+# SC-1662 shell staging regressions (stage_artifact)
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+
+== case 1: publish pair S1 ==
+   [sc-1662]   MANIFEST_OK manifest=/tmp/tmp.N2pXZrZxkc/s1/remoteinput-manifest.json artifact=/tmp/tmp.N2pXZrZxkc/s1/libRemoteInput.so sha256=d01a77f31acdf03ed779fc9d0f29689ec9205e112a15a36876fe2e452184928d size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   [sc-1662] published: /tmp/tmp.N2pXZrZxkc/dist/linux-x86_64 -> .versions/7f43f5d759ee5b15a8c0c5f1ff0ccbe0563520ca78a2d3ebb216e33d07168dac
+   exit=0
+PASS: case 1: staging succeeded
+PASS: case 1: publish point names the pair identity
+PASS: case 1: identity is the pair, not the artifact hash
+== case 2: re-stage S2 while its payload holds a different valid pair ==
+   [sc-1662]   MANIFEST_OK manifest=/tmp/tmp.N2pXZrZxkc/s2a/remoteinput-manifest.json artifact=/tmp/tmp.N2pXZrZxkc/s2a/libRemoteInput.so sha256=a4cd97abe394c645ccb25549713b25bb1a18875a121dab690ed980e52006af7d size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   [sc-1662] ERROR: refusing to stage: the existing payload /tmp/tmp.N2pXZrZxkc/dist/.versions/d212c12abce779f9d9a304e3f752fd1c1671e519116e5c3ec8e3c5eb33a7293c validates but is not the expected pair d212c12abce779f9d9a304e3f752fd1c1671e519116e5c3ec8e3c5eb33a7293c
+   exit=1
+PASS: case 2: the mismatched existing payload was refused by identity
+== case 3: copied pair does not reproduce the incoming identity ==
+   [sc-1662]   MANIFEST_OK manifest=/tmp/tmp.N2pXZrZxkc/s3/remoteinput-manifest.json artifact=/tmp/tmp.N2pXZrZxkc/s3/libRemoteInput.so sha256=0f3205057c0b61729e0f2d3d97cf2c777161a2b68752252ecc3f5d0c212a0286 size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   [sc-1662] ERROR: refusing to stage: the copied pair did not reproduce the expected identity 2a1b75688bb822f303326b460e00bf4639e197acaeecf37aa6a157b42104792a
+   exit=1
+PASS: case 3: the copied-pair identity mismatch was refused
+PASS: case 4: publish point returned to pair A
+PASS: case 4: displaced predecessor B retained
+== case 5: stage with a real directory at the publish point ==
+   [sc-1662]   MANIFEST_OK manifest=/tmp/tmp.N2pXZrZxkc/s5/remoteinput-manifest.json artifact=/tmp/tmp.N2pXZrZxkc/s5/libRemoteInput.so sha256=f24a7f86f338f9806111e546ae8b07b92ff0c2eddb1b7dde1a821602e2d814bb size=576 revision=5ea3b995f5d13e19c592a6399973fe7dadb5e656 patch=none
+   [sc-1662] ERROR: refusing to publish: /tmp/tmp.N2pXZrZxkc/dist/linux-x86_64 is a real directory, not the versioned publish symlink. Remove it explicitly (rm -rf '/tmp/tmp.N2pXZrZxkc/dist/linux-x86_64') and re-run.
+   exit=1
+PASS: case 5: the real-directory publish point was refused
+PASS: case 5: the real directory survives (no publish point was removed)
+
+# result: PASS (all shell staging regressions)
+EXIT=0

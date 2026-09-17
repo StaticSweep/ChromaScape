@@ -1,0 +1,27 @@
+# command: ./gradlew --offline buildRemoteInputLinux --console=plain -Psc967VectorsPath=<contracts>/ed25519-vectors.json
+# utc: 2026-09-15T03:09:27Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 2f0bb57467474316cdf6ee2974d3e4ed181cf9a6b2b08dd5616d8695f32bb652
+# run_sequence: 2 (post-review fixes; run 1 logs retained unmodified)
+
+> Task :buildRemoteInputLinux FAILED
+[sc-1662] verifying pinned source provenance against import-manifest.sha256
+[sc-1662]   PROVENANCE_OK files=278 tree=b727319f7289959019ecfc13313993312e92c03dccd88996f676b649c5d8ee0c patch=none
+[sc-1662] ERROR: cmake not found. Fedora: 'cmake'
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':buildRemoteInputLinux'.
+> Process 'command 'bash'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 1s
+1 actionable task: 1 executed
+# exit_code: 1
+# elapsed_seconds: 1

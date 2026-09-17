@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.worker.ReplayWorkerBranchRestoreTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:50.873Z" hostname="fedora" time="0.56">
+  <properties/>
+  <testcase name="snapshotRuntimeIdentityMismatchFailsClosed()" classname="com.chromascape.web.replay.worker.ReplayWorkerBranchRestoreTest" time="0.535"/>
+  <testcase name="tamperedStoredSnapshotBytesFailContentAddressVerification()" classname="com.chromascape.web.replay.worker.ReplayWorkerBranchRestoreTest" time="0.003"/>
+  <testcase name="internalChecksumDriftBetweenRowAndSnapshotFailsClosed()" classname="com.chromascape.web.replay.worker.ReplayWorkerBranchRestoreTest" time="0.003"/>
+  <testcase name="missingSnapshotArtifactChecksumFailsClosed()" classname="com.chromascape.web.replay.worker.ReplayWorkerBranchRestoreTest" time="0.003"/>
+  <testcase name="nullParentRunIdFailsClosedBeforeCheckpointLookup()" classname="com.chromascape.web.replay.worker.ReplayWorkerBranchRestoreTest" time="0.002"/>
+  <testcase name="publishedCheckpointRestoresContinuesAndPreservesChainLineage()" classname="com.chromascape.web.replay.worker.ReplayWorkerBranchRestoreTest" time="0.005"/>
+  <testcase name="foreignCheckpointFailsClosed()" classname="com.chromascape.web.replay.worker.ReplayWorkerBranchRestoreTest" time="0.005"/>
+  <testcase name="nullParentCheckpointIdFailsClosedBeforeCheckpointLookup()" classname="com.chromascape.web.replay.worker.ReplayWorkerBranchRestoreTest" time="0.002"/>
+  <system-out><![CDATA[12:41:51.425 [Test worker] INFO  com.chromascape.web.replay.worker.ReplayWorker - Branch run 8ac9aca2-9101-4ec3-aee1-c4241b2aaf42 resumed from checkpoint 3b03c3aa-f2f3-4847-aa03-7e339fd1a30e at tick 42 action index 3
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
