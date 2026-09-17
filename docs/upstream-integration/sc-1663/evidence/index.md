@@ -35,3 +35,12 @@ tree): `junit-r2/` (focused run JUnit XML, SHA-256 in `checksums-r2.sha256`), pl
 post-remediation offender set), `r2-failure-identity-delta.txt` and
 `r2-live-process-mapping.txt` (explicit SC-1664 attachment waiver). All host-derived paths are
 redacted; hashes were generated after redaction.
+
+## Post-stack prerequisite verification (2026-09-17)
+
+SC-1662 PR #7 tip `47489a1` was merged into the SC-1663 branch at `3a8458f`, making the PR #6
+base a genuine ancestor. The combined offline verification invoked the tracked non-executable
+wrapper as `bash gradlew` and ran `nativeMetadataTests` plus the SC-1662 RemoteInput and SC-1663
+window-focused suites: metadata 47/47; JUnit 140 tests, 0 failures, 0 errors, 1 Windows-only skip.
+The RemoteInput import manifest also verified all 278 entries. This is a delivery-topology
+recheck; the immutable r2 evidence bundle above remains the detailed SC-1663 remediation record.

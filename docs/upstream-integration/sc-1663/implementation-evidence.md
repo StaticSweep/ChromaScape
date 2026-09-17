@@ -16,12 +16,13 @@ Session date: 2026-09-16 (UTC). Final focused test run: 2026-09-16T23:51:41Z.
 
 - SC-1661 is merged (PRs #3/#4, Done in Shortcut); its compatibility map remains the contract
   reference (Decision 1, Boundary 1, downstream responsibility table).
-- SC-1662 head `be4230c` (`codex/sc-1662-linux-remoteinput`) is NOT part of this base: its native
-  build/loader/smoke implementation still lives uncommitted in the `ChromaScape-sc1662-native`
-  worktree, so it could not be stacked. The SC-1663 isolation guarantees therefore assert by
-  compiled class name (`RemoteInput`, `RemoteInputLibraryLoader`, `EIOS_*`), which holds whether or
-  not SC-1662's classes are present. Recorded honestly: SC-1663 is based on the integration head,
-  not on SC-1662 commits.
+- SC-1662 is now committed and pushed at `47489a1` (`codex/sc-1662-linux-remoteinput`), with
+  review-required PR #7 targeting `integration/chromascape-consolidated-20260901`:
+  https://github.com/ikiddoi/ChromaScape/pull/7. That exact prerequisite tip was merged into this
+  branch in merge commit `3a8458f`; ancestry verification passes and PR #6's three-dot diff remains
+  limited to the 63 SC-1663 files. The compiled-class isolation guarantees continue to assert by
+  class name (`RemoteInput`, `RemoteInputLibraryLoader`, `EIOS_*`) with the SC-1662 classes now
+  physically present.
 - Felix task resolution for `shortcut:sc-1663` under the canonical project identity: NOT RUN —
   no Felix MCP tooling is available in this session. No duplicate POSIX identity was created and
   no gate was bypassed.
@@ -249,20 +250,23 @@ checkout created for that purpose.
   preservation through selection, `getSelectedHwnd`, `EXITED`/`REPLACED`, KInput DLL packaging,
   focused suite on Windows) remains an operator gate; unit contracts (`WindowHandlerTest`,
   `WindowControllerTest`) pass unchanged on Linux.
-- SC-1662 prerequisite: head `be4230c` of `codex/sc-1662-linux-remoteinput` (pushed; verified as
-  the GitHub branch tip, based on the same integration head `7ab2a80`) is NOT an ancestor of this
-  branch. Per the sanctioned alternative, the SC-1663 PR is explicitly declared STACKED and
-  targets `codex/sc-1662-linux-remoteinput`; it must be retargeted/rebased onto the integration
-  head after SC-1662 lands, and every r2 gate re-run at that point.
+- SC-1662 prerequisite: head `47489a1` of `codex/sc-1662-linux-remoteinput` is an ancestor of this
+  branch. PR #7 is open and review-required. PR #6 remains correctly based on that prerequisite
+  branch, so GitHub presents only the 63 SC-1663 files for review. After PR #7 merges, PR #6 must
+  be retargeted or allowed to follow the updated base before its final merge.
+- Post-stack verification (2026-09-17): PASS — `nativeMetadataTests` ran 47/47; the combined
+  SC-1662 RemoteInput and SC-1663 window-focused suites ran 140 tests with 0 failures, 0 errors and
+  1 Windows-only skip; the RemoteInput import manifest verified all 278 entries. The tracked Gradle
+  wrapper is mode `100644`, so this Linux checkout invoked it as `bash gradlew`.
 - Shortcut/Felix resolution and PR review: recorded at PR time; no gate bypassed.
 
 ### PR status
 
 - Branch `codex/sc-1663-review-remediation` pushed to `github.com/ikiddoi/ChromaScape`.
 - PR opened and review-required: **https://github.com/ikiddoi/ChromaScape/pull/6** — base
-  `codex/sc-1662-linux-remoteinput`, explicitly stacked (see the SC-1662 prerequisite above); the
-  PR body carries the stacked declaration, the verification summary and the explicit waivers.
-  Merge is blocked on review and on SC-1662 landing.
+  `codex/sc-1662-linux-remoteinput`, now a genuine ancestry stack (see the SC-1662 prerequisite
+  above); the PR body carries the stacked declaration, the verification summary and the explicit
+  waivers. Merge is blocked on review and on PR #7 landing first.
 - Shortcut story update (final evidence summary, merged PR link, waiver record, accurate PASS/NOT
   RUN statuses) and the Felix `shortcut:sc-1663` resolution: NOT RUN — no Shortcut/Felix tooling
   is available in this session; left as the next operator step, consistent with the r1 record.
