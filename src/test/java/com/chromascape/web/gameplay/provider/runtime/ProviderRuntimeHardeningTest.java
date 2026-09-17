@@ -9,6 +9,7 @@ import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.ProviderDecisionOrchestrationSource;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.BudgetLimits;
+import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.SessionState;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.TurnState;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -117,6 +118,24 @@ class ProviderRuntimeHardeningTest {
     RedactedTranscriptStore.Artifact second = store.store("duplicate-content");
     assertEquals(first.reference(), second.reference());
     assertEquals(first.byteLength(), second.byteLength());
+  }
+
+  @Test
+  void transcriptRejectsTamperedExistingArtifact() throws Exception {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("transcripts"));
+    RedactedTranscriptStore store =
+        new RedactedTranscriptStore(properties, new CanonicalGameplayJson(new ObjectMapper()));
+
+    RedactedTranscriptStore.Artifact artifact = store.store("trusted-content");
+    java.nio.file.Path target =
+        temporary.resolve(
+            "transcripts/" + artifact.reference().substring("sha256:".length()) + ".json");
+    Files.writeString(target, "tampered-content");
+
+    ProviderRuntimeException failure =
+        assertThrows(ProviderRuntimeException.class, () -> store.store("trusted-content"));
+    assertEquals(FailureCode.TRANSCRIPT_PERSISTENCE_FAILED.name(), failure.failureCode());
   }
 
   @Test

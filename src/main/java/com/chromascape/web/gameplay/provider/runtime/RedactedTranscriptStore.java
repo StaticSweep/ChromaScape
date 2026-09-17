@@ -3,8 +3,10 @@ package com.chromascape.web.gameplay.provider.runtime;
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -42,8 +44,13 @@ public final class RedactedTranscriptStore {
       if (!target.startsWith(root)) {
         throw new IOException("Transcript path escaped root");
       }
-      if (!Files.exists(target)) {
-        Files.write(target, content);
+      try {
+        Files.write(target, content, StandardOpenOption.CREATE_NEW);
+      } catch (FileAlreadyExistsException ignored) {
+        byte[] existing = Files.readAllBytes(target);
+        if (!MessageDigest.isEqual(existing, content)) {
+          throw new IOException("Existing transcript artifact does not match its digest");
+        }
       }
       return new Artifact(digest, content.length);
     } catch (IOException exception) {
