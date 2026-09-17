@@ -14,6 +14,8 @@ public enum TargetSelectionDiagnostic {
   AMBIGUOUS_TARGET,
   /** One or more procfs entries were skipped as missing, unreadable, malformed or empty. */
   PROC_ENTRY_UNREADABLE,
+  /** A candidate's process start time was not observable, so no neutral identity was attached. */
+  IDENTITY_UNAVAILABLE,
   /** This platform has no discovery implementation. */
   UNSUPPORTED_PLATFORM,
   /** The selected process exited. */
