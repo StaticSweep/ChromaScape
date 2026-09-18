@@ -44,6 +44,12 @@ final class AccountBuilderPostgresTestFixtures {
 
   private AccountBuilderPostgresTestFixtures() {}
 
+  /** Immutable budget parsed from the fixture envelope at the fixture clock. */
+  static AccountBuilderBudgetPolicy.OrchestrationBudget budget(OrchestrationRequest request) {
+    return AccountBuilderBudgetPolicy.OrchestrationBudget.fromEnvelope(
+        request.envelope(), CANONICAL_JSON, CLOCK);
+  }
+
   static OrchestrationRequest request(String suffix) {
     return request(
         suffix,
@@ -80,7 +86,12 @@ final class AccountBuilderPostgresTestFixtures {
             .put("kind", "START_FISHING_TASK");
     var settings = JsonNodeFactory.instance.objectNode().put("secret-setting", "must-not-persist");
     var identities = JsonNodeFactory.instance.objectNode().put("runId", "run-" + suffix);
-    var budgets = JsonNodeFactory.instance.objectNode().put("actions", 1);
+    var budgets =
+        JsonNodeFactory.instance
+            .objectNode()
+            .put("maxActions", 5)
+            .put("maxAttempts", 2)
+            .put("maxElapsedMs", 60_000);
     ExecutionEnvelope envelope =
         new ExecutionEnvelope(
             GameplayContracts.VERSION,

@@ -99,7 +99,10 @@ class JpaAccountBuilderOrchestrationStoreTest {
     OrchestrationRequest request = request("jpa-reconstruct");
     String envelopeDigest = canonicalJson.digest(request.envelope());
 
-    assertThat(store.claim(request, request.requestFingerprint(), envelopeDigest).created())
+    assertThat(
+            store
+                .claim(request, request.requestFingerprint(), envelopeDigest, budget(request))
+                .created())
         .isTrue();
     store.transition(
         request.orchestrationId(), State.VALIDATED, FailureCode.NONE, null, null, false, false);
@@ -174,10 +177,12 @@ class JpaAccountBuilderOrchestrationStoreTest {
   void changedFingerprintCannotReuseDurableIdentity() {
     OrchestrationRequest request = request("jpa-conflict");
     String envelopeDigest = canonicalJson.digest(request.envelope());
-    store.claim(request, request.requestFingerprint(), envelopeDigest);
+    store.claim(request, request.requestFingerprint(), envelopeDigest, budget(request));
     OrchestrationRequest changed = withFingerprint(request, digest("changed-fingerprint"));
 
-    assertThatThrownBy(() -> store.claim(changed, changed.requestFingerprint(), envelopeDigest))
+    assertThatThrownBy(
+            () ->
+                store.claim(changed, changed.requestFingerprint(), envelopeDigest, budget(request)))
         .isInstanceOf(AccountBuilderOrchestrationException.class)
         .extracting("failureCode")
         .isEqualTo(FailureCode.IDEMPOTENCY_CONFLICT);
@@ -287,7 +292,10 @@ class JpaAccountBuilderOrchestrationStoreTest {
     assertThat(
             store
                 .claim(
-                    request, request.requestFingerprint(), canonicalJson.digest(request.envelope()))
+                    request,
+                    request.requestFingerprint(),
+                    canonicalJson.digest(request.envelope()),
+                    budget(request))
                 .created())
         .isTrue();
     store.transition(
@@ -311,6 +319,12 @@ class JpaAccountBuilderOrchestrationStoreTest {
         scopeDigest == null ? source.scopeDigest() : scopeDigest,
         source.oneUse(),
         signature == null ? source.signature() : signature);
+  }
+
+  private static AccountBuilderBudgetPolicy.OrchestrationBudget budget(
+      OrchestrationRequest request) {
+    return new AccountBuilderBudgetPolicy.OrchestrationBudget(
+        5, 2, 60_000, 0, 0, NOW, request.deadline());
   }
 
   private OrchestrationRequest request(String suffix) {

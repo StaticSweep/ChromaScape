@@ -87,7 +87,8 @@ class AccountBuilderOrchestrationPostgresConcurrencyTest {
                                 store.claim(
                                     request,
                                     request.requestFingerprint(),
-                                    AccountBuilderPostgresTestFixtures.envelopeDigest(request));
+                                    AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                                    AccountBuilderPostgresTestFixtures.budget(request));
                           }))
               .toList();
       List<Object> results = awaitAll(futures);
@@ -371,7 +372,8 @@ class AccountBuilderOrchestrationPostgresConcurrencyTest {
                               return store.claim(
                                   request,
                                   request.requestFingerprint(),
-                                  AccountBuilderPostgresTestFixtures.envelopeDigest(request));
+                                  AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                                  AccountBuilderPostgresTestFixtures.budget(request));
                             } catch (AccountBuilderOrchestrationException exception) {
                               return exception.failureCode();
                             }
@@ -389,7 +391,8 @@ class AccountBuilderOrchestrationPostgresConcurrencyTest {
                 .claim(
                     request,
                     request.requestFingerprint(),
-                    AccountBuilderPostgresTestFixtures.envelopeDigest(request))
+                    AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                    AccountBuilderPostgresTestFixtures.budget(request))
                 .created())
         .isTrue();
   }

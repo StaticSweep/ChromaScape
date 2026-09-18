@@ -56,18 +56,21 @@ public final class AccountBuilderOrchestrationService {
   public Submission orchestrate(OrchestrationRequest request) {
     String fingerprint = validator.validateAndFingerprint(request);
     String envelopeDigest = canonicalJson.digest(request.envelope());
-    AccountBuilderOrchestrationStore.Claim claim =
-        store.claim(request, fingerprint, envelopeDigest);
-    if (!claim.created()) {
-      return new Submission(claim.view(), false);
-    }
-
+    // The budget is parsed and validated before the claim, so an invalid frozen contract can
+    // never persist any part of the orchestration aggregate.
     AccountBuilderBudgetPolicy.OrchestrationBudget budget;
     try {
       budget = OrchestrationBudget.fromEnvelope(request.envelope(), canonicalJson, clock);
-      store.claimBudget(request.orchestrationId(), budget);
     } catch (IllegalArgumentException exception) {
-      return terminal(request, State.DENIED, FailureCode.INVALID_CONTRACT, null, false);
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT,
+          "Frozen SC-1429 budget limits are invalid at claim time",
+          exception);
+    }
+    AccountBuilderOrchestrationStore.Claim claim =
+        store.claim(request, fingerprint, envelopeDigest, budget);
+    if (!claim.created()) {
+      return new Submission(claim.view(), false);
     }
 
     store.transition(

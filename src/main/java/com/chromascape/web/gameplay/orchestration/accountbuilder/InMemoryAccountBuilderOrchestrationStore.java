@@ -97,7 +97,10 @@ public final class InMemoryAccountBuilderOrchestrationStore
 
   @Override
   public synchronized Claim claim(
-      OrchestrationRequest request, String fingerprint, String envelopeDigest) {
+      OrchestrationRequest request,
+      String fingerprint,
+      String envelopeDigest,
+      AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
     if (request == null
         || !validId(request.orchestrationId())
         || !validId(request.requestId())
@@ -112,7 +115,8 @@ public final class InMemoryAccountBuilderOrchestrationStore
         || request.observation() == null
         || request.deadline() == null
         || !validDigest(fingerprint)
-        || !validDigest(envelopeDigest)) {
+        || !validDigest(envelopeDigest)
+        || budget == null) {
       throw failure(FailureCode.INVALID_CONTRACT, "Durable orchestration identities are malformed");
     }
     Set<String> owners = new HashSet<>();
@@ -130,7 +134,13 @@ public final class InMemoryAccountBuilderOrchestrationStore
         throw integrity("Identity indexes point at multiple orchestration owners");
       }
       Entry owned = entries.get(owners.iterator().next());
-      if (owned == null
+      OrchestrationBudget existingBudget = budgets.get(owned.view.orchestrationId());
+      if (existingBudget == null) {
+        // A durable claim without a budget is an incomplete aggregate and never replays.
+        throw integrity("Durable orchestration claim has no immutable budget");
+      }
+      if (!sameBudget(existingBudget, budget)
+          || owned == null
           || !owned.view.requestFingerprint().equals(fingerprint)
           || !owned.view.orchestrationId().equals(request.orchestrationId())
           || !owned.view.requestId().equals(request.requestId())
@@ -165,28 +175,17 @@ public final class InMemoryAccountBuilderOrchestrationStore
     correlations.put(request.orchestrationId(), toCorrelation(request, envelopeDigest));
     requestOwners.put(request.requestId(), request.orchestrationId());
     idempotencyOwners.put(request.idempotencyKey(), request.orchestrationId());
+    budgets.put(request.orchestrationId(), budget);
     eventCounts.put(request.orchestrationId(), 1L);
     return new Claim(view, true);
   }
 
-  @Override
-  public synchronized AccountBuilderBudgetPolicy.OrchestrationBudget claimBudget(
-      String orchestrationId, OrchestrationBudget budget) {
-    OrchestrationBudget existing = budgets.get(orchestrationId);
-    if (existing != null) {
-      if (existing.maxActions() != budget.maxActions()
-          || existing.maxAttempts() != budget.maxAttempts()
-          || existing.maxElapsedMs() != budget.maxElapsedMs()
-          || !Objects.equals(existing.startedAt(), budget.startedAt())
-          || !Objects.equals(existing.expiresAt(), budget.expiresAt())) {
-        throw failure(
-            FailureCode.IDEMPOTENCY_CONFLICT,
-            "Persisted orchestration budget limits are immutable");
-      }
-      return existing;
-    }
-    budgets.put(orchestrationId, budget);
-    return budget;
+  private boolean sameBudget(OrchestrationBudget persisted, OrchestrationBudget candidate) {
+    return persisted.maxActions() == candidate.maxActions()
+        && persisted.maxAttempts() == candidate.maxAttempts()
+        && persisted.maxElapsedMs() == candidate.maxElapsedMs()
+        && Objects.equals(persisted.startedAt(), candidate.startedAt())
+        && Objects.equals(persisted.expiresAt(), candidate.expiresAt());
   }
 
   @Override

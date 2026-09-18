@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ExecutionEnvelope;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -121,9 +122,9 @@ class AccountBuilderOrchestrationBudgetTest {
     InMemoryAccountBuilderOrchestrationStore store =
         new InMemoryAccountBuilderOrchestrationStore(
             Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
-    store.claimBudget("orchestration-1", budget(1, 1, 10_000));
-    store.consumeBudget("orchestration-1", false, true);
-    assertThatThrownBy(() -> store.consumeBudget("orchestration-1", false, true))
+    claim(store, "budget-exhausted", budget(1, 1, 10_000));
+    store.consumeBudget(durableId("budget-exhausted"), false, true);
+    assertThatThrownBy(() -> store.consumeBudget(durableId("budget-exhausted"), false, true))
         .isInstanceOf(AccountBuilderOrchestrationException.class)
         .extracting("failureCode")
         .isEqualTo(AccountBuilderOrchestrationModels.FailureCode.BUDGET_EXHAUSTED);
@@ -131,11 +132,12 @@ class AccountBuilderOrchestrationBudgetTest {
     InMemoryAccountBuilderOrchestrationStore expiredStore =
         new InMemoryAccountBuilderOrchestrationStore(
             Clock.fixed(NOW.plusSeconds(120), ZoneOffset.UTC), (a, e) -> true);
-    expiredStore.claimBudget(
-        "orchestration-2",
+    claim(
+        expiredStore,
+        "budget-expired",
         new AccountBuilderBudgetPolicy.OrchestrationBudget(
             1, 1, 10_000, 0, 0, NOW, NOW.plusSeconds(60)));
-    assertThatThrownBy(() -> expiredStore.consumeBudget("orchestration-2", false, true))
+    assertThatThrownBy(() -> expiredStore.consumeBudget(durableId("budget-expired"), false, true))
         .isInstanceOf(AccountBuilderOrchestrationException.class)
         .extracting("failureCode")
         .isEqualTo(AccountBuilderOrchestrationModels.FailureCode.DEADLINE_EXPIRED);
@@ -146,7 +148,7 @@ class AccountBuilderOrchestrationBudgetTest {
     InMemoryAccountBuilderOrchestrationStore store =
         new InMemoryAccountBuilderOrchestrationStore(
             Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
-    store.claimBudget("orchestration-race", budget(5, 1, 600_000));
+    claim(store, "orchestration-race", budget(5, 1, 600_000));
     int contenders = 8;
     ExecutorService pool = Executors.newFixedThreadPool(contenders);
     CountDownLatch start = new CountDownLatch(1);
@@ -156,7 +158,7 @@ class AccountBuilderOrchestrationBudgetTest {
           () -> {
             start.await();
             try {
-              store.consumeBudget("orchestration-race", false, true);
+              store.consumeBudget(durableId("orchestration-race"), false, true);
               winners.incrementAndGet();
             } catch (AccountBuilderOrchestrationException expected) {
               // Losers must observe BUDGET_EXHAUSTED, never a gateway mutation.
@@ -168,6 +170,25 @@ class AccountBuilderOrchestrationBudgetTest {
     pool.shutdown();
     assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
     assertThat(winners.get()).isEqualTo(1);
-    assertThat(store.findBudget("orchestration-race").orElseThrow().attemptsUsed()).isEqualTo(1);
+    assertThat(store.findBudget(durableId("orchestration-race")).orElseThrow().attemptsUsed())
+        .isEqualTo(1);
+  }
+
+  /** Claims a synthetic durable orchestration carrying exactly the budget under test. */
+  private void claim(
+      InMemoryAccountBuilderOrchestrationStore store,
+      String orchestrationId,
+      AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
+    OrchestrationRequest request = AccountBuilderPostgresTestFixtures.request(orchestrationId);
+    store.claim(
+        request,
+        request.requestFingerprint(),
+        AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+        budget);
+  }
+
+  /** The fixture derives the durable identity as {@code orchestration-<id>}. */
+  private static String durableId(String orchestrationId) {
+    return "orchestration-" + orchestrationId;
   }
 }

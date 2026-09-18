@@ -317,7 +317,11 @@ class AccountBuilderOrchestrationServiceTest {
             Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
     AccountBuilderOrchestrationService service = service(gateway, store);
     OrchestrationRequest request = request("restart-before-authority", Mode.BOOTSTRAP_RECORDING);
-    store.claim(request, request.requestFingerprint(), canonicalJson.digest(request.envelope()));
+    store.claim(
+        request,
+        request.requestFingerprint(),
+        canonicalJson.digest(request.envelope()),
+        budget(request));
 
     List<OrchestrationView> recovered = service.recoverAfterRestart();
 
@@ -581,5 +585,11 @@ class AccountBuilderOrchestrationServiceTest {
           List.of("fake:" + phase.toLowerCase()),
           NOW);
     }
+  }
+
+  private static AccountBuilderBudgetPolicy.OrchestrationBudget budget(
+      OrchestrationRequest request) {
+    return new AccountBuilderBudgetPolicy.OrchestrationBudget(
+        5, 2, 60_000, 0, 0, NOW, request.deadline());
   }
 }

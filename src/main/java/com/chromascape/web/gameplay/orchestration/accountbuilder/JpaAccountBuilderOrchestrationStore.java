@@ -2,7 +2,6 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContracts;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderBudgetPolicy.OrchestrationBudget;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.AuthorityConsumption;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -85,8 +84,13 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
 
   @Override
   @Transactional
-  public Claim claim(OrchestrationRequest request, String fingerprint, String envelopeDigest) {
+  public Claim claim(
+      OrchestrationRequest request,
+      String fingerprint,
+      String envelopeDigest,
+      AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
     requireIdentity(request, fingerprint, envelopeDigest);
+    Objects.requireNonNull(budget, "budget");
     Instant now = now();
     OrchestrationView initial =
         new OrchestrationView(
@@ -151,6 +155,15 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
           || !Objects.equals(existing.envelopeDigest, envelopeDigest)) {
         throw conflict();
       }
+      AccountBuilderOrchestrationBudgetEntity existingBudget =
+          entityManager.find(
+              AccountBuilderOrchestrationBudgetEntity.class, existing.orchestrationId);
+      if (existingBudget == null) {
+        // A durable claim without a budget is an incomplete aggregate. Replay must never present
+        // it as a healthy claim; only a specifically tested recovery transaction may repair it.
+        throw integrity("Durable orchestration claim has no immutable budget row");
+      }
+      requireSameBudget(existingBudget, budget);
       return new Claim(readNormalized(existing).view(), false);
     }
 
@@ -164,31 +177,14 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
     }
     persistBinding(request);
     persistCorrelation(request, envelopeDigest);
+    persistBudget(request.orchestrationId(), budget);
     appendEvent(entity, "ORCHESTRATION_CREATED", fingerprint);
     entityManager.flush();
     return new Claim(initial, true);
   }
 
-  @Override
-  @Transactional
-  public AccountBuilderBudgetPolicy.OrchestrationBudget claimBudget(
-      String orchestrationId, OrchestrationBudget budget) {
-    AccountBuilderOrchestrationBudgetEntity existing =
-        entityManager.find(AccountBuilderOrchestrationBudgetEntity.class, orchestrationId);
-    if (existing != null) {
-      // Claimed limits are immutable. A second claim with different limits is a caller bug and
-      // must never silently rewrite the durable budget.
-      if (existing.maxActions != budget.maxActions()
-          || existing.maxAttempts != budget.maxAttempts()
-          || existing.maxElapsedMs != budget.maxElapsedMs()
-          || !Objects.equals(existing.startedAt, budget.startedAt())
-          || !Objects.equals(existing.expiresAt, budget.expiresAt())) {
-        throw failure(
-            FailureCode.IDEMPOTENCY_CONFLICT,
-            "Persisted orchestration budget limits are immutable");
-      }
-      return toBudget(existing);
-    }
+  private void persistBudget(
+      String orchestrationId, AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
     AccountBuilderOrchestrationBudgetEntity created = new AccountBuilderOrchestrationBudgetEntity();
     created.orchestrationId = orchestrationId;
     created.maxActions = budget.maxActions();
@@ -199,8 +195,19 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
     created.startedAt = budget.startedAt();
     created.expiresAt = budget.expiresAt();
     entityManager.persist(created);
-    entityManager.flush();
-    return toBudget(created);
+  }
+
+  /** Claimed budget limits are immutable; a replaying claim with different limits is a conflict. */
+  private void requireSameBudget(
+      AccountBuilderOrchestrationBudgetEntity persisted,
+      AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
+    if (persisted.maxActions != budget.maxActions()
+        || persisted.maxAttempts != budget.maxAttempts()
+        || persisted.maxElapsedMs != budget.maxElapsedMs()
+        || !Objects.equals(persisted.startedAt, budget.startedAt())
+        || !Objects.equals(persisted.expiresAt, budget.expiresAt())) {
+      throw conflict();
+    }
   }
 
   @Override

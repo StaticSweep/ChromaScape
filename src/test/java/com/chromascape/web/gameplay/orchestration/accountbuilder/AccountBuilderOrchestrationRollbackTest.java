@@ -60,6 +60,38 @@ class AccountBuilderOrchestrationRollbackTest {
   }
 
   @Test
+  void budgetInsertFailureRollsBackTheEntireClaimAggregate() {
+    OrchestrationRequest request = AccountBuilderPostgresTestFixtures.request("rollback-budget");
+    enableFault("budget", "ab_orchestration_budget");
+
+    assertThatThrownBy(
+            () ->
+                store.claim(
+                    request,
+                    request.requestFingerprint(),
+                    AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                    AccountBuilderPostgresTestFixtures.budget(request)))
+        .isInstanceOf(RuntimeException.class);
+
+    // The atomic claim must leave no root, snapshot, correlation, budget or event behind.
+    for (String table :
+        List.of(
+            "ab_orchestration",
+            "ab_orchestration_budget",
+            "ab_snapshot_binding",
+            "ab_gateway_correlation",
+            "ab_orchestration_event")) {
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "select count(*) from " + table + " where orchestration_id = ?",
+                  Integer.class,
+                  request.orchestrationId()))
+          .as(table)
+          .isZero();
+    }
+  }
+
+  @Test
   void receiptInsertFailureRollsBackRootLeaseReceiptAndEvent() {
     OrchestrationRequest request = prepareAuthorized("rollback-receipt");
     Lease lease = AccountBuilderPostgresTestFixtures.lease(request, "rollback-receipt");
@@ -194,7 +226,8 @@ class AccountBuilderOrchestrationRollbackTest {
                 .claim(
                     request,
                     request.requestFingerprint(),
-                    AccountBuilderPostgresTestFixtures.envelopeDigest(request))
+                    AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                    AccountBuilderPostgresTestFixtures.budget(request))
                 .created())
         .isTrue();
   }

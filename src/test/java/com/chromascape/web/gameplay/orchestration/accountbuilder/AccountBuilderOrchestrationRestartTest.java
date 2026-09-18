@@ -247,7 +247,8 @@ class AccountBuilderOrchestrationRestartTest {
                 .claim(
                     request,
                     request.requestFingerprint(),
-                    AccountBuilderPostgresTestFixtures.envelopeDigest(request))
+                    AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                    AccountBuilderPostgresTestFixtures.budget(request))
                 .created())
         .isTrue();
   }

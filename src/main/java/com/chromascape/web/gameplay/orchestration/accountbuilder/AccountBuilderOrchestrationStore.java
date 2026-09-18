@@ -1,7 +1,6 @@
 package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.GameplayContracts;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderBudgetPolicy.OrchestrationBudget;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.AuthorityConsumption;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -16,14 +15,22 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AccountBuilderOrchestrationStore {
-  Claim claim(OrchestrationRequest request, String fingerprint, String envelopeDigest);
-
   /**
-   * Persists the immutable budget limits at claim time. A repeated call for the same orchestration
-   * must never change the persisted limits; it only reports the current durable usage.
+   * Claims the orchestration and its immutable budget in one atomic operation.
+   *
+   * <p>The budget is parsed and validated by the caller before this method runs, so an invalid
+   * budget can never persist any part of the aggregate. On success the root, the initial lifecycle
+   * snapshot, the immutable request snapshot, the snapshot bindings, the gateway correlation, the
+   * budget row and the initial event all exist or none of them do. An exact replay — same
+   * fingerprint and same immutable budget — returns the existing aggregate. A changed request or
+   * budget is an {@code IDEMPOTENCY_CONFLICT}. A durable claim without a budget is an internal
+   * integrity failure and never silently replays.
    */
-  AccountBuilderBudgetPolicy.OrchestrationBudget claimBudget(
-      String orchestrationId, OrchestrationBudget budget);
+  Claim claim(
+      OrchestrationRequest request,
+      String fingerprint,
+      String envelopeDigest,
+      AccountBuilderBudgetPolicy.OrchestrationBudget budget);
 
   /** Returns the durable budget row, or empty when the claim never persisted one. */
   Optional<AccountBuilderBudgetPolicy.OrchestrationBudget> findBudget(String orchestrationId);
