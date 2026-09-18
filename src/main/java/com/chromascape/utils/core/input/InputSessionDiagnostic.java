@@ -49,6 +49,12 @@ public enum InputSessionDiagnostic {
   NATIVE_CALL_FAILED,
   /** A native call exceeded its deadline. */
   NATIVE_CALL_TIMEOUT,
+  /** Native capture dimensions were zero, negative, overflowing, or above the safety bound. */
+  INVALID_FRAME_DIMENSIONS,
+  /** Native capture returned a null image-buffer pointer. */
+  IMAGE_BUFFER_UNAVAILABLE,
+  /** Target dimensions changed while a native frame was being copied. */
+  FRAME_RESIZED_DURING_CAPTURE,
   /** Releasing the native target exceeded its deadline. */
   RELEASE_TIMEOUT,
   /** The session is closed. */

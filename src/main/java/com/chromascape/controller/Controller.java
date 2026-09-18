@@ -4,6 +4,8 @@ import com.chromascape.utils.core.input.TargetInputRuntime;
 import com.chromascape.utils.core.input.TargetInputSession;
 import com.chromascape.utils.core.input.keyboard.VirtualKeyboardUtils;
 import com.chromascape.utils.core.input.mouse.VirtualMouseUtils;
+import com.chromascape.utils.core.screen.capture.TargetFrameRuntime;
+import com.chromascape.utils.core.screen.capture.TargetFrameSource;
 import com.chromascape.utils.domain.ocr.Ocr;
 import com.chromascape.utils.domain.walker.Walker;
 import com.chromascape.utils.domain.zones.ZoneManager;
@@ -43,6 +45,9 @@ public class Controller {
     try {
       preloadFonts();
       opened = TargetInputRuntime.factory().openSelectedSession();
+      if (opened instanceof TargetFrameSource frameSource) {
+        TargetFrameRuntime.install(frameSource);
+      }
       mouse = new VirtualMouseUtils(opened);
       keyboard = new VirtualKeyboardUtils(opened);
       ZoneManager zones = new ZoneManager();
@@ -56,6 +61,9 @@ public class Controller {
       state = ControllerState.RUNNING;
       logger.info("Controller State: {}", state);
     } catch (RuntimeException failure) {
+      if (opened instanceof TargetFrameSource frameSource) {
+        TargetFrameRuntime.uninstall(frameSource);
+      }
       closeAfterFailure(mouse, failure);
       closeAfterFailure(keyboard, failure);
       closeAfterFailure(opened, failure);
@@ -93,6 +101,9 @@ public class Controller {
     }
     state = ControllerState.STOPPING;
     RuntimeException failure = null;
+    if (inputSession instanceof TargetFrameSource frameSource) {
+      TargetFrameRuntime.uninstall(frameSource);
+    }
     failure = closeForShutdown(virtualMouseUtils, failure);
     failure = closeForShutdown(virtualKeyboardUtils, failure);
     failure = closeForShutdown(inputSession, failure);

@@ -2,6 +2,7 @@ package com.chromascape.utils.core.input.remoteinput;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyByte;
 import static org.mockito.Mockito.doAnswer;
@@ -21,6 +22,7 @@ import com.chromascape.utils.core.screen.window.SelectionValidation;
 import com.chromascape.utils.core.screen.window.TargetDiscoveryService;
 import com.chromascape.utils.core.screen.window.WindowInfo;
 import com.chromascape.utils.core.screen.window.WindowSelectionService;
+import com.sun.jna.Memory;
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 import java.awt.Point;
@@ -29,6 +31,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -180,9 +183,121 @@ class RemoteInputSessionTest {
     verify(nativeApi, times(25)).EIOS_ReleaseTarget(new Pointer(1));
   }
 
+  @Test
+  void capturesDetachedRenderedBgraPixels() {
+    configureAlreadyInjected();
+    Memory pixels = new Memory(16);
+    pixels.write(
+        0,
+        new byte[] {
+          0,
+          0,
+          (byte) 255,
+          0,
+          0,
+          (byte) 255,
+          0,
+          1,
+          (byte) 255,
+          0,
+          0,
+          2,
+          (byte) 255,
+          (byte) 255,
+          (byte) 255,
+          3
+        },
+        0,
+        16);
+    when(nativeApi.EIOS_GetImageBuffer(new Pointer(1))).thenReturn(pixels);
+    RemoteInputSession session = open(defaultOptions());
+    configureDimensions(2, 2);
+
+    var first = session.captureFrame();
+    pixels.setByte(2, (byte) 0);
+    final var second = session.captureFrame();
+
+    assertEquals(2, first.image().getWidth());
+    assertEquals(new Rectangle(0, 0, 2, 2), session.targetBounds());
+    assertEquals(0xFFFF0000, first.image().getRGB(0, 0));
+    assertEquals(0xFF000000, second.image().getRGB(0, 0));
+    assertNotSame(first.image(), second.image());
+    session.close();
+  }
+
+  @Test
+  void refusesNullImageBufferWithoutReturningAnOldFrame() {
+    configureAlreadyInjected();
+    configureDimensions(2, 2);
+    RemoteInputSession session = open(defaultOptions());
+    when(nativeApi.EIOS_GetImageBuffer(new Pointer(1))).thenReturn(null);
+
+    InputSessionException failure =
+        assertThrows(InputSessionException.class, session::captureFrame);
+
+    assertEquals(InputSessionDiagnostic.IMAGE_BUFFER_UNAVAILABLE, failure.diagnostic());
+    session.close();
+  }
+
+  @Test
+  void refusesFrameWhenDimensionsChangeDuringCopy() {
+    configureAlreadyInjected();
+    AtomicInteger dimensionsCall = new AtomicInteger();
+    doAnswer(
+            invocation -> {
+              int call = dimensionsCall.getAndIncrement();
+              ((IntByReference) invocation.getArgument(1)).setValue(call >= 2 ? 3 : 2);
+              ((IntByReference) invocation.getArgument(2)).setValue(2);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_GetTargetDimensions(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+    Memory pixels = new Memory(16);
+    when(nativeApi.EIOS_GetImageBuffer(new Pointer(1))).thenReturn(pixels);
+    RemoteInputSession session = open(defaultOptions());
+
+    InputSessionException failure =
+        assertThrows(InputSessionException.class, session::captureFrame);
+
+    assertEquals(InputSessionDiagnostic.FRAME_RESIZED_DURING_CAPTURE, failure.diagnostic());
+    session.close();
+  }
+
+  @Test
+  void refusesInvalidDimensionsBeforeReadingTheNativePointer() {
+    configureAlreadyInjected();
+    configureDimensions(2, 2);
+    RemoteInputSession session = open(defaultOptions());
+    configureDimensions(0, 2);
+
+    InputSessionException failure =
+        assertThrows(InputSessionException.class, session::captureFrame);
+
+    assertEquals(InputSessionDiagnostic.INVALID_FRAME_DIMENSIONS, failure.diagnostic());
+    verify(nativeApi, times(0)).EIOS_GetImageBuffer(new Pointer(1));
+    session.close();
+  }
+
   private void configureAlreadyInjected() {
     when(nativeApi.EIOS_GetClients(anyByte())).thenReturn(1L);
     when(nativeApi.EIOS_GetClientPID(0)).thenReturn(42);
+  }
+
+  private void configureDimensions(int width, int height) {
+    doAnswer(
+            invocation -> {
+              ((IntByReference) invocation.getArgument(1)).setValue(width);
+              ((IntByReference) invocation.getArgument(2)).setValue(height);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_GetTargetDimensions(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
   }
 
   private RemoteInputSession open(RemoteInputSessionOptions options) {
