@@ -1,12 +1,51 @@
 # SC-1431.2 Implementation Evidence — lifecycle, budgets, fencing, failure normalization
 
 Branch: `codex/sc-1431-lifecycle-hardening`.
-Base: `origin/integration/chromascape-consolidated-20260901` at `97482af3` (the branch was rebased onto this head
-before remediation and is now ahead of it with 0 commits behind). The four SC-1430 commits (`087ae9ca`,
-`b1297922`, `66e29fff`, `4f7e038f`) sit directly above the base, and every SC-1431 commit sits above them; the
-stacks are never interleaved.
+Base: `origin/integration/chromascape-consolidated-20260901` at `1f1b6b5da792e6d611b648fc11219d893b5dcd7c`.
+Final branch head after the SC-1431.4 remediation: `a4a97b646baefff8f7e3533e44be05d2a43bb1f3` (20 commits ahead,
+0 behind). Remediation commits: `2cd1ae54` (replay and provider trust boundaries) and `a4a97b64` (Fedora
+verification coverage); this evidence update is the third scoped commit.
 
 ## Changed files
+
+### Remediation pass (SC-1431.4 review findings)
+
+Four review findings were fixed on top of the SC-1431.3 pass; every production change is exercised by a focused
+regression test.
+
+1. **Full-identity bootstrap replay** — `BootstrapGameplayOrchestrator.orchestrateThroughSc1431` no longer returns
+   an existing aggregate after comparing only `envelopeDigest`. It reads the persisted capability digest through
+   `AccountBuilderOrchestrationService.storedCapabilityDigest`, rebuilds the exact candidate with
+   `AccountBuilderOrchestrationRequestFactory.fromBootstrapReplay(...)` and compares the complete immutable
+   fingerprint. Any changed observation, provider decision, authority, envelope (budgets/deadline) or binding
+   yields `IDEMPOTENCY_CONFLICT`; an exact replay performs zero capability probes.
+2. **Provider validation before capability preflight** — `ProviderDecisionOrchestrationSource` is split into
+   `prepareProduction(command)` (persisted-decision validation and provenance binding, no Micro6) and
+   `completeProduction(prepared, preflight)` / `completeProductionReplay(prepared, storedDigest)`.
+   `AccountBuilderOrchestrationController.orchestrateProvider` authenticates, prepares, resolves an existing
+   aggregate (replay compare, no preflight), and only then performs `capabilityPreflight.probe(envelope)` for a
+   new orchestration. Invalid decisions and exact replays make zero gateway calls.
+3. **Closed provider-source vocabulary** — new `AccountBuilderOrchestrationSources` classifies the persisted
+   source string strictly and asserts `providerLike` with an ASCII case-independent prefix check. The generic
+   `AccountBuilderOrchestrationService.orchestrate` rejects every provider-like source before any claim, budget,
+   authority or gateway access; the dedicated `orchestrateProvider` entry point accepts only an exact provider
+   token. `AccountBuilderOrchestrationValidator` parses through the same classifier, so `provider:CODEX`,
+   `Provider:CODEX`, `PROVIDER:codex`, `PROVIDER:`, unknown providers, whitespace padding and arbitrary strings
+   all fail closed with `INVALID_CONTRACT`.
+4. **Conjunctive HTTP success stamps** — `Micro6AccountBuilderOrchestrationGateway.httpStampOk` now requires
+   `httpSuccess && httpStatus >= 200 && httpStatus < 300`. A `false`/`503` body can never contribute to
+   `liveDeliveryReady=true`. Unknown remote failure codes now throw `INVALID_GATEWAY_RECEIPT` instead of mapping
+   to a terminal `DISPATCH_REJECTED`.
+5. **Regression coverage** — `BootstrapGameplaySc1431IntegrationTest` (full-fingerprint replay rejection for
+   observation/decision/authority/envelope/deadline, replay survives a simulated gateway outage),
+   `ProviderDecisionOrchestrationIntegrationTest` (rewritten on the SC-1429 golden fixture; valid CODEX decision
+   reaches one durable claim with no gateway access, generic route rejects the same request, every drift case
+   makes zero gateway calls), `AccountBuilderOrchestrationServiceTest` (generic and provider service entry-point
+   bypass attempts), `AccountBuilderOrchestrationControllerHttpTest` (case-variant generic-route rejection,
+   provider sequencing, replay skips preflight), and `Micro6AccountBuilderOrchestrationGatewayTest`
+   (affirmative/contradictory/missing/wrongly-typed/boundary HTTP stamps with complete valid-looking bodies).
+
+### Retained prior passes (SC-1431.3)
 
 ### Remediation pass (SC-1431.3 hardening)
 
@@ -129,53 +168,58 @@ All SC-1431 remediation tests (new and updated):
   `TRANSCRIPT_DIGEST_MISMATCH`; deletion, empty/malformed references, path escape, symlink escape and
   oversized artifacts each fail with their stable code; exception messages never contain transcript content.
 
-Fedora verification (all commands run from
-`/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1431-fedora`):
-- Java: Corretto/OpenJDK 17.0.20.1 (`JAVA_HOME=/home/ikiddoi/.jdks/corretto-17.0.20.1`); Gradle 8.14.2.
-- PostgreSQL: 16.15 (container `chromascape-postgres`, image `postgres:16-alpine`) on port 5433, database
-  `chromascape_test` (plus Testcontainers-managed isolated databases for the Spring JPA proofs).
-- `sh gradlew compileJava compileTestJava --no-daemon` — green.
-- Focused remediation gate: `sh gradlew test -Psc967VectorsPath=/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/
-  contracts/sc967/ed25519-vectors.json --tests 'com.chromascape.web.gameplay.orchestration.BootstrapGameplay*'
-  --tests 'com.chromascape.web.gameplay.orchestration.accountbuilder.*'
-  --tests 'com.chromascape.web.gameplay.provider.runtime.*' --no-daemon` — **136 tests, 136 passed, 0 failed,
-  0 errors, 0 skipped** across 22 JUnit XML suites (includes Testcontainers PostgreSQL concurrency, restart,
-  rollback and JPA proofs plus the direct-Flyway schema proof).
-- `spotlessCheck` — green after `spotlessApply` restricted to the SC-1431 files; unrelated pre-existing format
-  drift in other files was reverted, never committed.
-- `checkstyleMain` / `checkstyleTest` — warnings only (severity threshold unchanged from baseline).
-- `git diff --check` and `git status --short` — clean at every commit boundary; each commit staged explicit
-  paths only.
+Fedora verification (worktree
+`/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/ChromaScape-sc1431-fedora`; toolchain Corretto/OpenJDK
+17.0.20.1 at `/home/ikiddoi/.jdks/corretto-17.0.20.1`, Gradle 8.14.2, Podman API socket
+`/run/user/1000/podman/podman.sock`, PostgreSQL 16 Testcontainers databases):
 
-Safety and scope audit: no gameplay, provider process or raw input capability was launched; no SC-1429 resource
-changed; no SC-1449 implementation was widened; no credentials or transcript contents were committed; no
-generated build output was staged; default delivery remains disabled; transcript tampering tests used actual
-stored files; the production bootstrap wiring was exercised end to end by `BootstrapGameplaySc1431IntegrationTest`.
+- `compileJava compileTestJava -Psc967VectorsPath=...` — green.
+- Focused unit/integration gate (10 suites, excludes Testcontainers): `BootstrapGameplaySc1431IntegrationTest`,
+  `AccountBuilderOrchestrationServiceTest`, `AccountBuilderOrchestrationControllerHttpTest`,
+  `Micro6AccountBuilderOrchestrationGatewayTest`, `ProviderDecisionOrchestrationIntegrationTest`,
+  `ProviderDecisionOrchestrationSourceTest`, `AccountBuilderOrchestrationBudgetTest`,
+  `AccountBuilderOrchestrationConcurrencyTest`, `AccountBuilderOrchestrationLifecycleMatrixTest`,
+  `ProviderRuntimeHardeningTest` — **115 tests, 115 passed, 0 failed, 0 errors, 0 skipped**.
+- PostgreSQL gate (`DOCKER_HOST=unix:///run/user/1000/podman/podman.sock`, `TESTCONTAINERS_RYUK_DISABLED=true`):
+  `AccountBuilderOrchestrationPostgresConcurrencyTest`, `AccountBuilderOrchestrationRestartTest`,
+  `AccountBuilderOrchestrationRollbackTest`, `JpaAccountBuilderOrchestrationStoreTest`,
+  `Sc1431BudgetIntegritySchemaTest` — **23 tests, 23 passed, 0 failed, 0 errors, 0 skipped** (V48 migration
+  validation, concurrency, rollback, restart and JPA store coverage).
+- Broader gate `--tests 'com.chromascape.web.gameplay.*'` with the same Podman environment — **39 suites, 299
+  tests, 299 passed, 0 failed, 0 errors, 0 skipped**.
+- `checkstyleMain checkstyleTest` — BUILD SUCCESSFUL; pre-existing warning baseline (severity unchanged), no
+  errors.
+- `spotlessCheck` — still fails, but **only** on pre-existing baseline files unrelated to SC-1431:
+  `IsolatedPatchWorker.java`, `Micro6TargetRelaunchService.java`, `GameplayV2LiveGateService.java`,
+  `Micro6CanonicalHash.java`, `Micro6CatalogV2Contract.java`, `RoutineAssistantGenerationContextIT.java`,
+  `Sc810FlywayOnlyMigrationCompletenessTest.java`, `Sc810NarrowContextIsolationTest.java`,
+  `Sc810PostgresTestConfiguration.java`, `TaskSourceManifestVerifierTest.java`,
+  `Micro6TargetRelaunchServiceTest.java`, `CdiStartupRegressionTest.java`,
+  `Micro6ContractFixtureCompatibilityTest.java`, `SimulatorVerifyServiceIntegrationTest.java`. A scoped
+  `spotlessApply` followed by reverting those files proved **no SC-1431 file is changed by Spotless**. The
+  baseline limitation is recorded rather than reformatted repository-wide.
+- `git diff --check` — clean.
+- Raw-input audit of `gameplay/orchestration` and `gameplay/provider`: matches are documentation comments plus
+  the pre-existing `SafeProviderProcessRunner` (SC-1430 provider launch path), which is outside the SC-1431
+  change set.
 
-Full-repository `gradlew test` run (after the format pass):
-- 2540 tests across 307 JUnit suites; 71 failures, of which **66 are one poisoned Spring-context cascade**
-  (`IllegalStateException at DefaultCacheAwareContextLoaderDelegate`) triggered by five pre-existing
-  environmental root causes: a Windows-only test resolving the Micro6 repo at `C:\Dev\IdeaProjects\micro6`,
-  Testcontainers failing to launch `postgres:16-alpine` under dozens of concurrently starting Spring contexts,
-  and a test invoking `./gradlew` before the wrapper's executable bit was restored (fixed in a follow-up
-  commit). The four SC-1431 PostgreSQL suites that appear in the cascade pass cleanly when run outside the
-  poisoned context (verified by an immediate isolated re-run and by the green full `gameplay.*` gate on the
-  final code); the Windows-path and container-contention root causes are outside Fedora scope and are
-  covered by the native Windows acceptance gate below.
+Safety and scope audit: no gameplay, provider process, Micro6 process or raw input capability was launched; no
+SC-1429 resource changed; no SC-1449 implementation was widened; no credentials or transcript contents were
+committed; default delivery remains off; the exact-replay, invalid-provider-decision, provider-bypass and
+negative-HTTP-stamp regression paths are each covered by tests that assert zero gateway calls where required.
 
 ## Remaining work
 
+- **Deferred external gates (not run, not claimed):** native Windows Gradle verification, the Windows-path
+  Micro6 contract test, real Micro6 catalog/observation exchange, real reserve/dispatch/status/reconcile/stop
+  integration, and live CODEX provider execution. The Fedora work proves behavior against the closed and
+  stubbed gateways plus Testcontainers PostgreSQL only.
+- **Spotless baseline limitation:** the fourteen unrelated files listed above still violate Spotless on the
+  base branch; they were deliberately not reformatted to avoid repository-wide churn. CI that enforces
+  `spotlessCheck` repository-wide will remain red until those pre-existing files are fixed in their own scope.
 - SC-1498 must switch to reading SC-1431 terminal receipts for SC-666 finalization (interface now returns
   durable terminal evidence; the recording-side consumer change belongs to SC-666/SC-1498 scope).
-- A dedicated live-delivery HTTP profile pass for the production-path matrix (disabled delivery never accesses
-  Micro6, timeout → `NEEDS_RECONCILIATION`, pre-submission connection failure retryable, post-submission
-  uncertainty never redispatches) is partially covered by the controller and gateway tests but not yet run as
-  one enabled-profile suite.
-- Windows acceptance pass: native restart behavior, real Micro6 desktop client operation, human-gated Fishing
-  completion, operator acceptance, the Windows-path Micro6 contract-equality test, and the full-repository
-  suite under the Windows toolchain remain outside Fedora verification — this is the remaining external gate
-  before the PR moves to review.
 - External completion gates: SC-573 catalog dependency, SC-666 recording lifecycle, SC-1449 server-side
   enforcement verification, and end-to-end duplicate-delivery proof.
-- The Shortcut story stays Backlog/blocked; no tracker mutation was performed from this implementation pass,
-  and the Felix transition to `in_review` has not been attempted yet (no MCP call was made from Fedora).
+- PR creation/retargeting after the SC-1430 stack is reconciled, reviewer approval, and any required Felix /
+  Shortcut evidence reconciliation. No tracker mutation or Felix transition was performed from Fedora.
