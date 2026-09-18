@@ -2,6 +2,8 @@
 
 Implementation is ready for review, but the story is not complete.
 
+Draft PR: <https://github.com/ikiddoi/ChromaScape/pull/12>
+
 Delivered:
 
 - the final upstream-owned AWT startup, host-native profile-path, and first-cycle adaptations;

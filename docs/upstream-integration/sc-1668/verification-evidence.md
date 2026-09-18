@@ -4,6 +4,8 @@ Status vocabulary: PASS / FAIL / NOT RUN / BLOCKED.
 
 Base: `ab8c4ccf43e09ce5d52b5e75a712e672984d1561`.
 
+Draft review PR: <https://github.com/ikiddoi/ChromaScape/pull/12>.
+
 ## Current results
 
 | Check | Result | Evidence |
