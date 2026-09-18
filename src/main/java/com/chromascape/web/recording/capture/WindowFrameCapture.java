@@ -1,5 +1,6 @@
 package com.chromascape.web.recording.capture;
 
+import com.chromascape.utils.core.screen.FrameEvent;
 import java.awt.image.BufferedImage;
 
 /**
@@ -17,4 +18,16 @@ public interface WindowFrameCapture {
    * @throws RuntimeException when the window is unavailable or its dimensions are invalid
    */
   BufferedImage capture();
+
+  /**
+   * Captures a frame event including target binding when the provider can supply it.
+   *
+   * <p>The default keeps existing test and custom implementations source-compatible.
+   */
+  default FrameEvent captureEvent() {
+    BufferedImage image = capture();
+    return image == null
+        ? null
+        : new FrameEvent(image, System.nanoTime(), image.getWidth(), image.getHeight());
+  }
 }
