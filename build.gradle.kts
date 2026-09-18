@@ -1426,3 +1426,17 @@ val nativeMetadataTests by tasks.registering(Exec::class) {
 	commandLine("python3", "-B", "-m", "unittest", "discover", "-s", tests, "-t", tests)
 	outputs.upToDateWhen { false }
 }
+
+// Fixture-only SC-1667 Fedora preflight regressions. They operate on a synthetic procfs,
+// os-release and ptrace policy tree and never inspect, attach to, signal or modify a real client.
+val fedoraPreflightRegressions by tasks.registering(Exec::class) {
+	group = "verification"
+	description = "Run Fedora host-native preflight fixture regressions."
+
+	onlyIf { isLinux }
+	commandLine(
+		"bash",
+		layout.projectDirectory.file("scripts/fedora/tests/preflight-regressions.sh").asFile.absolutePath,
+	)
+	outputs.upToDateWhen { false }
+}
