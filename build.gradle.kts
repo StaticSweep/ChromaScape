@@ -1440,3 +1440,15 @@ val fedoraPreflightRegressions by tasks.registering(Exec::class) {
 	)
 	outputs.upToDateWhen { false }
 }
+
+// Cross-host evidence-schema tests. The production helper creates fail-closed records: a host
+// matrix cannot become complete until two distinct Fedora hosts and one Windows host explicitly
+// carry PASS evidence for every required case at the same application revision.
+val sc1668EvidenceTests by tasks.registering(Exec::class) {
+	group = "verification"
+	description = "Run SC-1668 cross-host evidence contract regressions."
+
+	val tests = layout.projectDirectory.dir("scripts/qualification/tests").asFile.absolutePath
+	commandLine("python3", "-B", "-m", "unittest", "discover", "-s", tests, "-t", projectDir.absolutePath)
+	outputs.upToDateWhen { false }
+}
