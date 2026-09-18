@@ -9,8 +9,8 @@ import com.chromascape.web.viewport.WebsocketViewport;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.AutoConfigurationExcludeFilter;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.context.TypeExcludeFilter;
 import org.springframework.context.annotation.ComponentScan;
@@ -42,6 +42,7 @@ public class ChromaScapeApplication {
    * @param args command-line arguments passed to the application
    */
   public static void main(String[] args) {
+    AwtStartupMode.configureForCurrentHost();
     SpringApplication.run(ChromaScapeApplication.class, args);
   }
 
