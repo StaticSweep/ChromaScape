@@ -8,7 +8,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.chromascape.utils.core.input.remoteinput.KinputBackend;
+import com.chromascape.utils.core.input.remoteinput.RemoteInputArtifactException;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputBindingProvider;
+import com.chromascape.utils.core.input.remoteinput.RemoteInputDiagnostic;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptions;
 import com.chromascape.utils.core.screen.window.ProcessIdentity;
 import com.chromascape.utils.core.screen.window.ProcessManager;
@@ -19,6 +21,7 @@ import com.chromascape.utils.core.screen.window.TargetDiscoveryService;
 import com.chromascape.utils.core.screen.window.WindowInfo;
 import com.chromascape.utils.core.screen.window.WindowSelectionService;
 import java.awt.Rectangle;
+import java.nio.file.Path;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
@@ -81,6 +84,60 @@ class TargetInputSessionFactoryTest {
       } finally {
         session.close();
       }
+    } finally {
+      restoreOs(originalOs);
+    }
+  }
+
+  @Test
+  void productionConstructorKeepsAttachmentDisabledByDefault() {
+    String originalOs = System.getProperty("os.name");
+    System.setProperty("os.name", "Linux");
+    try {
+      Fixture fixture = new Fixture();
+      TargetInputSessionFactory factory =
+          new TargetInputSessionFactory(
+              fixture.discovery,
+              fixture.selection,
+              fixture.processManagers,
+              fixture.bindingProvider,
+              false);
+
+      InputSessionException failure =
+          assertThrows(InputSessionException.class, () -> factory.openSelectedSession());
+
+      assertEquals(InputSessionDiagnostic.ATTACHMENT_DISABLED, failure.diagnostic());
+      verifyNoInteractions(fixture.bindingProvider);
+    } finally {
+      restoreOs(originalOs);
+    }
+  }
+
+  @Test
+  void productionConstructorHonorsExplicitOverrideAndFailsClosedOnUnloadableLibrary() {
+    String originalOs = System.getProperty("os.name");
+    System.setProperty("os.name", "Linux");
+    try {
+      Fixture fixture = new Fixture();
+      when(fixture.bindingProvider.load())
+          .thenThrow(
+              new RemoteInputArtifactException(
+                  RemoteInputDiagnostic.LOAD_FAILED,
+                  (Path) null,
+                  "linux-x86_64 ELF 64-bit LSB shared object",
+                  "libRemoteInput.so: cannot open shared object file"));
+      TargetInputSessionFactory factory =
+          new TargetInputSessionFactory(
+              fixture.discovery,
+              fixture.selection,
+              fixture.processManagers,
+              fixture.bindingProvider,
+              true);
+
+      InputSessionException failure =
+          assertThrows(InputSessionException.class, () -> factory.openSelectedSession());
+
+      assertEquals(InputSessionDiagnostic.LOAD_FAILED, failure.diagnostic());
     } finally {
       restoreOs(originalOs);
     }
