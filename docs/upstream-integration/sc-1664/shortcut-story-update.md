@@ -5,6 +5,8 @@ Done until the PR is approved and merged. The target-owned lifecycle, exact iden
 fencing, bounded RemoteInput calls, lease ownership, cleanup semantics, KInput adapter and controller
 integration are implemented on the merged SC-1662/SC-1663 base.
 
+Review PR: https://github.com/ikiddoi/ChromaScape/pull/8
+
 Deterministic unit, isolation and focused launcher/discovery gates pass (213 tests, one expected
 Windows-only skip). The ordinary and replay suites introduce no stable failure identity versus the
 exact base. Live disposable-client Linux qualification and Windows runtime verification remain

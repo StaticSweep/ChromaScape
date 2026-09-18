@@ -20,7 +20,7 @@ This matrix separates deterministic local verification from host/client-specific
 | Disposable live Linux attachment/input | NOT RUN | no qualified disposable client running |
 | Real native 25-cycle lifecycle | NOT RUN | requires the same qualified client |
 | Windows runtime verification | NOT RUN | deferred to the Windows host |
-| PR review/merge | NOT RUN | follows completed local verification |
+| PR review/merge | REVIEW REQUIRED | PR #8 is open; approval and merge are NOT RUN |
 
 The ordinary task remains red because the exact base is already red for unavailable
 Postgres/Testcontainers services, contract-fixture drift and Windows-only path execution. One

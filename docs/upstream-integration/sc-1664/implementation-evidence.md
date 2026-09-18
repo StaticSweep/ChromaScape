@@ -31,7 +31,7 @@ Status vocabulary: PASS / FAIL / NOT RUN / BLOCKED.
   rerun and the final full run.
 - Replay comparison: PASS for regression identity. Candidate and exact base both ran 280 tests with
   the same 13 environment/Windows-path failures.
-- Shortcut update text: PASS. PR review and merge: NOT RUN.
+- Shortcut update text: PASS. PR #8 is open and review-required; approval and merge are NOT RUN.
 
 No native binary, credential, raw process listing or machine-specific absolute path is committed as
 evidence.
