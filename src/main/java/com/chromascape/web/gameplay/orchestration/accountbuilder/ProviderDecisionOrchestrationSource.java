@@ -37,11 +37,11 @@ public final class ProviderDecisionOrchestrationSource {
                         FailureCode.INVALID_CONTRACT,
                         "Validated persisted provider decision was not found"));
     if (!persisted.bindable()) {
-      // ABSTAINED, FAILED, CANCELLED, NEEDS_RECONCILIATION and every other nonterminal or
-      // non-decided turn can never be bound to an orchestration request.
+      // ABSTAINED, FAILED, CANCELLED, NEEDS_RECONCILIATION and every other nonterminal,
+      // non-decided, or provenance-incomplete turn can never be bound to an orchestration request.
       throw new AccountBuilderOrchestrationException(
           FailureCode.INVALID_CONTRACT,
-          "Persisted provider turn is not a proven DECIDED turn with normalized evidence");
+          "Persisted provider turn is not a proven DECIDED turn with complete provenance");
     }
     if (persisted.transcriptRef() == null
         || persisted.transcriptSha256() == null
@@ -85,32 +85,36 @@ public final class ProviderDecisionOrchestrationSource {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STALE_BINDING, "Persisted semantic action digest does not match the binding");
     }
-    // The persisted prompt/input digest must still describe the exact observation carried by the
-    // request; any divergence means the planning input changed after the decision was made.
-    if (persisted.observationDigest() != null
-        && !persisted.observationDigest().equals(canonicalJson.digest(request.observation()))) {
+    // Every contract-mandated digest comparison is unconditional: a persisted record that is
+    // missing any required provenance value fails closed and can never become deliverable.
+    if (!persisted.observationDigest().equals(canonicalJson.digest(request.observation()))) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STALE_BINDING, "Persisted observation digest does not match the request");
     }
-    if (persisted.toolsetDigest() != null
-        && !persisted.toolsetDigest().equals(bindings.toolSchemaDigest())) {
+    if (!persisted.toolsetDigest().equals(bindings.toolSchemaDigest())) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STALE_BINDING, "Persisted tool schema digest does not match the binding");
     }
-    if (persisted.knowledgeDigest() != null
-        && !persisted.knowledgeDigest().equals(envelope.knowledgeDigest())) {
+    if (!persisted.knowledgeDigest().equals(envelope.knowledgeDigest())) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STALE_BINDING, "Persisted knowledge digest does not match the envelope");
     }
-    if (persisted.goalPlanDigest() != null
-        && !persisted.goalPlanDigest().equals(envelope.goalPlanDigest())) {
+    if (!persisted.goalPlanDigest().equals(envelope.goalPlanDigest())) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STALE_BINDING, "Persisted goal plan digest does not match the envelope");
     }
-    if (!persisted.taskSkillDigests().isEmpty()
-        && !persisted.taskSkillDigests().equals(envelope.taskSkillDigests())) {
+    if (persisted.taskSkillDigests().isEmpty()
+        || !persisted.taskSkillDigests().equals(envelope.taskSkillDigests())) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STALE_BINDING, "Persisted task skill digests do not match the envelope");
+    }
+    if (bindings.observationDigest() == null
+        || bindings.promptDigest() == null
+        || !persisted.observationDigest().equals(bindings.observationDigest())
+        || !persisted.promptDigest().equals(bindings.promptDigest())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.STALE_BINDING,
+          "Orchestration binding is missing the persisted observation or prompt provenance");
     }
 
     return new OrchestrationRequest(

@@ -157,6 +157,89 @@ class ProviderRuntimeHardeningTest {
   }
 
   @Test
+  void verifyReturnsTheDigestOfTheExactStoredBytes() throws Exception {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("verify-transcripts"));
+    RedactedTranscriptStore store =
+        new RedactedTranscriptStore(properties, new CanonicalGameplayJson(new ObjectMapper()));
+
+    RedactedTranscriptStore.Artifact artifact = store.store("untouched-artifact");
+
+    RedactedTranscriptStore.Verification verification = store.verify(artifact.reference());
+    assertEquals(artifact.reference(), verification.digest());
+    assertEquals(artifact.byteLength(), verification.byteLength());
+  }
+
+  @Test
+  void verifyFailsClosedOnModifiedDeletedOversizedAndUnsafeArtifacts() throws Exception {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("verify-transcripts"));
+    properties.setMaxTranscriptBytes(4096);
+    RedactedTranscriptStore store =
+        new RedactedTranscriptStore(properties, new CanonicalGameplayJson(new ObjectMapper()));
+    RedactedTranscriptStore.Artifact artifact = store.store("verify-me");
+    java.nio.file.Path target =
+        temporary.resolve(
+            "verify-transcripts/" + artifact.reference().substring("sha256:".length()) + ".json");
+
+    // One-byte modification after the decision became terminal fails closed.
+    Files.writeString(target, "verify-mf");
+    ProviderRuntimeException modified =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify(artifact.reference()));
+    assertEquals(FailureCode.TRANSCRIPT_DIGEST_MISMATCH.name(), modified.failureCode());
+
+    // A deleted artifact fails closed.
+    Files.writeString(target, "verify-me");
+    Files.delete(target);
+    ProviderRuntimeException deleted =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify(artifact.reference()));
+    assertEquals(FailureCode.TRANSCRIPT_ARTIFACT_MISSING.name(), deleted.failureCode());
+
+    // Empty or malformed references fail closed.
+    ProviderRuntimeException empty =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify(""));
+    assertEquals(FailureCode.INVALID_EVIDENCE_REFERENCE.name(), empty.failureCode());
+    ProviderRuntimeException malformed =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify("sha256:not-a-digest"));
+    assertEquals(FailureCode.INVALID_EVIDENCE_REFERENCE.name(), malformed.failureCode());
+
+    // Path escape fails closed.
+    ProviderRuntimeException escape =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify("sha256:../../etc/passwd"));
+    assertEquals(FailureCode.INVALID_EVIDENCE_REFERENCE.name(), escape.failureCode());
+
+    // An oversized artifact fails closed.
+    Files.writeString(target, "x".repeat(8192));
+    ProviderRuntimeException oversized =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify(artifact.reference()));
+    assertEquals(FailureCode.TRANSCRIPT_ARTIFACT_TOO_LARGE.name(), oversized.failureCode());
+  }
+
+  @Test
+  void verifyRejectsSymlinkEscapeAndNeverExposesTranscriptContent() throws Exception {
+    ProviderRuntimeProperties properties = new ProviderRuntimeProperties();
+    properties.setTranscriptRoot(temporary.resolve("verify-transcripts"));
+    RedactedTranscriptStore store =
+        new RedactedTranscriptStore(properties, new CanonicalGameplayJson(new ObjectMapper()));
+    RedactedTranscriptStore.Artifact artifact = store.store("symlink-target");
+    java.nio.file.Path target =
+        temporary.resolve(
+            "verify-transcripts/" + artifact.reference().substring("sha256:".length()) + ".json");
+    Files.delete(target);
+    java.nio.file.Path outside = temporary.resolve("outside-secret.txt");
+    Files.writeString(outside, "secret-outside-root");
+    try {
+      Files.createSymbolicLink(target, outside);
+    } catch (UnsupportedOperationException | java.io.IOException ignored) {
+      return; // Symlinks unsupported on this platform; the escape case is covered elsewhere.
+    }
+    ProviderRuntimeException failure =
+        assertThrows(ProviderRuntimeException.class, () -> store.verify(artifact.reference()));
+    assertEquals(FailureCode.INVALID_EVIDENCE_REFERENCE.name(), failure.failureCode());
+    assertFalse(failure.getMessage().contains("secret-outside-root"));
+  }
+
+  @Test
   void httpStatusMappingIsStable() {
     ProviderRuntimeController controller = new ProviderRuntimeController(null, null);
     assertEquals(
@@ -261,7 +344,9 @@ class ProviderRuntimeHardeningTest {
                 "sha256:" + "d".repeat(64),
                 "build-1",
                 1,
-                1),
+                1,
+                "sha256:" + "9".repeat(64),
+                "sha256:" + "8".repeat(64)),
             null,
             null,
             java.time.Instant.now().plusSeconds(60));

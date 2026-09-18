@@ -446,7 +446,9 @@ class AccountBuilderOrchestrationServiceTest {
             envelope.verifierId(),
             envelope.buildId(),
             envelope.expectedObservationRevision(),
-            envelope.expectedTaskRevision());
+            envelope.expectedTaskRevision(),
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
     HumanAuthority authority =
         new HumanAuthority(
             "sc-1429/v1",

@@ -166,7 +166,9 @@ class AccountBuilderOrchestrationConcurrencyTest {
             envelope.verifierId(),
             envelope.buildId(),
             1,
-            1);
+            1,
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
     HumanAuthority authority =
         new HumanAuthority(
             GameplayContracts.VERSION,

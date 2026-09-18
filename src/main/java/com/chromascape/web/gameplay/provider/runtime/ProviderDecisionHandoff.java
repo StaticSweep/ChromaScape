@@ -44,13 +44,40 @@ public interface ProviderDecisionHandoff {
       taskSkillDigests = taskSkillDigests == null ? List.of() : List.copyOf(taskSkillDigests);
     }
 
-    /** Only a proven DECIDED turn with a normalized decision may be bound downstream. */
+    /**
+     * Only a proven {@code DECIDED} turn with successful normalization and every contract-mandated
+     * provenance digest may be bound downstream. Older records missing required provenance fail
+     * closed and can never become deliverable.
+     */
     public boolean bindable() {
       return turnState == TurnState.DECIDED
+          && normalizationResult == FailureCode.NONE
           && decision != null
-          && decisionDigest != null
-          && semanticActionDigest != null
-          && transcriptRef != null;
+          && isId(sessionId)
+          && isId(turnId)
+          && isId(requestId)
+          && provider != null
+          && isId(modelId)
+          && isDigest(decisionDigest)
+          && isDigest(semanticActionDigest)
+          && isDigest(observationDigest)
+          && isDigest(promptDigest)
+          && isDigest(toolsetDigest)
+          && isDigest(knowledgeDigest)
+          && isDigest(goalPlanDigest)
+          && !taskSkillDigests.isEmpty()
+          && taskSkillDigests.stream().allMatch(PersistedDecision::isDigest)
+          && isDigest(transcriptRef)
+          && isDigest(transcriptSha256)
+          && transcriptRef.equals(transcriptSha256);
+    }
+
+    private static boolean isId(String value) {
+      return value != null && value.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}");
+    }
+
+    private static boolean isDigest(String value) {
+      return value != null && value.matches("sha256:[0-9a-f]{64}");
     }
   }
 }

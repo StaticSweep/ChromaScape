@@ -168,6 +168,12 @@ class AccountBuilderOrchestrationSnapshotBindingEntity {
 
   @Column(name = "expected_task_revision", nullable = false)
   long expectedTaskRevision;
+
+  @Column(name = "observation_digest", nullable = false, length = 80)
+  String observationDigest;
+
+  @Column(name = "prompt_digest", nullable = false, length = 80)
+  String promptDigest;
 }
 
 /** Immutable, non-secret correlation used to address post-reservation gateway calls. */

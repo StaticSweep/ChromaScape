@@ -863,6 +863,8 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
     binding.buildId = request.bindings().buildId();
     binding.expectedObservationRevision = request.bindings().expectedObservationRevision();
     binding.expectedTaskRevision = request.bindings().expectedTaskRevision();
+    binding.observationDigest = request.bindings().observationDigest();
+    binding.promptDigest = request.bindings().promptDigest();
     entityManager.persist(binding);
   }
 
@@ -1353,7 +1355,9 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
         entity.verifierDigest,
         entity.buildId,
         entity.expectedObservationRevision,
-        entity.expectedTaskRevision);
+        entity.expectedTaskRevision,
+        entity.observationDigest,
+        entity.promptDigest);
   }
 
   private Lease toLease(AccountBuilderOrchestrationLeaseEntity entity) {

@@ -389,7 +389,9 @@ class JpaAccountBuilderOrchestrationStoreTest {
             envelope.verifierId(),
             envelope.buildId(),
             1,
-            1);
+            1,
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
     HumanAuthority authority = signedAuthority(envelope);
     // ObjectNode.set returns JsonNode, so the object cannot be built in one chained expression.
     var context =

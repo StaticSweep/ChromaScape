@@ -144,7 +144,9 @@ final class AccountBuilderPostgresTestFixtures {
             envelope.verifierId(),
             envelope.buildId(),
             envelope.expectedObservationRevision(),
-            envelope.expectedTaskRevision());
+            envelope.expectedTaskRevision(),
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
     HumanAuthority authority = signedAuthority(envelope);
     var observation =
         JsonNodeFactory.instance

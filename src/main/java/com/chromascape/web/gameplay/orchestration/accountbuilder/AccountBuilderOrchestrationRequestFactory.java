@@ -51,7 +51,7 @@ public final class AccountBuilderOrchestrationRequestFactory {
             "BOOTSTRAP",
             decision,
             envelope,
-            bootstrapBindings(decision, envelope),
+            bootstrapBindings(decision, envelope, observation),
             authority,
             observation,
             envelope.deadline()));
@@ -80,7 +80,7 @@ public final class AccountBuilderOrchestrationRequestFactory {
   }
 
   private SnapshotBindings bootstrapBindings(
-      ProviderDecision decision, ExecutionEnvelope envelope) {
+      ProviderDecision decision, ExecutionEnvelope envelope, JsonNode observation) {
     return new SnapshotBindings(
         canonicalJson.digest(decision),
         envelope.semanticActionDigest(),
@@ -94,6 +94,8 @@ public final class AccountBuilderOrchestrationRequestFactory {
         envelope.verifierId(),
         envelope.buildId(),
         envelope.expectedObservationRevision(),
-        envelope.expectedTaskRevision());
+        envelope.expectedTaskRevision(),
+        canonicalJson.digest(observation),
+        null);
   }
 }

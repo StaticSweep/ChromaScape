@@ -45,7 +45,7 @@ class ProviderDecisionOrchestrationSourceTest {
         DECISION_DIGEST,
         ACTION_DIGEST,
         observationDigest(),
-        "sha256:" + "a".repeat(64),
+        "sha256:" + "d".repeat(64),
         TOOL_DIGEST,
         KNOWLEDGE_DIGEST,
         PLAN_DIGEST,
@@ -53,7 +53,7 @@ class ProviderDecisionOrchestrationSourceTest {
         TRANSCRIPT,
         TRANSCRIPT,
         state,
-        null,
+        com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode.NONE,
         decision());
   }
 
@@ -113,7 +113,9 @@ class ProviderDecisionOrchestrationSourceTest {
             "verifier-1",
             "build-1",
             2,
-            3);
+            3,
+            observationDigest(),
+            "sha256:" + "d".repeat(64));
     return new OrchestrationRequest(
         "orchestration-1",
         "request-1",
@@ -195,7 +197,7 @@ class ProviderDecisionOrchestrationSourceTest {
             DECISION_DIGEST,
             ACTION_DIGEST,
             observationDigest(),
-            null,
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
             TOOL_DIGEST,
             KNOWLEDGE_DIGEST,
             PLAN_DIGEST,
@@ -203,12 +205,106 @@ class ProviderDecisionOrchestrationSourceTest {
             TRANSCRIPT,
             "sha256:" + "0".repeat(64),
             TurnState.DECIDED,
-            null,
+            com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode.NONE,
             decision());
     assertThatThrownBy(() -> source(tampered).bind("session-codex-1", "turn-codex-1", request()))
         .isInstanceOf(AccountBuilderOrchestrationException.class)
         .extracting("failureCode")
         .isEqualTo(FailureCode.INVALID_CONTRACT);
+  }
+
+  @Test
+  void incompleteProvenanceFailsClosed() {
+    PersistedDecision missingPrompt =
+        new PersistedDecision(
+            "session-codex-1",
+            "turn-codex-1",
+            "request-1",
+            Provider.CODEX,
+            "gpt-test",
+            DECISION_DIGEST,
+            ACTION_DIGEST,
+            observationDigest(),
+            null,
+            TOOL_DIGEST,
+            KNOWLEDGE_DIGEST,
+            PLAN_DIGEST,
+            List.of(SKILL_DIGEST),
+            TRANSCRIPT,
+            TRANSCRIPT,
+            TurnState.DECIDED,
+            com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode.NONE,
+            decision());
+    assertThatThrownBy(
+            () -> source(missingPrompt).bind("session-codex-1", "turn-codex-1", request()))
+        .extracting("failureCode")
+        .isEqualTo(FailureCode.INVALID_CONTRACT);
+
+    PersistedDecision emptySkills =
+        new PersistedDecision(
+            "session-codex-1",
+            "turn-codex-1",
+            "request-1",
+            Provider.CODEX,
+            "gpt-test",
+            DECISION_DIGEST,
+            ACTION_DIGEST,
+            observationDigest(),
+            "sha256:" + "d".repeat(64),
+            TOOL_DIGEST,
+            KNOWLEDGE_DIGEST,
+            PLAN_DIGEST,
+            List.of(),
+            TRANSCRIPT,
+            TRANSCRIPT,
+            TurnState.DECIDED,
+            com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode.NONE,
+            decision());
+    assertThatThrownBy(() -> source(emptySkills).bind("session-codex-1", "turn-codex-1", request()))
+        .extracting("failureCode")
+        .isEqualTo(FailureCode.INVALID_CONTRACT);
+  }
+
+  @Test
+  void bindingWithoutPersistedPromptProvenanceIsStaleBinding() {
+    OrchestrationRequest original = request();
+    SnapshotBindings withoutPrompt =
+        new SnapshotBindings(
+            original.bindings().decisionDigest(),
+            original.bindings().semanticActionDigest(),
+            original.bindings().catalogDigest(),
+            original.bindings().capabilityDigest(),
+            original.bindings().goalPlanDigest(),
+            original.bindings().taskSkillDigests(),
+            original.bindings().toolSchemaDigest(),
+            original.bindings().knowledgeDigest(),
+            original.bindings().policyDigest(),
+            original.bindings().verifierDigest(),
+            original.bindings().buildId(),
+            original.bindings().expectedObservationRevision(),
+            original.bindings().expectedTaskRevision(),
+            original.bindings().observationDigest(),
+            null);
+    OrchestrationRequest withoutPromptRequest =
+        new OrchestrationRequest(
+            original.orchestrationId(),
+            original.requestId(),
+            original.idempotencyKey(),
+            original.requestFingerprint(),
+            original.mode(),
+            original.sourceType(),
+            original.decision(),
+            original.envelope(),
+            withoutPrompt,
+            original.authority(),
+            original.observation(),
+            original.deadline());
+    assertThatThrownBy(
+            () ->
+                source(persisted(TurnState.DECIDED))
+                    .bind("session-codex-1", "turn-codex-1", withoutPromptRequest))
+        .extracting("failureCode")
+        .isEqualTo(FailureCode.STALE_BINDING);
   }
 
   @Test
@@ -223,7 +319,7 @@ class ProviderDecisionOrchestrationSourceTest {
             DECISION_DIGEST,
             ACTION_DIGEST,
             observationDigest(),
-            null,
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
             TOOL_DIGEST,
             KNOWLEDGE_DIGEST,
             PLAN_DIGEST,
@@ -231,7 +327,7 @@ class ProviderDecisionOrchestrationSourceTest {
             TRANSCRIPT,
             TRANSCRIPT,
             TurnState.DECIDED,
-            null,
+            com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode.NONE,
             decision());
     assertThatThrownBy(() -> source(otherModel).bind("session-codex-1", "turn-codex-1", request()))
         .extracting("failureCode")
@@ -250,7 +346,7 @@ class ProviderDecisionOrchestrationSourceTest {
             DECISION_DIGEST,
             ACTION_DIGEST,
             observationDigest(),
-            null,
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
             TOOL_DIGEST,
             KNOWLEDGE_DIGEST,
             PLAN_DIGEST,
@@ -258,7 +354,7 @@ class ProviderDecisionOrchestrationSourceTest {
             TRANSCRIPT,
             TRANSCRIPT,
             TurnState.DECIDED,
-            null,
+            com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode.NONE,
             decision());
     assertThatThrownBy(
             () -> source(otherRequest).bind("session-codex-1", "turn-codex-1", request()))
@@ -278,7 +374,7 @@ class ProviderDecisionOrchestrationSourceTest {
             "sha256:" + "9".repeat(64),
             ACTION_DIGEST,
             observationDigest(),
-            null,
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
             TOOL_DIGEST,
             KNOWLEDGE_DIGEST,
             PLAN_DIGEST,
@@ -286,7 +382,7 @@ class ProviderDecisionOrchestrationSourceTest {
             TRANSCRIPT,
             TRANSCRIPT,
             TurnState.DECIDED,
-            null,
+            com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode.NONE,
             decision());
     assertThatThrownBy(() -> source(changed).bind("session-codex-1", "turn-codex-1", request()))
         .extracting("failureCode")

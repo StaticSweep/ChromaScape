@@ -69,6 +69,13 @@ public final class AccountBuilderOrchestrationValidator {
     }
     validateDecision(request.decision(), request.envelope(), request.bindings());
     validateEnvelope(request.envelope(), request.bindings(), request.observation());
+    if (request.sourceType().startsWith("PROVIDER:")
+        && !validDigest(request.bindings().promptDigest())) {
+      // A bindable provider decision carries its session prompt provenance; without it the
+      // planning input can never be re-verified.
+      throw failure(
+          FailureCode.STALE_BINDING, "Provider provenance is missing the session prompt digest");
+    }
     if (request.mode().deliveryMode()
         && (request.envelope().leaseGeneration() < 1 || request.envelope().fence() < 1)) {
       throw failure(
@@ -217,6 +224,7 @@ public final class AccountBuilderOrchestrationValidator {
         && validDigest(bindings.policyDigest())
         && validId(bindings.verifierDigest())
         && validId(bindings.buildId())
+        && validDigest(bindings.observationDigest())
         && bindings.expectedObservationRevision() >= 0
         && bindings.expectedTaskRevision() >= 0;
   }

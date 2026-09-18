@@ -164,12 +164,11 @@ public final class GameplayProviderRuntime implements ProviderDecisionHandoff {
     if (session == null) {
       return Optional.empty();
     }
-    // The transcript artifact reference is the digest of the exact stored bytes, so it doubles as
-    // the durable content hash of the redacted transcript evidence.
-    String transcriptSha256 =
-        value.transcriptRef() != null && value.transcriptRef().matches("sha256:[0-9a-f]{64}")
-            ? value.transcriptRef()
-            : null;
+    // The transcript artifact itself is verified here: the exact stored bytes are re-hashed and
+    // compared against the recorded reference. A transcriptSha256 value is therefore never a
+    // digest-shaped assumption; it is the verified content hash of the durable artifact.
+    RedactedTranscriptStore.Verification transcript = transcripts.verify(value.transcriptRef());
+    String transcriptSha256 = transcript.digest();
     return Optional.of(
         new PersistedDecision(
             value.sessionId(),
