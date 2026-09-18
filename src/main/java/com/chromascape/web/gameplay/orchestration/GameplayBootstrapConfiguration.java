@@ -2,8 +2,10 @@ package com.chromascape.web.gameplay.orchestration;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContractValidator;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
+import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,7 +26,12 @@ public class GameplayBootstrapConfiguration {
       GameplayContractValidator validator,
       CanonicalGameplayJson canonicalJson,
       AccountBuilderGameplayGateway gateway,
-      BootstrapEvidenceStore evidenceStore) {
-    return new BootstrapGameplayOrchestrator(validator, canonicalJson, gateway, evidenceStore);
+      BootstrapEvidenceStore evidenceStore,
+      AccountBuilderOrchestrationService orchestrationService) {
+    // SC-1431 unification: dispatch, stop, idempotency, authority ownership and reconciliation
+    // delegate to the durable orchestration service; the legacy gateway remains only as evidence
+    // compatibility and is never an independent task-state owner.
+    return new BootstrapGameplayOrchestrator(
+        validator, canonicalJson, gateway, evidenceStore, orchestrationService, Clock.systemUTC());
   }
 }

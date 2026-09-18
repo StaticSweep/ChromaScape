@@ -9,6 +9,13 @@ import com.chromascape.web.gameplay.contract.GameplayContracts.Outcome;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision;
 import com.chromascape.web.gameplay.contract.GameplayContracts.Receipt;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ReceiptPhase;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationException;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.SnapshotBindings;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Clock;
 import java.time.Instant;
@@ -23,6 +30,7 @@ public final class BootstrapGameplayOrchestrator {
   private final CanonicalGameplayJson canonicalJson;
   private final AccountBuilderGameplayGateway gateway;
   private final BootstrapEvidenceStore evidenceStore;
+  private final AccountBuilderOrchestrationService orchestrationService;
   private final Clock clock;
   private final Map<String, RequestState> requests = new ConcurrentHashMap<>();
   private final Map<String, RequestIdentity> idempotencyOwners = new ConcurrentHashMap<>();
@@ -32,7 +40,7 @@ public final class BootstrapGameplayOrchestrator {
       CanonicalGameplayJson canonicalJson,
       AccountBuilderGameplayGateway gateway,
       BootstrapEvidenceStore evidenceStore) {
-    this(validator, canonicalJson, gateway, evidenceStore, Clock.systemUTC());
+    this(validator, canonicalJson, gateway, evidenceStore, null, Clock.systemUTC());
   }
 
   BootstrapGameplayOrchestrator(
@@ -41,10 +49,26 @@ public final class BootstrapGameplayOrchestrator {
       AccountBuilderGameplayGateway gateway,
       BootstrapEvidenceStore evidenceStore,
       Clock clock) {
+    this(validator, canonicalJson, gateway, evidenceStore, null, clock);
+  }
+
+  /**
+   * SC-1431 unified constructor: dispatch, stop, idempotency, authority ownership and lifecycle
+   * delegate to the durable orchestration service; the legacy gateway is only the compatibility
+   * fallback for callers that were never wired to the durable store.
+   */
+  BootstrapGameplayOrchestrator(
+      GameplayContractValidator validator,
+      CanonicalGameplayJson canonicalJson,
+      AccountBuilderGameplayGateway gateway,
+      BootstrapEvidenceStore evidenceStore,
+      AccountBuilderOrchestrationService orchestrationService,
+      Clock clock) {
     this.validator = validator;
     this.canonicalJson = canonicalJson;
     this.gateway = gateway;
     this.evidenceStore = evidenceStore;
+    this.orchestrationService = orchestrationService;
     this.clock = clock;
   }
 
@@ -80,6 +104,14 @@ public final class BootstrapGameplayOrchestrator {
     if (state.terminal() != null) {
       throw new GameplayProposalException(
           "REQUEST_ALREADY_TERMINAL", "Gameplay request is already terminal");
+    }
+    if (orchestrationService != null) {
+      try {
+        return toDispatchResult(
+            orchestrationService.stop(sc1431OrchestrationId(requestId), reason));
+      } catch (AccountBuilderOrchestrationException exception) {
+        throw new GameplayProposalException(exception.failureCode().name(), exception.getMessage());
+      }
     }
     return gateway.stop(requestId, reason, killSwitch);
   }
@@ -190,7 +222,10 @@ public final class BootstrapGameplayOrchestrator {
             List.of(authority.authorityId()));
     evidenceStore.append(recordingId, authorized);
     try {
-      AccountBuilderGameplayGateway.DispatchResult result = gateway.dispatch(envelope, authority);
+      AccountBuilderGameplayGateway.DispatchResult result =
+          orchestrationService != null
+              ? orchestrateThroughSc1431(observation, decision, envelope, authority, digest)
+              : gateway.dispatch(envelope, authority);
       Outcome outcome = classify(result);
       boolean retryAllowed = !result.deliveryAcknowledged() && outcome == Outcome.FAILED;
       Receipt terminal =
@@ -219,6 +254,93 @@ public final class BootstrapGameplayOrchestrator {
       requests.get(envelope.requestId()).terminal(uncertain);
       return finalizeEvidence(envelope, digest, recordingId, uncertain);
     }
+  }
+
+  /**
+   * Builds exactly one durable {@code OrchestrationRequest} from the validated bootstrap proposal
+   * and delegates authority ownership, reservation, dispatch, status verification and terminal
+   * evidence to the SC-1431 orchestration service. The bootstrap path never opens a second mutable
+   * task state: the returned view is the only lifecycle authority.
+   */
+  private AccountBuilderGameplayGateway.DispatchResult orchestrateThroughSc1431(
+      JsonNode observation,
+      ProviderDecision decision,
+      ExecutionEnvelope envelope,
+      HumanAuthority authority,
+      String envelopeDigest) {
+    OrchestrationRequest request =
+        new OrchestrationRequest(
+            sc1431OrchestrationId(envelope.requestId()),
+            envelope.requestId(),
+            envelope.idempotencyKey(),
+            requestFingerprint(envelopeDigest, authority),
+            Mode.BOOTSTRAP_RECORDING,
+            "BOOTSTRAP",
+            decision,
+            envelope,
+            new SnapshotBindings(
+                canonicalJson.digest(decision),
+                envelope.semanticActionDigest(),
+                envelope.catalogDigest(),
+                envelope.catalogDigest(),
+                envelope.goalPlanDigest(),
+                envelope.taskSkillDigests(),
+                envelope.schemaDigest(),
+                envelope.knowledgeDigest(),
+                envelope.policyDigest(),
+                envelope.verifierId(),
+                envelope.buildId(),
+                envelope.expectedObservationRevision(),
+                envelope.expectedTaskRevision()),
+            authority,
+            observation,
+            envelope.deadline());
+    return toDispatchResult(orchestrationService.orchestrate(request).view());
+  }
+
+  /** Maps a durable SC-1431 view onto the bootstrap compatibility result without redispatch. */
+  private AccountBuilderGameplayGateway.DispatchResult toDispatchResult(OrchestrationView view) {
+    String failureCode =
+        view.failureCode() == null || view.failureCode() == FailureCode.NONE
+            ? null
+            : view.failureCode().name();
+    List<String> evidenceRefs =
+        view.receipts().isEmpty()
+            ? List.of()
+            : view.receipts().get(view.receipts().size() - 1).evidenceRefs();
+    return switch (view.state()) {
+      case CONFIRMED -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.CONFIRMED, failureCode, true, true, evidenceRefs);
+      case REFUTED -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.REFUTED, failureCode, true, true, evidenceRefs);
+      case UNVERIFIABLE -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.UNVERIFIABLE, failureCode, true, true, evidenceRefs);
+      case STOPPED -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.STOPPED, failureCode, true, true, evidenceRefs);
+      case DENIED -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.DENIED, failureCode, false, true, evidenceRefs);
+      case FAILED -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.FAILED, failureCode, !view.retryAllowed(), true, evidenceRefs);
+      case NEEDS_RECONCILIATION -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.UNCERTAIN_OUTCOME, failureCode, true, false, evidenceRefs);
+      default -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.UNCERTAIN_OUTCOME, failureCode, false, false, evidenceRefs);
+    };
+  }
+
+  private static String sc1431OrchestrationId(String requestId) {
+    return "bootstrap-" + requestId;
+  }
+
+  private String requestFingerprint(String envelopeDigest, HumanAuthority authority) {
+    return canonicalJson.digest(
+        Map.of(
+            "envelopeDigest",
+            envelopeDigest,
+            "authorityId",
+            authority.authorityId(),
+            "scopeDigest",
+            authority.scopeDigest()));
   }
 
   private String decisionBindingFailure(
