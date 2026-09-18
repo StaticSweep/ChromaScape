@@ -2,9 +2,9 @@
 
 Branch: `codex/sc-1431-lifecycle-hardening`.
 Base: `origin/integration/chromascape-consolidated-20260901` at `1f1b6b5da792e6d611b648fc11219d893b5dcd7c`.
-Final branch head after the SC-1431.4 remediation: `a4a97b646baefff8f7e3533e44be05d2a43bb1f3` (20 commits ahead,
+Final code head before this evidence commit: `a4a97b646baefff8f7e3533e44be05d2a43bb1f3` (20 commits ahead,
 0 behind). Remediation commits: `2cd1ae54` (replay and provider trust boundaries) and `a4a97b64` (Fedora
-verification coverage); this evidence update is the third scoped commit.
+verification coverage); this evidence record is the next scoped commit and is the branch tip at handoff.
 
 ## Changed files
 
