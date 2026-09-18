@@ -106,6 +106,16 @@ public final class BootstrapGameplayOrchestrator {
       throw new GameplayProposalException(
           "STOP_REASON_INVALID", "A bounded stop reason is required");
     }
+    if (orchestrationService != null) {
+      // Durable SC-1431 state alone decides whether the orchestration exists or is terminal: no
+      // in-memory bootstrap entry is required, so stop works after a process restart.
+      try {
+        return toDispatchResult(
+            orchestrationService.stop(sc1431OrchestrationId(requestId), reason, killSwitch));
+      } catch (AccountBuilderOrchestrationException exception) {
+        throw new GameplayProposalException(stopFailureCode(exception), exception.getMessage());
+      }
+    }
     RequestState state = requests.get(requestId);
     if (state == null) {
       throw new GameplayProposalException("REQUEST_NOT_ACTIVE", "Gameplay request is not active");
@@ -114,15 +124,16 @@ public final class BootstrapGameplayOrchestrator {
       throw new GameplayProposalException(
           "REQUEST_ALREADY_TERMINAL", "Gameplay request is already terminal");
     }
-    if (orchestrationService != null) {
-      try {
-        return toDispatchResult(
-            orchestrationService.stop(sc1431OrchestrationId(requestId), reason));
-      } catch (AccountBuilderOrchestrationException exception) {
-        throw new GameplayProposalException(exception.failureCode().name(), exception.getMessage());
-      }
-    }
     return gateway.stop(requestId, reason, killSwitch);
+  }
+
+  /** Preserves the stable bootstrap stop codes across the durable failure mapping. */
+  private static String stopFailureCode(AccountBuilderOrchestrationException exception) {
+    return switch (exception.failureCode()) {
+      case INVALID_CONTRACT -> "REQUEST_NOT_ACTIVE";
+      case STOP_REJECTED -> "REQUEST_ALREADY_TERMINAL";
+      default -> exception.failureCode().name();
+    };
   }
 
   public Receipt dispatch(
@@ -135,6 +146,13 @@ public final class BootstrapGameplayOrchestrator {
     validator.validate("executionEnvelope", envelope);
     validator.validate("authority", authority);
     String digest = canonicalJson.digest(envelope);
+
+    if (orchestrationService != null) {
+      // Durable SC-1431 lifecycle: the bootstrap request and idempotency maps, the independent
+      // terminal receipts and the bootstrap evidence store are never the lifecycle authority.
+      return dispatchThroughSc1431(observation, decision, envelope, authority, digest);
+    }
+
     String recordingId = envelope.identities().path("recordingId").asText();
 
     RequestIdentity idempotencyOwner =
@@ -231,10 +249,7 @@ public final class BootstrapGameplayOrchestrator {
             List.of(authority.authorityId()));
     evidenceStore.append(recordingId, authorized);
     try {
-      AccountBuilderGameplayGateway.DispatchResult result =
-          orchestrationService != null
-              ? orchestrateThroughSc1431(observation, decision, envelope, authority, digest)
-              : gateway.dispatch(envelope, authority);
+      AccountBuilderGameplayGateway.DispatchResult result = gateway.dispatch(envelope, authority);
       Outcome outcome = classify(result);
       boolean retryAllowed = !result.deliveryAcknowledged() && outcome == Outcome.FAILED;
       Receipt terminal =
@@ -262,6 +277,86 @@ public final class BootstrapGameplayOrchestrator {
       evidenceStore.append(recordingId, uncertain);
       requests.get(envelope.requestId()).terminal(uncertain);
       return finalizeEvidence(envelope, digest, recordingId, uncertain);
+    }
+  }
+
+  /**
+   * Durable dispatch: the proposal binding and authority checks run before the durable claim, then
+   * the SC-1431 service owns idempotency, claim, budget, authority, reservation, dispatch, status
+   * verification and terminal evidence. The returned receipt is a read-only projection of the
+   * durable view; no bootstrap state is mutated.
+   */
+  private Receipt dispatchThroughSc1431(
+      JsonNode observation,
+      ProviderDecision decision,
+      ExecutionEnvelope envelope,
+      HumanAuthority authority,
+      String digest) {
+    String bindingFailure = decisionBindingFailure(observation, decision, envelope);
+    if (bindingFailure != null) {
+      return receipt(
+          envelope,
+          digest,
+          ReceiptPhase.VALIDATION,
+          Outcome.DENIED,
+          bindingFailure,
+          false,
+          List.of());
+    }
+    if (!digest.equals(authority.envelopeDigest())
+        || !envelope.authorityId().equals(authority.authorityId())) {
+      return receipt(
+          envelope,
+          digest,
+          ReceiptPhase.AUTHORIZATION,
+          Outcome.DENIED,
+          "AUTHORITY_SCOPE_MISMATCH",
+          false,
+          List.of());
+    }
+    if (!authority.expiresAt().isAfter(clock.instant())
+        || !envelope.deadline().isAfter(clock.instant())) {
+      return receipt(
+          envelope,
+          digest,
+          ReceiptPhase.AUTHORIZATION,
+          Outcome.DENIED,
+          "AUTHORITY_EXPIRED",
+          false,
+          List.of());
+    }
+    try {
+      AccountBuilderGameplayGateway.DispatchResult result =
+          orchestrateThroughSc1431(observation, decision, envelope, authority, digest);
+      Outcome outcome = classify(result);
+      boolean retryAllowed = !result.deliveryAcknowledged() && outcome == Outcome.FAILED;
+      return receipt(
+          envelope,
+          digest,
+          terminalPhase(result),
+          outcome,
+          result.failureCode(),
+          retryAllowed,
+          result.evidenceRefs());
+    } catch (AccountBuilderOrchestrationException exception) {
+      // Stable durable failure codes surface unchanged, including IDEMPOTENCY_CONFLICT.
+      return receipt(
+          envelope,
+          digest,
+          ReceiptPhase.VALIDATION,
+          Outcome.DENIED,
+          exception.failureCode().name(),
+          false,
+          List.of());
+    } catch (RuntimeException exception) {
+      return receipt(
+          envelope,
+          digest,
+          ReceiptPhase.VERIFICATION,
+          Outcome.UNCERTAIN_OUTCOME,
+          "DELIVERY_RECONCILIATION_FAILED",
+          false,
+          List.of());
     }
   }
 

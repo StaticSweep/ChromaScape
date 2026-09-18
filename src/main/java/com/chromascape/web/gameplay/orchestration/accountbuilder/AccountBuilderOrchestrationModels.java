@@ -278,7 +278,8 @@ public final class AccountBuilderOrchestrationModels {
       Lease lease,
       List<String> evidenceRefs,
       Instant at,
-      String receiptId) {
+      String receiptId,
+      boolean killSwitch) {
     public GatewayReceipt(
         String requestId,
         String envelopeDigest,
@@ -301,7 +302,8 @@ public final class AccountBuilderOrchestrationModels {
           lease,
           evidenceRefs,
           at,
-          null);
+          null,
+          false);
     }
 
     public GatewayReceipt {

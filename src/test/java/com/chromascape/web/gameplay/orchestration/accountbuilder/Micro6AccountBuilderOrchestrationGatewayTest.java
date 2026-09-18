@@ -51,6 +51,7 @@ class Micro6AccountBuilderOrchestrationGatewayTest {
     int startCalls;
     int statusCalls;
     String lastStopReason;
+    boolean lastStopKillSwitch;
 
     StubV2Gateway() {
       super(new ObjectMapper(), "http://127.0.0.1:1");
@@ -80,6 +81,7 @@ class Micro6AccountBuilderOrchestrationGatewayTest {
     @Override
     public JsonNode stop(String requestId, String reason, boolean killSwitch) {
       lastStopReason = reason;
+      lastStopKillSwitch = killSwitch;
       return stopResponse;
     }
 
@@ -314,9 +316,11 @@ class Micro6AccountBuilderOrchestrationGatewayTest {
     transport.stopResponse =
         (com.fasterxml.jackson.databind.node.ObjectNode)
             reservedAck().put("status", "STOPPED").put("deliveryAcknowledged", true);
-    GatewayReceipt receipt = adapter(transport).stop(correlation(), null, "operator requested");
+    GatewayReceipt receipt =
+        adapter(transport).stop(correlation(), null, "operator requested", true);
 
     assertThat(transport.lastStopReason).isEqualTo("operator requested");
+    assertThat(transport.lastStopKillSwitch).isTrue();
     assertThat(receipt.state()).isEqualTo(State.STOPPED);
     assertThat(receipt.terminalReconciled()).isTrue();
   }

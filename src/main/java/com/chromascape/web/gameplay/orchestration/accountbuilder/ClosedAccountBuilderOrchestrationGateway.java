@@ -36,8 +36,10 @@ public final class ClosedAccountBuilderOrchestrationGateway
   }
 
   @Override
-  public GatewayReceipt stop(GatewayCorrelation correlation, Lease lease, String reason) {
-    return unavailable(correlation, "STOP");
+  public GatewayReceipt stop(
+      GatewayCorrelation correlation, Lease lease, String reason, boolean killSwitch) {
+    // The closed gateway never reaches a transport, but it still records the requested mode.
+    return unavailable(correlation, "STOP", killSwitch);
   }
 
   @Override
@@ -51,6 +53,11 @@ public final class ClosedAccountBuilderOrchestrationGateway
   }
 
   private GatewayReceipt unavailable(GatewayCorrelation correlation, String phase) {
+    return unavailable(correlation, phase, false);
+  }
+
+  private GatewayReceipt unavailable(
+      GatewayCorrelation correlation, String phase, boolean killSwitch) {
     return new GatewayReceipt(
         correlation.requestId(),
         correlation.envelopeDigest(),
@@ -61,7 +68,9 @@ public final class ClosedAccountBuilderOrchestrationGateway
         true,
         null,
         List.of(),
-        Instant.now());
+        Instant.now(),
+        null,
+        killSwitch);
   }
 
   private GatewayReceipt unavailable(

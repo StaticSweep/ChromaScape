@@ -334,6 +334,62 @@ class AccountBuilderOrchestrationServiceTest {
     assertThat(gateway.dispatches).hasValue(0);
   }
 
+  @Test
+  void normalStopSendsFalseAndRecordsTheRequestedMode() {
+    FakeGateway gateway = new FakeGateway(State.ACTIVE);
+    AccountBuilderOrchestrationService service = service(gateway);
+    OrchestrationRequest request = request("stop-normal", Mode.BOOTSTRAP_RECORDING);
+    service.orchestrate(request);
+
+    OrchestrationView stopped =
+        service.stop(request.orchestrationId(), "operator requested", false);
+
+    assertThat(stopped.state()).isEqualTo(State.STOPPED);
+    assertThat(gateway.lastStopKillSwitch).isFalse();
+    assertThat(stopped.receipts().get(stopped.receipts().size() - 1).killSwitch()).isFalse();
+  }
+
+  @Test
+  void killSwitchStopSendsTrueAndPersistsStopEvidenceWithoutSecrets() {
+    FakeGateway gateway = new FakeGateway(State.ACTIVE);
+    AccountBuilderOrchestrationService service = service(gateway);
+    OrchestrationRequest request = request("stop-kill", Mode.BOOTSTRAP_RECORDING);
+    service.orchestrate(request);
+
+    OrchestrationView stopped = service.stop(request.orchestrationId(), "kill switch", true);
+
+    assertThat(stopped.state()).isEqualTo(State.STOPPED);
+    assertThat(gateway.lastStopKillSwitch).isTrue();
+    GatewayReceipt stopReceipt = stopped.receipts().get(stopped.receipts().size() - 1);
+    assertThat(stopReceipt.killSwitch()).isTrue();
+    // The stop evidence never carries authority secrets or raw fence tokens.
+    assertThat(stopReceipt.evidenceRefs()).doesNotContain(request.authority().signature());
+    assertThat(stopReceipt.toString()).doesNotContain(request.authority().signature());
+  }
+
+  @Test
+  void unauthorizedKillSwitchIsRejectedBeforeGatewayAccess() {
+    FakeGateway gateway = new FakeGateway(State.ACTIVE);
+    InMemoryAccountBuilderOrchestrationStore store =
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    OrchestrationRequest outOfScope =
+        withKillSwitchScope(request("stop-unauthorized", Mode.BOOTSTRAP_RECORDING), "OBSERVE");
+    // A durable record whose approved scope does not cover kill-switch use.
+    store.claim(
+        outOfScope,
+        outOfScope.requestFingerprint(),
+        canonicalJson.digest(outOfScope.envelope()),
+        budget(outOfScope));
+
+    assertThatThrownBy(() -> service.stop(outOfScope.orchestrationId(), "kill switch", true))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .extracting("failureCode")
+        .isEqualTo(FailureCode.OPERATOR_UNAUTHORIZED);
+    assertThat(gateway.stops).hasValue(0);
+  }
+
   private AccountBuilderOrchestrationService service(FakeGateway gateway) {
     return service(
         gateway,
@@ -420,6 +476,29 @@ class AccountBuilderOrchestrationServiceTest {
     return withFingerprint(withoutFingerprint, validator.immutableFingerprint(withoutFingerprint));
   }
 
+  private OrchestrationRequest withKillSwitchScope(OrchestrationRequest request, String scope) {
+    var node =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            objectMapper.valueToTree(request.envelope());
+    node.put("killSwitchScope", scope);
+    ExecutionEnvelope envelope = objectMapper.convertValue(node, ExecutionEnvelope.class);
+    OrchestrationRequest changed =
+        new OrchestrationRequest(
+            request.orchestrationId(),
+            request.requestId(),
+            request.idempotencyKey(),
+            null,
+            request.mode(),
+            request.sourceType(),
+            request.decision(),
+            envelope,
+            request.bindings(),
+            request.authority(),
+            request.observation(),
+            request.deadline());
+    return withFingerprint(changed, validator.immutableFingerprint(changed));
+  }
+
   private OrchestrationRequest withMode(OrchestrationRequest request, Mode mode) {
     OrchestrationRequest changed =
         new OrchestrationRequest(
@@ -460,10 +539,12 @@ class AccountBuilderOrchestrationServiceTest {
     private final AtomicInteger dispatches = new AtomicInteger();
     private final AtomicInteger statusReads = new AtomicInteger();
     private final AtomicInteger reservationReconciliations = new AtomicInteger();
+    private final AtomicInteger stops = new AtomicInteger();
     private final State dispatchState;
     private State statusState;
     private boolean staleCapabilities;
     private boolean failReservation;
+    private boolean lastStopKillSwitch;
 
     private FakeGateway(State dispatchState) {
       this.dispatchState = dispatchState;
@@ -529,8 +610,11 @@ class AccountBuilderOrchestrationServiceTest {
     }
 
     @Override
-    public GatewayReceipt stop(GatewayCorrelation correlation, Lease lease, String reason) {
-      return receipt(correlation, "STOP", State.STOPPED, lease, true, true);
+    public GatewayReceipt stop(
+        GatewayCorrelation correlation, Lease lease, String reason, boolean killSwitch) {
+      stops.incrementAndGet();
+      lastStopKillSwitch = killSwitch;
+      return receipt(correlation, "STOP", State.STOPPED, lease, true, true, killSwitch);
     }
 
     @Override
@@ -573,6 +657,17 @@ class AccountBuilderOrchestrationServiceTest {
         Lease lease,
         boolean acknowledged,
         boolean reconciled) {
+      return receipt(correlation, phase, state, lease, acknowledged, reconciled, false);
+    }
+
+    private GatewayReceipt receipt(
+        GatewayCorrelation correlation,
+        String phase,
+        State state,
+        Lease lease,
+        boolean acknowledged,
+        boolean reconciled,
+        boolean killSwitch) {
       return new GatewayReceipt(
           correlation.requestId(),
           correlation.envelopeDigest(),
@@ -583,7 +678,9 @@ class AccountBuilderOrchestrationServiceTest {
           reconciled,
           lease,
           List.of("fake:" + phase.toLowerCase()),
-          NOW);
+          NOW,
+          null,
+          killSwitch);
     }
   }
 

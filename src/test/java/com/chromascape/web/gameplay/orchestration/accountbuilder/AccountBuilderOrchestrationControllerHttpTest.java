@@ -2,6 +2,7 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -120,7 +121,7 @@ class AccountBuilderOrchestrationControllerHttpTest {
 
   @Test
   void stopReasonLengthLimitIsEnforcedOverHttp() throws Exception {
-    when(service.stop(anyString(), anyString()))
+    when(service.stop(anyString(), anyString(), anyBoolean()))
         .thenThrow(
             new AccountBuilderOrchestrationException(
                 FailureCode.STOP_REJECTED, "A bounded stop requires active orchestration state"));

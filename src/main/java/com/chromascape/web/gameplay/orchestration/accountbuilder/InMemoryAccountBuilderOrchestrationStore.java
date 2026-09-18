@@ -180,12 +180,11 @@ public final class InMemoryAccountBuilderOrchestrationStore
     return new Claim(view, true);
   }
 
+  /** Replay compares only the immutable limits; started/expires derive from the claim instant. */
   private boolean sameBudget(OrchestrationBudget persisted, OrchestrationBudget candidate) {
     return persisted.maxActions() == candidate.maxActions()
         && persisted.maxAttempts() == candidate.maxAttempts()
-        && persisted.maxElapsedMs() == candidate.maxElapsedMs()
-        && Objects.equals(persisted.startedAt(), candidate.startedAt())
-        && Objects.equals(persisted.expiresAt(), candidate.expiresAt());
+        && persisted.maxElapsedMs() == candidate.maxElapsedMs();
   }
 
   @Override
@@ -756,7 +755,8 @@ public final class InMemoryAccountBuilderOrchestrationStore
         lease,
         evidenceRefs,
         receipt.at() == null ? null : truncate(receipt.at()),
-        receipt.receiptId() == null ? null : opaqueDigest(receipt.receiptId()));
+        receipt.receiptId() == null ? null : opaqueDigest(receipt.receiptId()),
+        receipt.killSwitch());
   }
 
   private String opaqueDigest(String value) {

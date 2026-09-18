@@ -197,15 +197,13 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
     entityManager.persist(created);
   }
 
-  /** Claimed budget limits are immutable; a replaying claim with different limits is a conflict. */
+  /** Replay compares only the immutable limits; started/expires derive from the claim instant. */
   private void requireSameBudget(
       AccountBuilderOrchestrationBudgetEntity persisted,
       AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
     if (persisted.maxActions != budget.maxActions()
         || persisted.maxAttempts != budget.maxAttempts()
-        || persisted.maxElapsedMs != budget.maxElapsedMs()
-        || !Objects.equals(persisted.startedAt, budget.startedAt())
-        || !Objects.equals(persisted.expiresAt, budget.expiresAt())) {
+        || persisted.maxElapsedMs != budget.maxElapsedMs()) {
       throw conflict();
     }
   }
@@ -1195,7 +1193,8 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
         lease,
         evidenceRefs,
         at,
-        receipt.receiptId() == null ? null : opaqueDigest(receipt.receiptId()));
+        receipt.receiptId() == null ? null : opaqueDigest(receipt.receiptId()),
+        receipt.killSwitch());
   }
 
   private String receiptIdentity(GatewayReceipt receipt, String digest) {

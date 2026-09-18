@@ -92,7 +92,12 @@ public final class Micro6AccountBuilderOrchestrationGateway
     JsonNode response =
         transmit(() -> transport.reserve(bytes, request.envelope().idempotencyKey()));
     return receipt(
-        response, request.requestId(), envelopeDigest, "RESERVATION", leaseFrom(response, request));
+        response,
+        request.requestId(),
+        envelopeDigest,
+        "RESERVATION",
+        leaseFrom(response, request),
+        false);
   }
 
   @Override
@@ -102,22 +107,25 @@ public final class Micro6AccountBuilderOrchestrationGateway
             () ->
                 transport.start(
                     canonicalNode(request.envelope()), request.envelope().idempotencyKey()));
-    return receipt(response, request.requestId(), envelopeDigest, "DISPATCH", lease);
+    return receipt(response, request.requestId(), envelopeDigest, "DISPATCH", lease, false);
   }
 
   @Override
   public GatewayReceipt status(GatewayCorrelation correlation, Lease lease) {
     JsonNode response = transmit(() -> transport.status(correlation.requestId()));
     return receipt(
-        response, correlation.requestId(), correlation.envelopeDigest(), "STATUS", lease);
+        response, correlation.requestId(), correlation.envelopeDigest(), "STATUS", lease, false);
   }
 
   @Override
-  public GatewayReceipt stop(GatewayCorrelation correlation, Lease lease, String reason) {
+  public GatewayReceipt stop(
+      GatewayCorrelation correlation, Lease lease, String reason, boolean killSwitch) {
     JsonNode response =
         transmit(
-            () -> transport.stop(correlation.requestId(), reason == null ? "" : reason, false));
-    return receipt(response, correlation.requestId(), correlation.envelopeDigest(), "STOP", lease);
+            () ->
+                transport.stop(correlation.requestId(), reason == null ? "" : reason, killSwitch));
+    return receipt(
+        response, correlation.requestId(), correlation.envelopeDigest(), "STOP", lease, killSwitch);
   }
 
   @Override
@@ -125,7 +133,12 @@ public final class Micro6AccountBuilderOrchestrationGateway
     // Reconciliation is a lookup; it never reserves or dispatches.
     JsonNode response = transmit(() -> transport.status(correlation.requestId()));
     return receipt(
-        response, correlation.requestId(), correlation.envelopeDigest(), "RECONCILIATION", lease);
+        response,
+        correlation.requestId(),
+        correlation.envelopeDigest(),
+        "RECONCILIATION",
+        lease,
+        false);
   }
 
   @Override
@@ -137,7 +150,8 @@ public final class Micro6AccountBuilderOrchestrationGateway
         correlation.requestId(),
         correlation.envelopeDigest(),
         "RESERVATION_RECONCILIATION",
-        null);
+        null,
+        false);
   }
 
   private JsonNode canonicalNode(Object value) {
@@ -170,7 +184,8 @@ public final class Micro6AccountBuilderOrchestrationGateway
       String expectedRequestId,
       String expectedEnvelopeDigest,
       String phase,
-      Lease lease) {
+      Lease lease,
+      boolean killSwitch) {
     if (response == null || !response.isObject()) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.INVALID_GATEWAY_RECEIPT, "Micro6 v2 response is not a JSON object");
@@ -223,7 +238,8 @@ public final class Micro6AccountBuilderOrchestrationGateway
         lease,
         evidenceRefs(response),
         clock.instant(),
-        receiptId(response));
+        receiptId(response),
+        killSwitch);
   }
 
   private GatewayReceipt boundRejection(
@@ -255,7 +271,8 @@ public final class Micro6AccountBuilderOrchestrationGateway
         null,
         evidenceRefs(response),
         clock.instant(),
-        receiptId(response));
+        receiptId(response),
+        false);
   }
 
   private CapabilitySnapshot capabilitySnapshot(JsonNode catalog, Instant now) {

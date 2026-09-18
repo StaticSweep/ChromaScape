@@ -18,7 +18,12 @@ public interface AccountBuilderOrchestrationGateway {
 
   GatewayReceipt status(GatewayCorrelation correlation, Lease lease);
 
-  GatewayReceipt stop(GatewayCorrelation correlation, Lease lease, String reason);
+  /**
+   * Requests a bounded stop. The kill-switch flag carries the operator's requested stop mode all
+   * the way to the transport; implementations must never substitute a default.
+   */
+  GatewayReceipt stop(
+      GatewayCorrelation correlation, Lease lease, String reason, boolean killSwitch);
 
   GatewayReceipt reconcile(GatewayCorrelation correlation, Lease lease);
 

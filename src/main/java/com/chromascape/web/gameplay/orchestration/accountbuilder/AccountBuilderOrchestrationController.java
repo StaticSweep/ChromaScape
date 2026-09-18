@@ -63,7 +63,8 @@ public final class AccountBuilderOrchestrationController {
       @PathVariable String orchestrationId,
       @RequestBody ControlRequest request) {
     authenticate(operatorKey);
-    return ResponseEntity.accepted().body(service.stop(orchestrationId, request.reason()));
+    return ResponseEntity.accepted()
+        .body(service.stop(orchestrationId, request.reason(), request.killSwitch()));
   }
 
   @PostMapping("/orchestrations/{orchestrationId}/reconcile")
@@ -115,7 +116,7 @@ public final class AccountBuilderOrchestrationController {
     }
   }
 
-  public record ControlRequest(String reason) {}
+  public record ControlRequest(String reason, boolean killSwitch) {}
 
   public record ApiError(String contractVersion, FailureCode failureCode, String message) {}
 }

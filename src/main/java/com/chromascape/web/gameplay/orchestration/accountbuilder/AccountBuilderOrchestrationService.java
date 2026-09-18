@@ -166,7 +166,7 @@ public final class AccountBuilderOrchestrationService {
     return store.findBudget(orchestrationId);
   }
 
-  public OrchestrationView stop(String orchestrationId, String reason) {
+  public OrchestrationView stop(String orchestrationId, String reason, boolean killSwitch) {
     OrchestrationView view = find(orchestrationId);
     if (reason == null
         || reason.isBlank()
@@ -176,10 +176,13 @@ public final class AccountBuilderOrchestrationService {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STOP_REJECTED, "A bounded stop requires active orchestration state");
     }
+    // Kill-switch use is authorized by the approved scope. This check runs before any gateway
+    // access: an unauthorized kill switch can never reach the transport.
+    requireKillSwitchScope(orchestrationId, killSwitch);
     try {
       GatewayCorrelation correlation = store.correlation(orchestrationId);
       Lease lease = store.requireLease(orchestrationId, view.lease());
-      GatewayReceipt receipt = gateway.stop(correlation, lease, reason);
+      GatewayReceipt receipt = gateway.stop(correlation, lease, reason, killSwitch);
       requireBoundReceipt(correlation, receipt, lease);
       State state =
           receipt.terminalReconciled() && receipt.state().provenTerminal()
@@ -199,6 +202,25 @@ public final class AccountBuilderOrchestrationService {
           null,
           false,
           false);
+    }
+  }
+
+  /**
+   * Kill-switch intent is only valid inside the approved {@code RUN} scope that was verified at
+   * claim time. The persisted request snapshot is the authorization source; nothing here trusts the
+   * caller's assertion.
+   */
+  private void requireKillSwitchScope(String orchestrationId, boolean killSwitch) {
+    if (!killSwitch) {
+      return;
+    }
+    OrchestrationRequest stored = store.readAggregate(orchestrationId).redactedRequestSnapshot();
+    if (stored == null
+        || stored.envelope() == null
+        || !"RUN".equals(stored.envelope().killSwitchScope())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.OPERATOR_UNAUTHORIZED,
+          "Kill-switch stop is not authorized by the approved scope");
     }
   }
 
@@ -536,7 +558,8 @@ public final class AccountBuilderOrchestrationService {
         receipt.lease(),
         receipt.evidenceRefs(),
         receipt.at(),
-        receipt.receiptId());
+        receipt.receiptId(),
+        receipt.killSwitch());
   }
 
   private boolean validLease(OrchestrationRequest request, Lease lease) {

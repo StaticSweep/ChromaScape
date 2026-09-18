@@ -261,6 +261,35 @@ class BootstrapGameplaySc1431IntegrationTest {
         Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
+  @Test
+  void terminalStateAndStopDecisionsSurviveAnOrchestratorRestart() {
+    Bundle bundle = bundle("restart");
+    BootstrapGameplayOrchestrator first = productionOrchestrator();
+    first.dispatch(bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+    String orchestrationId = "bootstrap-" + bundle.envelope().requestId();
+    var terminalBefore = store.readAggregate(orchestrationId).view();
+
+    // A brand-new orchestrator instance with no in-memory bootstrap state, exactly like a
+    // restarted process: durable state alone decides stop and replay.
+    BootstrapGameplayOrchestrator restarted = productionOrchestrator();
+
+    assertThatThrownBy(
+            () -> restarted.requestStop(bundle.envelope().requestId(), "operator requested", false))
+        .isInstanceOf(BootstrapGameplayOrchestrator.GameplayProposalException.class)
+        .extracting(
+            throwable ->
+                ((BootstrapGameplayOrchestrator.GameplayProposalException) throwable).failureCode())
+        .isEqualTo("REQUEST_ALREADY_TERMINAL");
+
+    var replayReceipt =
+        restarted.dispatch(
+            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+    assertThat(replayReceipt.failureCode()).isEqualTo("RUNTIME_DISABLED");
+    var terminalAfter = store.readAggregate(orchestrationId).view();
+    assertThat(terminalAfter.version()).isEqualTo(terminalBefore.version());
+    assertThat(terminalAfter.updatedAt()).isEqualTo(terminalBefore.updatedAt());
+  }
+
   private Bundle bundle(String suffix) {
     JsonNode observation = fixtures.path("observation").deepCopy();
     JsonNode action = fixtures.path("semanticAction").deepCopy();
@@ -372,7 +401,8 @@ class BootstrapGameplaySc1431IntegrationTest {
     }
 
     @Override
-    public GatewayReceipt stop(GatewayCorrelation correlation, Lease lease, String reason) {
+    public GatewayReceipt stop(
+        GatewayCorrelation correlation, Lease lease, String reason, boolean killSwitch) {
       throw new AssertionError("stop is never reachable in this test");
     }
 

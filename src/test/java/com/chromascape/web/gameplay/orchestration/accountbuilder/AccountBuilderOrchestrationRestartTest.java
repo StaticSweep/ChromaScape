@@ -332,7 +332,8 @@ class AccountBuilderOrchestrationRestartTest {
     }
 
     @Override
-    public GatewayReceipt stop(GatewayCorrelation correlation, Lease lease, String reason) {
+    public GatewayReceipt stop(
+        GatewayCorrelation correlation, Lease lease, String reason, boolean killSwitch) {
       throw new AssertionError("restart recovery must not stop");
     }
 
