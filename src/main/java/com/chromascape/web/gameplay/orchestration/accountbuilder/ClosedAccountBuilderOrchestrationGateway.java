@@ -9,10 +9,8 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import java.time.Instant;
 import java.util.List;
-import org.springframework.stereotype.Component;
 
 /** Default gateway until SC-1449 provides a conforming live AccountBuilder adapter. */
-@Component
 public final class ClosedAccountBuilderOrchestrationGateway
     implements AccountBuilderOrchestrationGateway {
   @Override

@@ -146,6 +146,7 @@ public final class AccountBuilderOrchestrationModels {
     STOP_REJECTED,
     NEEDS_RECONCILIATION,
     BOUNDARY_VIOLATION,
+    INVALID_GATEWAY_RECEIPT,
     INTERNAL_FAILURE
   }
 
