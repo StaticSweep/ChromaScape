@@ -20,7 +20,7 @@
 | Live two-client/two-host routing | NOT RUN | requires qualified live clients on both Fedora hosts |
 | Live remote Builder Goal capture readiness | NOT RUN | no live remote launch used for this implementation pass |
 | Windows runtime regression | NOT RUN | deterministic fencing covered; execution deferred to Windows |
-| PR review and merge | NOT RUN | branch not yet pushed/opened at this checkpoint |
+| PR review and merge | REVIEW REQUIRED | [PR #10](https://github.com/ikiddoi/ChromaScape/pull/10) is open; merge NOT RUN |
 
 The focused total contains all nine SC-1666 tests. The ordinary suite was run immediately before
 the final round-trip test was added; that test then passed both alone and inside the final focused

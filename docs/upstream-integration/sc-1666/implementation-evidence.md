@@ -34,4 +34,5 @@ Implementation commit: `1ee492d6`.
 
 Implementation and deterministic verification are complete. Live two-host routing and Windows
 runtime qualification remain NOT RUN and require explicit execution or proof-of-concept waiver.
-The branch remains review-required until its PR is approved and merged.
+The branch remains review-required in [PR #10](https://github.com/ikiddoi/ChromaScape/pull/10)
+until it is approved and merged.
