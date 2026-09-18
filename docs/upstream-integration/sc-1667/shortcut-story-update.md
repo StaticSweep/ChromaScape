@@ -4,6 +4,8 @@ SC-1667 implementation is ready for review on branch
 `codex/sc-1667-fedora-host-native-preflight`, based on merged integration commit
 `97482af3780277d6510e07b5f0640bd1721b92cb`.
 
+Review PR: <https://github.com/ikiddoi/ChromaScape/pull/11>
+
 Delivered:
 
 - a non-executing, allowlisted `.env.fedora.local` configuration contract;

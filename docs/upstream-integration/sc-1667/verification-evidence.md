@@ -6,6 +6,8 @@ Base: `97482af3780277d6510e07b5f0640bd1721b92cb`
 
 Branch: `codex/sc-1667-fedora-host-native-preflight`
 
+Review PR: <https://github.com/ikiddoi/ChromaScape/pull/11>
+
 ## Current acceptance matrix
 
 | Check | Result | Evidence |
