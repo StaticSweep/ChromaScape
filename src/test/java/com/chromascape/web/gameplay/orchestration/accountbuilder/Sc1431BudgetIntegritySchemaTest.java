@@ -21,10 +21,10 @@ import org.junit.jupiter.api.Test;
  * Direct Flyway/PostgreSQL proof of the SC-1431 budget contract.
  *
  * <p>The test stages the full repository migration chain, proves the upgrade to {@code V48}, and
- * asserts the database-owned constraints: non-null timestamps and limits, bound and counter
- * checks, expiry ordering, immutable claimed limits and timestamps, monotonic counters and an
- * advancing optimistic-lock version. It runs against an isolated schema on the local PostgreSQL
- * instance and never touches a developer database.
+ * asserts the database-owned constraints: non-null timestamps and limits, bound and counter checks,
+ * expiry ordering, immutable claimed limits and timestamps, monotonic counters and an advancing
+ * optimistic-lock version. It runs against an isolated schema on the local PostgreSQL instance and
+ * never touches a developer database.
  */
 class Sc1431BudgetIntegritySchemaTest {
   private static final String SCHEMA = "sc1431_budget_integrity_test";
