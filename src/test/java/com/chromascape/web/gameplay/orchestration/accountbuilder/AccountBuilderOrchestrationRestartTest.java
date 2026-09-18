@@ -309,7 +309,7 @@ class AccountBuilderOrchestrationRestartTest {
     private final AtomicInteger leasedReconciliations = new AtomicInteger();
 
     @Override
-    public CapabilitySnapshot capabilities() {
+    public CapabilitySnapshot capabilities(OrchestrationRequest request) {
       throw new AssertionError("restart recovery must not read gateway capabilities");
     }
 

@@ -46,10 +46,13 @@ class Micro6AccountBuilderOrchestrationGatewayTest {
     JsonNode statusResponse;
     JsonNode stopResponse;
     JsonNode catalogResponse;
+    JsonNode observeResponse;
     RuntimeException reserveFailure;
     int reserveCalls;
     int startCalls;
     int statusCalls;
+    int observeCalls;
+    String lastObservedClientId;
     String lastStopReason;
     boolean lastStopKillSwitch;
 
@@ -89,6 +92,13 @@ class Micro6AccountBuilderOrchestrationGatewayTest {
     public JsonNode catalog() {
       return catalogResponse;
     }
+
+    @Override
+    public JsonNode observe(String clientId) {
+      observeCalls++;
+      lastObservedClientId = clientId;
+      return observeResponse;
+    }
   }
 
   private Micro6AccountBuilderOrchestrationGateway adapter(StubV2Gateway transport) {
@@ -103,7 +113,7 @@ class Micro6AccountBuilderOrchestrationGatewayTest {
             .put("maxActions", 5)
             .put("maxAttempts", 2)
             .put("maxElapsedMs", 30_000);
-    var node = mapper.createObjectNode();
+    var node = mapper.createObjectNode().put("clientId", "client-1");
     return new ExecutionEnvelope(
         "sc-1429/v1",
         Provider.CODEX,
@@ -201,6 +211,10 @@ class Micro6AccountBuilderOrchestrationGatewayTest {
         .put("requestId", "request-1")
         .put("envelopeDigest", ENVELOPE_DIGEST)
         .put("reservationId", "reservation-1")
+        .put("leaseGeneration", 1)
+        .put("fence", 7)
+        .put("fenceTokenDigest", "sha256:" + "c".repeat(64))
+        .put("leaseExpiresAt", NOW.plusSeconds(120).toString())
         .put("deliveryAcknowledged", true)
         .set("evidenceRefs", mapper.createArrayNode().add("micro6:reserve:request-1"));
   }
@@ -336,11 +350,11 @@ class Micro6AccountBuilderOrchestrationGatewayTest {
   }
 
   @Test
-  void readinessStaysFalseUntilTheCatalogRouteCheckPasses() {
+  void readinessRequiresCatalogAndClientObservationEvidence() {
     StubV2Gateway broken = new StubV2Gateway();
     broken.catalogResponse =
         mapper.createObjectNode().put("_httpSuccess", false).put("_httpStatus", 503);
-    CapabilitySnapshot brokenSnapshot = adapter(broken).capabilities();
+    CapabilitySnapshot brokenSnapshot = adapter(broken).capabilities(request());
     assertThat(brokenSnapshot.liveDeliveryReady()).isFalse();
 
     StubV2Gateway healthy = new StubV2Gateway();
@@ -354,8 +368,114 @@ class Micro6AccountBuilderOrchestrationGatewayTest {
             .put("catalogDigest", "sha256:" + "c".repeat(64))
             .put("buildId", "build-1")
             .set("tasks", healthyTasks);
-    CapabilitySnapshot ready = adapter(healthy).capabilities();
+    healthy.observeResponse = observationAck();
+    CapabilitySnapshot ready = adapter(healthy).capabilities(request());
     assertThat(ready.liveDeliveryReady()).isTrue();
     assertThat(ready.tasks().get(0).taskKey()).isEqualTo("FISHING_TRAINING");
+    assertThat(healthy.observeCalls).isEqualTo(1);
+    assertThat(healthy.lastObservedClientId).isEqualTo("client-1");
+    // The capability digest is the server-issued attestation, not a hash of transport JSON.
+    assertThat(ready.capabilityDigest())
+        .isEqualTo(observationAck().path("capabilityDigest").asText());
+
+    // Catalog success plus observation failure leaves readiness false.
+    StubV2Gateway observationFailure = new StubV2Gateway();
+    observationFailure.catalogResponse = healthy.catalogResponse;
+    observationFailure.observeResponse =
+        mapper.createObjectNode().put("_httpSuccess", false).put("_httpStatus", 503);
+    assertThat(adapter(observationFailure).capabilities(request()).liveDeliveryReady()).isFalse();
+
+    // Transport metadata never alters the contract digest.
+    StubV2Gateway withMetadata = new StubV2Gateway();
+    withMetadata.catalogResponse = healthy.catalogResponse;
+    withMetadata.observeResponse =
+        (com.fasterxml.jackson.databind.node.ObjectNode) observationAck().put("_httpStatus", 201);
+    assertThat(adapter(withMetadata).capabilities(request()).capabilityDigest())
+        .isEqualTo(ready.capabilityDigest());
+
+    // A wrong client observation is rejected.
+    StubV2Gateway wrongClient = new StubV2Gateway();
+    wrongClient.catalogResponse = healthy.catalogResponse;
+    wrongClient.observeResponse =
+        (com.fasterxml.jackson.databind.node.ObjectNode) observationAck().put("clientId", "other");
+    assertThat(adapter(wrongClient).capabilities(request()).liveDeliveryReady()).isFalse();
+
+    // A catalog/observation revision disagreement is rejected.
+    StubV2Gateway stale = new StubV2Gateway();
+    stale.catalogResponse = healthy.catalogResponse;
+    stale.observeResponse =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            observationAck().put("observationRevision", 9);
+    assertThat(adapter(stale).capabilities(request()).liveDeliveryReady()).isFalse();
+
+    // A missing server-issued capability digest is rejected.
+    StubV2Gateway noDigest = new StubV2Gateway();
+    noDigest.catalogResponse = healthy.catalogResponse;
+    com.fasterxml.jackson.databind.node.ObjectNode withoutDigest = observationAck();
+    withoutDigest.remove("capabilityDigest");
+    noDigest.observeResponse = withoutDigest;
+    assertThat(adapter(noDigest).capabilities(request()).liveDeliveryReady()).isFalse();
+  }
+
+  private com.fasterxml.jackson.databind.node.ObjectNode observationAck() {
+    return mapper
+        .createObjectNode()
+        .put("_httpSuccess", true)
+        .put("_httpStatus", 200)
+        .put("clientId", "client-1")
+        .put("catalogDigest", "sha256:" + "c".repeat(64))
+        .put("buildId", "build-1")
+        .put("capabilityDigest", "sha256:" + "9".repeat(64))
+        .put("observationRevision", -1)
+        .put("taskRevision", -1);
+  }
+
+  @Test
+  void missingAuthoritativeLeaseFieldsAreRejectedWithoutSynthesis() {
+    assertThat(reserveFailureCode(node -> node.remove("reservationId")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(reserveFailureCode(node -> node.remove("fenceTokenDigest")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(reserveFailureCode(node -> node.put("fenceTokenDigest", "not-a-digest")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(reserveFailureCode(node -> node.remove("leaseGeneration")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(reserveFailureCode(node -> node.remove("fence")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(reserveFailureCode(node -> node.remove("leaseExpiresAt")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(reserveFailureCode(node -> node.put("leaseExpiresAt", "not-a-timestamp")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+  }
+
+  @Test
+  void mismatchingLeaseIdentityFailsClosed() {
+    assertThat(reserveFailureCode(node -> node.put("leaseGeneration", 2)))
+        .isEqualTo(FailureCode.FENCE_MISMATCH);
+    assertThat(reserveFailureCode(node -> node.put("fence", 8)))
+        .isEqualTo(FailureCode.FENCE_MISMATCH);
+  }
+
+  @Test
+  void alreadyExpiredLeaseIsRejectedBeforePersistence() {
+    assertThat(
+            reserveFailureCode(node -> node.put("leaseExpiresAt", NOW.minusSeconds(1).toString())))
+        .isEqualTo(FailureCode.LEASE_EXPIRED);
+  }
+
+  /** Applies one sparse-field mutation to a complete reservation and maps the adapter outcome. */
+  private FailureCode reserveFailureCode(
+      java.util.function.Consumer<com.fasterxml.jackson.databind.node.ObjectNode> mutation) {
+    StubV2Gateway transport = new StubV2Gateway();
+    com.fasterxml.jackson.databind.node.ObjectNode response = reservedAck();
+    mutation.accept(response);
+    transport.reserveResponse = response;
+    try {
+      GatewayReceipt receipt = adapter(transport).reserve(request(), ENVELOPE_DIGEST);
+      // A synthesized lease would be visible here; the adapter must never return one.
+      return receipt.lease() == null ? FailureCode.NONE : FailureCode.INVALID_GATEWAY_RECEIPT;
+    } catch (AccountBuilderOrchestrationException exception) {
+      return exception.failureCode();
+    }
   }
 }

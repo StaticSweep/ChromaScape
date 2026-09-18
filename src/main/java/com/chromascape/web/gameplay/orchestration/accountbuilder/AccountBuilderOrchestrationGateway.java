@@ -10,7 +10,12 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
  * Sole SC-1431 delivery boundary. Implementations may expose semantic AccountBuilder calls only.
  */
 public interface AccountBuilderOrchestrationGateway {
-  CapabilitySnapshot capabilities();
+  /**
+   * Read-only capability acquisition bound to the validated request identity. Implementations must
+   * consult both the catalog and the client observation evidence for the request's client, and must
+   * never reserve, dispatch or mutate state here.
+   */
+  CapabilitySnapshot capabilities(OrchestrationRequest request);
 
   GatewayReceipt reserve(OrchestrationRequest request, String envelopeDigest);
 

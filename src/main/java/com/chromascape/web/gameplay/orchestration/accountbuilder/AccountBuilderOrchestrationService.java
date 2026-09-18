@@ -94,7 +94,7 @@ public final class AccountBuilderOrchestrationService {
       // durable counter advance happens before any gateway access, so an exhausted or expired
       // budget is always a proven denial, never a gateway mutation.
       store.consumeBudget(request.orchestrationId(), false, true);
-      CapabilitySnapshot capabilities = gateway.capabilities();
+      CapabilitySnapshot capabilities = gateway.capabilities(request);
       if (capabilities == null || !capabilities.liveDeliveryReady()) {
         return terminal(request, State.DENIED, FailureCode.GATEWAY_UNAVAILABLE, null, false);
       }
@@ -345,7 +345,9 @@ public final class AccountBuilderOrchestrationService {
   public Readiness readiness() {
     CapabilitySnapshot capabilities;
     try {
-      capabilities = gateway.capabilities();
+      // Readiness is request-free and therefore cannot present client observation evidence; a
+      // catalog-only probe is never delivery-ready.
+      capabilities = gateway.capabilities(null);
     } catch (RuntimeException exception) {
       capabilities = null;
     }

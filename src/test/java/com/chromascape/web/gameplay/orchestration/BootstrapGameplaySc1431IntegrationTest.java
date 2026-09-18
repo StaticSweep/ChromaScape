@@ -348,7 +348,7 @@ class BootstrapGameplaySc1431IntegrationTest {
     private final AtomicInteger dispatchCalls = new AtomicInteger();
 
     @Override
-    public CapabilitySnapshot capabilities() {
+    public CapabilitySnapshot capabilities(OrchestrationRequest request) {
       capabilityCalls.incrementAndGet();
       return new CapabilitySnapshot(
           "unavailable",

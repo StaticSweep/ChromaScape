@@ -14,7 +14,7 @@ import java.util.List;
 public final class ClosedAccountBuilderOrchestrationGateway
     implements AccountBuilderOrchestrationGateway {
   @Override
-  public CapabilitySnapshot capabilities() {
+  public CapabilitySnapshot capabilities(OrchestrationRequest request) {
     Instant now = Instant.now();
     return new CapabilitySnapshot(
         "unavailable", "unavailable", "unavailable", -1, -1, now, now, false, List.of());

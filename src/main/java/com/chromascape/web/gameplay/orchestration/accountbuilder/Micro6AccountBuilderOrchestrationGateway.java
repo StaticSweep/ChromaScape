@@ -40,6 +40,8 @@ import java.util.List;
 public final class Micro6AccountBuilderOrchestrationGateway
     implements AccountBuilderOrchestrationGateway {
 
+  private static final String DIGEST_PATTERN = "sha256:[0-9a-f]{64}";
+
   private final Micro6GameplayV2Gateway transport;
   private final CanonicalGameplayJson canonicalJson;
   private final ObjectMapper objectMapper;
@@ -57,16 +59,28 @@ public final class Micro6AccountBuilderOrchestrationGateway
   }
 
   @Override
-  public CapabilitySnapshot capabilities() {
+  public CapabilitySnapshot capabilities(OrchestrationRequest request) {
     Instant now = clock.instant();
     try {
       JsonNode catalog = transport.catalog();
-      return capabilitySnapshot(catalog, now);
+      String clientId = clientId(request);
+      JsonNode observation = clientId == null ? null : transport.observe(clientId);
+      return capabilitySnapshot(catalog, observation, request, now);
     } catch (RuntimeException exception) {
-      // Readiness stays false unless the catalog route check passes; a probe failure must never
-      // poison a delivery attempt because capabilities are read-only evidence.
+      // Readiness stays false unless both the catalog and the client observation routes pass; a
+      // probe failure must never poison a delivery attempt because capabilities are read-only
+      // evidence and never reserve, dispatch or mutate state.
       return new CapabilitySnapshot(null, null, null, -1, -1, now, now, false, List.of());
     }
+  }
+
+  /** The validated request identities carry the Micro6 client identity for observation. */
+  private String clientId(OrchestrationRequest request) {
+    if (request == null || request.envelope() == null || request.envelope().identities() == null) {
+      return null;
+    }
+    String clientId = request.envelope().identities().path("clientId").asText(null);
+    return clientId == null || clientId.isBlank() ? null : clientId;
   }
 
   @Override
@@ -275,8 +289,10 @@ public final class Micro6AccountBuilderOrchestrationGateway
         false);
   }
 
-  private CapabilitySnapshot capabilitySnapshot(JsonNode catalog, Instant now) {
-    boolean httpOk = !catalog.has("_httpSuccess") || catalog.path("_httpSuccess").asBoolean(false);
+  private CapabilitySnapshot capabilitySnapshot(
+      JsonNode catalog, JsonNode observation, OrchestrationRequest request, Instant now) {
+    boolean catalogOk =
+        !catalog.has("_httpSuccess") || catalog.path("_httpSuccess").asBoolean(false);
     String catalogDigest = catalog.path("catalogDigest").asText(null);
     String buildId = catalog.path("buildId").asText(null);
     List<TaskCapability> tasks = new ArrayList<>();
@@ -292,38 +308,101 @@ public final class Micro6AccountBuilderOrchestrationGateway
                       task.path("minimumBuildId").asText(null),
                       List.of())));
     }
-    // Readiness requires a truthful HTTP stamp, a digest-bearing catalog and a build identity.
-    boolean ready = httpOk && catalogDigest != null && buildId != null && !tasks.isEmpty();
+
+    boolean observationOk = observation != null && httpStampOk(observation);
+    // Server-issued attestations only: the capability digest is never re-hashed from the whole
+    // transport response, so transport metadata such as _httpStatus cannot enter a contract
+    // digest.
+    String serverCapabilityDigest =
+        observationOk ? observation.path("capabilityDigest").asText(null) : null;
+    String observationCatalogDigest =
+        observationOk ? observation.path("catalogDigest").asText(null) : null;
+    String observationBuildId = observationOk ? observation.path("buildId").asText(null) : null;
+    String observationClientId =
+        observationOk ? observation.path("clientId").asText(null) : clientId(request);
+    long observationRevision =
+        observationOk ? observation.path("observationRevision").asLong(-1) : -1;
+    long taskRevision = observationOk ? observation.path("taskRevision").asLong(-1) : -1;
+
+    boolean serverDigestValid =
+        serverCapabilityDigest != null && serverCapabilityDigest.matches(DIGEST_PATTERN);
+    boolean agree =
+        observationOk
+            && serverDigestValid
+            && catalogDigest != null
+            && catalogDigest.equals(observationCatalogDigest)
+            && buildId != null
+            && buildId.equals(observationBuildId)
+            && observationClientId != null
+            && observationClientId.equals(clientId(request))
+            && observationRevision == catalog.path("observationRevision").asLong(-1)
+            && taskRevision == catalog.path("taskRevision").asLong(-1);
+
+    // Readiness requires truthful HTTP stamps, a digest-bearing catalog, a build identity, task
+    // capabilities and a server-issued capability attestation that agrees with the catalog.
+    boolean ready = catalogOk && agree && !tasks.isEmpty();
     return new CapabilitySnapshot(
         catalogDigest,
-        ready ? canonicalJson.digest(catalog) : null,
+        ready ? serverCapabilityDigest : null,
         buildId,
-        catalog.path("observationRevision").asLong(-1),
-        catalog.path("taskRevision").asLong(-1),
+        observationRevision,
+        taskRevision,
         now,
         now.plus(Duration.ofSeconds(30)),
         ready,
         tasks);
   }
 
+  private boolean httpStampOk(JsonNode response) {
+    return !response.has("_httpSuccess") || response.path("_httpSuccess").asBoolean(false);
+  }
+
+  /**
+   * A successful reservation must carry every authoritative lease field. Nothing is derived from
+   * the request or synthesized locally: a sparse or malformed response can never become a trusted
+   * lease.
+   */
   private Lease leaseFrom(JsonNode response, OrchestrationRequest request) {
     if (!response.path("success").asBoolean(false)) {
       return null;
     }
     String reservationId = response.path("reservationId").asText(null);
-    if (reservationId == null || reservationId.isBlank()) {
-      reservationId = request.requestId();
-    }
     String fenceTokenDigest = response.path("fenceTokenDigest").asText(null);
-    if (fenceTokenDigest == null || !fenceTokenDigest.matches("sha256:[0-9a-f]{64}")) {
-      fenceTokenDigest = digestOf(response);
+    JsonNode generationNode = response.path("leaseGeneration");
+    JsonNode fenceNode = response.path("fence");
+    String leaseExpiresAt = response.path("leaseExpiresAt").asText(null);
+    if (reservationId == null
+        || reservationId.isBlank()
+        || fenceTokenDigest == null
+        || !fenceTokenDigest.matches(DIGEST_PATTERN)
+        || !generationNode.isIntegralNumber()
+        || !fenceNode.isIntegralNumber()
+        || leaseExpiresAt == null) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_GATEWAY_RECEIPT,
+          "Micro6 reservation receipt is missing authoritative lease evidence");
     }
-    return new Lease(
-        reservationId,
-        request.envelope().leaseGeneration(),
-        request.envelope().fence(),
-        fenceTokenDigest,
-        clock.instant().plus(Duration.ofSeconds(120)));
+    long generation = generationNode.asLong();
+    long fence = fenceNode.asLong();
+    Instant expiresAt;
+    try {
+      expiresAt = Instant.parse(leaseExpiresAt);
+    } catch (RuntimeException exception) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_GATEWAY_RECEIPT,
+          "Micro6 lease expiry is not a valid timestamp",
+          exception);
+    }
+    if (generation != request.envelope().leaseGeneration() || fence != request.envelope().fence()) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.FENCE_MISMATCH,
+          "Micro6 lease generation or fence does not match the approved request");
+    }
+    if (!expiresAt.isAfter(clock.instant())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.LEASE_EXPIRED, "Micro6 lease is already expired");
+    }
+    return new Lease(reservationId, generation, fence, fenceTokenDigest, expiresAt);
   }
 
   private State mapState(String status) {
@@ -345,6 +424,10 @@ public final class Micro6AccountBuilderOrchestrationGateway
     };
   }
 
+  /**
+   * Stable, one-to-one failure semantics. Missing, malformed, forbidden and consumed authority keep
+   * distinct meanings; unknown remote codes fail closed and are never translated into {@code NONE}.
+   */
   private FailureCode mapFailureCode(String remoteCode, State state) {
     if (remoteCode == null || remoteCode.isBlank() || "NONE".equals(remoteCode)) {
       return state == State.DENIED ? FailureCode.DISPATCH_REJECTED : FailureCode.NONE;
@@ -353,11 +436,10 @@ public final class Micro6AccountBuilderOrchestrationGateway
       case "FENCE_MISMATCH" -> FailureCode.FENCE_MISMATCH;
       case "LEASE_EXPIRED" -> FailureCode.LEASE_EXPIRED;
       case "DEADLINE_EXPIRED" -> FailureCode.DEADLINE_EXPIRED;
+      case "AUTHORITY_CONSUMED" -> FailureCode.AUTHORITY_ALREADY_USED;
       case "AUTHORITY_EXPIRED" -> FailureCode.AUTHORITY_EXPIRED;
-      case "AUTHORITY_CONSUMED",
-          "AUTHORITY_MISSING",
-          "AUTHORITY_FORBIDDEN",
-          "AUTHORITY_INVALID" -> FailureCode.AUTHORITY_ALREADY_USED;
+      case "AUTHORITY_MISSING", "AUTHORITY_INVALID" -> FailureCode.AUTHORITY_INVALID;
+      case "AUTHORITY_FORBIDDEN" -> FailureCode.BOUNDARY_VIOLATION;
       case "MODE_NOT_DELIVERABLE" -> FailureCode.MODE_NOT_DELIVERABLE;
       case "LIVE_DISABLED", "RUNTIME_DISABLED" -> FailureCode.RUNTIME_DISABLED;
       case "VERSION_MISMATCH",
@@ -365,7 +447,10 @@ public final class Micro6AccountBuilderOrchestrationGateway
           "INVALID_ENVELOPE",
           "INVALID_RECEIPT",
           "UNKNOWN_REQUEST" -> FailureCode.INVALID_GATEWAY_RECEIPT;
-      default -> State.DENIED == state ? FailureCode.DISPATCH_REJECTED : FailureCode.NONE;
+        // An unrecognized failure code can never become a success-shaped or retryable code.
+      default -> State.DENIED == state
+          ? FailureCode.DISPATCH_REJECTED
+          : FailureCode.INVALID_GATEWAY_RECEIPT;
     };
   }
 

@@ -552,7 +552,7 @@ class AccountBuilderOrchestrationServiceTest {
     }
 
     @Override
-    public CapabilitySnapshot capabilities() {
+    public CapabilitySnapshot capabilities(OrchestrationRequest request) {
       capabilityReads.incrementAndGet();
       OrchestrationRequest sample = request("capability", Mode.HELD);
       return new CapabilitySnapshot(
