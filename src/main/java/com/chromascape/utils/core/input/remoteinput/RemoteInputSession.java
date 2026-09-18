@@ -5,6 +5,8 @@ import com.chromascape.utils.core.input.InputSessionDiagnostic;
 import com.chromascape.utils.core.input.InputSessionException;
 import com.chromascape.utils.core.input.InputSessionState;
 import com.chromascape.utils.core.input.TargetInputSession;
+import com.chromascape.utils.core.screen.capture.CapturedFrame;
+import com.chromascape.utils.core.screen.capture.TargetFrameSource;
 import com.chromascape.utils.core.screen.window.ProcessIdentity;
 import com.chromascape.utils.core.screen.window.ProcessManager;
 import com.chromascape.utils.core.screen.window.ProcessManagerFactory;
@@ -15,6 +17,7 @@ import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -24,7 +27,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /** Linux target-owned input session bound to the audited SC-1662 RemoteInput ABI. */
-public final class RemoteInputSession implements TargetInputSession {
+public final class RemoteInputSession implements TargetInputSession, TargetFrameSource {
   private static final Logger logger = LogManager.getLogger(RemoteInputSession.class);
 
   private final RemoteInputInterface nativeApi;
@@ -37,9 +40,12 @@ public final class RemoteInputSession implements TargetInputSession {
   private final NativeCallExecutor calls;
   private final RemoteInputAttachmentCoordinator.Lease lease;
   private final InputGeometry geometry;
+  private final FrameFreshnessTracker frameFreshness =
+      new FrameFreshnessTracker(Duration.ofSeconds(2), Clock.systemUTC());
   private final Set<MouseButton> heldButtons = EnumSet.noneOf(MouseButton.class);
   private final Set<Integer> heldKeys = new HashSet<>();
   private Point mousePosition;
+  private Rectangle currentFrameBounds;
   private InputSessionState state = InputSessionState.ATTACHED;
   private boolean targetReleased;
 
@@ -66,6 +72,7 @@ public final class RemoteInputSession implements TargetInputSession {
     this.calls = calls;
     this.lease = lease;
     this.geometry = InputGeometry.clientRelative(width, height);
+    this.currentFrameBounds = new Rectangle(0, 0, width, height);
     this.mousePosition = new Point(mousePosition);
   }
 
@@ -359,6 +366,76 @@ public final class RemoteInputSession implements TargetInputSession {
         InputSessionDiagnostic.NATIVE_CALL_TIMEOUT);
   }
 
+  /**
+   * Copies the current rendered BGRA buffer on the session's serialized native lane.
+   *
+   * <p>The native mapping has a fixed lifetime and capacity. Dimensions are bounded before the
+   * pointer read and checked again afterward; a concurrent canvas resize is rejected instead of
+   * returning a wrongly shaped or previous frame. Detach cannot race this method because both are
+   * synchronized on the session and all native work uses the same bounded executor.
+   */
+  @Override
+  public synchronized CapturedFrame captureFrame() {
+    checkOpen();
+    RawFrame raw =
+        nativeCall(
+            () -> copyNativeFrame(),
+            options.nativeCallTimeout(),
+            InputSessionDiagnostic.NATIVE_CALL_TIMEOUT);
+    checkOpen();
+    FrameFreshnessTracker.Observation observation = frameFreshness.observe(raw.bgra());
+    currentFrameBounds = new Rectangle(0, 0, raw.width(), raw.height());
+    return new CapturedFrame(
+        RemoteInputFrameDecoder.decode(raw.bgra(), raw.width(), raw.height()),
+        observation.freshness(),
+        observation.observedAt(),
+        observation.contentChangedAt(),
+        identity,
+        generation);
+  }
+
+  private RawFrame copyNativeFrame() {
+    IntByReference widthBefore = new IntByReference();
+    IntByReference heightBefore = new IntByReference();
+    nativeApi.EIOS_GetTargetDimensions(target, widthBefore, heightBefore);
+    int byteCount;
+    try {
+      byteCount =
+          RemoteInputFrameDecoder.checkedByteCount(widthBefore.getValue(), heightBefore.getValue());
+    } catch (ArithmeticException | IllegalArgumentException invalid) {
+      throw failure(
+          InputSessionDiagnostic.INVALID_FRAME_DIMENSIONS,
+          identity,
+          generation,
+          "Native frame dimensions were outside the supported bound");
+    }
+
+    Pointer imageBuffer = nativeApi.EIOS_GetImageBuffer(target);
+    if (imageBuffer == null || Pointer.nativeValue(imageBuffer) == 0) {
+      throw failure(
+          InputSessionDiagnostic.IMAGE_BUFFER_UNAVAILABLE,
+          identity,
+          generation,
+          "Native image buffer was null or zero");
+    }
+    byte[] bgra = imageBuffer.getByteArray(0, byteCount);
+
+    IntByReference widthAfter = new IntByReference();
+    IntByReference heightAfter = new IntByReference();
+    nativeApi.EIOS_GetTargetDimensions(target, widthAfter, heightAfter);
+    if (widthBefore.getValue() != widthAfter.getValue()
+        || heightBefore.getValue() != heightAfter.getValue()) {
+      throw failure(
+          InputSessionDiagnostic.FRAME_RESIZED_DURING_CAPTURE,
+          identity,
+          generation,
+          "Target dimensions changed while copying the rendered frame");
+    }
+    return new RawFrame(widthBefore.getValue(), heightBefore.getValue(), bgra);
+  }
+
+  private record RawFrame(int width, int height, byte[] bgra) {}
+
   @Override
   public synchronized ProcessIdentity identity() {
     return identity;
@@ -373,6 +450,12 @@ public final class RemoteInputSession implements TargetInputSession {
   public synchronized Rectangle getTargetBounds() {
     checkOpen();
     return new Rectangle(geometry.publicMovementBounds());
+  }
+
+  @Override
+  public synchronized Rectangle targetBounds() {
+    checkOpen();
+    return new Rectangle(currentFrameBounds);
   }
 
   @Override

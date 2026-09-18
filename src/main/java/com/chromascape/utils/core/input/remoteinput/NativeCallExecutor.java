@@ -86,6 +86,9 @@ public final class NativeCallExecutor implements AutoCloseable {
           e);
     } catch (ExecutionException e) {
       Throwable cause = e.getCause() == null ? e : e.getCause();
+      if (cause instanceof InputSessionException sessionFailure) {
+        throw sessionFailure;
+      }
       throw new InputSessionException(
           InputSessionDiagnostic.NATIVE_CALL_FAILED,
           identity,
