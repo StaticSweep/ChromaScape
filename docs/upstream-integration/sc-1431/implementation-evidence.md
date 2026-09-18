@@ -152,6 +152,17 @@ changed; no SC-1449 implementation was widened; no credentials or transcript con
 generated build output was staged; default delivery remains disabled; transcript tampering tests used actual
 stored files; the production bootstrap wiring was exercised end to end by `BootstrapGameplaySc1431IntegrationTest`.
 
+Full-repository `gradlew test` run (after the format pass):
+- 2540 tests across 307 JUnit suites; 71 failures, of which **66 are one poisoned Spring-context cascade**
+  (`IllegalStateException at DefaultCacheAwareContextLoaderDelegate`) triggered by five pre-existing
+  environmental root causes: a Windows-only test resolving the Micro6 repo at `C:\Dev\IdeaProjects\micro6`,
+  Testcontainers failing to launch `postgres:16-alpine` under dozens of concurrently starting Spring contexts,
+  and a test invoking `./gradlew` before the wrapper's executable bit was restored (fixed in a follow-up
+  commit). The four SC-1431 PostgreSQL suites that appear in the cascade pass cleanly when run outside the
+  poisoned context (verified by an immediate isolated re-run and by the green full `gameplay.*` gate on the
+  final code); the Windows-path and container-contention root causes are outside Fedora scope and are
+  covered by the native Windows acceptance gate below.
+
 ## Remaining work
 
 - SC-1498 must switch to reading SC-1431 terminal receipts for SC-666 finalization (interface now returns
@@ -161,7 +172,8 @@ stored files; the production bootstrap wiring was exercised end to end by `Boots
   uncertainty never redispatches) is partially covered by the controller and gateway tests but not yet run as
   one enabled-profile suite.
 - Windows acceptance pass: native restart behavior, real Micro6 desktop client operation, human-gated Fishing
-  completion, and operator acceptance remain outside Fedora verification — this is the remaining external gate
+  completion, operator acceptance, the Windows-path Micro6 contract-equality test, and the full-repository
+  suite under the Windows toolchain remain outside Fedora verification — this is the remaining external gate
   before the PR moves to review.
 - External completion gates: SC-573 catalog dependency, SC-666 recording lifecycle, SC-1449 server-side
   enforcement verification, and end-to-end duplicate-delivery proof.
