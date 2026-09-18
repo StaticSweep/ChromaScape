@@ -21,7 +21,7 @@ import java.util.Random;
  *
  * <p>Intended for use with 64-bit Java applications that expose a {@code java.awt.Canvas}.
  */
-public class Kinput {
+public class Kinput implements KinputBackend {
 
   /** JNA interface mapping for KInputCtrl.dll native methods. */
   public interface KinputInterface extends Library {
@@ -103,6 +103,7 @@ public class Kinput {
 
   private final int pid;
   private final KinputInterface kinput;
+  private boolean destroyed;
 
   /** Mouse event type IDs mapped to standard AWT semantics. */
   public enum MouseEventType {
@@ -224,12 +225,25 @@ public class Kinput {
     }
   }
 
+  /**
+   * Sends a mouse button event using the explicit native button mapping.
+   *
+   * @param x the x coordinate
+   * @param y the y coordinate
+   * @param eventID the AWT event id (501 press, 502 release)
+   * @param button the button
+   */
+  @Override
+  public synchronized void mouseInput(int x, int y, int eventID, MouseButton button) {
+    focus();
+    if (!kinput.KInput_MouseEvent(pid, eventID, now(), 1, x, y, 1, false, button.id)) {
+      throw new RuntimeException("Mouse event failed");
+    }
+  }
+
   /** Sends a middle mouse button input. */
   public synchronized void middleInput(int x, int y, int eventID) {
-    focus();
-    if (!kinput.KInput_MouseEvent(pid, eventID, now(), 1, x, y, 1, false, MouseButton.MIDDLE.id)) {
-      throw new RuntimeException("Middle mouse event failed");
-    }
+    mouseInput(x, y, eventID, MouseButton.MIDDLE);
   }
 
   /** Moves the mouse cursor to a given screen coordinate. */
@@ -276,11 +290,17 @@ public class Kinput {
 
   /**
    * Destroys the active Kinput instance. Should be called on shutdown to free memory and close
-   * resources.
+   * resources. Idempotent: a second call is a no-op instead of failing on the already-deleted
+   * instance.
    */
+  @Override
   public synchronized void destroy() {
+    if (destroyed) {
+      return;
+    }
     if (!kinput.KInput_Delete(pid)) {
       throw new RuntimeException("Failed to delete Kinput instance");
     }
+    destroyed = true;
   }
 }
