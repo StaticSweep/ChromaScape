@@ -41,4 +41,5 @@
   client was attached for this implementation pass.
 - Windows runtime verification is NOT RUN on this Linux host. Windows GDI behavior is preserved by
   extraction and compile/focused tests, not claimed as a live Windows pass.
-- PR review and merge are NOT RUN. The Shortcut story remains In Progress and review-required.
+- [PR #9](https://github.com/ikiddoi/ChromaScape/pull/9) is open. Review and merge are NOT RUN; the
+  Shortcut story remains In Progress and review-required.

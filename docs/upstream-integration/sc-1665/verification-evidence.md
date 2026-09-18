@@ -25,7 +25,7 @@ This matrix distinguishes deterministic verification from live-client and host-s
 | Covered/minimized live client capture | NOT RUN | no qualified attached client used yet |
 | Paused live rendering classification | NOT RUN | requires the same qualified client |
 | Windows runtime verification | NOT RUN | deferred to Windows |
-| PR review/merge | NOT RUN | implementation is still local and uncommitted |
+| PR review/merge | REVIEW REQUIRED | [PR #9](https://github.com/ikiddoi/ChromaScape/pull/9) is open; approval and merge are NOT RUN |
 
 No live or platform-specific criterion is marked PASS without execution in that environment.
 

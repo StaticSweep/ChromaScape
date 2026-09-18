@@ -1,7 +1,8 @@
 # SC-1665 Shortcut update
 
 Implementation is complete for deterministic review on branch
-`codex/sc-1665-rendered-buffer-capture`.
+`codex/sc-1665-rendered-buffer-capture`. Review PR:
+https://github.com/ikiddoi/ChromaScape/pull/9
 
 Implemented:
 
