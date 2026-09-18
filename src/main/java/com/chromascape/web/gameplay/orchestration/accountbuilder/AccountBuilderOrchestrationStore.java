@@ -1,6 +1,7 @@
 package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.GameplayContracts;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderBudgetPolicy.OrchestrationBudget;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.AuthorityConsumption;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -16,6 +17,25 @@ import java.util.Optional;
 
 public interface AccountBuilderOrchestrationStore {
   Claim claim(OrchestrationRequest request, String fingerprint, String envelopeDigest);
+
+  /**
+   * Persists the immutable budget limits at claim time. A repeated call for the same orchestration
+   * must never change the persisted limits; it only reports the current durable usage.
+   */
+  AccountBuilderBudgetPolicy.OrchestrationBudget claimBudget(
+      String orchestrationId, OrchestrationBudget budget);
+
+  /** Returns the durable budget row, or empty when the claim never persisted one. */
+  Optional<AccountBuilderBudgetPolicy.OrchestrationBudget> findBudget(String orchestrationId);
+
+  /**
+   * Atomically consumes one external attempt and, optionally, one semantic action. Returns the
+   * advanced budget only when capacity remains at the moment of the conditional update; exhausted
+   * or expired budgets throw {@link AccountBuilderOrchestrationException} with {@code
+   * BUDGET_EXHAUSTED} or {@code DEADLINE_EXPIRED} before any gateway access.
+   */
+  AccountBuilderBudgetPolicy.OrchestrationBudget consumeBudget(
+      String orchestrationId, boolean action, boolean attempt);
 
   /** Atomically claims a one-use authority before any gateway reservation is attempted. */
   AuthorityConsumption consumeAuthority(

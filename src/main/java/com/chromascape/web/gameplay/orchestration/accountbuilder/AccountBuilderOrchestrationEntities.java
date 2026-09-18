@@ -65,6 +65,40 @@ class AccountBuilderOrchestrationEntity {
   long entityVersion;
 }
 
+/** Immutable limits plus atomically advanced usage counters for one orchestration claim. */
+@Entity(name = "AccountBuilderOrchestrationBudgetEntity")
+@Table(name = "ab_orchestration_budget")
+class AccountBuilderOrchestrationBudgetEntity {
+  @Id
+  @Column(name = "orchestration_id", nullable = false, length = 128)
+  String orchestrationId;
+
+  @Column(name = "max_actions", nullable = false)
+  int maxActions;
+
+  @Column(name = "max_attempts", nullable = false)
+  int maxAttempts;
+
+  @Column(name = "max_elapsed_ms", nullable = false)
+  long maxElapsedMs;
+
+  @Column(name = "actions_used", nullable = false)
+  int actionsUsed;
+
+  @Column(name = "attempts_used", nullable = false)
+  int attemptsUsed;
+
+  @Column(name = "started_at")
+  Instant startedAt;
+
+  @Column(name = "expires_at", nullable = false)
+  Instant expiresAt;
+
+  @Version
+  @Column(name = "version", nullable = false)
+  long version;
+}
+
 @Entity(name = "AccountBuilderOrchestrationEventEntity")
 @Table(name = "ab_orchestration_event")
 class AccountBuilderOrchestrationEventEntity {

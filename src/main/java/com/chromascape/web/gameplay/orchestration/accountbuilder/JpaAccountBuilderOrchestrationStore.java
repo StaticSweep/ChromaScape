@@ -2,6 +2,7 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContracts;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderBudgetPolicy.OrchestrationBudget;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.AuthorityConsumption;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -166,6 +167,120 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
     appendEvent(entity, "ORCHESTRATION_CREATED", fingerprint);
     entityManager.flush();
     return new Claim(initial, true);
+  }
+
+  @Override
+  @Transactional
+  public AccountBuilderBudgetPolicy.OrchestrationBudget claimBudget(
+      String orchestrationId, OrchestrationBudget budget) {
+    AccountBuilderOrchestrationBudgetEntity existing =
+        entityManager.find(AccountBuilderOrchestrationBudgetEntity.class, orchestrationId);
+    if (existing != null) {
+      // Claimed limits are immutable. A second claim with different limits is a caller bug and
+      // must never silently rewrite the durable budget.
+      if (existing.maxActions != budget.maxActions()
+          || existing.maxAttempts != budget.maxAttempts()
+          || existing.maxElapsedMs != budget.maxElapsedMs()
+          || !Objects.equals(existing.startedAt, budget.startedAt())
+          || !Objects.equals(existing.expiresAt, budget.expiresAt())) {
+        throw failure(
+            FailureCode.IDEMPOTENCY_CONFLICT,
+            "Persisted orchestration budget limits are immutable");
+      }
+      return toBudget(existing);
+    }
+    AccountBuilderOrchestrationBudgetEntity created = new AccountBuilderOrchestrationBudgetEntity();
+    created.orchestrationId = orchestrationId;
+    created.maxActions = budget.maxActions();
+    created.maxAttempts = budget.maxAttempts();
+    created.maxElapsedMs = budget.maxElapsedMs();
+    created.actionsUsed = budget.actionsUsed();
+    created.attemptsUsed = budget.attemptsUsed();
+    created.startedAt = budget.startedAt();
+    created.expiresAt = budget.expiresAt();
+    entityManager.persist(created);
+    entityManager.flush();
+    return toBudget(created);
+  }
+
+  @Override
+  @Transactional
+  public Optional<AccountBuilderBudgetPolicy.OrchestrationBudget> findBudget(
+      String orchestrationId) {
+    return Optional.ofNullable(
+            entityManager.find(AccountBuilderOrchestrationBudgetEntity.class, orchestrationId))
+        .map(this::toBudget);
+  }
+
+  @Override
+  @Transactional
+  public AccountBuilderBudgetPolicy.OrchestrationBudget consumeBudget(
+      String orchestrationId, boolean action, boolean attempt) {
+    Instant now = now();
+    // A single conditional UPDATE is the atomic capacity check. Rows are only advanced when both
+    // the action and the attempt capacity remain at the instant of the update, so two racing
+    // callers can never both take the final unit of capacity.
+    int advanced =
+        entityManager
+            .createNativeQuery(
+                """
+                UPDATE ab_orchestration_budget
+                SET actions_used = CASE WHEN :action THEN actions_used + 1 ELSE actions_used END,
+                    attempts_used = CASE WHEN :attempt THEN attempts_used + 1 ELSE attempts_used END,
+                    version = version + 1
+                WHERE orchestration_id = :orchestrationId
+                  AND (CASE WHEN :action THEN actions_used < max_actions ELSE TRUE END)
+                  AND (CASE WHEN :attempt THEN attempts_used < max_attempts ELSE TRUE END)
+                  AND expires_at > :now
+                """)
+            .setParameter("action", action)
+            .setParameter("attempt", attempt)
+            .setParameter("orchestrationId", orchestrationId)
+            .setParameter("now", now)
+            .executeUpdate();
+    if (advanced > 0) {
+      entityManager.flush();
+      AccountBuilderOrchestrationBudgetEntity advancedEntity =
+          entityManager.find(AccountBuilderOrchestrationBudgetEntity.class, orchestrationId);
+      if (advancedEntity != null) {
+        return toBudget(advancedEntity);
+      }
+      throw integrity("An advanced budget row could not be reloaded");
+    }
+    AccountBuilderOrchestrationBudgetEntity entity =
+        entityManager.find(AccountBuilderOrchestrationBudgetEntity.class, orchestrationId);
+    if (entity == null) {
+      throw failure(
+          FailureCode.INVALID_CONTRACT, "No durable budget was claimed for this orchestration");
+    }
+    if (!entity.expiresAt.isAfter(now)) {
+      throw failure(FailureCode.DEADLINE_EXPIRED, "The orchestration budget horizon has expired");
+    }
+    if ((action && entity.actionsUsed >= entity.maxActions)
+        || (attempt && entity.attemptsUsed >= entity.maxAttempts)) {
+      throw failure(
+          FailureCode.BUDGET_EXHAUSTED, "No orchestration budget capacity remains for delivery");
+    }
+    // The conditional update lost a race with an exhausted row; re-read the authoritative state.
+    if (action && entity.actionsUsed >= entity.maxActions) {
+      throw failure(FailureCode.BUDGET_EXHAUSTED, "Action capacity was consumed concurrently");
+    }
+    if (attempt && entity.attemptsUsed >= entity.maxAttempts) {
+      throw failure(FailureCode.BUDGET_EXHAUSTED, "Attempt capacity was consumed concurrently");
+    }
+    throw integrity("A budget consumption race did not expose a stable outcome");
+  }
+
+  private AccountBuilderBudgetPolicy.OrchestrationBudget toBudget(
+      AccountBuilderOrchestrationBudgetEntity entity) {
+    return new AccountBuilderBudgetPolicy.OrchestrationBudget(
+        entity.maxActions,
+        entity.maxAttempts,
+        entity.maxElapsedMs,
+        entity.actionsUsed,
+        entity.attemptsUsed,
+        entity.startedAt,
+        entity.expiresAt);
   }
 
   @Override

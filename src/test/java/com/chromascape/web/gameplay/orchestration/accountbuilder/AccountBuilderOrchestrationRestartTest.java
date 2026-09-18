@@ -40,11 +40,11 @@ class AccountBuilderOrchestrationRestartTest {
               .dataSource(url, database.username(), database.password())
               .schemas(database.schema())
               .defaultSchema(database.schema())
-              .target(MigrationVersion.fromVersion("32"))
+              .target(MigrationVersion.LATEST)
               .locations("classpath:db/migration")
               .load();
       flyway.migrate();
-      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("32");
+      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("47");
 
       Map<String, CommittedAggregate> before;
       try (ConfigurableApplicationContext contextA = start(database)) {

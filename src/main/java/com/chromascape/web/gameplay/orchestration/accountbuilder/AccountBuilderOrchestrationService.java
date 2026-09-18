@@ -1,6 +1,7 @@
 package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderBudgetPolicy.OrchestrationBudget;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -13,6 +14,7 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import java.time.Clock;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -60,6 +62,14 @@ public final class AccountBuilderOrchestrationService {
       return new Submission(claim.view(), false);
     }
 
+    AccountBuilderBudgetPolicy.OrchestrationBudget budget;
+    try {
+      budget = OrchestrationBudget.fromEnvelope(request.envelope(), canonicalJson, clock);
+      store.claimBudget(request.orchestrationId(), budget);
+    } catch (IllegalArgumentException exception) {
+      return terminal(request, State.DENIED, FailureCode.INVALID_CONTRACT, null, false);
+    }
+
     store.transition(
         request.orchestrationId(), State.VALIDATED, FailureCode.NONE, null, null, false, false);
     if (request.mode() == Mode.HELD || request.mode() == Mode.SHADOW) {
@@ -77,6 +87,10 @@ public final class AccountBuilderOrchestrationService {
 
     boolean authorityConsumed = false;
     try {
+      // The reserve begins the one external attempt cycle this orchestration may ever run. The
+      // durable counter advance happens before any gateway access, so an exhausted or expired
+      // budget is always a proven denial, never a gateway mutation.
+      store.consumeBudget(request.orchestrationId(), false, true);
       CapabilitySnapshot capabilities = gateway.capabilities();
       if (capabilities == null || !capabilities.liveDeliveryReady()) {
         return terminal(request, State.DENIED, FailureCode.GATEWAY_UNAVAILABLE, null, false);
@@ -142,6 +156,11 @@ public final class AccountBuilderOrchestrationService {
             () ->
                 new AccountBuilderOrchestrationException(
                     FailureCode.INVALID_CONTRACT, "Orchestration was not found"));
+  }
+
+  /** Durable budget row for the orchestration, if immutable limits were claimed. */
+  public Optional<AccountBuilderBudgetPolicy.OrchestrationBudget> budget(String orchestrationId) {
+    return store.findBudget(orchestrationId);
   }
 
   public OrchestrationView stop(String orchestrationId, String reason) {
@@ -322,6 +341,10 @@ public final class AccountBuilderOrchestrationService {
   private OrchestrationView deliver(
       OrchestrationRequest request, String envelopeDigest, Lease lease) {
     try {
+      // The dispatch belongs to the attempt cycle already opened by the reserve, so it consumes a
+      // semantic action rather than a second attempt. An exhausted or expired budget is a proven
+      // denial before the dispatch boundary is persisted and before any gateway access.
+      store.consumeBudget(request.orchestrationId(), true, false);
       Lease storedLease = store.requireLease(request.orchestrationId(), lease);
       // Persist the submission boundary before the network call. A restart can therefore
       // distinguish an unattempted reservation from a call whose outcome must be reconciled.
@@ -388,6 +411,28 @@ public final class AccountBuilderOrchestrationService {
           status.failureCode(),
           statusLease,
           status,
+          false,
+          false);
+    } catch (AccountBuilderOrchestrationException exception) {
+      if (exception.failureCode() == FailureCode.BUDGET_EXHAUSTED
+          || exception.failureCode() == FailureCode.DEADLINE_EXPIRED) {
+        // A budget denial at the dispatch boundary is a proven terminal failure before any
+        // gateway access; it is never a reconciliation case and never retryable.
+        return store.transition(
+            request.orchestrationId(),
+            State.FAILED,
+            exception.failureCode(),
+            lease,
+            null,
+            false,
+            false);
+      }
+      return store.transition(
+          request.orchestrationId(),
+          State.NEEDS_RECONCILIATION,
+          uncertaintyCode(exception),
+          null,
+          null,
           false,
           false);
     } catch (RuntimeException exception) {

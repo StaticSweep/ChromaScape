@@ -2,6 +2,7 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContracts;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderBudgetPolicy.OrchestrationBudget;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.AuthorityConsumption;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -58,6 +59,8 @@ public final class InMemoryAccountBuilderOrchestrationStore
   private final Map<String, String> authorityOwners = new HashMap<>();
   private final Map<String, TerminalResult> terminalResults = new HashMap<>();
   private final Map<String, Long> eventCounts = new HashMap<>();
+  private final Map<String, AccountBuilderBudgetPolicy.OrchestrationBudget> budgets =
+      new HashMap<>();
 
   public InMemoryAccountBuilderOrchestrationStore() {
     this(Clock.systemUTC(), (authority, envelope) -> false);
@@ -164,6 +167,59 @@ public final class InMemoryAccountBuilderOrchestrationStore
     idempotencyOwners.put(request.idempotencyKey(), request.orchestrationId());
     eventCounts.put(request.orchestrationId(), 1L);
     return new Claim(view, true);
+  }
+
+  @Override
+  public synchronized AccountBuilderBudgetPolicy.OrchestrationBudget claimBudget(
+      String orchestrationId, OrchestrationBudget budget) {
+    OrchestrationBudget existing = budgets.get(orchestrationId);
+    if (existing != null) {
+      if (existing.maxActions() != budget.maxActions()
+          || existing.maxAttempts() != budget.maxAttempts()
+          || existing.maxElapsedMs() != budget.maxElapsedMs()
+          || !Objects.equals(existing.startedAt(), budget.startedAt())
+          || !Objects.equals(existing.expiresAt(), budget.expiresAt())) {
+        throw failure(
+            FailureCode.IDEMPOTENCY_CONFLICT,
+            "Persisted orchestration budget limits are immutable");
+      }
+      return existing;
+    }
+    budgets.put(orchestrationId, budget);
+    return budget;
+  }
+
+  @Override
+  public synchronized Optional<AccountBuilderBudgetPolicy.OrchestrationBudget> findBudget(
+      String orchestrationId) {
+    return Optional.ofNullable(budgets.get(orchestrationId));
+  }
+
+  @Override
+  public synchronized AccountBuilderBudgetPolicy.OrchestrationBudget consumeBudget(
+      String orchestrationId, boolean action, boolean attempt) {
+    OrchestrationBudget budget = budgets.get(orchestrationId);
+    if (budget == null) {
+      throw failure(
+          FailureCode.INVALID_CONTRACT, "No durable budget was claimed for this orchestration");
+    }
+    Instant now = now();
+    if (budget.expiredAt(now)) {
+      throw failure(FailureCode.DEADLINE_EXPIRED, "The orchestration budget horizon has expired");
+    }
+    if ((action && budget.actionsExhausted()) || (attempt && budget.attemptsExhausted())) {
+      throw failure(
+          FailureCode.BUDGET_EXHAUSTED, "No orchestration budget capacity remains for delivery");
+    }
+    OrchestrationBudget advanced = budget;
+    if (attempt) {
+      advanced = advanced.withAttemptUsed();
+    }
+    if (action) {
+      advanced = advanced.withActionUsed();
+    }
+    budgets.put(orchestrationId, advanced);
+    return advanced;
   }
 
   @Override
