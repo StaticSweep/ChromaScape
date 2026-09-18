@@ -11,10 +11,9 @@ import com.chromascape.web.gameplay.contract.GameplayContracts.Receipt;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ReceiptPhase;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationException;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.SnapshotBindings;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRequestFactory;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Clock;
@@ -31,6 +30,7 @@ public final class BootstrapGameplayOrchestrator {
   private final AccountBuilderGameplayGateway gateway;
   private final BootstrapEvidenceStore evidenceStore;
   private final AccountBuilderOrchestrationService orchestrationService;
+  private final AccountBuilderOrchestrationRequestFactory requestFactory;
   private final Clock clock;
   private final Map<String, RequestState> requests = new ConcurrentHashMap<>();
   private final Map<String, RequestIdentity> idempotencyOwners = new ConcurrentHashMap<>();
@@ -40,7 +40,7 @@ public final class BootstrapGameplayOrchestrator {
       CanonicalGameplayJson canonicalJson,
       AccountBuilderGameplayGateway gateway,
       BootstrapEvidenceStore evidenceStore) {
-    this(validator, canonicalJson, gateway, evidenceStore, null, Clock.systemUTC());
+    this(validator, canonicalJson, gateway, evidenceStore, null, null, Clock.systemUTC());
   }
 
   BootstrapGameplayOrchestrator(
@@ -49,13 +49,15 @@ public final class BootstrapGameplayOrchestrator {
       AccountBuilderGameplayGateway gateway,
       BootstrapEvidenceStore evidenceStore,
       Clock clock) {
-    this(validator, canonicalJson, gateway, evidenceStore, null, clock);
+    this(validator, canonicalJson, gateway, evidenceStore, null, null, clock);
   }
 
   /**
    * SC-1431 unified constructor: dispatch, stop, idempotency, authority ownership and lifecycle
-   * delegate to the durable orchestration service; the legacy gateway is only the compatibility
-   * fallback for callers that were never wired to the durable store.
+   * delegate to the durable orchestration service through the shared request factory; the legacy
+   * gateway is only the compatibility fallback for callers that were never wired to the durable
+   * store. When the durable service is configured, the shared request factory is mandatory so the
+   * bootstrap path can never emit a partial fingerprint.
    */
   BootstrapGameplayOrchestrator(
       GameplayContractValidator validator,
@@ -63,12 +65,19 @@ public final class BootstrapGameplayOrchestrator {
       AccountBuilderGameplayGateway gateway,
       BootstrapEvidenceStore evidenceStore,
       AccountBuilderOrchestrationService orchestrationService,
+      AccountBuilderOrchestrationRequestFactory requestFactory,
       Clock clock) {
+    if (orchestrationService != null && requestFactory == null) {
+      throw new IllegalStateException(
+          "Durable SC-1431 bootstrap delegation requires the shared orchestration request"
+              + " factory");
+    }
     this.validator = validator;
     this.canonicalJson = canonicalJson;
     this.gateway = gateway;
     this.evidenceStore = evidenceStore;
     this.orchestrationService = orchestrationService;
+    this.requestFactory = requestFactory;
     this.clock = clock;
   }
 
@@ -268,33 +277,10 @@ public final class BootstrapGameplayOrchestrator {
       ExecutionEnvelope envelope,
       HumanAuthority authority,
       String envelopeDigest) {
+    // The immutable request and its full fingerprint come from the one shared factory, so the
+    // bootstrap path and the validator can never disagree about request identity again.
     OrchestrationRequest request =
-        new OrchestrationRequest(
-            sc1431OrchestrationId(envelope.requestId()),
-            envelope.requestId(),
-            envelope.idempotencyKey(),
-            requestFingerprint(envelopeDigest, authority),
-            Mode.BOOTSTRAP_RECORDING,
-            "BOOTSTRAP",
-            decision,
-            envelope,
-            new SnapshotBindings(
-                canonicalJson.digest(decision),
-                envelope.semanticActionDigest(),
-                envelope.catalogDigest(),
-                envelope.catalogDigest(),
-                envelope.goalPlanDigest(),
-                envelope.taskSkillDigests(),
-                envelope.schemaDigest(),
-                envelope.knowledgeDigest(),
-                envelope.policyDigest(),
-                envelope.verifierId(),
-                envelope.buildId(),
-                envelope.expectedObservationRevision(),
-                envelope.expectedTaskRevision()),
-            authority,
-            observation,
-            envelope.deadline());
+        requestFactory.fromBootstrap(observation, decision, envelope, authority);
     return toDispatchResult(orchestrationService.orchestrate(request).view());
   }
 
@@ -330,17 +316,6 @@ public final class BootstrapGameplayOrchestrator {
 
   private static String sc1431OrchestrationId(String requestId) {
     return "bootstrap-" + requestId;
-  }
-
-  private String requestFingerprint(String envelopeDigest, HumanAuthority authority) {
-    return canonicalJson.digest(
-        Map.of(
-            "envelopeDigest",
-            envelopeDigest,
-            "authorityId",
-            authority.authorityId(),
-            "scopeDigest",
-            authority.scopeDigest()));
   }
 
   private String decisionBindingFailure(
