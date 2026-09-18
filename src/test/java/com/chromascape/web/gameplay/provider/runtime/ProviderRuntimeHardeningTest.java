@@ -235,7 +235,9 @@ class ProviderRuntimeHardeningTest {
       assertFalse(name.contains("micro6"), "handoff must not expose micro6");
     }
     ProviderDecisionHandoff empty = (sessionId, turnId) -> Optional.empty();
-    ProviderDecisionOrchestrationSource source = new ProviderDecisionOrchestrationSource(empty);
+    ProviderDecisionOrchestrationSource source =
+        new ProviderDecisionOrchestrationSource(
+            empty, new CanonicalGameplayJson(new ObjectMapper()));
     AccountBuilderOrchestrationModels.OrchestrationRequest request =
         new AccountBuilderOrchestrationModels.OrchestrationRequest(
             "orchestration-1",
