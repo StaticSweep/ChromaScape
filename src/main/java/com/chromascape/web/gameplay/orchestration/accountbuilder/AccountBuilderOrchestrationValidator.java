@@ -50,8 +50,6 @@ public final class AccountBuilderOrchestrationValidator {
         || !validId(request.idempotencyKey())
         || request.mode() == null
         || request.sourceType() == null
-        || request.sourceType().isBlank()
-        || request.sourceType().length() > 128
         || request.decision() == null
         || request.envelope() == null
         || request.bindings() == null
@@ -69,7 +67,12 @@ public final class AccountBuilderOrchestrationValidator {
     }
     validateDecision(request.decision(), request.envelope(), request.bindings());
     validateEnvelope(request.envelope(), request.bindings(), request.observation());
-    if (request.sourceType().startsWith("PROVIDER:")
+    // Closed source vocabulary: only an exact approved non-provider token, or the exact
+    // PROVIDER:<PROVIDER_ENUM_NAME> token, is accepted. This rejects provider:CODEX, mixed-case
+    // variants, unknown provider names, whitespace padding and arbitrary strings.
+    AccountBuilderOrchestrationSources.Kind sourceKind =
+        AccountBuilderOrchestrationSources.classify(request.sourceType());
+    if (sourceKind == AccountBuilderOrchestrationSources.Kind.PROVIDER
         && !validDigest(request.bindings().promptDigest())) {
       // A bindable provider decision carries its session prompt provenance; without it the
       // planning input can never be re-verified.

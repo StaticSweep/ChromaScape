@@ -7,17 +7,43 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 
 /** Default gateway until SC-1449 provides a conforming live AccountBuilder adapter. */
 public final class ClosedAccountBuilderOrchestrationGateway
     implements AccountBuilderOrchestrationGateway {
+  /**
+   * Deterministic non-attestation capability digest. The closed gateway can never issue a server
+   * capability attestation, so its probe reports exactly this fixed value instead of pretending a
+   * catalog digest or any other request value is a capability attestation. It is a valid digest
+   * literal so a delivery-disabled bootstrap request still fingerprints and persists its durable
+   * {@code RUNTIME_DISABLED} denial, and it is stable so replays remain idempotent.
+   */
+  private static final String CLOSED_CAPABILITY_DIGEST = closedCapabilityDigest();
+
+  private static String closedCapabilityDigest() {
+    try {
+      return "sha256:"
+          + HexFormat.of()
+              .formatHex(
+                  MessageDigest.getInstance("SHA-256")
+                      .digest(
+                          "closed-gateway-issues-no-capability-attestation"
+                              .getBytes(StandardCharsets.US_ASCII)));
+    } catch (Exception exception) {
+      throw new IllegalStateException("Closed gateway capability digest is unavailable", exception);
+    }
+  }
+
   @Override
   public CapabilitySnapshot capabilities(OrchestrationRequest request) {
     Instant now = Instant.now();
     return new CapabilitySnapshot(
-        "unavailable", "unavailable", "unavailable", -1, -1, now, now, false, List.of());
+        null, CLOSED_CAPABILITY_DIGEST, null, -1, -1, now, now, false, List.of());
   }
 
   @Override

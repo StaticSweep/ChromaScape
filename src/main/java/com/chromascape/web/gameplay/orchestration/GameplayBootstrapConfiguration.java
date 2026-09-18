@@ -2,6 +2,7 @@ package com.chromascape.web.gameplay.orchestration;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContractValidator;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderCapabilityPreflight;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRequestFactory;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,11 +30,13 @@ public class GameplayBootstrapConfiguration {
       AccountBuilderGameplayGateway gateway,
       BootstrapEvidenceStore evidenceStore,
       AccountBuilderOrchestrationService orchestrationService,
-      AccountBuilderOrchestrationRequestFactory requestFactory) {
+      AccountBuilderOrchestrationRequestFactory requestFactory,
+      AccountBuilderCapabilityPreflight capabilityPreflight) {
     // SC-1431 unification: dispatch, stop, idempotency, authority ownership and reconciliation
     // delegate to the durable orchestration service through the one shared request factory; the
     // legacy gateway remains only as evidence compatibility and is never an independent task-state
-    // owner.
+    // owner. The read-only capability preflight supplies the server-issued capability digest that
+    // the immutable request binds before fingerprinting.
     return new BootstrapGameplayOrchestrator(
         validator,
         canonicalJson,
@@ -41,6 +44,7 @@ public class GameplayBootstrapConfiguration {
         evidenceStore,
         orchestrationService,
         requestFactory,
+        capabilityPreflight,
         Clock.systemUTC());
   }
 }

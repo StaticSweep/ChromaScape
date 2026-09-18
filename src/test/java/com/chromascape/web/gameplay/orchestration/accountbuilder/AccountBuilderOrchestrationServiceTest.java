@@ -78,6 +78,57 @@ class AccountBuilderOrchestrationServiceTest {
   }
 
   @Test
+  void genericServiceCategoricallyRejectsProviderSourcesBeforeAnyClaimOrGatewayAccess() {
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    InMemoryAccountBuilderOrchestrationStore store =
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    OrchestrationRequest base = request("bypass", Mode.BOOTSTRAP_RECORDING);
+
+    for (String source :
+        List.of(
+            "PROVIDER:CODEX",
+            "provider:CODEX",
+            "Provider:CODEX",
+            "PROVIDER:codex",
+            "PROVIDER:",
+            "provider:CLAUDE",
+            "PROVIDER:BOGUS",
+            " PROVIDER:CODEX",
+            "arbitrary")) {
+      OrchestrationRequest forged = withSource(base, source);
+      assertThatThrownBy(() -> service.orchestrate(forged))
+          .isInstanceOf(AccountBuilderOrchestrationException.class)
+          .extracting("failureCode")
+          .isEqualTo(FailureCode.INVALID_CONTRACT);
+    }
+
+    // No forged source reached the durable claim, budget, authority or gateway boundary.
+    assertThat(store.find("orchestration-bypass")).isEmpty();
+    assertThat(gateway.capabilityReads).hasValue(0);
+    assertThat(gateway.reservations).hasValue(0);
+    assertThat(gateway.dispatches).hasValue(0);
+  }
+
+  @Test
+  void providerEntryPointRejectsNonProviderSources() {
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    InMemoryAccountBuilderOrchestrationStore store =
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    OrchestrationRequest bootstrap = request("not-provider", Mode.BOOTSTRAP_RECORDING);
+
+    assertThatThrownBy(() -> service.orchestrateProvider(bootstrap))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .extracting("failureCode")
+        .isEqualTo(FailureCode.INVALID_CONTRACT);
+    assertThat(store.find("orchestration-not-provider")).isEmpty();
+    assertThat(gateway.capabilityReads).hasValue(0);
+  }
+
+  @Test
   void exactDeliveryConsumesAuthorityAndDispatchesOnce() {
     FakeGateway gateway = new FakeGateway(State.CONFIRMED);
     AccountBuilderOrchestrationService service = service(gateway);
@@ -118,6 +169,62 @@ class AccountBuilderOrchestrationServiceTest {
     assertThat(replay.view()).isEqualTo(first.view());
     assertThat(gateway.reservations).hasValue(1);
     assertThat(gateway.dispatches).hasValue(0);
+  }
+
+  @Test
+  void connectionRefusalBeforeSubmissionBecomesTerminalGatewayUnavailableFailure() {
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    gateway.refuseConnection = true;
+    InMemoryAccountBuilderOrchestrationStore store =
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    OrchestrationRequest request = request("refusal", Mode.BOOTSTRAP_RECORDING);
+
+    var first = service.orchestrate(request);
+
+    // The connection never opened, so nothing could have been submitted: this is a proven
+    // pre-submission failure, not a reconciliation case.
+    assertThat(first.view().state()).isEqualTo(State.FAILED);
+    assertThat(first.view().failureCode()).isEqualTo(FailureCode.GATEWAY_UNAVAILABLE);
+    assertThat(first.view().retryAllowed()).isFalse();
+    assertThat(first.view().authorityConsumed()).isTrue();
+    assertThat(gateway.reservations).hasValue(1);
+    assertThat(gateway.dispatches).hasValue(0);
+
+    // Authority stays consumed and a replay returns the same terminal result without redispatch.
+    var replay = service.orchestrate(request);
+    assertThat(replay.created()).isFalse();
+    assertThat(replay.view()).isEqualTo(first.view());
+    assertThat(gateway.reservations).hasValue(1);
+    assertThat(gateway.dispatches).hasValue(0);
+  }
+
+  @Test
+  void timeoutAfterSubmissionRemainsNeedsReconciliationDeliveryUncertain() {
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    gateway.timeOutAfterSubmission = true;
+    InMemoryAccountBuilderOrchestrationStore store =
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    OrchestrationRequest request = request("timeout", Mode.BOOTSTRAP_RECORDING);
+
+    var uncertain = service.orchestrate(request);
+
+    assertThat(uncertain.view().state()).isEqualTo(State.NEEDS_RECONCILIATION);
+    assertThat(uncertain.view().failureCode()).isEqualTo(FailureCode.DELIVERY_UNCERTAIN);
+    assertThat(uncertain.view().authorityConsumed()).isTrue();
+    assertThat(gateway.reservations).hasValue(1);
+    assertThat(gateway.dispatches).hasValue(0);
+
+    // Reconciliation of an authority-consumed orchestration without a lease is lookup only.
+    gateway.statusState = State.DENIED;
+    var reconciled = service.reconcile(request.orchestrationId());
+    assertThat(reconciled.state()).isEqualTo(State.DENIED);
+    assertThat(gateway.reservations).hasValue(1);
+    assertThat(gateway.dispatches).hasValue(0);
+    assertThat(gateway.reservationReconciliations).hasValue(1);
   }
 
   @Test
@@ -468,7 +575,7 @@ class AccountBuilderOrchestrationServiceTest {
             envelope.idempotencyKey(),
             null,
             mode,
-            "PROVIDER:CLAUDE",
+            "BOOTSTRAP",
             decision,
             envelope,
             bindings,
@@ -519,6 +626,24 @@ class AccountBuilderOrchestrationServiceTest {
     return withFingerprint(changed, validator.immutableFingerprint(changed));
   }
 
+  private OrchestrationRequest withSource(OrchestrationRequest request, String sourceType) {
+    OrchestrationRequest changed =
+        new OrchestrationRequest(
+            request.orchestrationId(),
+            request.requestId(),
+            request.idempotencyKey(),
+            null,
+            request.mode(),
+            sourceType,
+            request.decision(),
+            request.envelope(),
+            request.bindings(),
+            request.authority(),
+            request.observation(),
+            request.deadline());
+    return withFingerprint(changed, validator.immutableFingerprint(changed));
+  }
+
   private OrchestrationRequest withFingerprint(OrchestrationRequest request, String fingerprint) {
     return new OrchestrationRequest(
         request.orchestrationId(),
@@ -546,6 +671,8 @@ class AccountBuilderOrchestrationServiceTest {
     private State statusState;
     private boolean staleCapabilities;
     private boolean failReservation;
+    private boolean refuseConnection;
+    private boolean timeOutAfterSubmission;
     private boolean lastStopKillSwitch;
 
     private FakeGateway(State dispatchState) {
@@ -578,6 +705,17 @@ class AccountBuilderOrchestrationServiceTest {
     @Override
     public GatewayReceipt reserve(OrchestrationRequest request, String envelopeDigest) {
       reservations.incrementAndGet();
+      if (refuseConnection) {
+        // The transport proves the connection never opened: no request bytes were submitted.
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.GATEWAY_UNAVAILABLE, "Micro6 v2 route is unreachable");
+      }
+      if (timeOutAfterSubmission) {
+        // A timeout is only observable after submission was possible: delivery may have happened.
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.DELIVERY_UNCERTAIN,
+            "Micro6 v2 delivery outcome is unknown after submission was possible");
+      }
       if (failReservation) {
         throw new IllegalStateException("simulated reserve failure");
       }

@@ -11,6 +11,7 @@ import com.chromascape.web.gameplay.contract.GameplayContracts.Outcome;
 import com.chromascape.web.gameplay.contract.GameplayContracts.Provider;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderAuthorityVerifier;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderCapabilityPreflight;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationException;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationGateway;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
@@ -20,6 +21,7 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.TaskCapability;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationProperties;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRequestFactory;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
@@ -113,7 +115,11 @@ class BootstrapGameplaySc1431IntegrationTest {
 
     OrchestrationRequest request =
         requestFactory.fromBootstrap(
-            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+            bundle.observation(),
+            bundle.decision(),
+            bundle.envelope(),
+            bundle.authority(),
+            closedGatewaySnapshot());
     var first = service.orchestrate(request);
     var replay = service.orchestrate(request);
     assertThat(replay.created()).isFalse();
@@ -122,11 +128,336 @@ class BootstrapGameplaySc1431IntegrationTest {
   }
 
   @Test
+  void enabledDeliveryBindsTheDistinctServerCapabilityDigestAndReachesReserve() {
+    Bundle bundle = bundle("enabled");
+    RecordingGateway liveGateway = new LiveCapabilityGateway();
+    AccountBuilderOrchestrationService enabledService =
+        new AccountBuilderOrchestrationService(
+            orchestrationValidator, canonicalJson, store, liveGateway, enabledProperties());
+    BootstrapGameplayOrchestrator orchestrator =
+        productionOrchestrator(enabledService, liveGateway);
+
+    var receipt =
+        orchestrator.dispatch(
+            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+
+    assertThat(receipt.failureCode()).isEqualTo("GATEWAY_UNAVAILABLE");
+    String orchestrationId = "bootstrap-" + bundle.envelope().requestId();
+    // The persisted request binds the server-issued capability digest, which is distinct from the
+    // catalog digest in the same proposal snapshot.
+    assertThat(store.find(orchestrationId)).isPresent();
+    assertThat(store.readAggregate(orchestrationId).bindings().capabilityDigest())
+        .isEqualTo(SERVER_CAPABILITY_DIGEST);
+    assertThat(store.readAggregate(orchestrationId).bindings().capabilityDigest())
+        .isNotEqualTo(store.readAggregate(orchestrationId).bindings().catalogDigest());
+    assertThat(store.readAggregate(orchestrationId).bindings().catalogDigest())
+        .isEqualTo(bundle.envelope().catalogDigest());
+    // Preflight plus the immediate-before-reserve revalidation: exactly two read-only probes.
+    assertThat(liveGateway.capabilityCalls.get()).isEqualTo(2);
+    assertThat(liveGateway.reserves.get()).isEqualTo(1);
+  }
+
+  @Test
+  void replayingAnExistingClaimDoesNotFetchANewSnapshotOrRedispatch() {
+    Bundle bundle = bundle("replay");
+    RecordingGateway liveGateway = new LiveCapabilityGateway();
+    AccountBuilderOrchestrationService enabledService =
+        new AccountBuilderOrchestrationService(
+            orchestrationValidator, canonicalJson, store, liveGateway, enabledProperties());
+    BootstrapGameplayOrchestrator orchestrator =
+        productionOrchestrator(enabledService, liveGateway);
+    orchestrator.dispatch(
+        bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+    int capabilitiesBefore = liveGateway.capabilityCalls.get();
+    int reservesBefore = liveGateway.reserves.get();
+
+    orchestrator.dispatch(
+        bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+
+    assertThat(liveGateway.capabilityCalls.get()).isEqualTo(capabilitiesBefore);
+    assertThat(liveGateway.reserves.get()).isEqualTo(reservesBefore);
+  }
+
+  @Test
+  void bootstrapReplayWithAnyChangedImmutableInputConflicts() {
+    Bundle bundle = bundle("fullidentity");
+    BootstrapGameplayOrchestrator orchestrator = productionOrchestrator();
+    orchestrator.dispatch(
+        bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+
+    // A changed observation payload that still satisfies the proposal binding checks.
+    JsonNode changedObservation = bundle.observation().deepCopy();
+    ((ObjectNode) changedObservation)
+        .put("capturedTick", changedObservation.path("capturedTick").asInt() + 1);
+    assertThat(
+            orchestrator
+                .dispatch(
+                    changedObservation, bundle.decision(), bundle.envelope(), bundle.authority())
+                .failureCode())
+        .isEqualTo("IDEMPOTENCY_CONFLICT");
+
+    // A changed provider decision.
+    ProviderDecision changedDecision =
+        new ProviderDecision(
+            bundle.decision().contractVersion(),
+            bundle.decision().provider(),
+            bundle.decision().modelVersion(),
+            bundle.decision().decisionId(),
+            0.5,
+            bundle.decision().semanticAction(),
+            bundle.decision().evidenceRefs());
+    assertThat(
+            orchestrator
+                .dispatch(
+                    bundle.observation(), changedDecision, bundle.envelope(), bundle.authority())
+                .failureCode())
+        .isEqualTo("IDEMPOTENCY_CONFLICT");
+
+    // A changed authority.
+    HumanAuthority originalAuthority = bundle.authority();
+    HumanAuthority changedAuthority =
+        new HumanAuthority(
+            originalAuthority.contractVersion(),
+            originalAuthority.authorityId(),
+            originalAuthority.actorType(),
+            "other-operator",
+            originalAuthority.approvedAt(),
+            originalAuthority.expiresAt(),
+            originalAuthority.envelopeDigest(),
+            originalAuthority.scopeDigest(),
+            originalAuthority.oneUse(),
+            originalAuthority.signature());
+    assertThat(
+            orchestrator
+                .dispatch(
+                    bundle.observation(), bundle.decision(), bundle.envelope(), changedAuthority)
+                .failureCode())
+        .isEqualTo("IDEMPOTENCY_CONFLICT");
+
+    // A changed envelope: budgets and then deadline, each with a matching authority binding.
+    Bundle budgetsBundle =
+        mutateEnvelope(bundle, node -> ((ObjectNode) node.get("budgets")).put("maxActions", 9));
+    assertThat(
+            orchestrator
+                .dispatch(
+                    budgetsBundle.observation(),
+                    budgetsBundle.decision(),
+                    budgetsBundle.envelope(),
+                    budgetsBundle.authority())
+                .failureCode())
+        .isEqualTo("IDEMPOTENCY_CONFLICT");
+
+    Bundle deadlineBundle =
+        mutateEnvelope(
+            bundle, node -> node.put("deadline", Instant.now().plusSeconds(900).toString()));
+    assertThat(
+            orchestrator
+                .dispatch(
+                    deadlineBundle.observation(),
+                    deadlineBundle.decision(),
+                    deadlineBundle.envelope(),
+                    deadlineBundle.authority())
+                .failureCode())
+        .isEqualTo("IDEMPOTENCY_CONFLICT");
+  }
+
+  @Test
+  void exactBootstrapReplaySurvivesAGatewayOutage() {
+    Bundle bundle = bundle("replay-outage");
+    BootstrapGameplayOrchestrator orchestrator = productionOrchestrator();
+    orchestrator.dispatch(
+        bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+    int capabilitiesBefore = gateway.capabilityCalls.get();
+
+    // The gateway is now unreachable, but an exact replay must resolve from the durable aggregate
+    // without any capability access.
+    gateway.failCapabilities = true;
+    var replay =
+        orchestrator.dispatch(
+            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+
+    assertThat(replay.failureCode()).isEqualTo("RUNTIME_DISABLED");
+    assertThat(gateway.capabilityCalls.get()).isEqualTo(capabilitiesBefore);
+  }
+
+  private Bundle mutateEnvelope(Bundle bundle, java.util.function.Consumer<ObjectNode> mutation) {
+    ObjectNode envelopeNode = (ObjectNode) objectMapper.valueToTree(bundle.envelope());
+    mutation.accept(envelopeNode);
+    ExecutionEnvelope envelope = objectMapper.convertValue(envelopeNode, ExecutionEnvelope.class);
+    HumanAuthority authority =
+        new HumanAuthority(
+            bundle.authority().contractVersion(),
+            envelope.authorityId(),
+            bundle.authority().actorType(),
+            bundle.authority().approvedBy(),
+            bundle.authority().approvedAt(),
+            bundle.authority().expiresAt(),
+            canonicalJson.digest(envelope),
+            bundle.authority().scopeDigest(),
+            bundle.authority().oneUse(),
+            bundle.authority().signature());
+    return new Bundle(bundle.observation(), bundle.decision(), envelope, authority);
+  }
+
+  @Test
+  void missingCapabilityDigestFailsClosedBeforeClaim() {
+    Bundle bundle = bundle("nocap");
+    RecordingGateway absent =
+        new RecordingGateway() {
+          @Override
+          public CapabilitySnapshot capabilities(OrchestrationRequest request) {
+            capabilityCalls.incrementAndGet();
+            return new CapabilitySnapshot(
+                null, null, null, -1, -1, Instant.now(), Instant.now(), false, List.of());
+          }
+        };
+    BootstrapGameplayOrchestrator orchestrator =
+        productionOrchestrator(
+            new AccountBuilderOrchestrationService(
+                orchestrationValidator, canonicalJson, store, absent, enabledProperties()),
+            absent);
+
+    var receipt =
+        orchestrator.dispatch(
+            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+
+    assertThat(receipt.failureCode()).isEqualTo("GATEWAY_UNAVAILABLE");
+    assertThat(store.find("bootstrap-" + bundle.envelope().requestId())).isEmpty();
+    assertThat(absent.reserves.get()).isZero();
+  }
+
+  @Test
+  void capabilityCatalogMismatchFailsBeforeClaimAndReserve() {
+    Bundle bundle = bundle("catalogdrift");
+    RecordingGateway drifted =
+        new LiveCapabilityGateway() {
+          @Override
+          public CapabilitySnapshot capabilities(OrchestrationRequest request) {
+            capabilityCalls.incrementAndGet();
+            CapabilitySnapshot ready = super.capabilities(request);
+            return new CapabilitySnapshot(
+                "sha256:" + "4".repeat(64),
+                ready.capabilityDigest(),
+                ready.buildId(),
+                ready.observationRevision(),
+                ready.taskRevision(),
+                ready.observedAt(),
+                ready.expiresAt(),
+                true,
+                ready.tasks());
+          }
+        };
+    BootstrapGameplayOrchestrator orchestrator =
+        productionOrchestrator(
+            new AccountBuilderOrchestrationService(
+                orchestrationValidator, canonicalJson, store, drifted, enabledProperties()),
+            drifted);
+
+    var receipt =
+        orchestrator.dispatch(
+            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+
+    assertThat(receipt.failureCode()).isEqualTo("STALE_BINDING");
+    assertThat(store.find("bootstrap-" + bundle.envelope().requestId())).isEmpty();
+    assertThat(drifted.reserves.get()).isZero();
+  }
+
+  @Test
+  void revisionDriftFailsBeforeClaimAndReserve() {
+    Bundle bundle = bundle("revisiondrift");
+    RecordingGateway drifted =
+        new LiveCapabilityGateway() {
+          @Override
+          public CapabilitySnapshot capabilities(OrchestrationRequest request) {
+            capabilityCalls.incrementAndGet();
+            CapabilitySnapshot ready = super.capabilities(request);
+            return new CapabilitySnapshot(
+                ready.catalogDigest(),
+                ready.capabilityDigest(),
+                ready.buildId(),
+                ready.observationRevision() + 1,
+                ready.taskRevision(),
+                ready.observedAt(),
+                ready.expiresAt(),
+                true,
+                ready.tasks());
+          }
+        };
+    BootstrapGameplayOrchestrator orchestrator =
+        productionOrchestrator(
+            new AccountBuilderOrchestrationService(
+                orchestrationValidator, canonicalJson, store, drifted, enabledProperties()),
+            drifted);
+
+    var receipt =
+        orchestrator.dispatch(
+            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+
+    assertThat(receipt.failureCode()).isEqualTo("REVISION_MISMATCH");
+    assertThat(store.find("bootstrap-" + bundle.envelope().requestId())).isEmpty();
+    assertThat(drifted.reserves.get()).isZero();
+  }
+
+  @Test
+  void observationDriftBetweenPreflightAndReserveFailsBeforeReserve() {
+    Bundle bundle = bundle("clientdrift");
+    RecordingGateway drifted =
+        new LiveCapabilityGateway() {
+          private boolean firstProbe = true;
+
+          @Override
+          public CapabilitySnapshot capabilities(OrchestrationRequest request) {
+            capabilityCalls.incrementAndGet();
+            CapabilitySnapshot ready = super.capabilities(request);
+            if (firstProbe) {
+              firstProbe = false;
+              return ready;
+            }
+            // The second probe (immediately before reserve) now reports different capability
+            // evidence: the request's preflight binding no longer matches the live snapshot.
+            return new CapabilitySnapshot(
+                ready.catalogDigest(),
+                "sha256:" + "8".repeat(64),
+                ready.buildId(),
+                ready.observationRevision(),
+                ready.taskRevision(),
+                ready.observedAt(),
+                ready.expiresAt(),
+                true,
+                ready.tasks());
+          }
+        };
+    BootstrapGameplayOrchestrator orchestrator =
+        productionOrchestrator(
+            new AccountBuilderOrchestrationService(
+                orchestrationValidator, canonicalJson, store, drifted, enabledProperties()),
+            drifted);
+
+    var receipt =
+        orchestrator.dispatch(
+            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+
+    assertThat(receipt.failureCode()).isEqualTo("STALE_BINDING");
+    assertThat(drifted.reserves.get()).isZero();
+  }
+
+  private AccountBuilderOrchestrationProperties enabledProperties() {
+    AccountBuilderOrchestrationProperties properties = new AccountBuilderOrchestrationProperties();
+    properties.setEnabled(true);
+    properties.setLiveDeliveryEnabled(true);
+    return properties;
+  }
+
+  @Test
   void bootstrapFactoryAndValidatorComputeTheSameImmutableFingerprint() {
     Bundle bundle = bundle("fingerprint");
     OrchestrationRequest request =
         requestFactory.fromBootstrap(
-            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+            bundle.observation(),
+            bundle.decision(),
+            bundle.envelope(),
+            bundle.authority(),
+            closedGatewaySnapshot());
 
     assertThat(request.requestFingerprint())
         .isEqualTo(orchestrationValidator.immutableFingerprint(request));
@@ -139,7 +470,11 @@ class BootstrapGameplaySc1431IntegrationTest {
     Bundle bundle = bundle("legacy");
     OrchestrationRequest request =
         requestFactory.fromBootstrap(
-            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+            bundle.observation(),
+            bundle.decision(),
+            bundle.envelope(),
+            bundle.authority(),
+            closedGatewaySnapshot());
     OrchestrationRequest tampered =
         new OrchestrationRequest(
             request.orchestrationId(),
@@ -176,7 +511,11 @@ class BootstrapGameplaySc1431IntegrationTest {
     Bundle bundle = bundle("conflict");
     OrchestrationRequest request =
         requestFactory.fromBootstrap(
-            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+            bundle.observation(),
+            bundle.decision(),
+            bundle.envelope(),
+            bundle.authority(),
+            closedGatewaySnapshot());
     service.orchestrate(request);
 
     // A still-internally-consistent request whose immutable observation payload changed: every
@@ -212,7 +551,11 @@ class BootstrapGameplaySc1431IntegrationTest {
     Bundle bundle = bundle("nogateway");
     OrchestrationRequest request =
         requestFactory.fromBootstrap(
-            bundle.observation(), bundle.decision(), bundle.envelope(), bundle.authority());
+            bundle.observation(),
+            bundle.decision(),
+            bundle.envelope(),
+            bundle.authority(),
+            closedGatewaySnapshot());
     OrchestrationRequest tampered =
         new OrchestrationRequest(
             request.orchestrationId(),
@@ -238,27 +581,45 @@ class BootstrapGameplaySc1431IntegrationTest {
     assertThat(gateway.dispatchCalls.get()).isZero();
   }
 
-  private BootstrapGameplayOrchestrator productionOrchestrator() {
+  private BootstrapGameplayOrchestrator productionOrchestrator(
+      AccountBuilderOrchestrationService orchestrationService,
+      AccountBuilderOrchestrationGateway gateway) {
     return new BootstrapGameplayOrchestrator(
         validator,
         canonicalJson,
-        new AccountBuilderGameplayGateway() {
-          @Override
-          public DispatchResult dispatch(ExecutionEnvelope envelope, HumanAuthority authority) {
-            gateway.dispatchCalls.incrementAndGet();
-            return new DispatchResult(Outcome.CONFIRMED, null, true, true, List.of());
-          }
-
-          @Override
-          public DispatchResult stop(String requestId, String reason, boolean killSwitch) {
-            gateway.dispatchCalls.incrementAndGet();
-            return new DispatchResult(Outcome.STOPPED, null, true, true, List.of());
-          }
-        },
+        legacyGateway(),
         new BootstrapEvidenceStore(objectMapper, canonicalJson, temporaryDirectory),
-        service,
+        orchestrationService,
         requestFactory,
+        new AccountBuilderCapabilityPreflight(gateway),
         Clock.fixed(NOW, ZoneOffset.UTC));
+  }
+
+  private BootstrapGameplayOrchestrator productionOrchestrator() {
+    return productionOrchestrator(service, gateway);
+  }
+
+  private AccountBuilderGameplayGateway legacyGateway() {
+    return new AccountBuilderGameplayGateway() {
+      @Override
+      public DispatchResult dispatch(ExecutionEnvelope envelope, HumanAuthority authority) {
+        gateway.dispatchCalls.incrementAndGet();
+        return new DispatchResult(Outcome.CONFIRMED, null, true, true, List.of());
+      }
+
+      @Override
+      public DispatchResult stop(String requestId, String reason, boolean killSwitch) {
+        gateway.dispatchCalls.incrementAndGet();
+        return new DispatchResult(Outcome.STOPPED, null, true, true, List.of());
+      }
+    };
+  }
+
+  /** The digest-shaped snapshot the closed gateway reports when delivery is disabled. */
+  private static CapabilitySnapshot closedGatewaySnapshot() {
+    Instant now = Instant.now();
+    return new CapabilitySnapshot(
+        null, "sha256:" + "0".repeat(64), null, -1, -1, now, now, false, List.of());
   }
 
   @Test
@@ -342,24 +703,20 @@ class BootstrapGameplaySc1431IntegrationTest {
       HumanAuthority authority) {}
 
   /** Records every SC-1431 gateway touch; fingerprint validation must happen before any of it. */
-  private static final class RecordingGateway implements AccountBuilderOrchestrationGateway {
-    private final AtomicInteger capabilityCalls = new AtomicInteger();
-    private final AtomicInteger reserves = new AtomicInteger();
-    private final AtomicInteger dispatchCalls = new AtomicInteger();
+  static class RecordingGateway implements AccountBuilderOrchestrationGateway {
+    final AtomicInteger capabilityCalls = new AtomicInteger();
+    final AtomicInteger reserves = new AtomicInteger();
+    final AtomicInteger dispatchCalls = new AtomicInteger();
+    volatile boolean failCapabilities;
 
     @Override
     public CapabilitySnapshot capabilities(OrchestrationRequest request) {
       capabilityCalls.incrementAndGet();
-      return new CapabilitySnapshot(
-          "unavailable",
-          "unavailable",
-          "unavailable",
-          -1,
-          -1,
-          Instant.now(),
-          Instant.now(),
-          false,
-          List.of());
+      if (failCapabilities) {
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.GATEWAY_UNAVAILABLE, "simulated capability outage");
+      }
+      return closedGatewaySnapshot();
     }
 
     @Override
@@ -414,6 +771,37 @@ class BootstrapGameplaySc1431IntegrationTest {
     @Override
     public GatewayReceipt reconcileReservation(GatewayCorrelation correlation) {
       throw new AssertionError("reconcileReservation is never reachable in this test");
+    }
+  }
+
+  /** The distinct server-issued capability digest a live Micro6 attestation reports. */
+  static final String SERVER_CAPABILITY_DIGEST = "sha256:" + "9".repeat(64);
+
+  /**
+   * A live, ready Micro6-shaped gateway: the capability snapshot carries a distinct server-issued
+   * digest agreeing with the proposal catalog, but the reservation itself stays unavailable.
+   */
+  private static class LiveCapabilityGateway extends RecordingGateway {
+    @Override
+    public CapabilitySnapshot capabilities(OrchestrationRequest request) {
+      capabilityCalls.incrementAndGet();
+      Instant now = Instant.now();
+      return new CapabilitySnapshot(
+          request.envelope().catalogDigest(),
+          SERVER_CAPABILITY_DIGEST,
+          request.envelope().buildId(),
+          request.envelope().expectedObservationRevision(),
+          request.envelope().expectedTaskRevision(),
+          now,
+          now.plusSeconds(30),
+          true,
+          List.of(
+              new TaskCapability(
+                  request.envelope().taskKey(),
+                  true,
+                  request.envelope().schemaDigest(),
+                  request.envelope().buildId(),
+                  List.of())));
     }
   }
 }

@@ -9,7 +9,9 @@ import com.chromascape.web.gameplay.contract.GameplayContracts.Outcome;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision;
 import com.chromascape.web.gameplay.contract.GameplayContracts.Receipt;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ReceiptPhase;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderCapabilityPreflight;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationException;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
@@ -31,6 +33,7 @@ public final class BootstrapGameplayOrchestrator {
   private final BootstrapEvidenceStore evidenceStore;
   private final AccountBuilderOrchestrationService orchestrationService;
   private final AccountBuilderOrchestrationRequestFactory requestFactory;
+  private final AccountBuilderCapabilityPreflight capabilityPreflight;
   private final Clock clock;
   private final Map<String, RequestState> requests = new ConcurrentHashMap<>();
   private final Map<String, RequestIdentity> idempotencyOwners = new ConcurrentHashMap<>();
@@ -40,7 +43,7 @@ public final class BootstrapGameplayOrchestrator {
       CanonicalGameplayJson canonicalJson,
       AccountBuilderGameplayGateway gateway,
       BootstrapEvidenceStore evidenceStore) {
-    this(validator, canonicalJson, gateway, evidenceStore, null, null, Clock.systemUTC());
+    this(validator, canonicalJson, gateway, evidenceStore, null, null, null, Clock.systemUTC());
   }
 
   BootstrapGameplayOrchestrator(
@@ -49,15 +52,16 @@ public final class BootstrapGameplayOrchestrator {
       AccountBuilderGameplayGateway gateway,
       BootstrapEvidenceStore evidenceStore,
       Clock clock) {
-    this(validator, canonicalJson, gateway, evidenceStore, null, null, clock);
+    this(validator, canonicalJson, gateway, evidenceStore, null, null, null, clock);
   }
 
   /**
    * SC-1431 unified constructor: dispatch, stop, idempotency, authority ownership and lifecycle
    * delegate to the durable orchestration service through the shared request factory; the legacy
    * gateway is only the compatibility fallback for callers that were never wired to the durable
-   * store. When the durable service is configured, the shared request factory is mandatory so the
-   * bootstrap path can never emit a partial fingerprint.
+   * store. When the durable service is configured, the shared request factory and the read-only
+   * capability preflight are mandatory so the bootstrap path can never emit a partial fingerprint
+   * or substitute a catalog digest for a capability attestation.
    */
   BootstrapGameplayOrchestrator(
       GameplayContractValidator validator,
@@ -66,11 +70,16 @@ public final class BootstrapGameplayOrchestrator {
       BootstrapEvidenceStore evidenceStore,
       AccountBuilderOrchestrationService orchestrationService,
       AccountBuilderOrchestrationRequestFactory requestFactory,
+      AccountBuilderCapabilityPreflight capabilityPreflight,
       Clock clock) {
     if (orchestrationService != null && requestFactory == null) {
       throw new IllegalStateException(
           "Durable SC-1431 bootstrap delegation requires the shared orchestration request"
               + " factory");
+    }
+    if (orchestrationService != null && capabilityPreflight == null) {
+      throw new IllegalStateException(
+          "Durable SC-1431 bootstrap delegation requires the read-only capability preflight");
     }
     this.validator = validator;
     this.canonicalJson = canonicalJson;
@@ -78,6 +87,7 @@ public final class BootstrapGameplayOrchestrator {
     this.evidenceStore = evidenceStore;
     this.orchestrationService = orchestrationService;
     this.requestFactory = requestFactory;
+    this.capabilityPreflight = capabilityPreflight;
     this.clock = clock;
   }
 
@@ -372,10 +382,33 @@ public final class BootstrapGameplayOrchestrator {
       ExecutionEnvelope envelope,
       HumanAuthority authority,
       String envelopeDigest) {
-    // The immutable request and its full fingerprint come from the one shared factory, so the
-    // bootstrap path and the validator can never disagree about request identity again.
+    String orchestrationId = sc1431OrchestrationId(envelope.requestId());
+    // Idempotent replay: a durable aggregate with the same request identity owns the outcome. It
+    // is consulted before any capability preflight, so a replay neither fetches a new snapshot nor
+    // redispatches, and an existing capability binding is never replaced. The comparison covers the
+    // complete immutable identity, not just the envelope digest: the candidate request is rebuilt
+    // with the persisted capability digest and its full fingerprint is compared against the stored
+    // one, so any changed observation, provider decision, authority, envelope or binding conflicts.
+    java.util.Optional<OrchestrationView> existing =
+        orchestrationService.findOrchestration(orchestrationId);
+    if (existing.isPresent()) {
+      String storedCapabilityDigest = orchestrationService.storedCapabilityDigest(orchestrationId);
+      OrchestrationRequest replayCandidate =
+          requestFactory.fromBootstrapReplay(
+              observation, decision, envelope, authority, storedCapabilityDigest);
+      if (!replayCandidate.requestFingerprint().equals(existing.get().requestFingerprint())) {
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.IDEMPOTENCY_CONFLICT,
+            "A different request is already persisted under this orchestration id");
+      }
+      return toDispatchResult(existing.get());
+    }
+    // Read-only capability preflight: catalog and client observation only, never reserve or
+    // dispatch. The server-issued capability digest from this probe is what the immutable request
+    // binds; the catalog digest is never substituted.
+    CapabilitySnapshot preflight = capabilityPreflight.probe(envelope);
     OrchestrationRequest request =
-        requestFactory.fromBootstrap(observation, decision, envelope, authority);
+        requestFactory.fromBootstrap(observation, decision, envelope, authority, preflight);
     return toDispatchResult(orchestrationService.orchestrate(request).view());
   }
 

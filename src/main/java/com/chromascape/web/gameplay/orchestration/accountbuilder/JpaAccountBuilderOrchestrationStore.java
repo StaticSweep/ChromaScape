@@ -1473,7 +1473,11 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
   }
 
   private boolean requiresLease(State state) {
-    return LEASE_STATES.contains(state) && state != State.NEEDS_RECONCILIATION;
+    // A proven pre-submission terminal failure (connection refused before submission) carries no
+    // lease and never needs one; a lease attached to a terminal state is still validated.
+    return LEASE_STATES.contains(state)
+        && state != State.NEEDS_RECONCILIATION
+        && state != State.FAILED;
   }
 
   private boolean samePersistedReceipt(List<GatewayReceipt> persisted, GatewayReceipt candidate) {

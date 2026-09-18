@@ -134,7 +134,10 @@ class ProviderDecisionOrchestrationSourceTest {
   private ProviderDecisionOrchestrationSource source(PersistedDecision persisted) {
     return new ProviderDecisionOrchestrationSource(
         (sessionId, turnId) -> persisted == null ? Optional.empty() : Optional.of(persisted),
-        canonicalJson);
+        canonicalJson,
+        new AccountBuilderOrchestrationRequestFactory(
+            new AccountBuilderOrchestrationValidator(canonicalJson, (authority, envelope) -> true),
+            canonicalJson));
   }
 
   @Test

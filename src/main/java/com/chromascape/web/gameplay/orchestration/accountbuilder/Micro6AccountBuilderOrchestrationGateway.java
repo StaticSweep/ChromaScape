@@ -204,26 +204,53 @@ public final class Micro6AccountBuilderOrchestrationGateway
       throw new AccountBuilderOrchestrationException(
           FailureCode.INVALID_GATEWAY_RECEIPT, "Micro6 v2 response is not a JSON object");
     }
-    if (response.has("_httpSuccess") && !response.path("_httpSuccess").asBoolean()) {
+    // Every trusted response carries both HTTP stamps. A response without them is an invalid
+    // receipt that can never be trusted as success, denial or terminal evidence.
+    if (!response.path("_httpSuccess").isBoolean()) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_GATEWAY_RECEIPT, "Micro6 v2 response is missing _httpSuccess");
+    }
+    boolean httpSuccess = response.path("_httpSuccess").asBoolean();
+    if (!response.path("_httpStatus").isIntegralNumber()) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_GATEWAY_RECEIPT, "Micro6 v2 response is missing _httpStatus");
+    }
+    int httpStatus = response.path("_httpStatus").asInt();
+    if (httpSuccess != (httpStatus >= 200 && httpStatus < 300)) {
+      // HTTP stamps must agree: a success stamp with a non-2xx status (or the inverse) is an
+      // invalid receipt and never a usable evidence boundary.
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_GATEWAY_RECEIPT, "Micro6 v2 HTTP stamps contradict each other");
+    }
+    if (!httpSuccess) {
       // A negative HTTP status with a structured body is a stable rejection; without one it is an
       // invalid receipt that can never be trusted as terminal evidence.
-      if (response.path("success").isBoolean()
-          && !response.path("success").asBoolean()
-          && response.path("failureCode").asText(null) != null) {
-        return boundRejection(response, expectedRequestId, expectedEnvelopeDigest, phase);
+      if (!response.path("success").isBoolean()
+          || response.path("success").asBoolean()
+          || response.path("failureCode").asText(null) == null
+          || response.path("failureCode").asText().isBlank()) {
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.INVALID_GATEWAY_RECEIPT,
+            "Micro6 v2 response reported HTTP failure without a stable rejection body");
       }
-      throw new AccountBuilderOrchestrationException(
-          FailureCode.INVALID_GATEWAY_RECEIPT, "Micro6 v2 response reported HTTP failure");
+      return boundRejection(response, expectedRequestId, expectedEnvelopeDigest, phase);
     }
-    boolean httpStamped = response.has("_httpSuccess");
-    if (httpStamped && !response.path("success").isBoolean()) {
-      // HTTP 2xx without a closed success member can never be treated as semantic success.
+    // HTTP 2xx without a closed success member can never be treated as semantic success.
+    if (!response.path("success").isBoolean()) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.INVALID_GATEWAY_RECEIPT,
           "Micro6 v2 receipt is missing the closed success member");
     }
     String requestId = response.path("requestId").asText(null);
     String envelopeDigest = response.path("envelopeDigest").asText(null);
+    if (requestId == null
+        || requestId.isBlank()
+        || envelopeDigest == null
+        || envelopeDigest.isBlank()) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_GATEWAY_RECEIPT,
+          "Micro6 v2 receipt is missing its request or envelope identity");
+    }
     if (!expectedRequestId.equals(requestId)) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STALE_BINDING, "Micro6 v2 receipt request id does not match");
@@ -258,13 +285,26 @@ public final class Micro6AccountBuilderOrchestrationGateway
 
   private GatewayReceipt boundRejection(
       JsonNode response, String expectedRequestId, String expectedEnvelopeDigest, String phase) {
+    // A denial is only associated with the expected orchestration when it carries the exact
+    // request id and envelope digest. A denial missing either value is an unbound receipt and can
+    // never be trusted as terminal evidence for this request.
     String requestId = response.path("requestId").asText(null);
-    if (requestId != null && !expectedRequestId.equals(requestId)) {
+    if (requestId == null || requestId.isBlank()) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_GATEWAY_RECEIPT,
+          "Micro6 v2 rejection is missing its request identity");
+    }
+    if (!expectedRequestId.equals(requestId)) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STALE_BINDING, "Micro6 v2 rejection request id does not match");
     }
     String envelopeDigest = response.path("envelopeDigest").asText(null);
-    if (envelopeDigest != null && !expectedEnvelopeDigest.equals(envelopeDigest)) {
+    if (envelopeDigest == null || envelopeDigest.isBlank()) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_GATEWAY_RECEIPT,
+          "Micro6 v2 rejection is missing its envelope digest");
+    }
+    if (!expectedEnvelopeDigest.equals(envelopeDigest)) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.FENCE_MISMATCH, "Micro6 v2 rejection envelope digest does not match");
     }
@@ -291,8 +331,7 @@ public final class Micro6AccountBuilderOrchestrationGateway
 
   private CapabilitySnapshot capabilitySnapshot(
       JsonNode catalog, JsonNode observation, OrchestrationRequest request, Instant now) {
-    boolean catalogOk =
-        !catalog.has("_httpSuccess") || catalog.path("_httpSuccess").asBoolean(false);
+    boolean catalogOk = httpStampOk(catalog);
     String catalogDigest = catalog.path("catalogDigest").asText(null);
     String buildId = catalog.path("buildId").asText(null);
     List<TaskCapability> tasks = new ArrayList<>();
@@ -353,8 +392,22 @@ public final class Micro6AccountBuilderOrchestrationGateway
         tasks);
   }
 
+  /**
+   * Both HTTP stamps must be present and consistent on a trusted preflight response. A response
+   * without stamps, with contradictory stamps, or with a failure stamp can never carry capability
+   * evidence.
+   */
   private boolean httpStampOk(JsonNode response) {
-    return !response.has("_httpSuccess") || response.path("_httpSuccess").asBoolean(false);
+    if (!response.path("_httpSuccess").isBoolean()
+        || !response.path("_httpStatus").isIntegralNumber()) {
+      return false;
+    }
+    boolean httpSuccess = response.path("_httpSuccess").asBoolean();
+    int httpStatus = response.path("_httpStatus").asInt();
+    // Conjunctive: a stamp alone never proves success. Both the boolean success stamp AND a 2xx
+    // status are required, so a negative stamp (for example false/503, where both sides of an
+    // equality check would be false) can never be accepted as capability evidence.
+    return httpSuccess && httpStatus >= 200 && httpStatus < 300;
   }
 
   /**
@@ -426,7 +479,9 @@ public final class Micro6AccountBuilderOrchestrationGateway
 
   /**
    * Stable, one-to-one failure semantics. Missing, malformed, forbidden and consumed authority keep
-   * distinct meanings; unknown remote codes fail closed and are never translated into {@code NONE}.
+   * distinct meanings. An unrecognized remote code is a malformed protocol receipt: it is never
+   * translated into {@code NONE}, {@code DISPATCH_REJECTED} or any other proven terminal denial
+   * that could authorize a retry, and it fails closed with {@code INVALID_GATEWAY_RECEIPT}.
    */
   private FailureCode mapFailureCode(String remoteCode, State state) {
     if (remoteCode == null || remoteCode.isBlank() || "NONE".equals(remoteCode)) {
@@ -447,10 +502,9 @@ public final class Micro6AccountBuilderOrchestrationGateway
           "INVALID_ENVELOPE",
           "INVALID_RECEIPT",
           "UNKNOWN_REQUEST" -> FailureCode.INVALID_GATEWAY_RECEIPT;
-        // An unrecognized failure code can never become a success-shaped or retryable code.
-      default -> State.DENIED == state
-          ? FailureCode.DISPATCH_REJECTED
-          : FailureCode.INVALID_GATEWAY_RECEIPT;
+      default -> throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_GATEWAY_RECEIPT,
+          "Micro6 v2 receipt carries an unrecognized failure code");
     };
   }
 

@@ -219,6 +219,24 @@ public final class AccountBuilderOrchestrationModels {
       Instant deadline) {}
 
   /**
+   * Production provider-orchestration command. It carries provider session and turn identity plus
+   * request identity, envelope, authority, observation and deadline only. The provider decision,
+   * the provider provenance and the source type are never caller input: they are loaded from the
+   * durable persisted provider turn by {@code ProviderDecisionOrchestrationSource}.
+   */
+  public record ProviderOrchestrationCommand(
+      String providerSessionId,
+      String providerTurnId,
+      String orchestrationId,
+      String requestId,
+      String idempotencyKey,
+      Mode mode,
+      ExecutionEnvelope envelope,
+      HumanAuthority authority,
+      JsonNode observation,
+      Instant deadline) {}
+
+  /**
    * Non-secret identity used for every gateway operation after the initial validated request.
    *
    * <p>This contract deliberately contains digests and immutable routing metadata only. It is not a

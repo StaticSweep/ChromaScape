@@ -478,4 +478,217 @@ class Micro6AccountBuilderOrchestrationGatewayTest {
       return exception.failureCode();
     }
   }
+
+  /** Applies one sparse-field mutation and maps the adapter status outcome. */
+  private FailureCode statusFailureCode(
+      java.util.function.Consumer<com.fasterxml.jackson.databind.node.ObjectNode> mutation) {
+    StubV2Gateway transport = new StubV2Gateway();
+    com.fasterxml.jackson.databind.node.ObjectNode response = reservedAck();
+    mutation.accept(response);
+    transport.statusResponse = response;
+    try {
+      adapter(transport).status(correlation(), null);
+      return FailureCode.NONE;
+    } catch (AccountBuilderOrchestrationException exception) {
+      return exception.failureCode();
+    }
+  }
+
+  @Test
+  void missingHttpStampsFailClosedOnEveryTrustedShape() {
+    assertThat(reserveFailureCode(node -> node.remove("_httpSuccess")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(reserveFailureCode(node -> node.remove("_httpStatus")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(statusFailureCode(node -> node.remove("_httpSuccess")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(statusFailureCode(node -> node.remove("_httpStatus")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+  }
+
+  @Test
+  void contradictoryHttpStampsFailClosed() {
+    assertThat(reserveFailureCode(node -> node.put("_httpSuccess", true).put("_httpStatus", 500)))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(reserveFailureCode(node -> node.put("_httpSuccess", false).put("_httpStatus", 200)))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(statusFailureCode(node -> node.put("_httpSuccess", true).put("_httpStatus", 503)))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+  }
+
+  @Test
+  void semanticSuccessNeverAccompaniesHttpFailure() {
+    assertThat(
+            reserveFailureCode(
+                node ->
+                    node.put("_httpSuccess", false)
+                        .put("_httpStatus", 500)
+                        .put("success", true)
+                        .put("status", "RESERVED")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+  }
+
+  @Test
+  void unboundRejectionsAreNeverAssociatedWithTheExpectedRequest() {
+    assertThat(
+            reserveFailureCode(
+                node ->
+                    node.put("_httpSuccess", false)
+                        .put("_httpStatus", 409)
+                        .put("success", false)
+                        .put("status", "DENIED")
+                        .put("failureCode", "INVALID_ENVELOPE")
+                        .remove("requestId")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+    assertThat(
+            reserveFailureCode(
+                node ->
+                    node.put("_httpSuccess", false)
+                        .put("_httpStatus", 409)
+                        .put("success", false)
+                        .put("status", "DENIED")
+                        .put("failureCode", "INVALID_ENVELOPE")
+                        .remove("envelopeDigest")))
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+  }
+
+  @Test
+  void mismatchingRejectionIdentityFailsClosed() {
+    assertThat(
+            reserveFailureCode(
+                node ->
+                    node.put("_httpSuccess", false)
+                        .put("_httpStatus", 409)
+                        .put("success", false)
+                        .put("status", "DENIED")
+                        .put("failureCode", "INVALID_ENVELOPE")
+                        .put("requestId", "other")))
+        .isEqualTo(FailureCode.STALE_BINDING);
+    assertThat(
+            reserveFailureCode(
+                node ->
+                    node.put("_httpSuccess", false)
+                        .put("_httpStatus", 409)
+                        .put("success", false)
+                        .put("status", "DENIED")
+                        .put("failureCode", "INVALID_ENVELOPE")
+                        .put("envelopeDigest", "sha256:" + "8".repeat(64))))
+        .isEqualTo(FailureCode.FENCE_MISMATCH);
+  }
+
+  @Test
+  void aFullyBoundRejectionRemainsUsableTerminalEvidence() {
+    StubV2Gateway transport = new StubV2Gateway();
+    transport.statusResponse =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            reservedAck()
+                .put("_httpSuccess", false)
+                .put("_httpStatus", 409)
+                .put("success", false)
+                .put("status", "DENIED")
+                .put("failureCode", "MODE_NOT_DELIVERABLE");
+    GatewayReceipt receipt = adapter(transport).status(correlation(), null);
+
+    assertThat(receipt.state()).isEqualTo(State.DENIED);
+    assertThat(receipt.failureCode()).isEqualTo(FailureCode.MODE_NOT_DELIVERABLE);
+    assertThat(receipt.terminalReconciled()).isTrue();
+  }
+
+  @Test
+  void unknownRemoteFailureCodeFailsClosed() {
+    StubV2Gateway transport = new StubV2Gateway();
+    transport.statusResponse =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            reservedAck()
+                .put("_httpSuccess", false)
+                .put("_httpStatus", 409)
+                .put("success", false)
+                .put("failureCode", "TOTALLY_NEW_CODE");
+    // An unrecognized remote code is a malformed protocol receipt, never a proven terminal denial
+    // that could authorize a retry.
+    assertThatThrownBy(() -> adapter(transport).status(correlation(), null))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .extracting("failureCode")
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+  }
+
+  @Test
+  void capabilityEvidenceRequiresAffirmativeHttpStampsAndCompleteBodies() {
+    // A fully valid exchange is ready, including the 299 upper boundary.
+    assertThat(capabilityReady(catalogAck(), observationAck())).isTrue();
+    assertThat(capabilityReady(catalogAck().put("_httpStatus", 299), observationAck())).isTrue();
+
+    // Negative or contradictory stamps on otherwise complete valid-looking bodies never prove
+    // readiness. false/503 is the exact regression: an equality comparison treated both false
+    // sides as agreement and produced liveDeliveryReady=true.
+    assertThat(
+            capabilityReady(
+                catalogAck().put("_httpSuccess", false).put("_httpStatus", 503), observationAck()))
+        .isFalse();
+    assertThat(
+            capabilityReady(
+                catalogAck().put("_httpSuccess", false).put("_httpStatus", 200), observationAck()))
+        .isFalse();
+    assertThat(
+            capabilityReady(
+                catalogAck().put("_httpSuccess", true).put("_httpStatus", 503), observationAck()))
+        .isFalse();
+    assertThat(
+            capabilityReady(
+                catalogAck(), observationAck().put("_httpSuccess", false).put("_httpStatus", 503)))
+        .isFalse();
+
+    // Boundaries 199 and 300 are not 2xx.
+    assertThat(capabilityReady(catalogAck().put("_httpStatus", 199), observationAck())).isFalse();
+    assertThat(capabilityReady(catalogAck().put("_httpStatus", 300), observationAck())).isFalse();
+
+    // Missing or wrongly typed stamps never prove readiness.
+    assertThat(capabilityReady(catalogAck().remove("_httpSuccess"), observationAck())).isFalse();
+    assertThat(capabilityReady(catalogAck().remove("_httpStatus"), observationAck())).isFalse();
+    assertThat(capabilityReady(catalogAck().put("_httpSuccess", "true"), observationAck()))
+        .isFalse();
+    assertThat(capabilityReady(catalogAck().put("_httpStatus", "200"), observationAck())).isFalse();
+
+    // A mismatched catalog/observation identity is never ready.
+    assertThat(
+            capabilityReady(
+                catalogAck(), observationAck().put("catalogDigest", "sha256:" + "8".repeat(64))))
+        .isFalse();
+  }
+
+  private boolean capabilityReady(JsonNode catalog, JsonNode observation) {
+    StubV2Gateway transport = new StubV2Gateway();
+    transport.catalogResponse = catalog;
+    transport.observeResponse = observation;
+    return adapter(transport).capabilities(request()).liveDeliveryReady();
+  }
+
+  private com.fasterxml.jackson.databind.node.ObjectNode catalogAck() {
+    var tasks = mapper.createArrayNode();
+    tasks.addObject().put("taskKey", "FISHING_TRAINING").put("eligible", true);
+    return mapper
+        .createObjectNode()
+        .put("_httpSuccess", true)
+        .put("_httpStatus", 200)
+        .put("catalogDigest", "sha256:" + "c".repeat(64))
+        .put("buildId", "build-1")
+        .set("tasks", tasks);
+  }
+
+  @Test
+  void nonObjectAndEmptyResponsesFailClosed() {
+    StubV2Gateway array = new StubV2Gateway();
+    array.statusResponse = mapper.createArrayNode();
+    assertThatThrownBy(() -> adapter(array).status(correlation(), null))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .extracting("failureCode")
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+
+    StubV2Gateway empty = new StubV2Gateway();
+    empty.statusResponse = mapper.createObjectNode();
+    assertThatThrownBy(() -> adapter(empty).status(correlation(), null))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .extracting("failureCode")
+        .isEqualTo(FailureCode.INVALID_GATEWAY_RECEIPT);
+  }
 }

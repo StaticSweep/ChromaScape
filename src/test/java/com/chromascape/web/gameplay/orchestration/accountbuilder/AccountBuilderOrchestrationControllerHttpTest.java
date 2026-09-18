@@ -15,11 +15,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Readiness;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -29,17 +31,22 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class AccountBuilderOrchestrationControllerHttpTest {
   private static final String OPERATOR_KEY = "0123456789abcdef0123456789abcdef";
   private AccountBuilderOrchestrationService service;
+  private ProviderDecisionOrchestrationSource providerSource;
+  private AccountBuilderCapabilityPreflight capabilityPreflight;
   private MockMvc mvc;
 
   @BeforeEach
   void setUp() {
     service = mock(AccountBuilderOrchestrationService.class);
+    providerSource = mock(ProviderDecisionOrchestrationSource.class);
+    capabilityPreflight = mock(AccountBuilderCapabilityPreflight.class);
     AccountBuilderOrchestrationProperties properties = new AccountBuilderOrchestrationProperties();
     // Default-off: no enablement flags are set; only the operator key is configured.
     properties.setOperatorKey(OPERATOR_KEY);
     mvc =
         MockMvcBuilders.standaloneSetup(
-                new AccountBuilderOrchestrationController(service, properties))
+                new AccountBuilderOrchestrationController(
+                    service, properties, providerSource, capabilityPreflight))
             .build();
   }
 
@@ -181,5 +188,181 @@ class AccountBuilderOrchestrationControllerHttpTest {
             .getResponse()
             .getContentAsString();
     assertThat(body).doesNotContain(OPERATOR_KEY);
+  }
+
+  @Test
+  void directProviderSourceBypassIsRejected() throws Exception {
+    mvc.perform(
+            post("/api/v1/gameplay/accountbuilder/orchestrations")
+                .header("X-Gameplay-Operator-Key", OPERATOR_KEY)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"orchestrationId\":\"orchestration-1\",\"requestId\":\"request-1\","
+                        + "\"idempotencyKey\":\"idempotency-1\",\"sourceType\":\"PROVIDER:CODEX\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.failureCode").value("INVALID_CONTRACT"));
+    verify(service, never()).orchestrate(any());
+  }
+
+  @Test
+  void genericRouteRejectsProviderLikeSourcesRegardlessOfCase() throws Exception {
+    for (String source : List.of("provider:CODEX", "Provider:CODEX", "PROVIDER:codex")) {
+      mvc.perform(
+              post("/api/v1/gameplay/accountbuilder/orchestrations")
+                  .header("X-Gameplay-Operator-Key", OPERATOR_KEY)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      "{\"orchestrationId\":\"orchestration-1\",\"requestId\":\"request-1\","
+                          + "\"idempotencyKey\":\"idempotency-1\",\"sourceType\":\""
+                          + source
+                          + "\"}"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.failureCode").value("INVALID_CONTRACT"));
+    }
+    verify(service, never()).orchestrate(any());
+  }
+
+  @Test
+  void providerOrchestrationRouteBindsThePersistedDecisionAndOrchestrates() throws Exception {
+    var prepared = prepared();
+    when(providerSource.prepareProduction(any())).thenReturn(prepared);
+    when(service.findOrchestration("orchestration-1")).thenReturn(Optional.empty());
+    var snapshot =
+        new com.chromascape.web.gameplay.orchestration.accountbuilder
+            .AccountBuilderOrchestrationModels.CapabilitySnapshot(
+            null, null, null, -1, -1, Instant.now(), Instant.now(), false, List.of());
+    when(capabilityPreflight.probe(any())).thenReturn(snapshot);
+    when(providerSource.completeProduction(prepared, snapshot)).thenReturn(providerRequest(null));
+    when(service.orchestrateProvider(any()))
+        .thenReturn(new AccountBuilderOrchestrationService.Submission(view(State.CREATED), true));
+    mvc.perform(
+            post("/api/v1/gameplay/accountbuilder/provider-orchestrations")
+                .header("X-Gameplay-Operator-Key", OPERATOR_KEY)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"providerSessionId\":\"session-1\",\"providerTurnId\":\"turn-1\","
+                        + "\"orchestrationId\":\"orchestration-1\",\"requestId\":\"request-1\","
+                        + "\"idempotencyKey\":\"idempotency-1\",\"mode\":\"LIVE_TASK\"}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.state").value("CREATED"));
+    verify(capabilityPreflight).probe(any());
+    verify(providerSource).completeProduction(prepared, snapshot);
+    verify(service).orchestrateProvider(any());
+  }
+
+  @Test
+  void providerOrchestrationRouteRequiresAuthentication() throws Exception {
+    mvc.perform(
+            post("/api/v1/gameplay/accountbuilder/provider-orchestrations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"providerSessionId\":\"session-1\",\"providerTurnId\":\"turn-1\","
+                        + "\"orchestrationId\":\"orchestration-1\",\"requestId\":\"request-1\","
+                        + "\"idempotencyKey\":\"idempotency-1\",\"mode\":\"LIVE_TASK\"}"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.failureCode").value("OPERATOR_UNAUTHORIZED"));
+    verify(providerSource, never()).prepareProduction(any());
+    verify(capabilityPreflight, never()).probe(any());
+    verify(service, never()).orchestrateProvider(any());
+  }
+
+  @Test
+  void providerOrchestrationRouteFailsClosedOnSourceRejection() throws Exception {
+    when(providerSource.prepareProduction(any()))
+        .thenThrow(
+            new AccountBuilderOrchestrationException(
+                FailureCode.INVALID_CONTRACT,
+                "Persisted provider turn is not a proven DECIDED turn with complete provenance"));
+    mvc.perform(
+            post("/api/v1/gameplay/accountbuilder/provider-orchestrations")
+                .header("X-Gameplay-Operator-Key", OPERATOR_KEY)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"providerSessionId\":\"session-1\",\"providerTurnId\":\"turn-1\","
+                        + "\"orchestrationId\":\"orchestration-1\",\"requestId\":\"request-1\","
+                        + "\"idempotencyKey\":\"idempotency-1\",\"mode\":\"LIVE_TASK\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.failureCode").value("INVALID_CONTRACT"));
+    // An invalid provider decision can never reach Micro6 or the durable service.
+    verify(capabilityPreflight, never()).probe(any());
+    verify(service, never()).orchestrateProvider(any());
+  }
+
+  @Test
+  void providerOrchestrationRouteSkipsPreflightForAnExactReplay() throws Exception {
+    var prepared = prepared();
+    OrchestrationView existing = view(State.DENIED);
+    String storedCapabilityDigest = "sha256:" + "c".repeat(64);
+    when(providerSource.prepareProduction(any())).thenReturn(prepared);
+    when(service.findOrchestration("orchestration-1")).thenReturn(Optional.of(existing));
+    when(service.storedCapabilityDigest("orchestration-1")).thenReturn(storedCapabilityDigest);
+    when(providerSource.completeProductionReplay(prepared, storedCapabilityDigest))
+        .thenReturn(providerRequest(existing.requestFingerprint()));
+    mvc.perform(
+            post("/api/v1/gameplay/accountbuilder/provider-orchestrations")
+                .header("X-Gameplay-Operator-Key", OPERATOR_KEY)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"providerSessionId\":\"session-1\",\"providerTurnId\":\"turn-1\","
+                        + "\"orchestrationId\":\"orchestration-1\",\"requestId\":\"request-1\","
+                        + "\"idempotencyKey\":\"idempotency-1\",\"mode\":\"LIVE_TASK\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.state").value("DENIED"));
+    // An exact replay never touches Micro6 and never re-orchestrates.
+    verify(capabilityPreflight, never()).probe(any());
+    verify(service, never()).orchestrateProvider(any());
+  }
+
+  private OrchestrationRequest providerRequest(String fingerprint) {
+    return new OrchestrationRequest(
+        "orchestration-1",
+        "request-1",
+        "idempotency-1",
+        fingerprint,
+        AccountBuilderOrchestrationModels.Mode.LIVE_TASK,
+        "PROVIDER:CODEX",
+        null,
+        null,
+        null,
+        null,
+        null,
+        Instant.now());
+  }
+
+  private ProviderDecisionOrchestrationSource.PreparedProviderRequest prepared() {
+    String digest = "sha256:" + "a".repeat(64);
+    var decision =
+        new com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision(
+            "sc-1429/v1",
+            com.chromascape.web.gameplay.contract.GameplayContracts.Provider.CODEX,
+            "gpt-test",
+            "decision-1",
+            0.9,
+            new com.fasterxml.jackson.databind.ObjectMapper()
+                .createObjectNode()
+                .put("kind", "START_FISHING_TASK"),
+            List.of());
+    var persisted =
+        new com.chromascape.web.gameplay.provider.runtime.ProviderDecisionHandoff.PersistedDecision(
+            "session-1",
+            "turn-1",
+            "request-1",
+            com.chromascape.web.gameplay.contract.GameplayContracts.Provider.CODEX,
+            "gpt-test",
+            digest,
+            digest,
+            digest,
+            digest,
+            digest,
+            digest,
+            digest,
+            List.of(digest),
+            digest,
+            digest,
+            com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.TurnState.DECIDED,
+            com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode.NONE,
+            decision);
+    return new ProviderDecisionOrchestrationSource.PreparedProviderRequest(
+        providerRequest(null), persisted);
   }
 }

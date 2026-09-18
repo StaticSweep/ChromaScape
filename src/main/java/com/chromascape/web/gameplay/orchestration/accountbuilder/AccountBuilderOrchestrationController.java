@@ -3,9 +3,11 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.ProviderOrchestrationCommand;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Readiness;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -24,12 +26,18 @@ public final class AccountBuilderOrchestrationController {
   private static final String OPERATOR_HEADER = "X-Gameplay-Operator-Key";
   private final AccountBuilderOrchestrationService service;
   private final AccountBuilderOrchestrationProperties properties;
+  private final ProviderDecisionOrchestrationSource providerSource;
+  private final AccountBuilderCapabilityPreflight capabilityPreflight;
 
   public AccountBuilderOrchestrationController(
       AccountBuilderOrchestrationService service,
-      AccountBuilderOrchestrationProperties properties) {
+      AccountBuilderOrchestrationProperties properties,
+      ProviderDecisionOrchestrationSource providerSource,
+      AccountBuilderCapabilityPreflight capabilityPreflight) {
     this.service = service;
     this.properties = properties;
+    this.providerSource = providerSource;
+    this.capabilityPreflight = capabilityPreflight;
   }
 
   @GetMapping("/readiness")
@@ -44,7 +52,54 @@ public final class AccountBuilderOrchestrationController {
       @RequestHeader(value = OPERATOR_HEADER, required = false) String operatorKey,
       @RequestBody OrchestrationRequest request) {
     authenticate(operatorKey);
+    // The generic endpoint can never carry a provider source: provider orchestrations must be
+    // created through the persisted provider decision handoff, so a caller can never submit its
+    // own decision or provenance by naming a provider source type. The check is ASCII
+    // case-independent, so provider:CODEX and mixed-case variants are rejected here too.
+    if (request != null && AccountBuilderOrchestrationSources.providerLike(request.sourceType())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT,
+          "Provider source orchestrations must be created through the persisted provider"
+              + " decision handoff");
+    }
     AccountBuilderOrchestrationService.Submission submission = service.orchestrate(request);
+    return ResponseEntity.status(submission.created() ? HttpStatus.CREATED : HttpStatus.OK)
+        .body(submission.view());
+  }
+
+  /**
+   * Production provider-orchestration route. The provider decision, its provenance and the source
+   * type are loaded from the durable persisted provider turn; the command may only carry provider
+   * session and turn identity plus request identity, envelope, authority, observation and deadline.
+   *
+   * <p>Ordering is part of the trust boundary: authenticate, prepare the persisted decision,
+   * resolve any existing exact replay with the stored capability digest, and only then perform the
+   * capability preflight for a genuinely new orchestration. Invalid decisions and exact replays
+   * therefore never touch Micro6.
+   */
+  @PostMapping("/provider-orchestrations")
+  public ResponseEntity<OrchestrationView> orchestrateProvider(
+      @RequestHeader(value = OPERATOR_HEADER, required = false) String operatorKey,
+      @RequestBody ProviderOrchestrationCommand command) {
+    authenticate(operatorKey);
+    ProviderDecisionOrchestrationSource.PreparedProviderRequest prepared =
+        providerSource.prepareProduction(command);
+    Optional<OrchestrationView> existing = service.findOrchestration(command.orchestrationId());
+    if (existing.isPresent()) {
+      String storedCapabilityDigest = service.storedCapabilityDigest(command.orchestrationId());
+      OrchestrationRequest replay =
+          providerSource.completeProductionReplay(prepared, storedCapabilityDigest);
+      if (!replay.requestFingerprint().equals(existing.get().requestFingerprint())) {
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.IDEMPOTENCY_CONFLICT,
+            "A different request is already persisted under this orchestration id");
+      }
+      return ResponseEntity.ok(existing.get());
+    }
+    var capabilityPreflightSnapshot = capabilityPreflight.probe(command.envelope());
+    OrchestrationRequest request =
+        providerSource.completeProduction(prepared, capabilityPreflightSnapshot);
+    AccountBuilderOrchestrationService.Submission submission = service.orchestrateProvider(request);
     return ResponseEntity.status(submission.created() ? HttpStatus.CREATED : HttpStatus.OK)
         .body(submission.view());
   }

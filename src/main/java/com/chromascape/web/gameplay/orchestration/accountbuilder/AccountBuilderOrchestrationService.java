@@ -11,6 +11,7 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Readiness;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.SnapshotBindings;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import java.time.Clock;
 import java.util.List;
@@ -21,6 +22,8 @@ import org.springframework.stereotype.Service;
 /** Durable, source-neutral SC-1431 orchestration with no blind retry path. */
 @Service
 public final class AccountBuilderOrchestrationService {
+  private static final String DIGEST_PATTERN = "sha256:[0-9a-f]{64}";
+
   private final AccountBuilderOrchestrationValidator validator;
   private final CanonicalGameplayJson canonicalJson;
   private final AccountBuilderOrchestrationStore store;
@@ -53,7 +56,65 @@ public final class AccountBuilderOrchestrationService {
     this.clock = clock;
   }
 
+  /**
+   * Returns the durable view of an existing orchestration without validating any new request. The
+   * bootstrap path consults this before its read-only capability preflight, so an idempotent replay
+   * neither fetches a new snapshot nor replaces an existing capability binding.
+   */
+  public java.util.Optional<OrchestrationView> findOrchestration(String orchestrationId) {
+    return store.find(orchestrationId);
+  }
+
+  /**
+   * Returns the persisted capability digest for an existing orchestration, failing closed when the
+   * stored aggregate is missing or malformed. Replay resolution uses it to rebuild the exact
+   * immutable fingerprint without contacting the gateway.
+   */
+  public String storedCapabilityDigest(String orchestrationId) {
+    AccountBuilderOrchestrationStore.NormalizedAggregate aggregate =
+        store.readAggregate(orchestrationId);
+    SnapshotBindings bindings = aggregate == null ? null : aggregate.bindings();
+    String capabilityDigest = bindings == null ? null : bindings.capabilityDigest();
+    if (capabilityDigest == null || !capabilityDigest.matches(DIGEST_PATTERN)) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT, "Persisted capability binding is missing or malformed");
+    }
+    return capabilityDigest;
+  }
+
+  /**
+   * Generic orchestration entry point. Provider-sourced requests are categorically rejected here,
+   * before any durable claim, budget consumption, authority consumption or gateway access, so a
+   * direct service caller can never enter the provider trust path by forging a source type.
+   * Provider orchestrations must flow through {@link #orchestrateProvider(OrchestrationRequest)}.
+   */
   public Submission orchestrate(OrchestrationRequest request) {
+    if (request != null && AccountBuilderOrchestrationSources.providerLike(request.sourceType())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT,
+          "Provider source orchestrations must be created through the persisted provider decision"
+              + " handoff");
+    }
+    return orchestrateInternal(request);
+  }
+
+  /**
+   * Provider-only orchestration entry point. The request must carry the exact provider source token
+   * produced by {@code ProviderDecisionOrchestrationSource}; every non-provider source is rejected
+   * before any durable claim or gateway access.
+   */
+  Submission orchestrateProvider(OrchestrationRequest request) {
+    if (request == null
+        || AccountBuilderOrchestrationSources.classify(request.sourceType())
+            != AccountBuilderOrchestrationSources.Kind.PROVIDER) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT,
+          "Provider orchestration requires a validated provider-sourced request");
+    }
+    return orchestrateInternal(request);
+  }
+
+  private Submission orchestrateInternal(OrchestrationRequest request) {
     String fingerprint = validator.validateAndFingerprint(request);
     String envelopeDigest = canonicalJson.digest(request.envelope());
     // The budget is parsed and validated before the claim, so an invalid frozen contract can
@@ -113,6 +174,16 @@ public final class AccountBuilderOrchestrationService {
       try {
         reservation = gateway.reserve(request, envelopeDigest);
         requireBoundReceipt(request, envelopeDigest, reservation, null);
+      } catch (AccountBuilderOrchestrationException exception) {
+        if (exception.failureCode() == FailureCode.GATEWAY_UNAVAILABLE) {
+          // The adapter only raises GATEWAY_UNAVAILABLE when the transport proves the connection
+          // never opened, so no request bytes could have been submitted. The outcome is therefore
+          // a proven pre-submission failure, not a reconciliation case. Authority is already
+          // consumed, so the orchestration is non-retryable: a new attempt requires a new
+          // orchestration with fresh valid human authority.
+          return terminal(request, State.FAILED, FailureCode.GATEWAY_UNAVAILABLE, null, false);
+        }
+        return uncertain(request, uncertaintyCode(exception));
       } catch (RuntimeException exception) {
         return uncertain(request, uncertaintyCode(exception));
       }

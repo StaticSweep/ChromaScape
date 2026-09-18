@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRequestFactory;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationValidator;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.ProviderDecisionOrchestrationSource;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.BudgetLimits;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels.FailureCode;
@@ -318,9 +320,15 @@ class ProviderRuntimeHardeningTest {
       assertFalse(name.contains("micro6"), "handoff must not expose micro6");
     }
     ProviderDecisionHandoff empty = (sessionId, turnId) -> Optional.empty();
+    CanonicalGameplayJson handoffJson = new CanonicalGameplayJson(new ObjectMapper());
     ProviderDecisionOrchestrationSource source =
         new ProviderDecisionOrchestrationSource(
-            empty, new CanonicalGameplayJson(new ObjectMapper()));
+            empty,
+            handoffJson,
+            new AccountBuilderOrchestrationRequestFactory(
+                new AccountBuilderOrchestrationValidator(
+                    handoffJson, (authority, envelope) -> true),
+                handoffJson));
     AccountBuilderOrchestrationModels.OrchestrationRequest request =
         new AccountBuilderOrchestrationModels.OrchestrationRequest(
             "orchestration-1",
