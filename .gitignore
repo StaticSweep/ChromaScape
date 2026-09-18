@@ -124,6 +124,18 @@ recordings/
 !/scripts/native/tests/test_remoteinput_metadata.py
 !/scripts/native/tests/staging_regression_fixtures.py
 
+# SC-1667 reviewed Fedora host-native startup/preflight tooling. Keep the broad
+# user-script ignore above; only these named files are part of the product contract.
+!/scripts/fedora/
+/scripts/fedora/*
+!/scripts/fedora/chromascape-fedora.sh
+!/scripts/fedora/lib/
+/scripts/fedora/lib/*
+!/scripts/fedora/lib/preflight.sh
+!/scripts/fedora/tests/
+/scripts/fedora/tests/*
+!/scripts/fedora/tests/preflight-regressions.sh
+
 # SC-1662 reviewed evidence is deliberately tracked: each log below was reviewed for
 # credentials/account identifiers before being retained. Scoped negation only -- this must
 # not unignore *.log anywhere else in the repository, and must not cover build outputs.

@@ -131,6 +131,24 @@ That helper writes to `C:\Dev\IdeaProjects\ChromaScape\chromascape_output.log`.
 
 Use raw `gradlew.bat bootRun` for first start or when debugging startup interactively.
 
+## Fedora host-native startup
+
+The Windows restart command above remains the default for the canonical Windows checkout. On a
+Fedora host, use the SC-1667 wrapper instead; do not run the Windows wrapper through WSL or Wine:
+
+```bash
+cp .env.fedora.example .env.fedora.local
+scripts/fedora/chromascape-fedora.sh preflight
+scripts/fedora/chromascape-fedora.sh start
+```
+
+The Fedora wrapper verifies the separately launched host-native RuneLite/Micro6 client, starts
+ChromaScape, records the exact ChromaScape process identity, and supports `status`, `stop`, and
+`restart`. It never changes ptrace, seccomp, SELinux, namespaces, or firewall policy. A sandbox,
+namespace, artifact, ownership, or ptrace failure is reported and must be resolved by the operator. See
+`docs/upstream-integration/sc-1667/fedora-host-native-runbook.md` for setup, diagnostic codes, and
+recovery.
+
 ## Stop Then Restart
 
 If ChromaScape is already running in a visible console:
