@@ -362,4 +362,68 @@ grep -Fq '9>&- >> "$LOG_FILE"' "$FEDORA_DIR/chromascape-fedora.sh" || \
     fail "bootRun child would inherit the lifecycle lock descriptor"
 pass 'bootRun child cannot retain the lifecycle lock descriptor'
 
+# --- Development profile and qualification-harness defaults (SC-1668 phase 4) --------------
+# The wrapper defaults the development profile and a disabled qualification harness, and must
+# never overwrite an operator-supplied value. Each case runs in its own bash -c subshell because
+# the wrapper enables `set -euo pipefail` when sourced.
+wrapper_env() {
+    bash -c '
+        source "$1"
+        set_fedora_runtime_defaults
+        printf "profile=%s\nqualification=%s\ncapture=%s\n" \
+            "${SPRING_PROFILES_ACTIVE:-<unset>}" \
+            "${CHROMASCAPE_QUALIFICATION_ENABLED:-<unset>}" \
+            "${CHROMASCAPE_QUALIFICATION_CAPTURE_DIR:-<unset>}"
+    ' bash "$FEDORA_DIR/chromascape-fedora.sh"
+}
+
+default_wrapper_env="$(env -u SPRING_PROFILES_ACTIVE -u CHROMASCAPE_QUALIFICATION_ENABLED \
+    -u CHROMASCAPE_QUALIFICATION_CAPTURE_DIR bash -c '
+        source "$1"
+        set_fedora_runtime_defaults
+        printf "profile=%s\nqualification=%s\ncapture=%s\n" \
+            "${SPRING_PROFILES_ACTIVE:-<unset>}" \
+            "${CHROMASCAPE_QUALIFICATION_ENABLED:-<unset>}" \
+            "${CHROMASCAPE_QUALIFICATION_CAPTURE_DIR:-<unset>}"
+    ' bash "$FEDORA_DIR/chromascape-fedora.sh")"
+assert_contains "$default_wrapper_env" 'profile=local-development' \
+    'wrapper defaults the development profile'
+assert_contains "$default_wrapper_env" 'qualification=false' \
+    'qualification harness stays disabled by default'
+assert_contains "$default_wrapper_env" 'capture=.chromascape/qualification/captures' \
+    'wrapper defaults the capture directory'
+
+preserved_wrapper_env="$(SPRING_PROFILES_ACTIVE=production CHROMASCAPE_QUALIFICATION_ENABLED=true \
+    wrapper_env)"
+assert_contains "$preserved_wrapper_env" 'profile=production' \
+    'operator-supplied profile is never overwritten'
+assert_contains "$preserved_wrapper_env" 'qualification=true' \
+    'operator-supplied qualification opt-in is never overwritten'
+
+# Duplicate profile/qualification keys fail closed like every other machine-local key.
+DUP_PROFILE="$ROOT/env.dup-profile"
+printf 'SPRING_PROFILES_ACTIVE=local-development\nSPRING_PROFILES_ACTIVE=production\n' \
+    > "$DUP_PROFILE"
+dup_profile_output="$(run_duplicate_case "$DUP_PROFILE" SPRING_PROFILES_ACTIVE)"
+assert_contains "$dup_profile_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate profile key is rejected'
+
+DUP_QUALIFICATION="$ROOT/env.dup-qualification"
+printf 'CHROMASCAPE_QUALIFICATION_ENABLED=true\nCHROMASCAPE_QUALIFICATION_ENABLED=false\n' \
+    > "$DUP_QUALIFICATION"
+dup_qualification_output="$(run_duplicate_case "$DUP_QUALIFICATION" CHROMASCAPE_QUALIFICATION_ENABLED)"
+assert_contains "$dup_qualification_output" 'code=CONFIG_DUPLICATE_KEY' \
+    'duplicate qualification key is rejected'
+
+# An empty value is treated as unset by the parser contract, so the wrapper default applies.
+EMPTY_PROFILE="$ROOT/env.empty-profile"
+printf 'SPRING_PROFILES_ACTIVE=\n' > "$EMPTY_PROFILE"
+empty_profile_env="$(bash -c '
+    source "$1"
+    sc1667_load_env_file "$2" >/dev/null 2>&1 || true
+    set_fedora_runtime_defaults
+    printf "profile=%s\n" "${SPRING_PROFILES_ACTIVE:-<unset>}"
+' bash "$FEDORA_DIR/chromascape-fedora.sh" "$EMPTY_PROFILE")"
+assert_contains "$empty_profile_env" 'profile=local-development' \
+    'empty profile value falls back to the development default'
+
 printf 'SC1667_REGRESSIONS status=PASS cases=%d\n' "$PASS_COUNT"
