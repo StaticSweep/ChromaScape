@@ -1,16 +1,22 @@
 package com.chromascape.utils.core.input;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.chromascape.utils.core.input.remoteinput.RemoteInputBindingProvider;
+import com.chromascape.utils.core.input.remoteinput.RemoteInputInterface;
+import com.chromascape.utils.core.input.remoteinput.RemoteInputProperties;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
@@ -28,10 +34,16 @@ class RemoteInputAttachmentPropertyMappingTest {
   private final RemoteInputBindingProvider provider = mock(RemoteInputBindingProvider.class);
 
   private ApplicationContextRunner runner() {
+    when(provider.load()).thenReturn(mock(RemoteInputInterface.class));
     return new ApplicationContextRunner()
+        .withUserConfiguration(PropertiesConfig.class)
         .withBean(RemoteInputBindingProvider.class, () -> provider)
         .withBean(RemoteInputStartupValidator.class);
   }
+
+  @Configuration
+  @EnableConfigurationProperties(RemoteInputProperties.class)
+  static class PropertiesConfig {}
 
   @Test
   void defaultWithoutAnyOverrideRemainsDisabled() {
@@ -48,7 +60,11 @@ class RemoteInputAttachmentPropertyMappingTest {
   void explicitPropertyEnablesAttachmentAndLoadsTheBinding() {
     runner()
         .withPropertyValues("chromascape.remoteinput.attachment-enabled=true")
-        .run(context -> verify(provider).load());
+        .run(
+            context -> {
+              assertNull(context.getStartupFailure());
+              verify(provider).load();
+            });
   }
 
   @Test
@@ -64,6 +80,10 @@ class RemoteInputAttachmentPropertyMappingTest {
                       StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
                       Map.of("CHROMASCAPE_REMOTEINPUT_ATTACHMENT_ENABLED", "true")));
             })
-        .run(context -> verify(provider).load());
+        .run(
+            context -> {
+              assertNull(context.getStartupFailure());
+              verify(provider).load();
+            });
   }
 }

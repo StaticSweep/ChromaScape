@@ -11,9 +11,13 @@ import static org.mockito.Mockito.when;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputArtifactException;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputBindingProvider;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputDiagnostic;
+import com.chromascape.utils.core.input.remoteinput.RemoteInputInterface;
+import com.chromascape.utils.core.input.remoteinput.RemoteInputProperties;
 import com.chromascape.utils.core.screen.window.ProcessManagerFactory;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 class RemoteInputStartupValidatorTest {
 
@@ -33,6 +37,7 @@ class RemoteInputStartupValidatorTest {
   @Test
   void explicitOverrideLoadsTheBindingAtStartup() {
     RemoteInputBindingProvider provider = mock(RemoteInputBindingProvider.class);
+    when(provider.load()).thenReturn(mock(RemoteInputInterface.class));
 
     RemoteInputStartupValidator validator =
         new RemoteInputStartupValidator(provider, true, () -> ProcessManagerFactory.Platform.LINUX);
@@ -66,6 +71,74 @@ class RemoteInputStartupValidatorTest {
         thrown.getMessage().contains("LOAD_FAILED"),
         "message must carry the stable diagnostic: " + thrown.getMessage());
     assertEquals(failure, thrown.getCause());
+  }
+
+  @Test
+  void enabledOnLinuxWithNullBindingFailsStartupWithTheStableDiagnostic() {
+    RemoteInputBindingProvider provider = mock(RemoteInputBindingProvider.class);
+    when(provider.load()).thenReturn(null);
+
+    RemoteInputStartupValidator validator =
+        new RemoteInputStartupValidator(provider, true, () -> ProcessManagerFactory.Platform.LINUX);
+
+    IllegalStateException thrown =
+        assertThrows(IllegalStateException.class, () -> validator.verifyAttachmentReadiness());
+
+    assertTrue(
+        thrown.getMessage().contains(RemoteInputDiagnostic.LOAD_FAILED.name()),
+        "null binding must be reported as LOAD_FAILED: " + thrown.getMessage());
+    assertTrue(thrown.getMessage().contains("returned no binding"));
+  }
+
+  @Test
+  void enabledOnLinuxWithAValidBindingPassesAndLoadsExactlyOnce() {
+    RemoteInputBindingProvider provider = mock(RemoteInputBindingProvider.class);
+    when(provider.load()).thenReturn(mock(RemoteInputInterface.class));
+
+    RemoteInputStartupValidator validator =
+        new RemoteInputStartupValidator(provider, true, () -> ProcessManagerFactory.Platform.LINUX);
+
+    validator.verifyAttachmentReadiness();
+
+    verify(provider).load();
+  }
+
+  @Test
+  void disabledOnLinuxNeverLoadsEvenWhenAValidBindingExists() {
+    RemoteInputBindingProvider provider = mock(RemoteInputBindingProvider.class);
+    when(provider.load()).thenReturn(mock(RemoteInputInterface.class));
+
+    new RemoteInputStartupValidator(provider, false, () -> ProcessManagerFactory.Platform.LINUX)
+        .verifyAttachmentReadiness();
+
+    verifyNoInteractions(provider);
+  }
+
+  @Test
+  void unsupportedPlatformWithExplicitOverrideIsIgnored() {
+    RemoteInputBindingProvider provider = mock(RemoteInputBindingProvider.class);
+
+    new RemoteInputStartupValidator(
+            provider, true, () -> ProcessManagerFactory.Platform.UNSUPPORTED)
+        .verifyAttachmentReadiness();
+
+    verifyNoInteractions(provider);
+  }
+
+  @Test
+  @EnabledOnOs(OS.LINUX)
+  void productionConstructorReadsTheTypedPropertiesFlag() {
+    RemoteInputBindingProvider provider = mock(RemoteInputBindingProvider.class);
+    when(provider.load()).thenReturn(mock(RemoteInputInterface.class));
+    RemoteInputProperties disabled = new RemoteInputProperties();
+    RemoteInputProperties enabled = new RemoteInputProperties();
+    enabled.setAttachmentEnabled(true);
+
+    new RemoteInputStartupValidator(provider, disabled).verifyAttachmentReadiness();
+    verifyNoInteractions(provider);
+
+    new RemoteInputStartupValidator(provider, enabled).verifyAttachmentReadiness();
+    verify(provider).load();
   }
 
   @Test

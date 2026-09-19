@@ -235,15 +235,27 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
     return InputSessionDiagnostic.UNSUPPORTED_PLATFORM;
   }
 
+  /**
+   * Ensures the selected pid is registered as a RemoteInput client, injecting once if needed.
+   *
+   * <p>{@code options.injectTimeout()} is the <em>total</em> attachment deadline. The native {@code
+   * EIOS_Inject_PID} call is bounded by the time remaining until that deadline (never by a fresh
+   * full timeout), and every poll observes the same deadline, so a slow native call cannot extend
+   * the wait beyond the configured budget. Structured stage timestamps are recorded for evidence
+   * and reported on both success and timeout; they never include pointers, secrets, or command
+   * lines.
+   */
   private static void ensureInjectedClient(
       RemoteInputInterface nativeApi,
       NativeCallExecutor calls,
       RemoteInputSessionOptions options,
       ProcessIdentity identity,
       long generation) {
-    long deadline = System.nanoTime() + options.injectTimeout().toNanos();
+    AttachmentTimeline timeline = new AttachmentTimeline(options.injectTimeout());
+    long deadline = timeline.startNanos + options.injectTimeout().toNanos();
     boolean injected = false;
     while (true) {
+      timeline.markPoll();
       long count =
           calls.call(
               () -> nativeApi.EIOS_GetClients(RemoteInputInterface.NATIVE_FALSE),
@@ -251,27 +263,58 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
               InputSessionDiagnostic.NATIVE_CALL_TIMEOUT);
       validateClientCount(count, options.maxClients(), identity, generation);
       if (selectedClientPresent(nativeApi, calls, count, identity, options, generation)) {
+        timeline.markSelectedObserved();
+        logger.info(
+            "RemoteInput attachment for pid {} observed the injected client: {}",
+            identity.pid(),
+            timeline.describe());
         return;
       }
+      long remainingNanos = deadline - System.nanoTime();
       if (!injected) {
-        calls.call(
-            () -> {
-              nativeApi.EIOS_Inject_PID(Math.toIntExact(identity.pid()));
-              return null;
-            },
-            options.injectTimeout(),
-            InputSessionDiagnostic.INJECTION_TIMEOUT);
+        Duration injectBudget = remainingBudget(remainingNanos, options.validationInterval());
+        timeline.markInjectEntered();
+        try {
+          calls.call(
+              () -> {
+                nativeApi.EIOS_Inject_PID(Math.toIntExact(identity.pid()));
+                return null;
+              },
+              injectBudget,
+              InputSessionDiagnostic.INJECTION_TIMEOUT);
+        } catch (InputSessionException injectFailure) {
+          timeline.markInjectReturned();
+          timeline.markDeadlineReached();
+          logger.warn(
+              "RemoteInput injection call for pid {} failed ({}): {}",
+              identity.pid(),
+              injectFailure.diagnostic(),
+              timeline.describe());
+          throw injectFailure;
+        }
+        timeline.markInjectReturned();
         injected = true;
+        remainingNanos = deadline - System.nanoTime();
       }
-      if (System.nanoTime() >= deadline) {
+      if (remainingNanos <= 0) {
+        timeline.markDeadlineReached();
+        logger.warn(
+            "RemoteInput attachment for pid {} reached the injection deadline: {}",
+            identity.pid(),
+            timeline.describe());
         throw failure(
             InputSessionDiagnostic.INJECTION_TIMEOUT,
             identity,
             generation,
-            "Injected client for the selected pid did not register before the deadline");
+            "Injected client for the selected pid did not register before the deadline ("
+                + timeline.describe()
+                + ")");
       }
       try {
-        Thread.sleep(options.validationInterval().toMillis());
+        Thread.sleep(
+            Math.min(
+                options.validationInterval().toMillis(),
+                Math.max(1L, Duration.ofNanos(remainingNanos).toMillis())));
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new InputSessionException(
@@ -281,6 +324,77 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
             "Attachment interrupted while waiting for the injected client",
             e);
       }
+    }
+  }
+
+  /**
+   * Bounds the injection call by the time left before the total deadline while always leaving at
+   * least one polling interval so a returned injection can still be observed.
+   */
+  private static Duration remainingBudget(long remainingNanos, Duration minimum) {
+    Duration remaining = Duration.ofNanos(Math.max(0L, remainingNanos));
+    return remaining.compareTo(minimum) < 0 ? minimum : remaining;
+  }
+
+  /** Monotonic stage timestamps for one attachment attempt, relative to the request. */
+  private static final class AttachmentTimeline {
+    private final long startNanos = System.nanoTime();
+    private final Duration budget;
+    private long injectEnteredNanos = -1;
+    private long injectReturnedNanos = -1;
+    private long firstPollNanos = -1;
+    private int polls;
+    private long selectedObservedNanos = -1;
+    private long deadlineReachedNanos = -1;
+
+    AttachmentTimeline(Duration budget) {
+      this.budget = budget;
+    }
+
+    void markPoll() {
+      polls++;
+      if (firstPollNanos < 0) {
+        firstPollNanos = System.nanoTime();
+      }
+    }
+
+    void markInjectEntered() {
+      injectEnteredNanos = System.nanoTime();
+    }
+
+    void markInjectReturned() {
+      injectReturnedNanos = System.nanoTime();
+    }
+
+    void markSelectedObserved() {
+      selectedObservedNanos = System.nanoTime();
+    }
+
+    void markDeadlineReached() {
+      deadlineReachedNanos = System.nanoTime();
+    }
+
+    String describe() {
+      return "attachmentRequested=+0ms"
+          + " injectionCallEntered="
+          + offset(injectEnteredNanos)
+          + " injectionCallReturned="
+          + offset(injectReturnedNanos)
+          + " firstClientPoll="
+          + offset(firstPollNanos)
+          + " clientPolls="
+          + polls
+          + " selectedPidObserved="
+          + offset(selectedObservedNanos)
+          + " injectionDeadlineReached="
+          + offset(deadlineReachedNanos)
+          + " totalDeadline="
+          + budget.toMillis()
+          + "ms";
+    }
+
+    private String offset(long nanos) {
+      return nanos < 0 ? "n/a" : "+" + Duration.ofNanos(nanos - startNanos).toMillis() + "ms";
     }
   }
 

@@ -11,6 +11,7 @@ import com.chromascape.utils.core.input.remoteinput.KinputBackend;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputArtifactException;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputBindingProvider;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputDiagnostic;
+import com.chromascape.utils.core.input.remoteinput.RemoteInputProperties;
 import com.chromascape.utils.core.input.remoteinput.RemoteInputSessionOptions;
 import com.chromascape.utils.core.screen.window.ProcessIdentity;
 import com.chromascape.utils.core.screen.window.ProcessManager;
@@ -101,7 +102,7 @@ class TargetInputSessionFactoryTest {
               fixture.selection,
               fixture.processManagers,
               fixture.bindingProvider,
-              false);
+              new RemoteInputProperties());
 
       InputSessionException failure =
           assertThrows(InputSessionException.class, () -> factory.openSelectedSession());
@@ -126,13 +127,15 @@ class TargetInputSessionFactoryTest {
                   (Path) null,
                   "linux-x86_64 ELF 64-bit LSB shared object",
                   "libRemoteInput.so: cannot open shared object file"));
+      RemoteInputProperties enabled = new RemoteInputProperties();
+      enabled.setAttachmentEnabled(true);
       TargetInputSessionFactory factory =
           new TargetInputSessionFactory(
               fixture.discovery,
               fixture.selection,
               fixture.processManagers,
               fixture.bindingProvider,
-              true);
+              enabled);
 
       InputSessionException failure =
           assertThrows(InputSessionException.class, () -> factory.openSelectedSession());
