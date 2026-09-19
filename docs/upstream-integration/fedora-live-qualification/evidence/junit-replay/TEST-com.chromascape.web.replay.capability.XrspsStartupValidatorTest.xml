@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.capability.XrspsStartupValidatorTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:24:58.897Z" hostname="fedora" time="0.003">
+<testsuite name="com.chromascape.web.replay.capability.XrspsStartupValidatorTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:31:12.697Z" hostname="fedora" time="0.004">
   <properties/>
   <testcase name="verifyVersionsRejectsForbiddenCapabilitiesInsteadOfMaskingThem()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorTest" time="0.002"/>
   <testcase name="parseManifestPreservesSecurityAndCapabilityFields()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorTest" time="0.001"/>

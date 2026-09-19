@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.patchloop.service.DefaultBmadGraphTemplateTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:07:05.246Z" hostname="fedora" time="0.006">
+<testsuite name="com.chromascape.web.debug.patchloop.service.DefaultBmadGraphTemplateTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:35.667Z" hostname="fedora" time="0.003">
   <properties/>
-  <testcase name="Default BMAD template compiles and supports retry loop semantics" classname="com.chromascape.web.debug.patchloop.service.DefaultBmadGraphTemplateTest" time="0.006"/>
-  <system-out><![CDATA[18:07:05.246 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+  <testcase name="Default BMAD template compiles and supports retry loop semantics" classname="com.chromascape.web.debug.patchloop.service.DefaultBmadGraphTemplateTest" time="0.003"/>
+  <system-out><![CDATA[19:28:35.668 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
 graph TD;
   A[start] --> B[run_script]
   B --> C[collect_evidence]
@@ -16,7 +16,7 @@ graph TD;
   I -.retry.-> D
   I -.failure.-> J
 
-18:07:05.248 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 10 nodes, 11 edges, entry: A
+19:28:35.669 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 10 nodes, 11 edges, entry: A
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

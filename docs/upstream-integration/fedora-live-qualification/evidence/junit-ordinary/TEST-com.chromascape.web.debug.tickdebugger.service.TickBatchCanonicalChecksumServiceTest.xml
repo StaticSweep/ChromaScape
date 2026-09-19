@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:02.647Z" hostname="fedora" time="0.337">
+<testsuite name="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:21.133Z" hostname="fedora" time="0.047">
   <properties/>
   <testcase name="checksumDocumentShapeMatchesMicro6ActionContract()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.002"/>
-  <testcase name="numbersNeverPassThroughDouble()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.175"/>
-  <testcase name="malformedSurrogateInputIsRejected()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.005"/>
-  <testcase name="fixtureManifestListsIdenticalCrossRepositoryHashes()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.126"/>
-  <testcase name="rootPayloadChecksumIsRemovedButNestedValuesArePreserved()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.004"/>
+  <testcase name="numbersNeverPassThroughDouble()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.005"/>
+  <testcase name="malformedSurrogateInputIsRejected()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.002"/>
+  <testcase name="fixtureManifestListsIdenticalCrossRepositoryHashes()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.015"/>
+  <testcase name="rootPayloadChecksumIsRemovedButNestedValuesArePreserved()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.0"/>
   <testcase name="nestedOrderingCanonicalizesIdenticallyWhileArrayOrderIsPreserved()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.001"/>
-  <testcase name="canonicalVectorsMatchIndependentExpectations()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.009"/>
+  <testcase name="canonicalVectorsMatchIndependentExpectations()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.012"/>
   <testcase name="actionVectorsMatchProductionChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.003"/>
   <testcase name="goldenVectorMatchesCanonicalDocumentAndChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.001"/>
   <testcase name="decimalAndZeroFormsCanonicalizeIdentically()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.002"/>

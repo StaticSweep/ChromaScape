@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.aiplayer.routine.source.SourceManifestTextPersistenceTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-19T16:06:06.316Z" hostname="fedora" time="0.005">
+<testsuite name="com.chromascape.web.aiplayer.routine.source.SourceManifestTextPersistenceTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-19T17:27:52.389Z" hostname="fedora" time="0.002">
   <properties/>
-  <testcase name="productionSizedJsonRoundTripsAsInlineText()" classname="com.chromascape.web.aiplayer.routine.source.SourceManifestTextPersistenceTest" time="0.005">
+  <testcase name="productionSizedJsonRoundTripsAsInlineText()" classname="com.chromascape.web.aiplayer.routine.source.SourceManifestTextPersistenceTest" time="0.002">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -15,7 +15,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <system-out><![CDATA[18:06:06.318 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+  <system-out><![CDATA[19:27:52.390 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

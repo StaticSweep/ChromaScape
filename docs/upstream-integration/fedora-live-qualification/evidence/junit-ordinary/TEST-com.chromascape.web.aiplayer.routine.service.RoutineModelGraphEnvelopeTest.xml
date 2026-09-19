@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.aiplayer.routine.service.RoutineModelGraphEnvelopeTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:38Z" hostname="fedora" time="0.345">
+<testsuite name="com.chromascape.web.aiplayer.routine.service.RoutineModelGraphEnvelopeTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:37.392Z" hostname="fedora" time="0.2">
   <properties/>
-  <testcase name="buildsModelFromNestedGraphDefinitionAndStoresOnlyTheDefinition()" classname="com.chromascape.web.aiplayer.routine.service.RoutineModelGraphEnvelopeTest" time="0.345"/>
+  <testcase name="buildsModelFromNestedGraphDefinitionAndStoresOnlyTheDefinition()" classname="com.chromascape.web.aiplayer.routine.service.RoutineModelGraphEnvelopeTest" time="0.2"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:42.853Z" hostname="fedora" time="0.015">
+<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:18.654Z" hostname="fedora" time="0.016">
   <properties/>
-  <testcase name="isProviderAvailable delegates to provider" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.005"/>
-  <testcase name="analyzeEvidence returns response with FAILURE status" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.002"/>
-  <testcase name="analyzeEvidence propagates AnalysisException" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.002"/>
+  <testcase name="isProviderAvailable delegates to provider" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.003"/>
+  <testcase name="analyzeEvidence returns response with FAILURE status" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.001"/>
+  <testcase name="analyzeEvidence propagates AnalysisException" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.004"/>
   <testcase name="analyzeEvidence returns response with SUCCESS status" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.001"/>
-  <testcase name="isProviderAvailable returns false when provider unavailable" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.001"/>
+  <testcase name="isProviderAvailable returns false when provider unavailable" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.0"/>
   <testcase name="analyzeEvidence returns response with PARTIAL_SUCCESS status" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.001"/>
   <testcase name="getProviderName delegates to provider" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.001"/>
   <testcase name="analyzeEvidence delegates to provider" classname="com.chromascape.web.debug.patchloop.PatchLoopAnalysisClientTest" time="0.002"/>
-  <system-out><![CDATA[18:06:42.857 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
-18:06:42.859 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
-18:06:42.860 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - Delegating analysis request to provider: null
-18:06:42.861 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
-18:06:42.862 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - Delegating analysis request to provider: null
-18:06:42.863 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
-18:06:42.864 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - Delegating analysis request to provider: null
-18:06:42.864 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
-18:06:42.865 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
-18:06:42.866 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - Delegating analysis request to provider: null
-18:06:42.866 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
-18:06:42.868 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
-18:06:42.868 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - Delegating analysis request to provider: null
+  <system-out><![CDATA[19:28:18.656 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
+19:28:18.658 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
+19:28:18.658 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - Delegating analysis request to provider: null
+19:28:18.659 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
+19:28:18.660 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - Delegating analysis request to provider: null
+19:28:18.664 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
+19:28:18.664 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - Delegating analysis request to provider: null
+19:28:18.665 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
+19:28:18.666 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
+19:28:18.667 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - Delegating analysis request to provider: null
+19:28:18.668 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
+19:28:18.670 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - PatchLoopAnalysisClient initialized with provider: null
+19:28:18.670 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.PatchLoopAnalysisClient - Delegating analysis request to provider: null
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

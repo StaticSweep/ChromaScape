@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.compiler.ScenarioCompilerEvidenceHashingTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:31.182Z" hostname="fedora" time="0.576">
+<testsuite name="com.chromascape.web.replay.compiler.ScenarioCompilerEvidenceHashingTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:17.246Z" hostname="fedora" time="0.669">
   <properties/>
-  <testcase name="identicalEvidenceProducesByteIdenticalManifest()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerEvidenceHashingTest" time="0.571"/>
-  <testcase name="changingSnapshotContentChangesTheRecordingIdentity()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerEvidenceHashingTest" time="0.004"/>
+  <testcase name="identicalEvidenceProducesByteIdenticalManifest()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerEvidenceHashingTest" time="0.657"/>
+  <testcase name="changingSnapshotContentChangesTheRecordingIdentity()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerEvidenceHashingTest" time="0.009"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

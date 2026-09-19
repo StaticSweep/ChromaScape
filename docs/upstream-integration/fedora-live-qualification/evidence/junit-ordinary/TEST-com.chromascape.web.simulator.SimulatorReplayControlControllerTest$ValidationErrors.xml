@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="Validation errors" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:31.738Z" hostname="fedora" time="0.011">
+<testsuite name="Validation errors" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:48.782Z" hostname="fedora" time="0.016">
   <properties/>
-  <testcase name="start returns 409 when recording has no tick frames" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.002"/>
-  <testcase name="pause allows missing player and forwards auto-target request" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
-  <testcase name="start returns 409 when no debug session exists for recording" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
+  <testcase name="start returns 409 when recording has no tick frames" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.003"/>
+  <testcase name="pause allows missing player and forwards auto-target request" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.002"/>
+  <testcase name="start returns 409 when no debug session exists for recording" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.002"/>
   <testcase name="speed returns 400 for invalid number" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
   <testcase name="seek returns 400 when seconds is missing" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
   <testcase name="start allows missing player and forwards auto-target request" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
   <testcase name="speed returns 400 when speed is missing" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
   <testcase name="start allows missing player and forwards auto-target request" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$ValidationErrors" time="0.001"/>
-  <system-out><![CDATA[18:10:31.744 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: Invalid number for field: speed
-18:10:31.746 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: Missing required field: seconds
-18:10:31.748 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: Missing required field: speed
+  <system-out><![CDATA[19:30:48.791 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: Invalid number for field: speed
+19:30:48.793 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: Missing required field: seconds
+19:30:48.796 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: Missing required field: speed
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.viewer.ReplayViewerServiceTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:25:28.319Z" hostname="fedora" time="0.024">
+<testsuite name="com.chromascape.web.replay.viewer.ReplayViewerServiceTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:31:35.335Z" hostname="fedora" time="0.023">
   <properties/>
-  <testcase name="invalidCursorIsRejectedBeforeServingTrace()" classname="com.chromascape.web.replay.viewer.ReplayViewerServiceTest" time="0.016"/>
+  <testcase name="invalidCursorIsRejectedBeforeServingTrace()" classname="com.chromascape.web.replay.viewer.ReplayViewerServiceTest" time="0.015"/>
   <testcase name="framesUseOpaqueCursorAndPreserveTraceOrder()" classname="com.chromascape.web.replay.viewer.ReplayViewerServiceTest" time="0.007"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

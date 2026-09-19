@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:02.326Z" hostname="fedora" time="0.319">
+<testsuite name="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:20.914Z" hostname="fedora" time="0.217">
   <properties/>
-  <testcase name="acceptsLexicographicOrderingWhenSequenceRestartsOnANewTick()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.276"/>
-  <testcase name="comparesTheWinnerAfterNativeConflictWithoutSaveAndFlush()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.008"/>
-  <testcase name="rejectsAnActionBoundToAnotherRecording()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.007"/>
-  <testcase name="rejectsTamperedArgumentsByContentChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.012"/>
-  <testcase name="rejectsAConflictingNativeWinnerByProducerChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.009"/>
+  <testcase name="acceptsLexicographicOrderingWhenSequenceRestartsOnANewTick()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.193"/>
+  <testcase name="comparesTheWinnerAfterNativeConflictWithoutSaveAndFlush()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.006"/>
+  <testcase name="rejectsAnActionBoundToAnotherRecording()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.002"/>
+  <testcase name="rejectsTamperedArgumentsByContentChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.002"/>
+  <testcase name="rejectsAConflictingNativeWinnerByProducerChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.008"/>
   <testcase name="acceptsTheMicro6ChecksumAndRetainsTheProducerIdentity()" classname="com.chromascape.web.debug.tickdebugger.service.ReplayRecordingActionIngestionServiceTest" time="0.003"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

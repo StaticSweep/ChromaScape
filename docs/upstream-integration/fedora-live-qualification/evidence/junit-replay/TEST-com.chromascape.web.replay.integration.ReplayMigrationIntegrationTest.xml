@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" tests="9" skipped="0" failures="9" errors="0" timestamp="2026-09-19T15:25:00.603Z" hostname="fedora" time="1.329">
+<testsuite name="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" tests="9" skipped="0" failures="9" errors="0" timestamp="2026-09-19T17:31:04.870Z" hostname="fedora" time="1.668">
   <properties/>
-  <testcase name="v19RejectsConflictingOldAndNewChecksums()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="1.208">
+  <testcase name="v19RejectsConflictingOldAndNewChecksums()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="1.603">
     <failure message="java.lang.IllegalStateException: Could not find a valid Docker environment. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Could not find a valid Docker environment. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.lambda$getFirstValidStrategy$7(DockerClientProviderStrategy.java:274)
 	at java.base/java.util.Optional.orElseThrow(Optional.java:403)
@@ -18,7 +18,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.01">
+  <testcase name="freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.011">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -33,7 +33,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="v31CreatesPlaybackIndexesWhenDebuggerTablesExist()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.006">
+  <testcase name="v31CreatesPlaybackIndexesWhenDebuggerTablesExist()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.007">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -48,7 +48,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="v19BackfillsAndDropsWhenBothColumnsHoldEqualValues()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.006">
+  <testcase name="v19BackfillsAndDropsWhenBothColumnsHoldEqualValues()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.005">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -63,7 +63,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="v19AcceptsNewColumnOnlyState()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.011">
+  <testcase name="v19AcceptsNewColumnOnlyState()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.006">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -78,7 +78,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="v19ConvergesFromOldColumnOnlyState()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.019">
+  <testcase name="v19ConvergesFromOldColumnOnlyState()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.006">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -93,7 +93,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="v30AppliesOnAV20UpgradedDatabase()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.018">
+  <testcase name="v30AppliesOnAV20UpgradedDatabase()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.005">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -108,7 +108,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="replayChainThroughV31AppliesOnEmptyDatabase()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.023">
+  <testcase name="replayChainThroughV31AppliesOnEmptyDatabase()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.006">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -123,7 +123,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="v30AllowsNullAttemptIdButKeepsTheForeignKey()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.008">
+  <testcase name="v30AllowsNullAttemptIdButKeepsTheForeignKey()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.006">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -138,16 +138,16 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <system-out><![CDATA[17:25:00.908 [Test worker] DEBUG org.testcontainers.utility.TestcontainersConfiguration - Testcontainers configuration overrides will be loaded from file:<home>/.testcontainers.properties
-17:25:00.942 [Test worker] DEBUG org.testcontainers.utility.TestcontainersConfiguration - Attempted to read Testcontainers configuration file at file:<home>/.testcontainers.properties but the file was not found. Exception message: FileNotFoundException: <home>/.testcontainers.properties (No such file or directory)
-17:25:00.955 [Test worker] INFO  org.testcontainers.images.PullPolicy - Image pull policy will be performed by: DefaultPullPolicy()
-17:25:00.962 [Test worker] INFO  org.testcontainers.utility.ImageNameSubstitutor - Image name substitution will be performed by: DefaultImageNameSubstitutor (composite of 'ConfigurationFileImageNameSubstitutor' and 'PrefixingImageNameSubstitutor')
-17:25:00.989 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-17:25:01.431 [Test worker] DEBUG org.testcontainers.dockerclient.RootlessDockerClientProviderStrategy - $XDG_RUNTIME_DIR is set but '/run/user/1000/docker.sock' does not exist.
-17:25:01.433 [Test worker] DEBUG org.testcontainers.dockerclient.RootlessDockerClientProviderStrategy - '<home>/.docker/run' does not exist.
-17:25:01.619 [Test worker] DEBUG org.testcontainers.dockerclient.RootlessDockerClientProviderStrategy - '/run/user/1000/docker.sock' does not exist.
-17:25:01.621 [Test worker] DEBUG org.testcontainers.dockerclient.DockerClientProviderStrategy - Trying out strategy: UnixSocketClientProviderStrategy
-17:25:01.647 [Test worker] WARN  org.testcontainers.dockerclient.DockerClientProviderStrategy - DOCKER_HOST unix:///var/run/docker.sock is not listening
+  <system-out><![CDATA[19:31:05.893 [Test worker] DEBUG org.testcontainers.utility.TestcontainersConfiguration - Testcontainers configuration overrides will be loaded from file:<home>/.testcontainers.properties
+19:31:05.921 [Test worker] DEBUG org.testcontainers.utility.TestcontainersConfiguration - Attempted to read Testcontainers configuration file at file:<home>/.testcontainers.properties but the file was not found. Exception message: FileNotFoundException: <home>/.testcontainers.properties (No such file or directory)
+19:31:05.933 [Test worker] INFO  org.testcontainers.images.PullPolicy - Image pull policy will be performed by: DefaultPullPolicy()
+19:31:05.943 [Test worker] INFO  org.testcontainers.utility.ImageNameSubstitutor - Image name substitution will be performed by: DefaultImageNameSubstitutor (composite of 'ConfigurationFileImageNameSubstitutor' and 'PrefixingImageNameSubstitutor')
+19:31:05.964 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:31:06.281 [Test worker] DEBUG org.testcontainers.dockerclient.RootlessDockerClientProviderStrategy - $XDG_RUNTIME_DIR is set but '<user-runtime>/docker.sock' does not exist.
+19:31:06.282 [Test worker] DEBUG org.testcontainers.dockerclient.RootlessDockerClientProviderStrategy - '<home>/.docker/run' does not exist.
+19:31:06.366 [Test worker] DEBUG org.testcontainers.dockerclient.RootlessDockerClientProviderStrategy - '<user-runtime>/docker.sock' does not exist.
+19:31:06.367 [Test worker] DEBUG org.testcontainers.dockerclient.DockerClientProviderStrategy - Trying out strategy: UnixSocketClientProviderStrategy
+19:31:06.387 [Test worker] WARN  org.testcontainers.dockerclient.DockerClientProviderStrategy - DOCKER_HOST unix:///var/run/docker.sock is not listening
 java.net.BindException: Permission denied
 	at java.base/sun.nio.ch.UnixDomainSockets.connect0(Native Method) ~[?:?]
 	at java.base/sun.nio.ch.UnixDomainSockets.connect(UnixDomainSockets.java:148) ~[?:?]
@@ -269,23 +269,23 @@ java.net.BindException: Permission denied
 	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
-17:25:01.741 [Test worker] DEBUG org.testcontainers.dockerclient.DockerClientProviderStrategy - strategy UnixSocketClientProviderStrategy did not pass the test
-17:25:01.745 [Test worker] DEBUG org.testcontainers.dockerclient.DockerClientProviderStrategy - Trying out strategy: DockerDesktopClientProviderStrategy
-17:25:01.749 [Test worker] DEBUG org.testcontainers.dockerclient.DockerDesktopClientProviderStrategy - '<home>/.docker/desktop' does not exist.
-17:25:01.759 [Test worker] DEBUG org.testcontainers.dockerclient.DockerDesktopClientProviderStrategy - '<home>/.docker/run' does not exist.
-17:25:01.769 [Test worker] DEBUG org.testcontainers.dockerclient.DockerClientProviderStrategy - DockerDesktopClientProviderStrategy: failed with exception NullPointerException (Cannot invoke "java.nio.file.Path.toString()" because the return value of "org.testcontainers.dockerclient.DockerDesktopClientProviderStrategy.getSocketPath()" is null)
-17:25:01.784 [Test worker] INFO  org.testcontainers.dockerclient.DockerMachineClientProviderStrategy - docker-machine executable was not found on PATH ([<home>/jdks/jdk-17/bin, <home>/.local/bin, <home>/bin, /usr/local/bin, /usr/bin])
-17:25:01.785 [Test worker] ERROR org.testcontainers.dockerclient.DockerClientProviderStrategy - Could not find a valid Docker environment. Please check configuration. Attempted configurations were:
+19:31:06.422 [Test worker] DEBUG org.testcontainers.dockerclient.DockerClientProviderStrategy - strategy UnixSocketClientProviderStrategy did not pass the test
+19:31:06.423 [Test worker] DEBUG org.testcontainers.dockerclient.DockerClientProviderStrategy - Trying out strategy: DockerDesktopClientProviderStrategy
+19:31:06.423 [Test worker] DEBUG org.testcontainers.dockerclient.DockerDesktopClientProviderStrategy - '<home>/.docker/desktop' does not exist.
+19:31:06.424 [Test worker] DEBUG org.testcontainers.dockerclient.DockerDesktopClientProviderStrategy - '<home>/.docker/run' does not exist.
+19:31:06.427 [Test worker] DEBUG org.testcontainers.dockerclient.DockerClientProviderStrategy - DockerDesktopClientProviderStrategy: failed with exception NullPointerException (Cannot invoke "java.nio.file.Path.toString()" because the return value of "org.testcontainers.dockerclient.DockerDesktopClientProviderStrategy.getSocketPath()" is null)
+19:31:06.434 [Test worker] INFO  org.testcontainers.dockerclient.DockerMachineClientProviderStrategy - docker-machine executable was not found on PATH ([<home>/.local/bin, <home>/bin, /usr/local/bin, /usr/bin])
+19:31:06.439 [Test worker] ERROR org.testcontainers.dockerclient.DockerClientProviderStrategy - Could not find a valid Docker environment. Please check configuration. Attempted configurations were:
 	DockerDesktopClientProviderStrategy: failed with exception NullPointerException (Cannot invoke "java.nio.file.Path.toString()" because the return value of "org.testcontainers.dockerclient.DockerDesktopClientProviderStrategy.getSocketPath()" is null)As no valid configuration was found, execution cannot continue.
 See https://java.testcontainers.org/on_failure.html for more details.
-17:25:01.817 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-17:25:01.826 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-17:25:01.832 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-17:25:01.838 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-17:25:01.853 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-17:25:01.874 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-17:25:01.906 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-17:25:01.926 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:31:06.479 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:31:06.490 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:31:06.498 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:31:06.504 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:31:06.511 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:31:06.517 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:31:06.523 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:31:06.534 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

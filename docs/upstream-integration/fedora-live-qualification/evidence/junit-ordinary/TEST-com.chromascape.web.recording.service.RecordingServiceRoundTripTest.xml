@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.recording.service.RecordingServiceRoundTripTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:16.453Z" hostname="fedora" time="3.948">
+<testsuite name="com.chromascape.web.recording.service.RecordingServiceRoundTripTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:12.928Z" hostname="fedora" time="1.247">
   <properties/>
-  <testcase name="boundFramesEncodeAndFinalizeAsANonemptyMp4()" classname="com.chromascape.web.recording.service.RecordingServiceRoundTripTest" time="3.948"/>
-  <system-out><![CDATA[18:09:16.455 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Initial frame ready after 1 attempts in 0 ms: 16x16
-18:09:16.455 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Initializing recorder with captured dimensions: 16x16
-18:09:19.535 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Failed to start recorder with codec libx264: avcodec_open2() error -22: Could not open video codec. (For more details, make sure FFmpegLogCallback.set() has been called.)
-18:09:19.541 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Recording codec initialized: libopenh264
-18:09:19.541 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Started recording: recording_ae46bb37.mp4 at 10 FPS (buffer size: 300)
-18:09:19.543 [RecordingEncoder] INFO  com.chromascape.web.recording.service.RecordingService - Encoder thread started
-18:09:19.543 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Registered with unified capture service for recording
-18:09:19.543 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Stopping recording...
-18:09:19.544 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Unregistered from unified capture service
-18:09:19.839 [RecordingEncoder] INFO  com.chromascape.web.recording.service.RecordingService - Draining 0 remaining frames from buffer
-18:09:19.839 [RecordingEncoder] INFO  com.chromascape.web.recording.service.RecordingService - Encoder thread finished (encoded 3 frames)
-18:09:20.044 [Test worker] DEBUG com.chromascape.web.recording.service.RecordingService - Flushing recorder buffers...
-18:09:20.044 [Test worker] DEBUG com.chromascape.web.recording.service.RecordingService - Stopping recorder...
-18:09:20.045 [Test worker] DEBUG com.chromascape.web.recording.service.RecordingService - Releasing recorder resources...
-18:09:20.246 [Test worker] DEBUG com.chromascape.web.recording.service.RecordingService - Recording file finalized: 915 bytes
-2026-09-19T16:09:20.264096035Z Test worker WARN found 11 argument placeholders, but provided 14 for pattern `Recording saved: {}
+  <testcase name="boundFramesEncodeAndFinalizeAsANonemptyMp4()" classname="com.chromascape.web.recording.service.RecordingServiceRoundTripTest" time="1.247"/>
+  <system-out><![CDATA[19:30:12.935 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Initial frame ready after 1 attempts in 0 ms: 16x16
+19:30:12.936 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Initializing recorder with captured dimensions: 16x16
+19:30:13.629 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Failed to start recorder with codec libx264: avcodec_open2() error -22: Could not open video codec. (For more details, make sure FFmpegLogCallback.set() has been called.)
+19:30:13.638 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Recording codec initialized: libopenh264
+19:30:13.639 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Started recording: recording_b5a486df.mp4 at 10 FPS (buffer size: 300)
+19:30:13.643 [RecordingEncoder] INFO  com.chromascape.web.recording.service.RecordingService - Encoder thread started
+19:30:13.645 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Registered with unified capture service for recording
+19:30:13.646 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Stopping recording...
+19:30:13.646 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Unregistered from unified capture service
+19:30:13.655 [RecordingEncoder] INFO  com.chromascape.web.recording.service.RecordingService - Draining 0 remaining frames from buffer
+19:30:13.656 [RecordingEncoder] INFO  com.chromascape.web.recording.service.RecordingService - Encoder thread finished (encoded 3 frames)
+19:30:13.947 [Test worker] DEBUG com.chromascape.web.recording.service.RecordingService - Flushing recorder buffers...
+19:30:13.948 [Test worker] DEBUG com.chromascape.web.recording.service.RecordingService - Stopping recorder...
+19:30:13.951 [Test worker] DEBUG com.chromascape.web.recording.service.RecordingService - Releasing recorder resources...
+19:30:14.152 [Test worker] DEBUG com.chromascape.web.recording.service.RecordingService - Recording file finalized: 915 bytes
+2026-09-19T17:30:14.166543989Z Test worker WARN found 11 argument placeholders, but provided 14 for pattern `Recording saved: {}
 Duration: {} ms (expected ~{} sec based on {} frames @ {} FPS)
 Frames captured: {}
 Frames dropped: {} ({:.1f}%)
@@ -26,8 +26,8 @@ Frames encoded: {}
 Queue high-water mark: {}
 Actual capture FPS: {:.2f}
 Configured FPS: {}`
-18:09:20.249 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Recording saved: recording_ae46bb37.mp4
-Duration: 705 ms (expected ~0.3 sec based on 3 frames @ 10 FPS)
+19:30:14.163 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Recording saved: recording_b5a486df.mp4
+Duration: 514 ms (expected ~0.3 sec based on 3 frames @ 10 FPS)
 Frames captured: 3
 Frames dropped: 0 ({:.1f}%)
 Frames duplicated (CFR fill): 0.0 ({:.1f}%)
@@ -35,7 +35,7 @@ Frames encoded: 0
 Queue high-water mark: 0.0
 Actual capture FPS: {:.2f}
 Configured FPS: 3
-18:09:20.401 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - RecordingService cleanup - shutting down threads
+19:30:14.174 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - RecordingService cleanup - shutting down threads
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:46.312Z" hostname="fedora" time="1.803">
+<testsuite name="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:47.699Z" hostname="fedora" time="0.181">
   <properties/>
-  <testcase name="catalogBoundAdapterRejectsAllowlistViolations()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.462"/>
-  <testcase name="unreplayedAdapterOverloadFailsClosed()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.002"/>
-  <testcase name="equivalentEligibleInputsNormalizeToTheSameProviderNeutralDecision()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.661"/>
-  <testcase name="directProviderDecisionValidationRejectsNestedInvalidPlans()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.004"/>
-  <testcase name="abstainedDecisionCarriesNoGoalPlan()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.611"/>
-  <testcase name="adaptersRejectUnboundEligibilityProvenance()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.008"/>
-  <testcase name="adaptersFailClosedBeforeEligibility()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.006"/>
-  <testcase name="adaptersRejectMismatchedProviderIdentity()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.008"/>
-  <testcase name="uncataloguedAdapterFailsClosed()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.002"/>
-  <testcase name="adaptersRejectFutureEligibilityEvaluation()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.023"/>
-  <testcase name="adaptersRejectCyclicGoalPlansRecursively()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.008"/>
-  <testcase name="adaptersRejectFabricatedEligibilityAtTheBoundary()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.004"/>
+  <testcase name="catalogBoundAdapterRejectsAllowlistViolations()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.028"/>
+  <testcase name="unreplayedAdapterOverloadFailsClosed()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.008"/>
+  <testcase name="equivalentEligibleInputsNormalizeToTheSameProviderNeutralDecision()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.03"/>
+  <testcase name="directProviderDecisionValidationRejectsNestedInvalidPlans()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.007"/>
+  <testcase name="abstainedDecisionCarriesNoGoalPlan()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.017"/>
+  <testcase name="adaptersRejectUnboundEligibilityProvenance()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.022"/>
+  <testcase name="adaptersFailClosedBeforeEligibility()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.01"/>
+  <testcase name="adaptersRejectMismatchedProviderIdentity()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.009"/>
+  <testcase name="uncataloguedAdapterFailsClosed()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.003"/>
+  <testcase name="adaptersRejectFutureEligibilityEvaluation()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.007"/>
+  <testcase name="adaptersRejectCyclicGoalPlansRecursively()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.017"/>
+  <testcase name="adaptersRejectFabricatedEligibilityAtTheBoundary()" classname="com.chromascape.web.gameplay.provider.v2.GameplayV2ProviderEquivalenceTest" time="0.012"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

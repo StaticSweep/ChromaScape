@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.playback.LegacySimulatorProfileContractTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:22.233Z" hostname="fedora" time="0.204">
+<testsuite name="com.chromascape.web.replay.playback.LegacySimulatorProfileContractTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:37.969Z" hostname="fedora" time="0.158">
   <properties/>
-  <testcase name="everyLegacyBeanRequiresExplicitLegacyProfile()" classname="com.chromascape.web.replay.playback.LegacySimulatorProfileContractTest" time="0.204"/>
+  <testcase name="everyLegacyBeanRequiresExplicitLegacyProfile()" classname="com.chromascape.web.replay.playback.LegacySimulatorProfileContractTest" time="0.158"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

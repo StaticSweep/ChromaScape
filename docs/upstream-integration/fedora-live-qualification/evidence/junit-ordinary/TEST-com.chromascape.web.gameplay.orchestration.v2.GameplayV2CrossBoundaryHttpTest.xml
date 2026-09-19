@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:23.277Z" hostname="fedora" time="2.576">
+<testsuite name="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:27.610Z" hostname="fedora" time="0.74">
   <properties/>
-  <testcase name="aMicro6OutageDuringReserveNeedsReconciliationRatherThanRedispatch()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="1.307"/>
-  <testcase name="theFullReserveStartStatusStopSequenceCrossesTheRealHttpBoundary()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.907"/>
-  <testcase name="aStartWhoseDigestMicro6CannotMatchIsReportedTruthfullyAndNeverBecomesActive()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.108"/>
-  <testcase name="reconciliationReadsMicro6StateOverTheStatusRouteWithoutRedispatch()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.098"/>
-  <testcase name="theIdempotencyKeyTravelsOnTheWireAndAReplayReservesOnlyOnce()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.091"/>
-  <testcase name="micro6RecomputesTheEnvelopeDigestFromTheBytesItActuallyReceived()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.055"/>
+  <testcase name="aMicro6OutageDuringReserveNeedsReconciliationRatherThanRedispatch()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.104"/>
+  <testcase name="theFullReserveStartStatusStopSequenceCrossesTheRealHttpBoundary()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.19"/>
+  <testcase name="aStartWhoseDigestMicro6CannotMatchIsReportedTruthfullyAndNeverBecomesActive()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.144"/>
+  <testcase name="reconciliationReadsMicro6StateOverTheStatusRouteWithoutRedispatch()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.125"/>
+  <testcase name="theIdempotencyKeyTravelsOnTheWireAndAReplayReservesOnlyOnce()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.1"/>
+  <testcase name="micro6RecomputesTheEnvelopeDigestFromTheBytesItActuallyReceived()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2CrossBoundaryHttpTest" time="0.065"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

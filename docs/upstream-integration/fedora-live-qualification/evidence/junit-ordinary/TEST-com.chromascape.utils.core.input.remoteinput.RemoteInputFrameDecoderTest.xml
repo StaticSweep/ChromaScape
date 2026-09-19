@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.utils.core.input.remoteinput.RemoteInputFrameDecoderTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:36.149Z" hostname="fedora" time="0.188">
+<testsuite name="com.chromascape.utils.core.input.remoteinput.RemoteInputFrameDecoderTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:04.431Z" hostname="fedora" time="0.012">
   <properties/>
-  <testcase name="rejectsZeroOversizedOverflowingAndTruncatedFrames()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputFrameDecoderTest" time="0.159"/>
-  <testcase name="decodesTopDownBgraWithoutFlippingAndIgnoresAlpha()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputFrameDecoderTest" time="0.025"/>
+  <testcase name="rejectsZeroOversizedOverflowingAndTruncatedFrames()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputFrameDecoderTest" time="0.003"/>
+  <testcase name="decodesTopDownBgraWithoutFlippingAndIgnoresAlpha()" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputFrameDecoderTest" time="0.008"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

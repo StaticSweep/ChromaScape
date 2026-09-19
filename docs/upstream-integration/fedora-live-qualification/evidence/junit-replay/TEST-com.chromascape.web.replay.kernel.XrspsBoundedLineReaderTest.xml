@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:25:03.305Z" hostname="fedora" time="0.03">
+<testsuite name="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:31:14.180Z" hostname="fedora" time="0.018">
   <properties/>
-  <testcase name="[1] cap=64" classname="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" time="0.017"/>
-  <testcase name="[2] cap=1024" classname="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" time="0.001"/>
+  <testcase name="[1] cap=64" classname="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" time="0.012"/>
+  <testcase name="[2] cap=1024" classname="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" time="0.0"/>
   <testcase name="emptyStreamIsEndOfStream()" classname="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" time="0.0"/>
   <testcase name="multiByteUtf8SurvivesChunkBoundaries()" classname="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" time="0.001"/>
-  <testcase name="readsWellFormedLinesWithinTheCap()" classname="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" time="0.002"/>
-  <testcase name="unterminatedFinalLineIsReportedAsProtocolNoise()" classname="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" time="0.002"/>
+  <testcase name="readsWellFormedLinesWithinTheCap()" classname="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" time="0.001"/>
+  <testcase name="unterminatedFinalLineIsReportedAsProtocolNoise()" classname="com.chromascape.web.replay.kernel.XrspsBoundedLineReaderTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

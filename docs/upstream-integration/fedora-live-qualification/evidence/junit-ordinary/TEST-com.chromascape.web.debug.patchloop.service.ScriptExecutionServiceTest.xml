@@ -1,55 +1,55 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" tests="37" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:07:05.582Z" hostname="fedora" time="3.13">
+<testsuite name="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" tests="37" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:35.799Z" hostname="fedora" time="2.52">
   <properties/>
-  <testcase name="Micro6 status polling rejects a confirmed task identity mismatch" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.632"/>
-  <testcase name="Micro6 status polling resolves target-specific run status" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
-  <testcase name="runScriptAndWait returns RECONCILING (not FAILED) on ambiguous execute timeout" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.006"/>
-  <testcase name="Micro6 conflict whose polled task identity mismatches rejects attachment" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
-  <testcase name="Micro6 conflict with mismatched task_key fails closed as DUPLICATE_OR_CONFLICTING_DISPATCH" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
+  <testcase name="Micro6 status polling rejects a confirmed task identity mismatch" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.417"/>
+  <testcase name="Micro6 status polling resolves target-specific run status" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="runScriptAndWait returns RECONCILING (not FAILED) on ambiguous execute timeout" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
+  <testcase name="Micro6 conflict whose polled task identity mismatches rejects attachment" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 conflict with mismatched task_key fails closed as DUPLICATE_OR_CONFLICTING_DISPATCH" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
   <testcase name="Micro6 execute with a mismatched task identity fails closed" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
   <testcase name="Micro6 conflict whose polled status is not attachable rejects attachment" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
   <testcase name="Micro6 execute accepts a display name that resolves to the canonical task key via the catalog" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
-  <testcase name="Micro6 execute task identity rejects a whitespace mismatch" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.001"/>
-  <testcase name="Micro6 execute with a mismatched entry id fails closed" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 execute task identity rejects a whitespace mismatch" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 execute with a mismatched entry id fails closed" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.001"/>
   <testcase name="Micro6 execute task identity rejects a prefix collision (FISHING vs FISHING_TRAINING)" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
   <testcase name="Micro6 conflict whose polled entry id mismatches fails closed as conflicting dispatch" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
-  <testcase name="Micro6 backend handles execute endpoint rejection" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
-  <testcase name="Micro6 conflict with invalid existing_entry_id fails closed" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
-  <testcase name="Micro6 publish returns RECONCILING when execute times out twice and no acceptance is confirmed" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.004"/>
-  <testcase name="Micro6 conflict on a PAUSED existing entry is attachable" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.005"/>
-  <testcase name="Micro6 publish attaches to a verified already-queued run after a 409 conflict" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.004"/>
-  <testcase name="Micro6 backend dispatches to targeted advertised base URL when provided" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.005"/>
+  <testcase name="Micro6 backend handles execute endpoint rejection" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 conflict with invalid existing_entry_id fails closed" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 publish returns RECONCILING when execute times out twice and no acceptance is confirmed" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 conflict on a PAUSED existing entry is attachable" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
+  <testcase name="Micro6 publish attaches to a verified already-queued run after a 409 conflict" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 backend dispatches to targeted advertised base URL when provided" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
   <testcase name="Micro6 execute task identity rejects a suffix collision (FISHING_TRAINING vs FISHING)" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
-  <testcase name="Micro6 execute accepts only a matching immutable settings receipt" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.005"/>
-  <testcase name="Micro6 executor health reports publish-ready when logged in and AccountBuilder is ready" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.004"/>
-  <testcase name="Micro6 backend returns FAILED terminal status with error message" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
-  <testcase name="Micro6 execute task identity rejects a case-only mismatch" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
-  <testcase name="Micro6 status polling fails closed when iteration identity is missing" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
-  <testcase name="Micro6 backend returns COMPLETED terminal status" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
-  <testcase name="Micro6 conflict whose poll never confirms identity enters RECONCILING" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="1.013"/>
-  <testcase name="Micro6 conflict with unknown snapshot status never attaches on a later runnable poll" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.012"/>
-  <testcase name="Micro6 publish keeps command provenance separate from click telemetry" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.326"/>
-  <testcase name="Micro6 publish returns accepted entry id without waiting for completion" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.009"/>
-  <testcase name="Micro6 status polling requires the exact task and iteration identity" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 execute accepts only a matching immutable settings receipt" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
+  <testcase name="Micro6 executor health reports publish-ready when logged in and AccountBuilder is ready" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 backend returns FAILED terminal status with error message" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.001"/>
+  <testcase name="Micro6 execute task identity rejects a case-only mismatch" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.001"/>
+  <testcase name="Micro6 status polling fails closed when iteration identity is missing" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.001"/>
+  <testcase name="Micro6 backend returns COMPLETED terminal status" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.001"/>
+  <testcase name="Micro6 conflict whose poll never confirms identity enters RECONCILING" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="1.003"/>
+  <testcase name="Micro6 conflict with unknown snapshot status never attaches on a later runnable poll" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 publish keeps command provenance separate from click telemetry" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.02"/>
+  <testcase name="Micro6 publish returns accepted entry id without waiting for completion" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
+  <testcase name="Micro6 status polling requires the exact task and iteration identity" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.001"/>
   <testcase name="Micro6 executor health reports concrete dispatch reason when logged in but startup is incomplete" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
-  <testcase name="Micro6 health uses account name fallback only with canonical actual identity" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.008"/>
-  <testcase name="Micro6 execute HTTP 200 with a malformed body is not marked published" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.007"/>
-  <testcase name="Micro6 backend returns timeout terminal result when no terminal status arrives" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="1.017"/>
-  <testcase name="Micro6 conflict missing identity fields fails closed (never attaches on entry id alone)" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.007"/>
-  <testcase name="Micro6 execute rejects a display name that does not resolve through the catalog resolver" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.004"/>
-  <testcase name="Micro6 execute task identity accepts an exact normalized task_key match" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.001"/>
-  <system-out><![CDATA[18:07:06.223 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish request timed out for task configurable_woodcutting on http://127.0.0.1:8098; probing executor status before retry
-18:07:06.223 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish status recovery did not find entry 1001 for task configurable_woodcutting; retrying once
-18:07:06.223 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish remains ambiguous for task configurable_woodcutting on http://127.0.0.1:8098 after retry; entering RECONCILING for entry 1001
-18:07:06.224 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish for task configurable_woodcutting is RECONCILING (entry 1001); continuing in background
-18:07:06.229 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 conflict task_key mismatch: requested configurable_woodcutting but existing entry 1337 holds mining_training
-18:07:06.254 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish request timed out for task configurable_woodcutting on http://127.0.0.1:8098; probing executor status before retry
-18:07:06.254 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish status recovery did not find entry 1001 for task configurable_woodcutting; retrying once
-18:07:06.255 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish remains ambiguous for task configurable_woodcutting on http://127.0.0.1:8098 after retry; entering RECONCILING for entry 1001
-18:07:06.260 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Attached to existing Micro6 run for task configurable_woodcutting (existing_entry_id=1337, status=PAUSED)
-18:07:06.264 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Attached to existing Micro6 run for task configurable_woodcutting (existing_entry_id=1337, status=RUNNING)
-18:07:07.300 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 duplicate attachment could not confirm identity of entry 1337 within the probe window; entering RECONCILING
-18:07:07.676 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 execute response body for entry 1001 is not valid JSON: Unrecognized token 'this': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')
+  <testcase name="Micro6 health uses account name fallback only with canonical actual identity" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
+  <testcase name="Micro6 execute HTTP 200 with a malformed body is not marked published" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.003"/>
+  <testcase name="Micro6 backend returns timeout terminal result when no terminal status arrives" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="1.006"/>
+  <testcase name="Micro6 conflict missing identity fields fails closed (never attaches on entry id alone)" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 execute rejects a display name that does not resolve through the catalog resolver" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <testcase name="Micro6 execute task identity accepts an exact normalized task_key match" classname="com.chromascape.web.debug.patchloop.service.ScriptExecutionServiceTest" time="0.002"/>
+  <system-out><![CDATA[19:28:36.221 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish request timed out for task configurable_woodcutting on http://127.0.0.1:8098; probing executor status before retry
+19:28:36.221 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish status recovery did not find entry 1001 for task configurable_woodcutting; retrying once
+19:28:36.221 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish remains ambiguous for task configurable_woodcutting on http://127.0.0.1:8098 after retry; entering RECONCILING for entry 1001
+19:28:36.221 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish for task configurable_woodcutting is RECONCILING (entry 1001); continuing in background
+19:28:36.226 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 conflict task_key mismatch: requested configurable_woodcutting but existing entry 1337 holds mining_training
+19:28:36.246 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish request timed out for task configurable_woodcutting on http://127.0.0.1:8098; probing executor status before retry
+19:28:36.246 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish status recovery did not find entry 1001 for task configurable_woodcutting; retrying once
+19:28:36.246 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 publish remains ambiguous for task configurable_woodcutting on http://127.0.0.1:8098 after retry; entering RECONCILING for entry 1001
+19:28:36.249 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Attached to existing Micro6 run for task configurable_woodcutting (existing_entry_id=1337, status=PAUSED)
+19:28:36.251 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Attached to existing Micro6 run for task configurable_woodcutting (existing_entry_id=1337, status=RUNNING)
+19:28:37.269 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 duplicate attachment could not confirm identity of entry 1337 within the probe window; entering RECONCILING
+19:28:37.306 [Test worker] WARN  com.chromascape.web.debug.patchloop.service.ScriptExecutionService - Micro6 execute response body for entry 1001 is not valid JSON: Unrecognized token 'this': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')
  at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 5]
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>

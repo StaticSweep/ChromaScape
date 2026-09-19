@@ -1,29 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:42.735Z" hostname="fedora" time="0.092">
+<testsuite name="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:18.623Z" hostname="fedora" time="0.029">
   <properties/>
-  <testcase name="testSuccessResponseWithoutPatchDraftFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.067"/>
-  <testcase name="testValidSuccessResponsePasses()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.003"/>
-  <testcase name="testMissingTargetScriptNameFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
-  <testcase name="testInvalidSchemaVersionFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.003"/>
-  <testcase name="testMissingPromptTypeFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
+  <testcase name="testSuccessResponseWithoutPatchDraftFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.004"/>
+  <testcase name="testValidSuccessResponsePasses()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
+  <testcase name="testMissingTargetScriptNameFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.007"/>
+  <testcase name="testInvalidSchemaVersionFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
+  <testcase name="testMissingPromptTypeFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.003"/>
   <testcase name="testSuccessResponseWithoutRetestPlanFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
   <testcase name="testPartialSuccessResponseWithoutDiagnosisFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.0"/>
-  <testcase name="testValidFailureResponsePasses()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.0"/>
+  <testcase name="testValidFailureResponsePasses()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
   <testcase name="testSuccessResponseWithoutDiagnosisFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
   <testcase name="testSuccessResponseWithoutEvidenceReferencesFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
-  <testcase name="testInvalidSessionBoundsFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
-  <testcase name="testSuccessResponseWithoutImpactedModulesFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
+  <testcase name="testInvalidSessionBoundsFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.0"/>
+  <testcase name="testSuccessResponseWithoutImpactedModulesFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.0"/>
   <testcase name="testNullRequestFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
   <testcase name="testMissingPromptFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
   <testcase name="testErrorMessageMapping()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.0"/>
-  <testcase name="testMissingTargetFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
+  <testcase name="testMissingTargetFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.0"/>
   <testcase name="testMissingSchemaVersionFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
   <testcase name="testMissingEvidenceSelectorsFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
   <testcase name="testValidV2RequestPasses()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.0"/>
-  <testcase name="testEmptyPromptFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
+  <testcase name="testEmptyPromptFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.0"/>
   <testcase name="testEmptyEvidenceSelectorsFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
   <testcase name="testFailureResponseWithoutErrorFails()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
-  <testcase name="testValidPartialSuccessResponsePasses()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.001"/>
+  <testcase name="testValidPartialSuccessResponsePasses()" classname="com.chromascape.web.debug.patchloop.AnalysisV2ValidatorTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

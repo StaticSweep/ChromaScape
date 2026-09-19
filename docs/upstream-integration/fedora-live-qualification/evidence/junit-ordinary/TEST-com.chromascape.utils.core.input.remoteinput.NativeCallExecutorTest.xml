@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.utils.core.input.remoteinput.NativeCallExecutorTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:35.944Z" hostname="fedora" time="0.03">
+<testsuite name="com.chromascape.utils.core.input.remoteinput.NativeCallExecutorTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:04.399Z" hostname="fedora" time="0.026">
   <properties/>
   <testcase name="deliberateCloseIsNotReportedAsPoisoned()" classname="com.chromascape.utils.core.input.remoteinput.NativeCallExecutorTest" time="0.002"/>
-  <testcase name="timeoutPermanentlyPoisonsLane()" classname="com.chromascape.utils.core.input.remoteinput.NativeCallExecutorTest" time="0.027"/>
+  <testcase name="timeoutPermanentlyPoisonsLane()" classname="com.chromascape.utils.core.input.remoteinput.NativeCallExecutorTest" time="0.024"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

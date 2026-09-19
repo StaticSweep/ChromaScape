@@ -1,34 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:55.510Z" hostname="fedora" time="0.466">
+<testsuite name="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:16.457Z" hostname="fedora" time="0.038">
   <properties/>
-  <testcase name="an invalid token is rejected" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.268"/>
-  <testcase name="loopback development requests are permitted when no token is configured" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.131"/>
-  <testcase name="triage resolution requires the write token, not the read token" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.004"/>
-  <testcase name="oversized request bodies are rejected with 413 before parsing" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.003"/>
-  <testcase name="isFinished() reflects EOF, not quota exhaustion" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.019"/>
+  <testcase name="an invalid token is rejected" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.02"/>
+  <testcase name="loopback development requests are permitted when no token is configured" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.003"/>
+  <testcase name="triage resolution requires the write token, not the read token" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.001"/>
+  <testcase name="oversized request bodies are rejected with 413 before parsing" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.001"/>
+  <testcase name="isFinished() reflects EOF, not quota exhaustion" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.002"/>
   <testcase name="read-only GET endpoints never require the write token" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.001"/>
   <testcase name="a valid token grants access" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.001"/>
   <testcase name="a missing token is rejected when a token is configured" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.001"/>
-  <testcase name="blank tokens fail startup outside the explicit local-development profile" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.002"/>
+  <testcase name="blank tokens fail startup outside the explicit local-development profile" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.001"/>
   <testcase name="one blank production token also fails startup" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.001"/>
-  <testcase name="when no write token is configured the read token covers writes" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.002"/>
+  <testcase name="when no write token is configured the read token covers writes" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.001"/>
   <testcase name="the local-development profile does not require tokens" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.001"/>
   <testcase name="a non-loopback request is rejected when no token is configured" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.001"/>
-  <testcase name="repeated getInputStream() calls share one byte counter and never reset the bound" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.022"/>
-  <system-out><![CDATA[18:04:55.510 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.781 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.914 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.919 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.921 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.941 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.943 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.944 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.945 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [production]
-18:04:55.948 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [production]
-18:04:55.950 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.951 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.953 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.954 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+  <testcase name="repeated getInputStream() calls share one byte counter and never reset the bound" classname="com.chromascape.web.accounttask.config.StabilizationAuthFilterTest" time="0.002"/>
+  <system-out><![CDATA[19:27:16.457 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.478 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.481 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.483 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.484 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.486 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.487 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.488 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.489 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [production]
+19:27:16.490 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [production]
+19:27:16.491 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.492 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.493 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.494 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:29.374Z" hostname="fedora" time="0.235">
+<testsuite name="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:15.840Z" hostname="fedora" time="0.054">
   <properties/>
-  <testcase name="unsupportedOrMissingOptionViolates()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.218"/>
-  <testcase name="missingSnapshotAtTheActionTickIsAViolation()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.004"/>
+  <testcase name="unsupportedOrMissingOptionViolates()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.029"/>
+  <testcase name="missingSnapshotAtTheActionTickIsAViolation()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.006"/>
   <testcase name="targetPresentAtStartButGoneAtActionTickViolates()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.003"/>
-  <testcase name="duplicatedStableTargetAtActionTickViolates()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.003"/>
-  <testcase name="recordingLevelChecksRejectGapsAndNullSchema()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.004"/>
-  <testcase name="waitUntilTickRequiresOnlyASnapshotAtItsTick()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.0"/>
+  <testcase name="duplicatedStableTargetAtActionTickViolates()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.005"/>
+  <testcase name="recordingLevelChecksRejectGapsAndNullSchema()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.005"/>
+  <testcase name="waitUntilTickRequiresOnlyASnapshotAtItsTick()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.001"/>
   <testcase name="optionMustMatchTheRecordedSpotTypeAtTheActionTick()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

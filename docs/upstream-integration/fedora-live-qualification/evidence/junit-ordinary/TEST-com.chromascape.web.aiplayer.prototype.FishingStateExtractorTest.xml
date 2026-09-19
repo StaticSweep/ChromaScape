@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:28.190Z" hostname="fedora" time="0.06">
+<testsuite name="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:33.656Z" hostname="fedora" time="0.02">
   <properties/>
-  <testcase name="non-fishing NPCs are excluded from nearby fishing spots" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.007"/>
-  <testcase name="inventoryTotal matches persisted extraction quantity parsing" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.002"/>
+  <testcase name="non-fishing NPCs are excluded from nearby fishing spots" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.002"/>
+  <testcase name="inventoryTotal matches persisted extraction quantity parsing" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.001"/>
   <testcase name="inventoryTotal accepts integral numbers and numeric strings" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.0"/>
-  <testcase name="live and persisted snapshot extraction produce identical states" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.02"/>
-  <testcase name="animation id zero is treated as inactive" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.006"/>
-  <testcase name="inventoryTotal handles null, missing, and malformed quantities as zero" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.001"/>
-  <testcase name="extracts player, inventory, and fishing spot features" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.002"/>
+  <testcase name="live and persisted snapshot extraction produce identical states" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.007"/>
+  <testcase name="animation id zero is treated as inactive" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.001"/>
+  <testcase name="inventoryTotal handles null, missing, and malformed quantities as zero" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.0"/>
+  <testcase name="extracts player, inventory, and fishing spot features" classname="com.chromascape.web.aiplayer.prototype.FishingStateExtractorTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

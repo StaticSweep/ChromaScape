@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:28.544Z" hostname="fedora" time="0.289">
+<testsuite name="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:33.687Z" hostname="fedora" time="0.18">
   <properties/>
-  <testcase name="mutationRequiresOperatorToken()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.28"/>
-  <testcase name="validTokenPlacesConfiguredOperatorIdInRequest()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.003"/>
+  <testcase name="mutationRequiresOperatorToken()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.175"/>
+  <testcase name="validTokenPlacesConfiguredOperatorIdInRequest()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.001"/>
   <testcase name="readOnlyGetRequestsRemainUnauthenticated()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.001"/>
   <testcase name="wrongTokenIsRejectedWith401()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.001"/>
   <testcase name="unconfiguredTokenFailsClosedWith503()" classname="com.chromascape.web.aiplayer.routine.config.AiRoutineOperatorInterceptorTest" time="0.001"/>

@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:07:03.516Z" hostname="fedora" time="0.037">
+<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:34.952Z" hostname="fedora" time="0.027">
   <properties/>
-  <testcase name="POST /execute with evidence config passes through correctly" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.005"/>
-  <testcase name="POST /execute handles graph execution failure" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.004"/>
-  <testcase name="POST /execute with autofix_loop mode enables retesting" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.003"/>
+  <testcase name="POST /execute with evidence config passes through correctly" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.003"/>
+  <testcase name="POST /execute handles graph execution failure" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.002"/>
+  <testcase name="POST /execute with autofix_loop mode enables retesting" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.002"/>
   <testcase name="POST /execute returns 400 for invalid execution mode" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.002"/>
-  <testcase name="POST /execute-graph without iterationId creates new execution (non-regression)" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.006"/>
-  <testcase name="POST /execute delegates to graph orchestrator and returns execution details (E6.5)" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.005"/>
+  <testcase name="POST /execute-graph without iterationId creates new execution (non-regression)" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.002"/>
+  <testcase name="POST /execute delegates to graph orchestrator and returns execution details (E6.5)" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.003"/>
   <testcase name="POST /execute persists all new E6.5 request fields" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.003"/>
-  <testcase name="POST /execute-graph with custom mermaid preserves graph (non-regression)" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.004"/>
+  <testcase name="POST /execute-graph with custom mermaid preserves graph (non-regression)" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.003"/>
   <testcase name="POST /execute returns 400 for missing required fields" classname="com.chromascape.web.debug.patchloop.PatchLoopSimpleApiIntegrationTest" time="0.003"/>
-  <system-out><![CDATA[18:07:03.520 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
-18:07:03.523 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
-18:07:03.523 [Test worker] ERROR com.chromascape.web.debug.patchloop.controller.PatchLoopController - Failed to execute iteration
+  <system-out><![CDATA[19:28:34.956 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
+19:28:34.958 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
+19:28:34.958 [Test worker] ERROR com.chromascape.web.debug.patchloop.controller.PatchLoopController - Failed to execute iteration
 java.lang.RuntimeException: Failed to execute patch loop
 	at com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService.executeIteration(PatchLoopOrchestratorService.java:88) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.controller.PatchLoopController.executeIteration(PatchLoopController.java:107) ~[main/:?]
@@ -107,19 +107,19 @@ java.lang.RuntimeException: Failed to execute patch loop
 	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
-18:07:03.527 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'patchLoopAutofixEnabled' of type [null] on target object [com.chromascape.web.debug.patchloop.controller.PatchLoopController@2ee4eba0] or target class [class com.chromascape.web.debug.patchloop.controller.PatchLoopController] to value [true]
-18:07:03.528 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
-18:07:03.530 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
-18:07:03.530 [Test worker] WARN  com.chromascape.web.debug.patchloop.controller.PatchLoopController - Invalid request: Invalid execution mode
-18:07:03.534 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute-graph - script: TestScript
-18:07:03.542 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
-18:07:03.545 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'patchLoopAutofixEnabled' of type [null] on target object [com.chromascape.web.debug.patchloop.controller.PatchLoopController@1c31eec5] or target class [class com.chromascape.web.debug.patchloop.controller.PatchLoopController] to value [true]
-18:07:03.546 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
-18:07:03.549 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute-graph - script: TestScript
-18:07:03.552 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: null
-18:07:03.552 [Test worker] WARN  com.chromascape.web.debug.patchloop.controller.PatchLoopController - Invalid request: Script name is required
-18:07:03.553 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
-18:07:03.553 [Test worker] WARN  com.chromascape.web.debug.patchloop.controller.PatchLoopController - Invalid request: Prompt is required
+19:28:34.961 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'patchLoopAutofixEnabled' of type [null] on target object [com.chromascape.web.debug.patchloop.controller.PatchLoopController@15f87e85] or target class [class com.chromascape.web.debug.patchloop.controller.PatchLoopController] to value [true]
+19:28:34.962 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
+19:28:34.965 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
+19:28:34.965 [Test worker] WARN  com.chromascape.web.debug.patchloop.controller.PatchLoopController - Invalid request: Invalid execution mode
+19:28:34.968 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute-graph - script: TestScript
+19:28:34.970 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
+19:28:34.973 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'patchLoopAutofixEnabled' of type [null] on target object [com.chromascape.web.debug.patchloop.controller.PatchLoopController@55f8d659] or target class [class com.chromascape.web.debug.patchloop.controller.PatchLoopController] to value [true]
+19:28:34.974 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
+19:28:34.976 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute-graph - script: TestScript
+19:28:34.978 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: null
+19:28:34.980 [Test worker] WARN  com.chromascape.web.debug.patchloop.controller.PatchLoopController - Invalid request: Script name is required
+19:28:34.980 [Test worker] INFO  com.chromascape.web.debug.patchloop.controller.PatchLoopController - POST /api/debug/patch-loop/execute - script: TestScript
+19:28:34.980 [Test worker] WARN  com.chromascape.web.debug.patchloop.controller.PatchLoopController - Invalid request: Prompt is required
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

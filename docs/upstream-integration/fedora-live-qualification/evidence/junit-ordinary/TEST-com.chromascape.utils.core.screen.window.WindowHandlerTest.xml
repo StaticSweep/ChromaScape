@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.utils.core.screen.window.WindowHandlerTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:54.982Z" hostname="fedora" time="0.218">
+<testsuite name="com.chromascape.utils.core.screen.window.WindowHandlerTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:16.389Z" hostname="fedora" time="0.025">
   <properties/>
-  <testcase name="extractAccountNameSupportsVersionedLeeuwbotTitles()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.145"/>
-  <testcase name="selectBestWindowPrefersCaptureableRuneliteWindowOverLargerLeeuwbotWrapper()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.008"/>
-  <testcase name="deduplicateWindowsByPidFallsBackToWrapperWhenNoRenderClientExists()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.002"/>
-  <testcase name="selectBestWindowAmongRenderClientsUsesCaptureSignatureBeforeArea()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.0"/>
-  <testcase name="deduplicateWindowsByPidKeepsBestWindowPerProcess()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.048"/>
+  <testcase name="extractAccountNameSupportsVersionedLeeuwbotTitles()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.003"/>
+  <testcase name="selectBestWindowPrefersCaptureableRuneliteWindowOverLargerLeeuwbotWrapper()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.004"/>
+  <testcase name="deduplicateWindowsByPidFallsBackToWrapperWhenNoRenderClientExists()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
+  <testcase name="selectBestWindowAmongRenderClientsUsesCaptureSignatureBeforeArea()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
+  <testcase name="deduplicateWindowsByPidKeepsBestWindowPerProcess()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.007"/>
   <testcase name="selectBestWindowPrefersCaptureableWrapperOverZeroCanvasRenderClient()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
   <testcase name="selectBestWindowPrefersVisibleWindowOverHiddenSibling()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
-  <testcase name="supportedClientTitleClassifierAcceptsLeeuwbotButRejectsBrowserTabs()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.002"/>
+  <testcase name="supportedClientTitleClassifierAcceptsLeeuwbotButRejectsBrowserTabs()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
   <testcase name="selectBestWindowFallsBackToRuneliteTitleWhenNoCanvasIsDetected()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.001"/>
   <testcase name="uiCandidatesFallBackToJavaWindowListWhenStrictTargetListIsEmpty()" classname="com.chromascape.utils.core.screen.window.WindowHandlerTest" time="0.002"/>
-  <system-out><![CDATA[18:04:55.198 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowHandler - No strict supported-client windows found; exposing 1 fallback Java window candidates
+  <system-out><![CDATA[19:27:16.413 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowHandler - No strict supported-client windows found; exposing 1 fallback Java window candidates
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

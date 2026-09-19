@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:55.980Z" hostname="fedora" time="0.016">
+<testsuite name="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:16.497Z" hostname="fedora" time="0.008">
   <properties/>
-  <testcase name="an invalid token is rejected" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.003"/>
-  <testcase name="loopback development requests are permitted when no token is configured" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.002"/>
-  <testcase name="triage resolution requires the write token, not the read token" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.002"/>
+  <testcase name="an invalid token is rejected" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.0"/>
+  <testcase name="loopback development requests are permitted when no token is configured" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.001"/>
+  <testcase name="triage resolution requires the write token, not the read token" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.001"/>
   <testcase name="oversized request bodies are rejected with 413 before parsing" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.001"/>
   <testcase name="read-only GET endpoints never require the write token" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.001"/>
   <testcase name="a valid token grants access" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.001"/>
   <testcase name="a missing token is rejected when a token is configured" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.001"/>
   <testcase name="when no write token is configured the read token covers writes" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.001"/>
-  <testcase name="a non-loopback request is rejected when no token is configured" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.001"/>
-  <system-out><![CDATA[18:04:55.981 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.984 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.987 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.989 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.990 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.992 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.993 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.994 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-18:04:55.995 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+  <testcase name="a non-loopback request is rejected when no token is configured" classname="com.chromascape.web.accounttask.config.StabilizationAuthInterceptorTest" time="0.0"/>
+  <system-out><![CDATA[19:27:16.497 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.498 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.500 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.501 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.502 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.503 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.504 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.505 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:27:16.505 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

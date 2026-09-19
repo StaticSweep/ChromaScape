@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:17.156Z" hostname="fedora" time="0.256">
+<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:57.159Z" hostname="fedora" time="0.133">
   <properties/>
-  <testcase name="trustConfiguredRequiresAllThreeValues()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.2"/>
-  <testcase name="reportsNotConfiguredWhenTrustIsIncomplete()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.039"/>
-  <testcase name="rejectsMissingRunOrTaskIdentity()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.003"/>
-  <testcase name="reportsFailedWhenManifestCannotBeFetched()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.004"/>
-  <testcase name="doesNotFabricateAnExpectedIdentityWhenNothingWasAttested()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.006"/>
-  <testcase name="pinsBuildAndArtifactWhenTheExecutorAttestedThem()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.001"/>
-  <system-out><![CDATA[18:06:17.361 [Test worker] WARN  com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingService - [SC-810] run run-1 dispatched without source binding: trust is not configured (chromascape.source.public-key-base64 / public-key-id / environment)
-18:06:17.402 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingService - [SC-810] run run-1 binding without executor-attested artifact identity (heartbeat does not report build_id/artifact_digest)
-18:06:17.403 [Test worker] WARN  com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingService - [SC-810] source binding failed for run run-1: source manifest could not be fetched
+  <testcase name="trustConfiguredRequiresAllThreeValues()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.12"/>
+  <testcase name="reportsNotConfiguredWhenTrustIsIncomplete()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.003"/>
+  <testcase name="rejectsMissingRunOrTaskIdentity()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.001"/>
+  <testcase name="reportsFailedWhenManifestCannotBeFetched()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.003"/>
+  <testcase name="doesNotFabricateAnExpectedIdentityWhenNothingWasAttested()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.003"/>
+  <testcase name="pinsBuildAndArtifactWhenTheExecutorAttestedThem()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingServiceTest" time="0.002"/>
+  <system-out><![CDATA[19:27:57.281 [Test worker] WARN  com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingService - [SC-810] run run-1 dispatched without source binding: trust is not configured (chromascape.source.public-key-base64 / public-key-id / environment)
+19:27:57.286 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingService - [SC-810] run run-1 binding without executor-attested artifact identity (heartbeat does not report build_id/artifact_digest)
+19:27:57.287 [Test worker] WARN  com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingService - [SC-810] source binding failed for run run-1: source manifest could not be fetched
 java.lang.IllegalStateException: unreachable
 	at com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClient.manifest(Micro6SourceManifestClient.java:69) ~[main/:?]
 	at com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingService.bindRun(BuilderGoalSourceBindingService.java:149) ~[main/:?]
@@ -104,7 +104,7 @@ java.lang.IllegalStateException: unreachable
 	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
-18:06:17.407 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingService - [SC-810] run run-1 binding without executor-attested artifact identity (heartbeat does not report build_id/artifact_digest)
+19:27:57.289 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingService - [SC-810] run run-1 binding without executor-attested artifact identity (heartbeat does not report build_id/artifact_digest)
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

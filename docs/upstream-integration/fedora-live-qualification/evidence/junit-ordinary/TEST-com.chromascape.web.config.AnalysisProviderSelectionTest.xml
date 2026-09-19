@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.config.AnalysisProviderSelectionTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:06.764Z" hostname="fedora" time="0.207">
+<testsuite name="com.chromascape.web.config.AnalysisProviderSelectionTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:52.630Z" hostname="fedora" time="0.014">
   <properties/>
-  <testcase name="ClaudeMcpAliasAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.101"/>
-  <testcase name="Both providers implement AnalysisProvider interface" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.041"/>
-  <testcase name="ClaudeMcpAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.0"/>
-  <testcase name="ClaudeMcpAnalysisProvider can be instantiated with valid configuration" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.052"/>
+  <testcase name="ClaudeMcpAliasAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.003"/>
+  <testcase name="Both providers implement AnalysisProvider interface" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.003"/>
+  <testcase name="ClaudeMcpAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.001"/>
+  <testcase name="ClaudeMcpAnalysisProvider can be instantiated with valid configuration" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.003"/>
   <testcase name="ClaudeApiAnalysisProvider can be instantiated with valid configuration" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.002"/>
-  <testcase name="OpenAiCodexAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.001"/>
-  <testcase name="ClaudeApiAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.001"/>
+  <testcase name="OpenAiCodexAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.0"/>
+  <testcase name="ClaudeApiAnalysisProvider has @ConditionalOnProperty annotation" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.0"/>
   <testcase name="ClaudeApiAnalysisProvider reports unavailable without API key" classname="com.chromascape.web.config.AnalysisProviderSelectionTest" time="0.001"/>
-  <system-out><![CDATA[18:06:06.960 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
-18:06:06.962 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+  <system-out><![CDATA[19:27:52.640 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.mcp.McpTransportClient - McpTransportClient initialized - serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
+19:27:52.641 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.provider.ClaudeMcpAnalysisProvider - ClaudeMcpAnalysisProvider initialized (V2) - provider: codex-mcp, serverUrl: http://localhost:8765, timeout: 120s, maxRetries: 3
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

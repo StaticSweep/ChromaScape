@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:42.889Z" hostname="fedora" time="14.399">
+<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:28:18.675Z" hostname="fedora" time="13.611">
   <properties/>
-  <testcase name="INSUFFICIENT_EVIDENCE provider code maps to INSUFFICIENT_EVIDENCE" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.956"/>
-  <testcase name="INVALID_TIME_WINDOW provider code maps to INVALID_TIME_WINDOW" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.027"/>
-  <testcase name="Null error object maps to ANALYSIS_API_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.032"/>
-  <testcase name="PARSE_ERROR provider code maps to ANALYSIS_PARSE_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.03"/>
-  <testcase name="Failed analysis with FAILURE status does not transition to COMPLETED (terminal guard)" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.027"/>
-  <testcase name="Worker successfully constructed with all dependencies including persistence service" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="0.006"/>
-  <testcase name="API_AUTH_FAILED provider code maps to ANALYSIS_API_AUTH_FAILED" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.022"/>
-  <testcase name="INVALID_REQUEST provider code maps to ANALYSIS_VALIDATION_FAILED" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.038"/>
-  <testcase name="INTERNAL_ERROR provider code maps to INTERNAL_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.027"/>
-  <testcase name="Empty provider code maps to ANALYSIS_API_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.027"/>
-  <testcase name="API_RATE_LIMIT provider code maps to ANALYSIS_API_RATE_LIMIT" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.03"/>
-  <testcase name="Unknown provider code maps to ANALYSIS_API_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.11"/>
-  <testcase name="API_TIMEOUT provider code maps to ANALYSIS_API_TIMEOUT" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.025"/>
-  <testcase name="Null provider code maps to ANALYSIS_API_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.025"/>
-  <system-out><![CDATA[18:06:43.799 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:43.802 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:43.803 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:44.808 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:44.820 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:44.840 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Not enough evidence
-18:06:44.841 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+  <testcase name="INSUFFICIENT_EVIDENCE provider code maps to INSUFFICIENT_EVIDENCE" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.491"/>
+  <testcase name="INVALID_TIME_WINDOW provider code maps to INVALID_TIME_WINDOW" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.01"/>
+  <testcase name="Null error object maps to ANALYSIS_API_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.009"/>
+  <testcase name="PARSE_ERROR provider code maps to ANALYSIS_PARSE_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.009"/>
+  <testcase name="Failed analysis with FAILURE status does not transition to COMPLETED (terminal guard)" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.009"/>
+  <testcase name="Worker successfully constructed with all dependencies including persistence service" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="0.003"/>
+  <testcase name="API_AUTH_FAILED provider code maps to ANALYSIS_API_AUTH_FAILED" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.008"/>
+  <testcase name="INVALID_REQUEST provider code maps to ANALYSIS_VALIDATION_FAILED" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.008"/>
+  <testcase name="INTERNAL_ERROR provider code maps to INTERNAL_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.009"/>
+  <testcase name="Empty provider code maps to ANALYSIS_API_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.008"/>
+  <testcase name="API_RATE_LIMIT provider code maps to ANALYSIS_API_RATE_LIMIT" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.009"/>
+  <testcase name="Unknown provider code maps to ANALYSIS_API_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.011"/>
+  <testcase name="API_TIMEOUT provider code maps to ANALYSIS_API_TIMEOUT" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.009"/>
+  <testcase name="Null provider code maps to ANALYSIS_API_ERROR" classname="com.chromascape.web.debug.patchloop.PatchLoopAsyncWorkerTest" time="1.009"/>
+  <system-out><![CDATA[19:28:19.153 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:19.155 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:19.155 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:20.157 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:20.161 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:20.163 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Not enough evidence
+19:28:20.164 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Not enough evidence'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -119,13 +119,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='No
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: Not enough evidence
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:44.851 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:44.852 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:44.852 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:45.856 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:45.860 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:45.867 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Invalid time window
-18:06:45.868 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:20.169 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:20.169 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:20.170 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:21.171 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:21.171 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:21.173 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Invalid time window
+19:28:21.174 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Invalid time window'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -223,13 +223,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='In
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: Invalid time window
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:45.880 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:45.882 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:45.882 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:46.891 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:46.892 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:46.902 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Analysis failed
-18:06:46.902 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:21.178 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:21.179 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:21.180 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:22.181 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:22.181 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:22.183 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Analysis failed
+19:28:22.184 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Analysis failed'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -327,13 +327,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='An
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: Analysis failed
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:46.917 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:46.918 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:46.918 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:47.922 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:47.924 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:47.933 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Failed to parse response
-18:06:47.934 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:22.188 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:22.189 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:22.189 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:23.190 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:23.191 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:23.193 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Failed to parse response
+19:28:23.193 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Failed to parse response'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -431,13 +431,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Fa
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: Failed to parse response
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:47.946 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:47.947 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:47.947 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:48.951 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:48.953 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:48.962 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - API timeout occurred
-18:06:48.963 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:23.201 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:23.201 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:23.202 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:24.202 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:24.203 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:24.205 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - API timeout occurred
+19:28:24.205 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='API timeout occurred'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -535,14 +535,14 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='AP
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: API timeout occurred
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:48.975 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:48.978 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:48.979 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:48.979 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:49.983 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:49.984 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:49.992 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Authentication failed
-18:06:49.993 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:24.210 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:24.212 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:24.213 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:24.213 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:25.214 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:25.215 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:25.216 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Authentication failed
+19:28:25.217 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Authentication failed'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -640,13 +640,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Au
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: Authentication failed
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:50.003 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:50.005 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:50.011 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:51.016 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:51.017 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:51.032 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Request validation failed
-18:06:51.032 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:25.221 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:25.222 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:25.222 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:26.223 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:26.223 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:26.225 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Request validation failed
+19:28:26.226 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Request validation failed'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -744,13 +744,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Re
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: Request validation failed
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:51.042 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:51.044 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:51.044 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:52.047 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:52.048 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:52.059 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Internal server error
-18:06:52.059 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:26.231 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:26.231 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:26.232 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:27.233 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:27.233 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:27.235 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Internal server error
+19:28:27.236 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Internal server error'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -848,13 +848,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='In
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: Internal server error
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:52.072 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:52.074 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:52.074 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:53.078 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:53.079 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:53.087 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Error occurred
-18:06:53.088 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:27.240 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:27.241 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:27.242 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:28.242 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:28.243 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:28.244 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Error occurred
+19:28:28.245 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Error occurred'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -952,13 +952,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Er
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: Error occurred
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:53.099 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:53.100 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:53.100 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:54.104 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:54.105 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:54.116 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Rate limit exceeded
-18:06:54.118 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:28.250 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:28.250 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:28.251 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:29.252 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:29.252 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:29.254 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Rate limit exceeded
+19:28:29.254 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Rate limit exceeded'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -1056,13 +1056,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Ra
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: Rate limit exceeded
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:54.133 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:54.138 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:54.138 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:55.221 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:55.223 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:55.229 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Unknown error occurred
-18:06:55.230 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:29.259 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:29.260 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:29.260 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:30.261 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:30.262 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:30.263 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Unknown error occurred
+19:28:30.264 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Unknown error occurred'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -1160,13 +1160,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Un
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: Unknown error occurred
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:55.242 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:55.244 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:55.244 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:56.247 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:56.249 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:56.256 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - API timeout occurred
-18:06:56.257 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:30.271 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:30.271 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:30.271 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:31.272 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:31.273 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:31.275 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - API timeout occurred
+19:28:31.275 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='API timeout occurred'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]
@@ -1264,13 +1264,13 @@ java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='AP
 Caused by: com.chromascape.web.debug.patchloop.exception.AnalysisException: API timeout occurred
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:514) ~[main/:?]
 	... 92 more
-18:06:56.268 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
-18:06:56.269 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
-18:06:56.270 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
-18:06:57.274 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
-18:06:57.276 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
-18:06:57.283 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Error occurred
-18:06:57.284 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
+19:28:31.280 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - PatchLoopAsyncWorker initialized with analysis provider: mock-provider
+19:28:31.280 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - [Test worker] Starting async processing for iteration: test-id
+19:28:31.280 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Triggering script run for: TestScript
+19:28:32.281 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Collecting evidence for iteration: test-id
+19:28:32.282 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analyzing evidence for iteration: test-id using provider: mock-provider
+19:28:32.283 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Analysis failed: API_ERROR - Error occurred
+19:28:32.285 [Test worker] ERROR com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker - Error processing iteration test-id
 java.lang.RuntimeException: AnalysisException{errorCode='API_ERROR', message='Error occurred'}
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.analyzeEvidence(PatchLoopAsyncWorker.java:530) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.service.PatchLoopAsyncWorker.processIterationAsync(PatchLoopAsyncWorker.java:169) ~[main/:?]

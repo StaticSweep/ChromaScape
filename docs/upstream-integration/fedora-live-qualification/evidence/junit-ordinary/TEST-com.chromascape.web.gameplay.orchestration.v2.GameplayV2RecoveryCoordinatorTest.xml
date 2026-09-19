@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:44.166Z" hostname="fedora" time="0.165">
+<testsuite name="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:46.525Z" hostname="fedora" time="0.05">
   <properties/>
-  <testcase name="theLoopDoesNotStartWhileLiveGameplayIsDisabled()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" time="0.148"/>
-  <testcase name="aThrowingReconcileStillCountsAgainstTheAttemptBudget()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" time="0.009"/>
-  <testcase name="eachRequestGetsItsOwnAttemptBudget()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" time="0.002"/>
-  <testcase name="closeStopsTheExecutorAndIsIdempotent()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" time="0.001"/>
+  <testcase name="theLoopDoesNotStartWhileLiveGameplayIsDisabled()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" time="0.013"/>
+  <testcase name="aThrowingReconcileStillCountsAgainstTheAttemptBudget()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" time="0.025"/>
+  <testcase name="eachRequestGetsItsOwnAttemptBudget()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" time="0.004"/>
+  <testcase name="closeStopsTheExecutorAndIsIdempotent()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" time="0.002"/>
   <testcase name="aRequestThatNeverReconcilesIsAbandonedAfterThreeAttempts()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" time="0.002"/>
   <testcase name="aTerminallyReconciledRequestLeavesTheLoop()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinatorTest" time="0.001"/>
-  <system-out><![CDATA[18:08:44.314 [Test worker] INFO  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation loop not started: live gameplay is disabled
-18:08:44.317 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation attempt 1/3 failed for req-1: micro6 unreachable
-18:08:44.323 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation attempt 2/3 failed for req-1: micro6 unreachable
-18:08:44.323 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation attempt 3/3 failed for req-1: micro6 unreachable
-18:08:44.326 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation abandoned after 3 attempts; req-1 stays NEEDS_RECONCILIATION for the operator
-18:08:44.326 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation abandoned after 3 attempts; req-2 stays NEEDS_RECONCILIATION for the operator
-18:08:44.329 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation abandoned after 3 attempts; req-1 stays NEEDS_RECONCILIATION for the operator
+  <system-out><![CDATA[19:29:46.535 [Test worker] INFO  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation loop not started: live gameplay is disabled
+19:29:46.543 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation attempt 1/3 failed for req-1: micro6 unreachable
+19:29:46.559 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation attempt 2/3 failed for req-1: micro6 unreachable
+19:29:46.560 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation attempt 3/3 failed for req-1: micro6 unreachable
+19:29:46.569 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation abandoned after 3 attempts; req-1 stays NEEDS_RECONCILIATION for the operator
+19:29:46.569 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation abandoned after 3 attempts; req-2 stays NEEDS_RECONCILIATION for the operator
+19:29:46.573 [Test worker] WARN  com.chromascape.web.gameplay.orchestration.v2.GameplayV2RecoveryCoordinator - [ChromaScape] v2 reconciliation abandoned after 3 attempts; req-1 stays NEEDS_RECONCILIATION for the operator
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

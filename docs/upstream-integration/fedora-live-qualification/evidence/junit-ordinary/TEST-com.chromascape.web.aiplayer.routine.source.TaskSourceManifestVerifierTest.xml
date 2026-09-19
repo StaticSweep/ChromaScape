@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:06.519Z" hostname="fedora" time="0.243">
+<testsuite name="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:52.483Z" hostname="fedora" time="0.146">
   <properties/>
-  <testcase name="preservesGeneratedMappingsBoundToAuthoredSource()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.029"/>
-  <testcase name="verifiesGeneratedMappingReferentialIntegrity()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.008"/>
-  <testcase name="requiresEveryExpectedLaunchIdentityToMatch()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.018"/>
-  <testcase name="rejectsMissingAndDuplicateGeneratedMappings()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.018"/>
-  <testcase name="rejectsChangedManifestBytesAndWrongSigningKey()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.021"/>
+  <testcase name="preservesGeneratedMappingsBoundToAuthoredSource()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.015"/>
+  <testcase name="verifiesGeneratedMappingReferentialIntegrity()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.007"/>
+  <testcase name="requiresEveryExpectedLaunchIdentityToMatch()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.012"/>
+  <testcase name="rejectsMissingAndDuplicateGeneratedMappings()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.012"/>
+  <testcase name="rejectsChangedManifestBytesAndWrongSigningKey()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.009"/>
   <testcase name="rejectsUnknownSchemaBeforeCompatibilityParsing()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.001"/>
-  <testcase name="rejectsUnsafePathsAndInvalidRanges()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.017"/>
-  <testcase name="verifiesACompleteSignedV1Manifest()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.007"/>
-  <testcase name="sharedCanonicalVectorsAreByteIdentical()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.031"/>
-  <testcase name="rejectsInvalidMappingReferencesAndMetadata()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.08"/>
-  <testcase name="rejectsUnsignedV1EvenWhenItsCanonicalHashIsValid()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.004"/>
+  <testcase name="rejectsUnsafePathsAndInvalidRanges()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.014"/>
+  <testcase name="verifiesACompleteSignedV1Manifest()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.006"/>
+  <testcase name="sharedCanonicalVectorsAreByteIdentical()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.014"/>
+  <testcase name="rejectsInvalidMappingReferencesAndMetadata()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.052"/>
+  <testcase name="rejectsUnsignedV1EvenWhenItsCanonicalHashIsValid()" classname="com.chromascape.web.aiplayer.routine.source.TaskSourceManifestVerifierTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

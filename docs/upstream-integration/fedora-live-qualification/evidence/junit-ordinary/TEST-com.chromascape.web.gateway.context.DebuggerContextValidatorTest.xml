@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.gateway.context.DebuggerContextValidatorTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:49.385Z" hostname="fedora" time="0.001">
+<testsuite name="com.chromascape.web.gateway.context.DebuggerContextValidatorTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:48.515Z" hostname="fedora" time="0.017">
   <properties/>
-  <testcase name="mapsCurrentSliceWithoutReplacingItsIdentityGroups()" classname="com.chromascape.web.gateway.context.DebuggerContextValidatorTest" time="0.0"/>
+  <testcase name="mapsCurrentSliceWithoutReplacingItsIdentityGroups()" classname="com.chromascape.web.gateway.context.DebuggerContextValidatorTest" time="0.014"/>
   <testcase name="validatesDebugSessionSeparatelyFromTheCurrentSliceCaptureSession()" classname="com.chromascape.web.gateway.context.DebuggerContextValidatorTest" time="0.001"/>
-  <testcase name="rejectsReplayWithoutSelectedTick()" classname="com.chromascape.web.gateway.context.DebuggerContextValidatorTest" time="0.0"/>
+  <testcase name="rejectsReplayWithoutSelectedTick()" classname="com.chromascape.web.gateway.context.DebuggerContextValidatorTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

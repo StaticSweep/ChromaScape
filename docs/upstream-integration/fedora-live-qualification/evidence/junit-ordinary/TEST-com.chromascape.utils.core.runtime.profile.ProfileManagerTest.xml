@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.utils.core.runtime.profile.ProfileManagerTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:42.122Z" hostname="fedora" time="0.176">
+<testsuite name="com.chromascape.utils.core.runtime.profile.ProfileManagerTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:09.672Z" hostname="fedora" time="0.015">
   <properties/>
-  <testcase name="hostNativeProfileAlwaysResolvesBelowTheProvidedHome()" classname="com.chromascape.utils.core.runtime.profile.ProfileManagerTest" time="0.176"/>
+  <testcase name="hostNativeProfileAlwaysResolvesBelowTheProvidedHome()" classname="com.chromascape.utils.core.runtime.profile.ProfileManagerTest" time="0.015"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

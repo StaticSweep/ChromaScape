@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.accounttask.service.TaskCitationValidationServiceTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:06.154Z" hostname="fedora" time="0.013">
+<testsuite name="com.chromascape.web.accounttask.service.TaskCitationValidationServiceTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:19.683Z" hostname="fedora" time="0.006">
   <properties/>
-  <testcase name="hasRequiredEvidenceTriplet is false when RECORDING_SESSION is missing" classname="com.chromascape.web.accounttask.service.TaskCitationValidationServiceTest" time="0.004"/>
+  <testcase name="hasRequiredEvidenceTriplet is false when RECORDING_SESSION is missing" classname="com.chromascape.web.accounttask.service.TaskCitationValidationServiceTest" time="0.002"/>
   <testcase name="hasRequiredEvidenceTriplet is false when TICK_LOG is missing" classname="com.chromascape.web.accounttask.service.TaskCitationValidationServiceTest" time="0.001"/>
-  <testcase name="hasRequiredEvidenceTriplet is true when LOG, TICK_LOG, and RECORDING_SESSION exist" classname="com.chromascape.web.accounttask.service.TaskCitationValidationServiceTest" time="0.005"/>
-  <testcase name="hasRequiredEvidenceTriplet is false when LOG is missing" classname="com.chromascape.web.accounttask.service.TaskCitationValidationServiceTest" time="0.002"/>
+  <testcase name="hasRequiredEvidenceTriplet is true when LOG, TICK_LOG, and RECORDING_SESSION exist" classname="com.chromascape.web.accounttask.service.TaskCitationValidationServiceTest" time="0.001"/>
+  <testcase name="hasRequiredEvidenceTriplet is false when LOG is missing" classname="com.chromascape.web.accounttask.service.TaskCitationValidationServiceTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

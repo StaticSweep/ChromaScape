@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:30.024Z" hostname="fedora" time="0.039">
+<testsuite name="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:46.459Z" hostname="fedora" time="0.04">
   <properties/>
-  <testcase name="advisoryLockLoserSkipsWithoutTouchingAnything()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.029"/>
-  <testcase name="nonTerminalRunsAreSkippedAfterLocking()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.002"/>
-  <testcase name="existingReportsShortCircuitAsAlreadyPresent()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.001"/>
-  <testcase name="constraintViolationsEscapeWithoutBeingCaughtInsideTheTransaction()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.004"/>
-  <testcase name="insertsThePreparedReportWhenEverythingIsEligible()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.002"/>
-  <system-out><![CDATA[18:10:30.064 [Test worker] INFO  com.chromascape.web.replay.worker.ReplayRecoveryReportTransaction - Inserted recovery report for run 8ed96cbf-daff-4af2-8146-4579fdae5469 outcome=INFRASTRUCTURE_FAILURE reason=LEASE_EXPIRED
+  <testcase name="advisoryLockLoserSkipsWithoutTouchingAnything()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.023"/>
+  <testcase name="nonTerminalRunsAreSkippedAfterLocking()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.003"/>
+  <testcase name="existingReportsShortCircuitAsAlreadyPresent()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.002"/>
+  <testcase name="constraintViolationsEscapeWithoutBeingCaughtInsideTheTransaction()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.008"/>
+  <testcase name="insertsThePreparedReportWhenEverythingIsEligible()" classname="com.chromascape.web.replay.worker.ReplayRecoveryReportTransactionTest" time="0.003"/>
+  <system-out><![CDATA[19:30:46.499 [Test worker] INFO  com.chromascape.web.replay.worker.ReplayRecoveryReportTransaction - Inserted recovery report for run 108371b6-c00f-4852-8c9c-fa0bc77eddfc outcome=INFRASTRUCTURE_FAILURE reason=LEASE_EXPIRED
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

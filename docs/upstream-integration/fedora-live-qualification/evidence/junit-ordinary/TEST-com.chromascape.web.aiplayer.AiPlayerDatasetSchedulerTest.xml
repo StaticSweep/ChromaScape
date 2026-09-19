@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.aiplayer.AiPlayerDatasetSchedulerTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:07.594Z" hostname="fedora" time="0.062">
+<testsuite name="com.chromascape.web.aiplayer.AiPlayerDatasetSchedulerTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:20.078Z" hostname="fedora" time="0.008">
   <properties/>
-  <testcase name="exportScheduledPatchOutcomeDataset_noOpsWhenDisabled()" classname="com.chromascape.web.aiplayer.AiPlayerDatasetSchedulerTest" time="0.058"/>
-  <testcase name="exportScheduledPatchOutcomeDataset_runsWhenEnabled()" classname="com.chromascape.web.aiplayer.AiPlayerDatasetSchedulerTest" time="0.003"/>
-  <system-out><![CDATA[18:05:07.647 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'lookbackHours' of type [null] on target object [com.chromascape.web.aiplayer.AiPlayerDatasetScheduler@12eb281f] or target class [class com.chromascape.web.aiplayer.AiPlayerDatasetScheduler] to value [24]
-18:05:07.651 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'scheduledExportEnabled' of type [null] on target object [com.chromascape.web.aiplayer.AiPlayerDatasetScheduler@12eb281f] or target class [class com.chromascape.web.aiplayer.AiPlayerDatasetScheduler] to value [false]
-18:05:07.654 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'lookbackHours' of type [null] on target object [com.chromascape.web.aiplayer.AiPlayerDatasetScheduler@3f4b9792] or target class [class com.chromascape.web.aiplayer.AiPlayerDatasetScheduler] to value [24]
-18:05:07.654 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'scheduledExportEnabled' of type [null] on target object [com.chromascape.web.aiplayer.AiPlayerDatasetScheduler@3f4b9792] or target class [class com.chromascape.web.aiplayer.AiPlayerDatasetScheduler] to value [true]
-18:05:07.654 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'exportEmpty' of type [null] on target object [com.chromascape.web.aiplayer.AiPlayerDatasetScheduler@3f4b9792] or target class [class com.chromascape.web.aiplayer.AiPlayerDatasetScheduler] to value [true]
-18:05:07.656 [Test worker] INFO  com.chromascape.web.aiplayer.AiPlayerDatasetScheduler - Scheduled patch-outcome export completed: datasetId=ds-1 records=1 manifest=/tmp/out.manifest.json
+  <testcase name="exportScheduledPatchOutcomeDataset_noOpsWhenDisabled()" classname="com.chromascape.web.aiplayer.AiPlayerDatasetSchedulerTest" time="0.006"/>
+  <testcase name="exportScheduledPatchOutcomeDataset_runsWhenEnabled()" classname="com.chromascape.web.aiplayer.AiPlayerDatasetSchedulerTest" time="0.002"/>
+  <system-out><![CDATA[19:27:20.083 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'lookbackHours' of type [null] on target object [com.chromascape.web.aiplayer.AiPlayerDatasetScheduler@7a696a6b] or target class [class com.chromascape.web.aiplayer.AiPlayerDatasetScheduler] to value [24]
+19:27:20.084 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'scheduledExportEnabled' of type [null] on target object [com.chromascape.web.aiplayer.AiPlayerDatasetScheduler@7a696a6b] or target class [class com.chromascape.web.aiplayer.AiPlayerDatasetScheduler] to value [false]
+19:27:20.085 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'lookbackHours' of type [null] on target object [com.chromascape.web.aiplayer.AiPlayerDatasetScheduler@4c2cc99f] or target class [class com.chromascape.web.aiplayer.AiPlayerDatasetScheduler] to value [24]
+19:27:20.086 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'scheduledExportEnabled' of type [null] on target object [com.chromascape.web.aiplayer.AiPlayerDatasetScheduler@4c2cc99f] or target class [class com.chromascape.web.aiplayer.AiPlayerDatasetScheduler] to value [true]
+19:27:20.086 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'exportEmpty' of type [null] on target object [com.chromascape.web.aiplayer.AiPlayerDatasetScheduler@4c2cc99f] or target class [class com.chromascape.web.aiplayer.AiPlayerDatasetScheduler] to value [true]
+19:27:20.086 [Test worker] INFO  com.chromascape.web.aiplayer.AiPlayerDatasetScheduler - Scheduled patch-outcome export completed: datasetId=ds-1 records=1 manifest=/tmp/out.manifest.json
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

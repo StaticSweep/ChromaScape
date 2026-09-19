@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.run.ReplayV2RunServiceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:26.573Z" hostname="fedora" time="1.307">
+<testsuite name="com.chromascape.web.replay.run.ReplayV2RunServiceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:42.578Z" hostname="fedora" time="1.69">
   <properties/>
-  <testcase name="reportFallbackVerifiesEmbeddedDocumentChecksumAndReturnsFullArtifactChecksum()" classname="com.chromascape.web.replay.run.ReplayV2RunServiceTest" time="1.298"/>
-  <testcase name="mismatchProjectionIncludesRecordedActualAndSourceEvidence()" classname="com.chromascape.web.replay.run.ReplayV2RunServiceTest" time="0.006"/>
-  <testcase name="reportFallbackRejectsTamperedEmbeddedDocument()" classname="com.chromascape.web.replay.run.ReplayV2RunServiceTest" time="0.003"/>
+  <testcase name="reportFallbackVerifiesEmbeddedDocumentChecksumAndReturnsFullArtifactChecksum()" classname="com.chromascape.web.replay.run.ReplayV2RunServiceTest" time="1.625"/>
+  <testcase name="mismatchProjectionIncludesRecordedActualAndSourceEvidence()" classname="com.chromascape.web.replay.run.ReplayV2RunServiceTest" time="0.053"/>
+  <testcase name="reportFallbackRejectsTamperedEmbeddedDocument()" classname="com.chromascape.web.replay.run.ReplayV2RunServiceTest" time="0.008"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

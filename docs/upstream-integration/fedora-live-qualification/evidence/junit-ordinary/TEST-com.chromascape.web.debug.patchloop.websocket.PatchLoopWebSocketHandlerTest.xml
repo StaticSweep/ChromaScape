@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:07:51.576Z" hostname="fedora" time="0.617">
+<testsuite name="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:18.799Z" hostname="fedora" time="0.194">
   <properties/>
-  <testcase name="afterConnectionEstablished sends welcome message" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.533"/>
-  <testcase name="Replay buffer works for late-joining clients" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.01"/>
-  <testcase name="afterConnectionClosed removes session cleanly" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.01"/>
-  <testcase name="Broken session is removed from tracking after send failure" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.008"/>
-  <testcase name="Broadcast fallback to all sessions when no execution subscribers" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.004"/>
-  <testcase name="Broadcast to execution subscribers does not throw when a session is broken" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.025"/>
-  <testcase name="Broadcast handles concurrent session failures without throwing" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.008"/>
-  <testcase name="handleTransportError removes session cleanly" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.008"/>
-  <system-out><![CDATA[18:07:52.096 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
-18:07:52.121 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
-18:07:52.123 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-1 subscribed to execution exec-replay
-18:07:52.126 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: late-session
-18:07:52.126 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session late-session subscribed to execution exec-replay
-18:07:52.127 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Sending replay buffer with 2 events to session late-session
-18:07:52.134 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
-18:07:52.136 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket disconnected: session-1
-18:07:52.140 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
-18:07:52.140 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-1 subscribed to execution exec-1
-18:07:52.140 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-2
-18:07:52.141 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-2 subscribed to execution exec-1
-18:07:52.142 [Test worker] ERROR com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Failed to send message to session session-1
+  <testcase name="afterConnectionEstablished sends welcome message" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.159"/>
+  <testcase name="Replay buffer works for late-joining clients" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.008"/>
+  <testcase name="afterConnectionClosed removes session cleanly" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.004"/>
+  <testcase name="Broken session is removed from tracking after send failure" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.007"/>
+  <testcase name="Broadcast fallback to all sessions when no execution subscribers" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.002"/>
+  <testcase name="Broadcast to execution subscribers does not throw when a session is broken" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.003"/>
+  <testcase name="Broadcast handles concurrent session failures without throwing" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.004"/>
+  <testcase name="handleTransportError removes session cleanly" classname="com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest" time="0.004"/>
+  <system-out><![CDATA[19:29:18.953 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
+19:29:18.961 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
+19:29:18.963 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-1 subscribed to execution exec-replay
+19:29:18.966 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: late-session
+19:29:18.966 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session late-session subscribed to execution exec-replay
+19:29:18.966 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Sending replay buffer with 2 events to session late-session
+19:29:18.968 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
+19:29:18.969 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket disconnected: session-1
+19:29:18.972 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
+19:29:18.973 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-1 subscribed to execution exec-1
+19:29:18.973 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-2
+19:29:18.973 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-2 subscribed to execution exec-1
+19:29:18.974 [Test worker] ERROR com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Failed to send message to session session-1
 java.lang.RuntimeException: Broken pipe
 	at com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler.broadcastToExecution(PatchLoopWebSocketHandler.java:299) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler.broadcastNodeStarted(PatchLoopWebSocketHandler.java:159) ~[main/:?]
@@ -116,11 +116,11 @@ java.lang.RuntimeException: Broken pipe
 	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
-18:07:52.149 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
-18:07:52.150 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-2
-18:07:52.163 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
-18:07:52.170 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-1 subscribed to execution exec-123
-18:07:52.174 [Test worker] ERROR com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Failed to send message to session session-1
+19:29:18.979 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
+19:29:18.980 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-2
+19:29:18.982 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
+19:29:18.982 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-1 subscribed to execution exec-123
+19:29:18.983 [Test worker] ERROR com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Failed to send message to session session-1
 java.io.IOException: Connection reset
 	at com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler.broadcastToExecution(PatchLoopWebSocketHandler.java:299) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler.broadcastNodeStarted(PatchLoopWebSocketHandler.java:159) ~[main/:?]
@@ -219,11 +219,11 @@ java.io.IOException: Connection reset
 	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
-18:07:52.180 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
-18:07:52.180 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-1 subscribed to execution exec-1
-18:07:52.181 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-2
-18:07:52.181 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-2 subscribed to execution exec-1
-18:07:52.182 [Test worker] ERROR com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Failed to send message to session session-1
+19:29:18.985 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
+19:29:18.986 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-1 subscribed to execution exec-1
+19:29:18.986 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-2
+19:29:18.986 [Test worker] DEBUG com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Session session-2 subscribed to execution exec-1
+19:29:18.987 [Test worker] ERROR com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Failed to send message to session session-1
 java.io.IOException: Reset
 	at com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler.broadcastToExecution(PatchLoopWebSocketHandler.java:299) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler.broadcastNodeStarted(PatchLoopWebSocketHandler.java:159) ~[main/:?]
@@ -322,7 +322,7 @@ java.io.IOException: Reset
 	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
-18:07:52.184 [Test worker] ERROR com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Failed to send message to session session-2
+19:29:18.988 [Test worker] ERROR com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - Failed to send message to session session-2
 java.lang.RuntimeException: Broken
 	at com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler.broadcastToExecution(PatchLoopWebSocketHandler.java:299) ~[main/:?]
 	at com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler.broadcastNodeStarted(PatchLoopWebSocketHandler.java:159) ~[main/:?]
@@ -421,8 +421,8 @@ java.lang.RuntimeException: Broken
 	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
-18:07:52.186 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
-18:07:52.187 [Test worker] ERROR com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket error
+19:29:18.990 [Test worker] INFO  com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket connected: session-1
+19:29:18.991 [Test worker] ERROR com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandler - PatchLoop WebSocket error
 java.lang.RuntimeException: Transport error
 	at com.chromascape.web.debug.patchloop.websocket.PatchLoopWebSocketHandlerTest.testHandleTransportError(PatchLoopWebSocketHandlerTest.java:127) ~[test/:?]
 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]

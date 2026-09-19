@@ -1,30 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:33.983Z" hostname="fedora" time="0.255">
+<testsuite name="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:03.740Z" hostname="fedora" time="0.039">
   <properties/>
-  <testcase name="productionConstructorReadsTheTypedPropertiesFlag()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.005"/>
-  <testcase name="disabledOnLinuxNeverLoadsEvenWhenAValidBindingExists()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.005"/>
+  <testcase name="productionConstructorReadsTheTypedPropertiesFlag()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.003"/>
+  <testcase name="disabledOnLinuxNeverLoadsEvenWhenAValidBindingExists()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.002"/>
   <testcase name="unsupportedPlatformWithExplicitOverrideIsIgnored()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.002"/>
-  <testcase name="enabledOnLinuxWithMissingArtifactFailsStartupWithTheStableDiagnostic()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.194"/>
-  <testcase name="explicitOverrideOnNonLinuxPlatformIsReportedAndIgnored()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.003"/>
-  <testcase name="enabledOnLinuxWithUnloadableLibraryFailsStartupClearly()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.012"/>
-  <testcase name="defaultRemainsDisabledAndNeverTouchesTheBindingProvider()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.007"/>
-  <testcase name="explicitOverrideLoadsTheBindingAtStartup()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.004"/>
-  <testcase name="enabledOnLinuxWithAValidBindingPassesAndLoadsExactlyOnce()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.006"/>
+  <testcase name="enabledOnLinuxWithMissingArtifactFailsStartupWithTheStableDiagnostic()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.01"/>
+  <testcase name="explicitOverrideOnNonLinuxPlatformIsReportedAndIgnored()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.002"/>
+  <testcase name="enabledOnLinuxWithUnloadableLibraryFailsStartupClearly()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.003"/>
+  <testcase name="defaultRemainsDisabledAndNeverTouchesTheBindingProvider()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.002"/>
+  <testcase name="explicitOverrideLoadsTheBindingAtStartup()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.002"/>
+  <testcase name="enabledOnLinuxWithAValidBindingPassesAndLoadsExactlyOnce()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.003"/>
   <testcase name="enabledOnLinuxWithNullBindingFailsStartupWithTheStableDiagnostic()" classname="com.chromascape.utils.core.input.RemoteInputStartupValidatorTest" time="0.003"/>
-  <system-out><![CDATA[18:04:33.987 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is disabled (default); discovery remains read-only
-18:04:33.987 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
-18:04:33.988 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput native artifact resolved, verified and loaded at startup
-18:04:33.995 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is disabled (default); discovery remains read-only
-18:04:33.999 [Test worker] WARN  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled but the platform is UNSUPPORTED; RemoteInput applies to Linux only, so the flag is ignored on this host
-18:04:34.162 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
-18:04:34.199 [Test worker] WARN  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled but the platform is WINDOWS; RemoteInput applies to Linux only, so the flag is ignored on this host
-18:04:34.206 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
-18:04:34.220 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is disabled (default); discovery remains read-only
-18:04:34.225 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
-18:04:34.226 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput native artifact resolved, verified and loaded at startup
-18:04:34.233 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
-18:04:34.233 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput native artifact resolved, verified and loaded at startup
-18:04:34.237 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
+  <system-out><![CDATA[19:27:03.742 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is disabled (default); discovery remains read-only
+19:27:03.742 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
+19:27:03.743 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput native artifact resolved, verified and loaded at startup
+19:27:03.746 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is disabled (default); discovery remains read-only
+19:27:03.749 [Test worker] WARN  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled but the platform is UNSUPPORTED; RemoteInput applies to Linux only, so the flag is ignored on this host
+19:27:03.757 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
+19:27:03.762 [Test worker] WARN  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled but the platform is WINDOWS; RemoteInput applies to Linux only, so the flag is ignored on this host
+19:27:03.765 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
+19:27:03.769 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is disabled (default); discovery remains read-only
+19:27:03.772 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
+19:27:03.772 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput native artifact resolved, verified and loaded at startup
+19:27:03.775 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
+19:27:03.775 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput native artifact resolved, verified and loaded at startup
+19:27:03.778 [Test worker] INFO  com.chromascape.utils.core.input.RemoteInputStartupValidator - RemoteInput attachment is enabled; verifying the native artifact at startup
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

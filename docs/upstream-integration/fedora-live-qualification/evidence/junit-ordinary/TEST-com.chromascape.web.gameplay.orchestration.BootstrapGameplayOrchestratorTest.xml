@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest" tests="3" skipped="0" failures="3" errors="0" timestamp="2026-09-19T16:08:11.692Z" hostname="fedora" time="0.713">
+<testsuite name="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest" tests="3" skipped="0" failures="3" errors="0" timestamp="2026-09-19T17:29:24.741Z" hostname="fedora" time="0.066">
   <properties/>
-  <testcase name="fakeAccountBuilderCoversTerminalAndUncertainPathsWithAtomicEvidence()" classname="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest" time="0.674">
+  <testcase name="fakeAccountBuilderCoversTerminalAndUncertainPathsWithAtomicEvidence()" classname="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest" time="0.029">
     <failure message="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $.budgets: required property 'maxActions' not found; $.budgets: required property 'maxAttempts' not found; $.budgets: required property 'maxElapsedMs' not found" type="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation">com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $.budgets: required property 'maxActions' not found; $.budgets: required property 'maxAttempts' not found; $.budgets: required property 'maxElapsedMs' not found
 	at app//com.chromascape.web.gameplay.contract.GameplayContractValidator.validate(GameplayContractValidator.java:56)
 	at app//com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestrator.dispatch(BootstrapGameplayOrchestrator.java:94)
@@ -11,7 +11,7 @@
 	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="identicalRequestReconcilesAndConflictingIdempotencyFailsBeforeDispatch()" classname="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest" time="0.024">
+  <testcase name="identicalRequestReconcilesAndConflictingIdempotencyFailsBeforeDispatch()" classname="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest" time="0.02">
     <failure message="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $.budgets: required property 'maxActions' not found; $.budgets: required property 'maxAttempts' not found; $.budgets: required property 'maxElapsedMs' not found" type="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation">com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $.budgets: required property 'maxActions' not found; $.budgets: required property 'maxAttempts' not found; $.budgets: required property 'maxElapsedMs' not found
 	at app//com.chromascape.web.gameplay.contract.GameplayContractValidator.validate(GameplayContractValidator.java:56)
 	at app//com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestrator.dispatch(BootstrapGameplayOrchestrator.java:94)
@@ -21,7 +21,7 @@
 	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="staleObservationFailsBeforeAccountBuilderReservation()" classname="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest" time="0.012">
+  <testcase name="staleObservationFailsBeforeAccountBuilderReservation()" classname="com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestratorTest" time="0.015">
     <failure message="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $.budgets: required property 'maxActions' not found; $.budgets: required property 'maxAttempts' not found; $.budgets: required property 'maxElapsedMs' not found" type="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation">com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $.budgets: required property 'maxActions' not found; $.budgets: required property 'maxAttempts' not found; $.budgets: required property 'maxElapsedMs' not found
 	at app//com.chromascape.web.gameplay.contract.GameplayContractValidator.validate(GameplayContractValidator.java:56)
 	at app//com.chromascape.web.gameplay.orchestration.BootstrapGameplayOrchestrator.dispatch(BootstrapGameplayOrchestrator.java:94)

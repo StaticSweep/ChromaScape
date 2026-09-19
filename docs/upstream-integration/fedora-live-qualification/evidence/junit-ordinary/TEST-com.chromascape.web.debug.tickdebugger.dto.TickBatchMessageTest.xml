@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.tickdebugger.dto.TickBatchMessageTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:07:59.068Z" hostname="fedora" time="0.792">
+<testsuite name="com.chromascape.web.debug.tickdebugger.dto.TickBatchMessageTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:20.282Z" hostname="fedora" time="0.049">
   <properties/>
-  <testcase name="deserializesEmptyQuestHelperToNull()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchMessageTest" time="0.752"/>
-  <testcase name="deserializesFullNestedPlayerState()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchMessageTest" time="0.008"/>
-  <testcase name="deserializesOldPayloadWithoutQuestHelper()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchMessageTest" time="0.008"/>
-  <testcase name="deserializesQuestHelperBlock()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchMessageTest" time="0.01"/>
+  <testcase name="deserializesEmptyQuestHelperToNull()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchMessageTest" time="0.019"/>
+  <testcase name="deserializesFullNestedPlayerState()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchMessageTest" time="0.007"/>
+  <testcase name="deserializesOldPayloadWithoutQuestHelper()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchMessageTest" time="0.01"/>
+  <testcase name="deserializesQuestHelperBlock()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchMessageTest" time="0.007"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

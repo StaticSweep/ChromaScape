@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" tests="9" skipped="0" failures="9" errors="0" timestamp="2026-09-19T16:09:32.873Z" hostname="fedora" time="0.321">
+<testsuite name="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" tests="9" skipped="0" failures="9" errors="0" timestamp="2026-09-19T17:30:18.237Z" hostname="fedora" time="0.031">
   <properties/>
-  <testcase name="v19RejectsConflictingOldAndNewChecksums()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.296">
+  <testcase name="v19RejectsConflictingOldAndNewChecksums()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.007">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -16,7 +16,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.006">
+  <testcase name="freshHibernateManagedTablesConvergeAfterFlywayAndRemainStableOnRepeatStartup()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.003">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -31,7 +31,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="v31CreatesPlaybackIndexesWhenDebuggerTablesExist()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.002">
+  <testcase name="v31CreatesPlaybackIndexesWhenDebuggerTablesExist()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.004">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -106,7 +106,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <testcase name="replayChainThroughV31AppliesOnEmptyDatabase()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.003">
+  <testcase name="replayChainThroughV31AppliesOnEmptyDatabase()" classname="com.chromascape.web.replay.integration.ReplayMigrationIntegrationTest" time="0.004">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -136,15 +136,15 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <system-out><![CDATA[18:09:32.881 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-18:09:33.174 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-18:09:33.178 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-18:09:33.180 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-18:09:33.183 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-18:09:33.185 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-18:09:33.187 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-18:09:33.190 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
-18:09:33.193 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+  <system-out><![CDATA[19:30:18.240 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:30:18.246 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:30:18.250 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:30:18.253 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:30:18.255 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:30:18.258 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:30:18.260 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:30:18.262 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+19:30:18.267 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

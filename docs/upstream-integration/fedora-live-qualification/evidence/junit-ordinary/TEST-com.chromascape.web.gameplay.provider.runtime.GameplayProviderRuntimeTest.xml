@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.gameplay.provider.runtime.GameplayProviderRuntimeTest" tests="2" skipped="0" failures="1" errors="0" timestamp="2026-09-19T16:08:45.075Z" hostname="fedora" time="0.501">
+<testsuite name="com.chromascape.web.gameplay.provider.runtime.GameplayProviderRuntimeTest" tests="2" skipped="0" failures="1" errors="0" timestamp="2026-09-19T17:29:47.026Z" hostname="fedora" time="0.106">
   <properties/>
-  <testcase name="submittedUnknownOutcomeNeverRetriesOrSwitchesProvider()" classname="com.chromascape.web.gameplay.provider.runtime.GameplayProviderRuntimeTest" time="0.371"/>
-  <testcase name="identicalRetryInvokesProviderOnceAndPublishesOnlyPersistedDecision()" classname="com.chromascape.web.gameplay.provider.runtime.GameplayProviderRuntimeTest" time="0.129">
+  <testcase name="submittedUnknownOutcomeNeverRetriesOrSwitchesProvider()" classname="com.chromascape.web.gameplay.provider.runtime.GameplayProviderRuntimeTest" time="0.069"/>
+  <testcase name="identicalRetryInvokesProviderOnceAndPublishesOnlyPersistedDecision()" classname="com.chromascape.web.gameplay.provider.runtime.GameplayProviderRuntimeTest" time="0.036">
     <failure message="org.opentest4j.AssertionFailedError: expected: &lt;DECIDED&gt; but was: &lt;INVALID_OUTPUT&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: expected: &lt;DECIDED&gt; but was: &lt;INVALID_OUTPUT&gt;
 	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
 	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)

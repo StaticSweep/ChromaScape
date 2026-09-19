@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:24:59.997Z" hostname="fedora" time="0.078">
+<testsuite name="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:31:13.642Z" hostname="fedora" time="0.076">
   <properties/>
-  <testcase name="concurrentIdenticalCompilesReturnTheCommittedWinner()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.026"/>
-  <testcase name="recordedEvidenceMissingWorldIdentityBlocksCompilation()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.008"/>
-  <testcase name="jsonbKeyReorderingRemainsIdempotentInsteadOfColliding()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.017"/>
-  <testcase name="npcsWithoutExplicitStableIdsBlockCompilation()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.008"/>
-  <testcase name="syntheticCollisionWithDifferentCanonicalContentFailsClosed()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.015"/>
+  <testcase name="concurrentIdenticalCompilesReturnTheCommittedWinner()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.027"/>
+  <testcase name="recordedEvidenceMissingWorldIdentityBlocksCompilation()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.011"/>
+  <testcase name="jsonbKeyReorderingRemainsIdempotentInsteadOfColliding()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.012"/>
+  <testcase name="npcsWithoutExplicitStableIdsBlockCompilation()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.007"/>
+  <testcase name="syntheticCollisionWithDifferentCanonicalContentFailsClosed()" classname="com.chromascape.web.replay.compiler.ScenarioCompilerJsonbRoundTripTest" time="0.014"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

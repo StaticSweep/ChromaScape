@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:10.148Z" hostname="fedora" time="0.226">
+<testsuite name="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:23.924Z" hostname="fedora" time="0.128">
   <properties/>
   <testcase name="concurrentFirstUseAdmitsExactlyOneFreshDispatch()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.029"/>
-  <testcase name="forgedReconciliationReceiptsNeverAdvanceTheLedger()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.121"/>
-  <testcase name="blankOrNullKeysAndLedgersFailClosed()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.024"/>
+  <testcase name="forgedReconciliationReceiptsNeverAdvanceTheLedger()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.039"/>
+  <testcase name="blankOrNullKeysAndLedgersFailClosed()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.012"/>
   <testcase name="ordinaryCallerCannotForgeExactConfirmedReceipt()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.007"/>
-  <testcase name="deprecatedOverloadsAlwaysFailClosedWithoutMutatingTheLedger()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.004"/>
-  <testcase name="headNodeNameNeedNotBeLiteral()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.017"/>
-  <testcase name="goldenReceiptSignatureVectorIsStableAcrossRuntimes()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.007"/>
-  <testcase name="nullEnvelopeFailsClosedWithoutMutatingTheLedger()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.004"/>
+  <testcase name="deprecatedOverloadsAlwaysFailClosedWithoutMutatingTheLedger()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.003"/>
+  <testcase name="headNodeNameNeedNotBeLiteral()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.011"/>
+  <testcase name="goldenReceiptSignatureVectorIsStableAcrossRuntimes()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.01"/>
+  <testcase name="nullEnvelopeFailsClosedWithoutMutatingTheLedger()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.003"/>
   <testcase name="legacyRetryNeverLaundersIntoReconciliation()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2IdempotencyTest" time="0.006"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

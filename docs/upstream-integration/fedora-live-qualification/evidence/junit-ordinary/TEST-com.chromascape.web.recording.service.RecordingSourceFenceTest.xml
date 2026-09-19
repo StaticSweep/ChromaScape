@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.recording.service.RecordingSourceFenceTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:20.416Z" hostname="fedora" time="0.304">
+<testsuite name="com.chromascape.web.recording.service.RecordingSourceFenceTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:14.203Z" hostname="fedora" time="0.317">
   <properties/>
-  <testcase name="recordingAcceptsOnlyFramesFromItsStartTarget()" classname="com.chromascape.web.recording.service.RecordingSourceFenceTest" time="0.304"/>
-  <system-out><![CDATA[18:09:20.418 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Dropped 1 frame(s) from a source other than the recording start target
-18:09:20.418 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Max recording duration reached, stopping
-18:09:20.418 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Stopping recording...
-18:09:20.418 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Unregistered from unified capture service
-18:09:20.518 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Encoder did not drain buffer in time, 1 frames remaining
-18:09:20.719 [Test worker] ERROR com.chromascape.web.recording.service.RecordingService - Failed to stop recording: Cannot invoke "java.io.File.getName()" because "<local2>.currentRecordingFile" is null
+  <testcase name="recordingAcceptsOnlyFramesFromItsStartTarget()" classname="com.chromascape.web.recording.service.RecordingSourceFenceTest" time="0.317"/>
+  <system-out><![CDATA[19:30:14.208 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Dropped 1 frame(s) from a source other than the recording start target
+19:30:14.209 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Max recording duration reached, stopping
+19:30:14.209 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Stopping recording...
+19:30:14.209 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - Unregistered from unified capture service
+19:30:14.310 [Test worker] WARN  com.chromascape.web.recording.service.RecordingService - Encoder did not drain buffer in time, 1 frames remaining
+19:30:14.513 [Test worker] ERROR com.chromascape.web.recording.service.RecordingService - Failed to stop recording: Cannot invoke "java.io.File.getName()" because "<local2>.currentRecordingFile" is null
 java.lang.NullPointerException: Cannot invoke "java.io.File.getName()" because "<local2>.currentRecordingFile" is null
 	at com.chromascape.web.recording.service.RecordingService.stopRecording(RecordingService.java:415) ~[main/:?]
 	at com.chromascape.web.recording.service.RecordingService.onFrameCaptured(RecordingService.java:621) ~[main/:?]
@@ -102,7 +102,7 @@ java.lang.NullPointerException: Cannot invoke "java.io.File.getName()" because "
 	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
-18:09:20.720 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - RecordingService cleanup - shutting down threads
+19:30:14.518 [Test worker] INFO  com.chromascape.web.recording.service.RecordingService - RecordingService cleanup - shutting down threads
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

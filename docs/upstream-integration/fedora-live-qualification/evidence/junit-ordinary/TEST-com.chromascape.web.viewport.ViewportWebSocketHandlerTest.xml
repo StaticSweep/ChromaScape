@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.viewport.ViewportWebSocketHandlerTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:36.210Z" hostname="fedora" time="0.348">
+<testsuite name="com.chromascape.web.viewport.ViewportWebSocketHandlerTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:53.269Z" hostname="fedora" time="0.339">
   <properties/>
-  <testcase name="sessionLifecycleRegistersAndUnregistersViewportStreaming()" classname="com.chromascape.web.viewport.ViewportWebSocketHandlerTest" time="0.242"/>
-  <testcase name="broadcastSendsBinaryMessagesToActiveSessions()" classname="com.chromascape.web.viewport.ViewportWebSocketHandlerTest" time="0.106"/>
-  <system-out><![CDATA[18:10:36.451 [Test worker] INFO  com.chromascape.web.viewport.ViewportWebSocketHandler - Viewport WebSocket client connected
-18:10:36.452 [Test worker] INFO  com.chromascape.web.viewport.ViewportWebSocketHandler - Viewport WebSocket client disconnected
-18:10:36.453 [Test worker] INFO  com.chromascape.web.viewport.ViewportWebSocketHandler - Viewport WebSocket client connected
-18:10:36.454 [Test worker] DEBUG com.chromascape.web.viewport.ViewportWebSocketHandler - Broadcasting viewport frame, size: 4 bytes, sessions: 1
+  <testcase name="sessionLifecycleRegistersAndUnregistersViewportStreaming()" classname="com.chromascape.web.viewport.ViewportWebSocketHandlerTest" time="0.217"/>
+  <testcase name="broadcastSendsBinaryMessagesToActiveSessions()" classname="com.chromascape.web.viewport.ViewportWebSocketHandlerTest" time="0.12"/>
+  <system-out><![CDATA[19:30:53.467 [Test worker] INFO  com.chromascape.web.viewport.ViewportWebSocketHandler - Viewport WebSocket client connected
+19:30:53.469 [Test worker] INFO  com.chromascape.web.viewport.ViewportWebSocketHandler - Viewport WebSocket client disconnected
+19:30:53.491 [Test worker] INFO  com.chromascape.web.viewport.ViewportWebSocketHandler - Viewport WebSocket client connected
+19:30:53.491 [Test worker] DEBUG com.chromascape.web.viewport.ViewportWebSocketHandler - Broadcasting viewport frame, size: 4 bytes, sessions: 1
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

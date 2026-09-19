@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:25:28.196Z" hostname="fedora" time="0.11">
+<testsuite name="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:31:35.272Z" hostname="fedora" time="0.059">
   <properties/>
-  <testcase name="localDevelopmentLoopbackReceivesPrincipal()" classname="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" time="0.09"/>
-  <testcase name="existingPrincipalIsPreserved()" classname="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" time="0.005"/>
+  <testcase name="localDevelopmentLoopbackReceivesPrincipal()" classname="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" time="0.049"/>
+  <testcase name="existingPrincipalIsPreserved()" classname="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" time="0.004"/>
   <testcase name="nonLocalProfileDoesNotCreatePrincipal()" classname="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" time="0.002"/>
-  <system-out><![CDATA[17:25:28.212 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-17:25:28.301 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
-17:25:28.304 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [production]
+  <system-out><![CDATA[19:31:35.283 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:31:35.326 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+19:31:35.330 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [production]
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

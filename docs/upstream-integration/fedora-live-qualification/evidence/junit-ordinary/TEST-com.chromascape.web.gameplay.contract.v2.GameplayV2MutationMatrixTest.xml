@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:10.376Z" hostname="fedora" time="0.216">
+<testsuite name="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:24.055Z" hostname="fedora" time="0.333">
   <properties/>
-  <testcase name="unmutedEnvelopePassesAllBindingChecks()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.01"/>
-  <testcase name="mismatchedDecisionSourceIsRejected()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.01"/>
-  <testcase name="futureEligibilityEvaluationIsRejected()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.005"/>
-  <testcase name="authoritySignatureIsDeterministicallyVerifiable()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.004"/>
-  <testcase name="tamperedEnvelopeDigestFailsAuthorityBinding()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.003"/>
-  <testcase name="uncataloguedAdapterFailsClosed()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.004"/>
-  <testcase name="legacyAuthorityOverloadFailsClosed()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.003"/>
-  <testcase name="selectedNodeRevisionMismatchIsRejected()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.003"/>
-  <testcase name="everyFixtureCaseIsExecutedAndReconciled()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.154"/>
-  <testcase name="authorityHintMustMatchEnvelopeAuthorityId()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.007"/>
-  <testcase name="fabricatedEligibilityIsRejectedByFullBindings()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.008"/>
+  <testcase name="unmutedEnvelopePassesAllBindingChecks()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.012"/>
+  <testcase name="mismatchedDecisionSourceIsRejected()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.012"/>
+  <testcase name="futureEligibilityEvaluationIsRejected()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.006"/>
+  <testcase name="authoritySignatureIsDeterministicallyVerifiable()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.007"/>
+  <testcase name="tamperedEnvelopeDigestFailsAuthorityBinding()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.007"/>
+  <testcase name="uncataloguedAdapterFailsClosed()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.009"/>
+  <testcase name="legacyAuthorityOverloadFailsClosed()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.004"/>
+  <testcase name="selectedNodeRevisionMismatchIsRejected()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.006"/>
+  <testcase name="everyFixtureCaseIsExecutedAndReconciled()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.244"/>
+  <testcase name="authorityHintMustMatchEnvelopeAuthorityId()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.009"/>
+  <testcase name="fabricatedEligibilityIsRejectedByFullBindings()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2MutationMatrixTest" time="0.007"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

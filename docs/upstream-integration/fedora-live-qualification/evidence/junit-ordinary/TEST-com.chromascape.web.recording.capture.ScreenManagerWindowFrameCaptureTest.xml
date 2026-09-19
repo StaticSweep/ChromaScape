@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.recording.capture.ScreenManagerWindowFrameCaptureTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:13.832Z" hostname="fedora" time="0.135">
+<testsuite name="com.chromascape.web.recording.capture.ScreenManagerWindowFrameCaptureTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:30:10.057Z" hostname="fedora" time="0.025">
   <properties/>
-  <testcase name="selectionMustRemainStableAcrossWindowsCapture()" classname="com.chromascape.web.recording.capture.ScreenManagerWindowFrameCaptureTest" time="0.135"/>
+  <testcase name="selectionMustRemainStableAcrossWindowsCapture()" classname="com.chromascape.web.recording.capture.ScreenManagerWindowFrameCaptureTest" time="0.025"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

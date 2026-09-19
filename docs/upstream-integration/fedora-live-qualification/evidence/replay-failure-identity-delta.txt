@@ -9,7 +9,7 @@ replay | ReplayMigrationIntegrationTest | v30AppliesOnAV20UpgradedDatabase() | f
 == resolved identities ==
 replay | ReplayMigrationIntegrationTest | v21AllowsNullAttemptIdButKeepsTheForeignKey() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 replay | ReplayMigrationIntegrationTest | v21AppliesOnAV20UpgradedDatabase() | failure | java.lang.IllegalStateException | java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
-replay | XrspsProcessLaunchDiagnosticsTest | resolvedNodeProcessBuilderAndKernelLaunchesShareTheSameWindowsPaths() | failure | java.io.IOException | java.io.IOException: Cannot run program "./gradlew" (in directory "<baseline-repo>/."): error=13, Permission denied
+replay | XrspsProcessLaunchDiagnosticsTest | resolvedNodeProcessBuilderAndKernelLaunchesShareTheSameWindowsPaths() | failure | java.io.IOException | java.io.IOException: Cannot run program "./gradlew" (in directory "<workspace>/ChromaScape-sc1668-baseline-rerun/."): error=13, Permission denied
 replay | XrspsStartupValidatorTest | parseManifestPreservesSecurityAndCapabilityFields() | failure | org.opentest4j.AssertionFailedError | org.opentest4j.AssertionFailedError: expected: java.lang.String@<hex><XRSPS_AUTHORITATIVE> but was: com.chromascape.web.replay.capability.CapabilityManifest$Fidelity@44485db<XRSPS_AUTHORITATIVE>
 replay | XrspsStartupValidatorTest | verifyVersionsRejectsForbiddenCapabilitiesInsteadOfMaskingThem() | failure | org.opentest4j.AssertionFailedError | org.opentest4j.AssertionFailedError: expected: <true> but was: <false>
 

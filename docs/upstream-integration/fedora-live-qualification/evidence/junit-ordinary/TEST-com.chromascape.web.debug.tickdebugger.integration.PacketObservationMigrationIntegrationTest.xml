@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.tickdebugger.integration.PacketObservationMigrationIntegrationTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-19T16:08:00.382Z" hostname="fedora" time="0.0">
+<testsuite name="com.chromascape.web.debug.tickdebugger.integration.PacketObservationMigrationIntegrationTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-19T17:29:20.382Z" hostname="fedora" time="0.001">
   <properties/>
-  <testcase name="initializationError" classname="com.chromascape.web.debug.tickdebugger.integration.PacketObservationMigrationIntegrationTest" time="0.0">
+  <testcase name="initializationError" classname="com.chromascape.web.debug.tickdebugger.integration.PacketObservationMigrationIntegrationTest" time="0.001">
     <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
 	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
@@ -19,7 +19,7 @@
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
 </failure>
   </testcase>
-  <system-out><![CDATA[18:08:00.371 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+  <system-out><![CDATA[19:29:20.377 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

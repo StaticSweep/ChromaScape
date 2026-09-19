@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:34.371Z" hostname="fedora" time="1.132">
+<testsuite name="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:03.782Z" hostname="fedora" time="0.423">
   <properties/>
-  <testcase name="windowsBackendIsDestroyedWhenPostConstructionFenceFails()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.952"/>
-  <testcase name="productionConstructorHonorsExplicitOverrideAndFailsClosedOnUnloadableLibrary()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.016"/>
-  <testcase name="windowsSessionUsesClientRelativeDimensionsAndFencing()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.129"/>
-  <testcase name="separateFactoriesShareTheProcessAttachmentLease()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.015"/>
+  <testcase name="windowsBackendIsDestroyedWhenPostConstructionFenceFails()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.376"/>
+  <testcase name="productionConstructorHonorsExplicitOverrideAndFailsClosedOnUnloadableLibrary()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.01"/>
+  <testcase name="windowsSessionUsesClientRelativeDimensionsAndFencing()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.009"/>
+  <testcase name="separateFactoriesShareTheProcessAttachmentLease()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.012"/>
   <testcase name="productionConstructorKeepsAttachmentDisabledByDefault()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.006"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

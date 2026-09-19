@@ -1,26 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.tickdebugger.service.PlayerActionLogIngestionTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:02.044Z" hostname="fedora" time="0.28">
+<testsuite name="com.chromascape.web.debug.tickdebugger.service.PlayerActionLogIngestionTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:20.846Z" hostname="fedora" time="0.066">
   <properties/>
-  <testcase name="old batches without player actions continue to ingest snapshots" classname="com.chromascape.web.debug.tickdebugger.service.PlayerActionLogIngestionTest" time="0.248"/>
-  <testcase name="stored tick uses the batch tick while sourceTick remains authoritative" classname="com.chromascape.web.debug.tickdebugger.service.PlayerActionLogIngestionTest" time="0.012"/>
-  <testcase name="malformed optional action details do not reject the tick snapshot" classname="com.chromascape.web.debug.tickdebugger.service.PlayerActionLogIngestionTest" time="0.008"/>
-  <testcase name="PLAYER_ACTION/MENU_CLICK deserializes and persists from a v2 tick batch" classname="com.chromascape.web.debug.tickdebugger.service.PlayerActionLogIngestionTest" time="0.01"/>
-  <system-out><![CDATA[18:08:02.289 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 inventory: 0 items
-18:08:02.290 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 expanded data: npcs=0, gameObjects=0, groundObjects=0, groundItems=0
-18:08:02.290 [Test worker] DEBUG com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Tick 500 missing sections: questHelper, dialogue
-18:08:02.291 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processed tick batch: sessionId=debug_1234, tick=500, batchId=null
-18:08:02.304 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 inventory: 0 items
-18:08:02.305 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 expanded data: npcs=0, gameObjects=0, groundObjects=0, groundItems=0
-18:08:02.305 [Test worker] DEBUG com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Tick 500 missing sections: questHelper, dialogue
-18:08:02.305 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processed tick batch: sessionId=debug_1234, tick=500, batchId=null
-18:08:02.313 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 inventory: 0 items
-18:08:02.314 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 expanded data: npcs=0, gameObjects=0, groundObjects=0, groundItems=0
-18:08:02.314 [Test worker] DEBUG com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Tick 500 missing sections: questHelper, dialogue
-18:08:02.314 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processed tick batch: sessionId=debug_1234, tick=500, batchId=null
-18:08:02.323 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 inventory: 0 items
-18:08:02.323 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 expanded data: npcs=0, gameObjects=0, groundObjects=0, groundItems=0
-18:08:02.323 [Test worker] DEBUG com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Tick 500 missing sections: questHelper, dialogue
-18:08:02.324 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processed tick batch: sessionId=debug_1234, tick=500, batchId=null
+  <testcase name="old batches without player actions continue to ingest snapshots" classname="com.chromascape.web.debug.tickdebugger.service.PlayerActionLogIngestionTest" time="0.029"/>
+  <testcase name="stored tick uses the batch tick while sourceTick remains authoritative" classname="com.chromascape.web.debug.tickdebugger.service.PlayerActionLogIngestionTest" time="0.013"/>
+  <testcase name="malformed optional action details do not reject the tick snapshot" classname="com.chromascape.web.debug.tickdebugger.service.PlayerActionLogIngestionTest" time="0.011"/>
+  <testcase name="PLAYER_ACTION/MENU_CLICK deserializes and persists from a v2 tick batch" classname="com.chromascape.web.debug.tickdebugger.service.PlayerActionLogIngestionTest" time="0.011"/>
+  <system-out><![CDATA[19:29:20.873 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 inventory: 0 items
+19:29:20.874 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 expanded data: npcs=0, gameObjects=0, groundObjects=0, groundItems=0
+19:29:20.874 [Test worker] DEBUG com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Tick 500 missing sections: questHelper, dialogue
+19:29:20.874 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processed tick batch: sessionId=debug_1234, tick=500, batchId=null
+19:29:20.889 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 inventory: 0 items
+19:29:20.889 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 expanded data: npcs=0, gameObjects=0, groundObjects=0, groundItems=0
+19:29:20.889 [Test worker] DEBUG com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Tick 500 missing sections: questHelper, dialogue
+19:29:20.890 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processed tick batch: sessionId=debug_1234, tick=500, batchId=null
+19:29:20.900 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 inventory: 0 items
+19:29:20.901 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 expanded data: npcs=0, gameObjects=0, groundObjects=0, groundItems=0
+19:29:20.901 [Test worker] DEBUG com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Tick 500 missing sections: questHelper, dialogue
+19:29:20.901 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processed tick batch: sessionId=debug_1234, tick=500, batchId=null
+19:29:20.911 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 inventory: 0 items
+19:29:20.911 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processing tick 500 expanded data: npcs=0, gameObjects=0, groundObjects=0, groundItems=0
+19:29:20.911 [Test worker] DEBUG com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Tick 500 missing sections: questHelper, dialogue
+19:29:20.912 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService - Processed tick batch: sessionId=debug_1234, tick=500, batchId=null
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

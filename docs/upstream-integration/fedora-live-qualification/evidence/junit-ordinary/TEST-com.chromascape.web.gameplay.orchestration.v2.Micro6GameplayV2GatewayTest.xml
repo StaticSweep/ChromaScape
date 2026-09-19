@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.gameplay.orchestration.v2.Micro6GameplayV2GatewayTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:44.872Z" hostname="fedora" time="0.202">
+<testsuite name="com.chromascape.web.gameplay.orchestration.v2.Micro6GameplayV2GatewayTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:46.717Z" hostname="fedora" time="0.302">
   <properties/>
-  <testcase name="transportExposesClosedSixOperationVocabulary()" classname="com.chromascape.web.gameplay.orchestration.v2.Micro6GameplayV2GatewayTest" time="0.004"/>
-  <testcase name="reserveTransmitsExactValidatedBytesAndStampsTruthfulHttpStatus()" classname="com.chromascape.web.gameplay.orchestration.v2.Micro6GameplayV2GatewayTest" time="0.007"/>
-  <testcase name="reserveUsesAdditiveV2RouteWithIdempotencyKey()" classname="com.chromascape.web.gameplay.orchestration.v2.Micro6GameplayV2GatewayTest" time="0.006"/>
-  <testcase name="startStatusStopCatalogObserveMapToIndependentV2Routes()" classname="com.chromascape.web.gameplay.orchestration.v2.Micro6GameplayV2GatewayTest" time="0.184"/>
+  <testcase name="transportExposesClosedSixOperationVocabulary()" classname="com.chromascape.web.gameplay.orchestration.v2.Micro6GameplayV2GatewayTest" time="0.014"/>
+  <testcase name="reserveTransmitsExactValidatedBytesAndStampsTruthfulHttpStatus()" classname="com.chromascape.web.gameplay.orchestration.v2.Micro6GameplayV2GatewayTest" time="0.018"/>
+  <testcase name="reserveUsesAdditiveV2RouteWithIdempotencyKey()" classname="com.chromascape.web.gameplay.orchestration.v2.Micro6GameplayV2GatewayTest" time="0.02"/>
+  <testcase name="startStatusStopCatalogObserveMapToIndependentV2Routes()" classname="com.chromascape.web.gameplay.orchestration.v2.Micro6GameplayV2GatewayTest" time="0.247"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

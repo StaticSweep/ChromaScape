@@ -1,28 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.config.StartupConfigurationTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:07.540Z" hostname="fedora" time="0.723">
+<testsuite name="com.chromascape.web.config.StartupConfigurationTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:52.838Z" hostname="fedora" time="0.339">
   <properties/>
-  <testcase name="testStartupConfigurationCanBeInstantiated()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.613"/>
-  <testcase name="testInitializeInfrastructureLogsAppropriateMessages()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.064"/>
-  <testcase name="testCreateSubdirectoriesCreatesAllRequiredSubdirectories()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.006"/>
-  <testcase name="testInitializeInfrastructureHandlesDirectoryCreationFailure()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.004"/>
-  <testcase name="testInitializeInfrastructureCreatesSubdirectories()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.006"/>
-  <testcase name="testInitializeChromascapeDirectoryPrivateMethod()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.011"/>
-  <testcase name="testInitializeInfrastructureCreatesChromascapeDirectory()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.008"/>
-  <testcase name="testCreateSubdirectoriesHandlesExistingSubdirectories()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.003"/>
+  <testcase name="testStartupConfigurationCanBeInstantiated()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.312"/>
+  <testcase name="testInitializeInfrastructureLogsAppropriateMessages()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.007"/>
+  <testcase name="testCreateSubdirectoriesCreatesAllRequiredSubdirectories()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.002"/>
+  <testcase name="testInitializeInfrastructureHandlesDirectoryCreationFailure()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.002"/>
+  <testcase name="testInitializeInfrastructureCreatesSubdirectories()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.003"/>
+  <testcase name="testInitializeChromascapeDirectoryPrivateMethod()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.003"/>
+  <testcase name="testInitializeInfrastructureCreatesChromascapeDirectory()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.003"/>
+  <testcase name="testCreateSubdirectoriesHandlesExistingSubdirectories()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.001"/>
   <testcase name="testInitializeInfrastructureHandlesExistingDirectory()" classname="com.chromascape.web.config.StartupConfigurationTest" time="0.003"/>
-  <system-out><![CDATA[18:06:08.148 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@749b9c82] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 479531961]
-18:06:08.156 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@7be7ff45] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1295781070]
-18:06:08.213 [Test worker] INFO  com.chromascape.utils.core.runtime.profile.ProfileManager - ChromaScape RuneLite profile already loaded
-18:06:08.221 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@5494539a] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 262986467]
-18:06:08.227 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@608da061] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 519974834]
-18:06:08.232 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@4f714688] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 14302379]
-18:06:08.235 [Test worker] INFO  com.chromascape.utils.core.runtime.profile.ProfileManager - ChromaScape RuneLite profile already loaded
-18:06:08.237 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@3bc19d3d] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1728002047]
-18:06:08.250 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@1992ce66] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 973207283]
-18:06:08.253 [Test worker] INFO  com.chromascape.utils.core.runtime.profile.ProfileManager - ChromaScape RuneLite profile already loaded
-18:06:08.258 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@61b5ac0e] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 301812950]
-18:06:08.261 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@105be2d9] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1337658379]
-18:06:08.262 [Test worker] INFO  com.chromascape.utils.core.runtime.profile.ProfileManager - ChromaScape RuneLite profile already loaded
+  <system-out><![CDATA[19:27:53.148 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@212e3150] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 298419544]
+19:27:53.152 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@7bc340e] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1639296014]
+19:27:53.156 [Test worker] INFO  com.chromascape.utils.core.runtime.profile.ProfileManager - ChromaScape RuneLite profile already loaded
+19:27:53.159 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@4998e2fe] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 333477647]
+19:27:53.161 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@61ffbfa5] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1301242891]
+19:27:53.163 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@40109ce2] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 2103761414]
+19:27:53.165 [Test worker] INFO  com.chromascape.utils.core.runtime.profile.ProfileManager - ChromaScape RuneLite profile already loaded
+19:27:53.167 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@552e940b] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 2084024023]
+19:27:53.169 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@18514f04] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 709947471]
+19:27:53.171 [Test worker] INFO  com.chromascape.utils.core.runtime.profile.ProfileManager - ChromaScape RuneLite profile already loaded
+19:27:53.173 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@15c55ab5] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1612594314]
+19:27:53.175 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'logger' of type [null] on target object [com.chromascape.web.config.StartupConfiguration@662468cb] or target class [class com.chromascape.web.config.StartupConfiguration] to value [Mock for Logger, hashCode: 1710858859]
+19:27:53.176 [Test worker] INFO  com.chromascape.utils.core.runtime.profile.ProfileManager - ChromaScape RuneLite profile already loaded
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

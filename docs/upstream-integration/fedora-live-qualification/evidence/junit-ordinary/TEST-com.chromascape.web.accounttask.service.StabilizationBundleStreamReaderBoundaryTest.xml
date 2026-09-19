@@ -1,32 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" tests="26" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:03.781Z" hostname="fedora" time="0.746">
+<testsuite name="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" tests="26" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:18.856Z" hostname="fedora" time="0.131">
   <properties/>
-  <testcase name="the part after MAX_PARTS is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.539"/>
-  <testcase name="a traversal artifact filename is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.004"/>
-  <testcase name="an artifact filename without a valid extension is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
+  <testcase name="the part after MAX_PARTS is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.051"/>
+  <testcase name="a traversal artifact filename is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.003"/>
+  <testcase name="an artifact filename without a valid extension is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
   <testcase name="a closing boundary followed by garbage is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
   <testcase name="an artifact part with an unsupported media type is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
-  <testcase name="an initial closing boundary at EOF (empty bundle) is valid" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.092"/>
-  <testcase name="the completeMarker part must be text/plain" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.008"/>
-  <testcase name="bare LF header lines are rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.003"/>
-  <testcase name="a JSON part with a non-JSON content type is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.003"/>
-  <testcase name="a closing boundary -- suffix succeeds" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.007"/>
+  <testcase name="an initial closing boundary at EOF (empty bundle) is valid" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
+  <testcase name="the completeMarker part must be text/plain" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
+  <testcase name="bare LF header lines are rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
+  <testcase name="a JSON part with a non-JSON content type is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
+  <testcase name="a closing boundary -- suffix succeeds" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.003"/>
   <testcase name="a malformed boundary is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
-  <testcase name="a filename= value cannot satisfy name= (token-exact disposition parsing)" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.003"/>
-  <testcase name="trailing data after an initial closing boundary is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.003"/>
+  <testcase name="a filename= value cannot satisfy name= (token-exact disposition parsing)" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
+  <testcase name="trailing data after an initial closing boundary is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
   <testcase name="a parameter whose name only contains boundary is not accepted" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
-  <testcase name="a regular file cannot be used as the staging root" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.003"/>
+  <testcase name="a regular file cannot be used as the staging root" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
   <testcase name="a closing boundary at EOF (no trailing CRLF) is valid" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
   <testcase name="an unterminated quoted disposition parameter is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
   <testcase name="optional whitespace around a boundary parameter is accepted" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
   <testcase name="duplicate required parts are rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
-  <testcase name="a part with too many header lines is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.003"/>
-  <testcase name="an unsupported part name is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
-  <testcase name="a pre-existing staging target is never overwritten" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
+  <testcase name="a part with too many header lines is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
+  <testcase name="an unsupported part name is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
+  <testcase name="a pre-existing staging target is never overwritten" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
   <testcase name="quoted disposition parameters parse with escaped characters" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
-  <testcase name="trailing data after a closing CRLF is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.003"/>
-  <testcase name="a boundary-prefix that is not a real delimiter stays body data byte-for-byte" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
-  <testcase name="exactly MAX_PARTS ordinary parts are accepted before the closing boundary" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.041"/>
+  <testcase name="trailing data after a closing CRLF is rejected" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.002"/>
+  <testcase name="a boundary-prefix that is not a real delimiter stays body data byte-for-byte" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.001"/>
+  <testcase name="exactly MAX_PARTS ordinary parts are accepted before the closing boundary" classname="com.chromascape.web.accounttask.service.StabilizationBundleStreamReaderBoundaryTest" time="0.032"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

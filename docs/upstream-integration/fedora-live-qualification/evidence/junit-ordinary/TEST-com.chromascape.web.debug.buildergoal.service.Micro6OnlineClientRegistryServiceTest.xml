@@ -1,34 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" tests="28" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:18.066Z" hostname="fedora" time="0.049">
+<testsuite name="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" tests="28" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:57.438Z" hostname="fedora" time="0.033">
   <properties/>
-  <testcase name="legacyExpectedAccountHashRemainsCompatibilityOnly()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.006"/>
+  <testcase name="legacyExpectedAccountHashRemainsCompatibilityOnly()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.003"/>
   <testcase name="dispatchReadyLookup_nameFallbackAllowedOnlyWhenNoExpectedHash()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.01"/>
-  <testcase name="missingOrWrongHashSchemeRejects()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.002"/>
-  <testcase name="dispatchReadyLookup_nameFallbackRejectsMalformedReportedIdentity()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
+  <testcase name="missingOrWrongHashSchemeRejects()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
+  <testcase name="dispatchReadyLookup_nameFallbackRejectsMalformedReportedIdentity()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
   <testcase name="dispatchReadyLookup_requiresExactCurrentWorldNotHeartbeatFlag()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
-  <testcase name="invalidHashValuesReject()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
+  <testcase name="invalidHashValuesReject()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
   <testcase name="dispatchReadyLookup_startupIncompleteFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
-  <testcase name="dispatchReadyLookup_matchingNameNeverOverridesHashMismatch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
+  <testcase name="dispatchReadyLookup_matchingNameNeverOverridesHashMismatch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
   <testcase name="recordHeartbeat_absentWorldFieldsAreNotMatched()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
   <testcase name="dispatchReadyLookup_matchingMalformedHashesNeverAuthorizeDispatch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
   <testcase name="recordHeartbeat_registersRunnableClient()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
   <testcase name="requestedAccountHashWinsOverLegacyExpectedField()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
   <testcase name="recordHeartbeat_missingReadinessFieldsFailClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
   <testcase name="dispatchReadyLookup_wrongExpectedWorldRejected()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
-  <testcase name="dispatchReadyLookup_loggedOutFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
+  <testcase name="dispatchReadyLookup_loggedOutFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
   <testcase name="heartbeatWithRequestedAccountHashIsEligibleWhenAllConditionsMatch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
-  <testcase name="runnableAndDispatchReadyAgreeWithEvaluator()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
-  <testcase name="recordHeartbeat_wrongWorldIsNotDispatchReady()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
-  <testcase name="remoteReadinessRequiresMachineAttemptAccountWorldAndFreshHeartbeat()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.005"/>
+  <testcase name="runnableAndDispatchReadyAgreeWithEvaluator()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
+  <testcase name="recordHeartbeat_wrongWorldIsNotDispatchReady()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
+  <testcase name="remoteReadinessRequiresMachineAttemptAccountWorldAndFreshHeartbeat()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.002"/>
   <testcase name="dispatchReadyLookup_pathfinderIncompleteFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
-  <testcase name="sameNameDifferentHashRejects()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
+  <testcase name="sameNameDifferentHashRejects()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
   <testcase name="dispatchReadyLookup_hashIsAuthoritativeOverMatchingName()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
   <testcase name="dispatchReadyLookup_missingLoginStateFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
   <testcase name="genericRunnableDoesNotProveSelectedAccountEligibility()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
-  <testcase name="dispatchReadyLookup_usesObservedWorldWhenHeartbeatFlagIsStale()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
-  <testcase name="dispatchReadyLookup_dispatchHoldFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
-  <testcase name="dispatchReadyLookup_missingIdentityRejected()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
-  <testcase name="recordHeartbeat_capturesWorldAndScriptLifecycleFields()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
+  <testcase name="dispatchReadyLookup_usesObservedWorldWhenHeartbeatFlagIsStale()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
+  <testcase name="dispatchReadyLookup_dispatchHoldFailsClosed()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
+  <testcase name="dispatchReadyLookup_missingIdentityRejected()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.001"/>
+  <testcase name="recordHeartbeat_capturesWorldAndScriptLifecycleFields()" classname="com.chromascape.web.debug.buildergoal.service.Micro6OnlineClientRegistryServiceTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

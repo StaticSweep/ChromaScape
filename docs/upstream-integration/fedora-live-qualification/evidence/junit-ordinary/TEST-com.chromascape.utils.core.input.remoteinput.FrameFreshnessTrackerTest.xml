@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.utils.core.input.remoteinput.FrameFreshnessTrackerTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:35.509Z" hostname="fedora" time="0.028">
+<testsuite name="com.chromascape.utils.core.input.remoteinput.FrameFreshnessTrackerTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:27:04.212Z" hostname="fedora" time="0.006">
   <properties/>
-  <testcase name="reportsNewChangedUnchangedAndPausedFromContent()" classname="com.chromascape.utils.core.input.remoteinput.FrameFreshnessTrackerTest" time="0.028"/>
+  <testcase name="reportsNewChangedUnchangedAndPausedFromContent()" classname="com.chromascape.utils.core.input.remoteinput.FrameFreshnessTrackerTest" time="0.006"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

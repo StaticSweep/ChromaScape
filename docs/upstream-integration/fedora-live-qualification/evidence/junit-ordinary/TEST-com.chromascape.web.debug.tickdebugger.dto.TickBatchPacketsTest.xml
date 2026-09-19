@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.tickdebugger.dto.TickBatchPacketsTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:07:59.863Z" hostname="fedora" time="0.022">
+<testsuite name="com.chromascape.web.debug.tickdebugger.dto.TickBatchPacketsTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:20.334Z" hostname="fedora" time="0.029">
   <properties/>
-  <testcase name="deserializesSchemaV3WithPackets()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchPacketsTest" time="0.007"/>
-  <testcase name="deserializesV2ObservationAndGapWithSourceScopedLossRanges()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchPacketsTest" time="0.006"/>
-  <testcase name="schemaV2WithoutPacketsDefaultsToEmpty()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchPacketsTest" time="0.006"/>
+  <testcase name="deserializesSchemaV3WithPackets()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchPacketsTest" time="0.006"/>
+  <testcase name="deserializesV2ObservationAndGapWithSourceScopedLossRanges()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchPacketsTest" time="0.009"/>
+  <testcase name="schemaV2WithoutPacketsDefaultsToEmpty()" classname="com.chromascape.web.debug.tickdebugger.dto.TickBatchPacketsTest" time="0.01"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

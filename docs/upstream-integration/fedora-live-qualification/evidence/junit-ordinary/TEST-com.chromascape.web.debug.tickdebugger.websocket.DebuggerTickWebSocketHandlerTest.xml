@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:05.892Z" hostname="fedora" time="0.537">
+<testsuite name="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T17:29:22.431Z" hostname="fedora" time="0.263">
   <properties/>
-  <testcase name="transport error removes the client and unregisters from ingestion" classname="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" time="0.488"/>
+  <testcase name="transport error removes the client and unregisters from ingestion" classname="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" time="0.197"/>
   <testcase name="broadcast sends to all open clients and drops closed ones once" classname="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" time="0.003"/>
   <testcase name="connect registers the client and reports a thread-safe count" classname="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" time="0.001"/>
   <testcase name="a failed send removes and unregisters the client once" classname="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" time="0.002"/>
   <testcase name="connect is idempotent and does not double-register" classname="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" time="0.001"/>
-  <testcase name="close removes the client and unregisters from ingestion" classname="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" time="0.001"/>
-  <testcase name="broadcast is safe during concurrent connect and disconnect" classname="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" time="0.039"/>
-  <system-out><![CDATA[18:08:06.371 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.372 [Test worker] ERROR com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client transport error: null - boom
+  <testcase name="close removes the client and unregisters from ingestion" classname="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" time="0.0"/>
+  <testcase name="broadcast is safe during concurrent connect and disconnect" classname="com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest" time="0.054"/>
+  <system-out><![CDATA[19:29:22.624 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.625 [Test worker] ERROR com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client transport error: null - boom
 java.lang.RuntimeException: boom
 	at com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandlerTest.transportErrorRemovesAndUnregisters(DebuggerTickWebSocketHandlerTest.java:69) ~[test/:?]
 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]
@@ -102,55 +102,55 @@ java.lang.RuntimeException: boom
 	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
 	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
-18:08:06.384 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.384 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 2)
-18:08:06.386 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.388 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.388 [Test worker] WARN  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Failed to send message to client null: send boom
-18:08:06.389 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.390 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.390 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.390 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.392 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.397 [Thread-86] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.397 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.399 [Thread-88] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.399 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.400 [Thread-90] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.400 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.401 [Thread-92] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.402 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.403 [Thread-94] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.403 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.404 [Thread-96] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.405 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.406 [Thread-98] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.407 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.408 [Thread-100] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.409 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.410 [Thread-102] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.410 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.414 [Thread-104] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.416 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.417 [Thread-106] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.417 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.418 [Thread-108] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.418 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.419 [Thread-110] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.420 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.421 [Thread-112] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.421 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.422 [Thread-114] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.422 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.423 [Thread-116] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.423 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.425 [Thread-118] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.425 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.426 [Thread-120] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.427 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.428 [Thread-122] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
-18:08:06.428 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
-18:08:06.429 [Thread-124] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.633 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.633 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 2)
+19:29:22.635 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.637 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.638 [Test worker] WARN  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Failed to send message to client null: send boom
+19:29:22.638 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.639 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.640 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.640 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.641 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.645 [Thread-86] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.646 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.652 [Thread-88] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.653 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.654 [Thread-90] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.655 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.656 [Thread-92] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.657 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.658 [Thread-94] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.660 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.661 [Thread-96] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.662 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.663 [Thread-98] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.664 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.666 [Thread-100] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.666 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.668 [Thread-102] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.668 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.669 [Thread-104] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.671 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.673 [Thread-106] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.674 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.675 [Thread-108] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.676 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.678 [Thread-110] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.679 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.680 [Thread-112] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.681 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.682 [Thread-114] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.683 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.684 [Thread-116] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.685 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.686 [Thread-118] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.686 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.687 [Thread-120] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.688 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.691 [Thread-122] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
+19:29:22.692 [Test worker] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client connected: null (total clients: 1)
+19:29:22.694 [Thread-124] INFO  com.chromascape.web.debug.tickdebugger.websocket.DebuggerTickWebSocketHandler - Debugger client disconnected: null (total clients: 0)
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>
