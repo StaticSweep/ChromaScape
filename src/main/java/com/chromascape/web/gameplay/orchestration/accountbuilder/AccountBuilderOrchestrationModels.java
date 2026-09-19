@@ -198,7 +198,9 @@ public final class AccountBuilderOrchestrationModels {
       long expectedObservationRevision,
       long expectedTaskRevision,
       String observationDigest,
-      String promptDigest) {
+      String promptDigest,
+      String providerSessionId,
+      String providerTurnId) {
     public SnapshotBindings {
       taskSkillDigests = taskSkillDigests == null ? List.of() : List.copyOf(taskSkillDigests);
     }

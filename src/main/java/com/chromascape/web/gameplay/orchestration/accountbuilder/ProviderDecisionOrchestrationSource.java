@@ -28,14 +28,17 @@ public final class ProviderDecisionOrchestrationSource {
   private final ProviderDecisionHandoff handoff;
   private final CanonicalGameplayJson canonicalJson;
   private final AccountBuilderOrchestrationRequestFactory requestFactory;
+  private final AccountBuilderOrchestrationValidator validator;
 
   public ProviderDecisionOrchestrationSource(
       ProviderDecisionHandoff handoff,
       CanonicalGameplayJson canonicalJson,
-      AccountBuilderOrchestrationRequestFactory requestFactory) {
+      AccountBuilderOrchestrationRequestFactory requestFactory,
+      AccountBuilderOrchestrationValidator validator) {
     this.handoff = Objects.requireNonNull(handoff);
     this.canonicalJson = Objects.requireNonNull(canonicalJson);
     this.requestFactory = Objects.requireNonNull(requestFactory);
+    this.validator = Objects.requireNonNull(validator);
   }
 
   public OrchestrationRequest bind(
@@ -154,7 +157,9 @@ public final class ProviderDecisionOrchestrationSource {
             command.envelope().expectedObservationRevision(),
             command.envelope().expectedTaskRevision(),
             persisted.observationDigest(),
-            persisted.promptDigest());
+            persisted.promptDigest(),
+            persisted.sessionId(),
+            persisted.turnId());
     OrchestrationRequest draft =
         new OrchestrationRequest(
             command.orchestrationId(),
@@ -170,8 +175,12 @@ public final class ProviderDecisionOrchestrationSource {
             command.observation(),
             command.deadline());
     // Every persisted provenance digest is re-verified against the draft before any capability
-    // access or durable claim.
-    return new PreparedProviderRequest(bindProvenance(persisted, draft), persisted);
+    // access or durable claim. The full immutable invariant set (request identity, deadline,
+    // authority shape, decision/envelope binding) is then validated without the capability digest
+    // or final fingerprint, so a malformed command can never cause a Micro6 preflight.
+    OrchestrationRequest bound = bindProvenance(persisted, draft);
+    validator.validatePrepared(bound);
+    return new PreparedProviderRequest(bound, persisted);
   }
 
   /**
@@ -261,6 +270,15 @@ public final class ProviderDecisionOrchestrationSource {
     if (!persisted.semanticActionDigest().equals(bindings.semanticActionDigest())) {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STALE_BINDING, "Persisted semantic action digest does not match the binding");
+    }
+    // Provider session and turn identity is part of the immutable binding. Two distinct durable
+    // provider turns that produced identical decision and provenance content must never collapse
+    // into the same exact replay.
+    if (!Objects.equals(persisted.sessionId(), bindings.providerSessionId())
+        || !Objects.equals(persisted.turnId(), bindings.providerTurnId())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.STALE_BINDING,
+          "Persisted provider session or turn identity does not match the binding");
     }
     // Every contract-mandated digest comparison is unconditional: a persisted record that is
     // missing any required provenance value fails closed and can never become deliverable.

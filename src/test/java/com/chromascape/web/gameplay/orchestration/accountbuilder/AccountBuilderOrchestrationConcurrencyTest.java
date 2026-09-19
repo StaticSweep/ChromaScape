@@ -168,7 +168,9 @@ class AccountBuilderOrchestrationConcurrencyTest {
             1,
             1,
             "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            null,
+            null);
     HumanAuthority authority =
         new HumanAuthority(
             GameplayContracts.VERSION,

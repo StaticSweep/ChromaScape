@@ -58,7 +58,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
     classes = JpaAccountBuilderOrchestrationStoreTest.JpaTestBootstrap.class,
     properties = {
-      "spring.flyway.target=48",
+      "spring.flyway.target=49",
       "spring.jpa.hibernate.ddl-auto=validate",
       "stabilization.auth.token=sc1431-read-token",
       "stabilization.auth.write-token=sc1431-write-token",
@@ -393,7 +393,9 @@ class JpaAccountBuilderOrchestrationStoreTest {
             1,
             1,
             "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            null,
+            null);
     HumanAuthority authority = signedAuthority(envelope);
     // ObjectNode.set returns JsonNode, so the object cannot be built in one chained expression.
     var context =

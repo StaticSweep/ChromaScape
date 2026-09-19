@@ -16,6 +16,7 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.ProviderOrchestrationCommand;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.SnapshotBindings;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.TaskCapability;
@@ -112,19 +113,40 @@ class AccountBuilderOrchestrationServiceTest {
   }
 
   @Test
-  void providerEntryPointRejectsNonProviderSources() {
+  void providerEntryPointAcceptsOnlyProviderOrchestrationCommands() {
     FakeGateway gateway = new FakeGateway(State.CONFIRMED);
     InMemoryAccountBuilderOrchestrationStore store =
         new InMemoryAccountBuilderOrchestrationStore(
             Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
     AccountBuilderOrchestrationService service = service(gateway, store);
-    OrchestrationRequest bootstrap = request("not-provider", Mode.BOOTSTRAP_RECORDING);
 
-    assertThatThrownBy(() -> service.orchestrateProvider(bootstrap))
+    // The single provider entry point takes a ProviderOrchestrationCommand, never an assembled
+    // provider OrchestrationRequest, so no caller can forge a provider-shaped request.
+    assertThat(AccountBuilderOrchestrationService.class.getDeclaredMethods())
+        .filteredOn(method -> method.getName().equals("orchestrateProvider"))
+        .isNotEmpty()
+        .allSatisfy(
+            method ->
+                assertThat(method.getParameterTypes())
+                    .containsExactly(ProviderOrchestrationCommand.class));
+
+    ProviderOrchestrationCommand forged =
+        new ProviderOrchestrationCommand(
+            "session-absent",
+            "turn-absent",
+            "orchestration-forged",
+            "request-forged",
+            "idempotency-forged",
+            Mode.LIVE_TASK,
+            null,
+            null,
+            null,
+            NOW.plusSeconds(300));
+    assertThatThrownBy(() -> service.orchestrateProvider(forged))
         .isInstanceOf(AccountBuilderOrchestrationException.class)
         .extracting("failureCode")
         .isEqualTo(FailureCode.INVALID_CONTRACT);
-    assertThat(store.find("orchestration-not-provider")).isEmpty();
+    assertThat(store.find("orchestration-forged")).isEmpty();
     assertThat(gateway.capabilityReads).hasValue(0);
   }
 
@@ -507,8 +529,23 @@ class AccountBuilderOrchestrationServiceTest {
   private AccountBuilderOrchestrationService service(
       FakeGateway gateway, InMemoryAccountBuilderOrchestrationStore store) {
     Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+    AccountBuilderOrchestrationRequestFactory requestFactory =
+        new AccountBuilderOrchestrationRequestFactory(validator, canonicalJson);
+    ProviderDecisionOrchestrationSource providerSource =
+        new ProviderDecisionOrchestrationSource(
+            (sessionId, turnId) -> java.util.Optional.empty(),
+            canonicalJson,
+            requestFactory,
+            validator);
     return new AccountBuilderOrchestrationService(
-        validator, canonicalJson, store, gateway, properties, clock);
+        validator,
+        canonicalJson,
+        store,
+        gateway,
+        properties,
+        clock,
+        providerSource,
+        new AccountBuilderCapabilityPreflight(gateway));
   }
 
   private OrchestrationRequest request(String suffix, Mode mode) {
@@ -555,7 +592,9 @@ class AccountBuilderOrchestrationServiceTest {
             envelope.expectedObservationRevision(),
             envelope.expectedTaskRevision(),
             "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            null,
+            null);
     HumanAuthority authority =
         new HumanAuthority(
             "sc-1429/v1",

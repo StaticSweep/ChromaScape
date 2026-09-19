@@ -27,6 +27,7 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationValidator;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.InMemoryAccountBuilderOrchestrationStore;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.ProviderDecisionOrchestrationSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -81,13 +82,7 @@ class BootstrapGameplaySc1431IntegrationTest {
         new AccountBuilderOrchestrationRequestFactory(orchestrationValidator, canonicalJson);
     store = new InMemoryAccountBuilderOrchestrationStore(Clock.systemUTC(), authorityVerifier);
     gateway = new RecordingGateway();
-    service =
-        new AccountBuilderOrchestrationService(
-            orchestrationValidator,
-            canonicalJson,
-            store,
-            gateway,
-            new AccountBuilderOrchestrationProperties());
+    service = sc1431Service(gateway, new AccountBuilderOrchestrationProperties());
     fixtures =
         objectMapper.readTree(
             getClass()
@@ -132,8 +127,7 @@ class BootstrapGameplaySc1431IntegrationTest {
     Bundle bundle = bundle("enabled");
     RecordingGateway liveGateway = new LiveCapabilityGateway();
     AccountBuilderOrchestrationService enabledService =
-        new AccountBuilderOrchestrationService(
-            orchestrationValidator, canonicalJson, store, liveGateway, enabledProperties());
+        sc1431Service(liveGateway, enabledProperties());
     BootstrapGameplayOrchestrator orchestrator =
         productionOrchestrator(enabledService, liveGateway);
 
@@ -162,8 +156,7 @@ class BootstrapGameplaySc1431IntegrationTest {
     Bundle bundle = bundle("replay");
     RecordingGateway liveGateway = new LiveCapabilityGateway();
     AccountBuilderOrchestrationService enabledService =
-        new AccountBuilderOrchestrationService(
-            orchestrationValidator, canonicalJson, store, liveGateway, enabledProperties());
+        sc1431Service(liveGateway, enabledProperties());
     BootstrapGameplayOrchestrator orchestrator =
         productionOrchestrator(enabledService, liveGateway);
     orchestrator.dispatch(
@@ -312,10 +305,7 @@ class BootstrapGameplaySc1431IntegrationTest {
           }
         };
     BootstrapGameplayOrchestrator orchestrator =
-        productionOrchestrator(
-            new AccountBuilderOrchestrationService(
-                orchestrationValidator, canonicalJson, store, absent, enabledProperties()),
-            absent);
+        productionOrchestrator(sc1431Service(absent, enabledProperties()), absent);
 
     var receipt =
         orchestrator.dispatch(
@@ -348,10 +338,7 @@ class BootstrapGameplaySc1431IntegrationTest {
           }
         };
     BootstrapGameplayOrchestrator orchestrator =
-        productionOrchestrator(
-            new AccountBuilderOrchestrationService(
-                orchestrationValidator, canonicalJson, store, drifted, enabledProperties()),
-            drifted);
+        productionOrchestrator(sc1431Service(drifted, enabledProperties()), drifted);
 
     var receipt =
         orchestrator.dispatch(
@@ -384,10 +371,7 @@ class BootstrapGameplaySc1431IntegrationTest {
           }
         };
     BootstrapGameplayOrchestrator orchestrator =
-        productionOrchestrator(
-            new AccountBuilderOrchestrationService(
-                orchestrationValidator, canonicalJson, store, drifted, enabledProperties()),
-            drifted);
+        productionOrchestrator(sc1431Service(drifted, enabledProperties()), drifted);
 
     var receipt =
         orchestrator.dispatch(
@@ -428,10 +412,7 @@ class BootstrapGameplaySc1431IntegrationTest {
           }
         };
     BootstrapGameplayOrchestrator orchestrator =
-        productionOrchestrator(
-            new AccountBuilderOrchestrationService(
-                orchestrationValidator, canonicalJson, store, drifted, enabledProperties()),
-            drifted);
+        productionOrchestrator(sc1431Service(drifted, enabledProperties()), drifted);
 
     var receipt =
         orchestrator.dispatch(
@@ -579,6 +560,27 @@ class BootstrapGameplaySc1431IntegrationTest {
     assertThat(gateway.capabilityCalls.get()).isZero();
     assertThat(gateway.reserves.get()).isZero();
     assertThat(gateway.dispatchCalls.get()).isZero();
+  }
+
+  private AccountBuilderOrchestrationService sc1431Service(
+      AccountBuilderOrchestrationGateway orchestrationGateway,
+      AccountBuilderOrchestrationProperties orchestrationProperties) {
+    AccountBuilderOrchestrationRequestFactory factory =
+        new AccountBuilderOrchestrationRequestFactory(orchestrationValidator, canonicalJson);
+    ProviderDecisionOrchestrationSource providerSource =
+        new ProviderDecisionOrchestrationSource(
+            (sessionId, turnId) -> java.util.Optional.empty(),
+            canonicalJson,
+            factory,
+            orchestrationValidator);
+    return new AccountBuilderOrchestrationService(
+        orchestrationValidator,
+        canonicalJson,
+        store,
+        orchestrationGateway,
+        orchestrationProperties,
+        providerSource,
+        new AccountBuilderCapabilityPreflight(orchestrationGateway));
   }
 
   private BootstrapGameplayOrchestrator productionOrchestrator(

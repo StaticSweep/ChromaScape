@@ -8,6 +8,46 @@ verification coverage); this evidence record is the next scoped commit and is th
 
 ## Changed files
 
+### Review remediation pass (SC-1431.5, Fedora review findings)
+
+Two blocking correctness gaps and two trust-boundary gaps from the SC-1431.4 review were fixed.
+
+1. **Bootstrap nullable prompt provenance** — `V49__sc1431_bootstrap_provider_identity.sql` drops the
+   `NOT NULL` constraint and default from `ab_snapshot_binding.prompt_digest`, so a production
+   bootstrap claim no longer attempts to insert `null` into a non-null column and abort its
+   transaction. The JPA entity marks `promptDigest` nullable. The validator continues to require a
+   valid prompt digest for provider sources and requires it to be absent for bootstrap sources.
+2. **Provider session/turn in the immutable fingerprint** — `SnapshotBindings` gains
+   `providerSessionId` and `providerTurnId`. `ProviderDecisionOrchestrationSource.prepareProduction`
+   populates them from the loaded `PersistedDecision`; `bindProvenance` verifies they match the
+   loaded decision; the validator requires both for provider sources and forbids them for
+   bootstrap. Because the records are part of the immutable fingerprint, two distinct durable
+   provider turns with identical decision and provenance content can no longer resolve as the same
+   exact replay.
+3. **Single non-forgeable provider service boundary** — the controller no longer accepts or
+   assembles a provider `OrchestrationRequest`. `AccountBuilderOrchestrationService` exposes one
+   command-based entry point, `orchestrateProvider(ProviderOrchestrationCommand)`, which owns
+   preparation, exact-replay resolution with the stored capability digest, and the capability
+   preflight. `orchestrateInternal` stays private and the old package-private
+   `orchestrateProvider(OrchestrationRequest)` was removed.
+4. **Prepared-request validation before preflight** — `AccountBuilderOrchestrationValidator.validatePrepared`
+   validates every immutable invariant except the capability digest and the final fingerprint and is
+   invoked inside `prepareProduction`. Mismatched request id, idempotency key, deadline, expired
+   deadline, malformed authority and malformed envelope identity all fail before any Micro6 read.
+5. **Evidence correction** — the SC-1431.4 safety audit incorrectly stated that no SC-1429 resource
+   changed. The branch does restore the truncated test fixture
+   `src/test/resources/contracts/gameplay/sc-1429-golden-fixtures-v1.json` to the canonical bytes
+   (final SHA-256 `c55ad78af5b6367803bc7098e0ef0a03e03d8efff6465bd4eae7829aa743c19c`, identical to
+   the main resource). That statement is corrected below.
+6. **Regression coverage** — `ProviderDecisionOrchestrationIntegrationTest` now drives the
+   command-based service boundary and proves zero preflight for mismatched request id, idempotency
+   key, deadline, expired deadline, malformed authority and malformed envelope identity, plus
+   `IDEMPOTENCY_CONFLICT` with no preflight when only the provider session id or only the turn id
+   changes; `AccountBuilderOrchestrationServiceTest` asserts the only `orchestrateProvider` overload
+   takes `ProviderOrchestrationCommand`; `AccountBuilderOrchestrationRestartTest` claims a
+   `fromBootstrap(...)` request with a null prompt digest through `JpaAccountBuilderOrchestrationStore`
+   and proves exact replay after a two-context database restart.
+
 ### Remediation pass (SC-1431.4 review findings)
 
 Four review findings were fixed on top of the SC-1431.3 pass; every production change is exercised by a focused
@@ -148,8 +188,9 @@ All SC-1431 remediation tests (new and updated):
   injection still rolls back the full transition aggregate.
 - `AccountBuilderOrchestrationBudgetTest` — bound boundaries, exhausted/expired rejection before gateway
   access, and the concurrent final-attempt race (exactly one winner).
-- `AccountBuilderOrchestrationRestartTest` — Flyway target advanced to the new head (`48`); committed evidence
-  survives a full context restart and recovery never redispatches.
+- `AccountBuilderOrchestrationRestartTest` — Flyway target advanced to the new head (`49`); committed evidence
+  survives a full context restart and recovery never redispatches; a `fromBootstrap(...)` claim with a
+  null prompt digest is read back and replayed exactly across a two-context restart.
 - `AccountBuilderOrchestrationServiceTest` — normal stop sends `killSwitch=false`, kill stop sends `true` and
   the durable stop receipt records the requested mode without authority secrets; an out-of-scope kill switch
   is rejected with `OPERATOR_UNAUTHORIZED` before any gateway access; durable claims always carry budgets.
@@ -160,7 +201,8 @@ All SC-1431 remediation tests (new and updated):
   the contract digest; the stop transport call receives the requested kill-switch mode.
 - `Sc1431BudgetIntegritySchemaTest` — direct Flyway/PostgreSQL proof of the V48 budget contract (upgrade from
   V47, nullability, bounds, expiry ordering, immutability trigger, counter monotonicity, version advancement,
-  FK restrict) against the isolated schema on port 5433.
+  FK restrict) plus the V49 bootstrap/provider provenance columns (nullable `prompt_digest` and nullable
+  `provider_session_id`/`provider_turn_id`) against the isolated schema on port 5433.
 - `ProviderDecisionOrchestrationSourceTest` — provenance-incomplete records (missing prompt provenance, empty
   task-skill provenance) fail closed; bindings without the persisted prompt provenance are `STALE_BINDING`.
 - `ProviderRuntimeHardeningTest` — byte-level transcript verification against real files: untouched artifact
@@ -179,14 +221,14 @@ Fedora verification (worktree
   `Micro6AccountBuilderOrchestrationGatewayTest`, `ProviderDecisionOrchestrationIntegrationTest`,
   `ProviderDecisionOrchestrationSourceTest`, `AccountBuilderOrchestrationBudgetTest`,
   `AccountBuilderOrchestrationConcurrencyTest`, `AccountBuilderOrchestrationLifecycleMatrixTest`,
-  `ProviderRuntimeHardeningTest` — **115 tests, 115 passed, 0 failed, 0 errors, 0 skipped**.
+  `ProviderRuntimeHardeningTest` — **123 tests, 123 passed, 0 failed, 0 errors, 0 skipped**.
 - PostgreSQL gate (`DOCKER_HOST=unix:///run/user/1000/podman/podman.sock`, `TESTCONTAINERS_RYUK_DISABLED=true`):
   `AccountBuilderOrchestrationPostgresConcurrencyTest`, `AccountBuilderOrchestrationRestartTest`,
   `AccountBuilderOrchestrationRollbackTest`, `JpaAccountBuilderOrchestrationStoreTest`,
-  `Sc1431BudgetIntegritySchemaTest` — **23 tests, 23 passed, 0 failed, 0 errors, 0 skipped** (V48 migration
-  validation, concurrency, rollback, restart and JPA store coverage).
-- Broader gate `--tests 'com.chromascape.web.gameplay.*'` with the same Podman environment — **39 suites, 299
-  tests, 299 passed, 0 failed, 0 errors, 0 skipped**.
+  `Sc1431BudgetIntegritySchemaTest` — **24 tests, 24 passed, 0 failed, 0 errors, 0 skipped** (V49 migration
+  validation, concurrency, rollback, restart, bootstrap restart replay and JPA store coverage).
+- Broader gate `--tests 'com.chromascape.web.gameplay.*'` with the same Podman environment — **39 suites, 308
+  tests, 308 passed, 0 failed, 0 errors, 0 skipped**.
 - `checkstyleMain checkstyleTest` — BUILD SUCCESSFUL; pre-existing warning baseline (severity unchanged), no
   errors.
 - `spotlessCheck` — still fails, but **only** on pre-existing baseline files unrelated to SC-1431:
@@ -203,10 +245,14 @@ Fedora verification (worktree
   the pre-existing `SafeProviderProcessRunner` (SC-1430 provider launch path), which is outside the SC-1431
   change set.
 
-Safety and scope audit: no gameplay, provider process, Micro6 process or raw input capability was launched; no
-SC-1429 resource changed; no SC-1449 implementation was widened; no credentials or transcript contents were
-committed; default delivery remains off; the exact-replay, invalid-provider-decision, provider-bypass and
-negative-HTTP-stamp regression paths are each covered by tests that assert zero gateway calls where required.
+Safety and scope audit: no gameplay, provider process, Micro6 process or raw input capability was launched; the
+SC-1429 test fixture `src/test/resources/contracts/gameplay/sc-1429-golden-fixtures-v1.json` was restored from
+its truncated state to the canonical bytes (final SHA-256
+`c55ad78af5b6367803bc7098e0ef0a03e03d8efff6465bd4eae7829aa743c19c`, identical to
+`src/main/resources/contracts/gameplay/sc-1429-golden-fixtures-v1.json`) and no other SC-1429 resource changed;
+no SC-1449 implementation was widened; no credentials or transcript contents were committed; default delivery
+remains off; the exact-replay, invalid-provider-decision, provider-bypass and negative-HTTP-stamp regression
+paths are each covered by tests that assert zero gateway calls where required.
 
 ## Remaining work
 

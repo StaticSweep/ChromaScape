@@ -7,7 +7,6 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Readiness;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,18 +25,12 @@ public final class AccountBuilderOrchestrationController {
   private static final String OPERATOR_HEADER = "X-Gameplay-Operator-Key";
   private final AccountBuilderOrchestrationService service;
   private final AccountBuilderOrchestrationProperties properties;
-  private final ProviderDecisionOrchestrationSource providerSource;
-  private final AccountBuilderCapabilityPreflight capabilityPreflight;
 
   public AccountBuilderOrchestrationController(
       AccountBuilderOrchestrationService service,
-      AccountBuilderOrchestrationProperties properties,
-      ProviderDecisionOrchestrationSource providerSource,
-      AccountBuilderCapabilityPreflight capabilityPreflight) {
+      AccountBuilderOrchestrationProperties properties) {
     this.service = service;
     this.properties = properties;
-    this.providerSource = providerSource;
-    this.capabilityPreflight = capabilityPreflight;
   }
 
   @GetMapping("/readiness")
@@ -72,34 +65,16 @@ public final class AccountBuilderOrchestrationController {
    * type are loaded from the durable persisted provider turn; the command may only carry provider
    * session and turn identity plus request identity, envelope, authority, observation and deadline.
    *
-   * <p>Ordering is part of the trust boundary: authenticate, prepare the persisted decision,
-   * resolve any existing exact replay with the stored capability digest, and only then perform the
-   * capability preflight for a genuinely new orchestration. Invalid decisions and exact replays
-   * therefore never touch Micro6.
+   * <p>The single {@link AccountBuilderOrchestrationService#orchestrateProvider} boundary owns
+   * preparation, replay resolution and capability preflight, so this controller never assembles or
+   * accepts a provider-shaped request.
    */
   @PostMapping("/provider-orchestrations")
   public ResponseEntity<OrchestrationView> orchestrateProvider(
       @RequestHeader(value = OPERATOR_HEADER, required = false) String operatorKey,
       @RequestBody ProviderOrchestrationCommand command) {
     authenticate(operatorKey);
-    ProviderDecisionOrchestrationSource.PreparedProviderRequest prepared =
-        providerSource.prepareProduction(command);
-    Optional<OrchestrationView> existing = service.findOrchestration(command.orchestrationId());
-    if (existing.isPresent()) {
-      String storedCapabilityDigest = service.storedCapabilityDigest(command.orchestrationId());
-      OrchestrationRequest replay =
-          providerSource.completeProductionReplay(prepared, storedCapabilityDigest);
-      if (!replay.requestFingerprint().equals(existing.get().requestFingerprint())) {
-        throw new AccountBuilderOrchestrationException(
-            FailureCode.IDEMPOTENCY_CONFLICT,
-            "A different request is already persisted under this orchestration id");
-      }
-      return ResponseEntity.ok(existing.get());
-    }
-    var capabilityPreflightSnapshot = capabilityPreflight.probe(command.envelope());
-    OrchestrationRequest request =
-        providerSource.completeProduction(prepared, capabilityPreflightSnapshot);
-    AccountBuilderOrchestrationService.Submission submission = service.orchestrateProvider(request);
+    AccountBuilderOrchestrationService.Submission submission = service.orchestrateProvider(command);
     return ResponseEntity.status(submission.created() ? HttpStatus.CREATED : HttpStatus.OK)
         .body(submission.view());
   }

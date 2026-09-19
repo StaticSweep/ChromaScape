@@ -115,7 +115,9 @@ class ProviderDecisionOrchestrationSourceTest {
             2,
             3,
             observationDigest(),
-            "sha256:" + "d".repeat(64));
+            "sha256:" + "d".repeat(64),
+            "session-codex-1",
+            "turn-codex-1");
     return new OrchestrationRequest(
         "orchestration-1",
         "request-1",
@@ -132,12 +134,13 @@ class ProviderDecisionOrchestrationSourceTest {
   }
 
   private ProviderDecisionOrchestrationSource source(PersistedDecision persisted) {
+    AccountBuilderOrchestrationValidator validator =
+        new AccountBuilderOrchestrationValidator(canonicalJson, (authority, envelope) -> true);
     return new ProviderDecisionOrchestrationSource(
         (sessionId, turnId) -> persisted == null ? Optional.empty() : Optional.of(persisted),
         canonicalJson,
-        new AccountBuilderOrchestrationRequestFactory(
-            new AccountBuilderOrchestrationValidator(canonicalJson, (authority, envelope) -> true),
-            canonicalJson));
+        new AccountBuilderOrchestrationRequestFactory(validator, canonicalJson),
+        validator);
   }
 
   @Test
@@ -287,7 +290,9 @@ class ProviderDecisionOrchestrationSourceTest {
             original.bindings().expectedObservationRevision(),
             original.bindings().expectedTaskRevision(),
             original.bindings().observationDigest(),
-            null);
+            null,
+            original.bindings().providerSessionId(),
+            original.bindings().providerTurnId());
     OrchestrationRequest withoutPromptRequest =
         new OrchestrationRequest(
             original.orchestrationId(),

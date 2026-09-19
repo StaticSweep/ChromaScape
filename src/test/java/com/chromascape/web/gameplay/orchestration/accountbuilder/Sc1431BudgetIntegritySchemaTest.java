@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Direct Flyway/PostgreSQL proof of the SC-1431 budget contract.
  *
- * <p>The test stages the full repository migration chain, proves the upgrade to {@code V48}, and
+ * <p>The test stages the full repository migration chain, proves the upgrade to {@code V49}, and
  * asserts the database-owned constraints: non-null timestamps and limits, bound and counter checks,
  * expiry ordering, immutable claimed limits and timestamps, monotonic counters and an advancing
  * optimistic-lock version. It runs against an isolated schema on the local PostgreSQL instance and
@@ -60,13 +60,18 @@ class Sc1431BudgetIntegritySchemaTest {
     assertEquals("47", currentVersion());
     migrate(null);
 
-    assertEquals("48", currentVersion());
+    assertEquals("49", currentVersion());
     assertFalse(columnIsNullable("ab_orchestration_budget", "started_at"));
     assertFalse(columnIsNullable("ab_orchestration_budget", "expires_at"));
     assertFalse(columnIsNullable("ab_orchestration_budget", "max_actions"));
     assertFalse(columnIsNullable("ab_orchestration_budget", "max_attempts"));
     assertFalse(columnIsNullable("ab_orchestration_budget", "max_elapsed_ms"));
     assertTrue(triggerExists("ab_budget_guard_trigger"));
+
+    // V49: bootstrap prompt provenance is nullable while provider session/turn identity is present.
+    assertTrue(columnIsNullable("ab_snapshot_binding", "prompt_digest"));
+    assertTrue(columnIsNullable("ab_snapshot_binding", "provider_session_id"));
+    assertTrue(columnIsNullable("ab_snapshot_binding", "provider_turn_id"));
 
     // A valid budget row at the exact contract bounds is accepted, at both the minimum and the
     // maximum of every bound.

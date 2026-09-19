@@ -152,7 +152,9 @@ public final class AccountBuilderOrchestrationRequestFactory {
             bindings.expectedObservationRevision(),
             bindings.expectedTaskRevision(),
             bindings.observationDigest(),
-            bindings.promptDigest());
+            bindings.promptDigest(),
+            bindings.providerSessionId(),
+            bindings.providerTurnId());
     return withFingerprint(
         new OrchestrationRequest(
             draft.orchestrationId(),
@@ -221,6 +223,8 @@ public final class AccountBuilderOrchestrationRequestFactory {
         envelope.expectedObservationRevision(),
         envelope.expectedTaskRevision(),
         canonicalJson.digest(observation),
+        null,
+        null,
         null);
   }
 }

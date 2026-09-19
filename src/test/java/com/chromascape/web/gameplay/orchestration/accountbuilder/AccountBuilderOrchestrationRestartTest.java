@@ -44,7 +44,7 @@ class AccountBuilderOrchestrationRestartTest {
               .locations("classpath:db/migration")
               .load();
       flyway.migrate();
-      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("48");
+      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("49");
 
       Map<String, CommittedAggregate> before;
       try (ConfigurableApplicationContext contextA = start(database)) {
@@ -85,6 +85,94 @@ class AccountBuilderOrchestrationRestartTest {
     }
   }
 
+  @Test
+  void bootstrapClaimWithNullPromptProvisionReplaysExactlyAcrossContextRestart() throws Exception {
+    Database database = IsolatedPostgresTestDatabase.newDatabase();
+    String url = database.jdbcUrl() + "?currentSchema=" + database.schema();
+    try {
+      Flyway flyway =
+          Flyway.configure()
+              .dataSource(url, database.username(), database.password())
+              .schemas(database.schema())
+              .defaultSchema(database.schema())
+              .target(MigrationVersion.LATEST)
+              .locations("classpath:db/migration")
+              .load();
+      flyway.migrate();
+      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("49");
+
+      CapabilitySnapshot preflight =
+          new CapabilitySnapshot(
+              null,
+              "sha256:" + "0".repeat(64),
+              null,
+              -1,
+              -1,
+              AccountBuilderPostgresTestFixtures.NOW,
+              AccountBuilderPostgresTestFixtures.NOW,
+              false,
+              List.of());
+      OrchestrationRequest bootstrap =
+          AccountBuilderPostgresTestFixtures.bootstrapRequest("restart-bootstrap", preflight);
+      String orchestrationId = bootstrap.orchestrationId();
+      String fingerprint = bootstrap.requestFingerprint();
+
+      try (ConfigurableApplicationContext contextA = start(database)) {
+        JpaAccountBuilderOrchestrationStore storeA =
+            contextA.getBean(JpaAccountBuilderOrchestrationStore.class);
+        assertThat(
+                storeA
+                    .claim(
+                        bootstrap,
+                        fingerprint,
+                        AccountBuilderPostgresTestFixtures.envelopeDigest(bootstrap),
+                        AccountBuilderPostgresTestFixtures.budget(bootstrap))
+                    .created())
+            .isTrue();
+        AccountBuilderOrchestrationStore.NormalizedAggregate aggregateA =
+            storeA.readAggregate(orchestrationId);
+        assertThat(aggregateA.bindings().promptDigest()).isNull();
+        assertThat(aggregateA.bindings().providerSessionId()).isNull();
+        assertThat(aggregateA.bindings().providerTurnId()).isNull();
+      }
+
+      try (ConfigurableApplicationContext contextB = start(database)) {
+        JpaAccountBuilderOrchestrationStore storeB =
+            contextB.getBean(JpaAccountBuilderOrchestrationStore.class);
+        AccountBuilderOrchestrationStore.NormalizedAggregate aggregateB =
+            storeB.readAggregate(orchestrationId);
+        assertThat(aggregateB.view().requestFingerprint()).isEqualTo(fingerprint);
+        assertThat(aggregateB.bindings().promptDigest()).isNull();
+        assertThat(aggregateB.bindings().providerSessionId()).isNull();
+        assertThat(aggregateB.bindings().providerTurnId()).isNull();
+
+        AccountBuilderOrchestrationValidator validator =
+            new AccountBuilderOrchestrationValidator(
+                AccountBuilderPostgresTestFixtures.CANONICAL_JSON,
+                AccountBuilderPostgresTestFixtures.CLOCK,
+                (authority, envelope) -> true);
+        AccountBuilderOrchestrationRequestFactory factory =
+            new AccountBuilderOrchestrationRequestFactory(
+                validator, AccountBuilderPostgresTestFixtures.CANONICAL_JSON);
+        OrchestrationRequest replay =
+            factory.fromBootstrapReplay(
+                bootstrap.observation(),
+                bootstrap.decision(),
+                bootstrap.envelope(),
+                bootstrap.authority(),
+                aggregateB.bindings().capabilityDigest());
+        assertThat(replay.requestFingerprint()).isEqualTo(fingerprint);
+
+        AccountBuilderOrchestrationService service = service(storeB, new RecoveryGateway());
+        var submission = service.orchestrate(replay);
+        assertThat(submission.created()).isFalse();
+        assertThat(submission.view().requestFingerprint()).isEqualTo(fingerprint);
+      }
+    } finally {
+      dropSchema(database);
+    }
+  }
+
   private ConfigurableApplicationContext start(Database database) {
     SpringApplication application =
         new SpringApplication(JpaAccountBuilderOrchestrationStoreTest.JpaTestApplication.class);
@@ -97,7 +185,7 @@ class AccountBuilderOrchestrationRestartTest {
         "--spring.datasource.hikari.schema=" + database.schema(),
         "--spring.flyway.schemas=" + database.schema(),
         "--spring.flyway.default-schema=" + database.schema(),
-        "--spring.flyway.target=48",
+        "--spring.flyway.target=49",
         "--spring.flyway.create-schemas=true",
         "--spring.flyway.locations=classpath:db/migration",
         "--spring.jpa.properties.hibernate.default_schema=" + database.schema(),
@@ -206,13 +294,24 @@ class AccountBuilderOrchestrationRestartTest {
     properties.setEnabled(true);
     properties.setLiveDeliveryEnabled(true);
     properties.setOperatorKey("x".repeat(32));
+    AccountBuilderOrchestrationRequestFactory requestFactory =
+        new AccountBuilderOrchestrationRequestFactory(
+            validator, AccountBuilderPostgresTestFixtures.CANONICAL_JSON);
+    ProviderDecisionOrchestrationSource providerSource =
+        new ProviderDecisionOrchestrationSource(
+            (sessionId, turnId) -> java.util.Optional.empty(),
+            AccountBuilderPostgresTestFixtures.CANONICAL_JSON,
+            requestFactory,
+            validator);
     return new AccountBuilderOrchestrationService(
         validator,
         AccountBuilderPostgresTestFixtures.CANONICAL_JSON,
         store,
         gateway,
         properties,
-        AccountBuilderPostgresTestFixtures.CLOCK);
+        AccountBuilderPostgresTestFixtures.CLOCK,
+        providerSource,
+        new AccountBuilderCapabilityPreflight(gateway));
   }
 
   private void authorize(JpaAccountBuilderOrchestrationStore store, OrchestrationRequest request) {

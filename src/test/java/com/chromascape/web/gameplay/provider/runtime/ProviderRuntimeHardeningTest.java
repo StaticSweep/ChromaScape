@@ -321,14 +321,14 @@ class ProviderRuntimeHardeningTest {
     }
     ProviderDecisionHandoff empty = (sessionId, turnId) -> Optional.empty();
     CanonicalGameplayJson handoffJson = new CanonicalGameplayJson(new ObjectMapper());
+    AccountBuilderOrchestrationValidator handoffValidator =
+        new AccountBuilderOrchestrationValidator(handoffJson, (authority, envelope) -> true);
     ProviderDecisionOrchestrationSource source =
         new ProviderDecisionOrchestrationSource(
             empty,
             handoffJson,
-            new AccountBuilderOrchestrationRequestFactory(
-                new AccountBuilderOrchestrationValidator(
-                    handoffJson, (authority, envelope) -> true),
-                handoffJson));
+            new AccountBuilderOrchestrationRequestFactory(handoffValidator, handoffJson),
+            handoffValidator);
     AccountBuilderOrchestrationModels.OrchestrationRequest request =
         new AccountBuilderOrchestrationModels.OrchestrationRequest(
             "orchestration-1",
@@ -354,7 +354,9 @@ class ProviderRuntimeHardeningTest {
                 1,
                 1,
                 "sha256:" + "9".repeat(64),
-                "sha256:" + "8".repeat(64)),
+                "sha256:" + "8".repeat(64),
+                "session-1",
+                "turn-1"),
             null,
             null,
             java.time.Instant.now().plusSeconds(60));

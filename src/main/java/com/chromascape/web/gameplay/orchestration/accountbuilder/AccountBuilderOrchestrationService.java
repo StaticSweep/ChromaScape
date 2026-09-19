@@ -10,11 +10,13 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.ProviderOrchestrationCommand;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Readiness;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.SnapshotBindings;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import java.time.Clock;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,8 @@ public final class AccountBuilderOrchestrationService {
   private final AccountBuilderOrchestrationGateway gateway;
   private final AccountBuilderOrchestrationProperties properties;
   private final Clock clock;
+  private final ProviderDecisionOrchestrationSource providerSource;
+  private final AccountBuilderCapabilityPreflight capabilityPreflight;
 
   @Autowired
   public AccountBuilderOrchestrationService(
@@ -37,8 +41,18 @@ public final class AccountBuilderOrchestrationService {
       CanonicalGameplayJson canonicalJson,
       AccountBuilderOrchestrationStore store,
       AccountBuilderOrchestrationGateway gateway,
-      AccountBuilderOrchestrationProperties properties) {
-    this(validator, canonicalJson, store, gateway, properties, Clock.systemUTC());
+      AccountBuilderOrchestrationProperties properties,
+      ProviderDecisionOrchestrationSource providerSource,
+      AccountBuilderCapabilityPreflight capabilityPreflight) {
+    this(
+        validator,
+        canonicalJson,
+        store,
+        gateway,
+        properties,
+        Clock.systemUTC(),
+        providerSource,
+        capabilityPreflight);
   }
 
   AccountBuilderOrchestrationService(
@@ -47,13 +61,17 @@ public final class AccountBuilderOrchestrationService {
       AccountBuilderOrchestrationStore store,
       AccountBuilderOrchestrationGateway gateway,
       AccountBuilderOrchestrationProperties properties,
-      Clock clock) {
+      Clock clock,
+      ProviderDecisionOrchestrationSource providerSource,
+      AccountBuilderCapabilityPreflight capabilityPreflight) {
     this.validator = validator;
     this.canonicalJson = canonicalJson;
     this.store = store;
     this.gateway = gateway;
     this.properties = properties;
     this.clock = clock;
+    this.providerSource = Objects.requireNonNull(providerSource, "providerSource");
+    this.capabilityPreflight = Objects.requireNonNull(capabilityPreflight, "capabilityPreflight");
   }
 
   /**
@@ -86,7 +104,8 @@ public final class AccountBuilderOrchestrationService {
    * Generic orchestration entry point. Provider-sourced requests are categorically rejected here,
    * before any durable claim, budget consumption, authority consumption or gateway access, so a
    * direct service caller can never enter the provider trust path by forging a source type.
-   * Provider orchestrations must flow through {@link #orchestrateProvider(OrchestrationRequest)}.
+   * Provider orchestrations must flow through {@link
+   * #orchestrateProvider(ProviderOrchestrationCommand)}.
    */
   public Submission orchestrate(OrchestrationRequest request) {
     if (request != null && AccountBuilderOrchestrationSources.providerLike(request.sourceType())) {
@@ -99,18 +118,36 @@ public final class AccountBuilderOrchestrationService {
   }
 
   /**
-   * Provider-only orchestration entry point. The request must carry the exact provider source token
-   * produced by {@code ProviderDecisionOrchestrationSource}; every non-provider source is rejected
-   * before any durable claim or gateway access.
+   * Single provider-orchestration trust boundary. The caller supplies only a {@link
+   * ProviderOrchestrationCommand}; the provider decision, source type and provenance are always
+   * loaded from the durable persisted provider turn by {@link ProviderDecisionOrchestrationSource}.
+   * Preparation, replay resolution and capability preflight all happen here, so no caller can
+   * assemble a provider-shaped {@link OrchestrationRequest} and submit it. The final {@link
+   * #orchestrateInternal(OrchestrationRequest)} stays private.
    */
-  Submission orchestrateProvider(OrchestrationRequest request) {
-    if (request == null
-        || AccountBuilderOrchestrationSources.classify(request.sourceType())
-            != AccountBuilderOrchestrationSources.Kind.PROVIDER) {
-      throw new AccountBuilderOrchestrationException(
-          FailureCode.INVALID_CONTRACT,
-          "Provider orchestration requires a validated provider-sourced request");
+  Submission orchestrateProvider(ProviderOrchestrationCommand command) {
+    Objects.requireNonNull(command, "command");
+    ProviderDecisionOrchestrationSource.PreparedProviderRequest prepared =
+        providerSource.prepareProduction(command);
+    Optional<OrchestrationView> existing = store.find(command.orchestrationId());
+    if (existing.isPresent()) {
+      // Exact replay: rebuild the candidate with the persisted capability digest and compare the
+      // full immutable fingerprint. Any changed provider session, turn, decision, authority,
+      // envelope, observation or binding conflicts. No capability access occurs.
+      String storedCapabilityDigest = storedCapabilityDigest(command.orchestrationId());
+      OrchestrationRequest replay =
+          providerSource.completeProductionReplay(prepared, storedCapabilityDigest);
+      if (!replay.requestFingerprint().equals(existing.get().requestFingerprint())) {
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.IDEMPOTENCY_CONFLICT,
+            "A different request is already persisted under this orchestration id");
+      }
+      return new Submission(existing.get(), false);
     }
+    // Only now, for a genuinely new orchestration, is the read-only capability preflight made.
+    CapabilitySnapshot capabilityPreflightSnapshot = capabilityPreflight.probe(command.envelope());
+    OrchestrationRequest request =
+        providerSource.completeProduction(prepared, capabilityPreflightSnapshot);
     return orchestrateInternal(request);
   }
 

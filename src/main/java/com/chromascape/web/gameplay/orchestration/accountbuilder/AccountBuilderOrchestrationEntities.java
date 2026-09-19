@@ -172,8 +172,14 @@ class AccountBuilderOrchestrationSnapshotBindingEntity {
   @Column(name = "observation_digest", nullable = false, length = 80)
   String observationDigest;
 
-  @Column(name = "prompt_digest", nullable = false, length = 80)
+  @Column(name = "prompt_digest", nullable = true, length = 80)
   String promptDigest;
+
+  @Column(name = "provider_session_id", nullable = true, length = 128)
+  String providerSessionId;
+
+  @Column(name = "provider_turn_id", nullable = true, length = 128)
+  String providerTurnId;
 }
 
 /** Immutable, non-secret correlation used to address post-reservation gateway calls. */

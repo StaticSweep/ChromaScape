@@ -44,6 +44,30 @@ public final class AccountBuilderOrchestrationValidator {
   }
 
   public String validateAndFingerprint(OrchestrationRequest request) {
+    validateImmutable(request, true);
+    String fingerprint = immutableFingerprint(request);
+    if (!fingerprint.equals(request.requestFingerprint())) {
+      throw invalid("Request fingerprint does not match immutable orchestration inputs");
+    }
+    return fingerprint;
+  }
+
+  /**
+   * Validates every immutable request invariant except the capability digest and the final
+   * fingerprint. Production provider preparation runs this before any capability preflight, so a
+   * malformed request can never cause a Micro6 read. The capability binding is intentionally absent
+   * at this stage; the full {@link #validateAndFingerprint} runs again after the server-issued
+   * capability digest is bound.
+   */
+  public void validatePrepared(OrchestrationRequest request) {
+    validateImmutable(request, false);
+    // Authority is a non-capability invariant. Validate it before any preflight so a malformed or
+    // unsigned command can never cause a Micro6 read. The service re-validates it after the
+    // capability preflight as part of the normal delivery path.
+    validateAuthority(request, canonicalJson.digest(request.envelope()), request.authority());
+  }
+
+  private void validateImmutable(OrchestrationRequest request, boolean requireCapability) {
     if (request == null
         || !validId(request.orchestrationId())
         || !validId(request.requestId())
@@ -65,30 +89,37 @@ public final class AccountBuilderOrchestrationValidator {
         || !Objects.equals(request.idempotencyKey(), request.envelope().idempotencyKey())) {
       throw invalid("Request identity does not match the execution envelope");
     }
-    validateDecision(request.decision(), request.envelope(), request.bindings());
+    validateDecision(request.decision(), request.envelope(), request.bindings(), requireCapability);
     validateEnvelope(request.envelope(), request.bindings(), request.observation());
     // Closed source vocabulary: only an exact approved non-provider token, or the exact
     // PROVIDER:<PROVIDER_ENUM_NAME> token, is accepted. This rejects provider:CODEX, mixed-case
     // variants, unknown provider names, whitespace padding and arbitrary strings.
     AccountBuilderOrchestrationSources.Kind sourceKind =
         AccountBuilderOrchestrationSources.classify(request.sourceType());
-    if (sourceKind == AccountBuilderOrchestrationSources.Kind.PROVIDER
-        && !validDigest(request.bindings().promptDigest())) {
-      // A bindable provider decision carries its session prompt provenance; without it the
-      // planning input can never be re-verified.
+    SnapshotBindings bindings = request.bindings();
+    if (sourceKind == AccountBuilderOrchestrationSources.Kind.PROVIDER) {
+      // A bindable provider decision carries its session prompt and provider session/turn
+      // provenance; without them the planning input can never be re-verified or made distinct from
+      // another provider turn with identical decision content.
+      if (!validDigest(bindings.promptDigest())) {
+        throw failure(
+            FailureCode.STALE_BINDING, "Provider provenance is missing the session prompt digest");
+      }
+      if (!validId(bindings.providerSessionId()) || !validId(bindings.providerTurnId())) {
+        throw failure(
+            FailureCode.STALE_BINDING,
+            "Provider provenance is missing the session or turn identity");
+      }
+    } else if (bindings.providerSessionId() != null || bindings.providerTurnId() != null) {
       throw failure(
-          FailureCode.STALE_BINDING, "Provider provenance is missing the session prompt digest");
+          FailureCode.STALE_BINDING,
+          "Non-provider provenance cannot carry provider session or turn identity");
     }
     if (request.mode().deliveryMode()
         && (request.envelope().leaseGeneration() < 1 || request.envelope().fence() < 1)) {
       throw failure(
           FailureCode.FENCE_MISMATCH, "Live delivery requires positive lease generation and fence");
     }
-    String fingerprint = immutableFingerprint(request);
-    if (!fingerprint.equals(request.requestFingerprint())) {
-      throw invalid("Request fingerprint does not match immutable orchestration inputs");
-    }
-    return fingerprint;
   }
 
   public void validateCapabilities(OrchestrationRequest request, CapabilitySnapshot snapshot) {
@@ -157,8 +188,11 @@ public final class AccountBuilderOrchestrationValidator {
   }
 
   private void validateDecision(
-      ProviderDecision decision, ExecutionEnvelope envelope, SnapshotBindings bindings) {
-    if (!validSnapshotBindings(bindings)
+      ProviderDecision decision,
+      ExecutionEnvelope envelope,
+      SnapshotBindings bindings,
+      boolean requireCapability) {
+    if (!validSnapshotBindings(bindings, requireCapability)
         || decision.semanticAction() == null
         || decision.provider() == null
         || !Double.isFinite(decision.policyConfidence())
@@ -212,12 +246,12 @@ public final class AccountBuilderOrchestrationValidator {
     }
   }
 
-  private boolean validSnapshotBindings(SnapshotBindings bindings) {
+  private boolean validSnapshotBindings(SnapshotBindings bindings, boolean requireCapability) {
     return bindings != null
         && validDigest(bindings.decisionDigest())
         && validDigest(bindings.semanticActionDigest())
         && validDigest(bindings.catalogDigest())
-        && validDigest(bindings.capabilityDigest())
+        && (!requireCapability || validDigest(bindings.capabilityDigest()))
         && validDigest(bindings.goalPlanDigest())
         && bindings.taskSkillDigests() != null
         && !bindings.taskSkillDigests().isEmpty()
