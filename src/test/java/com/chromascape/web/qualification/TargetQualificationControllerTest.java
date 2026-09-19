@@ -20,6 +20,7 @@ import com.chromascape.utils.core.input.InputSessionException;
 import com.chromascape.utils.core.input.TargetInputSession;
 import com.chromascape.utils.core.input.TargetInputSessionFactory;
 import com.chromascape.utils.core.input.remoteinput.MouseButton;
+import com.chromascape.utils.core.input.remoteinput.RemoteInputSession;
 import com.chromascape.utils.core.screen.capture.TargetFrameRuntime;
 import com.chromascape.utils.core.screen.capture.TargetFrameSource;
 import com.chromascape.utils.core.screen.window.ProcessIdentity;
@@ -407,6 +408,66 @@ class TargetQualificationControllerTest {
     verify(fixture.factory, times(1)).openSelectedSession();
   }
 
+  // --- poisoned sessions -------------------------------------------------------------------
+
+  @Test
+  void poisonedSessionReportsRestartRequiredAndNeverReturnsClosed() {
+    Fixture fixture = new Fixture();
+    RemoteInputSession poisoned = poisonedSession(fixture);
+
+    when(poisoned.isPoisoned()).thenReturn(true);
+    when(poisoned.isOpen()).thenReturn(false);
+    doThrow(
+            new InputSessionException(
+                InputSessionDiagnostic.SESSION_POISONED, IDENTITY, 7L, "restart required"))
+        .when(poisoned)
+        .close();
+
+    ResponseEntity<Map<String, Object>> closed =
+        fixture.controller.closeSession(requestFrom("127.0.0.1"));
+
+    assertEquals(HttpStatus.CONFLICT, closed.getStatusCode());
+    assertFalse(
+        "closed".equals(closed.getBody().get("status")),
+        "a poisoned session must never report closed: " + closed.getBody());
+    assertEquals("SESSION_POISONED", closed.getBody().get("diagnostic"));
+    assertEquals(true, closed.getBody().get("restartRequired"));
+    assertEquals(false, closed.getBody().get("sessionOpen"));
+    assertEquals(42L, closed.getBody().get("pid"));
+    assertEquals(7L, closed.getBody().get("selectionGeneration"));
+  }
+
+  @Test
+  void poisonedSessionCannotBeReopenedWithoutRestart() {
+    Fixture fixture = new Fixture();
+    RemoteInputSession poisoned = poisonedSession(fixture);
+    when(poisoned.isPoisoned()).thenReturn(true);
+    when(poisoned.isOpen()).thenReturn(false);
+
+    ResponseEntity<Map<String, Object>> reopened =
+        fixture.controller.openSession(requestFrom("127.0.0.1"));
+
+    assertEquals(HttpStatus.CONFLICT, reopened.getStatusCode());
+    assertEquals("SESSION_POISONED_RESTART_REQUIRED", reopened.getBody().get("error"));
+    assertEquals(true, reopened.getBody().get("restartRequired"));
+    verify(fixture.factory, times(1)).openSelectedSession();
+  }
+
+  @Test
+  void poisonedSessionStatusReportsRestartRequired() {
+    Fixture fixture = new Fixture();
+    RemoteInputSession poisoned = poisonedSession(fixture);
+    when(poisoned.isPoisoned()).thenReturn(true);
+
+    ResponseEntity<Map<String, Object>> status =
+        fixture.controller.sessionStatus(requestFrom("127.0.0.1"));
+
+    assertEquals(HttpStatus.CONFLICT, status.getStatusCode());
+    assertEquals(true, status.getBody().get("restartRequired"));
+    assertEquals("SESSION_POISONED", status.getBody().get("diagnostic"));
+    assertEquals(false, status.getBody().get("sessionOpen"));
+  }
+
   // --- lifecycle cleanup -------------------------------------------------------------------
 
   @Test
@@ -486,6 +547,25 @@ class TargetQualificationControllerTest {
     when(session.getMousePosition()).thenReturn(new Point(0, 0));
     installedSources.add((TargetFrameSource) session);
     return session;
+  }
+
+  /**
+   * Opens a real {@link RemoteInputSession} mock as a healthy session (installing it as the frame
+   * source) so a later {@code isPoisoned()} transition exercises the controller's restart-required
+   * path. The mock is registered for uninstall in {@link #releaseFrameRuntime()}.
+   */
+  private RemoteInputSession poisonedSession(Fixture fixture) {
+    RemoteInputSession poisoned = mock(RemoteInputSession.class);
+    when(poisoned.isOpen()).thenReturn(true);
+    when(poisoned.identity()).thenReturn(IDENTITY);
+    when(poisoned.selectionGeneration()).thenReturn(7L);
+    when(poisoned.getTargetBounds()).thenReturn(new Rectangle(0, 0, 100, 100));
+    when(poisoned.getMousePosition()).thenReturn(new Point(0, 0));
+    when(fixture.factory.openSelectedSession()).thenReturn(poisoned);
+    installedSources.add(poisoned);
+    assertEquals(
+        HttpStatus.OK, fixture.controller.openSession(requestFrom("127.0.0.1")).getStatusCode());
+    return poisoned;
   }
 
   private static HttpServletRequest requestFrom(String remoteAddr) {

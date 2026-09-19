@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyByte;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -279,7 +281,9 @@ class RemoteInputSessionTest {
 
     assertEquals(InputSessionDiagnostic.NATIVE_CALL_TIMEOUT, failure.diagnostic());
     assertFalse(session.isOpen());
-    session.close();
+    assertTrue(session.isPoisoned(), "a timed-out lane must report the session as poisoned");
+    InputSessionException closeFailure = assertThrows(InputSessionException.class, session::close);
+    assertEquals(InputSessionDiagnostic.SESSION_POISONED, closeFailure.diagnostic());
     InputSessionException duplicate =
         assertThrows(InputSessionException.class, () -> coordinator.acquire(IDENTITY));
     assertEquals(InputSessionDiagnostic.TARGET_ALREADY_ATTACHED, duplicate.diagnostic());
@@ -403,6 +407,242 @@ class RemoteInputSessionTest {
     session.close();
   }
 
+  @Test
+  void heldKeyReleaseTimeoutPoisonsAndRetainsTheLease() {
+    configureAlreadyInjected();
+    RemoteInputSession session = open(fastOptions());
+    session.holdKey(65);
+    doAnswer(
+            invocation -> {
+              Thread.sleep(5_000);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_ReleaseKey(new Pointer(1), 65);
+
+    InputSessionException failure = assertThrows(InputSessionException.class, session::close);
+
+    assertEquals(InputSessionDiagnostic.RELEASE_TIMEOUT, failure.diagnostic());
+    assertTrue(session.isPoisoned());
+    InputSessionException second = assertThrows(InputSessionException.class, session::close);
+    assertEquals(InputSessionDiagnostic.SESSION_POISONED, second.diagnostic());
+    assertEquals(
+        InputSessionDiagnostic.TARGET_ALREADY_ATTACHED,
+        assertThrows(InputSessionException.class, () -> coordinator.acquire(IDENTITY))
+            .diagnostic());
+  }
+
+  @Test
+  void heldButtonReleaseTimeoutPoisonsAndRetainsTheLease() {
+    configureAlreadyInjected();
+    RemoteInputSession session = open(fastOptions());
+    session.holdMouse(MouseButton.LEFT);
+    doAnswer(
+            invocation -> {
+              Thread.sleep(5_000);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_ReleaseMouse(new Pointer(1), 5, 6, MouseButton.LEFT.nativeValue());
+
+    InputSessionException failure = assertThrows(InputSessionException.class, session::close);
+
+    assertEquals(InputSessionDiagnostic.RELEASE_TIMEOUT, failure.diagnostic());
+    assertTrue(session.isPoisoned());
+    assertEquals(
+        InputSessionDiagnostic.TARGET_ALREADY_ATTACHED,
+        assertThrows(InputSessionException.class, () -> coordinator.acquire(IDENTITY))
+            .diagnostic());
+  }
+
+  @Test
+  void targetReleaseTimeoutPoisonsAndRetainsTheLease() {
+    configureAlreadyInjected();
+    RemoteInputSession session = open(fastOptions());
+    doAnswer(
+            invocation -> {
+              Thread.sleep(5_000);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_ReleaseTarget(new Pointer(1));
+
+    InputSessionException failure = assertThrows(InputSessionException.class, session::close);
+
+    assertEquals(InputSessionDiagnostic.RELEASE_TIMEOUT, failure.diagnostic());
+    assertTrue(session.isPoisoned());
+    assertEquals(
+        InputSessionDiagnostic.SESSION_POISONED,
+        assertThrows(InputSessionException.class, session::close).diagnostic());
+    assertEquals(
+        InputSessionDiagnostic.TARGET_ALREADY_ATTACHED,
+        assertThrows(InputSessionException.class, () -> coordinator.acquire(IDENTITY))
+            .diagnostic());
+  }
+
+  @Test
+  void nonTimeoutReleaseFailureIsObservableAndDoesNotReleaseTheLease() {
+    configureAlreadyInjected();
+    RemoteInputSession session = open(fastOptions());
+    session.holdKey(65);
+    doThrow(
+            new InputSessionException(
+                InputSessionDiagnostic.NATIVE_CALL_FAILED, IDENTITY, GENERATION, "release failed"))
+        .when(nativeApi)
+        .EIOS_ReleaseKey(new Pointer(1), 65);
+
+    InputSessionException failure = assertThrows(InputSessionException.class, session::close);
+
+    assertEquals(InputSessionDiagnostic.NATIVE_CALL_FAILED, failure.diagnostic());
+    assertFalse(session.isOpen());
+    // The lane was not poisoned, so the identity lease is still held by the failed (not closed)
+    // session: a retry through /session/close must remain possible rather than silently succeeding.
+    assertEquals(
+        InputSessionDiagnostic.TARGET_ALREADY_ATTACHED,
+        assertThrows(InputSessionException.class, () -> coordinator.acquire(IDENTITY))
+            .diagnostic());
+  }
+
+  @Test
+  void slowNativeClientEnumerationReceivesOnlyTheRemainingBudget() {
+    when(nativeApi.EIOS_GetClients(anyByte()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(5_000);
+              return 0L;
+            });
+    RemoteInputSessionOptions options =
+        timedOptions(Duration.ofMillis(300), Duration.ofSeconds(1), Duration.ofMillis(20), 8);
+
+    long started = System.nanoTime();
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+    long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    assertTrue(
+        elapsedMillis < 1_500,
+        "a stalled GetClients must be cut at the remaining budget, took " + elapsedMillis);
+    verify(nativeApi, times(1)).EIOS_GetClients(anyByte());
+  }
+
+  @Test
+  void slowFirstPidLookupExhaustsTheTotalDeadline() {
+    when(nativeApi.EIOS_GetClients(anyByte())).thenReturn(1L);
+    when(nativeApi.EIOS_GetClientPID(anyLong()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(5_000);
+              return 0;
+            });
+    RemoteInputSessionOptions options =
+        timedOptions(Duration.ofMillis(300), Duration.ofSeconds(1), Duration.ofMillis(20), 8);
+
+    long started = System.nanoTime();
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+    long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    assertTrue(elapsedMillis < 1_500, "the first pid read must not get a full extra budget");
+  }
+
+  @Test
+  void multiplePidLookupsCannotMultiplyTheTimeout() {
+    when(nativeApi.EIOS_GetClients(anyByte())).thenReturn(4L);
+    when(nativeApi.EIOS_GetClientPID(anyLong()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(400);
+              return 99;
+            });
+    RemoteInputSessionOptions options =
+        timedOptions(Duration.ofMillis(500), Duration.ofSeconds(1), Duration.ofMillis(20), 8);
+
+    long started = System.nanoTime();
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+    long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    assertTrue(
+        elapsedMillis < 1_500,
+        "four 400ms pid reads must share one 500ms budget, took " + elapsedMillis);
+  }
+
+  @Test
+  void largeClientCountCannotExpandTheWallClockBudget() {
+    when(nativeApi.EIOS_GetClients(anyByte())).thenReturn(1_000L);
+    when(nativeApi.EIOS_GetClientPID(anyLong()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(100);
+              return 99;
+            });
+    RemoteInputSessionOptions options =
+        timedOptions(Duration.ofMillis(300), Duration.ofSeconds(1), Duration.ofMillis(20), 4_096);
+
+    long started = System.nanoTime();
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+    long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    assertTrue(
+        elapsedMillis < 1_500,
+        "a large maxClients must not turn into a 100s enumeration, took " + elapsedMillis);
+  }
+
+  @Test
+  void injectionReturningAtTheDeadlineDoesNotReceiveAnotherFullPoll() {
+    when(nativeApi.EIOS_GetClients(anyByte())).thenReturn(0L);
+    doAnswer(
+            invocation -> {
+              Thread.sleep(400);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_Inject_PID(42);
+    RemoteInputSessionOptions options =
+        timedOptions(Duration.ofMillis(200), Duration.ofSeconds(1), Duration.ofMillis(20), 8);
+
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    // Only the pre-injection poll: the inject call already consumed the whole budget, so no fresh
+    // post-injection poll is granted.
+    verify(nativeApi, times(1)).EIOS_GetClients(anyByte());
+  }
+
+  @Test
+  void timeoutDiagnosticCarriesOrderedStageTimelineWithoutPointers() {
+    when(nativeApi.EIOS_GetClients(anyByte())).thenReturn(0L);
+    RemoteInputSessionOptions options =
+        timedOptions(Duration.ofMillis(300), Duration.ofSeconds(1), Duration.ofMillis(20), 8);
+
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+    String message = failure.getMessage();
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    assertTrue(message.contains("totalDeadline=300ms"), message);
+    assertTrue(message.contains("injectionDeadlineReached=+"), message);
+    int requested = message.indexOf("attachmentRequested");
+    int injected = message.indexOf("injectionCallEntered");
+    int returned = message.indexOf("injectionCallReturned");
+    int polled = message.indexOf("firstClientPoll");
+    int selected = message.indexOf("selectedPidObserved");
+    int deadline = message.indexOf("injectionDeadlineReached");
+    int total = message.indexOf("totalDeadline");
+    assertTrue(
+        requested < injected
+            && injected < returned
+            && returned < polled
+            && polled < selected
+            && selected < deadline
+            && deadline < total,
+        "stage timeline must be internally ordered: " + message);
+    assertFalse(message.contains("0x"), "diagnostic must not leak native pointers: " + message);
+    assertFalse(
+        message.toLowerCase(java.util.Locale.ROOT).contains("cmd"),
+        "diagnostic must not leak command lines: " + message);
+  }
+
   private void configureAlreadyInjected() {
     when(nativeApi.EIOS_GetClients(anyByte())).thenReturn(1L);
     when(nativeApi.EIOS_GetClientPID(0)).thenReturn(42);
@@ -458,6 +698,21 @@ class RemoteInputSessionTest {
         defaults.nativeCallTimeout(),
         defaults.releaseTimeout(),
         defaults.validationInterval(),
+        maxClients);
+  }
+
+  private static RemoteInputSessionOptions timedOptions(
+      Duration injectTimeout,
+      Duration nativeCallTimeout,
+      Duration validationInterval,
+      int maxClients) {
+    return new RemoteInputSessionOptions(
+        true,
+        injectTimeout,
+        Duration.ofSeconds(1),
+        nativeCallTimeout,
+        Duration.ofSeconds(1),
+        validationInterval,
         maxClients);
   }
 }
