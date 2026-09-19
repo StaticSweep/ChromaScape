@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyByte;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -108,6 +109,88 @@ class RemoteInputSessionTest {
     assertEquals(new Point(5, 6), session.getMousePosition());
     session.close();
     verify(nativeApi).EIOS_ReleaseTarget(new Pointer(1));
+  }
+
+  @Test
+  void injectionTimeoutIsATotalDeadlineNotExtendedByASlowNativeInjectCall() {
+    when(nativeApi.EIOS_GetClients(anyByte())).thenReturn(0L);
+    doAnswer(
+            invocation -> {
+              Thread.sleep(350);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_Inject_PID(42);
+    RemoteInputSessionOptions options =
+        new RemoteInputSessionOptions(
+            true,
+            Duration.ofMillis(500),
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(1),
+            Duration.ofMillis(20),
+            8);
+
+    long started = System.nanoTime();
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+    long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    assertTrue(
+        elapsedMillis < 900,
+        "a 350ms inject call plus polling must stay near the 500ms budget, took " + elapsedMillis);
+    assertTrue(
+        failure.getMessage().contains("injectionCallReturned=+"),
+        "timeout detail must carry the stage timeline: " + failure.getMessage());
+    assertTrue(failure.getMessage().contains("totalDeadline=500ms"), failure.getMessage());
+    assertTrue(failure.getMessage().contains("injectionDeadlineReached=+"), failure.getMessage());
+    verify(nativeApi, times(1)).EIOS_Inject_PID(42);
+    // The lane was never poisoned, so the identity lease must have been released on failure.
+    coordinator.acquire(IDENTITY).close();
+  }
+
+  @Test
+  void slowNativeInjectCallThatExceedsTheWholeBudgetIsBoundedByTheRemainingBudget() {
+    when(nativeApi.EIOS_GetClients(anyByte())).thenReturn(0L);
+    doAnswer(
+            invocation -> {
+              Thread.sleep(5_000);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_Inject_PID(42);
+    RemoteInputSessionOptions options =
+        new RemoteInputSessionOptions(
+            true,
+            Duration.ofMillis(300),
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(1),
+            Duration.ofMillis(20),
+            8);
+
+    long started = System.nanoTime();
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+    long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    assertTrue(
+        elapsedMillis < 1_500,
+        "the inject call must be cut at the remaining budget, not run 5s; took " + elapsedMillis);
+  }
+
+  @Test
+  void clientRegisteringAfterInjectionIsObservedWithinTheDeadline() {
+    AtomicInteger polls = new AtomicInteger();
+    when(nativeApi.EIOS_GetClients(anyByte()))
+        .thenAnswer(invocation -> polls.incrementAndGet() >= 4 ? 1L : 0L);
+    when(nativeApi.EIOS_GetClientPID(0)).thenReturn(42);
+
+    RemoteInputSession session = open(defaultOptions());
+
+    verify(nativeApi, times(1)).EIOS_Inject_PID(42);
+    assertTrue(polls.get() >= 4, "the client must have been polled until it registered");
+    session.close();
   }
 
   @Test
