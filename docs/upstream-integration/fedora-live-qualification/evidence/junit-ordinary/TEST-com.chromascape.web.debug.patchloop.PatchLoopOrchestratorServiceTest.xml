@@ -16,7 +16,7 @@
   <testcase name="Get iteration returns iteration if found" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.001"/>
   <testcase name="Execute iteration creates iteration and delegates to graph orchestrator (E6.5)" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.002"/>
   <testcase name="List iterations filters by script name" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.004"/>
-  <system-out><![CDATA[18:07:03.177 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script:    
+  <system-out><![CDATA[18:07:03.177 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script:
 18:07:03.192 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script: TestScript
 18:07:03.419 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script: TestScript
 18:07:03.422 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script: null

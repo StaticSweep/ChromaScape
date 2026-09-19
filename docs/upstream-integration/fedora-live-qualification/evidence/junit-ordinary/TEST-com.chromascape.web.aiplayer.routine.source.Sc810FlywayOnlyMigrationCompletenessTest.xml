@@ -117,7 +117,7 @@
 18:05:58.634 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Database Type: PostgreSQL
 18:05:58.634 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Driver: PostgreSQL JDBC Driver 42.7.7
 18:05:58.634 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - DDL Transactions Supported: true
-18:05:58.634 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.SchemaHistoryFactory - Schemas: 
+18:05:58.634 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.SchemaHistoryFactory - Schemas:
 18:05:58.634 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.SchemaHistoryFactory - Default schema: sc810_migration_completeness_test
 18:05:58.645 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Scanning for script callbacks ...
 18:05:58.646 [Test worker] DEBUG org.flywaydb.core.internal.callback.SqlScriptCallbackFactory - Scanning for SQL callbacks ...
@@ -6796,7 +6796,7 @@ ALTER TABLE patch_loop_iteration
 18:06:03.586 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Database Type: PostgreSQL
 18:06:03.586 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Driver: PostgreSQL JDBC Driver 42.7.7
 18:06:03.587 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - DDL Transactions Supported: true
-18:06:03.587 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.SchemaHistoryFactory - Schemas: 
+18:06:03.587 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.SchemaHistoryFactory - Schemas:
 18:06:03.587 [Test worker] DEBUG org.flywaydb.core.internal.schemahistory.SchemaHistoryFactory - Default schema: sc810_migration_completeness_test
 18:06:03.601 [Test worker] DEBUG org.flywaydb.core.FlywayExecutor - Scanning for script callbacks ...
 18:06:03.602 [Test worker] DEBUG org.flywaydb.core.internal.callback.SqlScriptCallbackFactory - Scanning for SQL callbacks ...

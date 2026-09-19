@@ -1,5 +1,12 @@
 # Fedora live qualification — primary host final run
 
+> Supersession note (2026-09-19 remediation): the run below was executed against native patch
+> `sha256:a7744da1c54a5646b975d9b7adce5891832394b1d84104bb8009ade551107040`. The source patch has
+> since been extended with JNI local-reference cleanup for rejected window candidates (current
+> identity `sha256:7af654074906652c1bff730071978e56f1e0c6846f217962eedf7196bc9661e6`); the native
+> pair for that identity has not been rebuilt, so the PASS claims below describe the superseded
+> pair only.
+
 ## Identities
 
 | Item | Value |

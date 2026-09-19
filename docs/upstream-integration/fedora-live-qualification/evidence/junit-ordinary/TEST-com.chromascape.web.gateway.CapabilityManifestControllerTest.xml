@@ -16,7 +16,7 @@
 18:08:48.658 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:48.658 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:48.658 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:48.659 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:48.659 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.c.CapabilityManifestController:
 	{GET [/api/capabilities]}: getCapabilities()
 18:08:48.660 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 1 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping

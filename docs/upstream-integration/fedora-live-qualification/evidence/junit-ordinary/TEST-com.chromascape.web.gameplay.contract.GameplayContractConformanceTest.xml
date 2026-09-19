@@ -20,7 +20,7 @@
 </failure>
   </testcase>
   <testcase name="canonicalResourcesHaveFrozenByteDigests()" classname="com.chromascape.web.gameplay.contract.GameplayContractConformanceTest" time="0.004">
-    <failure message="org.opentest4j.AssertionFailedError: &#10;expected: &quot;c55ad78af5b6367803bc7098e0ef0a03e03d8efff6465bd4eae7829aa743c19c&quot;&#10; but was: &quot;ff9ad17f984d013fa9b851f1181815656c87c7d629fef18c8fe40755d4f97c9a&quot;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: 
+    <failure message="org.opentest4j.AssertionFailedError: &#10;expected: &quot;c55ad78af5b6367803bc7098e0ef0a03e03d8efff6465bd4eae7829aa743c19c&quot;&#10; but was: &quot;ff9ad17f984d013fa9b851f1181815656c87c7d629fef18c8fe40755d4f97c9a&quot;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError:
 expected: &quot;c55ad78af5b6367803bc7098e0ef0a03e03d8efff6465bd4eae7829aa743c19c&quot;
  but was: &quot;ff9ad17f984d013fa9b851f1181815656c87c7d629fef18c8fe40755d4f97c9a&quot;
 	at app//com.chromascape.web.gameplay.contract.GameplayContractConformanceTest.canonicalResourcesHaveFrozenByteDigests(GameplayContractConformanceTest.java:100)

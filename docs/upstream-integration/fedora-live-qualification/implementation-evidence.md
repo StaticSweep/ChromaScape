@@ -43,11 +43,15 @@ real client frame (826x540, focused). The pinned `EnumWindowsProc` returned the 
 splash window, the reflection returned null, and no `ControlCenter` rendezvous was created.
 
 The Linux-only patch (`Platform_Linux.cxx`, patch identity
-`sha256:a7744da1c54a5646b975d9b7adce5891832394b1d84104bb8009ade551107040`) collects every recognised
+`sha256:7af654074906652c1bff730071978e56f1e0c6846f217962eedf7196bc9661e6`, regenerated through the
+metadata workflow after the remediation's local-reference cleanup) collects every recognised
 target-owned window, orders non-skip-taskbar windows first, tries each candidate until
-`Reflection::Create` succeeds, and adds opt-in bounded stage diagnostics on the detached constructor
+`Reflection::Create` succeeds, releases the JNI local reference of every rejected candidate before
+the next retry, and adds opt-in bounded stage diagnostics on the detached constructor
 thread (`REMOTEINPUT_ATTACH_DIAGNOSTICS=1`). Windows behaviour is untouched. A source-level
-regression guards the corrected decision logic, and `PROVENANCE.md` records the patch.
+regression guards the corrected decision logic, and `PROVENANCE.md` records the patch. The live
+run below was executed with the earlier patch `sha256:a7744da1...`; the native pair for the new
+identity has not been rebuilt yet (see the NOT RUN table in `verification-evidence.md`).
 
 ## Build
 

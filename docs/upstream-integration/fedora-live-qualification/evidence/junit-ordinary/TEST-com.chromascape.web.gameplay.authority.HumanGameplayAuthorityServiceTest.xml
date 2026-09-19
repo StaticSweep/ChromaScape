@@ -2,7 +2,7 @@
 <testsuite name="com.chromascape.web.gameplay.authority.HumanGameplayAuthorityServiceTest" tests="2" skipped="0" failures="1" errors="0" timestamp="2026-09-19T16:08:07.985Z" hostname="fedora" time="1.711">
   <properties/>
   <testcase name="bindsOneUseAuthorityToTheExactEnvelopeAndScope()" classname="com.chromascape.web.gameplay.authority.HumanGameplayAuthorityServiceTest" time="1.68">
-    <failure message="org.opentest4j.AssertionFailedError: &#10;expected: &quot;sha256:9999999999999999999999999999999999999999999999999999999999999999&quot;&#10; but was: &quot;sha256:4035c57bebec8d0b1dfe17ee1729e04b802604a73ec094743262afa0d618f541&quot;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: 
+    <failure message="org.opentest4j.AssertionFailedError: &#10;expected: &quot;sha256:9999999999999999999999999999999999999999999999999999999999999999&quot;&#10; but was: &quot;sha256:4035c57bebec8d0b1dfe17ee1729e04b802604a73ec094743262afa0d618f541&quot;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError:
 expected: &quot;sha256:9999999999999999999999999999999999999999999999999999999999999999&quot;
  but was: &quot;sha256:4035c57bebec8d0b1dfe17ee1729e04b802604a73ec094743262afa0d618f541&quot;
 	at app//com.chromascape.web.gameplay.authority.HumanGameplayAuthorityServiceTest.bindsOneUseAuthorityToTheExactEnvelopeAndScope(HumanGameplayAuthorityServiceTest.java:56)

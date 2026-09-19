@@ -39,9 +39,9 @@
 17:25:12.898 [Test worker] INFO  com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel process disposed
 17:25:13.781 [Test worker] INFO  com.chromascape.web.replay.kernel.XrspsKernelProcess - Started xRSPS kernel process: node <repo>/build/replay-certification/runtime-fixtures/XrspsDisposeHandshakeTest-80bb3414-0399-421d-970b-90ba818af234/secret-stderr.js --stdio
 17:25:14.032 [xrsps-stderr-reader] WARN  com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel exceeded max stderr bytes; discarding further output until EOF
-17:25:14.147 [xrsps-stderr-reader] DEBUG com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel stderr preview diagnosticRef=xrsps-5dfc8725-482a-4879-a08e-58c178873b80 preview=[REDACTED] --profile-email=******** 
-17:25:14.147 [Test worker] DEBUG com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel stderr preview diagnosticRef=xrsps-5dfc8725-482a-4879-a08e-58c178873b80 preview=[REDACTED] --profile-email=******** 
-17:25:14.152 [Test worker] DEBUG com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel stderr preview diagnosticRef=xrsps-5dfc8725-482a-4879-a08e-58c178873b80 preview=[REDACTED] --profile-email=******** 
+17:25:14.147 [xrsps-stderr-reader] DEBUG com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel stderr preview diagnosticRef=xrsps-5dfc8725-482a-4879-a08e-58c178873b80 preview=[REDACTED] --profile-email=********
+17:25:14.147 [Test worker] DEBUG com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel stderr preview diagnosticRef=xrsps-5dfc8725-482a-4879-a08e-58c178873b80 preview=[REDACTED] --profile-email=********
+17:25:14.152 [Test worker] DEBUG com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel stderr preview diagnosticRef=xrsps-5dfc8725-482a-4879-a08e-58c178873b80 preview=[REDACTED] --profile-email=********
 17:25:14.213 [Test worker] INFO  com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel process disposed
 17:25:14.236 [Test worker] INFO  com.chromascape.web.replay.kernel.XrspsKernelProcess - Started xRSPS kernel process: node <repo>/build/replay-certification/runtime-fixtures/XrspsDisposeHandshakeTest-80bb3414-0399-421d-970b-90ba818af234/bad-ack.js --stdio
 17:25:14.508 [Test worker] WARN  com.chromascape.web.replay.kernel.XrspsKernelProcess - xRSPS kernel dispose acknowledgement not received within deadline

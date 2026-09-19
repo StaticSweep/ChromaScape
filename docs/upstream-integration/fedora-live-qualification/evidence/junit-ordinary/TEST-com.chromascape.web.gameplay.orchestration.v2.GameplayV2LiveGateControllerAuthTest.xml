@@ -26,7 +26,7 @@
 18:08:41.342 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:41.342 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:41.342 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:41.894 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:41.894 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
@@ -66,7 +66,7 @@
 18:08:43.167 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:43.167 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:43.167 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:43.170 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:43.170 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
@@ -121,7 +121,7 @@
 18:08:43.414 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:43.414 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:43.414 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:43.417 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:43.417 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
@@ -166,7 +166,7 @@
 18:08:43.432 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:43.432 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:43.432 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:43.435 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:43.435 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
@@ -211,7 +211,7 @@
 18:08:43.447 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:43.447 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:43.447 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:43.450 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:43.450 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
@@ -251,7 +251,7 @@
 18:08:43.461 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:43.462 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:43.462 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:43.465 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:43.465 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
@@ -290,7 +290,7 @@
 18:08:43.478 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:43.478 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:43.478 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:43.481 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:43.481 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
@@ -344,7 +344,7 @@
 18:08:43.503 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:43.503 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:43.503 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:43.506 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:43.506 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
@@ -384,7 +384,7 @@
 18:08:43.517 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:43.517 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:43.517 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:43.520 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:43.520 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
@@ -424,7 +424,7 @@
 18:08:43.533 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:43.533 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:43.533 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:43.535 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:43.535 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
@@ -464,7 +464,7 @@
 18:08:43.547 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
 18:08:43.547 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
 18:08:43.547 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
-18:08:43.550 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+18:08:43.550 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings -
 	c.c.w.g.o.v.GameplayV2LiveGateController:
 	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
 	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)

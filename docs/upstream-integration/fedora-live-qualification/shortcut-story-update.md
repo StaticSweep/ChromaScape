@@ -38,7 +38,10 @@ probe was driven against a window with no AWT Canvas; `Reflection::Create` retur
 
 `libRemoteInput.so` SHA-256 `b0c8d3655876dd23e931a9df48efc87b96f936758e5a18a27988d9ab49a5fefd`,
 pair identity `43b38e8f95d8f2dcf2d0ee4dd3ffb86d3cffd2fa975cca4db27970c4d1b03e9d`, local patch
-`sha256:a7744da1c54a5646b975d9b7adce5891832394b1d84104bb8009ade551107040`. No `.so` is committed.
+`sha256:a7744da1c54a5646b975d9b7adce5891832394b1d84104bb8009ade551107040` (superseded by
+`sha256:7af654074906652c1bff730071978e56f1e0c6846f217962eedf7196bc9661e6` after the remediation's
+JNI local-reference cleanup; the native pair for the new identity is not rebuilt yet — see the
+NOT RUN table in `verification-evidence.md`). No `.so` is committed.
 
 ## Next story
 

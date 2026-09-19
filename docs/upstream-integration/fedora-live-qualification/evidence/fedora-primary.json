@@ -60,6 +60,7 @@
     }
   },
   "hostId": "fedora-qual-host",
+  "supersededBy": "Remediation (2026-09-19) extended Platform_Linux.cxx with JNI local-reference cleanup; current patch identity sha256:7af654074906652c1bff730071978e56f1e0c6846f217962eedf7196bc9661e6 has no rebuilt native pair yet, so the nativeArtifact block below describes the superseded pair.",
   "nativeArtifact": {
     "librarySha256": "b0c8d3655876dd23e931a9df48efc87b96f936758e5a18a27988d9ab49a5fefd",
     "manifestSha256": "8e9a00cb76c826061dbd2e79e3245c622ade98dfe405277da8ae0c8cb67001f3",
