@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" tests="30" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:31.130Z" hostname="fedora" time="0.087">
+  <properties/>
+  <testcase name="finalizeSuccessfulRunRequiresRunningInFinalizeArtifacts()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.005"/>
+  <testcase name="registerArtifactInsertsStagingReferenceAndCopiesMediaType()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.003"/>
+  <testcase name="hardMismatchStillSucceedsWithFailedOutcome()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.003"/>
+  <testcase name="forgedWrongRunReceiptIsRejected()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.003"/>
+  <testcase name="storeRuntimeIdentitySetsAllFourFields()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.001"/>
+  <testcase name="appendActionResultWritesSampleOnlyAfterEveryEventPartition()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="registerCheckpointRejectsMissingInternalSnapshotChecksum()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="registerCheckpointPersistsReferenceAndRowTogether()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="finalizeFailureRejectsNullReportWithoutAnyWrites()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.01"/>
+  <testcase name="updatePhaseAppliesPhaseOnlyChange()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="reservationPreservesRequestedOutcomeWhenNotCancelling()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.001"/>
+  <testcase name="staleFenceBlocksEveryWriteType()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.006"/>
+  <testcase name="executionWritesRejectCancellingRun()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.005"/>
+  <testcase name="finalizeFailureRejectsReportMismatchedWithDecision()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="finalizeFailureWithoutReceiptTombstonesUnresolvedStagingReferences()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="finalizeFailureSkipsAlreadyTerminalRuns()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="reportArtifactChecksumMismatchIsRejected()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="appendEventsWritesUnderValidFence()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="registerArtifactRejectsCorruptAndTombstonedReferences()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="receiptThatMissesAStagedReferenceIsRejected()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="appendEventsFlushesAndClearsBetweenPartitions()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="saveMismatchesStampsEveryRowWithExactlyOneDatabaseTimestamp()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="finalizeFailureTerminalizesWithExactlyTheReservedDecision()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="appendEventsRejectsForeignAttemptAndNegativeOrdinals()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.003"/>
+  <testcase name="staleFenceCannotReserveOrFinalizeFailureOrFinalizeSuccess()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.003"/>
+  <testcase name="registerArtifactReuseOfFinalizedReferenceNeverMutatesAndSkipsRepublish()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="finalizeSuccessfulRunMarksArtifactsInsertsReportAndTerminals()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="registerArtifactReusesExistingReferenceAndVerifiesSize()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="reservationOnCancellingRunForcesCancelledDecisionAndSetsCutoff()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.002"/>
+  <testcase name="finalizeSuccessfulRunRejectsSecondReport()" classname="com.chromascape.web.replay.worker.ReplayWorkerPersistenceServiceTest" time="0.003"/>
+  <system-out><![CDATA[18:10:31.142 [Test worker] INFO  com.chromascape.web.replay.worker.ReplayWorkerPersistenceService - Run 88a6c851-4db8-4ff3-a038-7b61879f94e3 finalized successfully: outcome=FAILED
+18:10:31.167 [Test worker] INFO  com.chromascape.web.replay.worker.ReplayWorkerPersistenceService - Run 38df759c-4820-4ddb-8151-b8e405f815b8 reserved failure finalization: TIMED_OUT / TIMED_OUT (RUN_DEADLINE_EXCEEDED)
+18:10:31.183 [Test worker] INFO  com.chromascape.web.replay.worker.ReplayWorkerPersistenceService - Run a80829c2-3f1a-45ff-a53e-dfe527068cef finalized failure: FAILED outcome=INFRASTRUCTURE_FAILURE reason=LEASE_EXPIRED reportRow=mandatory
+18:10:31.201 [Test worker] INFO  com.chromascape.web.replay.worker.ReplayWorkerPersistenceService - Run 193e9557-251a-4071-a65b-ff2d6b115fcb finalized failure: TIMED_OUT outcome=TIMED_OUT reason=RUN_DEADLINE_EXCEEDED reportRow=mandatory
+18:10:31.211 [Test worker] INFO  com.chromascape.web.replay.worker.ReplayWorkerPersistenceService - Run 4bff275c-307d-4c48-8b1a-6b37c28209f2 finalized successfully: outcome=PASSED
+18:10:31.214 [Test worker] INFO  com.chromascape.web.replay.worker.ReplayWorkerPersistenceService - Run be260c1c-555e-40f4-be49-cb1c77b19695 reserved failure finalization: CANCELLED / CANCELLED (CANCEL_REQUESTED)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

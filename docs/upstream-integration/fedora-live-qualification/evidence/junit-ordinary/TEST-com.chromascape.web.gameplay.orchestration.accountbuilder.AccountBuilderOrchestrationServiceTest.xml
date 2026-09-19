@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:18.854Z" hostname="fedora" time="0.945">
+  <properties/>
+  <testcase name="terminalReceiptCannotBeRewritten()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.687"/>
+  <testcase name="conflictingIdentityFailsBeforeASecondGatewayCall()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.03"/>
+  <testcase name="heldAndShadowAreIdempotentAndNeverCallGateway()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.012"/>
+  <testcase name="noLeaseReservationUncertaintyUsesLookupOnlyReconciliation()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.013"/>
+  <testcase name="reconciliationCanProveTerminalStateWithoutRedispatch()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.023"/>
+  <testcase name="reconciliationNeededCannotReturnToDelivery()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.025"/>
+  <testcase name="restartCanQuiesceAClaimBeforeAuthorityWithoutDelivery()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.028"/>
+  <testcase name="duplicateReceiptIsIdempotentAndLeaseTupleCannotBeReplaced()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.047"/>
+  <testcase name="exactDeliveryConsumesAuthorityAndDispatchesOnce()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.019"/>
+  <testcase name="authorityOwnershipIsCommittedBeforeReserveAndPreventsRedispatchAfterFailure()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.022"/>
+  <testcase name="acknowledgedNonTerminalDeliveryFailsClosedAsNeedsReconciliation()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.016"/>
+  <testcase name="staleCapabilityBindingIsDeniedBeforeReservation()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationServiceTest" time="0.012"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

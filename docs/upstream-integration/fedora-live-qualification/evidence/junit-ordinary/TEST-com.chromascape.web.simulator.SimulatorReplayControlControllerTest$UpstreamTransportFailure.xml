@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Upstream transport failure" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:31.730Z" hostname="fedora" time="0.003">
+  <properties/>
+  <testcase name="start returns 502 on upstream non-2xx without parsed status" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$UpstreamTransportFailure" time="0.001"/>
+  <testcase name="getStatus returns 502 on upstream connection failure" classname="com.chromascape.web.simulator.SimulatorReplayControlControllerTest$UpstreamTransportFailure" time="0.001"/>
+  <system-out><![CDATA[18:10:31.732 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: OpenRune API returned 500: Internal error
+18:10:31.734 [Test worker] WARN  com.chromascape.web.simulator.SimulatorReplayControlController - Replay control request failed: Connection refused
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

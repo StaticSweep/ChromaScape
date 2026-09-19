@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.qualification.TargetQualificationControllerTest" tests="28" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:29:20.055Z" hostname="fedora" time="1.201">
+  <properties/>
+  <testcase name="destructionWithoutASessionIsANoOp()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.122"/>
+  <testcase name="destructionUninstallsTheExactFrameSource()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.302"/>
+  <testcase name="failedMouseReleaseLeavesTheSessionRecoverableThroughClose()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.016"/>
+  <testcase name="closeReleasesTheSessionAndHeldInputState()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.004"/>
+  <testcase name="destructionIsIdempotent()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.004"/>
+  <testcase name="previouslyClosedSessionDoesNotPoisonALaterOpen()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.005"/>
+  <testcase name="interruptedKeyPressPreservesReleaseFailureAsSuppressed()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.009"/>
+  <testcase name="poisonedSessionReportsRestartRequiredAndNeverReturnsClosed()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.115"/>
+  <testcase name="outOfBoundsMovementIsRejectedWithoutReachingTheSession()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.009"/>
+  <testcase name="destructionClosesAnOpenSession()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.005"/>
+  <testcase name="interruptedKeyPressStillReleasesAndReportsAnError()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.006"/>
+  <testcase name="destructionSwallowsCleanupFailuresAndPreservesInterrupt()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.025"/>
+  <testcase name="harnessBeanIsPresentOnlyWithProfileAndProperty()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.314"/>
+  <testcase name="openRefusesWhileASessionIsStillOpen()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.02"/>
+  <testcase name="inBoundsMovementReachesTheSession()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.004"/>
+  <testcase name="harnessBeanIsAbsentWithoutTheExplicitProperty()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.038"/>
+  <testcase name="poisonedSessionStatusReportsRestartRequired()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.004"/>
+  <testcase name="loopbackGuardAcceptsOnlyLocalAddresses()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.0"/>
+  <testcase name="keyPressHoldsThenReleases()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.003"/>
+  <testcase name="failedCloseKeepsTheSessionSoCloseCanBeRetried()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.004"/>
+  <testcase name="nonLoopbackCallerIsRefusedOnEveryMutation()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.002"/>
+  <testcase name="nonLoopbackCallerIsRefused()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.001"/>
+  <testcase name="defaultDisabledBehaviorRemainsIntact()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.026"/>
+  <testcase name="disabledAttachmentSurfacesTheStableDiagnostic()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.002"/>
+  <testcase name="harnessBeanIsAbsentWhenPropertyIsExplicitlyFalse()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.03"/>
+  <testcase name="harnessBeanIsAbsentWithoutAnyActiveProfile()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.017"/>
+  <testcase name="harnessBeanIsAbsentUnderProductionAndTestProfiles()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.087"/>
+  <testcase name="poisonedSessionCannotBeReopenedWithoutRestart()" classname="com.chromascape.web.qualification.TargetQualificationControllerTest" time="0.004"/>
+  <system-out><![CDATA[17:29:20.446 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.479 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Closing qualification session on shutdown
+17:29:20.484 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.500 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.505 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.506 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Closing qualification session on shutdown
+17:29:20.509 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.510 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Discarding closed qualification session before reopening
+17:29:20.510 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.513 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.633 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.639 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.649 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.650 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Closing qualification session on shutdown
+17:29:20.653 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.660 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:20.660 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Closing qualification session on shutdown
+17:29:20.661 [Test worker] WARN  com.chromascape.web.qualification.TargetQualificationController - Failed to close qualification session on shutdown
+java.lang.IllegalStateException: native release exploded
+	at com.chromascape.web.qualification.TargetQualificationController.shutdown(TargetQualificationController.java:570) ~[main/:?]
+	at com.chromascape.web.qualification.TargetQualificationControllerTest.destructionSwallowsCleanupFailuresAndPreservesInterrupt(TargetQualificationControllerTest.java:527) ~[test/:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77) ~[?:?]
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43) ~[?:?]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569) ~[?:?]
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775) ~[junit-platform-commons-1.12.2.jar:1.12.2]
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479) ~[junit-platform-commons-1.12.2.jar:1.12.2]
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511) ~[?:?]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511) ~[?:?]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25) [junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38) [junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47) [junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor$CollectAllTestClassesExecutor.processAllTestClasses(JUnitPlatformTestClassProcessor.java:124) [gradle-testing-junit-platform-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor$CollectAllTestClassesExecutor.access$000(JUnitPlatformTestClassProcessor.java:99) [gradle-testing-junit-platform-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor.stop(JUnitPlatformTestClassProcessor.java:94) [gradle-testing-junit-platform-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.SuiteTestClassProcessor.stop(SuiteTestClassProcessor.java:63) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77) ~[?:?]
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43) ~[?:?]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569) ~[?:?]
+	at org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:36) [gradle-messaging-8.14.2.jar:8.14.2]
+	at org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:24) [gradle-messaging-8.14.2.jar:8.14.2]
+	at org.gradle.internal.dispatch.ContextClassLoaderDispatch.dispatch(ContextClassLoaderDispatch.java:33) [gradle-messaging-8.14.2.jar:8.14.2]
+	at org.gradle.internal.dispatch.ProxyDispatchAdapter$DispatchingInvocationHandler.invoke(ProxyDispatchAdapter.java:92) [gradle-messaging-8.14.2.jar:8.14.2]
+	at jdk.proxy1/jdk.proxy1.$Proxy4.stop(Unknown Source) [?:?]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker$3.run(TestWorker.java:200) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.executeAndMaintainThreadName(TestWorker.java:132) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.execute(TestWorker.java:103) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.execute(TestWorker.java:63) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.process.internal.worker.child.ActionExecutionWorker.execute(ActionExecutionWorker.java:56) [gradle-worker-main-8.14.2.jar:8.14.2]
+	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:122) [gradle-worker-main-8.14.2.jar:8.14.2]
+	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
+	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
+	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
+17:29:20.688 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@7a3643e3
+17:29:20.688 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalConfigurationAnnotationProcessor'
+17:29:20.730 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'chromascape.qualification.enabled' in PropertySource 'configurationProperties' with value of type String
+17:29:20.739 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'spring.profiles.active' in PropertySource 'configurationProperties' with value of type String
+17:29:20.740 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+17:29:20.804 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'chromascape.qualification.enabled' in PropertySource 'configurationProperties' with value of type String
+17:29:20.949 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerProcessor'
+17:29:20.950 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerFactory'
+17:29:20.952 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalAutowiredAnnotationProcessor'
+17:29:20.954 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalCommonAnnotationProcessor'
+17:29:20.957 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalPersistenceAnnotationProcessor'
+17:29:20.957 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetQualificationControllerTest.HarnessConfig'
+17:29:20.959 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'com.chromascape.web.qualification.TargetQualificationController'
+17:29:20.960 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetInputSessionFactory'
+17:29:20.962 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'windowSelectionService'
+17:29:20.985 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Autowiring by type from bean name 'com.chromascape.web.qualification.TargetQualificationController' via constructor to bean named 'targetInputSessionFactory'
+17:29:20.991 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Autowiring by type from bean name 'com.chromascape.web.qualification.TargetQualificationController' via constructor to bean named 'windowSelectionService'
+17:29:20.997 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Closing org.springframework.context.annotation.AnnotationConfigApplicationContext@7a3643e3, started on Sat Sep 19 17:29:20 CEST 2026
+17:29:21.016 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:21.021 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:21.029 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@2e85e3f1
+17:29:21.039 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalConfigurationAnnotationProcessor'
+17:29:21.052 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerProcessor'
+17:29:21.053 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerFactory'
+17:29:21.053 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalAutowiredAnnotationProcessor'
+17:29:21.054 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalCommonAnnotationProcessor'
+17:29:21.055 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalPersistenceAnnotationProcessor'
+17:29:21.056 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetQualificationControllerTest.HarnessConfig'
+17:29:21.058 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetInputSessionFactory'
+17:29:21.059 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'windowSelectionService'
+17:29:21.061 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Closing org.springframework.context.annotation.AnnotationConfigApplicationContext@2e85e3f1, started on Sat Sep 19 17:29:21 CEST 2026
+17:29:21.065 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:21.070 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:21.078 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+17:29:21.083 [Test worker] WARN  com.chromascape.web.qualification.TargetQualificationController - Refused non-loopback qualification request from 192.168.1.10
+17:29:21.083 [Test worker] WARN  com.chromascape.web.qualification.TargetQualificationController - Refused non-loopback qualification request from 192.168.1.10
+17:29:21.083 [Test worker] WARN  com.chromascape.web.qualification.TargetQualificationController - Refused non-loopback qualification request from 192.168.1.10
+17:29:21.083 [Test worker] WARN  com.chromascape.web.qualification.TargetQualificationController - Refused non-loopback qualification request from 192.168.1.10
+17:29:21.084 [Test worker] WARN  com.chromascape.web.qualification.TargetQualificationController - Refused non-loopback qualification request from 192.168.1.10
+17:29:21.084 [Test worker] WARN  com.chromascape.web.qualification.TargetQualificationController - Refused non-loopback qualification request from 192.168.1.10
+17:29:21.084 [Test worker] WARN  com.chromascape.web.qualification.TargetQualificationController - Refused non-loopback qualification request from 192.168.1.10
+17:29:21.086 [Test worker] WARN  com.chromascape.web.qualification.TargetQualificationController - Refused non-loopback qualification request from 10.0.0.5
+17:29:21.094 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@2fa879ed
+17:29:21.095 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalConfigurationAnnotationProcessor'
+17:29:21.103 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerProcessor'
+17:29:21.103 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerFactory'
+17:29:21.104 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalAutowiredAnnotationProcessor'
+17:29:21.105 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalCommonAnnotationProcessor'
+17:29:21.106 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalPersistenceAnnotationProcessor'
+17:29:21.108 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetQualificationControllerTest.HarnessConfig'
+17:29:21.108 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetInputSessionFactory'
+17:29:21.109 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'windowSelectionService'
+17:29:21.112 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Closing org.springframework.context.annotation.AnnotationConfigApplicationContext@2fa879ed, started on Sat Sep 19 17:29:21 CEST 2026
+17:29:21.119 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@3722f39d
+17:29:21.119 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalConfigurationAnnotationProcessor'
+17:29:21.121 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'chromascape.qualification.enabled' in PropertySource 'configurationProperties' with value of type String
+17:29:21.132 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerProcessor'
+17:29:21.134 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerFactory'
+17:29:21.136 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalAutowiredAnnotationProcessor'
+17:29:21.137 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalCommonAnnotationProcessor'
+17:29:21.139 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalPersistenceAnnotationProcessor'
+17:29:21.140 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetQualificationControllerTest.HarnessConfig'
+17:29:21.141 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetInputSessionFactory'
+17:29:21.141 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'windowSelectionService'
+17:29:21.143 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Closing org.springframework.context.annotation.AnnotationConfigApplicationContext@3722f39d, started on Sat Sep 19 17:29:21 CEST 2026
+17:29:21.150 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@fde487b
+17:29:21.150 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalConfigurationAnnotationProcessor'
+17:29:21.152 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'chromascape.qualification.enabled' in PropertySource 'configurationProperties' with value of type String
+17:29:21.153 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'spring.profiles.active' in PropertySource 'configurationProperties' with value of type String
+17:29:21.153 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [default]
+17:29:21.155 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerProcessor'
+17:29:21.155 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerFactory'
+17:29:21.155 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalAutowiredAnnotationProcessor'
+17:29:21.156 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalCommonAnnotationProcessor'
+17:29:21.157 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalPersistenceAnnotationProcessor'
+17:29:21.157 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetQualificationControllerTest.HarnessConfig'
+17:29:21.157 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetInputSessionFactory'
+17:29:21.159 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'windowSelectionService'
+17:29:21.163 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Closing org.springframework.context.annotation.AnnotationConfigApplicationContext@fde487b, started on Sat Sep 19 17:29:21 CEST 2026
+17:29:21.168 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@6814262d
+17:29:21.170 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalConfigurationAnnotationProcessor'
+17:29:21.172 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'chromascape.qualification.enabled' in PropertySource 'configurationProperties' with value of type String
+17:29:21.172 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'spring.profiles.active' in PropertySource 'configurationProperties' with value of type String
+17:29:21.172 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [production]
+17:29:21.174 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerProcessor'
+17:29:21.175 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerFactory'
+17:29:21.175 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalAutowiredAnnotationProcessor'
+17:29:21.176 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalCommonAnnotationProcessor'
+17:29:21.176 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalPersistenceAnnotationProcessor'
+17:29:21.177 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetQualificationControllerTest.HarnessConfig'
+17:29:21.177 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetInputSessionFactory'
+17:29:21.178 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'windowSelectionService'
+17:29:21.190 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Closing org.springframework.context.annotation.AnnotationConfigApplicationContext@6814262d, started on Sat Sep 19 17:29:21 CEST 2026
+17:29:21.192 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@79c4f23b
+17:29:21.193 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalConfigurationAnnotationProcessor'
+17:29:21.194 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'chromascape.qualification.enabled' in PropertySource 'configurationProperties' with value of type String
+17:29:21.195 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'spring.profiles.active' in PropertySource 'configurationProperties' with value of type String
+17:29:21.195 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [prod]
+17:29:21.198 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerProcessor'
+17:29:21.198 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerFactory'
+17:29:21.198 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalAutowiredAnnotationProcessor'
+17:29:21.199 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalCommonAnnotationProcessor'
+17:29:21.199 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalPersistenceAnnotationProcessor'
+17:29:21.200 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetQualificationControllerTest.HarnessConfig'
+17:29:21.200 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetInputSessionFactory'
+17:29:21.201 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'windowSelectionService'
+17:29:21.203 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Closing org.springframework.context.annotation.AnnotationConfigApplicationContext@79c4f23b, started on Sat Sep 19 17:29:21 CEST 2026
+17:29:21.205 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@13d984ee
+17:29:21.206 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalConfigurationAnnotationProcessor'
+17:29:21.207 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'chromascape.qualification.enabled' in PropertySource 'configurationProperties' with value of type String
+17:29:21.207 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'spring.profiles.active' in PropertySource 'configurationProperties' with value of type String
+17:29:21.208 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [test]
+17:29:21.210 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerProcessor'
+17:29:21.211 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerFactory'
+17:29:21.211 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalAutowiredAnnotationProcessor'
+17:29:21.211 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalCommonAnnotationProcessor'
+17:29:21.212 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalPersistenceAnnotationProcessor'
+17:29:21.214 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetQualificationControllerTest.HarnessConfig'
+17:29:21.215 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetInputSessionFactory'
+17:29:21.216 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'windowSelectionService'
+17:29:21.217 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Closing org.springframework.context.annotation.AnnotationConfigApplicationContext@13d984ee, started on Sat Sep 19 17:29:21 CEST 2026
+17:29:21.219 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@54941dfd
+17:29:21.220 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalConfigurationAnnotationProcessor'
+17:29:21.226 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'chromascape.qualification.enabled' in PropertySource 'configurationProperties' with value of type String
+17:29:21.226 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'spring.profiles.active' in PropertySource 'configurationProperties' with value of type String
+17:29:21.227 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [sc1431-jpa]
+17:29:21.231 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerProcessor'
+17:29:21.232 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerFactory'
+17:29:21.232 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalAutowiredAnnotationProcessor'
+17:29:21.233 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalCommonAnnotationProcessor'
+17:29:21.234 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalPersistenceAnnotationProcessor'
+17:29:21.234 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetQualificationControllerTest.HarnessConfig'
+17:29:21.234 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetInputSessionFactory'
+17:29:21.235 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'windowSelectionService'
+17:29:21.238 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Closing org.springframework.context.annotation.AnnotationConfigApplicationContext@54941dfd, started on Sat Sep 19 17:29:21 CEST 2026
+17:29:21.240 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@52d63b7e
+17:29:21.241 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalConfigurationAnnotationProcessor'
+17:29:21.243 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'chromascape.qualification.enabled' in PropertySource 'configurationProperties' with value of type String
+17:29:21.243 [Test worker] DEBUG org.springframework.core.env.PropertySourcesPropertyResolver - Found key 'spring.profiles.active' in PropertySource 'configurationProperties' with value of type String
+17:29:21.243 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [fedora-development]
+17:29:21.245 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerProcessor'
+17:29:21.245 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.event.internalEventListenerFactory'
+17:29:21.245 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalAutowiredAnnotationProcessor'
+17:29:21.246 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalCommonAnnotationProcessor'
+17:29:21.247 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'org.springframework.context.annotation.internalPersistenceAnnotationProcessor'
+17:29:21.247 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetQualificationControllerTest.HarnessConfig'
+17:29:21.248 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'targetInputSessionFactory'
+17:29:21.248 [Test worker] DEBUG org.springframework.beans.factory.support.DefaultListableBeanFactory - Creating shared instance of singleton bean 'windowSelectionService'
+17:29:21.251 [Test worker] DEBUG org.springframework.context.annotation.AnnotationConfigApplicationContext - Closing org.springframework.context.annotation.AnnotationConfigApplicationContext@52d63b7e, started on Sat Sep 19 17:29:21 CEST 2026
+17:29:21.255 [Test worker] INFO  com.chromascape.web.qualification.TargetQualificationController - Qualification session opened for pid=42 generation=7
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

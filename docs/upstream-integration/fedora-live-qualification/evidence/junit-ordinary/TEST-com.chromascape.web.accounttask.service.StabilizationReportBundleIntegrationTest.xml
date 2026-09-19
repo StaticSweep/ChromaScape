@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" tests="34" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:04.835Z" hostname="fedora" time="1.305">
+  <properties/>
+  <testcase name="the same external reference under two evidence types is rejected as ambiguous" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.103"/>
+  <testcase name="an uploaded artifact part that is not referenced by evidence is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.053"/>
+  <testcase name="a self-hashed plan whose settingsHash does not match the manifest is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.041"/>
+  <testcase name="manifest catalog identity that disagrees with the plan is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.041"/>
+  <testcase name="NOT_APPLICABLE plans reject supplied evidence records" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.035"/>
+  <testcase name="the same run with different content is a 409 conflict" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.052"/>
+  <testcase name="external-reference lookup always requires the run id (no global fallback)" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.005"/>
+  <testcase name="an identical re-upload returns duplicate=true" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.032"/>
+  <testcase name="a stale attempt_manifest_hash is rejected even when the aggregate hash recomputes" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.031"/>
+  <testcase name="the success response returns every persisted artifact mapping in evidence order" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.078"/>
+  <testcase name="a reordered evidence reference union is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.042"/>
+  <testcase name="tampered evidence checksums are rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.02"/>
+  <testcase name="a PASS with incomplete evidence is rejected even with valid hashes" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.024"/>
+  <testcase name="a tampered plan hash is rejected (declared vs recomputed vs manifest)" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.038"/>
+  <testcase name="manifest settings that disagree with the plan are rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.022"/>
+  <testcase name="a top-level evidence record absent from its owner attempt fails the union check" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.039"/>
+  <testcase name="a plan whose planHash field disagrees with the recomputed hash is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.02"/>
+  <testcase name="an invalid source snapshot is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.016"/>
+  <testcase name="a ReportBundleClient-shaped multipart bundle streams in with preserved artifact filenames" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.187"/>
+  <testcase name="evidence owned by a foreign attempt is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.024"/>
+  <testcase name="a second-artifact staging failure cleans the first staged artifact exactly" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.048"/>
+  <testcase name="a self-hashed plan whose task catalogHash does not match the manifest is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.023"/>
+  <testcase name="blank recorder session/recording identity is rejected, not accepted by equality" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.025"/>
+  <testcase name="a valid bundle is ingested with a positive save result" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.021"/>
+  <testcase name="an evidence record byte count that differs from the uploaded artifact is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.022"/>
+  <testcase name="a manifest with a malformed artifact digest is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.023"/>
+  <testcase name="manifest build identity that disagrees with the plan is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.024"/>
+  <testcase name="the durable external evidence reference is bound to the stored artifact UUID" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.031"/>
+  <testcase name="a manifest with an UNVERIFIED artifact digest is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.012"/>
+  <testcase name="a second record for the same required evidence type in one attempt is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.028"/>
+  <testcase name="an evidence media_type that differs from the uploaded artifact part is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.035"/>
+  <testcase name="manifest instance identity that disagrees with the plan is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.029"/>
+  <testcase name="a missing marker is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.015"/>
+  <testcase name="an evidence record digest that differs from the uploaded artifact is rejected" classname="com.chromascape.web.accounttask.service.StabilizationReportBundleIntegrationTest" time="0.019"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

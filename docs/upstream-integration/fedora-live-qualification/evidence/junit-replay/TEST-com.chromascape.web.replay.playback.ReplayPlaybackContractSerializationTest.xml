@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.playback.ReplayPlaybackContractSerializationTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:25:23.716Z" hostname="fedora" time="0.206">
+  <properties/>
+  <testcase name="emptyAndPopulatedPagesValidateWithTheApplicationWireMapper()" classname="com.chromascape.web.replay.playback.ReplayPlaybackContractSerializationTest" time="0.19"/>
+  <testcase name="schemasRejectUnexpectedPropertiesAndUnknownLogCategories()" classname="com.chromascape.web.replay.playback.ReplayPlaybackContractSerializationTest" time="0.01"/>
+  <testcase name="schemasDeclareExactIdentifiersRequiredFieldsAndStrictWireShape()" classname="com.chromascape.web.replay.playback.ReplayPlaybackContractSerializationTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

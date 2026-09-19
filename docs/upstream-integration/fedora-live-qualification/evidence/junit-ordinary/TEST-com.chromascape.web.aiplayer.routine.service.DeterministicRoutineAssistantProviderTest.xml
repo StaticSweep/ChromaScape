@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.DeterministicRoutineAssistantProviderTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:32.922Z" hostname="fedora" time="0.055">
+  <properties/>
+  <testcase name="bindsTheTaskInteractionWithoutDisturbingTheRecordedAction()" classname="com.chromascape.web.aiplayer.routine.service.DeterministicRoutineAssistantProviderTest" time="0.015"/>
+  <testcase name="keepsTheDiffEnvelopeReadOnly()" classname="com.chromascape.web.aiplayer.routine.service.DeterministicRoutineAssistantProviderTest" time="0.002"/>
+  <testcase name="dropsIncidentalActionsAndBridgesTheChain()" classname="com.chromascape.web.aiplayer.routine.service.DeterministicRoutineAssistantProviderTest" time="0.015"/>
+  <testcase name="proposesNothingWhenNoCapturedActionDemonstratesTheTask()" classname="com.chromascape.web.aiplayer.routine.service.DeterministicRoutineAssistantProviderTest" time="0.007"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

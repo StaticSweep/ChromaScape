@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:07:02.801Z" hostname="fedora" time="0.639">
+  <properties/>
+  <testcase name="Iteration response includes isActive and isComplete flags" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.362"/>
+  <testcase name="Execute iteration fails with empty script name" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.012"/>
+  <testcase name="List iterations returns all when no filters" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.003"/>
+  <testcase name="getIteration includes summary fields when execution exists (E6.5)" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.002"/>
+  <testcase name="Get iteration returns empty if not found" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.003"/>
+  <testcase name="Execute iteration stores evidence config if provided" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.218"/>
+  <testcase name="getIteration includes empty summaries when no execution exists (E6.5)" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.006"/>
+  <testcase name="Execute iteration fails with null prompt" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.005"/>
+  <testcase name="Execute iteration fails with null script name" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.003"/>
+  <testcase name="List active iterations uses optimized query" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.003"/>
+  <testcase name="executeIteration returns consistent iterationId and executionId (E6.5)" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.003"/>
+  <testcase name="List iterations filters by status" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.002"/>
+  <testcase name="Get iteration returns iteration if found" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.001"/>
+  <testcase name="Execute iteration creates iteration and delegates to graph orchestrator (E6.5)" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.002"/>
+  <testcase name="List iterations filters by script name" classname="com.chromascape.web.debug.patchloop.PatchLoopOrchestratorServiceTest" time="0.004"/>
+  <system-out><![CDATA[18:07:03.177 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script:    
+18:07:03.192 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script: TestScript
+18:07:03.419 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script: TestScript
+18:07:03.422 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script: null
+18:07:03.428 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script: TestScript
+18:07:03.435 [Test worker] INFO  com.chromascape.web.debug.patchloop.service.PatchLoopOrchestratorService - Executing patch loop iteration for script: TestScript
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

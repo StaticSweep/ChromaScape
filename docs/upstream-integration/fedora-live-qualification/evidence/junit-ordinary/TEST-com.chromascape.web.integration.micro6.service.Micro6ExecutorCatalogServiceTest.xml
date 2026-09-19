@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:03.192Z" hostname="fedora" time="3.078">
+  <properties/>
+  <testcase name="executorsEndpointReturnsCandidates()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.14"/>
+  <testcase name="validLightweightCatalogIsCached()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.14"/>
+  <testcase name="expiredReferenceIsRejected()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.007"/>
+  <testcase name="unknownEndpointReferenceIsRejected()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.006"/>
+  <testcase name="twoExecutorsMaintainIndependentCaches()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.229"/>
+  <testcase name="schemaOnlyChangeInvalidatesFullCache()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.231"/>
+  <testcase name="devStaticRouteFallbackIsExplicitlyMarked()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.007"/>
+  <testcase name="lightweightCacheSurvivesSchemaOnlyChange()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.137"/>
+  <testcase name="tenConcurrentCallersProduceOneRequest()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.422"/>
+  <testcase name="failedWinnerRetriesAndAllCallersReceiveReplacementResult()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.46"/>
+  <testcase name="connectionFailureReturnsStaleWithLastKnownGood()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.186"/>
+  <testcase name="validFullCatalogIsCached()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.137"/>
+  <testcase name="runtimeAvailableWithoutBundleIsContractInvalid()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.009"/>
+  <testcase name="serviceUnavailable503DoesNotReplaceCache()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.27"/>
+  <testcase name="stale202FromReadyRuntimeNeverReplacesCache()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.358"/>
+  <testcase name="malformedCatalogIsRejectedAndNotCached()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.228"/>
+  <testcase name="noCacheReturnsUnavailable()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.007"/>
+  <testcase name="inflightMapIsClearedAfterSuccess()" classname="com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogServiceTest" time="0.096"/>
+  <system-out><![CDATA[18:09:05.161 [Test worker] WARN  com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService - [Micro6Catalog] refresh failed for ref=dev-micro6:DDDD mode=lightweight code=EXECUTOR_ERROR; serving last-known-good
+18:09:05.534 [Test worker] WARN  com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService - [Micro6Catalog] refresh failed for ref=dev-micro6:FFFF mode=lightweight code=EXECUTOR_UNAVAILABLE; serving last-known-good
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

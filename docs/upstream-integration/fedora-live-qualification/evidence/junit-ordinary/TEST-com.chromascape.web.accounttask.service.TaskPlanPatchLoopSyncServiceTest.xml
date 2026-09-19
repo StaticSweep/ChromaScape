@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncServiceTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:06.265Z" hostname="fedora" time="0.155">
+  <properties/>
+  <testcase name="skips when linked iteration is missing" classname="com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncServiceTest" time="0.142"/>
+  <testcase name="marks FAILED when linked iteration is terminal and failed" classname="com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncServiceTest" time="0.004"/>
+  <testcase name="skips when iteration is non-terminal" classname="com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncServiceTest" time="0.003"/>
+  <testcase name="is idempotent after item leaves EXECUTING" classname="com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncServiceTest" time="0.002"/>
+  <testcase name="marks COMPLETED when linked iteration is COMPLETED" classname="com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncServiceTest" time="0.003"/>
+  <system-out><![CDATA[18:05:06.411 [Test worker] INFO  com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncService - Marked plan item item_test1 FAILED from iteration iter_test1 (FAILED)
+18:05:06.420 [Test worker] INFO  com.chromascape.web.accounttask.service.TaskPlanPatchLoopSyncService - Marked plan item item_test1 COMPLETED from iteration iter_test1
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

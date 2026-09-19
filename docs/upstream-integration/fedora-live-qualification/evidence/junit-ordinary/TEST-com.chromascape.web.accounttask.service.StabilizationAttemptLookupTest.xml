@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.service.StabilizationAttemptLookupTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:02.880Z" hostname="fedora" time="0.892">
+  <properties/>
+  <testcase name="missing attempts return empty" classname="com.chromascape.web.accounttask.service.StabilizationAttemptLookupTest" time="0.88"/>
+  <testcase name="getRunByRunIdAndAttemptId returns the matching attempt" classname="com.chromascape.web.accounttask.service.StabilizationAttemptLookupTest" time="0.005"/>
+  <testcase name="getRunAttempts returns every attempt for a run ordered by attempt" classname="com.chromascape.web.accounttask.service.StabilizationAttemptLookupTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

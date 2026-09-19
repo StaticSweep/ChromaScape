@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:24:58.774Z" hostname="fedora" time="0.121">
+  <properties/>
+  <testcase name="nonObjectDocumentFails()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.004"/>
+  <testcase name="missingIdentityFieldsFail()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.024"/>
+  <testcase name="eachMissingTopLevelFieldIsNamedAsAProblem()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.016"/>
+  <testcase name="explicitNullSchemaVersionFails()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.003"/>
+  <testcase name="fidelityAndSupportedActionsAreClosedSetFields()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.015"/>
+  <testcase name="missingModeFieldsFail()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.003"/>
+  <testcase name="unsupportedValuesFail()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.011"/>
+  <testcase name="serverProducedManifestHardcodesForbiddenCapabilitiesOff()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.0"/>
+  <testcase name="capabilityServiceRejectsSyntheticAndContradictoryPlaybackClaims()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.002"/>
+  <testcase name="unavailableManifestNeverAdvertisesAnyExecutableCapability()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.001"/>
+  <testcase name="wrongTypesFail()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.012"/>
+  <testcase name="forbiddenTrueCapabilitiesFailTheHandshake()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.005"/>
+  <testcase name="completeSupportedDocumentPassesRawValidation()" classname="com.chromascape.web.replay.capability.XrspsStartupValidatorCapabilityContractTest" time="0.002"/>
+  <system-out><![CDATA[17:24:58.868 [Test worker] INFO  com.chromascape.web.replay.capability.ReplayCapabilityService - xRSPS capability updated: simulation=true, certifiable=true, adapter=0.1.0, build=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+17:24:58.869 [Test worker] INFO  com.chromascape.web.replay.capability.ReplayCapabilityService - xRSPS capability updated: simulation=true, certifiable=true, adapter=0.1.0, build=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

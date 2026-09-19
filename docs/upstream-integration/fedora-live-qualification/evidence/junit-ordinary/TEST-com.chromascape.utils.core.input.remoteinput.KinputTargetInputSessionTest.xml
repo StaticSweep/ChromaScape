@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.input.remoteinput.KinputTargetInputSessionTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:35.588Z" hostname="fedora" time="0.107">
+  <properties/>
+  <testcase name="rejectsAChangedSelectionBeforeSendingInput()" classname="com.chromascape.utils.core.input.remoteinput.KinputTargetInputSessionTest" time="0.007"/>
+  <testcase name="sendsBothKeyEdgesAndFailsClosedForWheelInput()" classname="com.chromascape.utils.core.input.remoteinput.KinputTargetInputSessionTest" time="0.002"/>
+  <testcase name="destroyFailureRetainsLeaseFencesInputAndCanBeRetried()" classname="com.chromascape.utils.core.input.remoteinput.KinputTargetInputSessionTest" time="0.079"/>
+  <testcase name="usesClientRelativeCoordinatesAndReleasesHeldInputOnClose()" classname="com.chromascape.utils.core.input.remoteinput.KinputTargetInputSessionTest" time="0.016"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

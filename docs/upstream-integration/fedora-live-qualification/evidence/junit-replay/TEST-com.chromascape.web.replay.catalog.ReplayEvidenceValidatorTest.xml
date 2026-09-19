@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:24:58.902Z" hostname="fedora" time="0.068">
+  <properties/>
+  <testcase name="unsupportedOrMissingOptionViolates()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.017"/>
+  <testcase name="missingSnapshotAtTheActionTickIsAViolation()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.005"/>
+  <testcase name="targetPresentAtStartButGoneAtActionTickViolates()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.008"/>
+  <testcase name="duplicatedStableTargetAtActionTickViolates()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.013"/>
+  <testcase name="recordingLevelChecksRejectGapsAndNullSchema()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.012"/>
+  <testcase name="waitUntilTickRequiresOnlyASnapshotAtItsTick()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.002"/>
+  <testcase name="optionMustMatchTheRecordedSpotTypeAtTheActionTick()" classname="com.chromascape.web.replay.catalog.ReplayEvidenceValidatorTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.playback.ReplayPlaybackParityIntegrationTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-19T16:10:23.932Z" hostname="fedora" time="0.0">
+  <properties/>
+  <testcase name="initializationError" classname="com.chromascape.web.replay.playback.ReplayPlaybackParityIntegrationTest" time="0.0">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at org.testcontainers.junit.jupiter.TestcontainersExtension$StoreAdapter.start(TestcontainersExtension.java:276)
+	at org.testcontainers.junit.jupiter.TestcontainersExtension$StoreAdapter.access$200(TestcontainersExtension.java:263)
+	at org.testcontainers.junit.jupiter.TestcontainersExtension.lambda$startContainers$4(TestcontainersExtension.java:83)
+	at org.testcontainers.junit.jupiter.TestcontainersExtension.lambda$startContainers$5(TestcontainersExtension.java:83)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at org.testcontainers.junit.jupiter.TestcontainersExtension.startContainers(TestcontainersExtension.java:83)
+	at org.testcontainers.junit.jupiter.TestcontainersExtension.beforeAll(TestcontainersExtension.java:57)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <system-out><![CDATA[18:10:23.917 [Test worker] DEBUG org.springframework.boot.test.context.SpringBootTestContextBootstrapper - Neither @ContextConfiguration nor @ContextHierarchy found for test class [ReplayPlaybackParityIntegrationTest]: using SpringBootContextLoader
+18:10:23.918 [Test worker] DEBUG org.springframework.test.context.support.AbstractContextLoader - Could not detect default resource locations for test class [com.chromascape.web.replay.playback.ReplayPlaybackParityIntegrationTest]: no resource found for suffixes {-context.xml, Context.groovy}.
+18:10:23.921 [Test worker] DEBUG org.springframework.boot.test.context.SpringBootTestContextBootstrapper - Using ContextCustomizerFactory implementations for test class [ReplayPlaybackParityIntegrationTest]: [OnFailureConditionReportContextCustomizerFactory, OverrideAutoConfigurationContextCustomizerFactory, ObservabilityContextCustomizerFactory, TypeExcludeFiltersContextCustomizerFactory, PropertyMappingContextCustomizerFactory, WebDriverContextCustomizerFactory, ImportsContextCustomizerFactory, ExcludeFilterContextCustomizerFactory, HttpGraphQlTesterContextCustomizerFactory, DuplicateJsonObjectContextCustomizerFactory, MockitoContextCustomizerFactory, TestRestTemplateContextCustomizerFactory, WebTestClientContextCustomizerFactory, DisableReactorResourceFactoryGlobalResourcesContextCustomizerFactory, MockServerContainerContextCustomizerFactory, DynamicPropertiesContextCustomizerFactory]
+18:10:23.923 [Test worker] DEBUG org.springframework.boot.test.context.SpringBootTestContextBootstrapper - Using ContextCustomizers for test class [ReplayPlaybackParityIntegrationTest]: [OnFailureConditionReportContextCustomizer, DisableObservabilityContextCustomizer, PropertyMappingContextCustomizer, WebDriverContextCustomizer, ImportsContextCustomizer, ExcludeFilterContextCustomizer, DuplicateJsonObjectContextCustomizer, MockitoContextCustomizer, TestRestTemplateContextCustomizer, DisableReactorResourceFactoryGlobalResourcesContextCustomizerCustomizer, DynamicPropertiesContextCustomizer]
+18:10:23.928 [Test worker] DEBUG org.springframework.test.context.util.TestContextSpringFactoriesUtils - Skipping candidate TestExecutionListener [org.springframework.test.context.observation.MicrometerObservationRegistryTestExecutionListener] due to a missing dependency. Specify custom TestExecutionListener classes or make the default TestExecutionListener classes and their required dependencies available. Offending class: io.micrometer.context.ThreadLocalAccessor. MicrometerObservationRegistryTestExecutionListener requires io.micrometer:micrometer-observation:1.10.8 or higher and io.micrometer:context-propagation:1.0.3 or higher.
+18:10:23.929 [Test worker] DEBUG org.springframework.boot.test.context.SpringBootTestContextBootstrapper - Using TestExecutionListeners for test class [ReplayPlaybackParityIntegrationTest]: [ServletTestExecutionListener, DirtiesContextBeforeModesTestExecutionListener, ApplicationEventsTestExecutionListener, MockitoTestExecutionListener, DependencyInjectionTestExecutionListener, DirtiesContextTestExecutionListener, TransactionalTestExecutionListener, SqlScriptsTestExecutionListener, EventPublishingTestExecutionListener, RestDocsTestExecutionListener, MockRestServiceServerResetTestExecutionListener, MockMvcPrintOnlyOnFailureTestExecutionListener, WebDriverTestExecutionListener, MockWebServiceServerTestExecutionListener, ResetMocksTestExecutionListener]
+18:10:23.930 [Test worker] DEBUG org.springframework.test.context.support.DirtiesContextBeforeModesTestExecutionListener - Before test class: class [ReplayPlaybackParityIntegrationTest], class annotated with @DirtiesContext [false] with mode [null]
+18:10:23.930 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+18:10:23.932 [Test worker] DEBUG org.springframework.test.context.support.DirtiesContextTestExecutionListener - After test class: class [ReplayPlaybackParityIntegrationTest], class annotated with @DirtiesContext [false] with mode [null]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

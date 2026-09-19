@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:07:03.576Z" hostname="fedora" time="0.047">
+  <properties/>
+  <testcase name="partial-success edge label is parsed correctly as PARTIAL_SUCCESS" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.006"/>
+  <testcase name="failure edge label is parsed correctly" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.001"/>
+  <testcase name="Mixed edge conditions are parsed correctly" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.002"/>
+  <testcase name="Compile response for run-only graph has no ANALYZE type in serialized JSON" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.005"/>
+  <testcase name="success edge label is parsed correctly" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.002"/>
+  <testcase name="Inline node declarations keep declared node types" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.001"/>
+  <testcase name="partial edge label is parsed correctly as PARTIAL_SUCCESS" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.001"/>
+  <testcase name="timeout edge label is parsed correctly" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.005"/>
+  <testcase name="Unknown edge label defaults to SUCCESS with warning" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.003"/>
+  <testcase name="Run-only graph has no ANALYZE node type" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.003"/>
+  <testcase name="NodeType.ANALYZE name matches frontend gating string" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.0"/>
+  <testcase name="retry edge label is parsed correctly" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.001"/>
+  <testcase name="Full analysis graph contains ANALYZE node type" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.004"/>
+  <testcase name="Compile response for analysis graph contains ANALYZE type string" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.009"/>
+  <testcase name="partial_success edge label is parsed correctly" classname="com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompilerTest" time="0.002"/>
+  <system-out><![CDATA[18:07:03.577 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[analyze] -.partial-success.-> B[generate_patch];
+
+18:07:03.580 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 2 nodes, 1 edges, entry: A
+18:07:03.583 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[analyze] -.failure.-> B[end];
+
+18:07:03.583 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 2 nodes, 1 edges, entry: A
+18:07:03.584 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[analyze] --> B[generate_patch];
+  A -.failure.-> C[end];
+  A -.partial_success.-> D[validate];
+  A -.retry.-> A;
+
+18:07:03.584 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 4 nodes, 4 edges, entry: A
+18:07:03.586 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[start] --> B[run_script]
+  B --> C[collect_evidence]
+  C --> D[end]
+
+18:07:03.586 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 4 nodes, 3 edges, entry: A
+18:07:03.592 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[analyze] --> B[generate_patch];
+
+18:07:03.592 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 2 nodes, 1 edges, entry: A
+18:07:03.593 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[start] --> B[run_script]
+  B --> C[collect_evidence]
+
+18:07:03.594 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 3 nodes, 2 edges, entry: A
+18:07:03.594 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[analyze] -.partial.-> B[generate_patch];
+
+18:07:03.594 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 2 nodes, 1 edges, entry: A
+18:07:03.595 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[analyze] -.timeout.-> B[end];
+
+18:07:03.596 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 2 nodes, 1 edges, entry: A
+18:07:03.601 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[analyze] -.unknown_label.-> B[generate_patch];
+
+18:07:03.602 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 2 nodes, 1 edges, entry: A
+18:07:03.602 [Test worker] WARN  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compilation warnings: [Unknown edge label: unknown_label, using SUCCESS]
+18:07:03.604 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[start] --> B[run_script]
+  B --> C[collect_evidence]
+  C --> D[end]
+
+18:07:03.605 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 4 nodes, 3 edges, entry: A
+18:07:03.607 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[analyze] -.retry.-> A;
+
+18:07:03.607 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 1 nodes, 1 edges, entry: A
+18:07:03.608 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[start] --> B[run_script]
+  B --> C[collect_evidence]
+  C --> D[analyze]
+  D --> E[generate_patch]
+  E --> F[end]
+
+18:07:03.608 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 6 nodes, 5 edges, entry: A
+18:07:03.612 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[start] --> B[run_script]
+  B --> C[collect_evidence]
+  C --> D[analyze]
+  D --> E[generate_patch]
+  E --> F[end]
+
+18:07:03.613 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 6 nodes, 5 edges, entry: A
+18:07:03.621 [Test worker] DEBUG com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiling Mermaid graph:
+graph TD;
+  A[analyze] -.partial_success.-> B[generate_patch];
+  A --> C[end];
+
+18:07:03.622 [Test worker] INFO  com.chromascape.web.debug.patchloop.graph.PatchLoopGraphCompiler - Compiled graph: 3 nodes, 2 edges, entry: A
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

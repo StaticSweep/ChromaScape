@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:50.311Z" hostname="fedora" time="2.46">
+  <properties/>
+  <testcase name="full catalog 202 GENERATING then 200 READY with typed schema and matching hashes" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest" time="0.476"/>
+  <testcase name="lightweight 200 exposes canonical Fishing tasks and the FISH_TRAINING alias" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest" time="0.098"/>
+  <testcase name="stale 202 from a READY runtime never replaces a cached READY catalog" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest" time="0.363"/>
+  <testcase name="assembled bootstrap: NOT_AVAILABLE -&gt; GENERATING -&gt; AVAILABLE with cache invalidation" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest" time="0.589"/>
+  <testcase name="reconnect with a different executor identity uses an independent cache" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest" time="0.273"/>
+  <testcase name="hashes remain stable across requests and match the Micro6 golden values" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest" time="0.32"/>
+  <testcase name="executor disconnect yields STALE with last-known-good; reconnect recovers" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogEndToEndIntegrationTest" time="0.337"/>
+  <system-out><![CDATA[18:08:52.630 [Test worker] WARN  com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService - [Micro6Catalog] refresh failed for ref=dev-micro6:SC584A mode=lightweight code=EXECUTOR_ERROR; serving last-known-good
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

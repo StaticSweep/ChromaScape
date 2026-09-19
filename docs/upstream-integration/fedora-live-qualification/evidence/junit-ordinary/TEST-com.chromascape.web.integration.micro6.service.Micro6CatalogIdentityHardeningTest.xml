@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:52.772Z" hostname="fedora" time="2.666">
+  <properties/>
+  <testcase name="runtimeChangedMidFetchDiscardsCatalog()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.097"/>
+  <testcase name="concurrentRequestsCoalesceOnIdentityKey()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.457"/>
+  <testcase name="responseExecutorHeaderMismatchIsRejected()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.096"/>
+  <testcase name="catalogVersionDriftMakesCacheStaleAndConflicts()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.231"/>
+  <testcase name="generatingRuntimeExposesPriorFullCatalogOnlyAsStale()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.14"/>
+  <testcase name="missingIdentityHeadersOn200ArePermanentlyUnverified()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.097"/>
+  <testcase name="unknownBundleStateOnResponseIsContractInvalid()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.007"/>
+  <testcase name="catalogHashConflictIsRejected()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.097"/>
+  <testcase name="catalogVersionConflictIsRejected()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.094"/>
+  <testcase name="catalogHashMetadataDriftMakesCacheStaleAndConflicts()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.232"/>
+  <testcase name="payloadExecutorInstanceMismatchIsRejectedAndNotCached()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.23"/>
+  <testcase name="sessionChangeInvalidatesCache()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.229"/>
+  <testcase name="notAvailableRuntimeExposesPriorFullCatalogOnlyAsStale()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.14"/>
+  <testcase name="errorRuntimeExposesPriorFullCatalogOnlyAsStale()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.142"/>
+  <testcase name="executorInstanceChangeInvalidatesCache()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.229"/>
+  <testcase name="nonSelectableRuntimeServesStaleOnlyForMatchingIdentity()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogIdentityHardeningTest" time="0.14"/>
+  <system-out><![CDATA[18:08:55.437 [Test worker] WARN  com.chromascape.web.integration.micro6.service.Micro6ExecutorCatalogService - [Micro6Catalog] refresh failed for ref=dev-micro6:OFFLINE mode=lightweight code=RUNTIME_NOT_SELECTABLE; serving last-known-good
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

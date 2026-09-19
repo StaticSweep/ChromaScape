@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Error Detection Tests" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:36.067Z" hostname="fedora" time="0.006">
+  <properties/>
+  <testcase name="Should surface CLI option error in job result" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$ErrorDetectionTests" time="0.001"/>
+  <testcase name="Should extract specific line with unknown option error" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$ErrorDetectionTests" time="0.001"/>
+  <testcase name="Should handle other error patterns when no CLI error" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$ErrorDetectionTests" time="0.001"/>
+  <testcase name="Should extract no active session error from output" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$ErrorDetectionTests" time="0.001"/>
+  <testcase name="Should extract bridge unreachable error from output" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$ErrorDetectionTests" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

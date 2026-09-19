@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.playback.ReplayPlaybackIndexConvergenceTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:22.957Z" hostname="fedora" time="0.957">
+  <properties/>
+  <testcase name="ddlPermissionDenialFailsStartupClosed()" classname="com.chromascape.web.replay.playback.ReplayPlaybackIndexConvergenceTest" time="0.952"/>
+  <testcase name="nonPostgresDataSourceIsAStartupNoOp()" classname="com.chromascape.web.replay.playback.ReplayPlaybackIndexConvergenceTest" time="0.001"/>
+  <testcase name="existingIndexDefinitionDriftFailsStartupClosed()" classname="com.chromascape.web.replay.playback.ReplayPlaybackIndexConvergenceTest" time="0.002"/>
+  <testcase name="removesOnlyRedundantOuterPredicateParentheses()" classname="com.chromascape.web.replay.playback.ReplayPlaybackIndexConvergenceTest" time="0.0"/>
+  <testcase name="normalizesSchemaQualificationQuotingWhitespaceAndRedundantPredicateParentheses()" classname="com.chromascape.web.replay.playback.ReplayPlaybackIndexConvergenceTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

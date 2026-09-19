@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.integration.micro6.service.Micro6ContractFixtureCompatibilityTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:01.693Z" hostname="fedora" time="1.497">
+  <properties/>
+  <testcase name="healthFixturesSatisfyTheHealthContract()" classname="com.chromascape.web.integration.micro6.service.Micro6ContractFixtureCompatibilityTest" time="1.235"/>
+  <testcase name="fixtureManifestChecksumsMatchGeneratedFiles()" classname="com.chromascape.web.integration.micro6.service.Micro6ContractFixtureCompatibilityTest" time="0.258"/>
+  <testcase name="modeSpecificProducerCatalogHashesAreRejected()" classname="com.chromascape.web.integration.micro6.service.Micro6ContractFixtureCompatibilityTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

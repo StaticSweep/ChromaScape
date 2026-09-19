@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" tests="26" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:01.668Z" hostname="fedora" time="0.024">
+  <properties/>
+  <testcase name="emptyTasksNeverPassAsValid()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="validLightweightCatalogIsAccepted()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="aliasesResolveToCanonicalFishingTraining()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="notRequestedSchemaStateMustNotCarrySchemaContentInLightweightMode()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="readyCatalogWithCatalogValidFalseIsRejectedInLightweightMode()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="missingSchemaStateIsInvalidInFullMode()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="missingSchemaBundleHashFailsReadyValidation()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="catalogHashMismatchFailsFullValidation()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="readyCatalogWithCatalogValidFalseIsRejected()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="lightweightRequiresNotRequestedSchemaState()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="schemaBundleHashMismatchFailsFullValidation()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="validFullCatalogIsAccepted()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="errorSchemaStateRequiresReasonAndNeverClassifiesAsReady()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="duplicateTaskKeysFailValidation()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="degradedCatalogWithoutAttestedBundleFailsValidation()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="errorSchemaStateRejectsNonArrayValidationErrors()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="unknownSchemaStateIsInvalid()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="missingAliasTargetFailsValidation()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="notRequestedForbidsSchemaVersionAndReasonFields()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="notRequestedSchemaStateMustNotCarrySchemaContentInFullMode()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="degradedCatalogIsAcceptedAsDegraded()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="notApplicableSchemaStateRequiresReason()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="malformedPayloadIsRejected()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.0"/>
+  <testcase name="taskSchemaStateForFullMustBeAvailableWithSchema()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="perTaskSchemaHashMismatchFailsFullValidation()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <testcase name="displayPrefixedRowsFailValidation()" classname="com.chromascape.web.integration.micro6.service.Micro6CatalogV2ContractTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

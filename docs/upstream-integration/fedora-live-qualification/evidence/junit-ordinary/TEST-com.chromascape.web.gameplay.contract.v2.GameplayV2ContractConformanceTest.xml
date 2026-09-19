@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.contract.v2.GameplayV2ContractConformanceTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:09.894Z" hostname="fedora" time="0.175">
+  <properties/>
+  <testcase name="mutationCaseCorpusIsExecutable()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2ContractConformanceTest" time="0.027"/>
+  <testcase name="crossObjectDigestBindingsHold()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2ContractConformanceTest" time="0.036"/>
+  <testcase name="capabilitySnapshotDigestIsIndependentlyProvable()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2ContractConformanceTest" time="0.008"/>
+  <testcase name="canonicalFixturesPinExpectedDigests()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2ContractConformanceTest" time="0.006"/>
+  <testcase name="canonicalV2ResourcesHaveFrozenByteDigests()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2ContractConformanceTest" time="0.004"/>
+  <testcase name="allValidFixtureObjectsAcceptSchemaAndSemanticRules()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2ContractConformanceTest" time="0.091"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

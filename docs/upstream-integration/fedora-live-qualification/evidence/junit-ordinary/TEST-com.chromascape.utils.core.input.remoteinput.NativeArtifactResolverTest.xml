@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:35.708Z" hostname="fedora" time="0.233">
+  <properties/>
+  <testcase name="invalidExplicitOverrideDoesNotFallBack(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.146"/>
+  <testcase name="pathsContainingSpacesResolve(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.005"/>
+  <testcase name="corruptNonElfContentIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.004"/>
+  <testcase name="relativeOverrideIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.002"/>
+  <testcase name="wrongElfMachineIsReportedAsUnsupported(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.003"/>
+  <testcase name="unsupportedPlatformIsReported(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.003"/>
+  <testcase name="nonSharedObjectElfTypeIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.003"/>
+  <testcase name="wrongElfClassIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.002"/>
+  <testcase name="unreadableFileIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.006"/>
+  <testcase name="managedPathUsesExpectedStagingLayout(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.002"/>
+  <testcase name="applicationRootFallbackIsUsedWhenNoOverrideConfigured(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.004"/>
+  <testcase name="missingFileIsReported(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.002"/>
+  <testcase name="resolutionIsIndependentOfWorkingDirectory(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.004"/>
+  <testcase name="directoryInsteadOfFileIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.003"/>
+  <testcase name="propertyTakesPrecedenceOverEnvironment(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.007"/>
+  <testcase name="environmentIsUsedWhenPropertyIsAbsent(Path)" classname="com.chromascape.utils.core.input.remoteinput.NativeArtifactResolverTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

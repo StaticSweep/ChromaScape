@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:27.880Z" hostname="fedora" time="0.089">
+  <properties/>
+  <testcase name="localDevelopmentLoopbackReceivesPrincipal()" classname="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" time="0.087"/>
+  <testcase name="existingPrincipalIsPreserved()" classname="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" time="0.002"/>
+  <testcase name="nonLocalProfileDoesNotCreatePrincipal()" classname="com.chromascape.web.replay.security.LocalReplayPrincipalFilterTest" time="0.0"/>
+  <system-out><![CDATA[18:10:27.881 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+18:10:27.968 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+18:10:27.969 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [production]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

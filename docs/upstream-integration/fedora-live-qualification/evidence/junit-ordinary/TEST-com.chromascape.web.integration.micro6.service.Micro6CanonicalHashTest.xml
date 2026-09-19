@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:50.279Z" hostname="fedora" time="0.03">
+  <properties/>
+  <testcase name="catalogHashChangesWhenTaskIdentityChanges()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.015"/>
+  <testcase name="schemaBundleHashMatchesMicro6GoldenValue()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.004"/>
+  <testcase name="settingsSchemaHashChangesWhenSchemaChanges()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.0"/>
+  <testcase name="catalogHashMatchesMicro6GoldenValue()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.001"/>
+  <testcase name="settingsSchemaHashMatchesMicro6GoldenValue()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.001"/>
+  <testcase name="canonicalHashIgnoresProducerExclusionsRecursively()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.001"/>
+  <testcase name="catalogHashIgnoresVolatileAndSchemaFields()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.001"/>
+  <testcase name="schemaBundleHashBindsToCatalogHash()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.002"/>
+  <testcase name="catalogHashIsStableAcrossTaskOrdering()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.001"/>
+  <testcase name="canonicalHashingRoundTripsThroughJson()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.001"/>
+  <testcase name="catalogHashIsIdenticalForLightweightAndFullCatalogs()" classname="com.chromascape.web.integration.micro6.service.Micro6CanonicalHashTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

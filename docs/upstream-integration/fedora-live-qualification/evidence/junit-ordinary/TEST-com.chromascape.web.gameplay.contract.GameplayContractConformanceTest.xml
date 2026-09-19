@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.contract.GameplayContractConformanceTest" tests="4" skipped="0" failures="4" errors="0" timestamp="2026-09-19T16:08:09.711Z" hostname="fedora" time="0.157">
+  <properties/>
+  <testcase name="claudeAndCodexUseTheSameClosedDownstreamShape()" classname="com.chromascape.web.gameplay.contract.GameplayContractConformanceTest" time="0.13">
+    <failure message="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $: null found, object expected" type="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation">com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $: null found, object expected
+	at app//com.chromascape.web.gameplay.contract.GameplayContractValidator.validate(GameplayContractValidator.java:56)
+	at app//com.chromascape.web.gameplay.provider.ClosedGameplayProviderAdapter.adapt(ClosedGameplayProviderAdapter.java:21)
+	at app//com.chromascape.web.gameplay.contract.GameplayContractConformanceTest.claudeAndCodexUseTheSameClosedDownstreamShape(GameplayContractConformanceTest.java:71)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="securitySensitiveObjectsRejectUnknownOrUnsupportedFields()" classname="com.chromascape.web.gameplay.contract.GameplayContractConformanceTest" time="0.009">
+    <failure message="java.lang.ClassCastException: class com.fasterxml.jackson.databind.node.MissingNode cannot be cast to class com.fasterxml.jackson.databind.node.ObjectNode (com.fasterxml.jackson.databind.node.MissingNode and com.fasterxml.jackson.databind.node.ObjectNode are in unnamed module of loader 'app')" type="java.lang.ClassCastException">java.lang.ClassCastException: class com.fasterxml.jackson.databind.node.MissingNode cannot be cast to class com.fasterxml.jackson.databind.node.ObjectNode (com.fasterxml.jackson.databind.node.MissingNode and com.fasterxml.jackson.databind.node.ObjectNode are in unnamed module of loader 'app')
+	at com.chromascape.web.gameplay.contract.GameplayContractConformanceTest.securitySensitiveObjectsRejectUnknownOrUnsupportedFields(GameplayContractConformanceTest.java:85)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="canonicalResourcesHaveFrozenByteDigests()" classname="com.chromascape.web.gameplay.contract.GameplayContractConformanceTest" time="0.004">
+    <failure message="org.opentest4j.AssertionFailedError: &#10;expected: &quot;c55ad78af5b6367803bc7098e0ef0a03e03d8efff6465bd4eae7829aa743c19c&quot;&#10; but was: &quot;ff9ad17f984d013fa9b851f1181815656c87c7d629fef18c8fe40755d4f97c9a&quot;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: 
+expected: &quot;c55ad78af5b6367803bc7098e0ef0a03e03d8efff6465bd4eae7829aa743c19c&quot;
+ but was: &quot;ff9ad17f984d013fa9b851f1181815656c87c7d629fef18c8fe40755d4f97c9a&quot;
+	at app//com.chromascape.web.gameplay.contract.GameplayContractConformanceTest.canonicalResourcesHaveFrozenByteDigests(GameplayContractConformanceTest.java:100)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <testcase name="canonicalFixturesValidateAndPinDigests()" classname="com.chromascape.web.gameplay.contract.GameplayContractConformanceTest" time="0.012">
+    <failure message="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $: null found, object expected" type="com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation">com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation: $: null found, object expected
+	at app//com.chromascape.web.gameplay.contract.GameplayContractValidator.validate(GameplayContractValidator.java:56)
+	at app//com.chromascape.web.gameplay.contract.GameplayContractConformanceTest.canonicalFixturesValidateAndPinDigests(GameplayContractConformanceTest.java:47)
+	at java.base@17.0.20.1/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base@17.0.20.1/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

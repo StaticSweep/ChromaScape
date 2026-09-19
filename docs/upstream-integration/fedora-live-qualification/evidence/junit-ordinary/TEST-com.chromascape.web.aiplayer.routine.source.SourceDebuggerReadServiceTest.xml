@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.source.SourceDebuggerReadServiceTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:05.149Z" hostname="fedora" time="0.741">
+  <properties/>
+  <testcase name="durableRedactionMarkerWinsOverAPreviouslyCachedCopy()" classname="com.chromascape.web.aiplayer.routine.source.SourceDebuggerReadServiceTest" time="0.698"/>
+  <testcase name="deniesSensitiveContentEvenWhenTheManifestAllowsTheFile()" classname="com.chromascape.web.aiplayer.routine.source.SourceDebuggerReadServiceTest" time="0.013"/>
+  <testcase name="durablePruneMarkerWinsOverAPreviouslyCachedCopy()" classname="com.chromascape.web.aiplayer.routine.source.SourceDebuggerReadServiceTest" time="0.009"/>
+  <testcase name="servesOnlyVerifiedCachedContentAndSnakeCaseSymbols()" classname="com.chromascape.web.aiplayer.routine.source.SourceDebuggerReadServiceTest" time="0.019"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:29:14.901Z" hostname="fedora" time="0.43">
+  <properties/>
+  <testcase name="windowsBackendIsDestroyedWhenPostConstructionFenceFails()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.383"/>
+  <testcase name="productionConstructorHonorsExplicitOverrideAndFailsClosedOnUnloadableLibrary()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.009"/>
+  <testcase name="windowsSessionUsesClientRelativeDimensionsAndFencing()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.009"/>
+  <testcase name="separateFactoriesShareTheProcessAttachmentLease()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.011"/>
+  <testcase name="productionConstructorKeepsAttachmentDisabledByDefault()" classname="com.chromascape.utils.core.input.TargetInputSessionFactoryTest" time="0.011"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

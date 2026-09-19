@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:36.874Z" hostname="fedora" time="1.119">
+  <properties/>
+  <testcase name="generatesProposalWithoutLoadingLobBackedEntities()" classname="com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextTest" time="0.995"/>
+  <testcase name="statusReportsTerminalGenerationFailureSoPollersCanStop()" classname="com.chromascape.web.aiplayer.routine.service.RoutineAssistantGenerationContextTest" time="0.122"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

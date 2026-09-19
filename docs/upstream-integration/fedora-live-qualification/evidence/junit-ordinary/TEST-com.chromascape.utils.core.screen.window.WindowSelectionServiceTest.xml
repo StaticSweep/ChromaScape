@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.WindowSelectionServiceTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:55.202Z" hostname="fedora" time="0.009">
+  <properties/>
+  <testcase name="hwndAdapterReturnsTheSelectedHandleWhenPresent()" classname="com.chromascape.utils.core.screen.window.WindowSelectionServiceTest" time="0.001"/>
+  <testcase name="isSelectedFallsBackToReferenceEqualityWithoutIdentity()" classname="com.chromascape.utils.core.screen.window.WindowSelectionServiceTest" time="0.001"/>
+  <testcase name="isSelectedComparesNeutralIdentityAcrossReEnumeration()" classname="com.chromascape.utils.core.screen.window.WindowSelectionServiceTest" time="0.0"/>
+  <testcase name="isSelectedIsFalseWhenOnlyOneSideCarriesAnIdentity()" classname="com.chromascape.utils.core.screen.window.WindowSelectionServiceTest" time="0.0"/>
+  <testcase name="selectedWindowAccessorKeepsItsContract()" classname="com.chromascape.utils.core.screen.window.WindowSelectionServiceTest" time="0.001"/>
+  <testcase name="generationIncrementsOnSelectAndClear()" classname="com.chromascape.utils.core.screen.window.WindowSelectionServiceTest" time="0.001"/>
+  <testcase name="hwndAdapterYieldsNullForNeutralSelections()" classname="com.chromascape.utils.core.screen.window.WindowSelectionServiceTest" time="0.0"/>
+  <system-out><![CDATA[18:04:55.203 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: title
+18:04:55.204 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: title
+18:04:55.206 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:55.207 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:55.208 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:55.208 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selection cleared
+18:04:55.210 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:55.210 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:55.210 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selection cleared
+18:04:55.211 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

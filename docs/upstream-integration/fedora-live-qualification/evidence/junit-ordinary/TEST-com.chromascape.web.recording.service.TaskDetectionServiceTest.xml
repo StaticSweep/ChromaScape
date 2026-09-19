@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.recording.service.TaskDetectionServiceTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:20.722Z" hostname="fedora" time="1.114">
+  <properties/>
+  <testcase name="onTaskEnded_existingRow_updatesMetadata()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="1.093"/>
+  <testcase name="onTaskDetected_startReturnsNull_doesNotMarkTaskActive()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.001"/>
+  <testcase name="onTaskDetected_afterDisabledPlan_doesNotLeakPlanIntoFallbackRow()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.003"/>
+  <testcase name="onTaskDetected_taskNotEnabled_doesNotStartRecordingAndClearsState()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.001"/>
+  <testcase name="onTaskEnded_stopRecordingThrows_clearsStateAndDoesNotPropagate()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.004"/>
+  <testcase name="onPlanTaskDetected_createsAndFinalizesPlanRecording()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.002"/>
+  <testcase name="onPlanTaskDetected_planDisabled_clearsAllTaskState()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.001"/>
+  <testcase name="onTaskEnded_noActiveRecording_clearsStateOnly()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.001"/>
+  <testcase name="onTaskEnded_stopRecordingReturnsNull_clearsStateWithoutBogusFinalization()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.002"/>
+  <testcase name="onPlanTaskDetected_startReturnsNull_doesNotStorePlanContext()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.001"/>
+  <testcase name="onTaskEnded_missingRow_createsFallbackRow()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.002"/>
+  <testcase name="onTaskDetected_switchingTasks_finalizesPreviousRecording()" classname="com.chromascape.web.recording.service.TaskDetectionServiceTest" time="0.002"/>
+  <system-out><![CDATA[18:09:21.812 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Task detected: WOODCUTTING - wc-script
+18:09:21.813 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Auto-starting recording for task: WOODCUTTING
+18:09:21.813 [Test worker] DEBUG com.chromascape.web.recording.service.TaskDetectionService - RecordingSession already exists for rec-1, skipping insert
+18:09:21.814 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Updating existing RecordingSession rec-1 with finalized metadata for task: WOODCUTTING
+18:09:21.814 [Test worker] WARN  com.chromascape.web.recording.service.TaskDetectionService - Finalized video file not found on disk for rec-1: /videos/rec-1.mp4
+18:09:21.814 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Finalized recording rec-1 for task: WOODCUTTING - video: /videos/rec-1.mp4, duration: 5000ms, frames: 150, fps: 30, codec: libx264
+18:09:21.816 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Task detected: WOODCUTTING - wc-script
+18:09:21.816 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Auto-starting recording for task: WOODCUTTING
+18:09:21.817 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Plan-linked task detected: plan=plan-1, item=item-1, context=plan-script
+18:09:21.817 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Task detected: WOODCUTTING - wc-script
+18:09:21.817 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Auto-starting recording for task: WOODCUTTING
+18:09:21.817 [Test worker] WARN  com.chromascape.web.recording.service.TaskDetectionService - Could not create RecordingSession for auto-start rec-1: start time unavailable
+18:09:21.818 [Test worker] WARN  com.chromascape.web.recording.service.TaskDetectionService - RecordingSession not found for rec-1; creating fallback row for task: WOODCUTTING
+18:09:21.818 [Test worker] WARN  com.chromascape.web.recording.service.TaskDetectionService - Finalized video file not found on disk for rec-1: /videos/rec-1.mp4
+18:09:21.818 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Finalized recording rec-1 for task: WOODCUTTING - video: /videos/rec-1.mp4, duration: 5000ms, frames: 150, fps: 30, codec: libx264
+18:09:21.820 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Task detected: FISHING - fishing-script
+18:09:21.821 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Task detected: WOODCUTTING - wc-script
+18:09:21.821 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Auto-starting recording for task: WOODCUTTING
+18:09:21.822 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Created RecordingSession for auto-start: rec-1
+18:09:21.823 [Test worker] ERROR com.chromascape.web.recording.service.TaskDetectionService - Failed to finalize recording for task: WOODCUTTING (recordingId=unknown): encoder flush failed
+java.lang.RuntimeException: encoder flush failed
+	at com.chromascape.web.recording.service.RecordingService.stopRecording(RecordingService.java:338) ~[main/:?]
+	at com.chromascape.web.recording.service.TaskDetectionService.finalizeCurrentRecording(TaskDetectionService.java:189) ~[main/:?]
+	at com.chromascape.web.recording.service.TaskDetectionService.onTaskEnded(TaskDetectionService.java:100) ~[main/:?]
+	at com.chromascape.web.recording.service.TaskDetectionServiceTest.lambda$onTaskEnded_stopRecordingThrows_clearsStateAndDoesNotPropagate$9(TaskDetectionServiceTest.java:234) ~[test/:?]
+	at org.junit.jupiter.api.AssertDoesNotThrow.assertDoesNotThrow(AssertDoesNotThrow.java:49) ~[junit-jupiter-api-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.api.AssertDoesNotThrow.assertDoesNotThrow(AssertDoesNotThrow.java:36) ~[junit-jupiter-api-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.api.Assertions.assertDoesNotThrow(Assertions.java:3199) ~[junit-jupiter-api-5.12.2.jar:5.12.2]
+	at com.chromascape.web.recording.service.TaskDetectionServiceTest.onTaskEnded_stopRecordingThrows_clearsStateAndDoesNotPropagate(TaskDetectionServiceTest.java:234) ~[test/:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77) ~[?:?]
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43) ~[?:?]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569) ~[?:?]
+	at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:775) ~[junit-platform-commons-1.12.2.jar:1.12.2]
+	at org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:479) ~[junit-platform-commons-1.12.2.jar:1.12.2]
+	at org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$ValidatingInvocation.proceed(InvocationInterceptorChain.java:131) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.intercept(TimeoutExtension.java:161) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestableMethod(TimeoutExtension.java:152) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.extension.TimeoutExtension.interceptTestMethod(TimeoutExtension.java:91) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker$ReflectiveInterceptorCall.lambda$ofVoidMethod$0(InterceptingExecutableInvoker.java:112) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.lambda$invoke$0(InterceptingExecutableInvoker.java:94) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain$InterceptedInvocation.proceed(InvocationInterceptorChain.java:106) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.proceed(InvocationInterceptorChain.java:64) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.chainAndInvoke(InvocationInterceptorChain.java:45) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InvocationInterceptorChain.invoke(InvocationInterceptorChain.java:37) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:93) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.execution.InterceptingExecutableInvoker.invoke(InterceptingExecutableInvoker.java:87) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.lambda$invokeTestMethod$7(TestMethodTestDescriptor.java:216) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.invokeTestMethod(TestMethodTestDescriptor.java:212) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:137) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.jupiter.engine.descriptor.TestMethodTestDescriptor.execute(TestMethodTestDescriptor.java:69) ~[junit-jupiter-engine-5.12.2.jar:5.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:156) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511) ~[?:?]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511) ~[?:?]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.invokeAll(SameThreadHierarchicalTestExecutorService.java:41) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$6(NodeTestTask.java:160) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$8(NodeTestTask.java:146) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.Node.around(Node.java:137) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.lambda$executeRecursively$9(NodeTestTask.java:144) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.ThrowableCollector.execute(ThrowableCollector.java:73) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.executeRecursively(NodeTestTask.java:143) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.NodeTestTask.execute(NodeTestTask.java:100) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.SameThreadHierarchicalTestExecutorService.submit(SameThreadHierarchicalTestExecutorService.java:35) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestExecutor.execute(HierarchicalTestExecutor.java:57) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.engine.support.hierarchical.HierarchicalTestEngine.execute(HierarchicalTestEngine.java:54) ~[junit-platform-engine-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:201) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:170) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:94) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.lambda$execute$0(EngineExecutionOrchestrator.java:59) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.withInterceptedStreams(EngineExecutionOrchestrator.java:142) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.EngineExecutionOrchestrator.execute(EngineExecutionOrchestrator.java:58) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:103) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DefaultLauncher.execute(DefaultLauncher.java:85) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.InterceptingLauncher.lambda$execute$1(InterceptingLauncher.java:39) ~[junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.ClasspathAlignmentCheckingLauncherInterceptor.intercept(ClasspathAlignmentCheckingLauncherInterceptor.java:25) [junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.InterceptingLauncher.execute(InterceptingLauncher.java:38) [junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.junit.platform.launcher.core.DelegatingLauncher.execute(DelegatingLauncher.java:47) [junit-platform-launcher-1.12.2.jar:1.12.2]
+	at org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor$CollectAllTestClassesExecutor.processAllTestClasses(JUnitPlatformTestClassProcessor.java:124) [gradle-testing-junit-platform-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor$CollectAllTestClassesExecutor.access$000(JUnitPlatformTestClassProcessor.java:99) [gradle-testing-junit-platform-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestClassProcessor.stop(JUnitPlatformTestClassProcessor.java:94) [gradle-testing-junit-platform-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.SuiteTestClassProcessor.stop(SuiteTestClassProcessor.java:63) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77) ~[?:?]
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43) ~[?:?]
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569) ~[?:?]
+	at org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:36) [gradle-messaging-8.14.2.jar:8.14.2]
+	at org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:24) [gradle-messaging-8.14.2.jar:8.14.2]
+	at org.gradle.internal.dispatch.ContextClassLoaderDispatch.dispatch(ContextClassLoaderDispatch.java:33) [gradle-messaging-8.14.2.jar:8.14.2]
+	at org.gradle.internal.dispatch.ProxyDispatchAdapter$DispatchingInvocationHandler.invoke(ProxyDispatchAdapter.java:92) [gradle-messaging-8.14.2.jar:8.14.2]
+	at jdk.proxy1/jdk.proxy1.$Proxy4.stop(Unknown Source) [?:?]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker$3.run(TestWorker.java:200) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.executeAndMaintainThreadName(TestWorker.java:132) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.execute(TestWorker.java:103) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.execute(TestWorker.java:63) [gradle-testing-base-infrastructure-8.14.2.jar:8.14.2]
+	at org.gradle.process.internal.worker.child.ActionExecutionWorker.execute(ActionExecutionWorker.java:56) [gradle-worker-main-8.14.2.jar:8.14.2]
+	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:122) [gradle-worker-main-8.14.2.jar:8.14.2]
+	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72) [gradle-worker-main-8.14.2.jar:8.14.2]
+	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69) [gradle-worker.jar:?]
+	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74) [gradle-worker.jar:?]
+18:09:21.825 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Plan-linked task detected: plan=plan-42, item=item-7, context=plan-script
+18:09:21.825 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Auto-starting recording for plan task: plan-42/item-7
+18:09:21.826 [Test worker] WARN  com.chromascape.web.recording.service.TaskDetectionService - RecordingSession not found for rec-plan; creating fallback row for task: OTHER
+18:09:21.826 [Test worker] WARN  com.chromascape.web.recording.service.TaskDetectionService - Finalized video file not found on disk for rec-plan: /videos/rec-plan.mp4
+18:09:21.826 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Finalized recording rec-plan for task: OTHER - video: /videos/rec-plan.mp4, duration: 8000ms, frames: 240, fps: 30, codec: libx264
+18:09:21.827 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Plan-linked task detected: plan=plan-1, item=item-1, context=plan-script
+18:09:21.830 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Task detected: WOODCUTTING - wc-script
+18:09:21.830 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Auto-starting recording for task: WOODCUTTING
+18:09:21.830 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Created RecordingSession for auto-start: rec-1
+18:09:21.830 [Test worker] ERROR com.chromascape.web.recording.service.TaskDetectionService - Failed to finalize recording for task: WOODCUTTING: stopRecording() returned null; metadata not persisted
+18:09:21.831 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Plan-linked task detected: plan=plan-1, item=item-1, context=plan-script
+18:09:21.831 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Auto-starting recording for plan task: plan-1/item-1
+18:09:21.832 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Task detected: WOODCUTTING - wc-script
+18:09:21.833 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Auto-starting recording for task: WOODCUTTING
+18:09:21.833 [Test worker] WARN  com.chromascape.web.recording.service.TaskDetectionService - Could not create RecordingSession for auto-start rec-1: start time unavailable
+18:09:21.833 [Test worker] WARN  com.chromascape.web.recording.service.TaskDetectionService - RecordingSession not found for rec-1; creating fallback row for task: WOODCUTTING
+18:09:21.833 [Test worker] WARN  com.chromascape.web.recording.service.TaskDetectionService - Finalized video file not found on disk for rec-1: /videos/rec-1.mp4
+18:09:21.833 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Finalized recording rec-1 for task: WOODCUTTING - video: /videos/rec-1.mp4, duration: 5000ms, frames: 150, fps: 30, codec: libx264
+18:09:21.835 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Task detected: WOODCUTTING - wc-script
+18:09:21.835 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Auto-starting recording for task: WOODCUTTING
+18:09:21.835 [Test worker] DEBUG com.chromascape.web.recording.service.TaskDetectionService - RecordingSession already exists for rec-1, skipping insert
+18:09:21.836 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Task detected: MINING - mining-script
+18:09:21.836 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Updating existing RecordingSession rec-1 with finalized metadata for previous task: WOODCUTTING
+18:09:21.836 [Test worker] WARN  com.chromascape.web.recording.service.TaskDetectionService - Finalized video file not found on disk for rec-1: /videos/rec-1.mp4
+18:09:21.836 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Finalized recording rec-1 for previous task: WOODCUTTING - video: /videos/rec-1.mp4, duration: 5000ms, frames: 150, fps: 30, codec: libx264
+18:09:21.836 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Auto-starting recording for task: MINING
+18:09:21.836 [Test worker] INFO  com.chromascape.web.recording.service.TaskDetectionService - Created RecordingSession for auto-start: rec-2
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

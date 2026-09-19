@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingWiringTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:17.417Z" hostname="fedora" time="0.59">
+  <properties/>
+  <testcase name="recordsNotConfiguredRatherThanLeavingStateNullWhenBinderIsAbsent()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingWiringTest" time="0.442"/>
+  <testcase name="doesNotBindBeforeTaskStartIsConfirmed()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingWiringTest" time="0.1"/>
+  <testcase name="bindsExactlyOnceAcrossRepeatedStatusPolls()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingWiringTest" time="0.008"/>
+  <testcase name="recordsFailedStateButDoesNotFailTheRunningRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingWiringTest" time="0.003"/>
+  <testcase name="passesNullAttestationWhenHeartbeatCarriesNoArtifactIdentity()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingWiringTest" time="0.003"/>
+  <testcase name="bindsSourceOnceTaskStartIsConfirmed()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingWiringTest" time="0.002"/>
+  <testcase name="recordsFailedWhenNoTaskKeyIsAvailableToBind()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalSourceBindingWiringTest" time="0.004"/>
+  <system-out><![CDATA[18:06:18.006 [Test worker] WARN  com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationService - [SC-810] run bg_bind_0006 confirmed without a task key; source binding cannot be attempted
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

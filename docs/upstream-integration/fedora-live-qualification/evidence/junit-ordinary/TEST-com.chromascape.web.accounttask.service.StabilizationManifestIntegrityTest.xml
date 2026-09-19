@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.service.StabilizationManifestIntegrityTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:04.671Z" hostname="fedora" time="0.038">
+  <properties/>
+  <testcase name="an unknown schema version is rejected" classname="com.chromascape.web.accounttask.service.StabilizationManifestIntegrityTest" time="0.005"/>
+  <testcase name="a PASS manifest that lacks complete evidence is rejected" classname="com.chromascape.web.accounttask.service.StabilizationManifestIntegrityTest" time="0.009"/>
+  <testcase name="an invalid manifest hash is rejected" classname="com.chromascape.web.accounttask.service.StabilizationManifestIntegrityTest" time="0.008"/>
+  <testcase name="an invalid outcome/terminal combination is rejected" classname="com.chromascape.web.accounttask.service.StabilizationManifestIntegrityTest" time="0.004"/>
+  <testcase name="missing required identity is rejected" classname="com.chromascape.web.accounttask.service.StabilizationManifestIntegrityTest" time="0.003"/>
+  <testcase name="direct manifest ingestion can never create a verified certification record" classname="com.chromascape.web.accounttask.service.StabilizationManifestIntegrityTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

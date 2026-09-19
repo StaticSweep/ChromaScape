@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.ScreenManagerRenderedBufferTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:54.787Z" hostname="fedora" time="0.01">
+  <properties/>
+  <testcase name="preservesScreenSpaceCoordinatesAndClampsPartialCrop()" classname="com.chromascape.utils.core.screen.window.ScreenManagerRenderedBufferTest" time="0.003"/>
+  <testcase name="rejectsEmptyAndDisjointCrops()" classname="com.chromascape.utils.core.screen.window.ScreenManagerRenderedBufferTest" time="0.004"/>
+  <testcase name="linuxCaptureDoesNotNeedWin32LibraryPath()" classname="com.chromascape.utils.core.screen.window.ScreenManagerRenderedBufferTest" time="0.001"/>
+  <system-out><![CDATA[18:04:54.788 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.791 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.796 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

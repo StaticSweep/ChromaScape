@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ParseReport Fallback Tests" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:36.044Z" hostname="fedora" time="0.003">
+  <properties/>
+  <testcase name="Should produce parseable report when no report file and no JSON in output" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$ParseReportFallbackTests" time="0.003"/>
+  <system-out><![CDATA[18:10:36.046 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'reportsDir' of type [null] on target object [SimulatorVerifierProperties{enabled=true, openruneRoot='/mnt/f/Dev/IdeaProjects/OpenRune-Server', invocationMode='jar', verifierJarPath='simulator-verifier/build/libs/simulator-verifier-all.jar', defaultBridgeUrl='http://localhost:8092', reportsDir='output/simulator-reports', maxConcurrentJobs=2, jobTimeoutSeconds=300}] or target class [class com.chromascape.web.simulator.SimulatorVerifierProperties] to value [reports]
+18:10:36.046 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'openruneRoot' of type [null] on target object [SimulatorVerifierProperties{enabled=true, openruneRoot='/mnt/f/Dev/IdeaProjects/OpenRune-Server', invocationMode='jar', verifierJarPath='simulator-verifier/build/libs/simulator-verifier-all.jar', defaultBridgeUrl='http://localhost:8092', reportsDir='reports', maxConcurrentJobs=2, jobTimeoutSeconds=300}] or target class [class com.chromascape.web.simulator.SimulatorVerifierProperties] to value [/tmp/junit-15721353030268912152]
+18:10:36.046 [Test worker] WARN  com.chromascape.web.simulator.SimulatorVerifyService - Report file not found at /tmp/junit-15721353030268912152/reports/parse-report-fallback.json, attempting to parse from output
+18:10:36.046 [Test worker] INFO  com.chromascape.web.simulator.SimulatorVerifyService - Built synthetic error report for job parse-report-fallback from verifier output
+18:10:36.046 [Test worker] INFO  com.chromascape.web.simulator.SimulatorVerifyService - Persisted report from verifier output to /tmp/junit-15721353030268912152/reports/parse-report-fallback.json
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

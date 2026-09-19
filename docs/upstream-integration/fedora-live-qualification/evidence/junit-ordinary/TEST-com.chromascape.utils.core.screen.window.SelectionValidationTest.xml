@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.SelectionValidationTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:04:54.798Z" hostname="fedora" time="0.013">
+  <properties/>
+  <testcase name="noProcessResolutionOccursAfterAGenerationMismatch()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.001"/>
+  <testcase name="nullManagerValidatesToUnsupportedPlatform()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.001"/>
+  <testcase name="remoteIdentityIsRefusedBeforeLocalResolution()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.001"/>
+  <testcase name="legacySelectionWithoutIdentityFallsBackToPidLiveness()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.001"/>
+  <testcase name="unsupportedPlatformManagerValidatesToUnsupportedPlatform()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.001"/>
+  <testcase name="noSelectionValidatesToNone()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.0"/>
+  <testcase name="futureGenerationIsRejected()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.0"/>
+  <testcase name="reusedPidValidatesToReplacedByBootIdMismatch()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.0"/>
+  <testcase name="exitedProcessValidatesToExited()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.001"/>
+  <testcase name="exactCurrentGenerationIsAccepted()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.0"/>
+  <testcase name="reusedPidValidatesToReplacedByStartTimeMismatch()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.001"/>
+  <testcase name="validSelectionRevalidatesAgainstLiveIdentity()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.001"/>
+  <testcase name="staleGenerationIsDetectedBeforeResolution()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.0"/>
+  <testcase name="clearAfterSelectionValidatesToNone()" classname="com.chromascape.utils.core.screen.window.SelectionValidationTest" time="0.001"/>
+  <system-out><![CDATA[18:04:54.798 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.799 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.800 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.801 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: title
+18:04:54.802 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.804 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.805 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.806 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.807 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.808 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.809 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.810 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.810 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.811 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+18:04:54.811 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selection cleared
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

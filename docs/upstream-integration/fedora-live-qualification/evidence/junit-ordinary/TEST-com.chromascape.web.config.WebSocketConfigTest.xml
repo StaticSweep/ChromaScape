@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.config.WebSocketConfigTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:08.345Z" hostname="fedora" time="0.29">
+  <properties/>
+  <testcase name="testPatchLoopHandlerExtendsTextWebSocketHandler()" classname="com.chromascape.web.config.WebSocketConfigTest" time="0.283"/>
+  <testcase name="testPatchLoopHandlerIsNotNull()" classname="com.chromascape.web.config.WebSocketConfigTest" time="0.001"/>
+  <testcase name="testWildcardRoutePatternCompatibility()" classname="com.chromascape.web.config.WebSocketConfigTest" time="0.001"/>
+  <testcase name="testWebSocketConfigCanBeInstantiated()" classname="com.chromascape.web.config.WebSocketConfigTest" time="0.0"/>
+  <testcase name="testExpectedRoutePatterns()" classname="com.chromascape.web.config.WebSocketConfigTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

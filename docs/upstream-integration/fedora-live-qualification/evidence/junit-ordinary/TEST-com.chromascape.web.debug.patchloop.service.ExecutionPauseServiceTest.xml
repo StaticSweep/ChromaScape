@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.patchloop.service.ExecutionPauseServiceTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:07:05.254Z" hostname="fedora" time="0.005">
+  <properties/>
+  <testcase name="setPaused with true overwrites existing pause state" classname="com.chromascape.web.debug.patchloop.service.ExecutionPauseServiceTest" time="0.001"/>
+  <testcase name="setPaused adds execution to paused state" classname="com.chromascape.web.debug.patchloop.service.ExecutionPauseServiceTest" time="0.0"/>
+  <testcase name="getPausedCount returns zero when no executions paused" classname="com.chromascape.web.debug.patchloop.service.ExecutionPauseServiceTest" time="0.0"/>
+  <testcase name="clearPaused is idempotent for non-existent execution" classname="com.chromascape.web.debug.patchloop.service.ExecutionPauseServiceTest" time="0.0"/>
+  <testcase name="setPaused with false removes execution from paused state" classname="com.chromascape.web.debug.patchloop.service.ExecutionPauseServiceTest" time="0.0"/>
+  <testcase name="getPausedCount returns correct count for multiple paused executions" classname="com.chromascape.web.debug.patchloop.service.ExecutionPauseServiceTest" time="0.0"/>
+  <testcase name="isPaused returns false for non-existent execution" classname="com.chromascape.web.debug.patchloop.service.ExecutionPauseServiceTest" time="0.0"/>
+  <testcase name="clearPaused removes execution from paused state" classname="com.chromascape.web.debug.patchloop.service.ExecutionPauseServiceTest" time="0.001"/>
+  <system-out><![CDATA[18:07:05.255 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionPauseService - Execution exec_1789834025254 paused
+18:07:05.255 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionPauseService - Execution exec_1789834025254 paused
+18:07:05.256 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionPauseService - Execution exec_1789834025256 paused
+18:07:05.257 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionPauseService - Execution exec_1789834025257 paused
+18:07:05.257 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionPauseService - Execution exec_1789834025257 resumed
+18:07:05.258 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionPauseService - Execution exec1 paused
+18:07:05.258 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionPauseService - Execution exec2 paused
+18:07:05.258 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionPauseService - Execution exec3 paused
+18:07:05.259 [Test worker] DEBUG com.chromascape.web.debug.patchloop.service.ExecutionPauseService - Execution exec_1789834025259 paused
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:32.983Z" hostname="fedora" time="0.76">
+  <properties/>
+  <testcase name="verifiesCurrentCanonicalManifestAcrossRepositoryRelativeModules()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.117"/>
+  <testcase name="rejectsTamperedCheckoutMissingSelectionAndPathTraversal()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.011"/>
+  <testcase name="copiesOnlyTheExecutableGradleDistributionIntoThePrivateHome()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.001"/>
+  <testcase name="validatesExactUtf8BytePreimageInsteadOfWholeLines()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.004"/>
+  <testcase name="explicitContractsTakePrecedenceOverAnExistingSibling()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.002"/>
+  <testcase name="resolvesExplicitContractsOutsideTheMicro6SiblingLayout()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.001"/>
+  <testcase name="contractsMustBeADirectory()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.003"/>
+  <testcase name="invalidExplicitContractsNeverFallBackToSibling()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.015"/>
+  <testcase name="acceptsOnlyCanonicalMavenPurlsWithAnOptionalClassifier()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.001"/>
+  <testcase name="rejectsWrongCommitBuildDirtyStateAndLegacySchemaEvenWhenRehashed()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.009"/>
+  <testcase name="fetchesExactDetachedWorktreeCommitAbsentFromClonedBranches()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.554"/>
+  <testcase name="rejectsMovingRefsInsteadOfFetchingUnapprovedSource()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.005"/>
+  <testcase name="excludesOnlyGradleCoordinationLocksFromThePrivateCacheSeed()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.001"/>
+  <testcase name="rejectsMissingAmbiguousAndInvalidByteRanges()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.017"/>
+  <testcase name="rejectsChangedCanonicalContentAndDeclaredIdentity()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.007"/>
+  <testcase name="unconfiguredContractsRetainTheConventionalSiblingLayout()" classname="com.chromascape.web.aiplayer.routine.service.IsolatedPatchWorkerTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

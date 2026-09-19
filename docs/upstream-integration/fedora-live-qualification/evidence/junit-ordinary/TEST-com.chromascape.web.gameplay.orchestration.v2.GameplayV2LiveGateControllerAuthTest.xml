@@ -1,0 +1,495 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:08:40.342Z" hostname="fedora" time="3.216">
+  <properties/>
+  <testcase name="blankOperatorKeyIsRejectedAndReachesNoService()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="2.819"/>
+  <testcase name="reserveAndStopAlsoRequireAuthentication()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="0.247"/>
+  <testcase name="startWithoutARequestIdIsRejectedBeforeTheService()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="0.018"/>
+  <testcase name="authenticationHappensBeforeTheLiveFlagIsConsulted()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="0.014"/>
+  <testcase name="anUnconfiguredSecretClosesTheBoundaryEntirely()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="0.014"/>
+  <testcase name="validOperatorKeyReachesTheService()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="0.015"/>
+  <testcase name="wrongOperatorKeyIsRejectedAndReachesNoService()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="0.025"/>
+  <testcase name="missingOperatorKeyIsRejectedAndReachesNoService()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="0.015"/>
+  <testcase name="startWithoutAuthenticationNeverStarts()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="0.015"/>
+  <testcase name="aTooShortSecretClosesTheBoundaryEntirely()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="0.014"/>
+  <testcase name="startTakesTheClosedStartRequestAndNeverTheBundle()" classname="com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateControllerAuthTest" time="0.015"/>
+  <system-out><![CDATA[18:08:41.335 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:41.338 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:41.339 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:41.339 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:41.339 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:41.339 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:41.340 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:41.340 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:41.342 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:41.342 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:41.342 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:41.342 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:41.342 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:41.342 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:41.894 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:41.898 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:41.901 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:41.901 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:41.901 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:41.901 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:41.901 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:41.901 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:41.901 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@6cd612d3
+18:08:41.901 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@2fb6fb6a
+18:08:41.901 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:41.901 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+18:08:41.902 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/internal/gameplay/v2/status/req-1", parameters={}
+18:08:41.902 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#status(String, String)
+18:08:42.287 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:42.288 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:42.288 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_AUTHENTICATION_FAILED, message=A valid SC-1449 v2 operator key is required}]
+18:08:42.334 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: A valid SC-1449 v2 operator key is required]
+18:08:42.335 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 401 UNAUTHORIZED
+18:08:43.157 [Test worker] DEBUG com.jayway.jsonpath.internal.path.CompiledPath - Evaluating path: $['failureCode']
+18:08:43.164 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:43.164 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:43.164 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:43.164 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:43.165 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:43.165 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:43.165 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:43.165 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:43.167 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:43.167 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:43.167 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:43.167 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:43.167 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:43.167 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:43.170 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:43.172 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:43.173 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:43.174 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:43.174 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:43.174 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:43.174 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:43.174 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:43.174 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@340b31b6
+18:08:43.174 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@2cbc4981
+18:08:43.174 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:43.174 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+18:08:43.175 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/internal/gameplay/v2/reserve", parameters={}
+18:08:43.175 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#reserve(V2Bundle, String)
+18:08:43.398 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [V2Bundle[catalogSnapshot=null, semanticObservation=null, planningInput=null, eligibilityResult=null, (truncated)...]
+18:08:43.399 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.400 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.400 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_AUTHENTICATION_FAILED, message=A valid SC-1449 v2 operator key is required}]
+18:08:43.401 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: A valid SC-1449 v2 operator key is required]
+18:08:43.401 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 401 UNAUTHORIZED
+18:08:43.401 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/internal/gameplay/v2/stop", parameters={}
+18:08:43.401 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#stop(V2StopRequest, String)
+18:08:43.404 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [V2StopRequest[requestId=req-1, reason=operator, killSwitch=false]]
+18:08:43.405 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.405 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.405 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_AUTHENTICATION_FAILED, message=A valid SC-1449 v2 operator key is required}]
+18:08:43.406 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: A valid SC-1449 v2 operator key is required]
+18:08:43.406 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 401 UNAUTHORIZED
+18:08:43.406 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/internal/gameplay/v2/reconcile/req-1", parameters={}
+18:08:43.406 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#reconcile(String, String)
+18:08:43.407 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.407 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.407 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_AUTHENTICATION_FAILED, message=A valid SC-1449 v2 operator key is required}]
+18:08:43.407 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: A valid SC-1449 v2 operator key is required]
+18:08:43.407 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 401 UNAUTHORIZED
+18:08:43.411 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:43.411 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:43.411 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:43.412 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:43.412 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:43.412 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:43.412 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:43.412 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:43.414 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:43.414 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:43.414 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:43.414 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:43.414 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:43.414 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:43.417 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:43.419 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:43.420 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:43.421 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:43.421 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:43.421 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:43.421 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:43.421 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:43.421 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@6299b325
+18:08:43.421 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@3f817722
+18:08:43.421 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:43.421 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+18:08:43.421 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/internal/gameplay/v2/start", parameters={}
+18:08:43.422 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#start(V2StartRequest, String)
+18:08:43.424 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [V2StartRequest[requestId=null, leaseGeneration=7, fence=9]]
+18:08:43.425 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.425 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=BAD_REQUEST, message=requestId is required}]
+18:08:43.425 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 400 BAD_REQUEST
+18:08:43.425 [Test worker] DEBUG com.jayway.jsonpath.internal.path.CompiledPath - Evaluating path: $['failureCode']
+18:08:43.426 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/internal/gameplay/v2/start", parameters={}
+18:08:43.426 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#start(V2StartRequest, String)
+18:08:43.426 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [V2StartRequest[requestId=, leaseGeneration=7, fence=9]]
+18:08:43.427 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.427 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=BAD_REQUEST, message=requestId is required}]
+18:08:43.427 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 400 BAD_REQUEST
+18:08:43.429 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:43.429 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:43.430 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:43.430 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:43.430 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:43.430 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:43.430 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:43.430 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:43.431 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:43.432 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:43.432 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:43.432 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:43.432 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:43.432 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:43.435 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:43.436 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:43.438 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:43.438 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:43.438 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:43.438 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:43.438 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:43.438 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:43.438 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@3805ebbe
+18:08:43.438 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@1512254c
+18:08:43.438 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:43.438 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+18:08:43.439 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/internal/gameplay/v2/status/req-1", parameters={}
+18:08:43.439 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#status(String, String)
+18:08:43.440 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.441 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.441 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_AUTHENTICATION_FAILED, message=A valid SC-1449 v2 operator key is required}]
+18:08:43.441 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: A valid SC-1449 v2 operator key is required]
+18:08:43.441 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 401 UNAUTHORIZED
+18:08:43.441 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/internal/gameplay/v2/status/req-1", parameters={}
+18:08:43.442 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#status(String, String)
+18:08:43.442 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.442 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=V2_DISABLED, message=v2 live gameplay is disabled}]
+18:08:43.442 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 503 SERVICE_UNAVAILABLE
+18:08:43.443 [Test worker] DEBUG com.jayway.jsonpath.internal.path.CompiledPath - Evaluating path: $['failureCode']
+18:08:43.444 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:43.445 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:43.445 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:43.445 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:43.445 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:43.445 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:43.445 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:43.445 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:43.446 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:43.447 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:43.447 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:43.447 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:43.447 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:43.447 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:43.450 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:43.452 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:43.453 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:43.454 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:43.454 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:43.454 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:43.454 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:43.454 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:43.454 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@51fb9eac
+18:08:43.454 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@3048f547
+18:08:43.454 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:43.454 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+18:08:43.455 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/internal/gameplay/v2/status/req-1", parameters={}
+18:08:43.455 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#status(String, String)
+18:08:43.456 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.456 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.457 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_KEY_NOT_CONFIGURED, message=No SC-1449 v2 operator key is configured; the live (truncated)...]
+18:08:43.457 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: No SC-1449 v2 operator key is configured; the live gate is closed]
+18:08:43.457 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 503 SERVICE_UNAVAILABLE
+18:08:43.457 [Test worker] DEBUG com.jayway.jsonpath.internal.path.CompiledPath - Evaluating path: $['failureCode']
+18:08:43.459 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:43.459 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:43.460 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:43.460 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:43.460 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:43.460 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:43.460 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:43.460 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:43.461 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:43.461 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:43.461 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:43.461 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:43.462 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:43.462 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:43.465 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:43.466 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:43.468 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:43.468 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:43.468 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:43.468 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:43.468 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:43.468 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:43.468 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@265e5e0b
+18:08:43.468 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@16f640e0
+18:08:43.468 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:43.468 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+18:08:43.469 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/internal/gameplay/v2/status/req-1", parameters={}
+18:08:43.469 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#status(String, String)
+18:08:43.471 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.471 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{requestId=req-1, envelopeDigest=digest-1, state=ACTIVE, failureCode=null, terminal=false, evidence= (truncated)...]
+18:08:43.472 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+18:08:43.472 [Test worker] DEBUG com.jayway.jsonpath.internal.path.CompiledPath - Evaluating path: $['state']
+18:08:43.472 [Test worker] DEBUG com.jayway.jsonpath.internal.path.CompiledPath - Evaluating path: $['requestId']
+18:08:43.474 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:43.474 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:43.475 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:43.475 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:43.475 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:43.475 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:43.476 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:43.476 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:43.477 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:43.477 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:43.478 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:43.478 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:43.478 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:43.478 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:43.481 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:43.482 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:43.485 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:43.485 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:43.487 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:43.487 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:43.487 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:43.487 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:43.487 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@6f4ce3e7
+18:08:43.487 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@725cefc7
+18:08:43.487 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:43.487 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+18:08:43.487 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/internal/gameplay/v2/status/req-1", parameters={}
+18:08:43.488 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#status(String, String)
+18:08:43.489 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.490 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.490 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_AUTHENTICATION_FAILED, message=A valid SC-1449 v2 operator key is required}]
+18:08:43.491 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: A valid SC-1449 v2 operator key is required]
+18:08:43.491 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 401 UNAUTHORIZED
+18:08:43.491 [Test worker] DEBUG com.jayway.jsonpath.internal.path.CompiledPath - Evaluating path: $['failureCode']
+18:08:43.491 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/internal/gameplay/v2/status/req-1", parameters={}
+18:08:43.491 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#status(String, String)
+18:08:43.492 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.492 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.492 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_AUTHENTICATION_FAILED, message=A valid SC-1449 v2 operator key is required}]
+18:08:43.493 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: A valid SC-1449 v2 operator key is required]
+18:08:43.493 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 401 UNAUTHORIZED
+18:08:43.493 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/internal/gameplay/v2/status/req-1", parameters={}
+18:08:43.493 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#status(String, String)
+18:08:43.493 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.494 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.497 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_AUTHENTICATION_FAILED, message=A valid SC-1449 v2 operator key is required}]
+18:08:43.498 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: A valid SC-1449 v2 operator key is required]
+18:08:43.498 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 401 UNAUTHORIZED
+18:08:43.500 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:43.500 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:43.500 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:43.500 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:43.501 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:43.501 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:43.501 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:43.501 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:43.502 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:43.502 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:43.502 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:43.503 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:43.503 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:43.503 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:43.506 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:43.507 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:43.509 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:43.509 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:43.509 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:43.509 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:43.510 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:43.510 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:43.510 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@5ae3ee58
+18:08:43.510 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@8507cf5
+18:08:43.510 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:43.510 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 1 ms
+18:08:43.510 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/internal/gameplay/v2/status/req-1", parameters={}
+18:08:43.510 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#status(String, String)
+18:08:43.512 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.512 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.512 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_AUTHENTICATION_FAILED, message=A valid SC-1449 v2 operator key is required}]
+18:08:43.513 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: A valid SC-1449 v2 operator key is required]
+18:08:43.513 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 401 UNAUTHORIZED
+18:08:43.513 [Test worker] DEBUG com.jayway.jsonpath.internal.path.CompiledPath - Evaluating path: $['failureCode']
+18:08:43.515 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:43.515 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:43.515 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:43.515 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:43.515 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:43.515 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:43.515 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:43.516 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:43.517 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:43.517 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:43.517 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:43.517 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:43.517 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:43.517 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:43.520 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:43.522 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:43.523 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:43.523 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:43.524 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:43.524 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:43.524 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:43.524 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:43.524 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@8c41fbf
+18:08:43.524 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@44a8f5a2
+18:08:43.524 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:43.524 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+18:08:43.524 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/internal/gameplay/v2/start", parameters={}
+18:08:43.524 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#start(V2StartRequest, String)
+18:08:43.526 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [V2StartRequest[requestId=req-1, leaseGeneration=7, fence=9]]
+18:08:43.527 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.527 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.527 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_AUTHENTICATION_FAILED, message=A valid SC-1449 v2 operator key is required}]
+18:08:43.528 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: A valid SC-1449 v2 operator key is required]
+18:08:43.528 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 401 UNAUTHORIZED
+18:08:43.530 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:43.530 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:43.530 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:43.531 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:43.531 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:43.531 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:43.531 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:43.531 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:43.532 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:43.532 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:43.533 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:43.533 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:43.533 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:43.533 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:43.535 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:43.537 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:43.538 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:43.539 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:43.539 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:43.539 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:43.539 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:43.539 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:43.539 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@1befd53
+18:08:43.539 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@767014a7
+18:08:43.539 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:43.539 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 0 ms
+18:08:43.539 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - GET "/api/internal/gameplay/v2/status/req-1", parameters={}
+18:08:43.540 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#status(String, String)
+18:08:43.541 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Using @ExceptionHandler com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#operatorError(GameplayV2OperatorException)
+18:08:43.541 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.541 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{failureCode=OPERATOR_KEY_NOT_CONFIGURED, message=No SC-1449 v2 operator key is configured; the live (truncated)...]
+18:08:43.542 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - Resolved [com.chromascape.web.gameplay.orchestration.v2.GameplayV2OperatorAuthenticator$GameplayV2OperatorException: No SC-1449 v2 operator key is configured; the live gate is closed]
+18:08:43.542 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 503 SERVICE_UNAVAILABLE
+18:08:43.543 [Test worker] DEBUG com.jayway.jsonpath.internal.path.CompiledPath - Evaluating path: $['failureCode']
+18:08:43.545 [Test worker] DEBUG org.hibernate.validator.messageinterpolation.ResourceBundleMessageInterpolator - Loaded expression factory via original TCCL
+18:08:43.545 [Test worker] DEBUG org.hibernate.validator.internal.engine.AbstractConfigurationImpl - Setting custom MessageInterpolator of type org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator
+18:08:43.545 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - Trying to load META-INF/validation.xml for XML based Validator configuration.
+18:08:43.545 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via TCCL
+18:08:43.545 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ResourceLoaderHelper - Trying to load META-INF/validation.xml via Hibernate Validator's class loader
+18:08:43.545 [Test worker] DEBUG org.hibernate.validator.internal.xml.config.ValidationXmlParser - No META-INF/validation.xml found. Using annotation based configuration only.
+18:08:43.545 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Found jakarta.persistence.Persistence on classpath containing 'getPersistenceUtil'. Assuming JPA 2 environment. Trying to instantiate JPA aware TraversableResolver
+18:08:43.546 [Test worker] DEBUG org.hibernate.validator.internal.engine.resolver.TraversableResolvers - Instantiated JPA aware TraversableResolver of type org.hibernate.validator.internal.engine.resolver.JPATraversableResolver.
+18:08:43.547 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000252: Using org.hibernate.validator.internal.engine.DefaultPropertyNodeNameProvider as property node name provider.
+18:08:43.547 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.springframework.validation.beanvalidation.LocaleContextMessageInterpolator as ValidatorFactory-scoped message interpolator.
+18:08:43.547 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.resolver.JPATraversableResolver as ValidatorFactory-scoped traversable resolver.
+18:08:43.547 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.util.ExecutableParameterNameProvider as ValidatorFactory-scoped parameter name provider.
+18:08:43.547 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.DefaultClockProvider as ValidatorFactory-scoped clock provider.
+18:08:43.547 [Test worker] DEBUG org.hibernate.validator.internal.engine.ValidatorFactoryConfigurationHelper - HV000234: Using org.hibernate.validator.internal.engine.scripting.DefaultScriptEvaluatorFactory as ValidatorFactory-scoped script evaluator factory.
+18:08:43.550 [Test worker] DEBUG _org.springframework.web.servlet.HandlerMapping.Mappings - 
+	c.c.w.g.o.v.GameplayV2LiveGateController:
+	{POST [/api/internal/gameplay/v2/start]}: start(V2StartRequest,String)
+	{GET [/api/internal/gameplay/v2/status/{requestId}]}: status(String,String)
+	{POST [/api/internal/gameplay/v2/stop]}: stop(V2StopRequest,String)
+	{POST [/api/internal/gameplay/v2/reconcile/{requestId}]}: reconcile(String,String)
+	{POST [/api/internal/gameplay/v2/reserve]}: reserve(V2Bundle,String)
+18:08:43.551 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - 5 mappings in org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+18:08:43.553 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter - ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+18:08:43.553 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver - ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+18:08:43.553 [Test worker] INFO  org.springframework.mock.web.MockServletContext - Initializing Spring TestDispatcherServlet ''
+18:08:43.553 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Initializing Servlet ''
+18:08:43.553 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected AcceptHeaderLocaleResolver
+18:08:43.553 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected FixedThemeResolver
+18:08:43.554 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@44e17ddd
+18:08:43.554 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Detected org.springframework.web.servlet.support.SessionFlashMapManager@c83b0a2
+18:08:43.554 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+18:08:43.554 [Test worker] INFO  org.springframework.test.web.servlet.TestDispatcherServlet - Completed initialization in 1 ms
+18:08:43.554 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - POST "/api/internal/gameplay/v2/start", parameters={}
+18:08:43.554 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping - Mapped to com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController#start(V2StartRequest, String)
+18:08:43.556 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessor - Read "application/json" to [V2StartRequest[requestId=req-1, leaseGeneration=7, fence=9]]
+18:08:43.557 [Test worker] INFO  com.chromascape.web.gameplay.orchestration.v2.GameplayV2LiveGateController - [ChromaScape] v2 gate operation principal=op-dd7d782fc4dc operation=start requestId=req-1 state=STARTING failureCode=null
+18:08:43.557 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/yaml]
+18:08:43.557 [Test worker] DEBUG org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessor - Writing [{requestId=req-1, envelopeDigest=digest-1, state=STARTING, failureCode=null, evidence=[]}]
+18:08:43.558 [Test worker] DEBUG org.springframework.test.web.servlet.TestDispatcherServlet - Completed 200 OK
+18:08:43.558 [Test worker] DEBUG com.jayway.jsonpath.internal.path.CompiledPath - Evaluating path: $['state']
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

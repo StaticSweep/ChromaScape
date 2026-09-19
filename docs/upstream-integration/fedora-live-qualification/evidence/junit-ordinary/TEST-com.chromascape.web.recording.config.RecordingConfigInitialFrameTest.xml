@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.recording.config.RecordingConfigInitialFrameTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:13.968Z" hostname="fedora" time="0.008">
+  <properties/>
+  <testcase name="toStringIncludesInitialFrameValues()" classname="com.chromascape.web.recording.config.RecordingConfigInitialFrameTest" time="0.006"/>
+  <testcase name="retryIntervalClampedToMaximum()" classname="com.chromascape.web.recording.config.RecordingConfigInitialFrameTest" time="0.0"/>
+  <testcase name="retryIntervalClampedToMinimum()" classname="com.chromascape.web.recording.config.RecordingConfigInitialFrameTest" time="0.0"/>
+  <testcase name="retryIntervalNeverExceedsEffectiveTimeout()" classname="com.chromascape.web.recording.config.RecordingConfigInitialFrameTest" time="0.0"/>
+  <testcase name="timeoutClampedToMaximum()" classname="com.chromascape.web.recording.config.RecordingConfigInitialFrameTest" time="0.0"/>
+  <testcase name="timeoutClampedToMinimum()" classname="com.chromascape.web.recording.config.RecordingConfigInitialFrameTest" time="0.0"/>
+  <testcase name="defaults()" classname="com.chromascape.web.recording.config.RecordingConfigInitialFrameTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

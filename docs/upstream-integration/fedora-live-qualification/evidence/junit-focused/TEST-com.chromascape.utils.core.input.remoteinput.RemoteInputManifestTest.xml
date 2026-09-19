@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:29:15.710Z" hostname="fedora" time="0.067">
+  <properties/>
+  <testcase name="blankPatchIdentityIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.033"/>
+  <testcase name="manifestWithoutArtifactObjectIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.002"/>
+  <testcase name="malformedDigestIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.002"/>
+  <testcase name="malformedRevisionIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.003"/>
+  <testcase name="nonPositiveArtifactSizeIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.004"/>
+  <testcase name="unsupportedSchemaVersionIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.002"/>
+  <testcase name="truncatedManifestIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.004"/>
+  <testcase name="readsTheReportedFields(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.002"/>
+  <testcase name="missingManifestIsRejected(Path)" classname="com.chromascape.utils.core.input.remoteinput.RemoteInputManifestTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

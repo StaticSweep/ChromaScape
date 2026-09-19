@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.report.ReplayReportContractTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:24.453Z" hostname="fedora" time="0.606">
+  <properties/>
+  <testcase name="logicalAndArtifactChecksumsStayConsistent()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.537"/>
+  <testcase name="partialRuntimeIdentityFailsClosedForInfrastructureFailure()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.002"/>
+  <testcase name="nonCausalModesAreRejectedByTheCheckedInContract()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.003"/>
+  <testcase name="preExecutionCancellationReportCarriesExactlyTheNullShape()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.003"/>
+  <testcase name="successfulExecutionReportSatisfiesTheStrictContract()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.002"/>
+  <testcase name="blankRuntimeIdentityFailsInsteadOfProducingInvalidBytes()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.001"/>
+  <testcase name="hardMismatchesAreEmbeddedOnlyWhenPresent()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.048"/>
+  <testcase name="preCapabilityInfrastructureFailureCarriesARealAttemptAndNoInventedIdentity()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.003"/>
+  <testcase name="executedReportsWithoutAnAttemptFailClosed()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.002"/>
+  <testcase name="mutatingCallerOwnedListsAfterPreparationCannotChangeReportBytes()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.002"/>
+  <testcase name="jvmClockTimestampsNeverEnterReports()" classname="com.chromascape.web.replay.report.ReplayReportContractTest" time="0.001"/>
+  <system-out><![CDATA[18:10:24.995 [Test worker] WARN  com.chromascape.web.replay.report.ReplayReportService - Report rejected by checked-in report-v1 schema: 1
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

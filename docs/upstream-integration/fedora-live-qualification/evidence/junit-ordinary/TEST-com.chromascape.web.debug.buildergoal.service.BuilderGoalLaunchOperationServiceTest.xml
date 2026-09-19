@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:10.409Z" hostname="fedora" time="2.076">
+  <properties/>
+  <testcase name="everyTargetStringFieldPassesThroughSanitization()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.136"/>
+  <testcase name="snapshotTargetMetadataIsRecursivelyImmutable()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.003"/>
+  <testcase name="readyWinsOverWatchdogRace()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.004"/>
+  <testcase name="modifyingMapReturnedFromToResponseCannotAffectStoredSnapshotOrLaterResponses()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.001"/>
+  <testcase name="modifyingOriginalMetadataAfterMarkReadyDoesNotChangeStoredSnapshot()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.001"/>
+  <testcase name="failedWinsOverLateReady()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.001"/>
+  <testcase name="preserveFailureDetailsEnrichesFailedSnapshotWithoutChangingTerminalState()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.0"/>
+  <testcase name="markReadyRejectsUnsupportedMetadataLeafTypes()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.16"/>
+  <testcase name="toResponseSanitizesOperationIdentityStrings()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.002"/>
+  <testcase name="progressSnapshotRemainsConsistentUnderConcurrentProgressAndReads()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="1.661"/>
+  <testcase name="terminalOperationExpiresFromCompletedAt()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.075"/>
+  <testcase name="createOrReuse_deduplicatesSimultaneousSameAccountRequests()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.011"/>
+  <testcase name="rejectionCleanupTransitionsToFailedAndClearsActiveMapping()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.002"/>
+  <testcase name="buildFailureUsesBuildFailedReadinessPhaseWithFailedTerminalStatus()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.001"/>
+  <testcase name="createOrReuse_differentAccountsCreateDistinctOperations()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.001"/>
+  <testcase name="markReadyFreezesSetsAndArraysInMetadataWithoutRetainingOriginalReferences()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.002"/>
+  <testcase name="retainedTerminalOperationRemainsQueryableByCompletedAt()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.001"/>
+  <testcase name="toResponseAndProgressSanitizeCredentialBearingText()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalLaunchOperationServiceTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

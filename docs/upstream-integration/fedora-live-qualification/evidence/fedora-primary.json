@@ -1,0 +1,82 @@
+{
+  "applicationRevision": "f3f75e9e",
+  "capturedAtUtc": "2026-09-19T15:15:00Z",
+  "checks": {
+    "attachment": {
+      "evidence": "POST /api/qualification/session/open returned status=open sessionOpen=true pid=<selected> targetBounds=765x503; the injected library logged '[RemoteInput] GetNativeReflector: entered' then 'reflection created' and /dev/shm contained RemoteInput_<pid>, RemoteInput_ControlCenter_SyncSignal_<pid>, sem.RemoteInput_ControlCenter_EventRead_<pid>, and sem.RemoteInput_ControlCenter_EventWrite_<pid>; see fedora-primary/attachment.log",
+      "status": "PASS"
+    },
+    "build": {
+      "evidence": "JDK17 candidate compiles; focused input/harness tests 145/145; ordinary suite failure identities unchanged from the integration baseline; replay failure identities unchanged (12, Docker unavailable); see fedora-primary/live-run.md",
+      "status": "PASS"
+    },
+    "capture": {
+      "evidence": "three POST /api/qualification/capture calls returned 765x503 frames with freshness NEW/UNCHANGED/PAUSED and distinct content timestamps; see fedora-primary/capture.log",
+      "status": "PASS"
+    },
+    "debugger": {
+      "evidence": "GET /debugger returned 200 and ss showed only 127.0.0.1:8090 bound",
+      "status": "PASS"
+    },
+    "discovery": {
+      "evidence": "GET /api/windows returned exactly one real RuneLite/Micro6 client pid for the single-client runs and both pids in deterministic order for the two-client run; wrappers, Gradle daemons, and IDE JVMs were excluded; see fedora-primary/attachment.log",
+      "status": "PASS"
+    },
+    "input": {
+      "evidence": "bounded mouse move succeeded, out-of-bounds move returned HTTP 400, a LEFT click and a 65 key press both reported held state false afterwards, and GET /input/held confirmed nothing remained held; see fedora-primary/input.log",
+      "status": "PASS"
+    },
+    "multiClientIsolation": {
+      "evidence": "two eligible clients were listed deterministically; explicit selection of the second attached only to that pid (capture and close both reported the selected pid); see fedora-primary/multiple-clients.log",
+      "status": "PASS"
+    },
+    "recording": {
+      "evidence": "out of scope for this story (packaging/recording follow-up)",
+      "status": "NOT_RUN"
+    },
+    "release": {
+      "evidence": "POST /api/qualification/session/close returned status=closed sessionOpen=false with no restartRequired or poisoned state, and no held input remained; see fedora-primary/release.log",
+      "status": "PASS"
+    },
+    "remoteLaunch": {
+      "evidence": "not exercised; the client was launched directly on the host for qualification",
+      "status": "NOT_RUN"
+    },
+    "repeatedAttachment": {
+      "evidence": "three open/capture/close cycles all returned HTTP 200 with stable 765x503 frames; see fedora-primary/repeated-attachment.log",
+      "status": "PASS"
+    },
+    "resizeMinimize": {
+      "evidence": "resize and iconify/restore left capture bounded at 765x503 and diagnostically clear (NEW then PAUSED, no error, no selection migration); see fedora-primary/resize-minimize.log",
+      "status": "PASS"
+    },
+    "targetRestart": {
+      "evidence": "after the client exited, session/open returned diagnostic=TARGET_EXITED and discovery returned []; a restarted client produced a new linux:<pid>:<ticks> identity and generation 2, and attach/capture/close passed; see fedora-primary/target-restart.log",
+      "status": "PASS"
+    },
+    "targetSelection": {
+      "evidence": "POST /api/windows/select then GET /api/windows/current returned the same linux:<pid>:<ticks> id",
+      "status": "PASS"
+    }
+  },
+  "hostId": "fedora-qual-host",
+  "nativeArtifact": {
+    "librarySha256": "b0c8d3655876dd23e931a9df48efc87b96f936758e5a18a27988d9ab49a5fefd",
+    "manifestSha256": "8e9a00cb76c826061dbd2e79e3245c622ade98dfe405277da8ae0c8cb67001f3",
+    "pairIdentity": "43b38e8f95d8f2dcf2d0ee4dd3ffb86d3cffd2fa975cca4db27970c4d1b03e9d",
+    "localPatchIdentity": "sha256:a7744da1c54a5646b975d9b7adce5891832394b1d84104bb8009ade551107040",
+    "repeatBuildByteIdentical": true,
+    "toolchainImage": "localhost/sc1662-fedora-toolchain:latest",
+    "toolchainImageDigest": "sha256:15179d9fbd427cc73c799f4710631fdb37c2183dbedfe53c5a24cc758ea72af4"
+  },
+  "role": "fedora-primary",
+  "schemaVersion": 1,
+  "story": "SC-1668",
+  "upstreamRevision": "5ea3b995f5d13e19c592a6399973fe7dadb5e656",
+  "versions": {
+    "arch": "x86_64",
+    "client": "Micro6 microbot-1.8.9.3.jar, net.runelite.client.RuneLite, RuneLite 1.11.8-SNAPSHOT",
+    "java": "openjdk version \"17.0.20.1\" 2026-08-18 LTS",
+    "os": "Fedora release 44, kernel 6.19.10-300.fc44.x86_64"
+  }
+}

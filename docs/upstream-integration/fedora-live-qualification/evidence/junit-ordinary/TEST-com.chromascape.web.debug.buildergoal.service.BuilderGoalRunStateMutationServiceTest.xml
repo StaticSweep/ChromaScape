@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" tests="36" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:13.287Z" hostname="fedora" time="0.499">
+  <properties/>
+  <testcase name="applyLateReconcile_finalizesCancelledExecutorRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.229"/>
+  <testcase name="failStaleLaunchIfActive_doesNotOverwriteConcurrentStopIntent()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.004"/>
+  <testcase name="applyExecutorStatus_pausedSurvivesReconciliationAsDistinctStatus()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.007"/>
+  <testcase name="applyPublishOutcome_rejectsEntryIdMismatch()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.01"/>
+  <testcase name="applyLateReconcile_revivesRunningRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.005"/>
+  <testcase name="applyExecutorStatus_persistsFailedPublishStatusBeforeTerminalTransition()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.005"/>
+  <testcase name="failStaleLaunchIfActive_ignoresTerminalRow()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.004"/>
+  <testcase name="requestStop_rejectsAlreadyTerminalRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.01"/>
+  <testcase name="requestStop_persistsStopMetadataAndPreservesEntryId()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.034"/>
+  <testcase name="readMetadata_returnsSnapshotWithoutLock()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.01"/>
+  <testcase name="applyLateReconcile_notFoundExecutorResultDoesNotRevive()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.002"/>
+  <testcase name="applyLateReconcile_rejectsNearMatchIterationIdentity()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.004"/>
+  <testcase name="applyLateReconcile_revivesQueuedRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.003"/>
+  <testcase name="applyLateReconcile_rejectsEntryIdMismatch()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.002"/>
+  <testcase name="failStaleLaunchIfActive_failsCurrentRowAtomically()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.002"/>
+  <testcase name="applyExecutorStatus_pausedWithoutStartBindingIsStillActivatedAndActive()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.004"/>
+  <testcase name="applyExecutorStatus_persistsCancelledPublishStatusBeforeTerminalTransition()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.003"/>
+  <testcase name="applyLateReconcile_finalizesCompletedRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.003"/>
+  <testcase name="beginLateReconcile_rejectsRunsWithStopRequest()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.012"/>
+  <testcase name="applyLateReconcile_revivesAssignedRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.004"/>
+  <testcase name="applyPublishOutcome_ignoresTerminalRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.008"/>
+  <testcase name="applyPublishOutcome_mergesPublishFieldsAndReturnsResult()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.008"/>
+  <testcase name="beginLateReconcile_returnsSnapshotForPublishFailedRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.003"/>
+  <testcase name="beginLateReconcile_rejectsNonFailedRuns()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.001"/>
+  <testcase name="applyExecutorStatus_pausedRemainsStoppableAndNotTerminal()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.003"/>
+  <testcase name="beginLateReconcile_rejectsRunsWithNoEntryId()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.002"/>
+  <testcase name="reservePublish_persistsEntryIdAndPublishingStatus()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.005"/>
+  <testcase name="applyExecutorStatus_queuedWithStoppedScriptTimesOutWithScriptStartFailed()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.006"/>
+  <testcase name="reservePublish_rejectsAlreadyReservedRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.004"/>
+  <testcase name="applyExecutorStatus_mapsAcceptedQueuedAssignedRunning()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.004"/>
+  <testcase name="reservePublish_rejectsStoppedRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.003"/>
+  <testcase name="applyPublishOutcome_reconcilingStatusPreservesRunTimestamps()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.002"/>
+  <testcase name="applyLateReconcile_rejectsCancelledChromaScapeRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.001"/>
+  <testcase name="applyPublishOutcome_stopWinsOverPublishedStatus()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.002"/>
+  <testcase name="reservePublish_rejectsTerminalRun()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.003"/>
+  <testcase name="applyExecutorStatus_persistsCompletedPublishStatusBeforeTerminalTransition()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationServiceTest" time="0.008"/>
+  <system-out><![CDATA[18:06:13.697 [Test worker] INFO  com.chromascape.web.debug.buildergoal.service.BuilderGoalRunStateMutationService - Publish outcome arrived for already-terminal run bg_term_outcome0001 (FAILED); ignoring.
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

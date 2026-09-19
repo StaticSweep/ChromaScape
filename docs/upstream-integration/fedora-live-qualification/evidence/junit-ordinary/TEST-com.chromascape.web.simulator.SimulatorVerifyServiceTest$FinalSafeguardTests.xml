@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Final Safeguard Tests" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:36.041Z" hostname="fedora" time="0.002">
+  <properties/>
+  <testcase name="Should write synthetic report when job is FAILED with no reportPath" classname="com.chromascape.web.simulator.SimulatorVerifyServiceTest$FinalSafeguardTests" time="0.002"/>
+  <system-out><![CDATA[18:10:36.042 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'reportsDir' of type [null] on target object [SimulatorVerifierProperties{enabled=true, openruneRoot='/mnt/f/Dev/IdeaProjects/OpenRune-Server', invocationMode='jar', verifierJarPath='simulator-verifier/build/libs/simulator-verifier-all.jar', defaultBridgeUrl='http://localhost:8092', reportsDir='output/simulator-reports', maxConcurrentJobs=2, jobTimeoutSeconds=300}] or target class [class com.chromascape.web.simulator.SimulatorVerifierProperties] to value [reports]
+18:10:36.042 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'openruneRoot' of type [null] on target object [SimulatorVerifierProperties{enabled=true, openruneRoot='/mnt/f/Dev/IdeaProjects/OpenRune-Server', invocationMode='jar', verifierJarPath='simulator-verifier/build/libs/simulator-verifier-all.jar', defaultBridgeUrl='http://localhost:8092', reportsDir='reports', maxConcurrentJobs=2, jobTimeoutSeconds=300}] or target class [class com.chromascape.web.simulator.SimulatorVerifierProperties] to value [/tmp/junit-1650294590771273294]
+18:10:36.043 [Test worker] INFO  com.chromascape.web.simulator.SimulatorVerifyService - Wrote synthetic error report to /tmp/junit-1650294590771273294/reports/safeguard-test.json
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

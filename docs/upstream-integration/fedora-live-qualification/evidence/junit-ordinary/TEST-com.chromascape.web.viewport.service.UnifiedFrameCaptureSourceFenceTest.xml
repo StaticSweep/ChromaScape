@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.viewport.service.UnifiedFrameCaptureSourceFenceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:37.118Z" hostname="fedora" time="0.041">
+  <properties/>
+  <testcase name="queuedFrameFromDisplacedHostIsNotDelivered()" classname="com.chromascape.web.viewport.service.UnifiedFrameCaptureSourceFenceTest" time="0.039"/>
+  <testcase name="generationChangeInvalidatesQueuedFrameOnSameHostAndPid()" classname="com.chromascape.web.viewport.service.UnifiedFrameCaptureSourceFenceTest" time="0.001"/>
+  <testcase name="anonymousFrameCannotBypassEstablishedBinding()" classname="com.chromascape.web.viewport.service.UnifiedFrameCaptureSourceFenceTest" time="0.001"/>
+  <system-out><![CDATA[18:10:37.156 [Test worker] INFO  com.chromascape.web.viewport.service.UnifiedFrameCaptureService - Frame source changed; invalidated cached frame (host=host-a pid=77 generation=1 -> host=host-b pid=77 generation=1)
+18:10:37.158 [Test worker] INFO  com.chromascape.web.viewport.service.UnifiedFrameCaptureService - Frame source changed; invalidated cached frame (host=host-a pid=77 generation=1 -> host=host-a pid=77 generation=2)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

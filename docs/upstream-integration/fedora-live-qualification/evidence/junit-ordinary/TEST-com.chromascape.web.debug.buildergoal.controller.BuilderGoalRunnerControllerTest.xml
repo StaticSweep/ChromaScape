@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" tests="44" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:08.992Z" hostname="fedora" time="1.312">
+  <properties/>
+  <testcase name="getLaunchOperation_returnsNotFoundForUnknownOrExpired()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="1.129"/>
+  <testcase name="getRecoveryState_returnsOkWithPhaseAndChild()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="mcpHealth_returnsUpWithServiceAndTimestamp()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.004"/>
+  <testcase name="getLaunchOperation_sanitizesUnexpectedFailuresWithoutCredentials()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.006"/>
+  <testcase name="launchAccount_returnsBadRequestWhenWorldAboveRange()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="runPayload_forwardsLegacyRawSettingsWithoutInjectingEmptyEnvelope()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.004"/>
+  <testcase name="listMachines_returnsBadGatewayWithStructuredErrorWhenLauncherFails()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="getRunLogsByRecordingId_returnsResolvedLogs()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.001"/>
+  <testcase name="publishTask_rejectsCallerSelectedTarget()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.001"/>
+  <testcase name="resolveRecoveryEvidence_returnsOk()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="launchAccount_returnsBadRequestWhenWorldBelowRange()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="runPayload_rejectsCallerSelectedTarget()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="openRecoveryWorkspace_returnsBadRequestWhenRunMissing()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="publishTask_delegatesToServiceAndReturnsOk()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.004"/>
+  <testcase name="publishTask_returnsConflictWhenDisabledAccountRejectsPublish()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="getRecoveryStateByRecordingId_returnsResolvedState()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="getLaunchOperation_returnsCurrentState()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="openRecoveryWorkspaceByRecordingId_delegatesToServiceAndReturnsOk()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.004"/>
+  <testcase name="launchAccount_passesForceRelaunch()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="launchAccount_delegatesToServiceAndReturnsAccepted()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="launchAccount_returnsServiceUnavailableWhenExecutorRejects()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="runPayload_rejectsNonObjectSettings()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="publishTask_rejectsNestedCallerSelectedTarget()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.001"/>
+  <testcase name="getRunSummary_returnsNotFoundForMissingRun()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="publishTask_returnsBadRequestWhenAccountAndTaskMissing()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.001"/>
+  <testcase name="launchAccount_errorBodiesAreSanitized()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="runPayload_returnsConflictWhenLaunchCredentialsAreMissing()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.005"/>
+  <testcase name="openRecoveryWorkspace_delegatesToServiceAndReturnsOk()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="genericControllerFailureUsesSanitizedDetails()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.005"/>
+  <testcase name="listMachines_badGatewayDetailsAreNonNullForParsingFailures()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="getRunByRecordingId_returnsResolvedRun()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="launchAccount_rejectsNestedCallerSelectedTarget()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="listMachines_returnsHttp200WithMachineSummaries()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="saveRecoveryAnnotations_delegatesAndReturnsOk()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="listMachines_badGatewayDetailsNeverDiscloseConfiguredToken()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="getRunSummary_returnsRunSummary()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.001"/>
+  <testcase name="launchAccount_returnsBadRequestWhenWorldMissing()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="getLaunchOperation_notFoundBodyIsSanitized()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="listMachines_badGatewayResponseContainsNeitherTokenNorAuthorizationHeader()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <testcase name="getRecoveryState_returnsBadRequestWhenNotFound()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="launchAccount_returnsBadRequestWhenAccountMissing()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="launchAccount_returnsAcceptedWithDeduplicatedFlagForActiveOperation()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.002"/>
+  <testcase name="publishTask_rejectsNullSettings()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.001"/>
+  <testcase name="launchAccount_returnsConflictWhenLaunchCredentialsAreMissing()" classname="com.chromascape.web.debug.buildergoal.controller.BuilderGoalRunnerControllerTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

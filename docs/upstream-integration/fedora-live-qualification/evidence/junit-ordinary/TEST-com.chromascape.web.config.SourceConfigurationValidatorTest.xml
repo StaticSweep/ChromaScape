@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.config.SourceConfigurationValidatorTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:06.984Z" hostname="fedora" time="0.341">
+  <properties/>
+  <testcase name="rejectsUnsafeKeyAndActorTokens()" classname="com.chromascape.web.config.SourceConfigurationValidatorTest" time="0.008"/>
+  <testcase name="publicKeyEnvironmentEndpointAndCredentialsAreMandatory()" classname="com.chromascape.web.config.SourceConfigurationValidatorTest" time="0.006"/>
+  <testcase name="completeAuthoritativeConfigurationPasses()" classname="com.chromascape.web.config.SourceConfigurationValidatorTest" time="0.002"/>
+  <testcase name="rejectsMalformedOrNonEd25519Keys()" classname="com.chromascape.web.config.SourceConfigurationValidatorTest" time="0.325"/>
+  <system-out><![CDATA[18:06:07.000 [Test worker] INFO  com.chromascape.web.config.SourceConfigurationValidator - SC-810 source trust and transport configuration validated for environment production-eu-1
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

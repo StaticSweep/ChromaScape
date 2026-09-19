@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.run.ReplayDatabaseClockTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:10:25.064Z" hostname="fedora" time="1.187">
+  <properties/>
+  <testcase name="deadlineDecisionsDelegateToTheDatabasePredicate()" classname="com.chromascape.web.replay.run.ReplayDatabaseClockTest" time="1.001"/>
+  <testcase name="terminalTransitionsStampExactlyTheSuppliedTimestampNotTheJvmClock()" classname="com.chromascape.web.replay.run.ReplayDatabaseClockTest" time="0.181"/>
+  <testcase name="threeArgOverloadCapturesItsOwnFreshDatabaseTimestamp()" classname="com.chromascape.web.replay.run.ReplayDatabaseClockTest" time="0.002"/>
+  <testcase name="startingTransitionsStampTheCapturedDatabaseTime()" classname="com.chromascape.web.replay.run.ReplayDatabaseClockTest" time="0.001"/>
+  <testcase name="deadlinePredicateIsTheOnlyExpiryAuthorityForFalseResultsToo()" classname="com.chromascape.web.replay.run.ReplayDatabaseClockTest" time="0.001"/>
+  <system-out><![CDATA[18:10:26.061 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@16269c10] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+18:10:26.066 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@1ac13cef] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+18:10:26.248 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@2b7e9d48] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+18:10:26.249 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@4e3de68b] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+18:10:26.250 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@26196172] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

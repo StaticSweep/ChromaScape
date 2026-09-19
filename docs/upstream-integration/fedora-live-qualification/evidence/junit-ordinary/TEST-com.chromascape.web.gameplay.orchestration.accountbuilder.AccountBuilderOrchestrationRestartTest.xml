@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRestartTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-19T16:08:18.525Z" hostname="fedora" time="0.004">
+  <properties/>
+  <testcase name="committedEvidenceSurvivesContextRestartAndRecoveryNeverRedispatches()" classname="com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRestartTest" time="0.004">
+    <failure message="java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration" type="java.lang.IllegalStateException">java.lang.IllegalStateException: Previous attempts to find a Docker environment failed. Will not retry. Please see logs and check configuration
+	at org.testcontainers.dockerclient.DockerClientProviderStrategy.getFirstValidStrategy(DockerClientProviderStrategy.java:229)
+	at org.testcontainers.DockerClientFactory.getOrInitializeStrategy(DockerClientFactory.java:154)
+	at org.testcontainers.DockerClientFactory.client(DockerClientFactory.java:196)
+	at org.testcontainers.DockerClientFactory$1.getDockerClient(DockerClientFactory.java:108)
+	at com.github.dockerjava.api.DockerClientDelegate.authConfig(DockerClientDelegate.java:109)
+	at org.testcontainers.containers.GenericContainer.start(GenericContainer.java:321)
+	at com.chromascape.testsupport.IsolatedPostgresTestDatabase.start(IsolatedPostgresTestDatabase.java:195)
+	at com.chromascape.testsupport.IsolatedPostgresTestDatabase.newDatabase(IsolatedPostgresTestDatabase.java:97)
+	at com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRestartTest.committedEvidenceSurvivesContextRestartAndRecoveryNeverRedispatches(AccountBuilderOrchestrationRestartTest.java:35)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <system-out><![CDATA[18:08:18.525 [Test worker] INFO  org.testcontainers.DockerClientFactory - Testcontainers version: 1.21.2
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

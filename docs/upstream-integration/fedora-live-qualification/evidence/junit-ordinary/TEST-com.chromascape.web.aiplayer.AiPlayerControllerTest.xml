@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.AiPlayerControllerTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:06.698Z" hostname="fedora" time="0.892">
+  <properties/>
+  <testcase name="evaluatePatchOutcomes forwards request values" classname="com.chromascape.web.aiplayer.AiPlayerControllerTest" time="0.544"/>
+  <testcase name="status exposes control and scheduler flags" classname="com.chromascape.web.aiplayer.AiPlayerControllerTest" time="0.007"/>
+  <testcase name="buildPatchOutcomeDataset returns manifest metadata" classname="com.chromascape.web.aiplayer.AiPlayerControllerTest" time="0.003"/>
+  <testcase name="status exposes the fishing prototype block and artifact directory" classname="com.chromascape.web.aiplayer.AiPlayerControllerTest" time="0.335"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

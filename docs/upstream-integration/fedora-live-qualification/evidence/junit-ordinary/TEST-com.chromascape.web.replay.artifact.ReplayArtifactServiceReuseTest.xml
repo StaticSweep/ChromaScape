@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.artifact.ReplayArtifactServiceReuseTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:09:28.912Z" hostname="fedora" time="0.304">
+  <properties/>
+  <testcase name="concurrentPublicationRaceReusesVerifiedWinner()" classname="com.chromascape.web.replay.artifact.ReplayArtifactServiceReuseTest" time="0.267"/>
+  <testcase name="publishVerifiesContentReturnsReceiptAndNeverMutatesRows()" classname="com.chromascape.web.replay.artifact.ReplayArtifactServiceReuseTest" time="0.004"/>
+  <testcase name="prepareWritesStagedBytesWithoutTouchingDatabase()" classname="com.chromascape.web.replay.artifact.ReplayArtifactServiceReuseTest" time="0.001"/>
+  <testcase name="identicalContentAcrossRunsReusesWinnerWithoutOverwrite()" classname="com.chromascape.web.replay.artifact.ReplayArtifactServiceReuseTest" time="0.002"/>
+  <testcase name="finalizedReadbackVerifiesTheContentAddress()" classname="com.chromascape.web.replay.artifact.ReplayArtifactServiceReuseTest" time="0.022"/>
+  <testcase name="missingContentEverywhereBlocksPublication()" classname="com.chromascape.web.replay.artifact.ReplayArtifactServiceReuseTest" time="0.003"/>
+  <testcase name="corruptPreexistingFinalFileBlocksPublication()" classname="com.chromascape.web.replay.artifact.ReplayArtifactServiceReuseTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.manifest.ScenarioManifestV2CompilerTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:25:22.648Z" hostname="fedora" time="0.363">
+  <properties/>
+  <testcase name="nearbyNonFishingNpcDoesNotBlockReferencedFishingTarget()" classname="com.chromascape.web.replay.manifest.ScenarioManifestV2CompilerTest" time="0.252"/>
+  <testcase name="conflictingActionsForOneNpcAreAmbiguous()" classname="com.chromascape.web.replay.manifest.ScenarioManifestV2CompilerTest" time="0.005"/>
+  <testcase name="certifiedInitialStateRequiresAndPreservesAuthoritativeNpcPins()" classname="com.chromascape.web.replay.manifest.ScenarioManifestV2CompilerTest" time="0.076"/>
+  <testcase name="conflictingRecordedSpotTypeFailsClosed()" classname="com.chromascape.web.replay.manifest.ScenarioManifestV2CompilerTest" time="0.009"/>
+  <testcase name="certifiedInitialStateRejectsMissingNpcPin()" classname="com.chromascape.web.replay.manifest.ScenarioManifestV2CompilerTest" time="0.004"/>
+  <testcase name="missingReferencedNpcFailsClosed()" classname="com.chromascape.web.replay.manifest.ScenarioManifestV2CompilerTest" time="0.009"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

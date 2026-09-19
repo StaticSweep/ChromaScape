@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.BuilderGoalRepairIncidentServiceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:06:12.969Z" hostname="fedora" time="0.309">
+  <properties/>
+  <testcase name="intentionalWaitResetsStallClock()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRepairIncidentServiceTest" time="0.277"/>
+  <testcase name="unchangedFingerprintCreatesStallAfterThreshold()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRepairIncidentServiceTest" time="0.004"/>
+  <testcase name="errorLogCreatesReviewOnlyIncident()" classname="com.chromascape.web.debug.buildergoal.service.BuilderGoalRepairIncidentServiceTest" time="0.027"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

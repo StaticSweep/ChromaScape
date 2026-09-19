@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.kernel.XrspsProcessLaunchDiagnosticsTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-09-19T16:09:50.875Z" hostname="fedora" time="30.955">
+  <properties/>
+  <testcase name="resolvedNodeProcessBuilderAndKernelLaunchesShareTheSameWindowsPaths()" classname="com.chromascape.web.replay.kernel.XrspsProcessLaunchDiagnosticsTest" time="30.955">
+    <failure message="java.lang.AssertionError: process timed out: [./gradlew, --version, --no-daemon]" type="java.lang.AssertionError">java.lang.AssertionError: process timed out: [./gradlew, --version, --no-daemon]
+	at com.chromascape.web.replay.kernel.XrspsProcessLaunchDiagnosticsTest.runProcess(XrspsProcessLaunchDiagnosticsTest.java:259)
+	at com.chromascape.web.replay.kernel.XrspsProcessLaunchDiagnosticsTest.resolvedNodeProcessBuilderAndKernelLaunchesShareTheSameWindowsPaths(XrspsProcessLaunchDiagnosticsTest.java:66)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

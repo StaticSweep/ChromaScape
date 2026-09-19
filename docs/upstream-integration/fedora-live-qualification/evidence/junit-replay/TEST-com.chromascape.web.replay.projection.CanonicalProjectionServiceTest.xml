@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.projection.CanonicalProjectionServiceTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-19T15:25:25.647Z" hostname="fedora" time="0.035">
+  <properties/>
+  <testcase name="stateHashMatchesTypeScriptGoldenVector()" classname="com.chromascape.web.replay.projection.CanonicalProjectionServiceTest" time="0.001"/>
+  <testcase name="canonicalJsonMatchesTypeScriptGoldenVector()" classname="com.chromascape.web.replay.projection.CanonicalProjectionServiceTest" time="0.002"/>
+  <testcase name="keyOrderIndependence()" classname="com.chromascape.web.replay.projection.CanonicalProjectionServiceTest" time="0.001"/>
+  <testcase name="chainHashFailsClosedOnMalformedInput()" classname="com.chromascape.web.replay.projection.CanonicalProjectionServiceTest" time="0.007"/>
+  <testcase name="chainHashIsByteConcatenationPerSpec()" classname="com.chromascape.web.replay.projection.CanonicalProjectionServiceTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

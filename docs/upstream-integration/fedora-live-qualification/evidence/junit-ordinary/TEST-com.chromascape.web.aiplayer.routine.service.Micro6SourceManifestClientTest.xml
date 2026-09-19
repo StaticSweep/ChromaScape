@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClientTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:05:33.745Z" hostname="fedora" time="1.645">
+  <properties/>
+  <testcase name="strictLoaderMutationsFailManifestFetchClosed()" classname="com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClientTest" time="0.317"/>
+  <testcase name="rejectsAManifestFromAnotherConfiguredEnvironment()" classname="com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClientTest" time="0.392"/>
+  <testcase name="rejectsInvalidManifestJsonAsAContractFailure()" classname="com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClientTest" time="0.022"/>
+  <testcase name="resolvesAnIndexedSymbolFromTheExactSnapshot()" classname="com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClientTest" time="0.299"/>
+  <testcase name="mapsPrunedUpstreamResponsesToTheStableFailureCode()" classname="com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClientTest" time="0.264"/>
+  <testcase name="acceptsABoundedProductionSizedManifestResponse()" classname="com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClientTest" time="0.288"/>
+  <testcase name="rejectsUnsignedV1ManifestEvenWhenTheTransportAndTrustKeyAreConfigured()" classname="com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClientTest" time="0.029"/>
+  <testcase name="malformedUtf8ManifestFailsAtTheTransportBoundary()" classname="com.chromascape.web.aiplayer.routine.service.Micro6SourceManifestClientTest" time="0.021"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

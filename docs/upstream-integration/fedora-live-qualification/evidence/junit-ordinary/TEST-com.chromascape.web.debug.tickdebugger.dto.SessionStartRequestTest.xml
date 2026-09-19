@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-09-19T16:07:58.977Z" hostname="fedora" time="0.088">
+  <properties/>
+  <testcase name="preferredSessionIdWinsWhenBothJsonNamesPresent()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.055"/>
+  <testcase name="clientRequestId_omittedInJsonYieldsNull()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.003"/>
+  <testcase name="preferredSessionId_defaultsToNullAndDeserializesFromJson()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.002"/>
+  <testcase name="fiveArgConstructor_setsPreferredSessionId()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.001"/>
+  <testcase name="canonicalFieldWinsWhenLegacySessionIdAppearsFirst()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.001"/>
+  <testcase name="clientRequestId_isSeparateFromLegacySessionIdAlias()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.001"/>
+  <testcase name="preferredSessionId_omittedInJsonYieldsNull()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.001"/>
+  <testcase name="sixArgConstructor_setsPreferredSessionIdAndClientRequestId()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.0"/>
+  <testcase name="canonicalFieldWinsWhenPreferredAppearsFirst()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.001"/>
+  <testcase name="legacySessionIdName_isAcceptedAsAliasForPreferredSessionId()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.001"/>
+  <testcase name="clientRequestId_deserializesIndependentlyFromPreferredSessionId()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.001"/>
+  <testcase name="blankClientRequestId_remainsBackwardCompatible()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.001"/>
+  <testcase name="preferredSessionId_roundTripsThroughGetSet()" classname="com.chromascape.web.debug.tickdebugger.dto.SessionStartRequestTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
