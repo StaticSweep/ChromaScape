@@ -91,6 +91,92 @@ assert_contains "$env_output" 'code=CONFIG_LOADED' 'environment parser is non-ex
 assert_contains "$env_output" 'code=CONFIG_KEY_UNSUPPORTED' 'environment parser rejects shell control variables'
 SC1667_ERRORS=0
 
+# Duplicate keys are rejected regardless of value agreement. Each case runs the parser in
+# a subshell so the assertions can inspect the resulting variable, the error count, and the
+# diagnostics without leaking state between cases. Values are deliberately recognisable
+# secrets-shaped strings so the output can be proven not to contain them.
+run_duplicate_case() {
+    local fixture="$1" key="$2"
+    # The parser must run in the same shell as the counter it increments, so its output
+    # is captured through a file rather than a command substitution.
+    bash -c '
+        source "$1"
+        unset "$3"
+        sc1667_load_env_file "$2" > "$2.out"
+        printf "%s\n---\nerrors=%s\nvalue=%s\n" "$(< "$2.out")" "$SC1667_ERRORS" "${!3:-<unset>}"
+    ' bash "$FEDORA_DIR/lib/preflight.sh" "$fixture" "$key"
+}
+
+assert_secret_free() {
+    local text="$1" name="$2"
+    shift 2
+    local secret
+    for secret in "$@"; do
+        [[ "$text" != *"$secret"* ]] || fail "$name (printed a configuration value)"
+    done
+    pass "$name"
+}
+
+DUP_EQUAL="$ROOT/env.dup-equal"
+printf 'CHROMASCAPE_DUP_A=secret-equal-1\nSERVER_PORT=8090\nCHROMASCAPE_DUP_A=secret-equal-1\n' > "$DUP_EQUAL"
+dup_equal_output="$(run_duplicate_case "$DUP_EQUAL" CHROMASCAPE_DUP_A)"
+assert_contains "$dup_equal_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate key with equal values is rejected'
+assert_contains "$dup_equal_output" 'line 3 repeats key CHROMASCAPE_DUP_A first defined on line 1' 'duplicate diagnostic names both lines'
+assert_contains "$dup_equal_output" 'errors=1' 'duplicate equal values count as a configuration error'
+assert_secret_free "${dup_equal_output%%---*}" 'duplicate equal-value diagnostics print no values' 'secret-equal-1'
+
+DUP_CONFLICT="$ROOT/env.dup-conflict"
+printf 'CHROMASCAPE_DUP_B=secret-first-2\nCHROMASCAPE_DUP_B=secret-second-2\n' > "$DUP_CONFLICT"
+dup_conflict_output="$(run_duplicate_case "$DUP_CONFLICT" CHROMASCAPE_DUP_B)"
+assert_contains "$dup_conflict_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate key with conflicting values is rejected'
+assert_contains "$dup_conflict_output" 'value=secret-first-2' 'later conflicting value is never applied'
+assert_secret_free "${dup_conflict_output%%---*}" 'duplicate conflicting diagnostics print no values' 'secret-first-2' 'secret-second-2'
+
+DUP_EMPTY="$ROOT/env.dup-empty"
+printf 'CHROMASCAPE_DUP_C=\nCHROMASCAPE_DUP_C=secret-later-3\n' > "$DUP_EMPTY"
+dup_empty_output="$(run_duplicate_case "$DUP_EMPTY" CHROMASCAPE_DUP_C)"
+assert_contains "$dup_empty_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate key with empty then non-empty value is rejected'
+[[ "$dup_empty_output" != *'value=secret-later-3'* ]] || fail "empty-then-non-empty duplicate applied the later value"
+pass 'empty-then-non-empty duplicate never applies the later value'
+assert_secret_free "${dup_empty_output%%---*}" 'duplicate empty-first diagnostics print no values' 'secret-later-3'
+
+DUP_QUOTED="$ROOT/env.dup-quoted"
+printf 'CHROMASCAPE_DUP_D="secret-quoted-4"\nCHROMASCAPE_DUP_D=secret-quoted-4\n' > "$DUP_QUOTED"
+dup_quoted_output="$(run_duplicate_case "$DUP_QUOTED" CHROMASCAPE_DUP_D)"
+assert_contains "$dup_quoted_output" 'code=CONFIG_DUPLICATE_KEY' 'quoted and unquoted duplicate is rejected'
+assert_contains "$dup_quoted_output" 'errors=1' 'quoted/unquoted duplicate counts exactly once'
+assert_secret_free "${dup_quoted_output%%---*}" 'duplicate quoted diagnostics print no values' 'secret-quoted-4'
+
+# External environment precedence is unchanged by duplicate detection: an exported
+# non-empty variable still wins over the file even when the file also repeats the key.
+DUP_PRECEDENCE="$ROOT/env.dup-precedence"
+printf 'CHROMASCAPE_DUP_E=file-1\nCHROMASCAPE_DUP_E=file-2\n' > "$DUP_PRECEDENCE"
+dup_precedence_value="$(
+    bash -c '
+        source "$1"
+        export CHROMASCAPE_DUP_E=environment-wins
+        sc1667_load_env_file "$2" >/dev/null
+        printf "%s" "$CHROMASCAPE_DUP_E"
+    ' bash "$FEDORA_DIR/lib/preflight.sh" "$DUP_PRECEDENCE"
+)"
+[[ "$dup_precedence_value" == environment-wins ]] || fail "duplicate detection changed environment precedence"
+pass 'exported environment still overrides a file with duplicate keys'
+
+# A duplicate in .env.fedora.local must stop the wrapper before any command runs.
+DUP_PROJECT="$ROOT/dup-project"
+mkdir -p "$DUP_PROJECT/scripts"
+cp -a "$FEDORA_DIR" "$DUP_PROJECT/scripts/fedora"
+printf 'CHROMASCAPE_REMOTEINPUT_ATTACHMENT_ENABLED=false\nCHROMASCAPE_REMOTEINPUT_ATTACHMENT_ENABLED=true\n' \
+    > "$DUP_PROJECT/.env.fedora.local"
+set +e
+dup_startup_output="$("$DUP_PROJECT/scripts/fedora/chromascape-fedora.sh" status 2>&1)"
+dup_startup_exit=$?
+set -e
+[[ "$dup_startup_exit" -eq 2 ]] || fail "wrapper started with a duplicate key in .env.fedora.local (exit $dup_startup_exit)"
+assert_contains "$dup_startup_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate machine-local key fails startup closed'
+[[ "$dup_startup_output" != *'SC1667_LIFECYCLE'* ]] || fail "wrapper reached a lifecycle command despite a parser failure"
+pass 'parser failure prevents any lifecycle command'
+
 defaults_output="$(
     bash -c '
         source "$1"
