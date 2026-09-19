@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '40';
+  static BUILDER_GOAL_BUNDLE_VERSION = '41';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -13,6 +13,42 @@ class AccountTaskPlanner {
   static BUILDER_GOAL_LAUNCH_OPERATION_KEY = 'taskPlanner.builderGoalLaunchOperationId';
   static BUILDER_GOAL_RUN_POLL_INTERVAL_MS = 2000;
   static BUILDER_GOAL_RUN_TRACKER_KEY = 'taskPlanner.builderGoalRunTrackerIterationId';
+  /** SC-260: minimum interval between unified-timeline refreshes while polling. */
+  // SC-260: kept below two tracker poll intervals so the unified run timeline is
+  // guaranteed to refresh within 5 seconds (every second poll) once an event appears.
+  static BUILDER_GOAL_TIMELINE_REFRESH_MS = 3000;
+
+  /**
+   * SC-260: executor publish statuses for which the run tracker must keep polling so the
+   * unified run timeline and run cards keep updating (≤5s) after a task reaches RUNNING.
+   * Only terminal/readiness-failure states end tracking.
+   */
+  static BUILDER_GOAL_ACTIVE_TRACKING_PUBLISH_STATUSES = new Set([
+    'PUBLISHING',
+    'RECEIVED',
+    'PENDING',
+    'ACCEPTED',
+    'QUEUED',
+    'ASSIGNED',
+    'RUNNING',
+    'PAUSED',
+    'STOPPING'
+  ]);
+
+  /** SC-260 timeline: per-event-type presentation for the unified run timeline. */
+  static BUILDER_GOAL_TIMELINE_EVENT_TYPES = {
+    ITERATION_CREATED: { icon: 'bi-plus-circle', tone: 'secondary', label: 'Created' },
+    SCRIPT_STARTED: { icon: 'bi-play-circle', tone: 'info', label: 'Started' },
+    SCRIPT_COMPLETED: { icon: 'bi-check-circle', tone: 'success', label: 'Completed' },
+    SCRIPT_FAILED: { icon: 'bi-x-circle', tone: 'danger', label: 'Failed' },
+    RUN_PAUSED: { icon: 'bi-pause-circle', tone: 'warning', label: 'Paused' },
+    RUN_RESUMED: { icon: 'bi-play-btn', tone: 'info', label: 'Resumed' },
+    RUN_STOP_REQUESTED: { icon: 'bi-stop-circle', tone: 'warning', label: 'Stop Requested' },
+    RUN_STOPPED: { icon: 'bi-stop-circle-fill', tone: 'danger', label: 'Stopped' },
+    RUN_RISK_TRIGGERED: { icon: 'bi-exclamation-triangle', tone: 'warning', label: 'Risk Triggered' },
+    RUN_STATUS_DEGRADED: { icon: 'bi-wifi-off', tone: 'warning', label: 'Status Degraded' }
+  };
+
 
   static BUILDER_GOAL_STATUS_LABELS = {
     AWAITING_EXECUTOR_CONFIRMATION: 'Executor request sent; awaiting confirmation.',
@@ -353,6 +389,10 @@ class AccountTaskPlanner {
     this.builderGoalCatalogReason = '';
     this.builderGoalCatalogSource = '';
     this.builderGoalLogsIterationId = null;
+    // SC-260 unified run timeline state.
+    this.builderGoalTimelineIterationId = null;
+    this.builderGoalTimelineEvents = [];
+    this.builderGoalTimelineLastLoadedAt = 0;
     // Same-screen recovery mode state
     this.recoveryModeActive = false;
     this.recoveryIterationId = null;
@@ -470,6 +510,10 @@ class AccountTaskPlanner {
     this.publishBuilderGoalBtn = document.getElementById('publishBuilderGoalBtn');
     this.runImportedBuilderGoalBtn = document.getElementById('runImportedBuilderGoalBtn');
     this.builderGoalClientStatus = document.getElementById('builderGoalClientStatus');
+    this.builderGoalTimelinePanel = document.getElementById('builderGoalTimelinePanel');
+    this.builderGoalTimelineSummary = document.getElementById('builderGoalTimelineSummary');
+    this.builderGoalRunTimeline = document.getElementById('builderGoalRunTimeline');
+    this.closeBuilderGoalTimelineBtn = document.getElementById('closeBuilderGoalTimelineBtn');
     this.builderGoalImportResult = document.getElementById('builderGoalImportResult');
     this.builderGoalRunsList = document.getElementById('builderGoalRunsList');
     this.builderGoalCodexSessionMeta = document.getElementById('builderGoalCodexSessionMeta');
@@ -800,11 +844,16 @@ class AccountTaskPlanner {
           this.resumeBuilderGoalRun(iterationId);
         } else if (action === 'view-logs') {
           this.loadBuilderGoalRunLogs(iterationId);
+        } else if (action === 'view-timeline') {
+          this.openBuilderGoalRunTimeline(iterationId);
         }
       });
     }
     if (this.closeBuilderGoalLogsBtn) {
       this.closeBuilderGoalLogsBtn.addEventListener('click', () => this.closeBuilderGoalRunLogs());
+    }
+    if (this.closeBuilderGoalTimelineBtn) {
+      this.closeBuilderGoalTimelineBtn.addEventListener('click', () => this.closeBuilderGoalRunTimeline());
     }
     if (this.builderGoalAnalysisResetBtn) {
       this.builderGoalAnalysisResetBtn.addEventListener('click', () => this.resetBuilderGoalAnalysisPrompt());
@@ -1883,6 +1932,175 @@ class AccountTaskPlanner {
     this.updateBuilderGoalRunButtonState();
   }
 
+  /**
+   * SC-260 unified run timeline: opens the timeline panel for a run and loads its durable
+   * chronological event stream.
+   */
+  openBuilderGoalRunTimeline(iterationId) {
+    this.builderGoalTimelineIterationId = iterationId;
+    this.builderGoalTimelineLastLoadedAt = 0;
+    if (this.builderGoalTimelinePanel) {
+      this.builderGoalTimelinePanel.classList.remove('d-none');
+      this.builderGoalTimelinePanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    this.loadBuilderGoalRunTimeline(iterationId);
+  }
+
+  closeBuilderGoalRunTimeline() {
+    this.builderGoalTimelineIterationId = null;
+    this.builderGoalTimelineEvents = [];
+    if (this.builderGoalTimelinePanel) {
+      this.builderGoalTimelinePanel.classList.add('d-none');
+    }
+    if (this.builderGoalRunTimeline) {
+      this.builderGoalRunTimeline.innerHTML = 'No timeline events loaded.';
+    }
+  }
+
+  async loadBuilderGoalRunTimeline(iterationId) {
+    if (!iterationId || !this.builderGoalRunTimeline) {
+      return;
+    }
+    try {
+      const response = await fetch(
+        `/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/events`
+      );
+      if (this.builderGoalTimelineIterationId !== iterationId) {
+        return;
+      }
+      if (response.status === 404) {
+        this.builderGoalTimelineEvents = [];
+        this.renderBuilderGoalRunTimeline();
+        return;
+      }
+      // SC-260: an HTTP error must render a degraded state, never an empty timeline
+      // that would read as "no events recorded".
+      if (!response.ok) {
+        throw new Error(`Timeline request failed with HTTP ${response.status}`);
+      }
+      const result = await response.json().catch(() => []);
+      if (this.builderGoalTimelineIterationId !== iterationId) {
+        return;
+      }
+      const events = Array.isArray(result) ? result : [];
+      events.sort((a, b) => AccountTaskPlanner.compareBuilderGoalTimelineEvents(a, b));
+      this.builderGoalTimelineEvents = events;
+      this.builderGoalTimelineLastLoadedAt = Date.now();
+      this.renderBuilderGoalRunTimeline();
+    } catch (error) {
+      console.error('Failed to load builder goal run timeline:', error);
+      if (this.builderGoalRunTimeline) {
+        this.builderGoalRunTimeline.innerHTML =
+          '<div class="text-danger small">Failed to load the run timeline. It will retry on the next status update.</div>';
+      }
+    }
+  }
+
+  /**
+   * Refreshes the visible timeline at most every three seconds while the run tracker is
+   * actively polling, guaranteeing an SC-260 update within five seconds of a new event
+   * appearing (the tracker polls every two seconds).
+   */
+  maybeRefreshBuilderGoalRunTimeline() {
+    if (!this.builderGoalTimelineIterationId) {
+      return;
+    }
+    const elapsed = Date.now() - (this.builderGoalTimelineLastLoadedAt || 0);
+    if (elapsed >= AccountTaskPlanner.BUILDER_GOAL_TIMELINE_REFRESH_MS) {
+      this.loadBuilderGoalRunTimeline(this.builderGoalTimelineIterationId);
+    }
+  }
+
+  /** Final timeline refresh when a tracked run reaches a terminal state. */
+  refreshBuilderGoalTimelineForRunIfVisible(run) {
+    if (run && this.builderGoalTimelineIterationId === run.iterationId) {
+      this.loadBuilderGoalRunTimeline(run.iterationId);
+    }
+  }
+
+  static compareBuilderGoalTimelineEvents(a, b) {
+    const ta = new Date(a && a.timestamp ? a.timestamp : 0).getTime() || 0;
+    const tb = new Date(b && b.timestamp ? b.timestamp : 0).getTime() || 0;
+    if (ta !== tb) {
+      return ta - tb;
+    }
+    return ((a && a.id) || 0) - ((b && b.id) || 0);
+  }
+
+  static formatBuilderGoalTimelineEventType(eventType) {
+    const normalized = String(eventType || '').toUpperCase();
+    const meta = AccountTaskPlanner.BUILDER_GOAL_TIMELINE_EVENT_TYPES[normalized];
+    return meta ? meta.label : normalized;
+  }
+
+  renderBuilderGoalRunTimeline() {
+    if (!this.builderGoalRunTimeline) {
+      return;
+    }
+    const events = Array.isArray(this.builderGoalTimelineEvents) ? this.builderGoalTimelineEvents : [];
+    if (this.builderGoalTimelineSummary) {
+      const label = this.builderGoalTimelineIterationId || '';
+      this.builderGoalTimelineSummary.innerHTML =
+        `<i class="bi bi-clock-history me-1"></i>Run timeline ${this.escapeHtml(label)} • ${events.length} event${events.length === 1 ? "" : "s"}`;
+    }
+    if (events.length === 0) {
+      this.builderGoalRunTimeline.innerHTML =
+        '<div class="text-muted small fst-italic">No timeline events recorded for this run yet.</div>';
+      return;
+    }
+    this.builderGoalRunTimeline.innerHTML = events
+      .map(event => this.formatBuilderGoalTimelineEvent(event))
+      .join('');
+  }
+
+  formatBuilderGoalTimelineEvent(event) {
+    const eventType = String(event.eventType || '').toUpperCase();
+    const meta = AccountTaskPlanner.BUILDER_GOAL_TIMELINE_EVENT_TYPES[eventType] ||
+      { icon: 'bi-circle', tone: 'secondary', label: eventType };
+    const timestamp = event.timestamp ? this.escapeHtml(this.formatAbsoluteTime(event.timestamp)) : '';
+    const message = event.message ? this.escapeHtml(event.message) : '';
+    const data = event.data || {};
+    const detailParts = [];
+    if (data.task_key) {
+      detailParts.push(`task ${data.task_key}`);
+    }
+    if (data.entry_id != null) {
+      detailParts.push(`entry ${data.entry_id}`);
+    }
+    let failureLine = '';
+    if (eventType === 'SCRIPT_FAILED' && (data.failure_code || data.failure_reason)) {
+      const reason = data.failure_reason || 'Unknown failure';
+      const code = data.failure_code || 'UNKNOWN';
+      failureLine =
+        `<div class="small text-danger mt-1"><i class="bi bi-exclamation-octagon me-1"></i>` +
+        `${this.escapeHtml(code)} • ${this.renderMultilineInline(reason)}</div>`;
+    }
+    let riskLine = '';
+    if (eventType === 'RUN_RISK_TRIGGERED' && data.risk) {
+      try {
+        riskLine =
+          `<div class="small text-warning mt-1 font-monospace">${this.escapeHtml(JSON.stringify(data.risk))}</div>`;
+      } catch (e) {
+        riskLine = '';
+      }
+    }
+    const detailLine = detailParts.length
+      ? `<div class="small text-muted mt-1">${this.escapeHtml(detailParts.join(" • "))}</div>`
+      : '';
+    return (
+      `<div class="border-bottom pb-2 mb-2">` +
+      `<div class="text-${meta.tone}"><i class="bi ${meta.icon} me-1"></i>` +
+      `<strong>${this.escapeHtml(meta.label)}</strong>` +
+      (timestamp ? `<span class="text-muted small ms-2">${timestamp}</span>` : '') +
+      `</div>` +
+      (message ? `<div class="small">${message}</div>` : '') +
+      failureLine +
+      riskLine +
+      detailLine +
+      `</div>`
+    );
+  }
+
   async loadBuilderGoalRuns(options = {}) {
     if (!this.builderGoalRunsList) return;
     const throwOnError = Boolean(options.throwOnError);
@@ -2324,6 +2542,9 @@ class AccountTaskPlanner {
           <div class="d-flex gap-2 mt-2">
             <button class="btn btn-sm btn-outline-info flex-fill" data-builder-run-action="view-logs" data-iteration-id="${this.escapeAttr(run.iterationId || '')}">
               <i class="bi bi-journal-text me-1"></i>${showingLogs ? 'Refresh Logs' : 'View Logs'}
+            </button>
+            <button class="btn btn-sm btn-outline-secondary flex-fill" data-builder-run-action="view-timeline" data-iteration-id="${this.escapeAttr(run.iterationId || '')}">
+              <i class="bi bi-clock-history me-1"></i>Timeline
             </button>
           </div>
           <div class="d-flex gap-2 mt-2">
@@ -2993,6 +3214,7 @@ class AccountTaskPlanner {
     // Confirmed completion is terminal and displayed as success.
     if (publishStatus === 'COMPLETED') {
       this.stopBuilderGoalRunTracking();
+      this.refreshBuilderGoalTimelineForRunIfVisible(run);
       this.renderBuilderGoalRunProgress(run, { terminal: true, tone: 'success' });
       if (this.runBuilderGoalBtn) {
         this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
@@ -3010,6 +3232,7 @@ class AccountTaskPlanner {
     // but never route it through the started/running confirmation branch.
     if (publishStatus === 'PAUSED') {
       this.renderBuilderGoalRunProgress(run, { terminal: false, tone: 'warning' });
+      this.maybeRefreshBuilderGoalRunTimeline();
       if (this.builderGoalRunTrackerIterationId !== run.iterationId ||
           this.builderGoalRunTrackerPollGeneration !== generation) {
         return;
@@ -3018,29 +3241,32 @@ class AccountTaskPlanner {
       return;
     }
 
-    // "Task started" is displayed only after RUNNING is confirmed by the executor.
+    // SC-260: "Task started" is displayed once RUNNING is confirmed by the executor, but the
+    // tracker keeps polling (≤5s cadence) so the unified run timeline and run cards stay
+    // current for the entire run. Only terminal states end tracking.
     if (publishStatus === 'RUNNING' && taskStarted) {
-      this.stopBuilderGoalRunTracking();
       const accountLabel = run.accountName || run.targetAccountName || run.accountId || 'account';
       this.renderBuilderGoalClientStatus(
-        `Task started for ${accountLabel}. The Micro6 executor confirmed the script is running — monitor the runs list for execution progress.`,
+        `Task running for ${accountLabel}. The Micro6 executor confirmed the script is running — live updates continue.`,
         'success'
       );
+      this.maybeRefreshBuilderGoalRunTimeline();
       if (this.runBuilderGoalBtn) {
         this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
       }
       this.updateBuilderGoalRunButtonState();
-      try {
-        await this.loadBuilderGoalRuns();
-      } catch (e) {
-        console.warn('Failed to refresh runs after task start:', e);
+      if (this.builderGoalRunTrackerIterationId !== run.iterationId ||
+          this.builderGoalRunTrackerPollGeneration !== generation) {
+        return;
       }
+      this.scheduleNextBuilderGoalRunPoll(this.builderGoalRunTrackerPollNextDelay);
       return;
     }
 
     // Terminal: build failure
     if (readinessPhase === 'BUILD_FAILED') {
       this.stopBuilderGoalRunTracking();
+      this.refreshBuilderGoalTimelineForRunIfVisible(run);
       this.renderBuilderGoalRunFailure(run);
       if (this.runBuilderGoalBtn) {
         this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
@@ -3057,6 +3283,7 @@ class AccountTaskPlanner {
     // Terminal: process exited (non-build failure)
     if (readinessPhase === 'PROCESS_EXITED') {
       this.stopBuilderGoalRunTracking();
+      this.refreshBuilderGoalTimelineForRunIfVisible(run);
       const detail = run.targetReadinessReason || run.launchFailureDetail ||
         'The Micro6 process exited before the executor became ready.';
       this.renderBuilderGoalClientStatus(
@@ -3078,6 +3305,7 @@ class AccountTaskPlanner {
     // Terminal: publish failed
     if (publishStatus === 'PUBLISH_FAILED') {
       this.stopBuilderGoalRunTracking();
+      this.refreshBuilderGoalTimelineForRunIfVisible(run);
       this.renderBuilderGoalClientStatus(
         `Task publish failed: ${run.publishError || 'unknown error'}`,
         'danger'
@@ -3097,6 +3325,7 @@ class AccountTaskPlanner {
     // Terminal: cancelled
     if (run.cancelled) {
       this.stopBuilderGoalRunTracking();
+      this.refreshBuilderGoalTimelineForRunIfVisible(run);
       this.renderBuilderGoalClientStatus('Run cancelled.', 'warning');
       if (this.runBuilderGoalBtn) {
         this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
@@ -3108,6 +3337,7 @@ class AccountTaskPlanner {
     // Terminal: a generic preparation failure that did not map to one of the named phases.
     if (status === 'FAILED') {
       this.stopBuilderGoalRunTracking();
+      this.refreshBuilderGoalTimelineForRunIfVisible(run);
       this.renderBuilderGoalRunFailure(run, { buildFailure: false });
       if (this.runBuilderGoalBtn) {
         this.runBuilderGoalBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Task';
@@ -3135,6 +3365,7 @@ class AccountTaskPlanner {
 
     // Active: render progress panel and schedule next poll
     this.renderBuilderGoalRunProgress(run, { terminal: false });
+    this.maybeRefreshBuilderGoalRunTimeline();
     if (this.builderGoalRunTrackerIterationId !== run.iterationId ||
         this.builderGoalRunTrackerPollGeneration !== generation) {
       return;

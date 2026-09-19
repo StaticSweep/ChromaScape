@@ -77,17 +77,17 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
   assert.match(isolatedPatchWorker,
     /request\.micro6Root\(\)\.toAbsolutePath\(\)\.normalize\(\)/);
   assert.match(isolatedPatchWorker, /ISOLATED_SOURCE_NOT_FOUND/);
-  assert.match(isolatedPatchWorker, /"--path-format=absolute", "--git-common-dir"/);
+  assert.match(isolatedPatchWorker, /"--path-format=absolute"\s*,\s*"--git-common-dir"/);
   assert.match(isolatedPatchWorker, /ISOLATED_SOURCE_REPOSITORY_NOT_FOUND/);
   assert.match(isolatedPatchWorker,
-    /List\.of\("git", "clone", "--no-checkout", "--config", "core\.longpaths=true", "--no-hardlinks"/);
+    /List\.of\(\s*"git"\s*,\s*"clone"\s*,\s*"--no-checkout"\s*,\s*"--config"\s*,\s*"core\.longpaths=true"\s*,\s*"--no-hardlinks"/);
   assert.match(isolatedPatchWorker, /ISOLATED_CHECKOUT_FAILED/);
   assert.match(isolatedPatchWorker, /resolveSibling\("contracts"\)\.resolve\("java"\)/);
   assert.match(isolatedPatchWorker, /CAPTURE_CONTRACTS_NOT_FOUND/);
   assert.match(isolatedPatchWorker,
-    /"-PaiRoutineCaptureContractsDir=" \+ captureContracts/);
+    /"-PaiRoutineCaptureContractsDir="\s*\+\s*captureContracts/);
   assert.match(isolatedPatchWorker,
-    /":client:compileJava", ":client:sc967CandidateCheckstyleMain"/);
+    /":client:compileJava"\s*,\s*":client:sc967CandidateCheckstyleMain"/);
   assert.match(isolatedPatchWorker,
     /":client:sc967CandidateCheckstyleTest"/);
   assert.match(isolatedPatchWorker, /":client:sc967CandidateTest"/);
@@ -100,7 +100,7 @@ test('SC-967 isolated candidate clones support tracked Windows long paths', () =
   assert.match(isolatedPatchWorker, /isGradleRuntimePath\(relative\)/);
   assert.match(isolatedPatchWorker, /"GRADLE_RO_DEP_CACHE"/);
   assert.match(isolatedPatchWorker, /resolve\("caches"\)/);
-  assert.match(isolatedPatchWorker, /endsWith\("\.lock"\) \|\| value\.endsWith\("\.lck"\)/);
+  assert.match(isolatedPatchWorker, /endsWith\("\.lock"\)\s*\|\|\s*value\.endsWith\("\.lck"\)/);
   assert.doesNotMatch(isolatedPatchWorker, /:runelite-client:/);
   assert.match(isolatedPatchWorker, /DosFileAttributeView/);
   assert.match(isolatedPatchWorker, /dos\.setReadOnly\(false\)/);
@@ -148,7 +148,7 @@ test('certified report bundles retain the raw servlet stream for bounded parsing
 test('managed run creation uses capture authentication, not the operator credential', () => {
   assert.match(operatorWebConfig, /\/api\/v1\/ai-routine\/runs\/from-stabilization\/\*\*/);
   assert.match(routineController,
-    /@PostMapping\("\/runs\/from-stabilization\/\{attemptId\}"\)[^\n]+@RequestHeader\(value="Authorization",required=false\)[^\n]+authorize\(authorization\)/);
+    /@PostMapping\("\/runs\/from-stabilization\/\{attemptId\}"\)[\s\S]*?@RequestHeader\(value\s*=\s*"Authorization"\s*,\s*required\s*=\s*false\)[\s\S]*?authorize\(authorization\)/);
 });
 
 test('SC-968 entrypoint and manifests require all five runtime evidence documents', () => {

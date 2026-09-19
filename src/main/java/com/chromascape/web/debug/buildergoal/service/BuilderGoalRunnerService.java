@@ -9,6 +9,7 @@ import com.chromascape.web.debug.patchloop.dto.AnalysisV2Response;
 import com.chromascape.web.debug.patchloop.dto.AnalysisV2Target;
 import com.chromascape.web.debug.patchloop.dto.EvidenceType;
 import com.chromascape.web.debug.patchloop.dto.PromptType;
+import com.chromascape.web.debug.patchloop.entity.PatchLoopEventType;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopFailureCode;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIteration;
 import com.chromascape.web.debug.patchloop.entity.PatchLoopIterationRepository;
@@ -135,6 +136,7 @@ public class BuilderGoalRunnerService {
   private final Micro6TargetRelaunchService micro6TargetRelaunchService;
   private final Micro6TargetPreparationService targetPreparationService;
   private final BuilderGoalRunStateMutationService mutationService;
+  private final BuilderGoalRunEventService runEventService;
   private final BuilderGoalLaunchOperationService launchOperationService;
   private final BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator;
   private final ObjectMapper objectMapper;
@@ -199,6 +201,7 @@ public class BuilderGoalRunnerService {
       Micro6TargetRelaunchService micro6TargetRelaunchService,
       Micro6TargetPreparationService targetPreparationService,
       BuilderGoalRunStateMutationService mutationService,
+      BuilderGoalRunEventService runEventService,
       BuilderGoalLaunchOperationService launchOperationService,
       BuilderGoalLocalLaunchCoordinatorService localLaunchCoordinator,
       ObjectMapper objectMapper,
@@ -225,6 +228,7 @@ public class BuilderGoalRunnerService {
     this.micro6TargetRelaunchService = micro6TargetRelaunchService;
     this.targetPreparationService = targetPreparationService;
     this.mutationService = mutationService;
+    this.runEventService = runEventService;
     this.launchOperationService = launchOperationService;
     this.localLaunchCoordinator = localLaunchCoordinator;
     this.objectMapper = objectMapper;
@@ -2087,8 +2091,12 @@ public class BuilderGoalRunnerService {
     BuilderGoalRunStateMutationService.StopRequestResult stopResult =
         mutationService.requestStop(iterationId, reason);
     Integer entryId = stopResult.preservedEntryId();
+    recordRunStopRequestedEvent(iterationId, entryId, reason);
 
     if (stopResult.isPrePublish()) {
+      // requestStop has already committed the CANCELLED state. Record the terminal event only
+      // after RUN_STOP_REQUESTED so the durable timeline preserves causal ordering.
+      recordRunStoppedEvent(iterationId, reason);
       // Cancel pre-publish runs transactionally via the mutation service.
       // Flag and interrupt any active launch worker before removing from tracking.
       ActiveLaunchWork work = activeLaunchWork.get(iterationId);
@@ -2132,6 +2140,40 @@ public class BuilderGoalRunnerService {
             ? "Task removed before publish."
             : "Stop requested. Waiting for Micro6 to confirm cancellation.");
     return response;
+  }
+
+  /** Records the durable SC-260 stop-requested timeline event; never blocks run control. */
+  private void recordRunStopRequestedEvent(String iterationId, Integer entryId, String reason) {
+    if (runEventService == null) {
+      return;
+    }
+    try {
+      Map<String, Object> data = new LinkedHashMap<>();
+      if (entryId != null) {
+        data.put("entry_id", entryId);
+      }
+      runEventService.recordRunEvent(
+          iterationId, PatchLoopEventType.RUN_STOP_REQUESTED, reason, "WARN", data);
+    } catch (Exception e) {
+      logger.debug("SC-260 stop-requested event recording skipped: {}", e.getMessage());
+    }
+  }
+
+  /** Records completion of a pre-publish stop after its request event. */
+  private void recordRunStoppedEvent(String iterationId, String reason) {
+    if (runEventService == null) {
+      return;
+    }
+    try {
+      runEventService.recordRunEvent(
+          iterationId,
+          PatchLoopEventType.RUN_STOPPED,
+          firstNonBlank(reason, "Task cancelled before publish"),
+          "WARN",
+          null);
+    } catch (Exception e) {
+      logger.debug("SC-260 stopped event recording skipped: {}", e.getMessage());
+    }
   }
 
   public Map<String, Object> pauseRun(String iterationId) {

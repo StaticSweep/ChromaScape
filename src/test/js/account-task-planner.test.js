@@ -1146,7 +1146,7 @@ test('builder goal bundle version markers agree on 40', () => {
     'utf8'
   );
   const jsVersion = AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION;
-  assert.equal(jsVersion, '40');
+  assert.equal(jsVersion, '41');
   assert.ok(
     source.includes(`BUILDER_GOAL_BUNDLE_VERSION = '${jsVersion}'`),
     'JS source must declare the same bundle version'
@@ -1453,8 +1453,8 @@ test('isActivePublishState returns false for null/missing run', () => {
 
 // --- Bundle marker tests ---
 
-test('BUILDER_GOAL_BUNDLE_VERSION is 40', () => {
-  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '40');
+test('BUILDER_GOAL_BUNDLE_VERSION is 41', () => {
+  assert.equal(AccountTaskPlanner.BUILDER_GOAL_BUNDLE_VERSION, '41');
 });
 
 test('ACTIVE_PRE_START_STATUSES includes RECONCILING and AWAITING_EXECUTOR_CONFIRMATION', () => {
@@ -2371,12 +2371,14 @@ test('exact-run RUNNING with task started displays "Task started"', async () => 
   const planner = launchStatusPlanner();
   planner.builderGoalRunTrackerIterationId = 'buildergoal_running';
   planner.builderGoalRunTrackerPollGeneration = 1;
+  planner.builderGoalRunTrackerPollNextDelay = 2000;
   planner.runBuilderGoalBtn = { innerHTML: '', disabled: true };
   planner.updateBuilderGoalRunButtonState = () => {};
   planner.loadBuilderGoalRuns = async () => {};
-  planner.stopBuilderGoalRunTracking = () => {
-    planner.builderGoalRunTrackerIterationId = '';
+  planner.scheduleNextBuilderGoalRunPoll = delay => {
+    planner._nextDelay = delay;
   };
+  planner.maybeRefreshBuilderGoalRunTimeline = () => {};
 
   await planner.handleBuilderGoalRunView({
     iterationId: 'buildergoal_running',
@@ -2386,8 +2388,11 @@ test('exact-run RUNNING with task started displays "Task started"', async () => 
     accountName: 'bigGreenMeat'
   }, 1);
 
-  assert.equal(planner.builderGoalRunTrackerIterationId, '');
-  assert.ok(planner._statusMessage.includes('Task started for bigGreenMeat'));
+  // SC-260: tracking continues after RUNNING so the unified run timeline and run
+  // cards keep updating; only terminal states end tracking.
+  assert.equal(planner.builderGoalRunTrackerIterationId, 'buildergoal_running');
+  assert.equal(planner._nextDelay, 2000);
+  assert.ok(planner._statusMessage.includes('Task running for bigGreenMeat'));
 });
 
 test('exact-run RUNNING without a confirmed start keeps tracking', async () => {
