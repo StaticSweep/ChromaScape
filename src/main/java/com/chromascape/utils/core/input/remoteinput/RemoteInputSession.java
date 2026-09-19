@@ -30,6 +30,14 @@ import org.apache.logging.log4j.Logger;
 public final class RemoteInputSession implements TargetInputSession, TargetFrameSource {
   private static final Logger logger = LogManager.getLogger(RemoteInputSession.class);
 
+  /**
+   * Smallest remaining budget worth handing to a native call. Below this the deadline is treated as
+   * already reached: the executor would otherwise be handed a sub-scheduling-granularity budget and
+   * spuriously poison the lane for a call that never had a chance to run. The early failure is at
+   * most this amount before the true deadline.
+   */
+  private static final long MIN_CALL_BUDGET_NANOS = 5_000_000L;
+
   private final RemoteInputInterface nativeApi;
   private final Pointer target;
   private final ProcessIdentity identity;
@@ -238,12 +246,17 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
   /**
    * Ensures the selected pid is registered as a RemoteInput client, injecting once if needed.
    *
-   * <p>{@code options.injectTimeout()} is the <em>total</em> attachment deadline. The native {@code
-   * EIOS_Inject_PID} call is bounded by the time remaining until that deadline (never by a fresh
-   * full timeout), exactly one client poll follows a returned injection, and every further poll
-   * observes the same deadline, so the wait can overrun the configured budget by at most one
-   * bounded native call. Structured stage timestamps are recorded for evidence and reported on both
-   * success and timeout; they never include pointers, secrets, or command lines.
+   * <p>{@code options.injectTimeout()} is the <em>total</em> attachment deadline enforced with one
+   * monotonic clock reading taken at the start. Every native call in this loop — the initial {@code
+   * EIOS_GetClients}, every {@code EIOS_GetClientPID}, {@code EIOS_Inject_PID}, and each
+   * post-injection poll — is bounded by {@code min(nativeCallTimeout, remainingTotalTime)}, so a
+   * stalled native implementation can never extend the wait beyond the configured budget: calls
+   * after the deadline fail immediately with {@link InputSessionDiagnostic#INJECTION_TIMEOUT} and
+   * enumeration stops once no budget remains regardless of {@code maxClients}. Exactly one poll
+   * follows a returned injection so a client that registered while the call was running is still
+   * observed; that poll also receives only the remaining budget. Structured stage timestamps are
+   * recorded for evidence and reported on both success and timeout; they never include pointers,
+   * secrets, or command lines.
    */
   private static void ensureInjectedClient(
       RemoteInputInterface nativeApi,
@@ -255,14 +268,41 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
     long deadline = timeline.startNanos + options.injectTimeout().toNanos();
     boolean injected = false;
     while (true) {
+      long remainingNanos = deadline - System.nanoTime();
+      if (remainingNanos < MIN_CALL_BUDGET_NANOS) {
+        timeline.markDeadlineReached();
+        logger.warn(
+            "RemoteInput attachment for pid {} reached the injection deadline: {}",
+            identity.pid(),
+            timeline.describe());
+        throw failure(
+            InputSessionDiagnostic.INJECTION_TIMEOUT,
+            identity,
+            generation,
+            "Injected client for the selected pid did not register before the deadline ("
+                + timeline.describe()
+                + ")");
+      }
+      Duration remaining = Duration.ofNanos(remainingNanos);
       timeline.markPoll();
-      long count =
-          calls.call(
-              () -> nativeApi.EIOS_GetClients(RemoteInputInterface.NATIVE_FALSE),
-              options.nativeCallTimeout(),
-              InputSessionDiagnostic.NATIVE_CALL_TIMEOUT);
+      long count;
+      try {
+        count =
+            calls.call(
+                () -> nativeApi.EIOS_GetClients(RemoteInputInterface.NATIVE_FALSE),
+                boundedCallTimeout(options.nativeCallTimeout(), remaining),
+                InputSessionDiagnostic.INJECTION_TIMEOUT);
+      } catch (InputSessionException timeout) {
+        throw attachmentTimeoutFailure(
+            timeout,
+            identity,
+            generation,
+            timeline,
+            "Client enumeration exceeded the remaining attachment budget");
+      }
       validateClientCount(count, options.maxClients(), identity, generation);
-      if (selectedClientPresent(nativeApi, calls, count, identity, options, generation)) {
+      if (selectedClientPresent(
+          nativeApi, calls, count, identity, options, generation, deadline, timeline)) {
         timeline.markSelectedObserved();
         logger.info(
             "RemoteInput attachment for pid {} observed the injected client: {}",
@@ -270,7 +310,6 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
             timeline.describe());
         return;
       }
-      long remainingNanos = deadline - System.nanoTime();
       if (!injected) {
         Duration injectBudget = remainingBudget(remainingNanos, options.validationInterval());
         timeline.markInjectEntered();
@@ -297,28 +336,16 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
         timeline.markInjectReturned();
         injected = true;
         // A client that registered while the injection call was running must still be observed:
-        // poll once more before the deadline is allowed to fail the attachment.
+        // poll once more before the deadline is allowed to fail the attachment. The loop re-checks
+        // the deadline first, so the poll only happens when positive total budget remains and it
+        // receives only that remaining budget (boundedCallTimeout above).
         continue;
-      }
-      if (remainingNanos <= 0) {
-        timeline.markDeadlineReached();
-        logger.warn(
-            "RemoteInput attachment for pid {} reached the injection deadline: {}",
-            identity.pid(),
-            timeline.describe());
-        throw failure(
-            InputSessionDiagnostic.INJECTION_TIMEOUT,
-            identity,
-            generation,
-            "Injected client for the selected pid did not register before the deadline ("
-                + timeline.describe()
-                + ")");
       }
       try {
         Thread.sleep(
             Math.min(
                 options.validationInterval().toMillis(),
-                Math.max(1L, Duration.ofNanos(remainingNanos).toMillis())));
+                Math.max(1L, Duration.ofNanos(deadline - System.nanoTime()).toMillis())));
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new InputSessionException(
@@ -329,6 +356,36 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
             e);
       }
     }
+  }
+
+  /**
+   * Bounds one native call by both its configured timeout and the time left before the total
+   * deadline: a call may never receive a fresh budget that outlives the attachment deadline.
+   */
+  private static Duration boundedCallTimeout(Duration nativeCallTimeout, Duration remaining) {
+    return nativeCallTimeout.compareTo(remaining) <= 0 ? nativeCallTimeout : remaining;
+  }
+
+  /**
+   * Rewraps an attachment-budget timeout so the diagnostic carries the stage timeline (including
+   * the configured total budget) instead of a bare executor message.
+   */
+  private static InputSessionException attachmentTimeoutFailure(
+      InputSessionException timeout,
+      ProcessIdentity identity,
+      long generation,
+      AttachmentTimeline timeline,
+      String stage) {
+    if (timeout.diagnostic() != InputSessionDiagnostic.INJECTION_TIMEOUT) {
+      return timeout;
+    }
+    timeline.markDeadlineReached();
+    return new InputSessionException(
+        InputSessionDiagnostic.INJECTION_TIMEOUT,
+        identity,
+        generation,
+        stage + " (" + timeline.describe() + ")",
+        timeout);
   }
 
   /**
@@ -408,14 +465,38 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
       long count,
       ProcessIdentity identity,
       RemoteInputSessionOptions options,
-      long generation) {
+      long generation,
+      long deadlineNanos,
+      AttachmentTimeline timeline) {
     for (long index = 0; index < count; index++) {
+      long remainingNanos = deadlineNanos - System.nanoTime();
+      if (remainingNanos < MIN_CALL_BUDGET_NANOS) {
+        timeline.markDeadlineReached();
+        throw failure(
+            InputSessionDiagnostic.INJECTION_TIMEOUT,
+            identity,
+            generation,
+            "Client enumeration exhausted the total attachment deadline before the selected pid "
+                + "was observed ("
+                + timeline.describe()
+                + ")");
+      }
       long clientIndex = index;
-      int pid =
-          calls.call(
-              () -> nativeApi.EIOS_GetClientPID(clientIndex),
-              options.nativeCallTimeout(),
-              InputSessionDiagnostic.NATIVE_CALL_TIMEOUT);
+      int pid;
+      try {
+        pid =
+            calls.call(
+                () -> nativeApi.EIOS_GetClientPID(clientIndex),
+                boundedCallTimeout(options.nativeCallTimeout(), Duration.ofNanos(remainingNanos)),
+                InputSessionDiagnostic.INJECTION_TIMEOUT);
+      } catch (InputSessionException timeout) {
+        throw attachmentTimeoutFailure(
+            timeout,
+            identity,
+            generation,
+            timeline,
+            "Client pid read exceeded the remaining attachment budget");
+      }
       if (pid <= 0) {
         throw failure(
             InputSessionDiagnostic.CLIENT_ENUMERATION_INVALID,
@@ -673,28 +754,49 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
     return state;
   }
 
+  /** Whether the native lane timed out and the session can never be reused (lease retained). */
+  public boolean isPoisoned() {
+    return state == InputSessionState.POISONED || calls.isPoisoned();
+  }
+
+  /**
+   * Closes the session, releasing every held input and the native target.
+   *
+   * <p>Failure semantics are deliberate and must never report success early: a held-input release
+   * timeout or an {@code EIOS_ReleaseTarget} timeout poisons the native lane permanently, the
+   * attachment lease is <b>retained</b> (the interrupted native operation may still be executing
+   * inside the target), and the original {@code RELEASE_TIMEOUT} diagnostic is thrown — the caller
+   * therefore never observes a normal return from a close that did not complete natively. A
+   * subsequent {@code close()} on a poisoned session throws {@code SESSION_POISONED} instead of
+   * silently succeeding; reopening the identity requires a ChromaScape restart. A normal close
+   * remains idempotent, and {@code calls.close()} plus {@code lease.close()} run only after every
+   * native release finished successfully.
+   */
   @Override
   public synchronized void close() {
-    if (state == InputSessionState.CLOSED
-        || state == InputSessionState.CLOSING
-        || state == InputSessionState.POISONED) {
+    if (state == InputSessionState.CLOSED || state == InputSessionState.CLOSING) {
       return;
     }
-    if (calls.isPoisoned()) {
+    if (state == InputSessionState.POISONED || calls.isPoisoned()) {
       state = InputSessionState.POISONED;
       retainPoisonedLease();
-      return;
+      throw failure(
+          InputSessionDiagnostic.SESSION_POISONED,
+          identity,
+          generation,
+          "Session close cannot complete because a native release timed out; restart "
+              + "ChromaScape to recover the attachment lease");
     }
 
     state = InputSessionState.CLOSING;
     RuntimeException releaseFailure = releaseHeldInputs();
-    if (calls.isPoisoned()) {
-      state = InputSessionState.POISONED;
-      retainPoisonedLease();
-      return;
-    }
     if (releaseFailure != null) {
-      state = InputSessionState.FAILED;
+      if (calls.isPoisoned()) {
+        state = InputSessionState.POISONED;
+        retainPoisonedLease();
+      } else {
+        state = InputSessionState.FAILED;
+      }
       throw releaseFailure;
     }
 
@@ -708,14 +810,14 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
             options.releaseTimeout(),
             InputSessionDiagnostic.RELEASE_TIMEOUT);
         targetReleased = true;
-      } catch (RuntimeException failure) {
+      } catch (RuntimeException releaseTargetFailure) {
         if (calls.isPoisoned()) {
           state = InputSessionState.POISONED;
           retainPoisonedLease();
-          return;
+        } else {
+          state = InputSessionState.FAILED;
         }
-        state = InputSessionState.FAILED;
-        throw failure;
+        throw releaseTargetFailure;
       }
     }
 
@@ -765,6 +867,8 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
 
   private void retainPoisonedLease() {
     logger.warn(
-        "RemoteInput session lane timed out; attachment lease retained for pid {}", identity.pid());
+        "RemoteInput session lane timed out; attachment lease retained for pid {} "
+            + "(restart ChromaScape to release it)",
+        identity.pid());
   }
 }

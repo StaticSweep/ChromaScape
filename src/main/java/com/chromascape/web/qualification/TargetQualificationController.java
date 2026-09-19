@@ -5,6 +5,7 @@ import com.chromascape.utils.core.input.InputSessionException;
 import com.chromascape.utils.core.input.TargetInputSession;
 import com.chromascape.utils.core.input.TargetInputSessionFactory;
 import com.chromascape.utils.core.input.remoteinput.MouseButton;
+import com.chromascape.utils.core.input.remoteinput.RemoteInputSession;
 import com.chromascape.utils.core.screen.capture.CapturedFrame;
 import com.chromascape.utils.core.screen.capture.TargetFrameRuntime;
 import com.chromascape.utils.core.screen.capture.TargetFrameSource;
@@ -125,8 +126,16 @@ public class TargetQualificationController {
         return ResponseEntity.status(HttpStatus.CONFLICT)
             .body(error("SESSION_ALREADY_OPEN", "A qualification session is already open"));
       }
-      // A previous session that closed or was poisoned underneath us must not keep its
-      // frame-source registration alive, or the new install below would be refused.
+      if (isPoisoned(session)) {
+        // A poisoned RemoteInputSession retains the static target lease on purpose: native work
+        // may still be executing inside the target, and reopening the same identity can only
+        // fail until ChromaScape restarts. Surface that instead of silently discarding the
+        // poisoned session and implying automatic recovery.
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(poisonedBody(session, "SESSION_POISONED_RESTART_REQUIRED"));
+      }
+      // A previous session that closed normally underneath us must not keep its frame-source
+      // registration alive, or the new install below would be refused.
       discardDeadSession();
       TargetInputSession opened = sessionFactory.openSelectedSession();
       TargetFrameSource installed = null;
@@ -165,8 +174,11 @@ public class TargetQualificationController {
     }
     lock.lock();
     try {
-      final Map<String, Object> before =
-          session != null && session.isOpen() ? identityBody(session) : Map.of();
+      if (session == null) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(error("SESSION_CLOSED", "No qualification session exists"));
+      }
+      final Map<String, Object> before = session.isOpen() ? identityBody(session) : Map.of();
       releaseAndClose();
       Map<String, Object> body = new LinkedHashMap<>();
       body.put("status", "closed");
@@ -174,6 +186,12 @@ public class TargetQualificationController {
       body.put("closedIdentity", before);
       return ResponseEntity.ok(body);
     } catch (InputSessionException failure) {
+      // The session reference is intentionally preserved: a failed release (timed-out native
+      // work, retained lease) must stay addressable and reportable, never "closed".
+      if (isPoisoned(session)) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(poisonedBody(session, "SESSION_POISONED"));
+      }
       return diagnosticResponse(failure);
     } finally {
       lock.unlock();
@@ -189,6 +207,10 @@ public class TargetQualificationController {
     }
     lock.lock();
     try {
+      if (isPoisoned(session)) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(poisonedBody(session, "SESSION_POISONED"));
+      }
       return ResponseEntity.ok(statusBody());
     } finally {
       lock.unlock();
@@ -559,10 +581,11 @@ public class TargetQualificationController {
   }
 
   /**
-   * Clears a non-null session that is no longer open (closed underneath us or poisoned) so its
-   * frame-source registration and reference cannot refuse or corrupt a later open. Failures of the
-   * dead session's own {@code close()} are logged, not propagated: the caller is about to open a
-   * fresh session and the dead one retains no usable state.
+   * Clears a non-null session that closed normally underneath us so its frame-source registration
+   * and reference cannot refuse or corrupt a later open. A <b>poisoned</b> session is never routed
+   * here: {@code /session/open} rejects the request first because poisoned state (a timed-out
+   * native release with its retained attachment lease) is only recoverable by a ChromaScape
+   * restart. Failures of the closed session's own {@code close()} are logged, not propagated.
    */
   private void discardDeadSession() {
     final TargetFrameSource stale = frameSource;
@@ -577,15 +600,47 @@ public class TargetQualificationController {
       try {
         dead.close();
       } catch (RuntimeException failure) {
-        logger.warn("Closing an already-dead qualification session failed", failure);
+        logger.warn("Closing an already-closed qualification session failed", failure);
       }
     }
+  }
+
+  /** Whether this session is a poisoned RemoteInput session (unusable until app restart). */
+  private static boolean isPoisoned(TargetInputSession candidate) {
+    return candidate instanceof RemoteInputSession remote && remote.isPoisoned();
+  }
+
+  /** Body describing a poisoned session with its identity, generation, and restart requirement. */
+  private static Map<String, Object> poisonedBody(TargetInputSession poisoned, String error) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("status", "error");
+    body.put("error", error);
+    body.put("diagnostic", error);
+    body.put(
+        "message",
+        "A native release timed out for this session; the attachment lease is retained and the "
+            + "target cannot be reopened until ChromaScape restarts");
+    body.put("restartRequired", true);
+    body.put("sessionOpen", false);
+    ProcessIdentity identity = poisoned.identity();
+    if (identity != null) {
+      body.put("pid", identity.pid());
+      body.put("origin", identity.origin().name());
+      body.put(
+          "processStartTime",
+          identity.startTime() == null ? null : identity.startTime().toString());
+      body.put("bootIdPresent", identity.bootId() != null && !identity.bootId().isEmpty());
+    }
+    body.put("selectionGeneration", poisoned.selectionGeneration());
+    return body;
   }
 
   /**
    * Operator-path close. The session reference is dropped only after {@code close()} succeeds so a
    * failed release ({@code RELEASE_TIMEOUT}, {@code FAILED} state) can be retried through {@code
    * /session/close} instead of leaving an orphaned attachment lease until the application restarts.
+   * A poisoned session intentionally keeps its reference: {@code /session/status} and {@code
+   * /session/open} must keep reporting the restart-required state instead of forgetting it.
    */
   private void releaseAndClose() {
     if (frameSource != null) {
@@ -619,6 +674,14 @@ public class TargetQualificationController {
   }
 
   private TargetInputSession requireOpenSession() {
+    if (session != null && isPoisoned(session)) {
+      throw new InputSessionException(
+          InputSessionDiagnostic.SESSION_POISONED,
+          session.identity(),
+          session.selectionGeneration(),
+          "The qualification session is poisoned by a timed-out native release; restart "
+              + "ChromaScape to recover");
+    }
     if (session == null || !session.isOpen()) {
       throw new InputSessionException(
           InputSessionDiagnostic.SESSION_CLOSED,
@@ -630,11 +693,20 @@ public class TargetQualificationController {
   }
 
   private Map<String, Object> statusBody() {
-    boolean open = session != null && session.isOpen();
+    boolean poisoned = isPoisoned(session);
+    boolean open = session != null && !poisoned && session.isOpen();
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("status", open ? "open" : "closed");
     body.put("sessionOpen", open);
-    if (open) {
+    if (poisoned) {
+      body.put("restartRequired", true);
+      body.put("diagnostic", "SESSION_POISONED");
+      ProcessIdentity identity = session.identity();
+      if (identity != null) {
+        body.put("pid", identity.pid());
+      }
+      body.put("selectionGeneration", session.selectionGeneration());
+    } else if (open) {
       body.putAll(identityBody(session));
     } else if (selection.hasSelection() && selection.getSelectedIdentity() != null) {
       body.put(
