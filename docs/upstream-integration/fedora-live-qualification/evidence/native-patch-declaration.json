@@ -1,0 +1,9 @@
+{
+  "patchIdentity": "sha256:a7744da1c54a5646b975d9b7adce5891832394b1d84104bb8009ade551107040",
+  "reason": "Select the RuneLite client frame deterministically when several target-owned windows share the recognised WM_CLASS (a splash window and the real frame), and add opt-in bounded attachment stage diagnostics emitted only from the detached constructor thread.",
+  "changedPaths": [
+    "third-party/RemoteInput/RemoteInput/Platform/Platform_Linux.cxx"
+  ],
+  "addedPaths": [],
+  "removedPaths": []
+}

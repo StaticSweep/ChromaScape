@@ -26,6 +26,7 @@
 
 #include <functional>
 #include <cstring>
+#include <cstdlib>
 #include <vector>
 #include <algorithm>
 #include <filesystem>
@@ -495,6 +496,65 @@ std::array<std::string, 2> recognizedClassNames = {
     "jagexappletviewer",  // Jagex client
     "net-runelite-client-RuneLite",  // RuneLite client
 };
+
+// Opt-in, bounded attachment diagnostics. The reflection probe runs on the detached constructor
+// thread (never the loader lock), so writing a short line to stderr is safe; it is still gated so a
+// normal production injection stays silent. Set REMOTEINPUT_ATTACH_DIAGNOSTICS=1 in the target
+// environment to capture the failing stage.
+bool AttachmentDiagnosticsEnabled() noexcept
+{
+    const char* value = std::getenv("REMOTEINPUT_ATTACH_DIAGNOSTICS");
+    return value != nullptr && (std::strcmp(value, "1") == 0 || std::strcmp(value, "true") == 0);
+}
+
+void Diagnose(const char* stage) noexcept
+{
+    if (!AttachmentDiagnosticsEnabled())
+    {
+        return;
+    }
+    std::fprintf(stderr, "[RemoteInput] %s\n", stage);
+    std::fflush(stderr);
+}
+
+// True when a window carries _NET_WM_STATE_SKIP_TASKBAR. The RuneLite splash window sets it while
+// the real client frame does not, so it is a deterministic preference signal among several
+// target-owned windows.
+bool IsSkipTaskbar(Display* display, Window window) noexcept
+{
+    Atom stateAtom = XInternAtom(display, "_NET_WM_STATE", True);
+    Atom skipAtom = XInternAtom(display, "_NET_WM_STATE_SKIP_TASKBAR", True);
+    if (stateAtom == None || skipAtom == None)
+    {
+        return false;
+    }
+
+    Atom type = None;
+    int format = 0;
+    unsigned long nItems = 0;
+    unsigned long bytesAfter = 0;
+    unsigned char* property = nullptr;
+    bool result = false;
+    if (XGetWindowProperty(display, window, stateAtom, 0L, 16L, False, XA_ATOM, &type, &format,
+                           &nItems, &bytesAfter, &property) == Success && property != nullptr)
+    {
+        Atom* atoms = reinterpret_cast<Atom*>(property);
+        for (unsigned long i = 0; i < nItems; ++i)
+        {
+            if (atoms[i] == skipAtom)
+            {
+                result = true;
+                break;
+            }
+        }
+        XFree(property);
+    }
+    return result;
+}
+
+// Collects every target-owned window whose class is recognised. The callback never stops the
+// enumeration: several windows can belong to the target (for example a splash screen and the real
+// client frame), and returning the first match is what selected the wrong window.
 bool EnumWindowsProc(Display* display, Window window, void* other) noexcept
 {
     std::int32_t pid = 0;
@@ -514,17 +574,36 @@ bool EnumWindowsProc(Display* display, Window window, void* other) noexcept
         );
         if (matchedClassName != std::end(recognizedClassNames))
         {
-            // the correct window has been located, so assign this `Window`
-            // object to the `other` parameter, and return false to
-            // indicate that the operation was a success.
-            *reinterpret_cast<Window*>(other) = window;
-            return false;
+            reinterpret_cast<std::vector<Window>*>(other)->push_back(window);
         }
         #if defined(DEBUG)
-        printf("excluded window with class name '%s'\n", className);
+        else
+        {
+            printf("excluded window with class name '%s'\n", className);
+        }
         #endif
     }
-    return true;
+    return true;  // always keep enumerating: several target-owned windows may match
+}
+
+// Returns every recognised target-owned window in a deterministic order: windows that are not
+// skip-taskbar (the real client frame) before skip-taskbar windows (the splash), preserving the
+// window-manager's _NET_CLIENT_LIST order within each group.
+std::vector<Window> GetMainWindows() noexcept
+{
+    std::vector<Window> windows;
+    Display* display = XOpenDisplay(nullptr);
+    if (!display)
+    {
+        return windows;
+    }
+
+    EnumWindows(display, EnumWindowsProc, &windows);
+    std::stable_sort(windows.begin(), windows.end(), [&](Window left, Window right) {
+        return !IsSkipTaskbar(display, left) && IsSkipTaskbar(display, right);
+    });
+    XCloseDisplay(display);
+    return windows;
 }
 
 std::unique_ptr<Reflection> GetNativeReflector() noexcept
@@ -560,26 +639,18 @@ std::unique_ptr<Reflection> GetNativeReflector() noexcept
         return result;
     };
 
+    Diagnose("GetNativeReflector: entered");
+
     if (!TimeOut(5, [&]{ return JVM().getVM() != nullptr; }))
     {
+        Diagnose("GetNativeReflector: JVM not discovered within 5s");
         return nullptr;
     }
-
-    auto GetMainWindow = [&]() -> Window {
-        Display* display = XOpenDisplay(nullptr);
-        if (display)
-        {
-            Window windowFrame = 0;
-            EnumWindows(display, EnumWindowsProc, &windowFrame);
-            XCloseDisplay(display);
-            return windowFrame;
-        }
-        return 0;
-    };
 
     JVM vm = JVM();
     if (!vm)
     {
+        Diagnose("GetNativeReflector: JVM unavailable after discovery");
         return nullptr;
     }
 
@@ -587,6 +658,7 @@ std::unique_ptr<Reflection> GetNativeReflector() noexcept
     if (vm.AttachCurrentThread(&env) == JNI_OK)
     {
         std::unique_ptr<Reflection> reflection;
+        bool awtComponentReported = false;
         bool hasReflection = TimeOut(20, [&]{
             if (!ModuleLoaded("libawt_xawt.so"))
             {
@@ -596,14 +668,21 @@ std::unique_ptr<Reflection> GetNativeReflector() noexcept
             auto awt_GetComponent = reinterpret_cast<jobject (*)(JNIEnv*, void*)>(dlsym(RTLD_DEFAULT, "awt_GetComponent"));
             if (!awt_GetComponent)
             {
+                if (!awtComponentReported)
+                {
+                    awtComponentReported = true;
+                    Diagnose("GetNativeReflector: awt_GetComponent unresolved via RTLD_DEFAULT");
+                }
                 return false;
             }
 
             return TimeOut(20, [&]{
-                void* windowFrame = reinterpret_cast<void*>(GetMainWindow());
-                if (windowFrame)
+                // Try every recognised target-owned window rather than only the first: a splash
+                // window can share the client's WM_CLASS but contain no AWT Canvas, so the real
+                // frame is the first candidate for which Reflection::Create succeeds.
+                for (Window windowFrame : GetMainWindows())
                 {
-                    jobject frame = awt_GetComponent(env, windowFrame);  //java.awt.Frame
+                    jobject frame = awt_GetComponent(env, reinterpret_cast<void*>(windowFrame));  //java.awt.Frame
                     if (frame)
                     {
                         if (IsValidFrame(env, frame))
@@ -611,6 +690,7 @@ std::unique_ptr<Reflection> GetNativeReflector() noexcept
                             reflection = Reflection::Create(frame);
                             if (reflection)
                             {
+                                Diagnose("GetNativeReflector: reflection created");
                                 return true;
                             }
                         }
@@ -624,6 +704,11 @@ std::unique_ptr<Reflection> GetNativeReflector() noexcept
         {
             return reflection;
         }
+        Diagnose("GetNativeReflector: no window produced a usable reflection");
+    }
+    else
+    {
+        Diagnose("GetNativeReflector: AttachCurrentThread failed");
     }
 
     vm.DetachCurrentThread();
