@@ -44,3 +44,7 @@ pair identity `43b38e8f95d8f2dcf2d0ee4dd3ffb86d3cffd2fa975cca4db27970c4d1b03e9d`
 
 Fedora proof-of-concept packaging (relocatable tar and RPM with install, upgrade, smoke, and
 uninstall verification) starts only after this story merges.
+
+## Review
+
+Review-required PR: https://github.com/ikiddoi/ChromaScape/pull/15

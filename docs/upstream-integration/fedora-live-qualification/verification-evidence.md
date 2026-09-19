@@ -26,7 +26,7 @@ Every criterion is reported honestly as PASS, FAIL, or NOT RUN against the final
 | Focused tests pass | PASS | 145/145 (`junit-focused/`) |
 | Ordinary and replay failure-identity deltas introduce nothing new | PASS | 100 ordinary + 12 replay failures, all pre-existing Docker/Postgres; none in input/qualification |
 | Evidence is committed, redacted, hashed, and tied to the final revision | PASS | `evidence/index.md`, `evidence/SHA256SUMS` |
-| Branch is pushed and a review-required PR is open | PASS | see PR link in the PR description / `shortcut-story-update.md` |
+| Branch is pushed and a review-required PR is open | PASS | PR https://github.com/ikiddoi/ChromaScape/pull/15 |
 
 ## Automated verification commands
 
