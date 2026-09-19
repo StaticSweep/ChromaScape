@@ -683,17 +683,30 @@ std::unique_ptr<Reflection> GetNativeReflector() noexcept
                 for (Window windowFrame : GetMainWindows())
                 {
                     jobject frame = awt_GetComponent(env, reinterpret_cast<void*>(windowFrame));  //java.awt.Frame
-                    if (frame)
+                    if (!frame)
                     {
-                        if (IsValidFrame(env, frame))
-                        {
-                            reflection = Reflection::Create(frame);
-                            if (reflection)
-                            {
-                                Diagnose("GetNativeReflector: reflection created");
-                                return true;
-                            }
-                        }
+                        continue;
+                    }
+
+                    std::unique_ptr<Reflection> candidate;
+                    if (IsValidFrame(env, frame))
+                    {
+                        candidate = Reflection::Create(frame);
+                    }
+                    // Reflection::Create() creates its own global reference to the frame
+                    // (Reflection.cxx NewGlobalRef), so the caller's local reference is released
+                    // before the next candidate/retry. This also releases the reference for
+                    // non-Frame results and for candidates whose Reflection::Create returned
+                    // null; no reference is used after this point and a null reference is never
+                    // deleted. Without this release the probe retries every 100 ms for up to 20 s
+                    // across several windows, leaking a local reference per rejected candidate.
+                    env->DeleteLocalRef(frame);
+
+                    if (candidate)
+                    {
+                        reflection = std::move(candidate);
+                        Diagnose("GetNativeReflector: reflection created");
+                        return true;
                     }
                 }
                 return false;
