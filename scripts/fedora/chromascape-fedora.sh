@@ -29,6 +29,10 @@ set_fedora_runtime_defaults() {
     set_default_environment MICRO6_EXECUTOR_BASE_URL http://127.0.0.1:8098
     set_default_environment GAMEPLAY_BOOTSTRAP_MICRO6_URL http://127.0.0.1:8098
     set_default_environment LEEUWBOT_CANDIDATE_REGISTRY_URL http://127.0.0.1:8081
+    # The MCP bridge is an analysis sidecar whose scripts/mcp-bridge payload is not
+    # part of a Linux checkout; leaving auto-start on aborts Fedora startup with a
+    # BridgeConfigException. Keep it off by default and let an operator opt back in.
+    set_default_environment MCP_AUTO_START false
 }
 
 usage() {

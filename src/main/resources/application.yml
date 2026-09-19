@@ -136,6 +136,15 @@ gateway:
 
 # ChromaScape runtime configuration
 chromascape:
+  # Development-only bounded target-session harness (open/capture/move/click/key) used by the
+  # live Fedora qualification. Disabled by default and enforced twice by Spring: the bean exists
+  # only when the local-development profile is the active profile AND
+  # CHROMASCAPE_QUALIFICATION_ENABLED=true is set explicitly. The controller additionally refuses
+  # non-loopback callers so it can never expose input on a shared interface, and it closes any
+  # open session on application shutdown.
+  qualification:
+    enabled: ${CHROMASCAPE_QUALIFICATION_ENABLED:false}
+    capture-directory: ${CHROMASCAPE_QUALIFICATION_CAPTURE_DIR:.chromascape/qualification/captures}
   # SC-810 authoritative source manifest trust. All values are mandatory at startup; empty
   # placeholders deliberately fail SourceConfigurationValidator rather than enabling a fallback.
   source:
