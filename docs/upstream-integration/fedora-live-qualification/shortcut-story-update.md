@@ -36,12 +36,12 @@ probe was driven against a window with no AWT Canvas; `Reflection::Create` retur
 
 ## Native artifact
 
-`libRemoteInput.so` SHA-256 `b0c8d3655876dd23e931a9df48efc87b96f936758e5a18a27988d9ab49a5fefd`,
-pair identity `43b38e8f95d8f2dcf2d0ee4dd3ffb86d3cffd2fa975cca4db27970c4d1b03e9d`, local patch
-`sha256:a7744da1c54a5646b975d9b7adce5891832394b1d84104bb8009ade551107040` (superseded by
-`sha256:7af654074906652c1bff730071978e56f1e0c6846f217962eedf7196bc9661e6` after the remediation's
-JNI local-reference cleanup; the native pair for the new identity is not rebuilt yet — see the
-NOT RUN table in `verification-evidence.md`). No `.so` is committed.
+`libRemoteInput.so` SHA-256 `65606e682f46756af8c62b15cfed555115f434604674d9facc761a9f5dd2426f`,
+pair identity `a834ff8760f38991d167cfda06122d241a031c553e1709cf40ed43b36d913243`, local patch
+`sha256:7af654074906652c1bff730071978e56f1e0c6846f217962eedf7196bc9661e6` — rebuilt in the pinned
+Podman toolchain (repeat build byte-identical) and verified by the complete live-matrix rerun of
+2026-09-19; see `verification-evidence.md`. The pre-remediation pair (`b0c8d365...`/`43b38e8f...`,
+patch `sha256:a7744da1...`) is superseded history. No `.so` is committed.
 
 ## Next story
 

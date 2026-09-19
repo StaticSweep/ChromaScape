@@ -1,11 +1,15 @@
 # Fedora live qualification — primary host final run
 
-> Supersession note (2026-09-19 remediation): the run below was executed against native patch
+> Supersession note (2026-09-19 completion): **Superseded both for native-pair identity and
+> failure classification. Do not use this file as the current base/candidate delta.** The run
+> below was executed against native patch
 > `sha256:a7744da1c54a5646b975d9b7adce5891832394b1d84104bb8009ade551107040`. The source patch has
-> since been extended with JNI local-reference cleanup for rejected window candidates (current
-> identity `sha256:7af654074906652c1bff730071978e56f1e0c6846f217962eedf7196bc9661e6`); the native
-> pair for that identity has not been rebuilt, so the PASS claims below describe the superseded
-> pair only.
+> since been extended with JNI local-reference cleanup for rejected window candidates; the pair
+> for the current identity `sha256:7af65407...` has been rebuilt (library `65606e68...`, pair
+> `a834ff87...`) and the complete live matrix rerun against it — see `../verification-evidence.md`
+> and `fedora-primary.json` for the current results. The ordinary/replay totals and
+> "exclusively PostgreSQL/Testcontainers environmental failures" classification below are also
+> superseded: the corrected classification is in `../verification-evidence.md`.
 
 ## Identities
 
