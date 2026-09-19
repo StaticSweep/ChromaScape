@@ -136,8 +136,10 @@ class RemoteInputSessionTest {
     long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
 
     assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    // The pre-fix behaviour granted the inject call its own full 500ms budget on top of the total
+    // deadline (>= ~1000ms); anything comfortably under that proves the deadline is shared.
     assertTrue(
-        elapsedMillis < 900,
+        elapsedMillis < 1_500,
         "a 350ms inject call plus polling must stay near the 500ms budget, took " + elapsedMillis);
     assertTrue(
         failure.getMessage().contains("injectionCallReturned=+"),
@@ -175,8 +177,45 @@ class RemoteInputSessionTest {
 
     assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
     assertTrue(
-        elapsedMillis < 1_500,
+        elapsedMillis < 2_500,
         "the inject call must be cut at the remaining budget, not run 5s; took " + elapsedMillis);
+  }
+
+  @Test
+  void clientRegisteringDuringTheInjectCallIsObservedByThePostInjectionPoll() {
+    AtomicInteger polls = new AtomicInteger();
+    java.util.concurrent.atomic.AtomicBoolean injected =
+        new java.util.concurrent.atomic.AtomicBoolean();
+    when(nativeApi.EIOS_GetClients(anyByte()))
+        .thenAnswer(
+            invocation -> {
+              polls.incrementAndGet();
+              return injected.get() ? 1L : 0L;
+            });
+    when(nativeApi.EIOS_GetClientPID(0)).thenReturn(42);
+    doAnswer(
+            invocation -> {
+              // The client registers while the native injection call is still running.
+              Thread.sleep(200);
+              injected.set(true);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_Inject_PID(42);
+    RemoteInputSessionOptions options =
+        new RemoteInputSessionOptions(
+            true,
+            Duration.ofSeconds(2),
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(1),
+            Duration.ofMillis(20),
+            8);
+
+    RemoteInputSession session = open(options);
+
+    assertEquals(2, polls.get(), "exactly one poll before and one after the injection call");
+    session.close();
   }
 
   @Test

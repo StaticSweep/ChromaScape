@@ -74,6 +74,27 @@ class RemoteInputStartupValidatorTest {
   }
 
   @Test
+  void enabledOnLinuxWithMissingArtifactFailsStartupWithTheStableDiagnostic() {
+    RemoteInputBindingProvider provider = mock(RemoteInputBindingProvider.class);
+    RemoteInputArtifactException missing =
+        new RemoteInputArtifactException(
+            RemoteInputDiagnostic.MISSING_LIBRARY,
+            (Path) null,
+            "linux-x86_64 ELF 64-bit LSB shared object",
+            "libRemoteInput.so was not found under the application root");
+    when(provider.load()).thenThrow(missing);
+
+    RemoteInputStartupValidator validator =
+        new RemoteInputStartupValidator(provider, true, () -> ProcessManagerFactory.Platform.LINUX);
+
+    IllegalStateException thrown =
+        assertThrows(IllegalStateException.class, () -> validator.verifyAttachmentReadiness());
+
+    assertTrue(thrown.getMessage().contains("MISSING_LIBRARY"), thrown.getMessage());
+    assertEquals(missing, thrown.getCause());
+  }
+
+  @Test
   void enabledOnLinuxWithNullBindingFailsStartupWithTheStableDiagnostic() {
     RemoteInputBindingProvider provider = mock(RemoteInputBindingProvider.class);
     when(provider.load()).thenReturn(null);

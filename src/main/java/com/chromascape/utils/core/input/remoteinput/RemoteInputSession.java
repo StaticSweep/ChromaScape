@@ -240,10 +240,10 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
    *
    * <p>{@code options.injectTimeout()} is the <em>total</em> attachment deadline. The native {@code
    * EIOS_Inject_PID} call is bounded by the time remaining until that deadline (never by a fresh
-   * full timeout), and every poll observes the same deadline, so a slow native call cannot extend
-   * the wait beyond the configured budget. Structured stage timestamps are recorded for evidence
-   * and reported on both success and timeout; they never include pointers, secrets, or command
-   * lines.
+   * full timeout), exactly one client poll follows a returned injection, and every further poll
+   * observes the same deadline, so the wait can overrun the configured budget by at most one
+   * bounded native call. Structured stage timestamps are recorded for evidence and reported on both
+   * success and timeout; they never include pointers, secrets, or command lines.
    */
   private static void ensureInjectedClient(
       RemoteInputInterface nativeApi,
@@ -284,7 +284,9 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
               InputSessionDiagnostic.INJECTION_TIMEOUT);
         } catch (InputSessionException injectFailure) {
           timeline.markInjectReturned();
-          timeline.markDeadlineReached();
+          if (injectFailure.diagnostic() == InputSessionDiagnostic.INJECTION_TIMEOUT) {
+            timeline.markDeadlineReached();
+          }
           logger.warn(
               "RemoteInput injection call for pid {} failed ({}): {}",
               identity.pid(),
@@ -294,7 +296,9 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
         }
         timeline.markInjectReturned();
         injected = true;
-        remainingNanos = deadline - System.nanoTime();
+        // A client that registered while the injection call was running must still be observed:
+        // poll once more before the deadline is allowed to fail the attachment.
+        continue;
       }
       if (remainingNanos <= 0) {
         timeline.markDeadlineReached();

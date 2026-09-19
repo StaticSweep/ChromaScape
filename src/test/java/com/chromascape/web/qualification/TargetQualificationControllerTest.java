@@ -49,14 +49,16 @@ class TargetQualificationControllerTest {
   private static final String ENABLED = "chromascape.qualification.enabled=true";
   private static final String DEV_PROFILE = TargetQualificationController.REQUIRED_PROFILE;
 
-  private TargetFrameSource installedSource;
+  private final java.util.List<TargetFrameSource> installedSources = new java.util.ArrayList<>();
 
   @AfterEach
   void releaseFrameRuntime() {
-    if (installedSource != null) {
-      TargetFrameRuntime.uninstall(installedSource);
-      installedSource = null;
+    // Uninstall every source a test may have installed so a mid-test failure can never leave a
+    // mock in the process-wide TargetFrameRuntime and poison later tests.
+    for (TargetFrameSource source : installedSources) {
+      TargetFrameRuntime.uninstall(source);
     }
+    installedSources.clear();
   }
 
   // --- bean gating -------------------------------------------------------------------------
@@ -344,6 +346,34 @@ class TargetQualificationControllerTest {
   }
 
   @Test
+  void failedCloseKeepsTheSessionSoCloseCanBeRetried() {
+    Fixture fixture = new Fixture().withOpenSession();
+    doThrow(
+            new InputSessionException(
+                InputSessionDiagnostic.RELEASE_TIMEOUT, IDENTITY, 7L, "release timed out"))
+        .doNothing()
+        .when(fixture.session)
+        .close();
+
+    ResponseEntity<Map<String, Object>> first =
+        fixture.controller.closeSession(requestFrom("127.0.0.1"));
+    assertEquals(HttpStatus.CONFLICT, first.getStatusCode());
+    assertEquals("RELEASE_TIMEOUT", first.getBody().get("diagnostic"));
+    assertEquals(
+        true,
+        fixture.controller.sessionStatus(requestFrom("127.0.0.1")).getBody().get("sessionOpen"),
+        "a session whose close failed must remain addressable for a retry");
+
+    ResponseEntity<Map<String, Object>> second =
+        fixture.controller.closeSession(requestFrom("127.0.0.1"));
+    assertEquals(HttpStatus.OK, second.getStatusCode());
+    verify(fixture.session, times(2)).close();
+    assertEquals(
+        false,
+        fixture.controller.sessionStatus(requestFrom("127.0.0.1")).getBody().get("sessionOpen"));
+  }
+
+  @Test
   void previouslyClosedSessionDoesNotPoisonALaterOpen() {
     Fixture fixture = new Fixture();
     TargetInputSession first = frameSourceSession();
@@ -454,7 +484,7 @@ class TargetQualificationControllerTest {
     when(session.selectionGeneration()).thenReturn(7L);
     when(session.getTargetBounds()).thenReturn(new Rectangle(0, 0, 100, 100));
     when(session.getMousePosition()).thenReturn(new Point(0, 0));
-    installedSource = (TargetFrameSource) session;
+    installedSources.add((TargetFrameSource) session);
     return session;
   }
 

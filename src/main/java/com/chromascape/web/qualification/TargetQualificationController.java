@@ -582,15 +582,19 @@ public class TargetQualificationController {
     }
   }
 
+  /**
+   * Operator-path close. The session reference is dropped only after {@code close()} succeeds so a
+   * failed release ({@code RELEASE_TIMEOUT}, {@code FAILED} state) can be retried through {@code
+   * /session/close} instead of leaving an orphaned attachment lease until the application restarts.
+   */
   private void releaseAndClose() {
     if (frameSource != null) {
       TargetFrameRuntime.uninstall(frameSource);
       frameSource = null;
     }
     if (session != null) {
-      TargetInputSession closing = session;
+      session.close();
       session = null;
-      closing.close();
     }
   }
 
