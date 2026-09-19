@@ -55,8 +55,34 @@ assert_present '!IsSkipTaskbar\(display, left\) && IsSkipTaskbar\(display, right
 # 3. Every candidate is tried until Reflection::Create succeeds.
 assert_present 'for \(Window windowFrame : GetMainWindows\(\)\)' \
   'reflection probe iterates every candidate window'
-assert_present 'reflection = Reflection::Create\(frame\);' \
+assert_present 'std::unique_ptr<Reflection> candidate;' \
+  'each candidate reflection is held separately before adoption'
+assert_present 'candidate = Reflection::Create\(frame\);' \
   'reflection is created per candidate frame'
+
+# 3a. Unsuccessful candidates release their JNI local reference before the next loop iteration.
+assert_present 'if \(!frame\)' \
+  'a null component result is skipped'
+assert_present 'continue;' \
+  'a null component result continues to the next candidate'
+assert_present 'env->DeleteLocalRef\(frame\);' \
+  'rejected candidate local references are released'
+assert_present 'reflection = std::move\(candidate\);' \
+  'the successful candidate is adopted after its local reference is released'
+assert_absent 'reflection = Reflection::Create\(frame\);' \
+  'the probe no longer assigns Create into the long-lived reflection while holding the reference'
+
+# 3b. Ordering: the release happens between the per-candidate Create and the adoption, so the
+# reference is deleted before the next candidate/retry and the successful reflection survives.
+create_line="$(grep -n 'candidate = Reflection::Create(frame);' "$SOURCE" | head -n 1 | cut -d: -f1)"
+delete_line="$(grep -n 'env->DeleteLocalRef(frame);' "$SOURCE" | head -n 1 | cut -d: -f1)"
+adopt_line="$(grep -n 'reflection = std::move(candidate);' "$SOURCE" | head -n 1 | cut -d: -f1)"
+if [ -n "$create_line" ] && [ -n "$delete_line" ] && [ -n "$adopt_line" ] \
+  && [ "$create_line" -lt "$delete_line" ] && [ "$delete_line" -lt "$adopt_line" ]; then
+  pass "release ordering (create=$create_line < delete=$delete_line < adopt=$adopt_line)"
+else
+  fail "release ordering (create=$create_line delete=$delete_line adopt=$adopt_line)"
+fi
 
 # 4. Diagnostics are opt-in and gated.
 assert_present 'REMOTEINPUT_ATTACH_DIAGNOSTICS' \

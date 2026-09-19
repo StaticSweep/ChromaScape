@@ -9,7 +9,11 @@
 #   3. the retained environment extracts only DISPLAY (no unrelated variables);
 #   4. usernames and repository paths are redacted from every retained file;
 #   5. the machine-readable stage summary is produced and identifies the failing stage;
-#   6. a control-center rendezvous is reported when the shared-memory object exists.
+#   6. a control-center rendezvous is reported when the shared-memory object exists;
+#   7. X11 tools are invoked with the selected target's DISPLAY (never the collector's), and
+#      missing/duplicate/malformed target displays are refused;
+#   8. ELF validation fails closed: missing or failing readelf, ELF32, and non-x86-64 libraries
+#      are refused, while a valid ELF64 x86-64 shared object is accepted.
 #
 # Exit: 0 when every case passed, 1 otherwise.
 
@@ -91,6 +95,55 @@ STUB
   chmod +x "$stub"
 }
 
+# xprop stub that records the DISPLAY it was invoked with, then delegates to the standard stub so
+# the collected evidence stays identical. The record is the proof of which display was used.
+make_recording_xprop_stub() {
+  local stub="$WORK/xprop-recording"
+  local record="$WORK/xprop-display-record"
+  cat > "$stub" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\${DISPLAY:-<unset>}" >> '$record'
+exec '$WORK/xprop' "\$@"
+STUB
+  chmod +x "$stub"
+}
+
+# readelf stub with a deterministic, controllable header. Emitting "ELF64"/"X86-64"/"DYN"
+# exercises the acceptance path without depending on the metadata of any real file.
+make_readelf_stub() {
+  local stub="$WORK/readelf-stub"
+  local class="$1" machine="$2" libtype="$3" exit_code="$4"
+  cat > "$stub" <<STUB
+#!/usr/bin/env bash
+if [ "\${1:-}" = "-d" ]; then
+  exit 0
+fi
+if [ "$exit_code" != "0" ]; then
+  echo "stub-readelf: simulated failure" >&2
+  exit $exit_code
+fi
+cat <<'HEADER'
+ELF Header:
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00
+  Class:                             $class
+  Data:                              2's complement, little endian
+  Type:                              $libtype
+  Machine:                           $machine
+HEADER
+exit 0
+STUB
+  chmod +x "$stub"
+}
+
+# Rewrites the target environ fixture (the pid directory and a previous fixture's environ file may
+# be mode 0500/000, so restore access before writing).
+set_target_environ() {
+  chmod u+rwx "$WORK/proc/$TARGET_PID"
+  chmod u+rw "$WORK/proc/$TARGET_PID/environ" 2>/dev/null || true
+  printf '%b' "$1" > "$WORK/proc/$TARGET_PID/environ"
+  chmod 0500 "$WORK/proc/$TARGET_PID"
+}
+
 make_os_release() {
   printf 'NAME="Fedora Linux"\nVERSION="44 (Workstation Edition)"\nID=fedora\nVERSION_ID=44\n' \
     > "$WORK/os-release"
@@ -108,8 +161,9 @@ collector_env() {
   DIAGNOSE_SELINUXFS="$WORK/selinux" \
   DIAGNOSE_AUDIT_LOG="$WORK/audit.log" \
   DIAGNOSE_SELF_UID="$(id -u)" \
-  DIAGNOSE_XPROP="$WORK/xprop" \
+  DIAGNOSE_XPROP="${DIAGNOSE_XPROP_OVERRIDE:-$WORK/xprop}" \
   DIAGNOSE_XWININFO="$WORK/no-xwininfo" \
+  DIAGNOSE_READELF="${DIAGNOSE_READELF_OVERRIDE:-$WORK/readelf-stub}" \
   DIAGNOSE_GETENFORCE="$WORK/no-getenforce" \
     "$COLLECTOR" "$@"
 }
@@ -117,8 +171,12 @@ collector_env() {
 # --- fixtures ----------------------------------------------------------------------------
 make_proc_fixture
 make_xprop_stub
+make_recording_xprop_stub
 make_os_release
 make_shm_fixture
+# Default readelf stub: a valid ELF64 x86-64 shared object header (same acceptance the real
+# toolchain produces for the built library).
+make_readelf_stub ELF64 "X86-64 (AMD x86-64)" DYN 0
 printf 'type=AVC msg=audit(1): avc: denied { ptrace } for pid=%s\n' "$TARGET_PID" > "$WORK/audit.log"
 
 # --- validation --------------------------------------------------------------------------
@@ -215,6 +273,113 @@ if collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$OUT2" > /de
 else
   fail "stage summary did not report the present rendezvous"
 fi
+
+# --- target DISPLAY selection (Phase C) --------------------------------------------------
+
+# Collector process DISPLAY=:99 (as if the collector ran on a different session); target :0.
+# The recording xprop stub captures the DISPLAY each invocation received.
+set_target_environ 'DISPLAY=:0\0SECRET_TOKEN=do-not-retain\0HOME=%s\0' "$HOME"
+rm -f "$WORK/xprop-display-record"
+OUT_DISPLAY="$WORK/diag-display"
+collector_display_run() {
+  DIAGNOSE_XPROP_OVERRIDE="$WORK/xprop-recording" \
+    collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$OUT_DISPLAY"
+}
+if collector_display_run > /dev/null 2>&1; then
+  pass "collector succeeds with a target display on a differing caller display"
+else
+  fail "collector failed with a target display fixture"
+fi
+if [ -f "$WORK/xprop-display-record" ] &&
+  grep -q '^:0$' "$WORK/xprop-display-record" &&
+  ! grep -q '^:99$' "$WORK/xprop-display-record"; then
+  pass "X11 tools receive the target DISPLAY=:0, never the collector's :99"
+else
+  fail "X11 tool display record is wrong: $(cat "$WORK/xprop-display-record" 2>/dev/null | sort -u | tr '\n' ' ')"
+fi
+if grep -q '^DISPLAY: :0$' "$OUT_DISPLAY/environment.md" &&
+  grep -q '^targetDisplay: :0$' "$OUT_DISPLAY/x11-window-inventory.log"; then
+  pass "evidence records the target display"
+else
+  fail "evidence did not record the target display"
+fi
+if grep -q 'SECRET_TOKEN' "$OUT_DISPLAY/environment.md"; then
+  fail "an unrelated environment variable was retained"
+else
+  pass "no unrelated environment variables are retained with a display fixture"
+fi
+
+# Missing target display.
+set_target_environ 'SECRET_TOKEN=do-not-retain\0'
+expect_exit 2 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-no-display"
+
+# Duplicate target display entries.
+set_target_environ 'DISPLAY=:0\0DISPLAY=:1\0'
+expect_exit 2 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-dup-display"
+
+# Malformed target display values (including an embedded control character).
+set_target_environ 'DISPLAY=display-for-x11\0'
+expect_exit 2 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-bad-display"
+set_target_environ 'DISPLAY=:0\t\0'
+expect_exit 2 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-ctrl-display"
+
+# Accepted display syntaxes.
+for display_value in ':0' ':0.0' 'localhost:10.0' 'host.example:1'; do
+  set_target_environ "DISPLAY=$display_value\0"
+  if collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-display-ok" \
+    > /dev/null 2>&1; then
+    pass "display value $display_value is accepted"
+  else
+    fail "display value $display_value was refused"
+  fi
+done
+
+# An unreadable target environ is refused (not silently skipped).
+make_proc_fixture
+chmod 000 "$WORK/proc/$TARGET_PID/environ"
+expect_exit 2 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-unreadable-display"
+
+# --- fail-closed ELF validation (Phase D) ------------------------------------------------
+
+# Missing readelf: a readable regular file must be refused, not accepted unvalidated.
+set_target_environ 'DISPLAY=:0\0'
+DIAGNOSE_READELF_OVERRIDE="$WORK/no-readelf" \
+  expect_exit 2 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-no-readelf"
+set +e
+DIAGNOSE_PROC_ROOT="$WORK/proc" DIAGNOSE_DEV_SHM="$WORK/shm" DIAGNOSE_OS_RELEASE="$WORK/os-release" \
+DIAGNOSE_SELINUXFS="$WORK/selinux" DIAGNOSE_AUDIT_LOG="$WORK/audit.log" DIAGNOSE_SELF_UID="$(id -u)" \
+DIAGNOSE_XPROP="$WORK/xprop" DIAGNOSE_XWININFO="$WORK/no-xwininfo" DIAGNOSE_GETENFORCE="$WORK/no-getenforce" \
+DIAGNOSE_READELF="$WORK/no-readelf" \
+  "$COLLECTOR" --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-no-readelf-msg" \
+  > /dev/null 2> "$WORK/err"
+no_readelf_exit=$?
+set -e
+if [ "$no_readelf_exit" -eq 2 ] &&
+  grep -q 'readelf is required to validate the RemoteInput library' "$WORK/err"; then
+  pass "missing readelf fails closed with a clear diagnostic"
+else
+  fail "missing readelf did not fail closed (exit $no_readelf_exit: $(cat "$WORK/err"))"
+fi
+
+# readelf returning nonzero: refused.
+make_readelf_stub ELF64 "X86-64 (AMD x86-64)" DYN 3
+expect_exit 2 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-readelf-fail"
+
+# ELF32 fixture: refused.
+make_readelf_stub ELF32 "X86-64 (AMD x86-64)" DYN 0
+expect_exit 2 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-elf32"
+
+# Wrong architecture fixture: refused.
+make_readelf_stub ELF64 "Intel 80386" DYN 0
+expect_exit 2 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-i386"
+
+# A non-shared-object type is refused when the toolchain output exposes it.
+make_readelf_stub ELF64 "X86-64 (AMD x86-64)" EXEC 0
+expect_exit 2 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-exec"
+
+# A valid ELF64 x86-64 shared object passes.
+make_readelf_stub ELF64 "X86-64 (AMD x86-64)" DYN 0
+expect_exit 0 collector_env --pid "$TARGET_PID" --library "$LIBRARY" --output "$WORK/out-valid-elf"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "DIAGNOSE_REGRESSIONS status=PASS"

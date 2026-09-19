@@ -48,6 +48,9 @@ TARGET_PID=""
 LIBRARY=""
 OUTPUT_DIR=""
 LOG_FILE=""
+# The X display string extracted from the selected target's /proc/<pid>/environ. Every X11 tool
+# invocation must use this value explicitly; the collector's own DISPLAY is never inherited.
+TARGET_DISPLAY=""
 
 usage() {
   cat <<'USAGE'
@@ -95,17 +98,59 @@ validate_pid() {
     die "pid $TARGET_PID is not owned by the current user (uid $SELF_UID)"
 }
 
+# Validates a DISPLAY value from the target environment: a single colon-prefixed X display with an
+# optional hostname and optional screen suffix. The value is ASCII-printable by construction: any
+# byte outside printable ASCII (including tabs, carriage returns, and control characters) fails
+# the byte-removal comparison below.
+validate_display_value() {
+  local value="$1"
+  local acceptable='^([A-Za-z0-9_.-]+)?:[0-9]+(\.[0-9]+)?$'
+  [[ "$value" =~ $acceptable ]] ||
+    die "target DISPLAY value is malformed or contains control characters"
+}
+
+# Extracts and validates the selected target's DISPLAY from its environment. The collector's own
+# DISPLAY is deliberately ignored: xprop/xwininfo later run against the target's display, not
+# against whichever display happened to be current for the collector process.
+validate_target_display() {
+  local env_file="$PROC_ROOT/$TARGET_PID/environ"
+  [ -r "$env_file" ] ||
+    die "target DISPLAY is missing or unreadable: the target environment is not accessible"
+  local raw
+  raw="$(tr '\0' '\n' < "$env_file" 2>/dev/null | grep -E '^DISPLAY=' || true)"
+  raw="${raw%$'\n'}"
+  local matches
+  matches="$(printf '%s\n' "$raw" | grep -cE '^DISPLAY=' || true)"
+  if [ "$matches" -gt 1 ]; then
+    die "duplicate DISPLAY entries in the target environment"
+  fi
+  [ -n "$raw" ] ||
+    die "target DISPLAY is missing or unreadable: the target environment is not accessible"
+  TARGET_DISPLAY="${raw#DISPLAY=}"
+  [ -n "$TARGET_DISPLAY" ] ||
+    die "target DISPLAY is missing or unreadable: the target environment is not accessible"
+  validate_display_value "$TARGET_DISPLAY"
+}
+
 validate_library() {
+  [ -e "$LIBRARY" ] || die "--library path does not exist"
   [ -f "$LIBRARY" ] || die "--library must be a regular file"
   [ -r "$LIBRARY" ] || die "--library must be readable"
-  if command -v "$READELF_BIN" >/dev/null 2>&1; then
-    local header class machine
-    header="$("$READELF_BIN" -h "$LIBRARY" 2>/dev/null || true)"
-    class="$(printf '%s\n' "$header" | awk '/Class:/ {print $2; exit}')"
-    machine="$(printf '%s\n' "$header" | awk -F: '/Machine:/ {print $2; exit}' | sed 's/^ *//')"
-    [[ "$class" == *ELF64* ]] || die "--library is not an ELF64 object"
-    [[ "$machine" == *X86-64* || "$machine" == *x86-64* ]] ||
-      die "--library is not an x86-64 object"
+  # Fail closed: without readelf there is no way to honour the ELF64 x86-64 shared-object
+  # contract, so an arbitrary readable file must never be accepted.
+  command -v "$READELF_BIN" >/dev/null 2>&1 ||
+    die "readelf is required to validate the RemoteInput library"
+  local header class machine libtype
+  header="$("$READELF_BIN" -h "$LIBRARY" 2>/dev/null || true)"
+  [ -n "$header" ] || die "readelf could not read the library header"
+  class="$(printf '%s\n' "$header" | awk '/Class:/ {print $2; exit}')"
+  machine="$(printf '%s\n' "$header" | awk -F: '/Machine:/ {print $2; exit}' | sed 's/^ *//')"
+  libtype="$(printf '%s\n' "$header" | awk '/Type:/ {print $2; exit}')"
+  [[ "$class" == *ELF64* ]] || die "--library is not an ELF64 object"
+  [[ "$machine" == *X86-64* || "$machine" == *x86-64* ]] ||
+    die "--library is not an x86-64 object"
+  if [ -n "$libtype" ]; then
+    [[ "$libtype" == *DYN* ]] || die "--library is not a shared object (ELF type $libtype)"
   fi
 }
 
@@ -174,9 +219,9 @@ collect_environment() {
     local cmd0
     cmd0="$(tr '\0' '\n' < "$PROC_ROOT/$TARGET_PID/cmdline" 2>/dev/null | head -n 1 || true)"
     echo "targetCommandBasename: $(redact_value "$(basename -- "${cmd0:-unknown}")")"
-    local display
-    display="$(tr '\0' '\n' < "$PROC_ROOT/$TARGET_PID/environ" 2>/dev/null | grep -m1 '^DISPLAY=' || true)"
-    echo "DISPLAY: ${display#DISPLAY=}"
+    # Only the validated target display is retained; never the full target environment.
+    echo "DISPLAY: $TARGET_DISPLAY"
+    echo "displaySource: selected-target-environ"
     echo
     echo "## Library"
     echo "library: $(redact_value "$LIBRARY")"
@@ -247,12 +292,15 @@ collect_x11_windows() {
   local out="$OUTPUT_DIR/x11-window-inventory.log"
   {
     echo "# X11 window inventory (DISPLAY only; no environment dump)"
+    # Every X11 tool is pinned to the selected target's display for this invocation only; the
+    # collector's own DISPLAY is never inherited and never exported globally.
+    echo "targetDisplay: $TARGET_DISPLAY"
     if ! command -v "$XPROP_BIN" >/dev/null 2>&1; then
       echo "(xprop unavailable)"
       return 0
     fi
     local clients
-    clients="$("$XPROP_BIN" -root _NET_CLIENT_LIST 2>/dev/null || true)"
+    clients="$(env DISPLAY="$TARGET_DISPLAY" "$XPROP_BIN" -root _NET_CLIENT_LIST 2>/dev/null || true)"
     echo "netClientList: $clients"
     local ids
     ids="$(printf '%s\n' "$clients" | grep -oE '0x[0-9a-fA-F]+' || true)"
@@ -262,9 +310,9 @@ collect_x11_windows() {
       [ -n "$id" ] || continue
       echo
       echo "window $id"
-      "$XPROP_BIN" -id "$id" _NET_WM_PID WM_CLASS _NET_WM_NAME WM_NAME _NET_WM_STATE 2>/dev/null || true
+      env DISPLAY="$TARGET_DISPLAY" "$XPROP_BIN" -id "$id" _NET_WM_PID WM_CLASS _NET_WM_NAME WM_NAME _NET_WM_STATE 2>/dev/null || true
       if command -v "$XWININFO_BIN" >/dev/null 2>&1; then
-        "$XWININFO_BIN" -id "$id" 2>/dev/null | grep -E 'Map State|Override Redirect State|Width|Height' || true
+        env DISPLAY="$TARGET_DISPLAY" "$XWININFO_BIN" -id "$id" 2>/dev/null | grep -E 'Map State|Override Redirect State|Width|Height' || true
       fi
     done <<< "$ids"
   } > "$out"
@@ -348,6 +396,7 @@ run_diagnostics() {
 main() {
   parse_args "$@"
   validate_pid
+  validate_target_display
   validate_library
   validate_output
   run_diagnostics
