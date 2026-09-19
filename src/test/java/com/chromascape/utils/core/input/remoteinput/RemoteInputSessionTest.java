@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyByte;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -641,6 +642,145 @@ class RemoteInputSessionTest {
     assertFalse(
         message.toLowerCase(java.util.Locale.ROOT).contains("cmd"),
         "diagnostic must not leak command lines: " + message);
+  }
+
+  @Test
+  void enumerationConsumingMostOfTheDeadlineLeavesInjectionOnlyTheRemainder() {
+    when(nativeApi.EIOS_GetClients(anyByte()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(250);
+              return 0L;
+            });
+    doAnswer(
+            invocation -> {
+              Thread.sleep(5_000);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_Inject_PID(42);
+    RemoteInputSessionOptions options =
+        timedOptions(Duration.ofMillis(300), Duration.ofSeconds(1), Duration.ofMillis(20), 8);
+
+    long started = System.nanoTime();
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+    long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    // A stale budget would hand the injection another ~300ms on top of the 250ms enumeration
+    // (elapsed >= ~550ms); the fixed behaviour cuts the inject call at the actual ~50ms remainder.
+    assertTrue(
+        elapsedMillis < 500,
+        "injection must not receive a fresh budget after enumeration consumed most of the "
+            + "deadline, took "
+            + elapsedMillis
+            + "ms");
+    assertTrue(failure.getMessage().contains("totalDeadline=300ms"), failure.getMessage());
+    // The injection either ran and returned within the remainder, or was never started because
+    // the remainder had already fallen below the minimum call budget; both prove no fresh grant.
+    String message = failure.getMessage();
+    assertTrue(
+        message.contains("injectionCallReturned=+")
+            || message.contains(
+                "was not started because the total attachment deadline was reached"),
+        message);
+    // The inject call was cut (or never started), so no further poll can be granted either.
+    verify(nativeApi, times(1)).EIOS_GetClients(anyByte());
+    verify(nativeApi, atMost(1)).EIOS_Inject_PID(42);
+  }
+
+  @Test
+  void pidEnumerationConsumingMostOfTheDeadlineBoundsInjection() {
+    when(nativeApi.EIOS_GetClients(anyByte())).thenReturn(2L);
+    when(nativeApi.EIOS_GetClientPID(anyLong()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(130);
+              return 99;
+            });
+    doAnswer(
+            invocation -> {
+              Thread.sleep(5_000);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_Inject_PID(42);
+    RemoteInputSessionOptions options =
+        timedOptions(Duration.ofMillis(300), Duration.ofSeconds(1), Duration.ofMillis(20), 8);
+
+    long started = System.nanoTime();
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+    long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    // Two 130ms pid reads (~260ms) must leave the injection only the actual ~40ms remainder
+    // instead of the stale full 300ms budget (which would run to >= ~560ms).
+    assertTrue(
+        elapsedMillis < 500,
+        "injection must be bounded by the post-enumeration remainder, took "
+            + elapsedMillis
+            + "ms");
+    verify(nativeApi, atMost(1)).EIOS_Inject_PID(42);
+  }
+
+  @Test
+  void remainingBudgetBelowTheValidationIntervalIsNotExpanded() {
+    when(nativeApi.EIOS_GetClients(anyByte()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(290);
+              return 0L;
+            });
+    doAnswer(
+            invocation -> {
+              Thread.sleep(5_000);
+              return null;
+            })
+        .when(nativeApi)
+        .EIOS_Inject_PID(42);
+    RemoteInputSessionOptions options =
+        timedOptions(Duration.ofMillis(300), Duration.ofSeconds(1), Duration.ofMillis(250), 8);
+
+    long started = System.nanoTime();
+    InputSessionException failure = assertThrows(InputSessionException.class, () -> open(options));
+    long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+    assertEquals(InputSessionDiagnostic.INJECTION_TIMEOUT, failure.diagnostic());
+    // ~10ms must remain ~10ms: expanding it to the 250ms validation interval would push the
+    // total elapsed time to >= ~540ms.
+    assertTrue(
+        elapsedMillis < 450,
+        "a small remaining budget must never be expanded to the validation interval, took "
+            + elapsedMillis
+            + "ms");
+    verify(nativeApi, times(1)).EIOS_GetClients(anyByte());
+    verify(nativeApi, atMost(1)).EIOS_Inject_PID(42);
+  }
+
+  @Test
+  void clientRegisteringJustBeforeTheDeadlineIsStillObserved() {
+    AtomicInteger getClientsCalls = new AtomicInteger();
+    when(nativeApi.EIOS_GetClients(anyByte()))
+        .thenAnswer(
+            invocation -> {
+              int call = getClientsCalls.getAndIncrement();
+              if (call == 0) {
+                Thread.sleep(100);
+                return 0L;
+              }
+              // Second poll returns the registered client late but within the total deadline.
+              Thread.sleep(150);
+              return 1L;
+            });
+    when(nativeApi.EIOS_GetClientPID(0)).thenReturn(42);
+
+    RemoteInputSession session =
+        open(timedOptions(Duration.ofMillis(300), Duration.ofSeconds(1), Duration.ofMillis(20), 8));
+
+    assertEquals(2, getClientsCalls.get(), "the late registration must be observed, not timed out");
+    verify(nativeApi, times(1)).EIOS_Inject_PID(42);
+    session.close();
+    verify(nativeApi).EIOS_ReleaseTarget(new Pointer(1));
   }
 
   private void configureAlreadyInjected() {
