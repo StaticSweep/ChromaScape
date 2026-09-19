@@ -249,14 +249,18 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
    * <p>{@code options.injectTimeout()} is the <em>total</em> attachment deadline enforced with one
    * monotonic clock reading taken at the start. Every native call in this loop — the initial {@code
    * EIOS_GetClients}, every {@code EIOS_GetClientPID}, {@code EIOS_Inject_PID}, and each
-   * post-injection poll — is bounded by {@code min(nativeCallTimeout, remainingTotalTime)}, so a
-   * stalled native implementation can never extend the wait beyond the configured budget: calls
-   * after the deadline fail immediately with {@link InputSessionDiagnostic#INJECTION_TIMEOUT} and
-   * enumeration stops once no budget remains regardless of {@code maxClients}. Exactly one poll
-   * follows a returned injection so a client that registered while the call was running is still
-   * observed; that poll also receives only the remaining budget. Structured stage timestamps are
-   * recorded for evidence and reported on both success and timeout; they never include pointers,
-   * secrets, or command lines.
+   * post-injection poll — recomputes the time remaining on that deadline immediately before it is
+   * issued and is bounded by {@code min(nativeCallTimeout, currentRemainingTotalTime)}. The
+   * remaining time is never cached across calls and never expanded: a small remainder can only
+   * shrink the next call's budget. The implementation may reject a call up to {@link
+   * #MIN_CALL_BUDGET_NANOS} before the mathematical deadline (so the bounded executor is never
+   * handed a sub-scheduling-granularity budget) but can never extend beyond it, and calls after the
+   * deadline fail immediately with {@link InputSessionDiagnostic#INJECTION_TIMEOUT}. Enumeration
+   * stops once no budget remains regardless of {@code maxClients}. Exactly one poll follows a
+   * returned injection so a client that registered while the call was running is still observed;
+   * that poll also receives only the remaining budget. Structured stage timestamps are recorded for
+   * evidence and reported on both success and timeout; they never include pointers, secrets, or
+   * command lines.
    */
   private static void ensureInjectedClient(
       RemoteInputInterface nativeApi,
@@ -268,29 +272,19 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
     long deadline = timeline.startNanos + options.injectTimeout().toNanos();
     boolean injected = false;
     while (true) {
-      long remainingNanos = deadline - System.nanoTime();
-      if (remainingNanos < MIN_CALL_BUDGET_NANOS) {
-        timeline.markDeadlineReached();
-        logger.warn(
-            "RemoteInput attachment for pid {} reached the injection deadline: {}",
-            identity.pid(),
-            timeline.describe());
-        throw failure(
-            InputSessionDiagnostic.INJECTION_TIMEOUT,
-            identity,
-            generation,
-            "Injected client for the selected pid did not register before the deadline ("
-                + timeline.describe()
-                + ")");
-      }
-      Duration remaining = Duration.ofNanos(remainingNanos);
       timeline.markPoll();
       long count;
       try {
         count =
             calls.call(
                 () -> nativeApi.EIOS_GetClients(RemoteInputInterface.NATIVE_FALSE),
-                boundedCallTimeout(options.nativeCallTimeout(), remaining),
+                remainingCallBudget(
+                    deadline,
+                    options.nativeCallTimeout(),
+                    identity,
+                    generation,
+                    timeline,
+                    "Client enumeration"),
                 InputSessionDiagnostic.INJECTION_TIMEOUT);
       } catch (InputSessionException timeout) {
         throw attachmentTimeoutFailure(
@@ -311,7 +305,14 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
         return;
       }
       if (!injected) {
-        Duration injectBudget = remainingBudget(remainingNanos, options.validationInterval());
+        Duration injectBudget =
+            remainingCallBudget(
+                deadline,
+                options.nativeCallTimeout(),
+                identity,
+                generation,
+                timeline,
+                "Native injection call");
         timeline.markInjectEntered();
         try {
           calls.call(
@@ -323,29 +324,49 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
               InputSessionDiagnostic.INJECTION_TIMEOUT);
         } catch (InputSessionException injectFailure) {
           timeline.markInjectReturned();
-          if (injectFailure.diagnostic() == InputSessionDiagnostic.INJECTION_TIMEOUT) {
-            timeline.markDeadlineReached();
-          }
           logger.warn(
               "RemoteInput injection call for pid {} failed ({}): {}",
               identity.pid(),
               injectFailure.diagnostic(),
               timeline.describe());
-          throw injectFailure;
+          // Consistent with the enumeration paths: an injection-budget timeout carries the stage
+          // timeline (and the deadline-reached marker); any other failure passes through unchanged.
+          throw attachmentTimeoutFailure(
+              injectFailure,
+              identity,
+              generation,
+              timeline,
+              "Native injection call exceeded the remaining attachment budget");
         }
         timeline.markInjectReturned();
         injected = true;
         // A client that registered while the injection call was running must still be observed:
-        // poll once more before the deadline is allowed to fail the attachment. The loop re-checks
-        // the deadline first, so the poll only happens when positive total budget remains and it
-        // receives only that remaining budget (boundedCallTimeout above).
+        // poll once more before the deadline is allowed to fail the attachment. The next loop
+        // iteration recomputes the remaining budget before that poll, so it only happens when
+        // positive total budget remains and it receives only that remaining budget.
         continue;
+      }
+      // Wait between polls without ever sleeping past the deadline: the remaining time is
+      // recomputed here (never reused from an earlier call), the deadline is failed before
+      // sleeping when it is reached, and the sleep is capped by the actual remainder.
+      long remainingBeforeSleep = deadline - System.nanoTime();
+      if (remainingBeforeSleep < MIN_CALL_BUDGET_NANOS) {
+        timeline.markDeadlineReached();
+        logger.warn(
+            "RemoteInput attachment for pid {} reached the injection deadline: {}",
+            identity.pid(),
+            timeline.describe());
+        throw failure(
+            InputSessionDiagnostic.INJECTION_TIMEOUT,
+            identity,
+            generation,
+            "Injected client for the selected pid did not register before the deadline ("
+                + timeline.describe()
+                + ")");
       }
       try {
         Thread.sleep(
-            Math.min(
-                options.validationInterval().toMillis(),
-                Math.max(1L, Duration.ofNanos(deadline - System.nanoTime()).toMillis())));
+            Math.min(options.validationInterval().toMillis(), remainingBeforeSleep / 1_000_000L));
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new InputSessionException(
@@ -359,11 +380,42 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
   }
 
   /**
-   * Bounds one native call by both its configured timeout and the time left before the total
-   * deadline: a call may never receive a fresh budget that outlives the attachment deadline.
+   * Computes the timeout available to the next native call: the freshly measured remainder of the
+   * total attachment deadline, capped by the configured per-call timeout.
+   *
+   * <p>The remaining time is read from the monotonic clock at call time — never cached from an
+   * earlier point, never expanded (a 10 ms remainder is never turned into a full validation
+   * interval), never granted a guaranteed minimum interval, and never returned as zero or a
+   * negative duration. When the remainder has fallen below {@link #MIN_CALL_BUDGET_NANOS} the
+   * deadline is marked reached and the call is rejected with {@link
+   * InputSessionDiagnostic#INJECTION_TIMEOUT}: at most that minimum is surrendered before the
+   * mathematical deadline, and the deadline itself can never be extended.
    */
-  private static Duration boundedCallTimeout(Duration nativeCallTimeout, Duration remaining) {
-    return nativeCallTimeout.compareTo(remaining) <= 0 ? nativeCallTimeout : remaining;
+  private static Duration remainingCallBudget(
+      long deadlineNanos,
+      Duration maximumCallTimeout,
+      ProcessIdentity identity,
+      long generation,
+      AttachmentTimeline timeline,
+      String stage) {
+    long remainingNanos = deadlineNanos - System.nanoTime();
+    if (remainingNanos < MIN_CALL_BUDGET_NANOS) {
+      timeline.markDeadlineReached();
+      logger.warn(
+          "RemoteInput attachment for pid {} reached the injection deadline: {}",
+          identity.pid(),
+          timeline.describe());
+      throw failure(
+          InputSessionDiagnostic.INJECTION_TIMEOUT,
+          identity,
+          generation,
+          stage
+              + " was not started because the total attachment deadline was reached ("
+              + timeline.describe()
+              + ")");
+    }
+    Duration remaining = Duration.ofNanos(remainingNanos);
+    return maximumCallTimeout.compareTo(remaining) <= 0 ? maximumCallTimeout : remaining;
   }
 
   /**
@@ -386,15 +438,6 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
         generation,
         stage + " (" + timeline.describe() + ")",
         timeout);
-  }
-
-  /**
-   * Bounds the injection call by the time left before the total deadline while always leaving at
-   * least one polling interval so a returned injection can still be observed.
-   */
-  private static Duration remainingBudget(long remainingNanos, Duration minimum) {
-    Duration remaining = Duration.ofNanos(Math.max(0L, remainingNanos));
-    return remaining.compareTo(minimum) < 0 ? minimum : remaining;
   }
 
   /** Monotonic stage timestamps for one attachment attempt, relative to the request. */
@@ -469,25 +512,19 @@ public final class RemoteInputSession implements TargetInputSession, TargetFrame
       long deadlineNanos,
       AttachmentTimeline timeline) {
     for (long index = 0; index < count; index++) {
-      long remainingNanos = deadlineNanos - System.nanoTime();
-      if (remainingNanos < MIN_CALL_BUDGET_NANOS) {
-        timeline.markDeadlineReached();
-        throw failure(
-            InputSessionDiagnostic.INJECTION_TIMEOUT,
-            identity,
-            generation,
-            "Client enumeration exhausted the total attachment deadline before the selected pid "
-                + "was observed ("
-                + timeline.describe()
-                + ")");
-      }
       long clientIndex = index;
       int pid;
       try {
         pid =
             calls.call(
                 () -> nativeApi.EIOS_GetClientPID(clientIndex),
-                boundedCallTimeout(options.nativeCallTimeout(), Duration.ofNanos(remainingNanos)),
+                remainingCallBudget(
+                    deadlineNanos,
+                    options.nativeCallTimeout(),
+                    identity,
+                    generation,
+                    timeline,
+                    "Client pid read"),
                 InputSessionDiagnostic.INJECTION_TIMEOUT);
       } catch (InputSessionException timeout) {
         throw attachmentTimeoutFailure(
