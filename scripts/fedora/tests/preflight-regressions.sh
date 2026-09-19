@@ -177,6 +177,49 @@ assert_contains "$dup_startup_output" 'code=CONFIG_DUPLICATE_KEY' 'duplicate mac
 [[ "$dup_startup_output" != *'SC1667_LIFECYCLE'* ]] || fail "wrapper reached a lifecycle command despite a parser failure"
 pass 'parser failure prevents any lifecycle command'
 
+# MCP_AUTO_START defaults to false only when the operator left it unset; explicit
+# values are preserved verbatim and the wrapper never overwrites them.
+mcp_default_output="$(
+    bash -c '
+        source "$1"
+        unset MCP_AUTO_START
+        set_fedora_runtime_defaults
+        printf "%s" "${MCP_AUTO_START:-<unset>}"
+    ' bash "$FEDORA_DIR/chromascape-fedora.sh"
+)"
+[[ "$mcp_default_output" == false ]] || fail "unset MCP_AUTO_START did not default to false (got $mcp_default_output)"
+pass 'unset MCP_AUTO_START defaults to false'
+
+for mcp_explicit in true false; do
+    mcp_explicit_output="$(
+        bash -c '
+            source "$1"
+            export MCP_AUTO_START="$2"
+            set_fedora_runtime_defaults
+            set_fedora_runtime_defaults
+            printf "%s" "$MCP_AUTO_START"
+        ' bash "$FEDORA_DIR/chromascape-fedora.sh" "$mcp_explicit"
+    )"
+    [[ "$mcp_explicit_output" == "$mcp_explicit" ]] || \
+        fail "explicit MCP_AUTO_START=$mcp_explicit was overwritten (got $mcp_explicit_output)"
+    pass "explicit MCP_AUTO_START=$mcp_explicit is preserved and never overwritten"
+done
+
+# An operator value supplied through .env.fedora.local also survives the defaults pass.
+MCP_ENV="$ROOT/env.mcp"
+printf 'MCP_AUTO_START=true\n' > "$MCP_ENV"
+mcp_file_output="$(
+    bash -c '
+        source "$1"
+        unset MCP_AUTO_START
+        sc1667_load_env_file "$2" >/dev/null
+        set_fedora_runtime_defaults
+        printf "%s|%s" "${MCP_AUTO_START:-<unset>}" "$SC1667_ERRORS"
+    ' bash "$FEDORA_DIR/chromascape-fedora.sh" "$MCP_ENV"
+)"
+[[ "$mcp_file_output" == 'true|0' ]] || fail "MCP_AUTO_START from the local file was not honoured (got $mcp_file_output)"
+pass 'MCP_AUTO_START from .env.fedora.local overrides the wrapper default'
+
 defaults_output="$(
     bash -c '
         source "$1"
