@@ -185,7 +185,7 @@ class StabilizationBundleStreamReaderBoundaryTest {
 
   @Test
   @DisplayName("a boundary-prefix that is not a real delimiter stays body data byte-for-byte")
-  void boundaryPrefixStaysBodyData() {
+  void boundaryPrefixStaysBodyData() throws Exception {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
     body.append("--").append(boundary).append("\r\n");
@@ -217,7 +217,7 @@ class StabilizationBundleStreamReaderBoundaryTest {
 
   @Test
   @DisplayName("a closing boundary -- suffix succeeds")
-  void closingBoundarySuffix() {
+  void closingBoundarySuffix() throws Exception {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
     body.append("--").append(boundary).append("\r\n");
@@ -253,7 +253,7 @@ class StabilizationBundleStreamReaderBoundaryTest {
 
   @Test
   @DisplayName("quoted disposition parameters parse with escaped characters")
-  void quotedDispositionParameters() {
+  void quotedDispositionParameters() throws Exception {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
     body.append("--").append(boundary).append("\r\n");
@@ -270,7 +270,7 @@ class StabilizationBundleStreamReaderBoundaryTest {
 
   @Test
   @DisplayName("a closing boundary at EOF (no trailing CRLF) is valid")
-  void closingBoundaryAtEofValid() {
+  void closingBoundaryAtEofValid() throws Exception {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
     body.append("--").append(boundary).append("\r\n");
@@ -322,7 +322,7 @@ class StabilizationBundleStreamReaderBoundaryTest {
 
   @Test
   @DisplayName("an initial closing boundary at EOF (empty bundle) is valid")
-  void initialClosingBoundaryAtEofValid() {
+  void initialClosingBoundaryAtEofValid() throws Exception {
     String boundary = "b-" + UUID.randomUUID();
     StringBuilder body = new StringBuilder();
     body.append("--").append(boundary).append("\r\n");

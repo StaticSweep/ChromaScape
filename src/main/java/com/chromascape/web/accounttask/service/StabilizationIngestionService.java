@@ -354,7 +354,7 @@ public class StabilizationIngestionService {
     }
     if (!declaredPlanHash.equals(plan.path("planHash").asText(""))) {
       throw new IllegalArgumentException(
-          "report bundle plan.planHash does not equal the recomputed plan hash");
+          "report bundle plan.planHash does not equal manifest plan_hash");
     }
     validatePlanSchema(plan);
     validateManifestArtifactDigest(manifest);
@@ -638,15 +638,12 @@ public class StabilizationIngestionService {
       String planBuildId = plan.path("buildId").asText("");
       String planInstance = plan.path("micro6InstanceId").asText("");
       String planCatalogHash = plan.path("task").path("catalogHash").asText("");
-      if (!sameText(manifest.path("plan_id"), plan.path("planId"))
-          || !planTaskKey.equals(manifest.path("task_key").asText(""))
-          || !planSettingsHash.equals(manifest.path("settings_hash").asText(""))
-          || !planBuildId.equals(manifest.path("build_id").asText(""))
-          || !planInstance.equals(manifest.path("micro6_instance_id").asText(""))
-          || !planCatalogHash.equals(manifest.path("catalog_hash").asText(""))) {
-        throw new IllegalArgumentException(
-            "harness manifest aggregate identity does not match the plan");
-      }
+      requirePlanParity(manifest, plan.path("planId").asText(""), "plan_id");
+      requirePlanParity(manifest, planTaskKey, "task_key");
+      requirePlanParity(manifest, planSettingsHash, "settings_hash");
+      requirePlanParity(manifest, planBuildId, "build_id");
+      requirePlanParity(manifest, planInstance, "micro6_instance_id");
+      requirePlanParity(manifest, planCatalogHash, "catalog_hash");
       // The plan's own declared planHash must equal the manifest plan_hash. The recomputed hash of
       // the bundle plan document is verified separately before this method; requiring the plan's
       // internal planHash field to agree closes the self-hashed-but-mismatched-plan gap.
@@ -662,6 +659,13 @@ public class StabilizationIngestionService {
 
   private static boolean sameText(JsonNode a, JsonNode b) {
     return a.asText("").equals(b.asText(""));
+  }
+
+  private static void requirePlanParity(JsonNode manifest, String expected, String field) {
+    if (!expected.equals(manifest.path(field).asText(""))) {
+      throw new IllegalArgumentException(
+          "harness manifest " + field + " does not match the plan");
+    }
   }
 
   /**

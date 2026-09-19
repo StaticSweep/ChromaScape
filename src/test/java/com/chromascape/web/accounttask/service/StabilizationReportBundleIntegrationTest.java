@@ -113,8 +113,6 @@ class StabilizationReportBundleIntegrationTest {
   void validBundleIsIngested() {
     ObjectNode manifest = manifest();
     BundleDocuments docs = documents(manifest);
-    when(runRepository.existsByRunIdAndManifestHash("run-1", manifest.path("manifest_hash").asText()))
-        .thenReturn(false);
     when(runRepository.existsByRunId("run-1")).thenReturn(false);
     when(snapshotRepository.existsByMatrixHashAndGroupKey(any(), any())).thenReturn(true);
 
@@ -442,7 +440,6 @@ class StabilizationReportBundleIntegrationTest {
     when(runRepository.existsByRunIdAndManifestHash("run-1", manifest.path("manifest_hash").asText()))
         .thenReturn(false);
     when(runRepository.existsByRunId("run-1")).thenReturn(false);
-    when(snapshotRepository.existsByMatrixHashAndGroupKey(any(), any())).thenReturn(true);
     when(artifactStore.stage(any(java.nio.file.Path.class), any(), any(), any(), any()))
         .thenAnswer(invocation -> {
           // The first artifact must stage with metadata derived from the ACTUAL uploaded bytes so the
