@@ -532,8 +532,8 @@ public class TargetQualificationController {
         return;
       }
       logger.info("Closing qualification session on shutdown");
-      TargetFrameSource source = frameSource;
-      TargetInputSession active = session;
+      final TargetFrameSource source = frameSource;
+      final TargetInputSession active = session;
       frameSource = null;
       session = null;
       if (source != null) {
@@ -565,8 +565,8 @@ public class TargetQualificationController {
    * fresh session and the dead one retains no usable state.
    */
   private void discardDeadSession() {
-    TargetFrameSource stale = frameSource;
-    TargetInputSession dead = session;
+    final TargetFrameSource stale = frameSource;
+    final TargetInputSession dead = session;
     frameSource = null;
     session = null;
     if (stale != null) {
