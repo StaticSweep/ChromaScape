@@ -119,10 +119,13 @@ recordings/
 !/scripts/native/staging-regressions.sh
 !/scripts/native/staging-shell-regressions.sh
 !/scripts/native/distribution-exclusion-regressions.sh
+!/scripts/native/diagnose-remoteinput-linux.sh
 !/scripts/native/tests/
 /scripts/native/tests/*
 !/scripts/native/tests/test_remoteinput_metadata.py
 !/scripts/native/tests/staging_regression_fixtures.py
+!/scripts/native/tests/diagnose-remoteinput-linux-regressions.sh
+!/scripts/native/tests/remoteinput-linux-window-selection-regressions.sh
 
 # SC-1667 reviewed Fedora host-native startup/preflight tooling. Keep the broad
 # user-script ignore above; only these named files are part of the product contract.
