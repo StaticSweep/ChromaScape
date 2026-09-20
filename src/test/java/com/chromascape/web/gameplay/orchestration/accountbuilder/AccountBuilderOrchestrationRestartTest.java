@@ -30,6 +30,64 @@ import org.springframework.context.ConfigurableApplicationContext;
 /** Committed two-context restart proof against the real Flyway schema. */
 class AccountBuilderOrchestrationRestartTest {
 
+  /**
+   * External process harness used by the native-Windows restart gate.
+   *
+   * <p>The {@code seed} process deliberately remains alive after committing every checkpoint so the
+   * verifier can terminate that JVM with {@code Stop-Process -Force}. A separate {@code verify}
+   * process then starts a new Spring context against the same PostgreSQL schema and proves that
+   * recovery neither reserves nor dispatches work.
+   */
+  public static void main(String[] args) throws Exception {
+    if (args.length != 6 || !("seed".equals(args[0]) || "verify".equals(args[0]))) {
+      throw new IllegalArgumentException(
+          "usage: <seed|verify> <jdbc-url> <username> <password> <schema> <checkpoint>");
+    }
+    Database database = new Database(args[1], args[2], args[3], args[4]);
+    String checkpoint = args[5];
+    AccountBuilderOrchestrationRestartTest harness = new AccountBuilderOrchestrationRestartTest();
+    if ("seed".equals(args[0])) {
+      harness.migrate(database);
+      try (ConfigurableApplicationContext context = harness.start(database)) {
+        JpaAccountBuilderOrchestrationStore store =
+            context.getBean(JpaAccountBuilderOrchestrationStore.class);
+        harness.populate(store, database);
+        System.out.printf(
+            "SC1431_PROCESS_READY checkpoint=%s pid=%d%n",
+            checkpoint, ProcessHandle.current().pid());
+        System.out.flush();
+        Thread.sleep(Long.MAX_VALUE);
+      }
+      return;
+    }
+
+    try (ConfigurableApplicationContext context = harness.start(database)) {
+      JpaAccountBuilderOrchestrationStore store =
+          context.getBean(JpaAccountBuilderOrchestrationStore.class);
+      assertThat(store.find("orchestration-restart-authorized").orElseThrow().state())
+          .isEqualTo(State.AUTHORIZED);
+      assertThat(store.find("orchestration-restart-reserved").orElseThrow().state())
+          .isEqualTo(State.RESERVED);
+      assertThat(store.find("orchestration-restart-dispatch-submitted").orElseThrow().state())
+          .isEqualTo(State.DISPATCH_SUBMITTED);
+      assertThat(store.find("orchestration-restart-active").orElseThrow().state())
+          .isEqualTo(State.ACTIVE);
+      assertThat(store.find("orchestration-restart-needs-lease").orElseThrow().state())
+          .isEqualTo(State.NEEDS_RECONCILIATION);
+      assertThat(store.find("orchestration-restart-terminal").orElseThrow().state())
+          .isEqualTo(State.DENIED);
+
+      RecoveryGateway gateway = new RecoveryGateway();
+      List<OrchestrationView> recovered = harness.service(store, gateway).recoverAfterRestart();
+      assertThat(recovered).hasSize(6);
+      assertThat(gateway.reservations).hasValue(0);
+      assertThat(gateway.dispatches).hasValue(0);
+      System.out.printf(
+          "SC1431_PROCESS_VERIFIED checkpoint=%s recovered=%d reservations=%d dispatches=%d%n",
+          checkpoint, recovered.size(), gateway.reservations.get(), gateway.dispatches.get());
+    }
+  }
+
   @Test
   void committedEvidenceSurvivesContextRestartAndRecoveryNeverRedispatches() throws Exception {
     Database database = IsolatedPostgresTestDatabase.newDatabase();
@@ -106,6 +164,20 @@ class AccountBuilderOrchestrationRestartTest {
         "--stabilization.auth.token=sc1431-read-token",
         "--stabilization.auth.write-token=sc1431-write-token",
         "--gameplay.bootstrap.authority-hmac-secret=" + AccountBuilderPostgresTestFixtures.SECRET);
+  }
+
+  private void migrate(Database database) {
+    Flyway.configure()
+        .dataSource(
+            database.jdbcUrl() + "?currentSchema=" + database.schema(),
+            database.username(),
+            database.password())
+        .schemas(database.schema())
+        .defaultSchema(database.schema())
+        .target(MigrationVersion.fromVersion("32"))
+        .locations("classpath:db/migration")
+        .load()
+        .migrate();
   }
 
   private Map<String, CommittedAggregate> populate(

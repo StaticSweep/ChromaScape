@@ -45,8 +45,13 @@ public final class AccountBuilderOrchestrationController {
       @RequestBody OrchestrationRequest request) {
     authenticate(operatorKey);
     AccountBuilderOrchestrationService.Submission submission = service.orchestrate(request);
-    return ResponseEntity.status(submission.created() ? HttpStatus.CREATED : HttpStatus.OK)
-        .body(submission.view());
+    HttpStatus status =
+        switch (submission.view().failureCode()) {
+          case RUNTIME_DISABLED, GATEWAY_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+          case NEEDS_RECONCILIATION, DELIVERY_UNCERTAIN -> HttpStatus.CONFLICT;
+          default -> submission.created() ? HttpStatus.CREATED : HttpStatus.OK;
+        };
+    return ResponseEntity.status(status).body(submission.view());
   }
 
   @GetMapping("/orchestrations/{orchestrationId}")
