@@ -147,6 +147,38 @@ class BootstrapApprovalStorePostgresTest {
         .hasMessageContaining("different authority");
   }
 
+  @Test
+  void recordingIdOnlyReuseConflictIsStable() {
+    store.create(
+        "session-3",
+        "turn-3",
+        "orch-approval-3",
+        "req-approval-3",
+        "rec-approval-3",
+        "sha256:" + "1".repeat(64),
+        "sha256:" + "2".repeat(64),
+        "operator-1",
+        CLOCK.instant().plusSeconds(300));
+
+    // Only the unique recording id is reused: every other identity differs. The conflict must still
+    // resolve to a stable APPROVAL_CONFLICT with the durable owner, not an opaque ownership
+    // failure.
+    assertThatThrownBy(
+            () ->
+                store.create(
+                    "session-4",
+                    "turn-4",
+                    "orch-approval-4",
+                    "req-approval-4",
+                    "rec-approval-3",
+                    "sha256:" + "3".repeat(64),
+                    "sha256:" + "4".repeat(64),
+                    "operator-1",
+                    CLOCK.instant().plusSeconds(300)))
+        .isInstanceOf(BootstrapApprovalException.class)
+        .hasMessageContaining("different scope");
+  }
+
   @SpringBootConfiguration
   @EnableAutoConfiguration
   @EntityScan(basePackages = "com.chromascape.web.gameplay.bootstrap")

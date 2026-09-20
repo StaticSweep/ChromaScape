@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
+import com.chromascape.web.gameplay.contract.GameplayContracts.ExecutionEnvelope;
+import com.chromascape.web.gameplay.contract.v2.GameplayV2EnvelopeRules;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -143,6 +145,71 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
     assertThat(snapshot.observationRevision()).isEqualTo(7);
     assertThat(snapshot.taskRevision()).isEqualTo(9);
     assertThat(snapshot.liveDeliveryReady()).isTrue();
+    // The capability entry must attest the canonical v2 tool-schema digest for the requested task
+    // key, never the catalog hash.
+    assertThat(snapshot.tasks()).hasSize(1);
+    assertThat(snapshot.tasks().get(0).taskKey()).isEqualTo("FISHING_TRAINING");
+    assertThat(snapshot.tasks().get(0).schemaDigest())
+        .isEqualTo(GameplayV2EnvelopeRules.canonicalSchemaDigest());
+    assertThat(snapshot.tasks().get(0).schemaDigest()).isNotEqualTo(snapshot.catalogDigest());
+  }
+
+  @Test
+  void capabilitiesWithoutRequestEnvelopeFailClosed() {
+    var gateway = gateway();
+    OrchestrationRequest noEnvelope =
+        new OrchestrationRequest(
+            "orch-1",
+            "req-1",
+            "idem-1",
+            "sha256:" + "f".repeat(64),
+            AccountBuilderOrchestrationModels.Mode.BOOTSTRAP_RECORDING,
+            "PROVIDER:CLAUDE",
+            null,
+            null,
+            null,
+            null,
+            null,
+            NOW.plusSeconds(300));
+    assertThat(gateway.capabilities(noEnvelope).liveDeliveryReady()).isFalse();
+  }
+
+  @Test
+  void capabilitiesWrongClientFailsClosed() {
+    reconfigure(
+        "/api/v2/gameplay/observe",
+        "{\"contractVersion\":\"sc-1429/v2\",\"clientId\":\"client-other\",\"buildId\":\"build-v1\","
+            + "\"catalogHash\":\"sha256:"
+            + "c".repeat(64)
+            + "\","
+            + "\"capabilityDigest\":\"sha256:"
+            + "a".repeat(64)
+            + "\","
+            + "\"observationRevision\":7,\"taskRevision\":9}");
+    assertThat(gateway().capabilities(request()).liveDeliveryReady()).isFalse();
+  }
+
+  @Test
+  void capabilitiesDisagreeingCatalogFailsClosed() {
+    reconfigure(
+        "/api/v2/gameplay/observe",
+        "{\"contractVersion\":\"sc-1429/v2\",\"clientId\":\"client-1\",\"buildId\":\"build-v1\","
+            + "\"catalogHash\":\"sha256:"
+            + "b".repeat(64)
+            + "\","
+            + "\"capabilityDigest\":\"sha256:"
+            + "a".repeat(64)
+            + "\","
+            + "\"observationRevision\":7,\"taskRevision\":9}");
+    assertThat(gateway().capabilities(request()).liveDeliveryReady()).isFalse();
+  }
+
+  @Test
+  void stopRecordsTheRequestedKillSwitchMode() {
+    var gateway = gateway();
+    GatewayCorrelation correlation = correlation("req-1", "sha256:" + "e".repeat(64));
+    assertThat(gateway.stop(correlation, null, "kill-switch:human", true).killSwitch()).isTrue();
+    assertThat(gateway.stop(correlation, null, "operator:stop", false).killSwitch()).isFalse();
   }
 
   @Test
@@ -405,11 +472,46 @@ class Micro6V2AccountBuilderOrchestrationGatewayTest {
         AccountBuilderOrchestrationModels.Mode.BOOTSTRAP_RECORDING,
         "PROVIDER:CLAUDE",
         null,
-        null,
+        envelope(),
         null,
         null,
         null,
         NOW.plusSeconds(300));
+  }
+
+  private ExecutionEnvelope envelope() {
+    try {
+      String json =
+          "{\"contractVersion\":\"sc-1429/v1\",\"provider\":\"CLAUDE\",\"modelVersion\":\"model-v1\","
+              + "\"decisionId\":\"decision-1\",\"requestId\":\"req-1\",\"idempotencyKey\":\"idem-1\","
+              + "\"goalPlanDigest\":\"sha256:"
+              + "1".repeat(64)
+              + "\",\"taskSkillDigests\":[\"sha256:"
+              + "2".repeat(64)
+              + "\"],"
+              + "\"taskKey\":\"FISHING_TRAINING\",\"settings\":{},"
+              + "\"identities\":{\"clientId\":\"client-1\",\"accountId\":\"account-1\","
+              + "\"environmentId\":\"LIVE\"},"
+              + "\"catalogDigest\":\"sha256:"
+              + "c".repeat(64)
+              + "\",\"schemaDigest\":\"sha256:"
+              + "3".repeat(64)
+              + "\","
+              + "\"policyDigest\":\"sha256:"
+              + "4".repeat(64)
+              + "\",\"knowledgeDigest\":\"sha256:"
+              + "5".repeat(64)
+              + "\","
+              + "\"semanticActionDigest\":\"sha256:"
+              + "6".repeat(64)
+              + "\",\"expectedTransition\":\"CONFIRMED\","
+              + "\"verifierId\":\"verifier-1\",\"buildId\":\"build-v1\",\"expectedObservationRevision\":7,"
+              + "\"expectedTaskRevision\":9,\"authorityId\":\"auth-1\",\"leaseGeneration\":1,\"fence\":1,"
+              + "\"budgets\":{},\"deadline\":\"2026-08-30T12:05:00Z\",\"killSwitchScope\":\"RUN\"}";
+      return objectMapper.readValue(json, ExecutionEnvelope.class);
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
   }
 
   private void respond(com.sun.net.httpserver.HttpExchange exchange, int status, String body)

@@ -12,8 +12,7 @@ import com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinator.Reco
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ExecutionEnvelope;
 import com.chromascape.web.gameplay.contract.GameplayContracts.HumanAuthority;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderCapabilityPreflight;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationException;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
@@ -21,7 +20,6 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.SnapshotBindings;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.ProviderDecisionOrchestrationSource;
 import com.chromascape.web.gameplay.provider.runtime.GameplayProviderRuntime;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,7 +29,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -49,14 +48,14 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public final class BootstrapGameplayOperatorService {
+  private static final Logger LOG = LoggerFactory.getLogger(BootstrapGameplayOperatorService.class);
+
   private final CanonicalGameplayJson canonicalJson;
   private final HumanGameplayAuthorityService authorityService;
   private final BootstrapProposalAssembler assembler;
   private final BootstrapApprovalStore approvalStore;
   private final BootstrapRecordingCoordinator recordingCoordinator;
   private final BootstrapEvidenceManifestService manifestService;
-  private final ProviderDecisionOrchestrationSource decisionSource;
-  private final AccountBuilderCapabilityPreflight capabilityPreflight;
   private final AccountBuilderOrchestrationService orchestrationService;
   private final GameplayProviderRuntime providerRuntime;
   private final ObjectMapper objectMapper;
@@ -74,8 +73,6 @@ public final class BootstrapGameplayOperatorService {
       BootstrapApprovalStore approvalStore,
       BootstrapRecordingCoordinator recordingCoordinator,
       BootstrapEvidenceManifestService manifestService,
-      ProviderDecisionOrchestrationSource decisionSource,
-      AccountBuilderCapabilityPreflight capabilityPreflight,
       AccountBuilderOrchestrationService orchestrationService,
       GameplayProviderRuntime providerRuntime,
       ObjectMapper objectMapper,
@@ -90,8 +87,6 @@ public final class BootstrapGameplayOperatorService {
         approvalStore,
         recordingCoordinator,
         manifestService,
-        decisionSource,
-        capabilityPreflight,
         orchestrationService,
         providerRuntime,
         objectMapper,
@@ -109,8 +104,6 @@ public final class BootstrapGameplayOperatorService {
       BootstrapApprovalStore approvalStore,
       BootstrapRecordingCoordinator recordingCoordinator,
       BootstrapEvidenceManifestService manifestService,
-      ProviderDecisionOrchestrationSource decisionSource,
-      AccountBuilderCapabilityPreflight capabilityPreflight,
       AccountBuilderOrchestrationService orchestrationService,
       GameplayProviderRuntime providerRuntime,
       ObjectMapper objectMapper,
@@ -125,8 +118,6 @@ public final class BootstrapGameplayOperatorService {
     this.approvalStore = approvalStore;
     this.recordingCoordinator = recordingCoordinator;
     this.manifestService = manifestService;
-    this.decisionSource = decisionSource;
-    this.capabilityPreflight = capabilityPreflight;
     this.orchestrationService = orchestrationService;
     this.providerRuntime = providerRuntime;
     this.objectMapper = objectMapper;
@@ -175,8 +166,19 @@ public final class BootstrapGameplayOperatorService {
         operatorKey.length >= 32,
         providerReady,
         models,
-        0,
+        pendingApprovals(),
         blockingReasons(providerReady, orchestrationReadiness));
+  }
+
+  /** Durable pending-approval count for operator readiness; a store failure reports zero. */
+  private int pendingApprovals() {
+    try {
+      long count = approvalStore.countPending();
+      return count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count;
+    } catch (RuntimeException exception) {
+      LOG.warn("SC-1498 pending-approval count could not be read", exception);
+      return 0;
+    }
   }
 
   public ApprovalPreview preview(String presentedKey, PreviewRequest request) {
@@ -311,11 +313,40 @@ public final class BootstrapGameplayOperatorService {
             approval.scopeDigest());
     HumanAuthority authority = authorityService.signDurableApproval(pending, boundEnvelope);
     String signatureDigest = authorityService.signatureDigest(authority);
+    // Delivery is delegated exclusively to the hardened SC-1431 provider route. The service loads
+    // the persisted provider decision and its provenance from the durable SC-1430 turn, resolves an
+    // exact replay against the stored capability digest, and performs the Micro6 capability
+    // preflight only for a genuinely new orchestration. Invalid decisions and exact replays
+    // therefore never reach delivery; the operator never assembles a provider-shaped request and
+    // the generic orchestrate() entry point rejects provider sources.
+    ProviderOrchestrationCommand command =
+        new ProviderOrchestrationCommand(
+            approval.providerSessionId(),
+            approval.providerTurnId(),
+            approval.orchestrationId(),
+            approval.requestId(),
+            boundEnvelope.idempotencyKey(),
+            Mode.BOOTSTRAP_RECORDING,
+            boundEnvelope,
+            authority,
+            request.observation(),
+            boundEnvelope.deadline());
+    // Validate the persisted provider turn before consuming the one-use bind or starting the
+    // durable recording projection, so a stale or malformed command leaves neither a bound
+    // approval nor an orphan STARTED recording. This never probes Micro6.
+    try {
+      orchestrationService.validateProviderCommand(command);
+    } catch (RuntimeException exception) {
+      throw error(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "STALE_BINDING",
+          "Persisted provider decision cannot back this dispatch");
+    }
     ApprovalView bound =
         approvalStore.bind(approval.approvalId(), authority.authorityId(), signatureDigest);
-    // SC-1498 ordering: the durable recording projection STARTS before SC-1431 delivery. If the
-    // process dies after this point, recovery finds the STARTED projection and resumes
-    // reconciliation or finalization only — gameplay is never redispatched.
+    // SC-1498 ordering: the durable recording projection STARTS before SC-1431 delivery, once the
+    // command is proven valid. If the process dies after this point, recovery finds the STARTED
+    // projection and resumes reconciliation or finalization only — gameplay is never redispatched.
     RecordingView recording =
         recordingCoordinator.start(
             bound.orchestrationId(),
@@ -328,64 +359,31 @@ public final class BootstrapGameplayOperatorService {
             assembled.decision().modelVersion(),
             null,
             null);
-    // The hardened SC-1431 provider route is mirrored here: the provider decision, its
-    // provenance and the source type are loaded from the durable persisted provider turn by
-    // stage one, an exact replay is resolved with the stored capability digest, and only a
-    // genuinely new orchestration performs the Micro6 capability preflight. Invalid decisions
-    // and exact replays therefore never reach delivery. The generic orchestrate() entry point
-    // rejects provider sources, so the provider-only entry point is used.
-    ProviderOrchestrationCommand command =
-        new ProviderOrchestrationCommand(
-            bound.providerSessionId(),
-            bound.providerTurnId(),
-            bound.orchestrationId(),
-            bound.requestId(),
-            boundEnvelope.idempotencyKey(),
-            Mode.BOOTSTRAP_RECORDING,
-            boundEnvelope,
-            authority,
-            request.observation(),
-            boundEnvelope.deadline());
-    ProviderDecisionOrchestrationSource.PreparedProviderRequest prepared;
-    try {
-      prepared = decisionSource.prepareProduction(command);
-    } catch (RuntimeException exception) {
-      throw error(
-          HttpStatus.UNPROCESSABLE_ENTITY,
-          "STALE_BINDING",
-          "Persisted provider decision cannot back this dispatch");
-    }
     AccountBuilderOrchestrationService.Submission submission;
     try {
-      Optional<OrchestrationView> existing =
-          orchestrationService.findOrchestration(bound.orchestrationId());
-      if (existing.isPresent()) {
-        String storedCapabilityDigest =
-            orchestrationService.storedCapabilityDigest(bound.orchestrationId());
-        OrchestrationRequest replay =
-            decisionSource.completeProductionReplay(prepared, storedCapabilityDigest);
-        if (!replay.requestFingerprint().equals(existing.get().requestFingerprint())) {
-          throw error(
-              HttpStatus.CONFLICT,
-              "STALE_BINDING",
-              "A different request is already persisted under this orchestration id");
-        }
-        return finalizeIfTerminalForExisting(bound.orchestrationId(), existing.get());
-      }
-      CapabilitySnapshot preflight = capabilityPreflight.probe(boundEnvelope);
-      OrchestrationRequest orchestrationRequest =
-          decisionSource.completeProduction(prepared, preflight);
-      submission = orchestrationService.orchestrateProvider(orchestrationRequest);
+      submission = orchestrationService.orchestrateProvider(command);
     } catch (OperatorException exception) {
       throw exception;
+    } catch (AccountBuilderOrchestrationException exception) {
+      throw error(
+          HttpStatus.CONFLICT,
+          exception.failureCode().name(),
+          "SC-1431 orchestration could not be reconciled; use reconcile only");
     } catch (RuntimeException exception) {
       throw error(
           HttpStatus.CONFLICT,
           "DELIVERY_UNCERTAIN",
           "SC-1431 orchestration could not be reconciled; use reconcile only");
     }
-    return finalizeIfTerminal(
-        bound, recording, assembled, boundEnvelope, authority, submission.view());
+    OrchestrationView view = submission.view();
+    if (!view.state().provenTerminal()) {
+      // SC-1498 one-run bound: wait read-only for a proven terminal receipt before projecting the
+      // evidence. The wait never redispatches and stays reconciliation-only if the bound elapses.
+      view =
+          orchestrationService.reconcileUntilTerminal(
+              command.orchestrationId(), boundEnvelope.deadline());
+    }
+    return finalizeIfTerminal(bound, recording, assembled, boundEnvelope, authority, view);
   }
 
   public OrchestrationView run(String presentedKey, String orchestrationId) {
@@ -504,8 +502,13 @@ public final class BootstrapGameplayOperatorService {
           artifact.videoPath(),
           artifact.artifactDigest(),
           finalizedAt);
-    } catch (RuntimeException ignored) {
+    } catch (RuntimeException exception) {
       // Finalization failure never repeats gameplay; recovery resumes from durable evidence.
+      LOG.warn(
+          "SC-1498 finalization projection failed for orchestration {}; recovery resumes from"
+              + " durable evidence",
+          approval.orchestrationId(),
+          exception);
     }
     return view;
   }
@@ -558,8 +561,13 @@ public final class BootstrapGameplayOperatorService {
           artifact.videoPath(),
           artifact.artifactDigest(),
           finalizedAt);
-    } catch (RuntimeException ignored) {
+    } catch (RuntimeException exception) {
       // Recovery resumes finalization from durable evidence without redispatch.
+      LOG.warn(
+          "SC-1498 recovery finalization failed for orchestration {}; a later reconcile resumes"
+              + " from durable evidence",
+          orchestrationId,
+          exception);
     }
     return view;
   }
@@ -651,6 +659,18 @@ public final class BootstrapGameplayOperatorService {
           HttpStatus.SERVICE_UNAVAILABLE,
           "BOOTSTRAP_OPERATOR_DISABLED",
           "SC-1498 operator endpoints are disabled");
+    }
+    if (!recordingEnabled) {
+      throw error(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "BOOTSTRAP_RECORDING_DISABLED",
+          "SC-1498 bootstrap recording is disabled");
+    }
+    if (!micro6V2Enabled) {
+      throw error(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "MICRO6_V2_DISABLED",
+          "Micro6 v2 AccountBuilder delivery is disabled");
     }
   }
 

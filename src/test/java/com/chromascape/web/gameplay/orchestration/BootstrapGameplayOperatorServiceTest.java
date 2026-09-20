@@ -19,14 +19,9 @@ import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorServi
 import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.DispatchRequest;
 import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.OperatorException;
 import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.PreviewRequest;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderCapabilityPreflight;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRequestFactory;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationValidator;
-import com.chromascape.web.gameplay.orchestration.accountbuilder.ProviderDecisionOrchestrationSource;
 import com.chromascape.web.gameplay.provider.runtime.ProviderDecisionHandoff;
 import com.chromascape.web.gameplay.provider.runtime.ProviderDecisionHandoff.PersistedDecision;
 import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels;
@@ -62,7 +57,6 @@ class BootstrapGameplayOperatorServiceTest {
   @Mock private BootstrapApprovalStore approvalStore;
   @Mock private BootstrapRecordingCoordinator recordingCoordinator;
   @Mock private BootstrapEvidenceManifestService manifestService;
-  @Mock private AccountBuilderCapabilityPreflight capabilityPreflight;
   @Mock private AccountBuilderOrchestrationService orchestrationService;
 
   @Mock
@@ -71,7 +65,7 @@ class BootstrapGameplayOperatorServiceTest {
   private BootstrapGameplayOperatorService service;
   private HumanGameplayAuthorityService authorityService;
   private BootstrapProposalAssembler assembler;
-  private ProviderDecisionOrchestrationSource decisionSource;
+  private Clock fixed;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -86,34 +80,30 @@ class BootstrapGameplayOperatorServiceTest {
                 .getClassLoader()
                 .getResourceAsStream("contracts/gameplay/sc-1429-golden-fixtures-v1.json"));
     canonicalJson = new CanonicalGameplayJson(objectMapper);
-    Clock fixed = Clock.fixed(NOW, ZoneOffset.UTC);
+    fixed = Clock.fixed(NOW, ZoneOffset.UTC);
     authorityService = new HumanGameplayAuthorityService(canonicalJson, fixed, AUTHORITY_SECRET);
     FakeHandoff handoff = new FakeHandoff();
     assembler = new BootstrapProposalAssembler(handoff, authorityService, canonicalJson);
-    AccountBuilderOrchestrationValidator validator =
-        new AccountBuilderOrchestrationValidator(canonicalJson, fixed, authorityService);
-    AccountBuilderOrchestrationRequestFactory requestFactory =
-        new AccountBuilderOrchestrationRequestFactory(validator, canonicalJson);
-    decisionSource =
-        new ProviderDecisionOrchestrationSource(handoff, canonicalJson, requestFactory);
-    service =
-        new BootstrapGameplayOperatorService(
-            canonicalJson,
-            authorityService,
-            assembler,
-            approvalStore,
-            recordingCoordinator,
-            manifestService,
-            decisionSource,
-            capabilityPreflight,
-            orchestrationService,
-            providerRuntime,
-            objectMapper,
-            fixed,
-            true,
-            OPERATOR_KEY,
-            true,
-            true);
+    service = service(true, true);
+  }
+
+  private BootstrapGameplayOperatorService service(
+      boolean recordingEnabled, boolean micro6V2Enabled) {
+    return new BootstrapGameplayOperatorService(
+        canonicalJson,
+        authorityService,
+        assembler,
+        approvalStore,
+        recordingCoordinator,
+        manifestService,
+        orchestrationService,
+        providerRuntime,
+        objectMapper,
+        fixed,
+        true,
+        OPERATOR_KEY,
+        recordingEnabled,
+        micro6V2Enabled);
   }
 
   @Test
@@ -251,22 +241,9 @@ class BootstrapGameplayOperatorServiceTest {
                     LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
                     LocalDateTime.ofInstant(NOW, ZoneOffset.UTC))));
     OrchestrationView terminalView = terminalView(preview.orchestrationId());
-    // The hardened SC-1431 provider route is mirrored: an exact replay resolves with the stored
-    // capability digest, otherwise one read-only Micro6 preflight backs the new orchestration.
-    // Delivery itself stays mocked; the real two-stage assembly above it is what this verifies.
-    when(orchestrationService.findOrchestration(any())).thenReturn(Optional.empty());
-    when(capabilityPreflight.probe(any()))
-        .thenReturn(
-            new CapabilitySnapshot(
-                envelope.catalogDigest(),
-                "sha256:" + "c".repeat(64),
-                envelope.buildId(),
-                envelope.expectedObservationRevision(),
-                envelope.expectedTaskRevision(),
-                NOW,
-                NOW.plus(1, ChronoUnit.MINUTES),
-                false,
-                List.of()));
+    // Delivery is delegated to the hardened SC-1431 provider route; the operator only assembles,
+    // approves, starts the durable recording and projects the terminal evidence. The real
+    // two-stage assembly above it is what this verifies.
     when(orchestrationService.orchestrateProvider(any()))
         .thenReturn(new AccountBuilderOrchestrationService.Submission(terminalView, true));
     when(manifestService.buildManifest(
@@ -282,6 +259,35 @@ class BootstrapGameplayOperatorServiceTest {
         service.dispatch(
             OPERATOR_KEY, new DispatchRequest(approvalId, observation(), envelope, bindings));
     assertThat(dispatched.state()).isEqualTo(AccountBuilderOrchestrationModels.State.CONFIRMED);
+
+    // The persisted provider turn is validated before the durable recording projection is created,
+    // so a stale command can never leave an orphan STARTED recording.
+    var order = org.mockito.Mockito.inOrder(orchestrationService, recordingCoordinator);
+    order.verify(orchestrationService).validateProviderCommand(any());
+    order
+        .verify(recordingCoordinator)
+        .start(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    order.verify(orchestrationService).orchestrateProvider(any());
+  }
+
+  @Test
+  void dispatchIsRejectedBeforeAnyRecordingWhenAGateIsDisabled() {
+    ExecutionEnvelope envelope = envelopeWithFutureDeadline();
+    DispatchRequest request =
+        new DispatchRequest("approval-1", observation(), envelope, bindings(envelope));
+
+    BootstrapGameplayOperatorService recordingDisabled = service(false, true);
+    assertThatThrownBy(() -> recordingDisabled.dispatch(OPERATOR_KEY, request))
+        .isInstanceOf(OperatorException.class)
+        .hasMessageContaining("recording");
+
+    BootstrapGameplayOperatorService v2Disabled = service(true, false);
+    assertThatThrownBy(() -> v2Disabled.dispatch(OPERATOR_KEY, request))
+        .isInstanceOf(OperatorException.class)
+        .hasMessageContaining("Micro6 v2");
+
+    org.mockito.Mockito.verifyNoInteractions(recordingCoordinator);
+    org.mockito.Mockito.verifyNoInteractions(approvalStore);
   }
 
   @Test
@@ -376,7 +382,9 @@ class BootstrapGameplayOperatorServiceTest {
         envelope.expectedObservationRevision(),
         envelope.expectedTaskRevision(),
         persisted.observationDigest(),
-        persisted.promptDigest());
+        persisted.promptDigest(),
+        persisted.sessionId(),
+        persisted.turnId());
   }
 
   private OrchestrationView terminalView(String orchestrationId) {

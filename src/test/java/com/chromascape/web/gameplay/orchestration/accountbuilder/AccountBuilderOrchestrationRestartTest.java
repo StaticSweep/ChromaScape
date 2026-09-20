@@ -44,7 +44,7 @@ class AccountBuilderOrchestrationRestartTest {
               .locations("classpath:db/migration")
               .load();
       flyway.migrate();
-      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("57");
+      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("89");
 
       Map<String, CommittedAggregate> before;
       try (ConfigurableApplicationContext contextA = start(database)) {
@@ -99,7 +99,7 @@ class AccountBuilderOrchestrationRestartTest {
               .locations("classpath:db/migration")
               .load();
       flyway.migrate();
-      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("57");
+      assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("89");
 
       CapabilitySnapshot preflight =
           new CapabilitySnapshot(

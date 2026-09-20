@@ -5,6 +5,7 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayReceipt;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Lease;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
+import java.time.Instant;
 
 /**
  * Sole SC-1431 delivery boundary. Implementations may expose semantic AccountBuilder calls only.
@@ -36,4 +37,15 @@ public interface AccountBuilderOrchestrationGateway {
    * Lookup-only reservation reconciliation for an authority-consumed orchestration without lease.
    */
   GatewayReceipt reconcileReservation(GatewayCorrelation correlation);
+
+  /**
+   * Bounded, read-only terminal wait used by the SC-1498 one-run bootstrap. Implementations may
+   * poll status until a proven terminal receipt or the earliest of the supplied deadline and their
+   * own configured bound; the default is exactly one status lookup. It must never reserve or
+   * dispatch again, and a still-nonterminal result must be reconciliation-only.
+   */
+  default GatewayReceipt awaitTerminal(
+      GatewayCorrelation correlation, Lease lease, Instant deadline) {
+    return status(correlation, lease);
+  }
 }

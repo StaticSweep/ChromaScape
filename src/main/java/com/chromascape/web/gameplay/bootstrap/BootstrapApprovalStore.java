@@ -105,13 +105,14 @@ public class BootstrapApprovalStore {
             .executeUpdate();
     if (inserted == 0) {
       BootstrapApprovalEntity owner =
-          findOwnerByAnyIdentity(orchestrationId, requestId, scopeDigest);
+          findOwnerByAnyIdentity(orchestrationId, requestId, recordingId, scopeDigest);
       if (owner == null) {
         throw new BootstrapApprovalException(
             "APPROVAL_CONFLICT", "An approval identity conflict did not expose its owner");
       }
       if (!Objects.equals(owner.providerSessionId, providerSessionId)
           || !Objects.equals(owner.providerTurnId, providerTurnId)
+          || !Objects.equals(owner.recordingId, recordingId)
           || !Objects.equals(owner.requestFingerprint, requestFingerprint)
           || !Objects.equals(owner.scopeDigest, scopeDigest)
           || !Objects.equals(owner.approvedBy, approvedBy)) {
@@ -236,21 +237,32 @@ public class BootstrapApprovalStore {
   }
 
   private BootstrapApprovalEntity findOwnerByAnyIdentity(
-      String orchestrationId, String requestId, String scopeDigest) {
+      String orchestrationId, String requestId, String recordingId, String scopeDigest) {
     List<BootstrapApprovalEntity> values =
         entityManager
             .createQuery(
                 "select a from BootstrapApprovalEntity a where a.orchestrationId=:orchestrationId"
-                    + " or a.requestId=:requestId or a.scopeDigest=:scopeDigest",
+                    + " or a.requestId=:requestId or a.recordingId=:recordingId"
+                    + " or a.scopeDigest=:scopeDigest",
                 BootstrapApprovalEntity.class)
             .setParameter("orchestrationId", orchestrationId)
             .setParameter("requestId", requestId)
+            .setParameter("recordingId", recordingId)
             .setParameter("scopeDigest", scopeDigest)
             .getResultList();
     if (values.isEmpty()) {
       return null;
     }
     return values.get(0);
+  }
+
+  /** Counts durable approvals still awaiting a one-use bind, for operator availability. */
+  @Transactional
+  public long countPending() {
+    return entityManager
+        .createQuery(
+            "select count(a) from BootstrapApprovalEntity a where a.state='APPROVED'", Long.class)
+        .getSingleResult();
   }
 
   private ApprovalView toView(BootstrapApprovalEntity entity) {

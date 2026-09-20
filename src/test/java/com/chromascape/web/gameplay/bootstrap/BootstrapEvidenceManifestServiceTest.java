@@ -308,7 +308,9 @@ class BootstrapEvidenceManifestServiceTest {
             envelope.expectedObservationRevision(),
             envelope.expectedTaskRevision(),
             canonicalJson.digest(observation),
-            "sha256:" + "p".repeat(64));
+            "sha256:" + "p".repeat(64),
+            "session-fixture",
+            "turn-fixture");
     HumanAuthority authority =
         new HumanAuthority(
             "sc-1429/v1",

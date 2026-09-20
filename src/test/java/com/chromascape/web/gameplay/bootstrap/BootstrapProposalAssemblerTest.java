@@ -110,7 +110,9 @@ class BootstrapProposalAssemblerTest {
             bindings.expectedObservationRevision(),
             bindings.expectedTaskRevision(),
             bindings.observationDigest(),
-            bindings.promptDigest());
+            bindings.promptDigest(),
+            bindings.providerSessionId(),
+            bindings.providerTurnId());
 
     assertThatThrownBy(
             () ->
@@ -149,7 +151,9 @@ class BootstrapProposalAssemblerTest {
         envelope.expectedObservationRevision(),
         envelope.expectedTaskRevision(),
         persisted.observationDigest(),
-        persisted.promptDigest());
+        persisted.promptDigest(),
+        persisted.sessionId(),
+        persisted.turnId());
   }
 
   private final class FakeHandoff implements ProviderDecisionHandoff {

@@ -24,7 +24,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-/** Flyway and constraint proof for the SC-1498 durable approval/recording schema (V35). */
+/** Flyway and constraint proof for the SC-1498 durable approval/recording schema (V50). */
 @SpringBootTest(
     classes = Sc1498FlywaySchemaTest.TestApplication.class,
     properties = {
@@ -43,7 +43,7 @@ class Sc1498FlywaySchemaTest {
   }
 
   @Test
-  void v35TablesExistWithSafetyAndImmutabilityGuards() {
+  void v50TablesExistWithSafetyAndImmutabilityGuards() {
     assertThat(
             jdbc.queryForObject(
                 "select count(*) from information_schema.tables where table_schema = current_schema() and table_name='gameplay_bootstrap_approval'",
@@ -320,7 +320,7 @@ class Sc1498FlywaySchemaTest {
 
   @Test
   void safetyFlagsRejectTrue() {
-    // Minimal parent for the recording FK.
+    // Minimal parent for the recording terminal-evidence gate (there is no foreign key).
     jdbc.execute(
         "INSERT INTO ab_orchestration (orchestration_id, request_id, idempotency_key,"
             + " request_fingerprint, envelope_digest, source_type, mode, state, failure_code,"

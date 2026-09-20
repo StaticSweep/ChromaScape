@@ -245,6 +245,7 @@ public class BootstrapRecordingCoordinator {
    * projection is still STARTED, the finalized artifact is rebuilt from the durable {@link
    * RecordingSession} row and its video file. Gameplay is never repeated to recover an artifact.
    */
+  @Transactional
   public Optional<RecordingArtifact> rebuildArtifactForRecovery(String recordingId) {
     if (recordingId == null || recordingId.isBlank()) {
       throw new BootstrapRecordingException("INVALID_REQUEST", "A recording id is required");

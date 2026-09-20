@@ -1,6 +1,7 @@
 package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
+import com.chromascape.web.gameplay.contract.v2.GameplayV2EnvelopeRules;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -37,13 +38,14 @@ import org.springframework.stereotype.Component;
  * closed to {@code NEEDS_RECONCILIATION} with {@code retryAllowed=false}; recovery performs
  * lookup/reconciliation only and never redispatches.
  *
- * <p>Revision sourcing: Micro6 v2 {@code /observe} currently attests {@code clientId}, {@code
- * buildId} and {@code catalogHash} but no observation/task revision counter. Revision freshness for
- * SC-1498 is therefore enforced end to end via the persisted SC-1430 decision, envelope,
- * observation and snapshot bindings (see {@code BootstrapProposalAssembler}); the gateway snapshot
- * carries the Micro6-observed catalog/build identity and a live-delivery flag. Native-Windows
- * verification must confirm the catalog/capability digest mapping against real Micro6 observe
- * responses before any live run.
+ * <p>Capability attestation: Micro6 v2 {@code /catalog} and {@code /observe} must agree on {@code
+ * buildId}, {@code catalogHash} and {@code capabilityDigest}, and {@code /observe} must attest the
+ * observation/task revisions and the client identity. Any missing, disagreeing or wrong-client
+ * value fails closed to unavailable rather than being filled from the request. The capability entry
+ * for the requested task key carries the canonical v2 tool-schema digest (never the catalog hash)
+ * so it matches the envelope's pinned {@code schemaDigest}. Native-Windows verification must
+ * confirm the catalog/capability digest mapping against real Micro6 observe responses before any
+ * live run.
  */
 @Component("micro6V2AccountBuilderOrchestrationGateway")
 @Primary
@@ -109,58 +111,67 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
   @Override
   public CapabilitySnapshot capabilities(OrchestrationRequest request) {
     Instant now = clock.instant();
-    if (!adapterEnabled) {
+    if (!adapterEnabled || request == null || request.envelope() == null) {
       return unavailable(now);
     }
     try {
       JsonNode catalog = get("api/v2/gameplay/catalog");
       JsonNode observe = get("api/v2/gameplay/observe");
       boolean enabled = catalog.path("enabled").asBoolean(false);
-      String buildId = firstText(catalog, "buildId", "build_id");
-      if (buildId == null || buildId.isBlank()) {
-        buildId = observe.path("buildId").asText(null);
-      }
-      String catalogHash = observe.path("catalogHash").asText(null);
-      if (catalogHash == null || catalogHash.isBlank()) {
-        catalogHash = catalog.path("catalogHash").asText(null);
-      }
-      // Micro6 must attest the live revisions and capability digest from the same snapshot
-      // validated by its v2 gate. A missing field fails closed: the gateway never substitutes
-      // zero and never copies an unverified value out of the submitted request.
+      // Both routes must attest the same coherent Micro6 snapshot. Any missing or disagreeing
+      // identity fails closed rather than being filled from the other route or the request.
+      String catalogBuildId = firstPresent(catalog, "buildId");
+      String observeBuildId = firstPresent(observe, "buildId");
+      String catalogHash = firstPresent(catalog, "catalogHash");
+      String observeCatalogHash = firstPresent(observe, "catalogHash");
+      String capabilityDigest = firstPresent(catalog, "capabilityDigest");
+      String observeCapabilityDigest = firstPresent(observe, "capabilityDigest");
+      String observedClientId = firstPresent(observe, "clientId");
+      String expectedClientId =
+          request.envelope().identities() == null
+              ? null
+              : request.envelope().identities().path("clientId").asText(null);
+      // Micro6 must attest the live revisions from the same validated observation snapshot. A
+      // missing field fails closed: the gateway never substitutes zero and never copies an
+      // unverified value out of the submitted request.
       long observationRevision = revision(observe, "observationRevision");
-      if (observationRevision < 0) {
-        observationRevision = revision(catalog, "observationRevision");
-      }
       long taskRevision = revision(observe, "taskRevision");
-      if (taskRevision < 0) {
-        taskRevision = revision(catalog, "taskRevision");
-      }
-      String capabilityDigest = firstPresent(observe, "capabilityDigest");
-      if (capabilityDigest == null) {
-        capabilityDigest = firstPresent(catalog, "capabilityDigest");
-      }
       if (!enabled
-          || buildId == null
-          || buildId.isBlank()
-          || catalogHash == null
-          || catalogHash.isBlank()
-          || capabilityDigest == null
-          || capabilityDigest.isBlank()
+          || !nonBlank(catalogBuildId)
+          || !catalogBuildId.equals(observeBuildId)
+          || !nonBlank(catalogHash)
+          || !catalogHash.equals(observeCatalogHash)
+          || !nonBlank(capabilityDigest)
+          || !capabilityDigest.equals(observeCapabilityDigest)
+          || !nonBlank(observedClientId)
+          || !observedClientId.equals(expectedClientId)
           || observationRevision < 0
           || taskRevision < 0) {
         return unavailable(now);
       }
+      String taskKey = request.envelope().taskKey();
+      if (taskKey == null || taskKey.isBlank()) {
+        return unavailable(now);
+      }
       Instant expiresAt = now.plusSeconds(60);
+      // The v2 gate pins one canonical tool-schema digest for every task; the capability entry
+      // must attest that exact digest (never the catalog hash) for the requested task key.
       return new CapabilitySnapshot(
           catalogHash,
           capabilityDigest,
-          buildId,
+          catalogBuildId,
           observationRevision,
           taskRevision,
           now,
           expiresAt,
           true,
-          List.of(new TaskCapability("FISHING_TRAINING", true, catalogHash, buildId, List.of())));
+          List.of(
+              new TaskCapability(
+                  taskKey,
+                  true,
+                  GameplayV2EnvelopeRules.canonicalSchemaDigest(),
+                  catalogBuildId,
+                  List.of())));
     } catch (RuntimeException exception) {
       return unavailable(now);
     }
@@ -172,7 +183,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
     try {
       Map<String, Object> bundle = v2Bundle(request);
       JsonNode response = post("api/v2/gameplay/reserve", bundle, request.idempotencyKey());
-      return toReceipt(request.requestId(), envelopeDigest, "RESERVATION", response, at);
+      return toReceipt(request.requestId(), envelopeDigest, "RESERVATION", response, at, false);
     } catch (AccountBuilderOrchestrationException exception) {
       throw exception;
     } catch (RuntimeException exception) {
@@ -193,7 +204,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
                   : objectMapper.valueToTree(request.envelope()));
       JsonNode response = post("api/v2/gameplay/start", body, request.idempotencyKey() + ":start");
       GatewayReceipt receipt =
-          toReceipt(request.requestId(), envelopeDigest, "DISPATCH", response, at);
+          toReceipt(request.requestId(), envelopeDigest, "DISPATCH", response, at, false);
       if (lease != null && receipt.lease() != null && !lease.equals(receipt.lease())) {
         throw new AccountBuilderOrchestrationException(
             FailureCode.FENCE_MISMATCH, "Gateway receipt lease does not match the stored lease");
@@ -213,7 +224,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
     try {
       JsonNode response = get("api/v2/gameplay/status/" + correlation.requestId());
       return toReceipt(
-          correlation.requestId(), correlation.envelopeDigest(), "STATUS", response, at);
+          correlation.requestId(), correlation.envelopeDigest(), "STATUS", response, at, false);
     } catch (AccountBuilderOrchestrationException exception) {
       throw exception;
     } catch (RuntimeException exception) {
@@ -229,6 +240,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
    * the bound, and returns reconciliation-only uncertainty when still nonterminal. Start is never
    * repeated here.
    */
+  @Override
   public GatewayReceipt awaitTerminal(
       GatewayCorrelation correlation, Lease lease, Instant deadline) {
     Instant now = clock.instant();
@@ -276,7 +288,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
         observed.evidenceRefs(),
         clock.instant(),
         observed.receiptId(),
-        false);
+        observed.killSwitch());
   }
 
   private boolean sleep(Duration duration) {
@@ -306,7 +318,9 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
               "killSwitch", kill);
       JsonNode response =
           postWithIdempotency("api/v2/gameplay/stop", body, correlation.requestId() + ":stop");
-      return toReceipt(correlation.requestId(), correlation.envelopeDigest(), "STOP", response, at);
+      // The durable receipt records the requested kill-switch mode, matching the SC-1431 contract.
+      return toReceipt(
+          correlation.requestId(), correlation.envelopeDigest(), "STOP", response, at, kill);
     } catch (AccountBuilderOrchestrationException exception) {
       throw exception;
     } catch (RuntimeException exception) {
@@ -331,7 +345,8 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
             correlation.envelopeDigest(),
             "RESERVATION_RECONCILIATION",
             response,
-            at);
+            at,
+            false);
       }
       return new GatewayReceipt(
           correlation.requestId(),
@@ -377,7 +392,12 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
   }
 
   private GatewayReceipt toReceipt(
-      String requestId, String envelopeDigest, String phase, JsonNode response, Instant at) {
+      String requestId,
+      String envelopeDigest,
+      String phase,
+      JsonNode response,
+      Instant at,
+      boolean killSwitch) {
     boolean success = response.path("success").asBoolean(false);
     if (success) {
       // A successful response must attest its own binding identity. Missing, blank or
@@ -430,7 +450,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
           List.copyOf(evidenceRefs),
           at,
           receiptId(responseRequestId, phase),
-          false);
+          killSwitch);
     }
     String wireStatus = firstText(response, "status", "outcome");
     State state = mapWireState(wireStatus, success);
@@ -460,7 +480,7 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
         List.copyOf(evidenceRefs),
         at,
         receiptId(requestId, phase),
-        false);
+        killSwitch);
   }
 
   private State mapWireState(String wireStatus, boolean success) {
@@ -606,6 +626,10 @@ public final class Micro6V2AccountBuilderOrchestrationGateway
   private String firstPresent(JsonNode node, String field) {
     String value = node.path(field).asText(null);
     return value == null || value.isBlank() ? null : value;
+  }
+
+  private static boolean nonBlank(String value) {
+    return value != null && !value.isBlank();
   }
 
   private long revision(JsonNode node, String field) {

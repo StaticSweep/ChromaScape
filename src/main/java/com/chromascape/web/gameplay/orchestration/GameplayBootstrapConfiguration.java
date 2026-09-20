@@ -9,10 +9,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Legacy file-evidence and orchestrator compatibility beans (SC-1498 WP7).
+ *
+ * <p>Production bootstrap delivery uses {@code BootstrapGameplayOperatorService} with the durable
+ * SC-1431 orchestration and the immutable manifest service. These beans are therefore excluded by
+ * default so no second delivery path can be instantiated; tests and legacy tooling opt in with
+ * {@code gameplay.bootstrap.legacy-orchestrator-enabled=true}.
+ */
 @Configuration
+@ConditionalOnProperty(
+    prefix = "gameplay.bootstrap",
+    name = "legacy-orchestrator-enabled",
+    havingValue = "true")
 public class GameplayBootstrapConfiguration {
   /**
    * Legacy file-evidence compatibility bean (SC-1498 WP7).

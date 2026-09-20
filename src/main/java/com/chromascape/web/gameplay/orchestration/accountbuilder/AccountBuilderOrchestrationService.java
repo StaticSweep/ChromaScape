@@ -15,6 +15,7 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.SnapshotBindings;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -153,6 +154,17 @@ public final class AccountBuilderOrchestrationService {
     OrchestrationRequest request =
         providerSource.completeProduction(prepared, capabilityPreflightSnapshot);
     return orchestrateInternal(request);
+  }
+
+  /**
+   * Validates a provider orchestration command against the durable persisted provider turn without
+   * claiming, consuming authority, probing Micro6 or touching the gateway. SC-1498 calls this
+   * before creating its durable recording projection so a stale or malformed command can never
+   * leave an orphan {@code STARTED} recording.
+   */
+  public void validateProviderCommand(ProviderOrchestrationCommand command) {
+    Objects.requireNonNull(command, "command");
+    providerSource.prepareProduction(command);
   }
 
   private Submission orchestrateInternal(OrchestrationRequest request) {
@@ -383,6 +395,49 @@ public final class AccountBuilderOrchestrationService {
       }
       Lease lease = store.requireLease(orchestrationId, aggregate.lease());
       GatewayReceipt receipt = gateway.reconcile(correlation, lease);
+      requireBoundReceipt(correlation, receipt, lease);
+      if (!receipt.terminalReconciled() || !receipt.state().provenTerminal()) {
+        return store.transition(
+            orchestrationId,
+            State.NEEDS_RECONCILIATION,
+            FailureCode.NEEDS_RECONCILIATION,
+            lease,
+            receipt,
+            false,
+            false);
+      }
+      return store.transition(
+          orchestrationId, receipt.state(), receipt.failureCode(), lease, receipt, false, false);
+    } catch (RuntimeException exception) {
+      return view;
+    }
+  }
+
+  /**
+   * Bounded terminal wait for the SC-1498 one-run bootstrap.
+   *
+   * <p>Polls read-only status through the gateway's bounded helper until a proven terminal receipt
+   * or the supplied deadline, then projects the durable terminal state. It never reserves or
+   * dispatches again; a still-nonterminal observation stays reconciliation-only.
+   */
+  public OrchestrationView reconcileUntilTerminal(String orchestrationId, Instant deadline) {
+    OrchestrationView view = find(orchestrationId);
+    if (view.state().provenTerminal()) {
+      return view;
+    }
+    try {
+      AccountBuilderOrchestrationStore.NormalizedAggregate aggregate =
+          store.readAggregate(orchestrationId);
+      if (aggregate == null) {
+        return view;
+      }
+      GatewayCorrelation correlation = aggregate.correlation();
+      if (aggregate.lease() == null) {
+        // No lease means the reservation boundary is ambiguous; only a lookup is permitted.
+        return reconcileReservation(orchestrationId, correlation, view);
+      }
+      Lease lease = store.requireLease(orchestrationId, aggregate.lease());
+      GatewayReceipt receipt = gateway.awaitTerminal(correlation, lease, deadline);
       requireBoundReceipt(correlation, receipt, lease);
       if (!receipt.terminalReconciled() || !receipt.state().provenTerminal()) {
         return store.transition(

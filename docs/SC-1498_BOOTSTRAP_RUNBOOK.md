@@ -38,9 +38,19 @@ In `C:\Dev\IdeaProjects\ChromaScape\.env.local`:
 GAMEPLAY_BOOTSTRAP_OPERATOR_ENABLED=true
 GAMEPLAY_BOOTSTRAP_OPERATOR_KEY=<random 32+ character operator key>
 GAMEPLAY_BOOTSTRAP_AUTHORITY_HMAC_SECRET=<random 32+ character authority secret>
+GAMEPLAY_BOOTSTRAP_RECORDING_ENABLED=true
+GAMEPLAY_BOOTSTRAP_MICRO6_V2_ENABLED=true
+GAMEPLAY_BOOTSTRAP_MICRO6_V2_URL=http://127.0.0.1:8098
 GAMEPLAY_BOOTSTRAP_MICRO6_URL=http://127.0.0.1:8098
 GAMEPLAY_BOOTSTRAP_EVIDENCE_ROOT=.chromascape/bootstrap-recordings
+GAMEPLAY_ACCOUNTBUILDER_ORCHESTRATION_ENABLED=true
+GAMEPLAY_ACCOUNTBUILDER_LIVE_DELIVERY_ENABLED=true
 ```
+
+All five SC-1498 gates plus the SC-1431 orchestration and live-delivery flags must be enabled:
+`operator-enabled`, `recording-enabled` and `micro6-v2-enabled` gate the operator surface, the
+durable recording projection and the Micro6 v2 adapter respectively. Any one left `false` fails the
+endpoint closed with a stable `*_DISABLED` code before any recording row or Micro6 call is created.
 
 In `C:\Dev\IdeaProjects\micro6\.env`:
 
@@ -109,6 +119,11 @@ cd C:\Dev\IdeaProjects\ChromaScape
 The script prints the exact scope and digest. It dispatches nothing unless the human types the full
 `APPROVE sha256:...` value shown on screen. Approval expires after five minutes and can be bound
 once.
+
+The dispatch endpoint validates the persisted provider turn before creating the durable recording
+projection, then performs a bounded read-only terminal wait for the earlier of the envelope deadline
+and `gameplay.bootstrap.micro6-v2-terminal-timeout-ms` (default 300000 ms). It never redispatch; a
+still-nonterminal bound returns a reconciliation-only receipt for the operator to reconcile later.
 
 Keep a second Windows terminal ready for the kill switch:
 
