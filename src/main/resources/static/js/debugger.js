@@ -3,6 +3,8 @@
  * Unified layout with live viewport, logs, scrubber, bot state, and AI inspector.
  */
 
+const replayRecoveryCore = globalThis.ChromaScapeReplayCore;
+
 let currentMode = 'live';
 let currentRecording = null;
 let sessionHealthMap = {};
@@ -560,9 +562,13 @@ const SYNC_INTERVAL_PLAYING_MS = 400;
  * validate the generation directly in that window.
  */
 function isCurrentReplayLoad(generation, recordingId) {
-  return currentMode === 'replay'
-    && replayLoadGeneration === generation
-    && currentRecording === recordingId;
+  return replayRecoveryCore.acceptsReplayResponse(
+    currentMode,
+    generation,
+    replayLoadGeneration,
+    currentRecording,
+    recordingId
+  );
 }
 
 // Source filter state
@@ -629,6 +635,7 @@ const globalSectionToggles = {
   objects: true,
   groundObjects: true,
   groundItems: true,
+  packets: true,
   // Action-log type filters
   animation: true,
   walkhere: true,
@@ -1227,7 +1234,8 @@ function buildTickGroup(tick, entries) {
     'varbits',
     'objects',
     'groundObjects',
-    'groundItems'
+    'groundItems',
+    'packets'
   ];
   sectionNames.forEach(section => {
     const chip = document.createElement('span');
@@ -1244,7 +1252,8 @@ function buildTickGroup(tick, entries) {
       varbits: 'V',
       objects: 'O',
       groundObjects: 'GO',
-      groundItems: 'GI'
+      groundItems: 'GI',
+      packets: 'Pk'
     };
     chip.textContent = labelMap[section] || section.charAt(0).toUpperCase();
     chip.title = `Toggle ${section} for this tick`;
@@ -1306,6 +1315,7 @@ function buildTickGroup(tick, entries) {
 
   // Get snapshot for this tick
   const snapshot = getTickSnapshot(tick);
+  header.insertBefore(buildPacketCountBadge(snapshot), headerChips);
 
   // Build structured sections
   if (isSectionVisible(tick, 'actions') && entries.length > 0) {
@@ -1352,6 +1362,10 @@ function buildTickGroup(tick, entries) {
 
   if (isSectionVisible(tick, 'groundItems') && snapshot) {
     content.appendChild(buildGroundItemsSection(tick, snapshot));
+  }
+
+  if (isSectionVisible(tick, 'packets') && snapshot) {
+    content.appendChild(buildPacketsSection(tick, snapshot));
   }
 
   group.appendChild(header);
@@ -1432,7 +1446,8 @@ function buildTickGroupWithFilter(tick, allEntries, visibleEntries) {
     'varbits',
     'objects',
     'groundObjects',
-    'groundItems'
+    'groundItems',
+    'packets'
   ];
   sectionNames.forEach(section => {
     const chip = document.createElement('span');
@@ -1449,7 +1464,8 @@ function buildTickGroupWithFilter(tick, allEntries, visibleEntries) {
       varbits: 'V',
       objects: 'O',
       groundObjects: 'GO',
-      groundItems: 'GI'
+      groundItems: 'GI',
+      packets: 'Pk'
     };
     chip.textContent = labelMap[section] || section.charAt(0).toUpperCase();
     chip.title = `Toggle ${section} for this tick`;
@@ -1568,6 +1584,10 @@ function buildTickGroupWithFilter(tick, allEntries, visibleEntries) {
     content.appendChild(buildGroundItemsSection(tick, snapshot));
   }
 
+  if (isSectionVisible(tick, 'packets') && snapshot) {
+    content.appendChild(buildPacketsSection(tick, snapshot));
+  }
+
   group.appendChild(header);
   group.appendChild(content);
   return group;
@@ -1613,6 +1633,77 @@ function togglePerTickSection(tick, section) {
 function getTickSnapshot(tick) {
   if (tick === null) return null;
   return currentMode === 'live' ? liveTickSnapshots.get(tick) : replayTickSnapshots.get(tick);
+}
+
+/**
+ * Re-renders only the packet list rows for a tick, preserving the filter inputs
+ * (and keyboard focus) while typing. Falls back to a full tick re-render when
+ * the section shape cannot be found.
+ */
+function rerenderPacketListOnly(tick, focusedInput, caretPos) {
+  const outputContainer = typeof elements !== 'undefined' ? elements.logsContainer : null;
+  if (!outputContainer) {
+    rerenderTickGroup(tick);
+    return;
+  }
+  const tickSelector = tick === null ? '[data-tick="null"]' : `[data-tick="${tick}"]`;
+  const existingGroup = outputContainer.querySelector(`.tick-group${tickSelector}`);
+  const packetSection = existingGroup ? existingGroup.querySelector('.section-packets') : null;
+  const list = packetSection ? packetSection.querySelector('.packet-list') : null;
+  if (!packetSection || !list) {
+    rerenderTickGroup(tick);
+    return;
+  }
+  const store = currentMode === 'live' ? liveTickSnapshots : replayTickSnapshots;
+  const snapshot = store.get(tick) || {};
+  const packets = Array.isArray(snapshot.packets) ? snapshot.packets : [];
+  const seededPacketCount = Number(snapshot.packetCount ?? 0) || 0;
+  const packetTotal = Math.max(packets.length, seededPacketCount);
+  const visible = packets.filter(packetMatchesFilters);
+  const shown = visible.slice(0, PACKET_ROW_CAP);
+  list.replaceChildren();
+  if (packets.length === 0) {
+    const empty = document.createElement('span');
+    empty.className = 'section-empty';
+    const sourceStatus = snapshot.transport?.packetSourceStatus;
+    empty.textContent = sourceStatus === 'UNAVAILABLE'
+      ? 'Packet source unavailable (client not launched through RSProx)'
+      : (seededPacketCount > 0
+        ? `Loading ${seededPacketCount} packet${seededPacketCount === 1 ? '' : 's'}…`
+        : 'No packets for this tick');
+    list.appendChild(empty);
+  } else {
+    shown.forEach(packet => list.appendChild(buildPacketRow(packet)));
+    if (visible.length > shown.length) {
+      const more = document.createElement('div');
+      more.className = 'section-empty';
+      more.textContent = `Showing ${shown.length} of ${visible.length} matching packets (${packetTotal} total)`;
+      list.appendChild(more);
+    } else if (visible.length < packets.length) {
+      const note = document.createElement('div');
+      note.className = 'section-empty';
+      note.textContent = `Showing ${visible.length} of ${packetTotal} packets (filtered)`;
+      list.appendChild(note);
+    } else if (packetTotal > packets.length) {
+      const pending = document.createElement('div');
+      pending.className = 'section-empty';
+      pending.textContent = `Showing ${packets.length} of ${packetTotal} packets (loading…)`;
+      list.appendChild(pending);
+    }
+  }
+  if (focusedInput && focusedInput.isConnected) {
+    focusedInput.focus({ preventScroll: true });
+    try {
+      // Restore the caret where the user was editing instead of forcing it to
+      // the end: typing in the middle of the filter must not jump the cursor.
+      const pos = Number.isInteger(caretPos)
+        ? Math.max(0, Math.min(caretPos, focusedInput.value.length))
+        : focusedInput.value.length;
+      focusedInput.setSelectionRange(pos, pos);
+    } catch (e) {
+      // Non-text inputs: focus alone is sufficient.
+    }
+  }
 }
 
 /**
@@ -2647,6 +2738,747 @@ function buildGroundItemsSection(tick, snapshot) {
   section.appendChild(header);
   section.appendChild(content);
   return section;
+}
+
+/* ---------------------------------------------------------------------------
+ * RSProx packets section (SC-1618).
+ *
+ * Packets arrive inside TICK_BATCH (live WebSocket) or the paginated replay
+ * packet API. A batch may carry observations for several assigned ticks, so
+ * updatePanelsForTick distributes rows by packet.tick via distributePacketsToTicks.
+ * All packet-derived text is rendered with textContent/escapeHtml and decoded
+ * bodies expand lazily; rows are capped so bursts cannot freeze the browser.
+ * ------------------------------------------------------------------------- */
+const MAX_PACKETS_PER_TICK_SNAPSHOT = 500;
+const PACKET_ROW_CAP = 200;
+const PACKET_DECODED_PREVIEW_CHARS = 2000;
+
+const packetFilters = {
+  direction: '',
+  status: '',
+  text: ''
+};
+
+function packetIdentityKey(packet) {
+  return replayRecoveryCore.packetIdentityKey(packet);
+}
+
+function cappedPackets(packets) {
+  if (!Array.isArray(packets) || packets.length === 0) return [];
+  return packets.slice(-MAX_PACKETS_PER_TICK_SNAPSHOT);
+}
+
+/**
+ * Merges packet rows into per-tick snapshots by packet.tick (not the enclosing
+ * batch tick) and ensures a tick group exists for every affected tick.
+ * Ownership follows packet.tick: every packet lands only under its assigned tick,
+ * and the primary snapshot keeps only its own packets, so batches spanning
+ * several ticks never duplicate rows under the enclosing batch tick.
+ */
+function distributePacketsToTicks(packets, primaryTick) {
+  if (!Array.isArray(packets) || packets.length === 0) return;
+  const store = currentMode === 'live' ? liveTickSnapshots : replayTickSnapshots;
+  const byTick = new Map();
+  packets.forEach(p => {
+    const t = p && Number.isFinite(Number(p.tick)) ? Number(p.tick) : primaryTick;
+    if (!byTick.has(t)) byTick.set(t, []);
+    byTick.get(t).push(p);
+  });
+  byTick.forEach((list, t) => {
+    if (t === primaryTick) return;
+    let snap = store.get(t);
+    if (!snap) {
+      snap = {};
+      store.set(t, snap);
+    }
+    const existing = Array.isArray(snap.packets) ? snap.packets : [];
+    const seen = new Set(existing.map(packetIdentityKey));
+    const fresh = list.filter(
+      e => !seen.has(packetIdentityKey(e)));
+    const merged = existing.concat(fresh);
+    snap.packetTruncated = merged.length > MAX_PACKETS_PER_TICK_SNAPSHOT || !!snap.packetTruncated;
+    snap.packets = merged.slice(-MAX_PACKETS_PER_TICK_SNAPSHOT);
+    try {
+      ensureTickGroupForSnapshot(t);
+    } catch (e) {
+      console.warn('packet tick-group ensure failed', e);
+    }
+  });
+  const primaryList = byTick.get(primaryTick);
+  if (primaryList && primaryList.length !== packets.length) {
+    const primary = store.get(primaryTick);
+    if (primary && Array.isArray(primary.packets)) {
+      primary.packets = primary.packets.filter(
+        p => (p && Number.isFinite(Number(p.tick)) ? Number(p.tick) : primaryTick) === primaryTick);
+    }
+  }
+}
+
+function packetMatchesFilters(packet) {
+  if (packetFilters.direction && packet.direction !== packetFilters.direction) return false;
+  if (packetFilters.status) {
+    if (packetFilters.status === 'ERRORS') {
+      if (packet.decodeStatus !== 'DECODE_ERROR' && packet.decodeStatus !== 'UNKNOWN_PROTOCOL') return false;
+    } else if (packetFilters.status === 'GAPS') {
+      if (packet.decodeStatus !== 'GAP') return false;
+    } else if (packetFilters.status === 'DECODED_ONLY') {
+      if (packet.decodeStatus !== 'DECODED') return false;
+    } else if (packet.decodeStatus !== packetFilters.status) {
+      return false;
+    }
+  }
+  if (packetFilters.text) {
+    const hay = `${packet.protocolName || ''} ${packet.opcode ?? ''} ${packet.decodedType || ''} ${packet.decodeError || ''} ${packet.sequence ?? ''} ${packet.packetSequence ?? ''}`.toLowerCase();
+    if (!hay.includes(packetFilters.text.toLowerCase())) return false;
+  }
+  return true;
+}
+
+function formatPacketTime(packet) {
+  if (packet.capturedAt) {
+    const d = new Date(packet.capturedAt);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().slice(11, 23);
+    }
+  }
+  return `#${packet.sequence ?? '?'}`;
+}
+
+function buildPacketCountBadge(snapshot) {
+  const rows = Array.isArray(snapshot?.packets) ? snapshot.packets : [];
+  const seeded = Number(snapshot?.packetCount ?? 0) || 0;
+  const count = Math.max(rows.length, seeded);
+  const badge = document.createElement('span');
+  badge.className = 'tick-packet-count';
+  badge.title = count === 1 ? '1 packet' : `${count} packets`;
+  badge.textContent = `Pk ${count}`;
+  if (count === 0) badge.classList.add('empty');
+  const transport = snapshot?.transport;
+  if (transport && (transport.droppedPacketCount > 0 || transport.omittedPacketCount > 0
+      || transport.malformedPacketFrameCount > 0)) {
+    badge.classList.add('has-gap');
+    badge.title += ' (drops/omissions reported — see Packets section)';
+  }
+  return badge;
+}
+
+function buildPacketsSection(tick, snapshot) {
+  const section = document.createElement('div');
+  section.className = 'tick-section section-packets';
+
+  const tickLabel = tick === null ? 'Unknown' : `Tick ${tick}`;
+  const packets = Array.isArray(snapshot?.packets) ? snapshot.packets : [];
+  const seededPacketCount = Number(snapshot?.packetCount ?? 0) || 0;
+  const packetTotal = Math.max(packets.length, seededPacketCount);
+  const transport = snapshot?.transport || {};
+
+  const header = document.createElement('div');
+  header.className = 'tick-section-header';
+  const title = document.createElement('span');
+  title.innerHTML = '<i class="bi bi-diagram-3"></i> ';
+  title.appendChild(document.createTextNode(`Packets (${tickLabel}) · ${packetTotal}`));
+  header.appendChild(title);
+
+  const badges = document.createElement('span');
+  badges.className = 'packet-badges';
+  const sourceStatus = transport.packetSourceStatus;
+  if (sourceStatus && sourceStatus !== 'CONNECTED') {
+    const source = document.createElement('span');
+    source.className = 'packet-badge packet-badge-source';
+    source.textContent = sourceStatus === 'UNAVAILABLE' ? 'source unavailable' : `source ${sourceStatus.toLowerCase()}`;
+    badges.appendChild(source);
+  }
+  const dropped = Number(transport.droppedPacketCount || 0);
+  const omitted = Number(transport.omittedPacketCount || 0);
+  const malformed = Number(transport.malformedPacketFrameCount || 0);
+  if (dropped > 0 || omitted > 0 || malformed > 0 || packets.some(p => p.decodeStatus === 'GAP')) {
+    const gap = document.createElement('span');
+    gap.className = 'packet-badge packet-badge-gap';
+    const range = transport.firstDroppedPacketSequence != null
+      ? ` seq ${transport.firstDroppedPacketSequence}–${transport.lastDroppedPacketSequence}`
+      : '';
+    const malformedSuffix = malformed > 0 ? `, malformed ${malformed}` : '';
+    gap.textContent = `gap: dropped ${dropped}, omitted ${omitted}${malformedSuffix}${range}`;
+    badges.appendChild(gap);
+  }
+  if (snapshot?.packetTruncated) {
+    const trunc = document.createElement('span');
+    trunc.className = 'packet-badge packet-badge-truncated';
+    trunc.textContent = 'truncated';
+    badges.appendChild(trunc);
+  }
+  if (snapshot?.replayPacketsTruncated) {
+    const trunc = document.createElement('span');
+    trunc.className = 'packet-badge packet-badge-truncated';
+    trunc.textContent = 'replay window truncated at 10,000 packets';
+    trunc.title = 'Narrow the tick range to load the remaining replay packets';
+    trunc.style.cursor = 'pointer';
+    trunc.addEventListener('click', () => {
+      const truncatedWindow = replayPacketTruncatedWindows.find(w => w.start <= tick && tick <= w.end);
+      const continuation = truncatedWindow
+        ? replayPacketContinuationCursors.get(
+          replayPacketWindowKey(currentRecording, truncatedWindow.start, truncatedWindow.end))
+        : null;
+      if (continuation && truncatedWindow && currentRecording
+          && typeof ensureReplayPacketWindow === 'function') {
+        ensureReplayPacketWindow(currentRecording, truncatedWindow.start, truncatedWindow.end,
+          { forceReload: true, continueFromCursor: true });
+        return;
+      }
+      const range = currentReplayVisibleRange(tick);
+      if (range && typeof loadReplayTickWindow === 'function' && currentRecording) {
+        const span = range.end - range.start;
+        // Halve the visible window around its center and force a reload: the 10,000-packet
+        // cap binds per window, so a narrower range resolves into rows and clears the flag.
+        const clickedTick = Number(tick);
+        const center = Number.isFinite(clickedTick)
+          ? Math.max(range.start, Math.min(range.end, clickedTick))
+          : Math.floor((range.start + range.end) / 2);
+        const half = Math.max(1, Math.floor(span / 4));
+        loadReplayTickWindow(currentRecording, Math.max(0, center - half), center + half,
+          { forceReload: true });
+      }
+    });
+    badges.appendChild(trunc);
+  }
+  const packetError = replayPacketErrorForTick(tick);
+  if (packetError) {
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'packet-badge packet-badge-error packet-retry-btn';
+    retry.textContent = 'packet load failed — retry';
+    retry.title = packetError.message;
+    retry.addEventListener('click', event => {
+      event.stopPropagation();
+      clearReplayPacketLoadError(packetError.recordingId, packetError.start, packetError.end);
+      ensureReplayPacketWindow(packetError.recordingId, packetError.start, packetError.end,
+        { forceReload: true });
+    });
+    badges.appendChild(retry);
+  }
+  header.appendChild(badges);
+  section.appendChild(header);
+
+  // Filters: direction, status, text search.
+  const filters = document.createElement('div');
+  filters.className = 'packet-filters';
+  const dirSelect = document.createElement('select');
+  dirSelect.className = 'packet-filter-select';
+  dirSelect.title = 'Filter by direction';
+  [['', 'Both directions'], ['CLIENT_TO_SERVER', 'Client →'], ['SERVER_TO_CLIENT', '← Server']].forEach(([value, label]) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    if (packetFilters.direction === value) opt.selected = true;
+    dirSelect.appendChild(opt);
+  });
+  dirSelect.addEventListener('change', () => {
+    packetFilters.direction = dirSelect.value;
+    rerenderTickGroup(tick);
+  });
+  const statusSelect = document.createElement('select');
+  statusSelect.className = 'packet-filter-select';
+  statusSelect.title = 'Filter by decode status';
+  [['', 'All statuses'], ['DECODED_ONLY', 'Decoded'], ['ERRORS', 'Errors'], ['GAPS', 'Gaps'], ['DECODED', 'DECODED'], ['UNKNOWN_PROTOCOL', 'UNKNOWN_PROTOCOL'], ['DECODE_ERROR', 'DECODE_ERROR'], ['GAP', 'GAP']].forEach(([value, label]) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    if (packetFilters.status === value) opt.selected = true;
+    statusSelect.appendChild(opt);
+  });
+  statusSelect.addEventListener('change', () => {
+    packetFilters.status = statusSelect.value;
+    rerenderTickGroup(tick);
+  });
+  const textInput = document.createElement('input');
+  textInput.type = 'text';
+  textInput.className = 'packet-filter-text';
+  textInput.placeholder = 'Filter protocol/opcode/type…';
+  textInput.value = packetFilters.text || '';
+  textInput.addEventListener('input', () => {
+    packetFilters.text = textInput.value;
+    const caret = textInput.selectionStart;
+    rerenderPacketListOnly(tick, textInput, caret);
+  });
+  // Avoid collapsing the tick group while interacting with filters.
+  filters.addEventListener('click', e => e.stopPropagation());
+  filters.appendChild(dirSelect);
+  filters.appendChild(statusSelect);
+  filters.appendChild(textInput);
+  section.appendChild(filters);
+
+  const content = document.createElement('div');
+  content.className = 'tick-section-content packet-list';
+
+  if (packets.length === 0) {
+    const empty = document.createElement('span');
+    empty.className = 'section-empty';
+    empty.textContent = sourceStatus === 'UNAVAILABLE'
+      ? 'Packet source unavailable (client not launched through RSProx)'
+      : (seededPacketCount > 0
+        ? `Loading ${seededPacketCount} packet${seededPacketCount === 1 ? '' : 's'}…`
+        : 'No packets for this tick');
+    content.appendChild(empty);
+    section.appendChild(content);
+    return section;
+  }
+
+  const visible = packets.filter(packetMatchesFilters);
+  const shown = visible.slice(0, PACKET_ROW_CAP);
+  shown.forEach(packet => content.appendChild(buildPacketRow(packet)));
+  if (visible.length > shown.length) {
+    const more = document.createElement('div');
+    more.className = 'section-empty';
+    more.textContent = `Showing ${shown.length} of ${visible.length} matching packets (${packetTotal} total)`;
+    content.appendChild(more);
+  } else if (visible.length < packets.length) {
+    const note = document.createElement('div');
+    note.className = 'section-empty';
+    note.textContent = `Showing ${visible.length} of ${packetTotal} packets (filtered)`;
+    content.appendChild(note);
+  } else if (packetTotal > packets.length) {
+    const pending = document.createElement('div');
+    pending.className = 'section-empty';
+    pending.textContent = `Showing ${packets.length} of ${packetTotal} packets (loading…)`;
+    content.appendChild(pending);
+  }
+  section.appendChild(content);
+  return section;
+}
+
+function buildPacketRow(packet) {
+  const row = document.createElement('div');
+  row.className = 'packet-row';
+  const identity = replayRecoveryCore.packetDisplayIdentity(packet);
+
+  const arrow = document.createElement('span');
+  arrow.className = 'packet-direction ' + (packet.direction === 'CLIENT_TO_SERVER' ? 'packet-out' : 'packet-in');
+  arrow.textContent = packet.direction === 'CLIENT_TO_SERVER' ? '→' : '←';
+  arrow.title = packet.direction || '';
+
+  const time = document.createElement('span');
+  time.className = 'packet-time';
+  time.textContent = formatPacketTime(packet);
+
+  const seq = document.createElement('span');
+  seq.className = 'packet-seq';
+  seq.textContent = `obs #${identity.observationSequence ?? '?'}`;
+
+  const captureSeq = document.createElement('span');
+  captureSeq.className = 'packet-capture-seq';
+  captureSeq.textContent = identity.captureSequence != null
+    ? `capture #${identity.captureSequence}`
+    : (packet.decodeStatus === 'GAP' ? 'capture GAP range' : 'capture —');
+
+  const opcode = document.createElement('span');
+  opcode.className = 'packet-opcode';
+  opcode.textContent = `op ${packet.opcode ?? '?'}`;
+
+  const name = document.createElement('span');
+  name.className = 'packet-name';
+  name.textContent = packet.protocolName || 'UNKNOWN';
+
+  const size = document.createElement('span');
+  size.className = 'packet-size';
+  size.textContent = packet.encodedSize != null ? `${packet.encodedSize}B` : '';
+
+  const status = document.createElement('span');
+  status.className = 'packet-badge packet-status-' + String(packet.decodeStatus || 'UNKNOWN').toLowerCase().replace(/[^a-z]/g, '');
+  status.textContent = packet.decodeStatus || 'UNKNOWN';
+  if (packet.synthetic) {
+    status.textContent += ' · synthetic';
+  }
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'packet-expand-btn';
+  toggle.textContent = '+';
+  toggle.title = 'Expand decoded detail';
+
+  const summary = document.createElement('div');
+  summary.className = 'packet-summary';
+  summary.append(arrow, time, seq, captureSeq, opcode, name, size, status, toggle);
+
+  const detail = document.createElement('div');
+  detail.className = 'packet-detail';
+  detail.hidden = true;
+
+  toggle.addEventListener('click', e => {
+    e.stopPropagation();
+    detail.hidden = !detail.hidden;
+    toggle.textContent = detail.hidden ? '+' : '−';
+    if (!detail.hidden && !detail.dataset.rendered) {
+      renderPacketDetail(detail, packet);
+      detail.dataset.rendered = '1';
+    }
+  });
+
+  // Keyboard accessible expansion.
+  summary.tabIndex = 0;
+  summary.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggle.click();
+    }
+  });
+
+  row.append(summary, detail);
+  return row;
+}
+
+function renderPacketDetail(container, packet) {
+  if (packet.decodedType) {
+    const typeRow = document.createElement('div');
+    typeRow.className = 'packet-detail-row';
+    const label = document.createElement('span');
+    label.className = 'packet-detail-label';
+    label.textContent = 'Type: ';
+    const value = document.createElement('span');
+    value.textContent = packet.decodedType;
+    typeRow.append(label, value);
+    container.appendChild(typeRow);
+  }
+  if (packet.decodeError) {
+    const errRow = document.createElement('div');
+    errRow.className = 'packet-detail-row packet-detail-error';
+    errRow.textContent = `Error: ${packet.decodeError}`;
+    container.appendChild(errRow);
+  }
+  if (packet.decodeStatus === 'GAP' && packet.decoded && Array.isArray(packet.decoded.droppedPacketRanges)) {
+    const ranges = document.createElement('div');
+    ranges.className = 'packet-detail-row packet-detail-gap-ranges';
+    const text = packet.decoded.droppedPacketRanges.map(range =>
+      `${range.first ?? '?'}–${range.last ?? '?'} (${range.count ?? '?'})`).join(', ');
+    ranges.textContent = `Lost capture ranges: ${text || 'unknown'}`;
+    container.appendChild(ranges);
+  }
+  if (packet.decoded !== undefined && packet.decoded !== null) {
+    const pre = document.createElement('pre');
+    pre.className = 'packet-decoded';
+    let text;
+    try {
+      text = JSON.stringify(packet.decoded, null, 2);
+    } catch (e) {
+      text = String(packet.decoded);
+    }
+    pre.textContent = text.length > PACKET_DECODED_PREVIEW_CHARS
+      ? text.slice(0, PACKET_DECODED_PREVIEW_CHARS) + `… (${text.length - PACKET_DECODED_PREVIEW_CHARS} more chars)`: text;
+    container.appendChild(pre);
+  } else {
+    const meta = document.createElement('div');
+    meta.className = 'packet-detail-row section-empty';
+    meta.textContent = 'Metadata only (decoded body omitted)';
+    container.appendChild(meta);
+  }
+  if (packet.sanitizedPayloadBase64) {
+    const raw = document.createElement('div');
+    raw.className = 'packet-detail-row section-empty';
+    raw.textContent = `Sanitized payload: ${packet.sanitizedPayloadBase64.slice(0, 128)}${packet.sanitizedPayloadBase64.length > 128 ? '…' : ''}`;
+    container.appendChild(raw);
+  }
+}
+
+/* Replay packet loading: visible-window fetch merged by packet.tick. */
+const replayPacketSessionCache = new Map();
+/* Windows that hit the 10,000-packet cap: narrowing the tick range retries them. */
+const replayPacketTruncatedWindows = [];
+/* A continuation cursor is retained when a window reaches the browser page cap. */
+const replayPacketContinuationCursors = new Map();
+/* One request per recording/window; overlapping UI rerenders share the same promise. */
+const replayPacketInFlight = replayRecoveryCore.createInFlightRegistry();
+/* Failed packet loads stay visible until an explicit retry succeeds. */
+const replayPacketLoadErrors = new Map();
+
+function replayPacketWindowKey(recordingId, startTick, endTick) {
+  return `${recordingId}:${startTick}:${endTick}`;
+}
+
+function replayPacketErrorForTick(tick) {
+  if (!currentRecording) return null;
+  for (const error of replayPacketLoadErrors.values()) {
+    if (error.recordingId === currentRecording && error.start <= tick && tick <= error.end) {
+      return error;
+    }
+  }
+  return null;
+}
+
+function setReplayPacketLoadError(recordingId, startTick, endTick, message) {
+  const key = replayPacketWindowKey(recordingId, startTick, endTick);
+  replayPacketLoadErrors.set(key, {
+    recordingId,
+    start: startTick,
+    end: endTick,
+    message: message || 'Packet rows could not be loaded.'
+  });
+  if (currentMode === 'replay' && currentRecording === recordingId
+      && typeof replayTickSnapshots !== 'undefined') {
+    replayTickSnapshots.forEach((_snapshot, tick) => {
+      if (tick >= startTick && tick <= endTick && typeof rerenderTickGroup === 'function') {
+        try { rerenderTickGroup(tick); } catch (e) { console.warn('packet error rerender failed', e); }
+      }
+    });
+  }
+}
+
+function clearReplayPacketLoadError(recordingId, startTick, endTick) {
+  replayPacketLoadErrors.delete(replayPacketWindowKey(recordingId, startTick, endTick));
+}
+
+/** True when the requested range overlaps a truncated window and is narrower than it. */
+function replayPacketWindowNeedsRecovery(startTick, endTick) {
+  if (!Array.isArray(replayPacketTruncatedWindows) || replayPacketTruncatedWindows.length === 0) return false;
+  const span = endTick - startTick;
+  return replayPacketTruncatedWindows.some(w =>
+    w.start <= endTick && startTick <= w.end && span < (w.end - w.start));
+}
+
+/**
+ * Visible replay tick range for truncation recovery. Prefer the truncated window containing
+ * the clicked tick so recovery stays local to the warning the operator selected. If several
+ * windows overlap that tick, use the narrowest one; falling back to the widest window keeps
+ * keyboard/programmatic callers useful when no focused tick is available.
+ */
+function currentReplayVisibleRange(focusTick = null) {
+  if (Array.isArray(replayPacketTruncatedWindows) && replayPacketTruncatedWindows.length > 0) {
+    const selected = replayRecoveryCore.chooseRecoveryWindow(
+      replayPacketTruncatedWindows,
+      focusTick
+    );
+    if (selected) {
+      return selected;
+    }
+  }
+  if (typeof replayLoadedRanges !== 'undefined' && Array.isArray(replayLoadedRanges)
+      && replayLoadedRanges.length > 0) {
+    let start = replayLoadedRanges[0].start;
+    let end = replayLoadedRanges[0].end;
+    for (const r of replayLoadedRanges) {
+      start = Math.min(start, r.start);
+      end = Math.max(end, r.end);
+    }
+    return { start, end };
+  }
+  return null;
+}
+
+async function loadReplayPacketWindow(recordingId, startTick, endTick, options = {}) {
+  if (!recordingId || startTick == null || endTick == null) return;
+  if (currentMode !== 'replay' || currentRecording !== recordingId) return;
+  const generation = typeof replayLoadGeneration !== 'undefined' ? replayLoadGeneration : 0;
+  const signal = (typeof replayLoadAbortController !== 'undefined' && replayLoadAbortController)
+    ? replayLoadAbortController.signal
+    : null;
+  // Recovery reloads bypass any cached completion for this exact window: the 10,000-packet
+  // cap otherwise makes a narrower retry a no-op because the range claims to be loaded.
+  const forceReload = !!(options && options.forceReload);
+  const loadedKey = `${recordingId}:${startTick}:${endTick}`;
+  if (!forceReload) {
+    ensureReplayPacketWindow.loadedWindows = ensureReplayPacketWindow.loadedWindows || new Set();
+    if (ensureReplayPacketWindow.loadedWindows.has(loadedKey)) return;
+  }
+  let sessionId = replayPacketSessionCache.get(recordingId);
+  if (sessionId === undefined) {
+    try {
+      const lookup = await fetch(
+        `/api/debug/replay/sessions/by-recording?recordingId=${encodeURIComponent(recordingId)}`,
+        signal ? { signal } : {});
+      if (typeof isCurrentReplayLoad === 'function' && !isCurrentReplayLoad(generation, recordingId)) return;
+      if (lookup.ok) {
+        const summary = await lookup.json();
+        sessionId = summary.sessionId || null;
+      } else {
+        sessionId = null;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+      setReplayPacketLoadError(recordingId, startTick, endTick,
+        e && e.message ? e.message : 'Replay session lookup failed.');
+      console.warn('Replay packet session lookup failed:', e);
+      return;
+    }
+    replayPacketSessionCache.set(recordingId, sessionId);
+  }
+  if (!sessionId) {
+    setReplayPacketLoadError(recordingId, startTick, endTick,
+      'No debug session is attached to this recording.');
+    return;
+  }
+  try {
+    const windowKey = replayPacketWindowKey(recordingId, startTick, endTick);
+    let cursor = options && options.continueFromCursor
+      ? (replayPacketContinuationCursors.get(windowKey) || '')
+      : '';
+    if (options && options.continueFromCursor && !cursor) return;
+    let pages = 0;
+    for (;;) {
+      const url = `/api/debug/replay/packets/${encodeURIComponent(sessionId)}?startTick=${startTick}&endTick=${endTick}&limit=500`
+        + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+      const response = await fetch(url, signal ? { signal } : {});
+      if (typeof isCurrentReplayLoad === 'function' && !isCurrentReplayLoad(generation, recordingId)) return;
+      if (!response.ok) {
+        setReplayPacketLoadError(recordingId, startTick, endTick,
+          `Packet request failed (${response.status}).`);
+        return;
+      }
+      const page = await response.json();
+      if (typeof isCurrentReplayLoad === 'function' && !isCurrentReplayLoad(generation, recordingId)) return;
+      mergeReplayPackets(page.packets || []);
+      const pageDecision = replayRecoveryCore.nextPacketPage(page, pages);
+      if (pageDecision.done) {
+        if (!pageDecision.truncated) {
+          // Fully loaded: this narrower window recovers any truncated window it covers,
+          // clearing the flag so the 10,000-packet warning disappears once rows arrive.
+          clearReplayPacketsTruncatedForRange(recordingId, startTick, endTick);
+          replayPacketContinuationCursors.delete(windowKey);
+        } else {
+          cursor = pageDecision.cursor;
+          replayPacketContinuationCursors.set(windowKey, cursor);
+          markReplayPacketsTruncated(startTick, endTick, cursor);
+        }
+        clearReplayPacketLoadError(recordingId, startTick, endTick);
+        ensureReplayPacketWindow.loadedWindows = ensureReplayPacketWindow.loadedWindows || new Set();
+        ensureReplayPacketWindow.loadedWindows.add(`${recordingId}:${startTick}:${endTick}`);
+        return;
+      }
+      cursor = pageDecision.cursor;
+      pages++;
+    }
+  } catch (e) {
+    if (!e || e.name !== 'AbortError') {
+      setReplayPacketLoadError(recordingId, startTick, endTick,
+        e && e.message ? e.message : 'Packet request failed.');
+      console.warn('Replay packet fetch failed:', e);
+    }
+  }
+}
+
+/** Coalesces overlapping packet loads for the same recording/window. */
+async function ensureReplayPacketWindow(recordingId, startTick, endTick, options = {}) {
+  const key = replayPacketWindowKey(recordingId, startTick, endTick);
+  return replayPacketInFlight.ensure(
+    key,
+    () => loadReplayPacketWindow(recordingId, startTick, endTick, options)
+  );
+}
+
+function markReplayPacketsTruncated(startTick, endTick, continuationCursor = null) {
+  if (!Array.isArray(replayPacketTruncatedWindows)) return;
+  const existing = replayPacketTruncatedWindows.find(w => w.start === startTick && w.end === endTick);
+  if (existing) {
+    if (continuationCursor) existing.cursor = continuationCursor;
+  } else {
+    replayPacketTruncatedWindows.push({ start: startTick, end: endTick, cursor: continuationCursor });
+  }
+  if (continuationCursor) {
+    replayPacketContinuationCursors.set(
+      replayPacketWindowKey(currentRecording, startTick, endTick), continuationCursor);
+  }
+  if (typeof replayTickSnapshots !== 'undefined') replayTickSnapshots.forEach((snapshot, tick) => {
+    if (tick < startTick || tick > endTick) return;
+    if (snapshot) snapshot.replayPacketsTruncated = true;
+  });
+  if (currentMode === 'replay') {
+    replayTickSnapshots.forEach((_snapshot, tick) => {
+      if (tick < startTick || tick > endTick) return;
+      try {
+        if (typeof rerenderTickGroup === 'function') rerenderTickGroup(tick);
+      } catch (e) {
+        console.warn('packet truncation rerender failed', e);
+      }
+    });
+  }
+}
+
+/**
+ * Clears the truncation flag for ticks fully covered by a successfully loaded range, so
+ * narrowing the tick range after a 10,000-packet truncation recovers visibly. Ranges
+ * outside the loaded window keep their flag until they are loaded in full.
+ */
+function clearReplayPacketsTruncatedForRange(recordingId, startTick, endTick) {
+  if (typeof startTick !== 'number' || typeof endTick !== 'number') {
+    endTick = startTick;
+    startTick = recordingId;
+    recordingId = null;
+  }
+  const overlappingWindows = replayPacketTruncatedWindows.filter(w =>
+    w.end >= startTick && w.start <= endTick);
+  const clearedAny = overlappingWindows.length > 0;
+  const remainingWindows = replayRecoveryCore.subtractTruncatedWindows(
+    replayPacketTruncatedWindows,
+    startTick,
+    endTick
+  );
+  const cursorRecording = recordingId == null ? currentRecording : recordingId;
+  for (const w of overlappingWindows) {
+    replayPacketContinuationCursors.delete(replayPacketWindowKey(cursorRecording, w.start, w.end));
+  }
+  replayPacketTruncatedWindows.splice(0, replayPacketTruncatedWindows.length, ...remainingWindows);
+  // The narrower retry must not inherit the wide window's "already loaded" marker:
+  // drop every cached packet window inside the recovered range so later pans refetch.
+  if (ensureReplayPacketWindow.loadedWindows) {
+    for (const key of Array.from(ensureReplayPacketWindow.loadedWindows)) {
+      const parts = String(key).split(':');
+      const s = Number(parts[parts.length - 2]);
+      const e = Number(parts[parts.length - 1]);
+      const keyRecording = parts.slice(0, -2).join(':');
+      if (Number.isFinite(s) && Number.isFinite(e) && s >= startTick && e <= endTick
+          && (recordingId == null || keyRecording === String(recordingId))) {
+        ensureReplayPacketWindow.loadedWindows.delete(key);
+      }
+    }
+    if (recordingId != null) {
+      ensureReplayPacketWindow.loadedWindows.add(`${recordingId}:${startTick}:${endTick}`);
+    }
+  }
+  if (typeof replayTickSnapshots !== 'undefined') replayTickSnapshots.forEach((snapshot, tick) => {
+    if (tick < startTick || tick > endTick) return;
+    if (snapshot && snapshot.replayPacketsTruncated
+        && !replayPacketTruncatedWindows.some(w => tick >= w.start && tick <= w.end)) {
+      snapshot.replayPacketsTruncated = false;
+      try {
+        if (currentMode === 'replay' && typeof rerenderTickGroup === 'function') rerenderTickGroup(tick);
+      } catch (e) {
+        console.warn('packet truncation recovery rerender failed', e);
+      }
+    }
+  });
+  return clearedAny;
+}
+
+function mergeReplayPackets(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  const affected = new Set();
+  rows.forEach(packet => {
+    const tick = Number(packet.tick);
+    if (!Number.isFinite(tick)) return;
+    let snapshot = replayTickSnapshots.get(tick);
+    if (!snapshot) {
+      snapshot = {};
+      replayTickSnapshots.set(tick, snapshot);
+    }
+    const existing = Array.isArray(snapshot.packets) ? snapshot.packets : [];
+    const duplicate = existing.some(e => packetIdentityKey(e) === packetIdentityKey(packet));
+    if (!duplicate) {
+      existing.push(packet);
+      if (existing.length > MAX_PACKETS_PER_TICK_SNAPSHOT) {
+        snapshot.packetTruncated = true;
+        snapshot.packets = existing.slice(-MAX_PACKETS_PER_TICK_SNAPSHOT);
+      } else {
+        snapshot.packets = existing;
+      }
+      affected.add(tick);
+    }
+  });
+  if (currentMode === 'replay') {
+    affected.forEach(tick => {
+      try {
+        rerenderTickGroup(tick);
+      } catch (e) {
+        console.warn('packet tick rerender failed', e);
+      }
+    });
+  }
 }
 
 /**
@@ -5674,6 +6506,24 @@ async function loadRecording(recordingId) {
   replayTickWindowInFlight.length = 0;
   replayTickCardsUnavailable = false;
   replayTickCardCache.clear();
+  if (typeof replayPacketTruncatedWindows !== 'undefined') {
+    replayPacketTruncatedWindows.length = 0;
+  }
+  if (typeof replayPacketContinuationCursors !== 'undefined') {
+    replayPacketContinuationCursors.clear();
+  }
+  if (typeof replayPacketLoadErrors !== 'undefined') {
+    replayPacketLoadErrors.clear();
+  }
+  if (typeof replayPacketInFlight !== 'undefined') {
+    replayPacketInFlight.clear();
+  }
+  if (typeof replayPacketSessionCache !== 'undefined') {
+    replayPacketSessionCache.clear();
+  }
+  if (typeof ensureReplayPacketWindow !== 'undefined' && ensureReplayPacketWindow.loadedWindows) {
+    ensureReplayPacketWindow.loadedWindows.clear();
+  }
   if (typeof perTickSectionToggles !== 'undefined') {
     perTickSectionToggles.clear(); // Clear tick UI state
   }
@@ -5926,7 +6776,11 @@ function buildReplayHistoryFromTickCards(tickCards) {
       npcs: card.sectionData?.npcs || null,
       gameObjects: card.sectionData?.objects || null,
       groundObjects: card.sectionData?.groundObjects || null,
-      groundItems: card.sectionData?.groundItems || null
+      groundItems: card.sectionData?.groundItems || null,
+      // Tick cards carry packet counts only; rows arrive through the paginated replay
+      // packet API. Seed the count badge from the annotated range metadata until rows land.
+      packets: [],
+      packetCount: Number(card.sectionCounts?.packets ?? 0) || 0
     };
 
     replayTickSnapshots.set(tick, snapshot);
@@ -5949,11 +6803,17 @@ function buildReplayHistoryFromTickCards(tickCards) {
 }
 
 /** Load a window of tick cards for the current replay and add them to the cache. */
-async function loadReplayTickWindow(recordingId, startTick, endTick) {
+async function loadReplayTickWindow(recordingId, startTick, endTick, options = {}) {
   if (!recordingId || startTick == null || endTick == null) return;
   if (replayTickCardsUnavailable) return;
   if (startTick > endTick) return;
-  if (isReplayRangeLoaded(startTick, endTick) || isReplayRangeInFlight(startTick, endTick)) return;
+  const forceReload = !!(options && options.forceReload);
+  // A truncated packet window must reload on a narrower range even when tick cards are
+  // cached: tick-card coverage otherwise suppresses the packet retry forever.
+  const needsPacketRecovery = typeof replayPacketWindowNeedsRecovery === 'function'
+    && replayPacketWindowNeedsRecovery(startTick, endTick);
+  if (!forceReload && !needsPacketRecovery
+      && (isReplayRangeLoaded(startTick, endTick) || isReplayRangeInFlight(startTick, endTick))) return;
 
   // Capture generation and abort signal to guard against stale responses
   // polluting a newly selected recording.
@@ -5997,6 +6857,14 @@ async function loadReplayTickWindow(recordingId, startTick, endTick) {
     registerReplayLoadedRange(startTick, endTick);
     if (currentMode === 'replay' && currentRecording === recordingId) {
       tickCards.forEach(card => rerenderTickGroup(card.tick));
+    }
+    // Packet rows are not embedded in tick cards. Fetch the visible window so the
+    // seeded packet counts resolve into rows; stale responses cancel via generation.
+    // Recovery-driven reloads force the packet fetch even when tick cards were already
+    // loaded: tick-card coverage otherwise suppresses the narrower retry.
+    if (typeof ensureReplayPacketWindow === 'function') {
+      ensureReplayPacketWindow(recordingId, startTick, endTick,
+        needsPacketRecovery ? { forceReload: true } : undefined);
     }
     console.log(`Loaded ${tickCards.length} tick cards for ticks ${startTick}-${endTick}`);
   } catch (e) {
@@ -7196,8 +8064,17 @@ function updatePanelsForTick(data) {
       gameObjects: state.objects || state.gameObjects,
       groundObjects: state.groundObjects,
       groundItems: state.groundItems,
-      varbits: state.varbits
+      varbits: state.varbits,
+      packets: Array.isArray(data.packets) ? data.packets.slice(-MAX_PACKETS_PER_TICK_SNAPSHOT) : [],
+      transport: data.transport || null
     };
+    // Partition by packet.tick so multi-tick batches never duplicate rows under
+    // the enclosing batch tick; the primary snapshot keeps only its own packets.
+    // Pre-register first: distributePacketsToTicks partitions against the store.
+    (currentMode === 'live' ? liveTickSnapshots : replayTickSnapshots).set(tick, snapshot);
+    distributePacketsToTicks(snapshot.packets, tick);
+    snapshot.packets = snapshot.packets.filter(
+      p => (p && Number.isFinite(Number(p.tick)) ? Number(p.tick) : tick) === tick);
 
     if (currentMode === 'live') {
       liveTickSnapshots.set(tick, snapshot);
@@ -7258,8 +8135,15 @@ function updatePanelsForTick(data) {
       npcs: data.npcs || data.snapshot?.npcs,
       gameObjects: data.gameObjects || data.snapshot?.gameObjects,
       groundObjects: data.groundObjects || data.snapshot?.groundObjects,
-      groundItems: data.groundItems || data.snapshot?.groundItems
+      groundItems: data.groundItems || data.snapshot?.groundItems,
+      packets: cappedPackets(data.packets || data.snapshot?.packets),
+      transport: data.transport || data.snapshot?.transport || null
     };
+    // Same partition as the new format: primary keeps only its own packets.
+    (currentMode === 'live' ? liveTickSnapshots : replayTickSnapshots).set(tick, snapshot);
+    distributePacketsToTicks(snapshot.packets, tick);
+    snapshot.packets = snapshot.packets.filter(
+      p => (p && Number.isFinite(Number(p.tick)) ? Number(p.tick) : tick) === tick);
 
     if (currentMode === 'live') {
       liveTickSnapshots.set(tick, snapshot);

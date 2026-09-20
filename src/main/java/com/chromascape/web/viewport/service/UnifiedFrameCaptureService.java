@@ -2,13 +2,18 @@ package com.chromascape.web.viewport.service;
 
 import com.chromascape.utils.core.screen.FrameEvent;
 import com.chromascape.utils.core.screen.FrameListener;
-import com.chromascape.utils.core.screen.window.ScreenManager;
+import com.chromascape.utils.core.screen.FrameSourceBinding;
+import com.chromascape.web.recording.capture.ScreenManagerWindowFrameCapture;
+import com.chromascape.web.recording.capture.WindowFrameCapture;
 import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
 import jakarta.annotation.PreDestroy;
-import java.awt.image.BufferedImage;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -35,6 +40,7 @@ public class UnifiedFrameCaptureService {
   private static final Logger logger = LogManager.getLogger(UnifiedFrameCaptureService.class);
 
   private final UnifiedCaptureConfig config;
+  private final WindowFrameCapture frameCapture;
   private final Set<FrameListener> subscribers = ConcurrentHashMap.newKeySet();
   private final AtomicInteger refCount = new AtomicInteger(0);
   private final AtomicReference<FrameEvent> latestFrame = new AtomicReference<>();
@@ -43,6 +49,9 @@ public class UnifiedFrameCaptureService {
   private final AtomicLong captureErrors = new AtomicLong(0);
   private final AtomicLong subscriberDispatchAttempts = new AtomicLong(0);
   private final AtomicLong subscriberDispatchErrors = new AtomicLong(0);
+  private final AtomicLong sourceTransitions = new AtomicLong(0);
+  private final AtomicLong staleSourceDispatches = new AtomicLong(0);
+  private final AtomicReference<FrameSourceBinding> activeSourceBinding = new AtomicReference<>();
   private final AtomicLong totalCaptureDurationMs = new AtomicLong(0);
   private final AtomicLong maxCaptureDurationMs = new AtomicLong(0);
 
@@ -57,9 +66,16 @@ public class UnifiedFrameCaptureService {
   private volatile long totalCaptureJitterMs = 0;
   private volatile long captureCount = 0;
 
+  /** Creates the shared capture pipeline over the platform-aware frame provider. */
   @Autowired
-  public UnifiedFrameCaptureService(UnifiedCaptureConfig config) {
+  public UnifiedFrameCaptureService(UnifiedCaptureConfig config, WindowFrameCapture frameCapture) {
     this.config = config;
+    this.frameCapture = frameCapture;
+  }
+
+  /** Compatibility constructor for focused tests and non-Spring callers. */
+  public UnifiedFrameCaptureService(UnifiedCaptureConfig config) {
+    this(config, new ScreenManagerWindowFrameCapture());
   }
 
   /**
@@ -93,7 +109,7 @@ public class UnifiedFrameCaptureService {
       // Send latest frame to new subscriber immediately if available
       FrameEvent latest = latestFrame.get();
       if (latest != null && listener.isActive()) {
-        dispatchExecutor.execute(() -> listener.onFrameCaptured(latest));
+        dispatchExecutor.execute(() -> deliverFrame(listener, latest));
       }
     }
   }
@@ -199,6 +215,9 @@ public class UnifiedFrameCaptureService {
       }
       dispatchExecutor = null;
     }
+    // A later subscription must never receive the previous target's cached frame.
+    latestFrame.set(null);
+    activeSourceBinding.set(null);
   }
 
   /** Captures a frame and dispatches it to all active subscribers. */
@@ -231,7 +250,7 @@ public class UnifiedFrameCaptureService {
     lastCaptureTimeMs = captureStart;
 
     try {
-      BufferedImage frame = ScreenManager.captureWindow();
+      final FrameEvent event = frameCapture.captureEvent();
       long captureEnd = System.currentTimeMillis();
       long captureMs = captureEnd - captureStart;
       totalCaptureDurationMs.addAndGet(captureMs);
@@ -242,11 +261,9 @@ public class UnifiedFrameCaptureService {
         logger.warn("Slow frame capture: {}ms (expected <{}ms)", captureMs, config.getIntervalMs());
       }
 
-      if (frame != null) {
+      if (event != null && event.getFrame() != null) {
         captureSuccesses.incrementAndGet();
-        // Create frame event with timestamp and dimensions
-        FrameEvent event =
-            new FrameEvent(frame, System.nanoTime(), frame.getWidth(), frame.getHeight());
+        observeSourceBinding(event.getSourceBinding());
 
         // Store as latest frame
         latestFrame.set(event);
@@ -272,6 +289,12 @@ public class UnifiedFrameCaptureService {
 
   /** Delivers a frame to a subscriber, catching any exceptions. */
   private void deliverFrame(FrameListener subscriber, FrameEvent event) {
+    FrameSourceBinding eventBinding = event.getSourceBinding();
+    FrameSourceBinding activeBinding = activeSourceBinding.get();
+    if (activeBinding != null && !activeBinding.equals(eventBinding)) {
+      staleSourceDispatches.incrementAndGet();
+      return;
+    }
     try {
       subscriber.onFrameCaptured(event);
     } catch (Exception e) {
@@ -280,6 +303,21 @@ public class UnifiedFrameCaptureService {
           "Error delivering frame to subscriber {}: {}",
           subscriber.getClass().getSimpleName(),
           e.getMessage());
+    }
+  }
+
+  private void observeSourceBinding(FrameSourceBinding observed) {
+    if (observed == null) {
+      return;
+    }
+    FrameSourceBinding previous = activeSourceBinding.getAndSet(observed);
+    if (previous != null && !previous.equals(observed)) {
+      sourceTransitions.incrementAndGet();
+      latestFrame.set(null);
+      logger.info(
+          "Frame source changed; invalidated cached frame ({} -> {})",
+          previous.toDisplayString(),
+          observed.toDisplayString());
     }
   }
 
@@ -322,6 +360,22 @@ public class UnifiedFrameCaptureService {
     return subscriberDispatchErrors.get();
   }
 
+  /** Number of exact host/process/generation transitions observed by this service. */
+  public long getSourceTransitions() {
+    return sourceTransitions.get();
+  }
+
+  /** Number of queued callbacks refused because their source was displaced. */
+  public long getStaleSourceDispatches() {
+    return staleSourceDispatches.get();
+  }
+
+  /** Returns the exact active source binding, or {@code null} before the first bound frame. */
+  public FrameSourceBinding getActiveSourceBinding() {
+    return activeSourceBinding.get();
+  }
+
+  /** Returns mean capture duration over successful captures. */
   public double getAverageCaptureDurationMs() {
     long successes = captureSuccesses.get();
     return successes == 0 ? 0.0 : (double) totalCaptureDurationMs.get() / successes;

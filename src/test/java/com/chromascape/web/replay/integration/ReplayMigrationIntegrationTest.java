@@ -21,8 +21,8 @@ import java.util.regex.Pattern;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 /**
@@ -51,6 +51,7 @@ class ReplayMigrationIntegrationTest {
   static java.nio.file.Path replayMigrationDir() throws Exception {
     java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("replay-migrations");
     String[] scripts = {
+      "V10__recording_archive.sql",
       "V11__replay_curation_and_manifest.sql",
       "V12__replay_suites_and_runs.sql",
       "V13__replay_events_checkpoints_and_hashes.sql",
@@ -60,6 +61,7 @@ class ReplayMigrationIntegrationTest {
       "V18__replay_checkpoint_artifact_checksum.sql",
       "V19__reconcile_replay_checkpoint_artifacts.sql",
       "V20__replay_finalization_reservation.sql",
+      "V24__replay_recording_actions.sql",
       "V30__replay_pre_execution_reports.sql",
       "V31__replay_playback_catalog_pagination.sql",
       "V25__replay_v2_metadata.sql",
@@ -128,7 +130,7 @@ class ReplayMigrationIntegrationTest {
           "V20 must add finalization_reserved_at");
       assertFalse(
           columnNotNull(connection, "replay_reports", "attempt_id"),
-          "V21 must drop NOT NULL from replay_reports.attempt_id");
+          "V30 must drop NOT NULL from replay_reports.attempt_id");
     }
   }
 
@@ -179,14 +181,10 @@ class ReplayMigrationIntegrationTest {
       throws Exception {
     try (PostgreSQLContainer<?> pg = postgres("fresh_hibernate_playback_indexes");
         Connection connection = connect(pg)) {
-      // On a fresh application database Hibernate creates these debugger tables after Flyway has
-      // already reached V22. This is the real ordering that the post-Hibernate runner must cover.
+      // Flyway owns debug_sessions as of V24. Hibernate still creates the tick tables after Flyway,
+      // so the post-Hibernate runner must converge their indexes without disturbing the V31
+      // debug-session indexes.
       flyway(pg, replayMigrations()).migrate();
-      exec(
-          connection,
-          "CREATE TABLE debug_sessions ("
-              + "id BIGSERIAL PRIMARY KEY, start_time TIMESTAMP NOT NULL,"
-              + "account_name VARCHAR(100), recording_id VARCHAR(100))");
       exec(
           connection,
           "CREATE TABLE tick_snapshots (id BIGSERIAL PRIMARY KEY, session_id VARCHAR(100) NOT NULL,"
@@ -221,32 +219,32 @@ class ReplayMigrationIntegrationTest {
     }
   }
 
-  /** V20-upgraded databases converge to V21 without touching existing rows. */
+  /** V20-upgraded databases converge to V30 without touching existing rows. */
   @Test
-  void v21AppliesOnAV20UpgradedDatabase() throws Exception {
+  void v30AppliesOnAV20UpgradedDatabase() throws Exception {
     try (PostgreSQLContainer<?> pg = postgres("v20_upgrade");
         Connection connection = connect(pg)) {
-      // Apply everything EXCEPT V21.
-      java.nio.file.Path dirWithoutV21 = java.nio.file.Files.createTempDirectory("replay-v20");
+      // Apply everything EXCEPT V30 so the precondition is the V14 NOT NULL definition.
+      java.nio.file.Path dirWithoutV30 = java.nio.file.Files.createTempDirectory("replay-v20");
       try (var files = java.nio.file.Files.list(MIGRATION_DIR)) {
         files
-            .filter(p -> !p.getFileName().toString().startsWith("V21"))
+            .filter(p -> !p.getFileName().toString().startsWith("V30"))
             .forEach(
                 p -> {
                   try {
                     java.nio.file.Files.copy(
                         p,
-                        dirWithoutV21.resolve(p.getFileName()),
+                        dirWithoutV30.resolve(p.getFileName()),
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                   } catch (Exception e) {
                     throw new IllegalStateException(e);
                   }
                 });
       }
-      flyway(pg, "filesystem:" + dirWithoutV21.toAbsolutePath()).migrate();
+      flyway(pg, "filesystem:" + dirWithoutV30.toAbsolutePath()).migrate();
       assertTrue(
           columnNotNull(connection, "replay_reports", "attempt_id"),
-          "precondition: V14 still has attempt_id NOT NULL");
+          "precondition: V30 has not yet dropped attempt_id NOT NULL");
 
       flyway(pg, replayMigrations()).migrate();
 
@@ -255,9 +253,9 @@ class ReplayMigrationIntegrationTest {
     }
   }
 
-  /** V21 keeps the foreign key: NULL attempt ids insert, bogus non-null values are rejected. */
+  /** V30 keeps the foreign key: NULL attempt ids insert, bogus non-null values are rejected. */
   @Test
-  void v21AllowsNullAttemptIdButKeepsTheForeignKey() throws Exception {
+  void v30AllowsNullAttemptIdButKeepsTheForeignKey() throws Exception {
     try (PostgreSQLContainer<?> pg = postgres("v21_fk");
         Connection connection = connect(pg)) {
       flyway(pg, replayMigrations()).migrate();
@@ -299,7 +297,7 @@ class ReplayMigrationIntegrationTest {
               + UUID.randomUUID()
               + "', 'QUEUED', 'PREFLIGHT', 'STOP_ON_FIRST_HARD', false, 'main', now())");
 
-      // NULL attempt_id accepted after V21.
+      // NULL attempt_id accepted after V30.
       exec(
           connection,
           "INSERT INTO replay_reports (id, run_id, attempt_id, mode,"
@@ -349,7 +347,7 @@ class ReplayMigrationIntegrationTest {
                           + "', 'FAILED', 0, 0, 0, 0, 0, '{}'::jsonb, 'sha256:"
                           + "f".repeat(64)
                           + "', false, now())"),
-              "the foreign key on attempt_id must survive V21");
+              "the foreign key on attempt_id must survive V30");
 
       // The SQLState is the portable contract — PostgreSQL/JDBC error MESSAGE text is not
       // guaranteed stable across versions, but the FK-violation class is.

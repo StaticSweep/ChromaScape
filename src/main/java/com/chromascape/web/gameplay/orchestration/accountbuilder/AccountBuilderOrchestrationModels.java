@@ -67,9 +67,9 @@ public final class AccountBuilderOrchestrationModels {
     /**
      * Returns whether a durable lifecycle transition is structurally valid.
      *
-     * <p>The stores still validate the evidence attached to a transition. This method only
-     * protects the lifecycle graph, so a caller cannot skip the persisted reservation or dispatch
-     * boundary and then present a later receipt as if the skipped work had happened.
+     * <p>The stores still validate the evidence attached to a transition. This method only protects
+     * the lifecycle graph, so a caller cannot skip the persisted reservation or dispatch boundary
+     * and then present a later receipt as if the skipped work had happened.
      */
     public boolean canTransitionTo(State next) {
       if (next == null || this == next) {
@@ -77,53 +77,46 @@ public final class AccountBuilderOrchestrationModels {
       }
       return switch (this) {
         case CREATED -> next == VALIDATED || next == DENIED || next == NEEDS_RECONCILIATION;
-        case VALIDATED ->
-            next == HELD
-                || next == AUTHORIZED
-                || next == DENIED
-                || next == NEEDS_RECONCILIATION;
-        case AUTHORIZED ->
-            next == RESERVED
-                || next == DENIED
-                || next == FAILED
-                || next == NEEDS_RECONCILIATION;
-        case RESERVED ->
-            next == DISPATCH_SUBMITTED
-                || next == STOPPED
-                || next == FAILED
-                || next == NEEDS_RECONCILIATION;
-        case DISPATCH_SUBMITTED ->
-            next == ACTIVE
-                || next == VERIFYING
-                || next == CONFIRMED
-                || next == REFUTED
-                || next == UNVERIFIABLE
-                || next == DENIED
-                || next == STOPPED
-                || next == FAILED
-                || next == NEEDS_RECONCILIATION;
-        case ACTIVE ->
-            next == VERIFYING
-                || next == CONFIRMED
-                || next == REFUTED
-                || next == UNVERIFIABLE
-                || next == STOPPED
-                || next == FAILED
-                || next == NEEDS_RECONCILIATION;
-        case VERIFYING ->
-            next == CONFIRMED
-                || next == REFUTED
-                || next == UNVERIFIABLE
-                || next == STOPPED
-                || next == FAILED
-                || next == NEEDS_RECONCILIATION;
-        case NEEDS_RECONCILIATION ->
-            next == CONFIRMED
-                || next == REFUTED
-                || next == UNVERIFIABLE
-                || next == DENIED
-                || next == STOPPED
-                || next == FAILED;
+        case VALIDATED -> next == HELD
+            || next == AUTHORIZED
+            || next == DENIED
+            || next == NEEDS_RECONCILIATION;
+        case AUTHORIZED -> next == RESERVED
+            || next == DENIED
+            || next == FAILED
+            || next == NEEDS_RECONCILIATION;
+        case RESERVED -> next == DISPATCH_SUBMITTED
+            || next == STOPPED
+            || next == FAILED
+            || next == NEEDS_RECONCILIATION;
+        case DISPATCH_SUBMITTED -> next == ACTIVE
+            || next == VERIFYING
+            || next == CONFIRMED
+            || next == REFUTED
+            || next == UNVERIFIABLE
+            || next == DENIED
+            || next == STOPPED
+            || next == FAILED
+            || next == NEEDS_RECONCILIATION;
+        case ACTIVE -> next == VERIFYING
+            || next == CONFIRMED
+            || next == REFUTED
+            || next == UNVERIFIABLE
+            || next == STOPPED
+            || next == FAILED
+            || next == NEEDS_RECONCILIATION;
+        case VERIFYING -> next == CONFIRMED
+            || next == REFUTED
+            || next == UNVERIFIABLE
+            || next == STOPPED
+            || next == FAILED
+            || next == NEEDS_RECONCILIATION;
+        case NEEDS_RECONCILIATION -> next == CONFIRMED
+            || next == REFUTED
+            || next == UNVERIFIABLE
+            || next == DENIED
+            || next == STOPPED
+            || next == FAILED;
         case HELD, CONFIRMED, REFUTED, UNVERIFIABLE, DENIED, STOPPED, FAILED -> false;
       };
     }
@@ -220,6 +213,30 @@ public final class AccountBuilderOrchestrationModels {
       SnapshotBindings bindings,
       HumanAuthority authority,
       JsonNode observation,
+      Instant deadline) {}
+
+  /**
+   * Non-secret identity used for every gateway operation after the initial validated request.
+   *
+   * <p>This contract deliberately contains digests and immutable routing metadata only. It is not a
+   * recoverable {@link OrchestrationRequest}; in particular it never carries settings, identities,
+   * budgets, observations, signatures, operator keys or fence tokens.
+   */
+  public record GatewayCorrelation(
+      String contractVersion,
+      String orchestrationId,
+      String requestId,
+      String idempotencyKey,
+      String envelopeDigest,
+      Mode mode,
+      String sourceType,
+      String taskKey,
+      String authorityId,
+      String identitiesDigest,
+      String settingsDigest,
+      String budgetsDigest,
+      long expectedObservationRevision,
+      long expectedTaskRevision,
       Instant deadline) {}
 
   public record Lease(

@@ -21,7 +21,8 @@ public class AiRoutineOperatorWebConfig implements WebMvcConfigurer {
 
   @Override
   public void addInterceptors(InterceptorRegistry registry) {
-    registry.addInterceptor(interceptor)
+    registry
+        .addInterceptor(interceptor)
         .addPathPatterns("/api/v1/ai-routine/**")
         .excludePathPatterns(
             "/api/v1/ai-routine/capture/**",

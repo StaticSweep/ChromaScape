@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:47:47.772Z" hostname="fedora" time="0.019">
+  <properties/>
+  <testcase name="resetEnvelopeCarriesInitialTickAndEventsAtResultRoot()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="blankLineReturnsNullWithoutNoise()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="capabilitiesEnvelopeFromCompiledWorkerDecodesAtResultRoot()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.0"/>
+  <testcase name="encodeProducesSingleLineJsonWithId()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="okTrueWithoutResultIsFatal()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="decodeRoundTripsResponse()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.0"/>
+  <testcase name="missingOkFlagIsFatal()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.0"/>
+  <testcase name="observeSnapshotTraceEnvelopesDecodeAtResultRoot()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="decodeSurfacesMalformedJsonAsFatalInsteadOfDropping()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.002"/>
+  <testcase name="stepEnvelopeCarriesTerminalTickObservationEvents()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="decodeErrorMessageCarriesCode()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="okTrueWithErrorIsFatal()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="missingIdIsFatalProtocolError()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="okFalseWithResultIsFatal()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="nonTextualIdIsFatal()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.001"/>
+  <testcase name="okFalseWithoutErrorIsFatal()" classname="com.chromascape.web.replay.kernel.KernelProtocolCodecTest" time="0.0"/>
+  <system-out><![CDATA[12:47:47.783 [Test worker] WARN  com.chromascape.web.replay.kernel.KernelProtocolCodec - Failed to decode kernel message; treating as protocol violation: Unrecognized token 'this': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')
+ at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 5]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

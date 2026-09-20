@@ -106,7 +106,8 @@ public class ReplayReportService {
     doc.put("reportVersion", 1);
     doc.put("manifestVersion", run.getManifestVersion());
     doc.put("runId", run.getId().toString());
-    if (attempt != null && attempt.getId() != null) doc.put("attemptId", attempt.getId().toString());
+    if (attempt != null && attempt.getId() != null)
+      doc.put("attemptId", attempt.getId().toString());
     doc.put("mode", run.getMode().name());
     doc.put("manifestChecksum", run.getManifestChecksum());
     doc.put("fidelity", run.getFidelity());
@@ -285,8 +286,8 @@ public class ReplayReportService {
    * real attempt: a run with execution evidence can never produce a report without one (the strict
    * contract rejects a null attempt id outside the cancellation branch). An infrastructure failure
    * before the capability response is the one execution exception: it still has a real attempt and
-   * database start time, but its runtime identity is deliberately null because no worker identity was
-   * observed. Partial identities are never accepted.
+   * database start time, but its runtime identity is deliberately null because no worker identity
+   * was observed. Partial identities are never accepted.
    *
    * @param artifactChecksums content addresses of genuinely FINALIZED artifacts; the REPORT
    *     artifact itself is excluded here by the caller and never enters this list

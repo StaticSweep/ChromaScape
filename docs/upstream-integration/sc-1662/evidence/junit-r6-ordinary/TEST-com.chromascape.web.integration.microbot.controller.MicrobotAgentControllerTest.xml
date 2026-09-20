@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.integration.microbot.controller.MicrobotAgentControllerTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:22.277Z" hostname="fedora" time="0.171">
+  <properties/>
+  <testcase name="healthIncludesConfiguredBaseUrlWhenAdapterPresent()" classname="com.chromascape.web.integration.microbot.controller.MicrobotAgentControllerTest" time="0.17"/>
+  <testcase name="healthIncludesConfiguredBaseUrlWhenAdapterMissing()" classname="com.chromascape.web.integration.microbot.controller.MicrobotAgentControllerTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

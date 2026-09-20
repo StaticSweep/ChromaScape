@@ -21,7 +21,8 @@ function Invoke-Sc968Http {
     [ValidateSet('GET','POST','PUT')][string] $Method = 'GET',
     [string] $BearerToken,
     [string] $Body,
-    [string] $IdempotencyKey
+    [string] $IdempotencyKey,
+    [hashtable] $RequestHeaders
   )
   $client = [System.Net.Http.HttpClient]::new()
   $request = $null
@@ -31,6 +32,14 @@ function Invoke-Sc968Http {
     $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::new($Method), $uri)
     if ($BearerToken) { $request.Headers.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $BearerToken) }
     if ($IdempotencyKey) { $request.Headers.Add('Idempotency-Key', $IdempotencyKey) }
+    if ($RequestHeaders) {
+      foreach ($entry in $RequestHeaders.GetEnumerator()) {
+        if ([string]::IsNullOrWhiteSpace([string]$entry.Key) -or $null -eq $entry.Value) {
+          throw 'SC-968 HTTP request headers must have a nonblank name and non-null value'
+        }
+        $request.Headers.Add([string]$entry.Key, [string]$entry.Value)
+      }
+    }
     # An unbound [string] parameter is '' rather than $null, so a null check attaches an empty body
     # to every GET and .NET rejects it with "Cannot send a content-body with this verb-type."
     if (-not [string]::IsNullOrEmpty($Body)) {

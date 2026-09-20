@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.aiplayer.routine.source.SourceManifestBindingServiceTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:36.229Z" hostname="fedora" time="0.054">
+  <properties/>
+  <testcase name="rejectsARecordingAlreadyBoundToAnotherRun()" classname="com.chromascape.web.aiplayer.routine.source.SourceManifestBindingServiceTest" time="0.009"/>
+  <testcase name="matchingEnvironmentIsPersistedAsPartOfTheSourceReference()" classname="com.chromascape.web.aiplayer.routine.source.SourceManifestBindingServiceTest" time="0.009"/>
+  <testcase name="configuredEnvironmentMustMatchTheManifestEnvironment()" classname="com.chromascape.web.aiplayer.routine.source.SourceManifestBindingServiceTest" time="0.007"/>
+  <testcase name="expectedCommitMismatchFailsBeforePersistence()" classname="com.chromascape.web.aiplayer.routine.source.SourceManifestBindingServiceTest" time="0.007"/>
+  <testcase name="persistsAndIdempotentlyBindsOneVerifiedManifestToOneRun()" classname="com.chromascape.web.aiplayer.routine.source.SourceManifestBindingServiceTest" time="0.021"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

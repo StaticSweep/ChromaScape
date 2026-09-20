@@ -13,12 +13,32 @@ spring:
     locations: classpath:db/migration
   jpa:
     hibernate:
-      # Flyway migrates versioned tables; Hibernate may create legacy tables in this disposable
-      # isolated database. It can never alter the developer database.
+      # Flyway migrates versioned tables in this disposable isolated database. It can never alter
+      # the developer database.
       ddl-auto: create-drop
 
 server:
   port: 0
+
+# SC-810 uses an explicit test-only Ed25519 public key and credentials. Individual integration
+# tests override the public key when they generate a matching ephemeral signed manifest.
+chromascape:
+  source:
+    public-key-base64: MCowBQYDK2VwAyEAC0lAcEEjQzmMhkzftxSdQign8O43ut51YnbS7VPPcXs=
+    public-key-id: test-key
+    environment: production
+    access:
+      metadata-token: test-source-metadata-token
+      content-token: test-source-content-token
+
+micro6:
+  source:
+    transport:
+      base-url: https://micro6.example
+      auth-token: test-source-upstream-token
+      actor: chromascape-test
+  log-shipper:
+    enabled: false
 
 # Stabilization endpoints deliberately require separate read and write credentials outside the
 # local-development profile.  Use inert test-only values so Spring integration tests exercise the
@@ -49,10 +69,6 @@ leeuwbot:
     enabled: false
     stream:
       enabled: false
-
-micro6:
-  log-shipper:
-    enabled: false
 
 analysis:
   provider: codex-mcp

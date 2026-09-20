@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.utils.core.screen.window.WindowControllerTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-17T11:58:05.463Z" hostname="fedora" time="0.027">
+  <properties/>
+  <testcase name="selectingTitledCandidateKeepsWindowsResponseContent()" classname="com.chromascape.utils.core.screen.window.WindowControllerTest" time="0.016"/>
+  <testcase name="getCurrentWindowReturnsNoContentWhenNoWindowIsSelected()" classname="com.chromascape.utils.core.screen.window.WindowControllerTest" time="0.001"/>
+  <testcase name="selectingNeutralLinuxCandidateReturnsOkWithNullTitleAndStoresIdentity()" classname="com.chromascape.utils.core.screen.window.WindowControllerTest" time="0.005"/>
+  <testcase name="getCurrentWindowReturnsSelectedWindowPayload()" classname="com.chromascape.utils.core.screen.window.WindowControllerTest" time="0.002"/>
+  <system-out><![CDATA[13:58:05.466 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: RuneLite - test
+13:58:05.466 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowController - Window selected via API: RuneLite - test (ID: 1)
+13:58:05.485 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+13:58:05.485 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: null
+13:58:05.486 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowController - Window selected via API: null (ID: linux:100:12345)
+13:58:05.487 [Test worker] DEBUG com.chromascape.utils.core.screen.window.LinuxProcessManager - Discovered 1 eligible local target(s) from 1 procfs entries (0 unreadable)
+13:58:05.489 [Test worker] INFO  com.chromascape.utils.core.screen.window.WindowSelectionService - Window selected: RuneLite - test
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

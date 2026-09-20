@@ -1,11 +1,12 @@
 package com.chromascape.web.replay.manifest;
 
+import com.chromascape.web.debug.tickdebugger.dto.RecordingAction;
 import com.chromascape.web.debug.tickdebugger.entity.DebugSession;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshot;
 import com.chromascape.web.debug.tickdebugger.entity.TickSnapshotRepository;
-import com.chromascape.web.debug.tickdebugger.dto.RecordingAction;
 import com.chromascape.web.replay.capability.CapabilityManifest;
 import com.chromascape.web.replay.capability.ReplayCapabilityService;
+import com.chromascape.web.replay.catalog.ReplayNpcPinValidator;
 import com.chromascape.web.replay.catalog.ReplayRecordingResolver;
 import com.chromascape.web.replay.conversion.ActionProvenance;
 import com.chromascape.web.replay.conversion.ConversionMode;
@@ -46,9 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Compiles the one-click recording path into the immutable ScenarioManifest/v2 contract.
  *
- * <p>This compiler deliberately does not replace the v1 curation compiler. v1 remains available
- * for existing published curations; v2 is the recording-to-xRSPS path and carries conversion
- * evidence, provenance, gaps, approximations, and worker fidelity in the manifest itself.
+ * <p>This compiler deliberately does not replace the v1 curation compiler. v1 remains available for
+ * existing published curations; v2 is the recording-to-xRSPS path and carries conversion evidence,
+ * provenance, gaps, approximations, and worker fidelity in the manifest itself.
  */
 @Service
 @Transactional
@@ -140,15 +141,13 @@ public class ScenarioManifestV2Compiler {
     }
 
     List<String> unsupported = unsupportedActions(conversion, capability);
-    if (conversion.quality()
-            == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED
+    if (conversion.quality() == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED
         && !unsupported.isEmpty()) {
       throw ReplayException.invalid(
           ReplayErrorCode.ACTION_UNSUPPORTED,
           "The pinned xRSPS worker does not support captured action " + unsupported.get(0));
     }
-    if (conversion.quality()
-            == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED
+    if (conversion.quality() == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED
         && !capabilityService.isAuthoritativeCertifiable()) {
       throw new ReplayException(
           ReplayErrorCode.XRSPS_VERSION_INCOMPATIBLE,
@@ -158,13 +157,21 @@ public class ScenarioManifestV2Compiler {
           "Use a worker advertising fidelity=XRSPS_AUTHORITATIVE and certifiable=true");
     }
 
-    ObjectNode initialState = buildInitialState(snapshots.get(0), conversion);
+    boolean authoritativeNpcPins =
+        conversion.quality() == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED;
+    List<ReplayNpcPinValidator.Violation> npcPinViolations =
+        ReplayNpcPinValidator.validate(snapshots, conversion, authoritativeNpcPins);
+    if (!npcPinViolations.isEmpty()) {
+      ReplayNpcPinValidator.Violation violation = npcPinViolations.get(0);
+      throw ReplayException.invalid(violation.code(), violation.message());
+    }
+    ObjectNode initialState = buildInitialState(snapshots.get(0), conversion, authoritativeNpcPins);
     ObjectNode expectations = buildExpectations(snapshots.get(snapshots.size() - 1));
     String recordingChecksum = recordingChecksum(recordingId, session, snapshots, conversion);
     String sessionChecksum = sessionChecksum(session);
 
-    RecordingCuration conversionCuration = ensureConversionCuration(
-        recordingId, session, conversion, unsupported);
+    RecordingCuration conversionCuration =
+        ensureConversionCuration(recordingId, session, conversion, unsupported);
     ObjectNode manifestDocument =
         buildManifestDocument(
             recordingId,
@@ -395,24 +402,69 @@ public class ScenarioManifestV2Compiler {
     ObjectNode action = objectMapper.createObjectNode();
     String type = source.getActionType();
     action.put("type", type);
-    if ("WAIT_UNTIL_TICK".equals(type)) {
-      action.put("tick", source.getTick());
-    }
+    Map<String, Object> arguments = source.getArguments();
     MapValue target = mapValue(source.getTarget());
-    if (target.stableId() != null) {
-      action.put("targetStableId", target.stableId());
-    }
-    String option = textValue(source.getArguments(), "option");
-    if (option != null) {
-      action.put("option", option);
-    }
-    Integer slot = intValue(source.getArguments(), "slot");
-    Integer itemId = intValue(source.getArguments(), "itemId");
-    if (slot != null) action.put("slot", slot);
-    if (itemId != null) action.put("itemId", itemId);
-    JsonNode destination = jsonValue(source.getArguments(), "destination");
-    if (destination != null && destination.isObject()) {
-      action.set("destination", destination.deepCopy());
+    switch (type) {
+      case "WAIT_UNTIL_TICK" -> action.put("tick", source.getTick());
+      case "WALK_TO" -> copyObjectArgument(action, arguments, "destination");
+      case "INTERACT_NPC", "INTERACT_OBJECT" -> {
+        putStableTarget(action, target);
+        putTextArgument(action, arguments, "option");
+      }
+      case "INTERACT_GROUND_ITEM" -> {
+        putStableTarget(action, target);
+        putTextArgument(action, arguments, "option");
+        putIntegerArgument(action, arguments, "itemId");
+      }
+      case "INTERACT_INVENTORY_ITEM" -> {
+        putStableTarget(action, target);
+        putIntegerArgument(action, arguments, "slot");
+        putIntegerArgument(action, arguments, "itemId");
+        putTextArgument(action, arguments, "option");
+      }
+      case "INTERACT_WIDGET" -> {
+        putStableTarget(action, target);
+        putTextArgument(action, arguments, "option");
+        putIntegerArgument(action, arguments, "widgetId");
+        putIntegerArgument(action, arguments, "widgetIndex");
+      }
+      case "SELECT_DIALOGUE_OPTION" -> {
+        putStableTarget(action, target);
+        putTextArgument(action, arguments, "option");
+        putIntegerArgument(action, arguments, "optionIndex");
+        putIntegerArgument(action, arguments, "widgetId");
+        putIntegerArgument(action, arguments, "widgetIndex");
+      }
+      case "CAST_SPELL" -> {
+        putStableTarget(action, target);
+        putIntegerArgument(action, arguments, "spellId");
+        putTextArgument(action, arguments, "option");
+        putIntegerArgument(action, arguments, "widgetId");
+        putIntegerArgument(action, arguments, "widgetIndex");
+      }
+      case "EQUIP_ITEM" -> {
+        putStableTarget(action, target);
+        putIntegerArgument(action, arguments, "slot");
+        putIntegerArgument(action, arguments, "itemId");
+        putTextArgument(action, arguments, "option");
+        putIntegerArgument(action, arguments, "equipmentSlot");
+      }
+        // These names are retained for manifests produced by the first v2 implementation. They
+        // are not part of the canonical capability list, but their wire shape remains exact.
+      case "INVENTORY_ACTION" -> {
+        putIntegerArgument(action, arguments, "slot");
+        putIntegerArgument(action, arguments, "itemId");
+        putTextArgument(action, arguments, "option");
+      }
+      case "USE_ITEM_ON_NPC" -> {
+        putIntegerArgument(action, arguments, "slot");
+        putIntegerArgument(action, arguments, "itemId");
+        putStableTarget(action, target);
+      }
+      default -> {
+        // The conversion/preflight layer rejects unknown action types. Keep this method
+        // deliberately non-inventive if it is called with an invalid row.
+      }
     }
 
     action.put("sourceActionTick", source.getTick());
@@ -421,8 +473,28 @@ public class ScenarioManifestV2Compiler {
     action.put("provenanceReason", converted.provenanceReason());
     ObjectNode evidence = action.putObject("sourceEvidence");
     if (converted.sourceLogId() != null) evidence.put("logId", converted.sourceLogId());
-    if (converted.sourceSnapshotId() != null) evidence.put("snapshotId", converted.sourceSnapshotId());
+    if (converted.sourceSnapshotId() != null)
+      evidence.put("snapshotId", converted.sourceSnapshotId());
     return action;
+  }
+
+  private void putStableTarget(ObjectNode action, MapValue target) {
+    if (target.stableId() != null) action.put("targetStableId", target.stableId());
+  }
+
+  private void putTextArgument(ObjectNode action, Map<String, Object> arguments, String key) {
+    String value = textValue(arguments, key);
+    if (value != null) action.put(key, value);
+  }
+
+  private void putIntegerArgument(ObjectNode action, Map<String, Object> arguments, String key) {
+    Integer value = intValue(arguments, key);
+    if (value != null) action.put(key, value);
+  }
+
+  private void copyObjectArgument(ObjectNode action, Map<String, Object> arguments, String key) {
+    JsonNode value = jsonValue(arguments, key);
+    if (value != null && value.isObject()) action.set(key, value.deepCopy());
   }
 
   private RecordingCuration ensureConversionCuration(
@@ -443,7 +515,8 @@ public class ScenarioManifestV2Compiler {
       action.put("provenance", converted.provenance().name());
       action.put("provenanceReason", converted.provenanceReason());
       if (converted.sourceLogId() != null) action.put("sourceLogId", converted.sourceLogId());
-      if (converted.sourceSnapshotId() != null) action.put("sourceSnapshotId", converted.sourceSnapshotId());
+      if (converted.sourceSnapshotId() != null)
+        action.put("sourceSnapshotId", converted.sourceSnapshotId());
     }
     ArrayNode gaps = content.putArray("gaps");
     conversion.gaps().forEach(gap -> gaps.add(gapNode(gap)));
@@ -453,7 +526,8 @@ public class ScenarioManifestV2Compiler {
                 .put("code", "WORKER_ACTION_UNSUPPORTED")
                 .put("message", "Pinned worker does not support converted action " + action));
     ArrayNode approximations = content.putArray("approximations");
-    conversion.approximations()
+    conversion
+        .approximations()
         .forEach(
             approximation -> {
               ObjectNode entry = approximations.addObject();
@@ -505,17 +579,15 @@ public class ScenarioManifestV2Compiler {
       persistMissingCuratedActions(saved.getId(), conversion);
       return saved;
     } catch (DataIntegrityViolationException race) {
-      return curationRepository
-          .findByContentChecksum(checksum)
-          .orElseThrow(() -> race);
+      return curationRepository.findByContentChecksum(checksum).orElseThrow(() -> race);
     }
   }
 
   private int nextCurationVersion(String recordingId) {
     return curationRepository.findByRecordingIdOrderByVersionDesc(recordingId).stream()
-            .findFirst()
-            .map(curation -> curation.getVersion() + 1)
-            .orElse(1);
+        .findFirst()
+        .map(curation -> curation.getVersion() + 1)
+        .orElse(1);
   }
 
   private void persistMissingCuratedActions(
@@ -554,17 +626,61 @@ public class ScenarioManifestV2Compiler {
     return projectionService.sha256Hex(projectionService.canonicalJsonBytes(basis));
   }
 
-  ObjectNode buildInitialState(
-      TickSnapshot first, ReplayActionConversionResult conversion) {
+  ObjectNode buildInitialState(TickSnapshot first, ReplayActionConversionResult conversion) {
+    boolean authoritativeNpcPins =
+        conversion != null
+            && conversion.quality()
+                == com.chromascape.web.replay.conversion.ConversionQuality.CERTIFIED;
+    List<ReplayNpcPinValidator.Violation> npcPinViolations =
+        ReplayNpcPinValidator.validate(
+            first == null ? List.of() : List.of(first), conversion, authoritativeNpcPins);
+    if (!npcPinViolations.isEmpty()) {
+      ReplayNpcPinValidator.Violation violation = npcPinViolations.get(0);
+      throw ReplayException.invalid(violation.code(), violation.message());
+    }
+    return buildInitialState(first, conversion, authoritativeNpcPins);
+  }
+
+  private ObjectNode buildInitialState(
+      TickSnapshot first, ReplayActionConversionResult conversion, boolean authoritativeNpcPins) {
     JsonNode playerState = first.getPlayerState();
     if (playerState == null || !playerState.isObject()) {
       throw ReplayException.invalid(
           ReplayErrorCode.PLAYER_STATE_MISSING, "Earliest tick snapshot has no player state");
     }
     ObjectNode state = objectMapper.createObjectNode();
-    state.put("worldId", playerState.path("worldId").asInt(0));
-    state.put("collisionRevision", "recorded");
-    ObjectNode player = state.putObject("player");
+    JsonNode world = playerState.path("world");
+    JsonNode worldId =
+        world.isObject() && world.has("worldId")
+            ? world.get("worldId")
+            : playerState.get("worldId");
+    if (worldId == null
+        || !worldId.isIntegralNumber()
+        || !worldId.canConvertToInt()
+        || worldId.asInt() <= 0) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+          "Recorded world id missing or invalid at start tick");
+    }
+    state.put("worldId", worldId.asInt());
+
+    JsonNode collisionRevision =
+        playerState.has("collisionRevision")
+            ? playerState.get("collisionRevision")
+            : world.isObject() ? world.get("collisionRevision") : null;
+    if (collisionRevision == null
+        || !collisionRevision.isTextual()
+        || collisionRevision.asText().isBlank()) {
+      throw ReplayException.invalid(
+          ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
+          "Recorded collision revision missing or blank at start tick");
+    }
+    state.put("collisionRevision", collisionRevision.asText().trim());
+
+    // Start with the complete captured player object. The canonical fields below are normalized
+    // for the worker, while every additional captured field (HP, prayer, animation, aliases,
+    // interaction state, and server metadata) remains part of the immutable manifest evidence.
+    ObjectNode player = playerState.deepCopy();
     JsonNode position = positionNode(playerState);
     if (position == null) {
       throw ReplayException.invalid(
@@ -573,9 +689,10 @@ public class ScenarioManifestV2Compiler {
     player.set("position", normalizedPosition(position));
 
     JsonNode skills = playerState.path("skills");
-    player.set("skills", skills.isObject() ? skills.deepCopy() : objectMapper.createObjectNode());
+    if (skills.isObject()) player.set("skills", skills.deepCopy());
     player.set("inventory", normalizeSlots(first.getInventory(), "inventory"));
     player.set("equipment", normalizeSlots(first.getEquipment(), "equipment"));
+    state.set("player", player);
 
     JsonNode npcs = first.getNpcs();
     if (npcs == null || !npcs.isArray() || npcs.isEmpty()) {
@@ -584,9 +701,9 @@ public class ScenarioManifestV2Compiler {
           "Initial world must contain a non-empty typed NPC list");
     }
     ArrayNode normalizedNpcs = state.putArray("npcs");
-    validateNpcActions(conversion);
     Set<String> referencedNpcIds = referencedNpcIds(conversion);
     Map<String, Set<String>> spotTypeCandidates = spotTypeCandidates(conversion);
+    Map<String, Set<String>> actionOptions = actionOptions(conversion);
     Map<String, List<JsonNode>> npcsByStableId = new HashMap<>();
     List<JsonNode> npcEntries = new ArrayList<>();
     for (JsonNode npc : npcs) {
@@ -602,6 +719,7 @@ public class ScenarioManifestV2Compiler {
           .computeIfAbsent(npc.path("stableId").asText(), ignored -> new ArrayList<>())
           .add(npc);
     }
+    validateNpcActions(npcsByStableId, conversion);
     for (String stableId : referencedNpcIds) {
       List<JsonNode> matches = npcsByStableId.getOrDefault(stableId, List.of());
       if (matches.isEmpty()) {
@@ -615,7 +733,7 @@ public class ScenarioManifestV2Compiler {
             "Initial NPC target " + stableId + " is ambiguous in the recorded world");
       }
       Set<String> candidates = spotTypeCandidates.getOrDefault(stableId, Set.of());
-      if (candidates.size() != 1) {
+      if (!candidates.isEmpty() && candidates.size() != 1) {
         throw ReplayException.invalid(
             ReplayErrorCode.ACTION_AMBIGUOUS,
             "NPC target " + stableId + " has no single supported fishing option");
@@ -626,7 +744,7 @@ public class ScenarioManifestV2Compiler {
       boolean referenced = referencedNpcIds.contains(stableId);
       String recordedSpotType = npc.path("spotType").asText(null);
       boolean recordedSpotTypePresent = !isBlank(recordedSpotType);
-      if (!referenced && !isSupportedFishingOption(recordedSpotType)) {
+      if (!referenced && (!isSupportedFishingOption(recordedSpotType) || authoritativeNpcPins)) {
         // The capture may contain nearby NPCs that are not fishing spots. They are not part of
         // the v1 kernel world unless a semantic action resolves them as a target.
         continue;
@@ -634,29 +752,54 @@ public class ScenarioManifestV2Compiler {
       String spotType = recordedSpotType;
       Set<String> candidates = spotTypeCandidates.getOrDefault(stableId, Set.of());
       if (referenced) {
-        if (recordedSpotTypePresent && !isSupportedFishingOption(recordedSpotType)) {
+        Set<String> options = actionOptions.getOrDefault(stableId, Set.of());
+        boolean hasFishingAction = !candidates.isEmpty();
+        boolean hasGenericAction =
+            options.stream().anyMatch(option -> !isSupportedFishingOption(option));
+        if (recordedSpotTypePresent
+            && !isSupportedFishingOption(recordedSpotType)
+            && !hasGenericAction) {
           throw ReplayException.invalid(
               ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
               "Referenced NPC " + stableId + " has unsupported spotType " + recordedSpotType);
         }
-        String inferred = candidates.iterator().next();
-        if (isSupportedFishingOption(recordedSpotType)
-            && !recordedSpotType.equals(inferred)) {
-          throw ReplayException.invalid(
-              ReplayErrorCode.ACTION_UNSUPPORTED,
-              "NPC target " + stableId + " records spotType " + recordedSpotType
-                  + " but the action selects " + inferred);
+        if (hasFishingAction) {
+          String inferred = candidates.iterator().next();
+          if (isSupportedFishingOption(recordedSpotType) && !recordedSpotType.equals(inferred)) {
+            throw ReplayException.invalid(
+                ReplayErrorCode.ACTION_UNSUPPORTED,
+                "NPC target "
+                    + stableId
+                    + " records spotType "
+                    + recordedSpotType
+                    + " but the action selects "
+                    + inferred);
+          }
+          spotType = inferred;
+        } else if (hasGenericAction) {
+          // A generic NPC is valid when its recorded server menu contains the selected option.
+          // Keep it explicitly generic so the worker cannot reinterpret it as a Fishing spot.
+          spotType = "generic";
         }
-        spotType = inferred;
       }
       ObjectNode normalized = npc.deepCopy();
       normalized.set("position", normalizedPosition(positionNode(npc)));
-      if (!isSupportedFishingOption(spotType)) {
+      if (!isSupportedFishingOption(spotType) && !"generic".equals(spotType)) {
         throw ReplayException.invalid(
             ReplayErrorCode.SIM_INITIAL_WORLD_INCOMPLETE,
-            "Initial NPC " + stableId + " lacks a supported spotType");
+            "Initial NPC " + stableId + " lacks a supported fishing spotType or generic action");
       }
       normalized.put("spotType", spotType);
+      if (authoritativeNpcPins) {
+        // The pin validator has already checked these fields. Keep them in the manifest exactly
+        // as captured; the xRSPS loader must never reconstruct them from spotType or array order.
+        normalized.put("npcId", npc.path("npcId").asInt());
+        normalized.put("npcTypeId", npc.path("npcTypeId").asInt());
+        normalized.put("size", npc.path("size").asInt());
+        if (!isBlank(npc.path("spotId").asText(null))) {
+          normalized.put("spotId", npc.path("spotId").asText().trim());
+        }
+      }
       npcEntries.add(normalized);
     }
     if (npcEntries.isEmpty()) {
@@ -681,39 +824,104 @@ public class ScenarioManifestV2Compiler {
     }
     state.set("objects", first.getGameObjects().deepCopy());
     state.set("groundItems", first.getGroundItems().deepCopy());
+    state.set("threats", nullable(first.getThreats()));
+    state.set("projectiles", nullable(first.getProjectiles()));
+    state.set("cooldowns", nullable(first.getCooldowns()));
+    state.set("quest", nullable(first.getQuest()));
+    state.set("questHelper", nullable(first.getQuestHelper()));
+    state.set("dialogue", nullable(first.getDialogue()));
+    state.set("spells", nullable(first.getSpells()));
+    state.set("vars", nullable(first.getVars()));
+    state.set("groundObjects", nullable(first.getGroundObjects()));
+    state.set("players", nullable(first.getPlayers()));
+    state.set("widgets", nullable(first.getWidgets()));
     return state;
   }
 
-  private void validateNpcActions(ReplayActionConversionResult conversion) {
+  private void validateNpcActions(
+      Map<String, List<JsonNode>> npcsByStableId, ReplayActionConversionResult conversion) {
     if (conversion == null || conversion.actions() == null) return;
     for (ConvertedReplayAction converted : conversion.actions()) {
-      if (converted == null || converted.action() == null
-          || !"INTERACT_NPC".equals(converted.action().getActionType())) {
+      if (converted == null
+          || converted.action() == null
+          || (!"INTERACT_NPC".equals(converted.action().getActionType())
+              && !"USE_ITEM_ON_NPC".equals(converted.action().getActionType()))) {
         continue;
       }
       String stableId = textValue(converted.action().getTarget(), "stableId");
       if (isBlank(stableId)) {
         throw ReplayException.invalid(
             ReplayErrorCode.ACTION_TARGET_UNRESOLVED,
-            "INTERACT_NPC action at tick " + converted.action().getTick()
+            "INTERACT_NPC action at tick "
+                + converted.action().getTick()
                 + " has no stable target id");
       }
+      List<JsonNode> matches = npcsByStableId.getOrDefault(stableId, List.of());
+      if (matches.size() != 1) continue;
+      if ("USE_ITEM_ON_NPC".equals(converted.action().getActionType())) {
+        Integer itemId = intValue(converted.action().getArguments(), "itemId");
+        if (itemId == null || itemId <= 0) {
+          throw ReplayException.invalid(
+              ReplayErrorCode.ACTION_UNSUPPORTED,
+              "USE_ITEM_ON_NPC action at tick "
+                  + converted.action().getTick()
+                  + " has missing or invalid itemId");
+        }
+        continue;
+      }
       String option = textValue(converted.action().getArguments(), "option");
-      if (!isSupportedFishingOption(option)) {
+      if (isSupportedFishingOption(option)) {
+        continue;
+      }
+      if (!hasNpcOption(matches.get(0), option)) {
         throw ReplayException.invalid(
             ReplayErrorCode.ACTION_UNSUPPORTED,
-            "INTERACT_NPC action at tick " + converted.action().getTick()
-                + " has missing or unsupported option");
+            "INTERACT_NPC action at tick "
+                + converted.action().getTick()
+                + " selects an option not present in the recorded NPC menu");
       }
     }
+  }
+
+  private Map<String, Set<String>> actionOptions(ReplayActionConversionResult conversion) {
+    Map<String, Set<String>> options = new HashMap<>();
+    if (conversion == null || conversion.actions() == null) return options;
+    for (ConvertedReplayAction converted : conversion.actions()) {
+      if (converted == null
+          || converted.action() == null
+          || !"INTERACT_NPC".equals(converted.action().getActionType())) {
+        continue;
+      }
+      String stableId = textValue(converted.action().getTarget(), "stableId");
+      String option = textValue(converted.action().getArguments(), "option");
+      if (!isBlank(stableId) && !isBlank(option)) {
+        options
+            .computeIfAbsent(stableId, ignored -> new HashSet<>())
+            .add(option.trim().toLowerCase());
+      }
+    }
+    return options;
+  }
+
+  private boolean hasNpcOption(JsonNode npc, String option) {
+    if (npc == null || isBlank(option)) return false;
+    JsonNode values = npc.has("actions") ? npc.get("actions") : npc.get("options");
+    if (values == null || !values.isArray()) return false;
+    String normalized = option.trim().toLowerCase();
+    for (JsonNode value : values) {
+      if (value.isTextual() && normalized.equals(value.asText().trim().toLowerCase())) return true;
+    }
+    return false;
   }
 
   private Set<String> referencedNpcIds(ReplayActionConversionResult conversion) {
     Set<String> result = new HashSet<>();
     if (conversion == null || conversion.actions() == null) return result;
     for (ConvertedReplayAction converted : conversion.actions()) {
-      if (converted == null || converted.action() == null
-          || !"INTERACT_NPC".equals(converted.action().getActionType())) {
+      if (converted == null
+          || converted.action() == null
+          || (!"INTERACT_NPC".equals(converted.action().getActionType())
+              && !"USE_ITEM_ON_NPC".equals(converted.action().getActionType()))) {
         continue;
       }
       String stableId = textValue(converted.action().getTarget(), "stableId");
@@ -732,7 +940,8 @@ public class ScenarioManifestV2Compiler {
       return Map.of();
     }
     for (ConvertedReplayAction converted : conversion.actions()) {
-      if (converted == null || converted.action() == null
+      if (converted == null
+          || converted.action() == null
           || !"INTERACT_NPC".equals(converted.action().getActionType())) {
         continue;
       }
@@ -742,8 +951,7 @@ public class ScenarioManifestV2Compiler {
       }
       Map<String, Object> arguments = converted.action().getArguments();
       Object option = arguments == null ? null : arguments.get("option");
-      if (option instanceof String fishingOption
-          && isSupportedFishingOption(fishingOption)) {
+      if (option instanceof String fishingOption && isSupportedFishingOption(fishingOption)) {
         candidates.computeIfAbsent(stableId, ignored -> new HashSet<>()).add(fishingOption);
       }
     }
@@ -828,9 +1036,20 @@ public class ScenarioManifestV2Compiler {
     node.set("playerState", nullable(snapshot.getPlayerState()));
     node.set("inventory", nullable(snapshot.getInventory()));
     node.set("equipment", nullable(snapshot.getEquipment()));
+    node.set("threats", nullable(snapshot.getThreats()));
+    node.set("projectiles", nullable(snapshot.getProjectiles()));
+    node.set("cooldowns", nullable(snapshot.getCooldowns()));
+    node.set("quest", nullable(snapshot.getQuest()));
+    node.set("questHelper", nullable(snapshot.getQuestHelper()));
+    node.set("dialogue", nullable(snapshot.getDialogue()));
+    node.set("spells", nullable(snapshot.getSpells()));
+    node.set("vars", nullable(snapshot.getVars()));
     node.set("npcs", nullable(snapshot.getNpcs()));
     node.set("gameObjects", nullable(snapshot.getGameObjects()));
+    node.set("groundObjects", nullable(snapshot.getGroundObjects()));
     node.set("groundItems", nullable(snapshot.getGroundItems()));
+    node.set("players", nullable(snapshot.getPlayers()));
+    node.set("widgets", nullable(snapshot.getWidgets()));
     node.set("schemaVersion", nullable(snapshot.getSchemaVersion()));
     return node;
   }
@@ -843,7 +1062,8 @@ public class ScenarioManifestV2Compiler {
     return projectionService.sha256Hex(projectionService.canonicalJsonBytes(node));
   }
 
-  private static void assertContiguousSnapshots(List<TickSnapshot> snapshots, long start, long end) {
+  private static void assertContiguousSnapshots(
+      List<TickSnapshot> snapshots, long start, long end) {
     if (snapshots == null || snapshots.size() != end - start + 1) {
       throw ReplayException.invalid(
           ReplayErrorCode.TICK_GAP_DETECTED,
@@ -875,23 +1095,30 @@ public class ScenarioManifestV2Compiler {
   }
 
   private JsonNode nullable(Integer value) {
-    return value == null ? objectMapper.nullNode() : objectMapper.getNodeFactory().numberNode(value);
+    return value == null
+        ? objectMapper.nullNode()
+        : objectMapper.getNodeFactory().numberNode(value);
   }
 
   private static JsonNode positionNode(JsonNode state) {
     if (state == null || !state.isObject()) return null;
     JsonNode nested = state.path("position");
-    if (nested.isObject() && hasCoordinate(nested, "x") && (hasCoordinate(nested, "y") || hasCoordinate(nested, "z"))) {
+    if (nested.isObject()
+        && hasCoordinate(nested, "x")
+        && (hasCoordinate(nested, "y") || hasCoordinate(nested, "z"))) {
       return nested;
     }
     JsonNode worldPoint = state.path("worldPoint");
-    if (worldPoint.isObject() && hasCoordinate(worldPoint, "x") && (hasCoordinate(worldPoint, "y") || hasCoordinate(worldPoint, "z"))) {
+    if (worldPoint.isObject()
+        && hasCoordinate(worldPoint, "x")
+        && (hasCoordinate(worldPoint, "y") || hasCoordinate(worldPoint, "z"))) {
       return worldPoint;
     }
     if (hasCoordinate(state, "x") && (hasCoordinate(state, "y") || hasCoordinate(state, "z"))) {
       return state;
     }
-    if (hasCoordinate(state, "worldX") && (hasCoordinate(state, "worldY") || hasCoordinate(state, "z"))) {
+    if (hasCoordinate(state, "worldX")
+        && (hasCoordinate(state, "worldY") || hasCoordinate(state, "z"))) {
       return state;
     }
     return null;

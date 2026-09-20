@@ -33,7 +33,9 @@
         "type": {
           "type": "string",
           "enum": [
-            "WAIT_UNTIL_TICK", "INTERACT_NPC", "INTERACT_OBJECT", "WALK_TO",
+          "WAIT_UNTIL_TICK", "INTERACT_NPC", "INTERACT_OBJECT", "WALK_TO",
+            "INTERACT_GROUND_ITEM", "INTERACT_INVENTORY_ITEM", "INTERACT_WIDGET",
+            "SELECT_DIALOGUE_OPTION", "CAST_SPELL", "EQUIP_ITEM",
             "INVENTORY_ACTION", "USE_ITEM_ON_NPC"
           ]
         },
@@ -43,6 +45,11 @@
         "destination": { "$ref": "#/$defs/position" },
         "slot": { "type": "integer", "minimum": 0 },
         "itemId": { "type": "integer", "minimum": 0 },
+        "optionIndex": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "spellId": { "type": "integer", "minimum": 1 },
+        "widgetId": { "type": "integer", "minimum": 0 },
+        "widgetIndex": { "type": "integer", "minimum": -1, "maximum": 65535 },
+        "equipmentSlot": { "type": "integer", "minimum": 0, "maximum": 13 },
         "sourceActionTick": { "type": "integer", "minimum": 0 },
         "sourceActionSequence": { "type": "integer", "minimum": 0 },
         "provenance": { "type": "string" },
@@ -69,6 +76,30 @@
         {
           "if": { "properties": { "type": { "const": "INTERACT_OBJECT" } } },
           "then": { "required": ["targetStableId", "option"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "INTERACT_GROUND_ITEM" } } },
+          "then": { "required": ["targetStableId", "option"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "INTERACT_INVENTORY_ITEM" } } },
+          "then": { "required": ["targetStableId", "slot", "itemId", "option"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "INTERACT_WIDGET" } } },
+          "then": { "required": ["targetStableId", "option"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "SELECT_DIALOGUE_OPTION" } } },
+          "then": { "required": ["targetStableId"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "CAST_SPELL" } } },
+          "then": { "required": ["targetStableId"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "EQUIP_ITEM" } } },
+          "then": { "required": ["targetStableId", "slot", "itemId"] }
         },
         {
           "if": { "properties": { "type": { "const": "WALK_TO" } } },
@@ -212,7 +243,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "mode": { "type": "string", "enum": ["AUTO", "TYPED_ONLY", "LEGACY_WITH_GAPS"] },
+        "mode": { "type": "string", "enum": ["AUTO", "CAPTURED_ONLY", "LEGACY_BEST_EFFORT"] },
         "quality": { "type": "string", "enum": ["CERTIFIED", "BEST_EFFORT", "UNSUPPORTED"] },
         "conversionChecksum": { "type": "string", "minLength": 1 },
         "typedActionCount": { "type": "integer", "minimum": 0 },

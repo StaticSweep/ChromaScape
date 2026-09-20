@@ -1294,7 +1294,8 @@ class FishingShadowDecisionServiceTest {
         tempDir.resolve("fishing").resolve("shadow").resolve("debug_1").resolve("run_old.jsonl");
     Files.writeString(
         histFile,
-        objectMapper.writeValueAsString(decision("debug_1", "run_old", 5, 9, "2026-08-11T04:00:00Z"))
+        objectMapper.writeValueAsString(
+                decision("debug_1", "run_old", 5, 9, "2026-08-11T04:00:00Z"))
             + System.lineSeparator());
 
     Map<String, Object> runs = service.runs("debug_1");
@@ -1319,8 +1320,7 @@ class FishingShadowDecisionServiceTest {
     Path legacy = tempDir.resolve("fishing").resolve("shadow").resolve("debug_1.jsonl");
     Files.writeString(
         legacy,
-        objectMapper.writeValueAsString(decision("debug_1", null, 7, 9))
-            + System.lineSeparator());
+        objectMapper.writeValueAsString(decision("debug_1", null, 7, 9)) + System.lineSeparator());
 
     Map<String, Object> runs = service.runs("debug_1");
     @SuppressWarnings("unchecked")
@@ -1329,13 +1329,17 @@ class FishingShadowDecisionServiceTest {
     boolean legacyFound = runList.stream().anyMatch(r -> Boolean.TRUE.equals(r.get("legacy")));
     assertThat(legacyFound).isTrue();
     Map<String, Object> legacySummary =
-        runList.stream().filter(r -> Boolean.TRUE.equals(r.get("legacy"))).findFirst().orElseThrow();
+        runList.stream()
+            .filter(r -> Boolean.TRUE.equals(r.get("legacy")))
+            .findFirst()
+            .orElseThrow();
     assertThat(legacySummary).containsEntry("shadowRunId", null);
     assertThat(legacySummary).containsEntry("legacy", true);
   }
 
   @Test
-  @DisplayName("run summaries with nullable timestamps serialize cleanly through the controller mapper")
+  @DisplayName(
+      "run summaries with nullable timestamps serialize cleanly through the controller mapper")
   void nullableRunSummariesSerializeCleanly() throws Exception {
     service.openSession("debug_1", RUN);
 

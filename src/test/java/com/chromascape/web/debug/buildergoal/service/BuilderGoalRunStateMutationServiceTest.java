@@ -464,9 +464,7 @@ class BuilderGoalRunStateMutationServiceTest {
             "bg_paused_unbound0001",
             1001,
             executorStatus(
-                "PAUSED",
-                null,
-                Map.of("status", "PAUSED", "activation_state", "PAUSED")),
+                "PAUSED", null, Map.of("status", "PAUSED", "activation_state", "PAUSED")),
             LocalDateTime.now().plusMinutes(10));
 
     assertThat(result.terminal()).isFalse();

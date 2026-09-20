@@ -1,5 +1,9 @@
 # SC-810 source provenance and signing decision
 
+> Decision (2026-09-02): `../SC-810-GREENFIELD-IMPLEMENTATION-SPEC.md` supersedes the earlier
+> remediation language. Delete Micro6's embedded legacy Fishing manifest/objects and all runtime
+> fallback; only a signed `task-source-manifest/v1` bundle is authoritative.
+
 Status: accepted for SC-810 implementation
 
 The Micro6 producer is the authority for executable source. A task manifest is generated from a
@@ -15,10 +19,11 @@ characters of that checksum. The signature is Ed25519 over canonical UTF-8 JSON 
 key ID and the hash of the signed bytes. Public keys are configured out of band and are never
 accepted from a request.
 
-Legacy `micro6-source-manifest/v1` documents remain readable only as provenance-unknown data. They
-cannot establish patch eligibility or replace a verified run binding. New production documents use
-`task-source-manifest/v1`, require a clean tree, a real SHA-256 artifact digest, a bounded closure,
-and an Ed25519 signature.
+No embedded Micro6 resource or historical manifest decoder is retained or consulted after bundle
+failure. Existing historical records, if present in an older database, are opaque audit history;
+they cannot establish patch eligibility, satisfy a run binding, or act as a runtime fallback. New
+production documents use `task-source-manifest/v1`, require a clean tree, a real SHA-256 artifact
+digest, a bounded closure, and an Ed25519 signature.
 
 Source reads are read-only, allowlisted by the verified manifest, independently authorized for
 metadata and content, bounded, and audited. Redacted, pruned, generated-only, unavailable, partial,

@@ -26,7 +26,13 @@
     },
     "scenarioSchemaVersions": {
       "type": "array",
-      "items": { "type": "integer" }
+      "prefixItems": [
+        { "const": 1 },
+        { "const": 2 }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
     },
     "semanticActionVersions": {
       "type": "array",
@@ -70,11 +76,22 @@
       "type": "array",
       "prefixItems": [
         { "const": "WAIT_UNTIL_TICK" },
-        { "const": "INTERACT_NPC" }
+        { "const": "WALK_TO" },
+        { "const": "INTERACT_NPC" },
+        { "const": "INTERACT_OBJECT" },
+        { "const": "INTERACT_GROUND_ITEM" },
+        { "const": "INTERACT_INVENTORY_ITEM" },
+        { "const": "INTERACT_WIDGET" },
+        { "const": "SELECT_DIALOGUE_OPTION" },
+        { "const": "CAST_SPELL" },
+        { "const": "EQUIP_ITEM" }
       ],
       "items": false,
-      "minItems": 2,
-      "maxItems": 2
+      "minItems": 10,
+      "maxItems": 10
+    },
+    "viewerTraceSchema": {
+      "const": "xrsps-replay-trace/v1"
     }
   },
   "required": [
@@ -90,6 +107,7 @@
     "openRuneAvailable",
     "certifiable",
     "fidelity",
-    "supportedActions"
+    "supportedActions",
+    "viewerTraceSchema"
   ]
 }

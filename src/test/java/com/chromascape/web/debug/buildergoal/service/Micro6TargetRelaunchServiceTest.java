@@ -1558,8 +1558,7 @@ class Micro6TargetRelaunchServiceTest {
   void readHealthyExecutorTarget_doesNotPromoteRequestedHashToObservedTargetIdentity()
       throws Exception {
     com.sun.net.httpserver.HttpServer server =
-        com.sun.net.httpserver.HttpServer.create(
-            new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
     try {
       // This is the legacy name-fallback case: the game name is known, but no actual hash has
       // been resolved. Identity is a readiness field, so a missing resolved hash keeps the
@@ -1616,7 +1615,13 @@ class Micro6TargetRelaunchServiceTest {
       // Resolved identity is missing; only the launch-args requested identity is present.
       String body =
           healthPayload(
-              null, null, "1111111111111111", "bigGreenMeat", false, "accountbuilder_ready", "logged_in");
+              null,
+              null,
+              "1111111111111111",
+              "bigGreenMeat",
+              false,
+              "accountbuilder_ready",
+              "logged_in");
       server.createContext(
           "/health",
           exchange -> {

@@ -179,14 +179,22 @@ class Micro6OnlineClientRegistryServiceTest {
 
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "bbbbbbbbbbbbbbbb", "same-name", null, java.time.Instant.now().minusSeconds(45), 360))
+                "bbbbbbbbbbbbbbbb",
+                "same-name",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isPresent()
         .get()
         .extracting(Micro6OnlineClientRegistryService.TargetClient::clientId)
         .isEqualTo("client-hash-b");
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "aaaaaaaaaaaaaaaa", "same-name", null, java.time.Instant.now().minusSeconds(45), 360))
+                "aaaaaaaaaaaaaaaa",
+                "same-name",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isPresent()
         .get()
         .extracting(Micro6OnlineClientRegistryService.TargetClient::clientId)
@@ -225,7 +233,11 @@ class Micro6OnlineClientRegistryServiceTest {
 
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "aaaaaaaaaaaaaaaa", "same-name", null, java.time.Instant.now().minusSeconds(45), 360))
+                "aaaaaaaaaaaaaaaa",
+                "same-name",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isEmpty();
   }
 
@@ -288,7 +300,11 @@ class Micro6OnlineClientRegistryServiceTest {
 
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "1111111111111111", "Test Account", null, java.time.Instant.now().minusSeconds(45), 360))
+                "1111111111111111",
+                "Test Account",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isEmpty();
     assertThat(service.getRunnableClient("client-stale-flag")).isEmpty();
   }
@@ -318,11 +334,19 @@ class Micro6OnlineClientRegistryServiceTest {
 
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "1111111111111111", "Test Account", null, java.time.Instant.now().minusSeconds(45), 301))
+                "1111111111111111",
+                "Test Account",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                301))
         .isEmpty();
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "1111111111111111", "Test Account", null, java.time.Instant.now().minusSeconds(45), 360))
+                "1111111111111111",
+                "Test Account",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isPresent();
   }
 
@@ -336,18 +360,28 @@ class Micro6OnlineClientRegistryServiceTest {
 
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "1111111111111111", "Test Account", null, java.time.Instant.now().minusSeconds(45), 360))
+                "1111111111111111",
+                "Test Account",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isEmpty();
   }
 
   @Test
   void dispatchReadyLookup_loggedOutFailsClosed() throws Exception {
     Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
-    service.recordHeartbeat(readyHeartbeat("client-logged-out", "1111111111111111", 360).put("login_state", "auto_login_failed"));
+    service.recordHeartbeat(
+        readyHeartbeat("client-logged-out", "1111111111111111", 360)
+            .put("login_state", "auto_login_failed"));
 
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "1111111111111111", "Test Account", null, java.time.Instant.now().minusSeconds(45), 360))
+                "1111111111111111",
+                "Test Account",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isEmpty();
   }
 
@@ -355,22 +389,32 @@ class Micro6OnlineClientRegistryServiceTest {
   void dispatchReadyLookup_startupIncompleteFailsClosed() throws Exception {
     Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
     service.recordHeartbeat(
-        readyHeartbeat("client-startup", "1111111111111111", 360).put("startup_state", "initializing_bot_logic"));
+        readyHeartbeat("client-startup", "1111111111111111", 360)
+            .put("startup_state", "initializing_bot_logic"));
 
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "1111111111111111", "Test Account", null, java.time.Instant.now().minusSeconds(45), 360))
+                "1111111111111111",
+                "Test Account",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isEmpty();
   }
 
   @Test
   void dispatchReadyLookup_pathfinderIncompleteFailsClosed() throws Exception {
     Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
-    service.recordHeartbeat(readyHeartbeat("client-pf", "1111111111111111", 360).put("pathfinder_ready", false));
+    service.recordHeartbeat(
+        readyHeartbeat("client-pf", "1111111111111111", 360).put("pathfinder_ready", false));
 
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "1111111111111111", "Test Account", null, java.time.Instant.now().minusSeconds(45), 360))
+                "1111111111111111",
+                "Test Account",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isEmpty();
   }
 
@@ -384,7 +428,11 @@ class Micro6OnlineClientRegistryServiceTest {
 
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "1111111111111111", "Test Account", null, java.time.Instant.now().minusSeconds(45), 360))
+                "1111111111111111",
+                "Test Account",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isEmpty();
   }
 
@@ -545,8 +593,7 @@ class Micro6OnlineClientRegistryServiceTest {
   void invalidHashValuesReject() throws Exception {
     Micro6OnlineClientRegistryService service = new Micro6OnlineClientRegistryService();
 
-    service.recordHeartbeat(
-        readyHeartbeat("client-invalid-hash", "not-a-canonical-hash", 360));
+    service.recordHeartbeat(readyHeartbeat("client-invalid-hash", "not-a-canonical-hash", 360));
 
     java.util.Map<String, Object> summary = service.listClients().get(0);
     assertThat(summary.get("selectedAccountEligible")).isEqualTo(false);
@@ -567,21 +614,70 @@ class Micro6OnlineClientRegistryServiceTest {
     assertThat(service.getRunnableClient("client-ready")).isPresent();
     assertThat(
             service.findDispatchReadyClientForRecovery(
-                "1111111111111111", "Test Account", null, java.time.Instant.now().minusSeconds(45), 360))
+                "1111111111111111",
+                "Test Account",
+                null,
+                java.time.Instant.now().minusSeconds(45),
+                360))
         .isPresent();
   }
 
   private void registerReadyClient(
-      Micro6OnlineClientRegistryService service, String clientId, String accountName, String accountHash, int world)
+      Micro6OnlineClientRegistryService service,
+      String clientId,
+      String accountName,
+      String accountHash,
+      int world)
       throws Exception {
     service.recordHeartbeat(
         readyHeartbeat(clientId, accountHash, world).put("account_name", accountName));
   }
 
+  @Test
+  void remoteReadinessRequiresMachineAttemptAccountWorldAndFreshHeartbeat() {
+    var service = new Micro6OnlineClientRegistryService();
+    var heartbeat = readyHeartbeat("remote", "0123456789abcdef", 360).put("machine_uuid", "fedora");
+    service.recordHeartbeat(heartbeat);
+    var before = java.time.Instant.now().minusSeconds(5);
+    assertThat(
+            service.findRemoteReadyClient(
+                "fedora", "0123456789abcdef", 360, "attempt-remote", before))
+        .isPresent();
+    assertThat(
+            service.findRemoteReadyClient(
+                "windows", "0123456789abcdef", 360, "attempt-remote", before))
+        .isEmpty();
+    assertThat(
+            service.findRemoteReadyClient("fedora", "0123456789abcdef", 360, "old-attempt", before))
+        .isEmpty();
+    assertThat(
+            service.findRemoteReadyClient(
+                "fedora", "1111111111111111", 360, "attempt-remote", before))
+        .isEmpty();
+    assertThat(
+            service.findRemoteReadyClient(
+                "fedora", "0123456789abcdef", 361, "attempt-remote", before))
+        .isEmpty();
+    assertThat(
+            service.findRemoteReadyClient(
+                "fedora",
+                "0123456789abcdef",
+                360,
+                "attempt-remote",
+                java.time.Instant.now().plusSeconds(1)))
+        .isEmpty();
+    service.recordHeartbeat(heartbeat.put("dispatch_hold", true));
+    assertThat(
+            service.findRemoteReadyClient(
+                "fedora", "0123456789abcdef", 360, "attempt-remote", before))
+        .isEmpty();
+  }
+
   private com.fasterxml.jackson.databind.node.ObjectNode readyHeartbeat(
       String clientId, String accountHash, int world) {
     return (com.fasterxml.jackson.databind.node.ObjectNode)
-        objectMapper.createObjectNode()
+        objectMapper
+            .createObjectNode()
             .put("executor_instance_id", clientId)
             .put("account_name", "Test Account")
             .put("account_hash", accountHash)

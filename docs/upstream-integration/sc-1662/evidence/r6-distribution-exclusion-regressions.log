@@ -1,0 +1,27 @@
+== seeding the isolated output root with a stale RemoteInput payload ==
+== assembling the distribution into the isolated root ==
+Starting a Gradle Daemon, 1 busy Daemon could not be reused, use --status for details
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :resolveMainClassName UP-TO-DATE
+> Task :bootJar UP-TO-DATE
+> Task :assembleLinuxDistributionRegression
+
+BUILD SUCCESSFUL in 28s
+5 actionable tasks: 1 executed, 4 up-to-date
+== assertions ==
+PASS: seeded path removed: native/linux-x86_64/libRemoteInput.so
+PASS: seeded path removed: native/linux-x86_64/remoteinput-manifest.json
+PASS: seeded path removed: licenses/RemoteInput-LICENSE
+PASS: seeded path removed: licenses/RemoteInput-thirdparty
+PASS: no libRemoteInput.so, manifest, RemoteInput licence or third-party directory anywhere
+PASS: application.jar exists and is non-empty
+PASS: launcher exists and is executable
+PASS: launcher passes shell syntax check (sh -n)
+PASS: licenses/ChromaScape-LICENSE exists and is non-empty
+PASS: launcher contains no chromascape.remoteinput.library or libRemoteInput.so reference
+PASS: application.jar contains no native library, manifest, vendored source or licence
+PASS: distribution tree is exactly the allowed set
+distribution-exclusion regression: ALL CHECKS PASSED

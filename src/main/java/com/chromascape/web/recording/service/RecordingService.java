@@ -2,6 +2,7 @@ package com.chromascape.web.recording.service;
 
 import com.chromascape.utils.core.screen.FrameEvent;
 import com.chromascape.utils.core.screen.FrameListener;
+import com.chromascape.utils.core.screen.FrameSourceBinding;
 import com.chromascape.web.recording.capture.WindowFrameCapture;
 import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
@@ -57,6 +58,7 @@ public class RecordingService implements FrameListener {
   private final AtomicLong frameCount = new AtomicLong(0);
   private final AtomicLong droppedFrameCount = new AtomicLong(0);
   private final AtomicLong duplicatedFrameCount = new AtomicLong(0);
+  private final AtomicLong sourceMismatchFrameCount = new AtomicLong(0);
   private volatile int queueHighWaterMark = 0;
   private final Java2DFrameConverter frameConverter = new Java2DFrameConverter();
 
@@ -76,10 +78,12 @@ public class RecordingService implements FrameListener {
   private String currentVideoCodec; // Track which codec was successfully used
   private int initialWidth;
   private int initialHeight;
+  private volatile FrameSourceBinding recordingSourceBinding;
   private long framesRecorded = 0; // Track total frames recorded for metrics
   private static final String[] VIDEO_CODEC_PREFERENCES =
       new String[] {"libx264", "libopenh264", "mpeg4"};
 
+  /** Creates a recording service over the shared, source-fenced frame pipeline. */
   @Autowired
   public RecordingService(
       RecordingConfig config,
@@ -174,6 +178,7 @@ public class RecordingService implements FrameListener {
       // Clear any leftover frames in buffer
       frameBuffer.clear();
       droppedFrameCount.set(0);
+      sourceMismatchFrameCount.set(0);
       framesRecorded = 0;
 
       // CAPTURE START TIME HERE - immediately before first frame queued
@@ -204,7 +209,8 @@ public class RecordingService implements FrameListener {
         logger.info("Registered with unified capture service for recording");
       } else {
         logger.warn(
-            "Unified capture is disabled, recording will not receive frames (legacy mode not implemented)");
+            "Unified capture is disabled, recording will not receive frames (legacy mode not"
+                + " implemented)");
       }
 
       return currentRecordingId;
@@ -218,7 +224,8 @@ public class RecordingService implements FrameListener {
       cleanupRecording();
       throw new RecordingException(
           "Unexpected error during recording initialization: " + e.getMessage(),
-          "An unexpected error occurred while starting the recording. Please try again or check the logs.");
+          "An unexpected error occurred while starting the recording. Please try again or check the"
+              + " logs.");
     } finally {
       recordingStarting.set(false);
     }
@@ -248,13 +255,20 @@ public class RecordingService implements FrameListener {
       attempts++;
       String captureError = null;
       try {
-        BufferedImage captured = windowFrameCapture.capture();
+        FrameEvent capturedEvent = windowFrameCapture.captureEvent();
+        BufferedImage captured = capturedEvent != null ? capturedEvent.getFrame() : null;
+        if (capturedEvent == null) {
+          // Mockito/custom implementations written against the pre-SC-1666 interface can return
+          // null from the new default method; retain their legacy capture path.
+          captured = windowFrameCapture.capture();
+        }
         if (captured == null) {
           captureError = "capture returned no frame";
         } else if (captured.getWidth() <= 0 || captured.getHeight() <= 0) {
           captureError =
               String.format("invalid dimensions %dx%d", captured.getWidth(), captured.getHeight());
         } else {
+          recordingSourceBinding = capturedEvent != null ? capturedEvent.getSourceBinding() : null;
           long waitMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
           logger.info(
               "Initial frame ready after {} attempts in {} ms: {}x{}",
@@ -389,17 +403,15 @@ public class RecordingService implements FrameListener {
       double expectedDurationSec = (double) encodedFrameCount / unifiedConfig.getFps();
 
       logger.info(
-          """
-        Recording saved: {}
-        Duration: {} ms (expected ~{} sec based on {} frames @ {} FPS)
-        Frames captured: {}
-        Frames dropped: {} ({:.1f}%)
-        Frames duplicated (CFR fill): {} ({:.1f}%)
-        Frames encoded: {}
-        Queue high-water mark: {}
-        Actual capture FPS: {:.2f}
-        Configured FPS: {}
-        """,
+          "Recording saved: {}\n"
+              + "Duration: {} ms (expected ~{} sec based on {} frames @ {} FPS)\n"
+              + "Frames captured: {}\n"
+              + "Frames dropped: {} ({:.1f}%)\n"
+              + "Frames duplicated (CFR fill): {} ({:.1f}%)\n"
+              + "Frames encoded: {}\n"
+              + "Queue high-water mark: {}\n"
+              + "Actual capture FPS: {:.2f}\n"
+              + "Configured FPS: {}",
           currentRecordingFile.getName(),
           duration,
           String.format("%.1f", expectedDurationSec),
@@ -438,8 +450,8 @@ public class RecordingService implements FrameListener {
   }
 
   /**
-   * Stops a recording only when it is still the recording identified by {@code recordingId}.
-   * This prevents rollback for one session from stopping a newer process-wide recording.
+   * Stops a recording only when it is still the recording identified by {@code recordingId}. This
+   * prevents rollback for one session from stopping a newer process-wide recording.
    */
   public synchronized boolean stopRecordingIfCurrent(String recordingId) {
     if (recordingId == null || recordingId.isBlank() || !recording.get()) {
@@ -467,6 +479,10 @@ public class RecordingService implements FrameListener {
     metrics.put("frameBufferCapacity", frameBuffer.remainingCapacity());
     metrics.put("droppedFrames", droppedFrameCount.get());
     metrics.put("duplicatedFrames", duplicatedFrameCount.get());
+    metrics.put("sourceMismatchFrames", sourceMismatchFrameCount.get());
+    metrics.put(
+        "sourceBinding",
+        recordingSourceBinding != null ? recordingSourceBinding.toDisplayString() : null);
     metrics.put("queueHighWaterMark", queueHighWaterMark);
     metrics.put("framesRecorded", framesRecorded);
     metrics.put("currentRecordingId", currentRecordingId);
@@ -544,6 +560,16 @@ public class RecordingService implements FrameListener {
   @Override
   public void onFrameCaptured(FrameEvent event) {
     if (!recording.get()) {
+      return;
+    }
+
+    FrameSourceBinding expectedSource = recordingSourceBinding;
+    if (expectedSource != null && !expectedSource.equals(event.getSourceBinding())) {
+      long rejected = sourceMismatchFrameCount.incrementAndGet();
+      if (rejected == 1 || rejected % 30 == 0) {
+        logger.warn(
+            "Dropped {} frame(s) from a source other than the recording start target", rejected);
+      }
       return;
     }
 
@@ -780,6 +806,7 @@ public class RecordingService implements FrameListener {
       queueHighWaterMark = 0;
       encodedFrameCount = 0;
       framesRecorded = 0;
+      recordingSourceBinding = null;
     }
 
     return wasRecording;
@@ -833,6 +860,7 @@ public class RecordingService implements FrameListener {
     framesRecorded = 0;
     initialWidth = 0;
     initialHeight = 0;
+    recordingSourceBinding = null;
   }
 
   private void startRecorderWithFallbacks(int width, int height) {
@@ -913,7 +941,8 @@ public class RecordingService implements FrameListener {
     }
 
     logger.warn(
-        "Captured frame dimensions {}x{} are not even; trimming to {}x{} for recorder compatibility.",
+        "Captured frame dimensions {}x{} are not even; trimming to {}x{} for recorder"
+            + " compatibility.",
         width,
         height,
         evenWidth,
@@ -972,6 +1001,7 @@ public class RecordingService implements FrameListener {
     private final long droppedFrames;
     private final String videoCodec;
 
+    /** Creates immutable metadata for a finalized recording. */
     public RecordingMetadata(
         String id,
         String filePath,

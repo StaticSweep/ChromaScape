@@ -265,7 +265,9 @@ class Micro6CatalogV2ContractTest {
     task.put("settings_schema_state", "NOT_REQUESTED");
     task.put("settings_schema_version", "1");
     task.put("schema_error_reason", "stale_error");
-    task.set("schema_validation_errors", com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode());
+    task.set(
+        "schema_validation_errors",
+        com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode());
     task.put("schema_not_applicable_reason", "stale_reason");
     ValidationResult result = Micro6CatalogV2Contract.validateLightweight(payload);
     assertThat(result.valid()).isFalse();
@@ -274,9 +276,12 @@ class Micro6CatalogV2ContractTest {
     assertThat(result.reasons())
         .anyMatch(r -> r.contains("task_schema_not_requested_has_error_reason:FISHING_TRAINING"));
     assertThat(result.reasons())
-        .anyMatch(r -> r.contains("task_schema_not_requested_has_validation_errors:FISHING_TRAINING"));
+        .anyMatch(
+            r -> r.contains("task_schema_not_requested_has_validation_errors:FISHING_TRAINING"));
     assertThat(result.reasons())
-        .anyMatch(r -> r.contains("task_schema_not_requested_has_not_applicable_reason:FISHING_TRAINING"));
+        .anyMatch(
+            r ->
+                r.contains("task_schema_not_requested_has_not_applicable_reason:FISHING_TRAINING"));
   }
 
   @Test

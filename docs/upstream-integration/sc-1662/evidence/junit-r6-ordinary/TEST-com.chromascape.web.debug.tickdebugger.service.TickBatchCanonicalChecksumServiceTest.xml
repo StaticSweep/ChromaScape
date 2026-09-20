@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:40:59.933Z" hostname="fedora" time="0.307">
+  <properties/>
+  <testcase name="checksumDocumentShapeMatchesMicro6ActionContract()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.001"/>
+  <testcase name="numbersNeverPassThroughDouble()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.001"/>
+  <testcase name="malformedSurrogateInputIsRejected()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.001"/>
+  <testcase name="fixtureManifestListsIdenticalCrossRepositoryHashes()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.288"/>
+  <testcase name="rootPayloadChecksumIsRemovedButNestedValuesArePreserved()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.001"/>
+  <testcase name="nestedOrderingCanonicalizesIdenticallyWhileArrayOrderIsPreserved()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.0"/>
+  <testcase name="canonicalVectorsMatchIndependentExpectations()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.007"/>
+  <testcase name="actionVectorsMatchProductionChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.002"/>
+  <testcase name="goldenVectorMatchesCanonicalDocumentAndChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.001"/>
+  <testcase name="decimalAndZeroFormsCanonicalizeIdentically()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.002"/>
+  <testcase name="realisticFishingBatchMatchesIndependentChecksum()" classname="com.chromascape.web.debug.tickdebugger.service.TickBatchCanonicalChecksumServiceTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

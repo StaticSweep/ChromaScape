@@ -1,0 +1,4 @@
+OK: build-remoteinput-linux.sh
+OK: staging-regressions.sh
+OK: staging-shell-regressions.sh
+OK: distribution-exclusion-regressions.sh

@@ -1,0 +1,13 @@
+# command: ./gradlew compileJava compileTestJava --console=plain
+# utc: 2026-09-14T14:19:41Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+
+BUILD SUCCESSFUL in 1s
+3 actionable tasks: 3 up-to-date
+# exit_code: 0
+# elapsed_seconds: 1

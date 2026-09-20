@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "vectors": [
+    {
+      "name": "integers",
+      "wire": "{\"b\":2,\"a\":1,\"neg\":-7,\"zero\":0}",
+      "canonical": "{\"a\":1,\"b\":2,\"neg\":-7,\"zero\":0}",
+      "checksum": "sha256:e441fab20fbdecfe33d6d410e95e8d9f93d0d8312f3ee36351c8456a42be9ed1"
+    },
+    {
+      "name": "decimal-1",
+      "wire": "{\"v\":1}",
+      "canonical": "{\"v\":1}",
+      "checksum": "sha256:afbf9d0f3560b0fd7795e81c42a0a79ee6b6fc67e064f77826aee642cad28d91"
+    },
+    {
+      "name": "decimal-1.0",
+      "wire": "{\"v\":1.0}",
+      "canonical": "{\"v\":1}",
+      "checksum": "sha256:afbf9d0f3560b0fd7795e81c42a0a79ee6b6fc67e064f77826aee642cad28d91"
+    },
+    {
+      "name": "decimal-1.0000",
+      "wire": "{\"v\":1.0000}",
+      "canonical": "{\"v\":1}",
+      "checksum": "sha256:afbf9d0f3560b0fd7795e81c42a0a79ee6b6fc67e064f77826aee642cad28d91"
+    },
+    {
+      "name": "zero",
+      "wire": "{\"v\":0}",
+      "canonical": "{\"v\":0}",
+      "checksum": "sha256:ec4f95abcb4e2e3dbe856c3eb2f81995eacb3823d40aa2e78ed4c5e1798f664d"
+    },
+    {
+      "name": "neg-zero",
+      "wire": "{\"v\":-0}",
+      "canonical": "{\"v\":0}",
+      "checksum": "sha256:ec4f95abcb4e2e3dbe856c3eb2f81995eacb3823d40aa2e78ed4c5e1798f664d"
+    },
+    {
+      "name": "neg-zero-dec",
+      "wire": "{\"v\":-0.0}",
+      "canonical": "{\"v\":0}",
+      "checksum": "sha256:ec4f95abcb4e2e3dbe856c3eb2f81995eacb3823d40aa2e78ed4c5e1798f664d"
+    },
+    {
+      "name": "big-int",
+      "wire": "{\"v\":123456789012345678901234567890}",
+      "canonical": "{\"v\":123456789012345678901234567890}",
+      "checksum": "sha256:971b9513c94c9ccfa88d31f8af8bc6e3f6475a14f61c852e985a0eda20464a0e"
+    },
+    {
+      "name": "big-int-neg",
+      "wire": "{\"v\":-123456789012345678901234567890}",
+      "canonical": "{\"v\":-123456789012345678901234567890}",
+      "checksum": "sha256:5a1d1ad554a7f781984bb51e07455c0f33d0c8c8779a3700543d3ffd064db4c2"
+    },
+    {
+      "name": "small-decimal",
+      "wire": "{\"v\":0.000000123}",
+      "canonical": "{\"v\":0.000000123}",
+      "checksum": "sha256:d764bd8fc6076b9f85b92041de56623b34aa12089e35193dff3f1dc86cc1da70"
+    },
+    {
+      "name": "big-decimal-exp",
+      "wire": "{\"v\":1.23e-7}",
+      "canonical": "{\"v\":0.000000123}",
+      "checksum": "sha256:d764bd8fc6076b9f85b92041de56623b34aa12089e35193dff3f1dc86cc1da70"
+    },
+    {
+      "name": "high-precision",
+      "wire": "{\"v\":3.141592653589793238462643383279}",
+      "canonical": "{\"v\":3.141592653589793238462643383279}",
+      "checksum": "sha256:603331286a9286607593844ce0001233723f53ef00c48f61c09cd06dfe143fde"
+    },
+    {
+      "name": "quotes-backslash",
+      "wire": "{\"s\":\"a\\\"b\\\\c\"}",
+      "canonical": "{\"s\":\"a\\\"b\\\\c\"}",
+      "checksum": "sha256:97a1049b950c4967857a84a892616be14cfa33824839b42b557d9299074e9ea6"
+    },
+    {
+      "name": "controls",
+      "wire": "{\"s\":\"\\b\\f\\n\\r\\t\\u0001\\u001f\"}",
+      "canonical": "{\"s\":\"\\b\\f\\n\\r\\t\\u0001\\u001f\"}",
+      "checksum": "sha256:3945d319ebe02cfcd06e30728250f1ad4567eac5a5ba6e84112708733f9cdfbc"
+    },
+    {
+      "name": "html-sensitive",
+      "wire": "{\"s\":\"<>&'=\"}",
+      "canonical": "{\"s\":\"<>&'=\"}",
+      "checksum": "sha256:80737862ab1db7440375f9412ed505cdbb1d72f3415833b87bf945838ad1bd45"
+    },
+    {
+      "name": "u2028-2029",
+      "wire": "{\"s\":\"\\u2028\\u2029\"}",
+      "canonical": "{\"s\":\"\\u2028\\u2029\"}",
+      "checksum": "sha256:0696bba90b235d8c332209ed97c9ce862c11fdb33af41998ff1bb01ce6a3b01d"
+    },
+    {
+      "name": "bmp-cafe",
+      "wire": "{\"s\":\"caf\\u00e9\"}",
+      "canonical": "{\"s\":\"café\"}",
+      "checksum": "sha256:298ebe9dfd0022919780451da01d6ff22cd701ae9f614b77522b751906ac2784"
+    },
+    {
+      "name": "emoji",
+      "wire": "{\"s\":\"\\ud83c\\udfa3\\ud83d\\udd25\"}",
+      "canonical": "{\"s\":\"🎣🔥\"}",
+      "checksum": "sha256:d80aa7fbb4b94bc1147f0965a57d28e7b6e9ab87a1a88a50369ba76ab321ccfc"
+    },
+    {
+      "name": "object-null",
+      "wire": "{\"b\":1,\"a\":null}",
+      "canonical": "{\"a\":null,\"b\":1}",
+      "checksum": "sha256:c0bf82ad036cb0a5a03d6759c1b7b8b1f70a39b32dd96ed3977c7f2831ee3b56"
+    },
+    {
+      "name": "array-nulls",
+      "wire": "{\"arr\":[null,1,null,\"x\"]}",
+      "canonical": "{\"arr\":[null,1,null,\"x\"]}",
+      "checksum": "sha256:c8654dcbc501533927121fe88529fc58223b50113a7ea9070ce7098182a50827"
+    },
+    {
+      "name": "nested-order-a",
+      "wire": "{\"z\":{\"b\":1,\"a\":2},\"a\":{\"y\":[3,2],\"x\":1}}",
+      "canonical": "{\"a\":{\"x\":1,\"y\":[3,2]},\"z\":{\"a\":2,\"b\":1}}",
+      "checksum": "sha256:503052e1505892fd31633c9889e1bb487a1b5e61b15f794bec9269cb1627be88"
+    },
+    {
+      "name": "nested-order-b",
+      "wire": "{\"a\":{\"x\":1,\"y\":[3,2]},\"z\":{\"a\":2,\"b\":1}}",
+      "canonical": "{\"a\":{\"x\":1,\"y\":[3,2]},\"z\":{\"a\":2,\"b\":1}}",
+      "checksum": "sha256:503052e1505892fd31633c9889e1bb487a1b5e61b15f794bec9269cb1627be88"
+    },
+    {
+      "name": "nested-payload",
+      "wire": "{\"payloadChecksum\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\",\"nested\":{\"payloadChecksum\":\"retain\",\"n\":1}}",
+      "canonical": "{\"nested\":{\"n\":1,\"payloadChecksum\":\"retain\"}}",
+      "checksum": "sha256:759913d51a9959771ee6a3e4b9661cecf4eb28b8f7d5be65086340f785b82305"
+    },
+    {
+      "name": "array-order-a",
+      "wire": "{\"arr\":[1,2,3]}",
+      "canonical": "{\"arr\":[1,2,3]}",
+      "checksum": "sha256:302ccb1b18ee904077285b8dabc9f1f078ee4f89312844fc11a4cf4a26e1801e"
+    },
+    {
+      "name": "array-order-b",
+      "wire": "{\"arr\":[3,2,1]}",
+      "canonical": "{\"arr\":[3,2,1]}",
+      "checksum": "sha256:1cfbb6e16dd68e057f2ae5021f74a7a51d71f75115d9894a1316ccc04dc10de5"
+    },
+    {
+      "name": "exp-number",
+      "wire": "{\"v\":1e6}",
+      "canonical": "{\"v\":1000000}",
+      "checksum": "sha256:36b66874f071cfe7377866ac8a492dc5423997fd8b3fd2efd8aac4dca94cd50a"
+    },
+    {
+      "name": "slash",
+      "wire": "{\"s\":\"a/b\"}",
+      "canonical": "{\"s\":\"a/b\"}",
+      "checksum": "sha256:9c264114e98db725a30993f561fc16c317f85758d9919128ca9102281570bd83"
+    }
+  ]
+}

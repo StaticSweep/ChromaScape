@@ -18,14 +18,36 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /** Direct, non-shell process execution with a bounded transcript and allowlisted environment. */
 @Component
 public final class SafeProviderProcessRunner {
+  private static final Logger logger = LoggerFactory.getLogger(SafeProviderProcessRunner.class);
+
   private static final Set<String> BASE_ENVIRONMENT =
-      Set.of("PATH", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "LANG");
+      Set.of(
+          "PATH",
+          "HOME",
+          "USERPROFILE",
+          "HOMEDRIVE",
+          "HOMEPATH",
+          "APPDATA",
+          "LOCALAPPDATA",
+          "TEMP",
+          "TMP",
+          "LANG",
+          "SystemRoot",
+          "SystemDrive",
+          "WINDIR",
+          "COMSPEC",
+          "PATHEXT",
+          "OS",
+          "PROCESSOR_ARCHITECTURE",
+          "NUMBER_OF_PROCESSORS");
 
   private final ProviderRuntimeProperties properties;
   private final Clock clock;
@@ -86,12 +108,12 @@ public final class SafeProviderProcessRunner {
       Map<String, String> source = System.getenv();
       environment.clear();
       BASE_ENVIRONMENT.forEach(
-          name -> {
-            String value = source.get(name);
-            if (value != null && !value.isBlank()) {
-              environment.put(name, value);
-            }
-          });
+          name ->
+              source.entrySet().stream()
+                  .filter(entry -> entry.getKey().equalsIgnoreCase(name))
+                  .findFirst()
+                  .filter(entry -> !entry.getValue().isBlank())
+                  .ifPresent(entry -> environment.put(entry.getKey(), entry.getValue())));
       credentialEnvironmentNames.forEach(
           name -> {
             String value = source.get(name);
@@ -109,21 +131,24 @@ public final class SafeProviderProcessRunner {
 
     boolean submitted = false;
     try {
-      process.getOutputStream().write(stdin.getBytes(StandardCharsets.UTF_8));
-      process.getOutputStream().close();
-      submitted = true;
       CompletableFuture<BoundedOutput> stdout =
           CompletableFuture.supplyAsync(
               () -> readBounded(process.getInputStream(), properties.getMaxStdoutBytes()));
       CompletableFuture<BoundedOutput> stderr =
           CompletableFuture.supplyAsync(
               () -> readBounded(process.getErrorStream(), properties.getMaxStderrBytes()));
+      // Once the child is running, submission has begun. A child may legitimately close stdin
+      // after producing a terminal response, so a broken input pipe must not discard the bounded
+      // output or be misclassified as a process-start failure.
+      submitted = true;
+      try (var processInput = process.getOutputStream()) {
+        processInput.write(stdin.getBytes(StandardCharsets.UTF_8));
+      } catch (IOException inputFailure) {
+        logger.debug("Provider process {} closed stdin during submission", turnRef, inputFailure);
+      }
       long remaining = Math.max(1, Duration.between(clock.instant(), deadline).toMillis());
       if (!process.waitFor(remaining, TimeUnit.MILLISECONDS)) {
-        process.destroy();
-        if (process.isAlive()) {
-          process.destroyForcibly();
-        }
+        terminateProcessTree(process);
         return ProcessResult.failure(
             true, FailureCode.UNKNOWN_PROVIDER_OUTCOME, elapsed(startedAt));
       }
@@ -144,6 +169,7 @@ public final class SafeProviderProcessRunner {
       return new ProcessResult(
           true, true, process.exitValue(), out.text(), err.text(), failure, elapsed(startedAt));
     } catch (Exception exception) {
+      logger.warn("Provider process {} failed after submission={}", turnRef, submitted, exception);
       if (submitted) {
         return ProcessResult.failure(
             true, FailureCode.UNKNOWN_PROVIDER_OUTCOME, elapsed(startedAt));
@@ -159,8 +185,32 @@ public final class SafeProviderProcessRunner {
     if (process == null) {
       return false;
     }
-    process.destroy();
+    terminateProcessTree(process);
     return true;
+  }
+
+  private void terminateProcessTree(Process process) {
+    List<ProcessHandle> descendants = process.descendants().toList();
+    descendants.forEach(ProcessHandle::destroy);
+    process.destroy();
+    try {
+      if (!process.waitFor(250, TimeUnit.MILLISECONDS)) {
+        descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
+        process.destroyForcibly();
+        process.waitFor(5, TimeUnit.SECONDS);
+      }
+      for (ProcessHandle descendant : descendants) {
+        if (descendant.isAlive()) {
+          descendant.destroyForcibly();
+          descendant.onExit().get(5, TimeUnit.SECONDS);
+        }
+      }
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      logger.warn("Interrupted while terminating provider process tree", exception);
+    } catch (Exception exception) {
+      logger.warn("Provider process tree did not terminate within the cleanup bound", exception);
+    }
   }
 
   public ProbeResult probe(List<String> command, List<String> credentialEnvironmentNames) {

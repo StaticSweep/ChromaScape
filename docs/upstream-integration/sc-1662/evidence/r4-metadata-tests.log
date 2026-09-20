@@ -1,0 +1,19 @@
+# command: ./gradlew --offline nativeMetadataTests --console=plain
+# utc: 2026-09-15T23:35:13Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 14b04aa7ec24791e96a20b0a734de9dc493f89583357b36c332fe3b18fa20552
+# run_sequence: 4 (third-review fixes; runs 1-3 retained unmodified apart from redaction)
+
+
+> Task :nativeMetadataTests
+...........................................
+----------------------------------------------------------------------
+Ran 43 tests in 0.063s
+
+OK
+
+BUILD SUCCESSFUL in 1s
+1 actionable task: 1 executed
+
+# exit: 0
+# elapsed_seconds: 2

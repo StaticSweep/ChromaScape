@@ -32,8 +32,14 @@ public class CaptureOperationDispatcher {
   private final CaptureRecordingGateway gateway;
   private final CaptureOperationResultService results;
   private final TransactionTemplate transactions;
-  private final ExecutorService executor = new ThreadPoolExecutor(
-      0, 4, 30, TimeUnit.SECONDS, new ArrayBlockingQueue<>(64), new ThreadPoolExecutor.AbortPolicy());
+  private final ExecutorService executor =
+      new ThreadPoolExecutor(
+          0,
+          4,
+          30,
+          TimeUnit.SECONDS,
+          new ArrayBlockingQueue<>(64),
+          new ThreadPoolExecutor.AbortPolicy());
 
   public CaptureOperationDispatcher(
       RoutineCaptureOperationRepository operations,
@@ -49,17 +55,24 @@ public class CaptureOperationDispatcher {
   public void dispatchAfterCommit(Long operationId) {
     Runnable dispatch = () -> submit(operationId);
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-        @Override public void afterCommit() { dispatch.run(); }
-      });
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              dispatch.run();
+            }
+          });
     } else {
       dispatch.run();
     }
   }
 
   private void submit(Long operationId) {
-    try { executor.execute(() -> dispatch(operationId)); }
-    catch (RejectedExecutionException ignored) { /* recovery scanner owns the durable retry */ }
+    try {
+      executor.execute(() -> dispatch(operationId));
+    } catch (RejectedExecutionException ignored) {
+      /* recovery scanner owns the durable retry */
+    }
   }
 
   public Claim claim(Long operationId) {
@@ -76,8 +89,13 @@ public class CaptureOperationDispatcher {
     operation.setAttempts(operation.getAttempts() + 1);
     operation.setLastError(null);
     operations.save(operation);
-    return new Claim(operation.getId(), operation.getSessionId(), operation.getOperation(),
-        operation.getCorrelationId(), attemptId, operation.getRequestJson());
+    return new Claim(
+        operation.getId(),
+        operation.getSessionId(),
+        operation.getOperation(),
+        operation.getCorrelationId(),
+        attemptId,
+        operation.getRequestJson());
   }
 
   private void dispatch(Long operationId) {
@@ -86,12 +104,21 @@ public class CaptureOperationDispatcher {
     try {
       if ("START".equals(claim.kind())) {
         var request = parseStart(claim.requestJson());
-        results.applyStart(claim.id(), claim.attemptId(), gateway.startOrFind(
-            claim.sessionId(), request.taskKey(), claim.correlationId()));
+        results.applyStart(
+            claim.id(),
+            claim.attemptId(),
+            gateway.startOrFind(claim.sessionId(), request.taskKey(), claim.correlationId()));
       } else {
         var request = parseComplete(claim.requestJson());
-        results.applyComplete(claim.id(), claim.attemptId(), gateway.completeOrFind(
-            claim.sessionId(), request.debugSessionId(), request.recordingId(), request.finalTick(), claim.correlationId()));
+        results.applyComplete(
+            claim.id(),
+            claim.attemptId(),
+            gateway.completeOrFind(
+                claim.sessionId(),
+                request.debugSessionId(),
+                request.recordingId(),
+                request.finalTick(),
+                claim.correlationId()));
       }
     } catch (Exception exception) {
       // The attempt lease expires and recovery can safely perform lookup-first reconciliation.
@@ -101,52 +128,87 @@ public class CaptureOperationDispatcher {
 
   @Scheduled(fixedDelay = 5000L)
   public void recover() {
-    for (RoutineCaptureOperation operation : operations.findClaimable(
-        Instant.now(), org.springframework.data.domain.PageRequest.of(0, 16))) {
+    for (RoutineCaptureOperation operation :
+        operations.findClaimable(
+            Instant.now(), org.springframework.data.domain.PageRequest.of(0, 16))) {
       submit(operation.getId());
     }
   }
 
   public void markUncertain(Long operationId, String attemptId, String error) {
-    transactions.executeWithoutResult(status -> markUncertainInTransaction(operationId, attemptId, error));
+    transactions.executeWithoutResult(
+        status -> markUncertainInTransaction(operationId, attemptId, error));
   }
 
   private void markUncertainInTransaction(Long operationId, String attemptId, String error) {
     RoutineCaptureOperation operation = operations.findWithLockById(operationId).orElse(null);
-    if (operation == null || !"LEASED".equals(operation.getState())
+    if (operation == null
+        || !"LEASED".equals(operation.getState())
         || !attemptId.equals(operation.getAttemptId())) return;
     operation.setState("UNCERTAIN");
-    operation.setLastError(error == null ? "CAPTURE_OPERATION_UNCERTAIN" : error.substring(0, Math.min(1000, error.length())));
+    operation.setLastError(
+        error == null
+            ? "CAPTURE_OPERATION_UNCERTAIN"
+            : error.substring(0, Math.min(1000, error.length())));
     operation.setAttemptId(null);
     operation.setLeaseExpiresAt(null);
     operation.setNextAttemptAt(Instant.now().plusSeconds(30));
     operations.save(operation);
   }
 
-  public void reconcile(Long operationId) { dispatchAfterCommit(operationId); }
+  public void reconcile(Long operationId) {
+    dispatchAfterCommit(operationId);
+  }
 
   private boolean claimable(RoutineCaptureOperation operation, Instant now) {
     return ("PENDING".equals(operation.getState()) || "UNCERTAIN".equals(operation.getState()))
-        && !operation.getNextAttemptAt().isAfter(now)
-        || "LEASED".equals(operation.getState()) && operation.getLeaseExpiresAt() != null
+            && !operation.getNextAttemptAt().isAfter(now)
+        || "LEASED".equals(operation.getState())
+            && operation.getLeaseExpiresAt() != null
             && operation.getLeaseExpiresAt().isBefore(now);
   }
 
   StartRequest parseStart(String json) {
-    try { return OPERATION_MAPPER.readValue(json, StartRequest.class); }
-    catch (Exception e) { throw new IllegalStateException("CAPTURE_START_REQUEST_INVALID", e); }
+    try {
+      return OPERATION_MAPPER.readValue(json, StartRequest.class);
+    } catch (Exception e) {
+      throw new IllegalStateException("CAPTURE_START_REQUEST_INVALID", e);
+    }
   }
 
   CompleteRequest parseComplete(String json) {
-    try { return OPERATION_MAPPER.readValue(json, CompleteRequest.class); }
-    catch (Exception e) { throw new IllegalStateException("CAPTURE_COMPLETE_REQUEST_INVALID", e); }
+    try {
+      return OPERATION_MAPPER.readValue(json, CompleteRequest.class);
+    } catch (Exception e) {
+      throw new IllegalStateException("CAPTURE_COMPLETE_REQUEST_INVALID", e);
+    }
   }
 
-  record StartRequest(String task_key) { String taskKey() { return task_key; } }
-  record CompleteRequest(String recording_id, String debug_session_id, int final_tick) {
-    String recordingId() { return recording_id; }
-    String debugSessionId() { return debug_session_id; }
-    int finalTick() { return final_tick; }
+  record StartRequest(String task_key) {
+    String taskKey() {
+      return task_key;
+    }
   }
-  public record Claim(Long id, String sessionId, String kind, String correlationId, String attemptId, String requestJson) {}
+
+  record CompleteRequest(String recording_id, String debug_session_id, int final_tick) {
+    String recordingId() {
+      return recording_id;
+    }
+
+    String debugSessionId() {
+      return debug_session_id;
+    }
+
+    int finalTick() {
+      return final_tick;
+    }
+  }
+
+  public record Claim(
+      Long id,
+      String sessionId,
+      String kind,
+      String correlationId,
+      String attemptId,
+      String requestJson) {}
 }

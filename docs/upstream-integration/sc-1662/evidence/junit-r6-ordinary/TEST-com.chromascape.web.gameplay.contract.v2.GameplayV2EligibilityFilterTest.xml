@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.gameplay.contract.v2.GameplayV2EligibilityFilterTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:41:02.422Z" hostname="fedora" time="0.034">
+  <properties/>
+  <testcase name="policyBudgetAndPrerequisiteReasonsAreClosed()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2EligibilityFilterTest" time="0.005"/>
+  <testcase name="identityMismatchesFailClosedBeforeTaskChecks()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2EligibilityFilterTest" time="0.003"/>
+  <testcase name="deterministicFilterReproducesTheGoldenEligibilityResult()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2EligibilityFilterTest" time="0.008"/>
+  <testcase name="unsupportedCapabilitiesAndCatalogPreconditionsAreEvaluated()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2EligibilityFilterTest" time="0.004"/>
+  <testcase name="catalogRevisionIdentitiesDeadlineAndContradictionsFailClosed()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2EligibilityFilterTest" time="0.004"/>
+  <testcase name="staleObservationIsRejectedDeterministically()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2EligibilityFilterTest" time="0.004"/>
+  <testcase name="incompleteAndLowConfidenceObservationsAreStale()" classname="com.chromascape.web.gameplay.contract.v2.GameplayV2EligibilityFilterTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

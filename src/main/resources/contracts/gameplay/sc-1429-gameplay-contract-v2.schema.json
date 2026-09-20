@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:chromascape:gameplay:sc-1429:v2",
+  "title": "SC-1429 provider-neutral gameplay contract v2",
+  "$defs": {
+    "token": {"type":"string","pattern":"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "sha256": {"type":"string","pattern":"^sha256:[a-f0-9]{64}$"},
+    "evidenceRef": {"type":"string","minLength":1,"maxLength":512,"pattern":"^[^\\u0000-\\u001F]+$"},
+    "timestamp": {"type":"string","format":"date-time"},
+    "revision": {"type":"integer","minimum":0},
+    "confidence": {"type":"number","minimum":0,"maximum":1},
+    "executionMode": {"enum":["SIMULATION","SHADOW","LIVE_TASK"]},
+    "areaPolicy": {"enum":["LUMBRIDGE","DRAYNOR","BARBARIAN_VILLAGE"]},
+    "expectedTransition": {"enum":["FISHING_XP_INCREASED","TARGET_LEVEL_REACHED"]},
+    "taskKey": {"const":"FISHING_TRAINING"},
+    "taskSkillMaturity": {"enum":["CANDIDATE","VALIDATED","TRUSTED"]},
+    "eligibilityStatus": {
+      "enum":["ELIGIBLE","NO_ELIGIBLE_TASK","STALE_OBSERVATION","STALE_KNOWLEDGE","UNSUPPORTED_CAPABILITY","PREREQUISITE_UNMET","POLICY_DENIED","BUDGET_EXHAUSTED","IDENTITY_MISMATCH"]
+    },
+    "abstentionReason": {
+      "enum":["NO_ELIGIBLE_TASK","STALE_OBSERVATION","STALE_KNOWLEDGE","UNSUPPORTED_CAPABILITY","PREREQUISITE_UNMET","POLICY_DENIED","BUDGET_EXHAUSTED","IDENTITY_MISMATCH"]
+    },
+    "semanticAction": {
+      "type":"object","additionalProperties":false,
+      "required":["kind","taskKey","settings","expectedTransition","verifierId","decisionId"],
+      "properties":{
+        "kind":{"const":"START_FISHING_TASK"},
+        "taskKey":{"$ref":"#/$defs/taskKey"},
+        "settings":{"$ref":"#/$defs/fishingTrainingSettings"},
+        "expectedTransition":{"$ref":"#/$defs/expectedTransition"},
+        "verifierId":{"$ref":"#/$defs/token"},
+        "decisionId":{"$ref":"#/$defs/token"}
+      }
+    },
+    "approvedScope": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","mode","provider","modelVersion","decisionId","identities","taskKey","settings","budgets","semanticActionDigest","expectedTransition","verifierId","deadline","killSwitchScope"],
+      "properties":{
+        "contractVersion":{"const":"sc-1429/v2"},
+        "mode":{"$ref":"#/$defs/executionMode"},
+        "provider":{"enum":["CLAUDE","CODEX"]},
+        "modelVersion":{"$ref":"#/$defs/token"},
+        "decisionId":{"$ref":"#/$defs/token"},
+        "identities":{"$ref":"#/$defs/identities"},
+        "taskKey":{"$ref":"#/$defs/taskKey"},
+        "settings":{"$ref":"#/$defs/fishingTrainingSettings"},
+        "budgets":{"$ref":"#/$defs/budgets"},
+        "semanticActionDigest":{"$ref":"#/$defs/sha256"},
+        "expectedTransition":{"$ref":"#/$defs/expectedTransition"},
+        "verifierId":{"$ref":"#/$defs/token"},
+        "deadline":{"$ref":"#/$defs/timestamp"},
+        "killSwitchScope":{"const":"RUN"}
+      }
+    },
+    "toolOperationName": {"enum":["CATALOG","RESERVE","START","STATUS","STOP","OBSERVE"]},
+    "identities": {
+      "type":"object","additionalProperties":false,
+      "required":["accountId","clientId","environmentId","runId","taskId","sessionId","recordingId","sourceId"],
+      "properties": {
+        "accountId":{"$ref":"#/$defs/token"},"clientId":{"$ref":"#/$defs/token"},
+        "environmentId":{"$ref":"#/$defs/token"},"runId":{"$ref":"#/$defs/token"},
+        "taskId":{"$ref":"#/$defs/token"},"sessionId":{"$ref":"#/$defs/token"},
+        "recordingId":{"$ref":"#/$defs/token"},"sourceId":{"$ref":"#/$defs/token"}
+      }
+    },
+    "budgets": {"type":"object","additionalProperties":false,"required":["maxActions","maxAttempts","maxElapsedMs"],"properties":{"maxActions":{"type":"integer","minimum":1,"maximum":20},"maxAttempts":{"type":"integer","minimum":1,"maximum":3},"maxElapsedMs":{"type":"integer","minimum":1000,"maximum":1800000}}},
+    "fishingTrainingSettings": {
+      "type":"object","additionalProperties":false,
+      "required":["targetLevel","areaPolicy"],
+      "properties":{"targetLevel":{"type":"integer","minimum":2,"maximum":99},"areaPolicy":{"$ref":"#/$defs/areaPolicy"}}
+    },
+    "taskSkillRef": {
+      "type":"object","additionalProperties":false,
+      "required":["taskSkillId","version","artifactDigest","maturity","capabilityRequirements","provenance"],
+      "properties":{
+        "taskSkillId":{"$ref":"#/$defs/token"},
+        "version":{"type":"integer","minimum":1,"maximum":65535},
+        "artifactDigest":{"$ref":"#/$defs/sha256"},
+        "maturity":{"$ref":"#/$defs/taskSkillMaturity"},
+        "capabilityRequirements":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/token"}},
+        "provenance":{"type":"array","minItems":1,"maxItems":8,"items":{"$ref":"#/$defs/evidenceRef"}}
+      }
+    },
+    "goalPlanNode": {
+      "type":"object","additionalProperties":false,
+      "required":["nodeId","ordinal","taskKey","taskSkillRefs","settings","prerequisiteNodeIds","preconditions","expectedObservationRevision","expectedTaskRevision","expectedTransition","verifierId","budgets","fallbackNodeId","failureCode","evidenceRefs"],
+      "properties":{
+        "nodeId":{"$ref":"#/$defs/token"},
+        "ordinal":{"type":"integer","minimum":0,"maximum":15},
+        "taskKey":{"$ref":"#/$defs/taskKey"},
+        "taskSkillRefs":{"type":"array","minItems":1,"maxItems":8,"items":{"$ref":"#/$defs/taskSkillRef"}},
+        "settings":{"$ref":"#/$defs/fishingTrainingSettings"},
+        "prerequisiteNodeIds":{"type":"array","maxItems":15,"items":{"$ref":"#/$defs/token"}},
+        "preconditions":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/token"}},
+        "expectedObservationRevision":{"$ref":"#/$defs/revision"},
+        "expectedTaskRevision":{"$ref":"#/$defs/revision"},
+        "expectedTransition":{"$ref":"#/$defs/expectedTransition"},
+        "verifierId":{"$ref":"#/$defs/token"},
+        "budgets":{"$ref":"#/$defs/budgets"},
+        "fallbackNodeId":{"type":["string","null"]},
+        "failureCode":{"type":["string","null"],"pattern":"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "evidenceRefs":{"type":"array","maxItems":32,"items":{"$ref":"#/$defs/evidenceRef"}}
+      }
+    },
+    "goalPlan": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","goalPlanId","goalPlanDigest","mode","identities","sourceDecisionId","deadline","terminalObjective","aggregateBudgets","nodes"],
+      "properties":{
+        "contractVersion":{"const":"sc-1429/v2"},
+        "goalPlanId":{"$ref":"#/$defs/token"},
+        "goalPlanDigest":{"$ref":"#/$defs/sha256"},
+        "mode":{"$ref":"#/$defs/executionMode"},
+        "identities":{"$ref":"#/$defs/identities"},
+        "sourceDecisionId":{"$ref":"#/$defs/token"},
+        "deadline":{"$ref":"#/$defs/timestamp"},
+        "terminalObjective":{"$ref":"#/$defs/token"},
+        "aggregateBudgets":{"$ref":"#/$defs/budgets"},
+        "nodes":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/goalPlanNode"}}
+      }
+    },
+    "fishingTrainingTask": {
+      "type":"object","additionalProperties":false,
+      "required":["taskKey","requiredCapabilities","prerequisites","preconditions","expectedTransitions","verifierIds","maxPolicyBounds"],
+      "properties":{
+        "taskKey":{"$ref":"#/$defs/taskKey"},
+        "requiredCapabilities":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/token"}},
+        "prerequisites":{"type":"array","maxItems":16,"items":{"$ref":"#/$defs/token"}},
+        "preconditions":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/token"}},
+        "expectedTransitions":{"type":"array","minItems":1,"maxItems":2,"items":{"$ref":"#/$defs/expectedTransition"}},
+        "verifierIds":{"type":"array","minItems":1,"maxItems":8,"items":{"$ref":"#/$defs/token"}},
+        "maxPolicyBounds":{"$ref":"#/$defs/budgets"}
+      }
+    },
+    "capabilitySnapshot": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","capabilities"],
+      "properties":{
+        "contractVersion":{"const":"sc-1429/v2"},
+        "capabilities":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/token"}}
+      }
+    },
+    "immutableTaskCatalogSnapshot": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","catalogId","catalogRevision","catalogDigest","capturedAt","executorArtifactId","executorBuildId","pluginId","capabilitySnapshotDigest","tasks"],
+      "properties":{
+        "contractVersion":{"const":"sc-1429/v2"},
+        "catalogId":{"$ref":"#/$defs/token"},
+        "catalogRevision":{"$ref":"#/$defs/revision"},
+        "catalogDigest":{"$ref":"#/$defs/sha256"},
+        "capturedAt":{"$ref":"#/$defs/timestamp"},
+        "executorArtifactId":{"$ref":"#/$defs/token"},
+        "executorBuildId":{"$ref":"#/$defs/token"},
+        "pluginId":{"$ref":"#/$defs/token"},
+        "capabilitySnapshotDigest":{"$ref":"#/$defs/sha256"},
+        "tasks":{"type":"array","minItems":1,"maxItems":1,"items":{"$ref":"#/$defs/fishingTrainingTask"}}
+      }
+    },
+    "semanticObservation": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","observationId","revision","capturedAt","capturedTick","mode","identities","catalogDigest","catalogRevision","capabilitySnapshotDigest","policyDigest","knowledgeDigest","buildId","player","inventory","skills","eligibleTargets","taskState","freshness","observationComplete","adapterObservationConfidence","knowledgeFreshnessConfidence","taskRevision"],
+      "properties":{
+        "contractVersion":{"const":"sc-1429/v2"},
+        "observationId":{"$ref":"#/$defs/token"},
+        "revision":{"$ref":"#/$defs/revision"},
+        "capturedAt":{"$ref":"#/$defs/timestamp"},
+        "capturedTick":{"type":"integer","minimum":0},
+        "mode":{"$ref":"#/$defs/executionMode"},
+        "identities":{"$ref":"#/$defs/identities"},
+        "catalogDigest":{"$ref":"#/$defs/sha256"},
+        "catalogRevision":{"$ref":"#/$defs/revision"},
+        "capabilitySnapshotDigest":{"$ref":"#/$defs/sha256"},
+        "policyDigest":{"$ref":"#/$defs/sha256"},
+        "knowledgeDigest":{"$ref":"#/$defs/sha256"},
+        "buildId":{"$ref":"#/$defs/token"},
+        "player":{"type":"object","additionalProperties":false,"required":["worldPoint","animation","interactingTarget"],"properties":{"worldPoint":{"type":"string","pattern":"^-?[0-9]+,-?[0-9]+,[0-3]$"},"animation":{"type":"integer"},"interactingTarget":{"type":["string","null"],"maxLength":128}}},
+        "inventory":{"type":"array","maxItems":28,"items":{"type":"object","additionalProperties":false,"required":["itemId","quantity"],"properties":{"itemId":{"type":"integer","minimum":0},"quantity":{"type":"integer","minimum":1}}}},
+        "skills":{"type":"object","additionalProperties":false,"required":["fishingLevel","fishingXp"],"properties":{"fishingLevel":{"type":"integer","minimum":1,"maximum":126},"fishingXp":{"type":"integer","minimum":0}}},
+        "eligibleTargets":{"type":"array","maxItems":32,"items":{"$ref":"#/$defs/token"}},
+        "taskState":{"type":"object","additionalProperties":false,"required":["revision","status","taskKey"],"properties":{"revision":{"$ref":"#/$defs/revision"},"status":{"enum":["IDLE","RECEIVED","QUEUED","ASSIGNED","RUNNING","PAUSED","COMPLETED","FAILED","CANCELLED"]},"taskKey":{"type":["string","null"],"pattern":"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"}}},
+        "freshness":{"type":"object","additionalProperties":false,"required":["status","maxAgeMs"],"properties":{"status":{"enum":["CURRENT","STALE"]},"maxAgeMs":{"type":"integer","minimum":0,"maximum":600000}}},
+        "observationComplete":{"type":"boolean"},
+        "adapterObservationConfidence":{"$ref":"#/$defs/confidence"},
+        "knowledgeFreshnessConfidence":{"$ref":"#/$defs/confidence"},
+        "taskRevision":{"$ref":"#/$defs/revision"}
+      }
+    },
+    "planningInput": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","mode","catalogDigest","catalogRevision","observationDigest","capabilitySnapshotDigest","policyDigest","knowledgeDigest","eligibleTaskKeys","rejectedEntries","budgets","deadline","identities","provenanceRefs","promptSchemaId","promptSchemaVersion"],
+      "properties":{
+        "contractVersion":{"const":"sc-1429/v2"},
+        "mode":{"$ref":"#/$defs/executionMode"},
+        "catalogDigest":{"$ref":"#/$defs/sha256"},
+        "catalogRevision":{"$ref":"#/$defs/revision"},
+        "observationDigest":{"$ref":"#/$defs/sha256"},
+        "capabilitySnapshotDigest":{"$ref":"#/$defs/sha256"},
+        "policyDigest":{"$ref":"#/$defs/sha256"},
+        "knowledgeDigest":{"$ref":"#/$defs/sha256"},
+        "eligibleTaskKeys":{"type":"array","maxItems":16,"items":{"$ref":"#/$defs/taskKey"}},
+        "rejectedEntries":{"type":"array","maxItems":16,"items":{"type":"object","additionalProperties":false,"required":["taskKey","reason"],"properties":{"taskKey":{"$ref":"#/$defs/token"},"reason":{"$ref":"#/$defs/eligibilityStatus"}}}},
+        "budgets":{"$ref":"#/$defs/budgets"},
+        "deadline":{"$ref":"#/$defs/timestamp"},
+        "identities":{"$ref":"#/$defs/identities"},
+        "provenanceRefs":{"type":"array","maxItems":32,"items":{"$ref":"#/$defs/evidenceRef"}},
+        "promptSchemaId":{"$ref":"#/$defs/token"},
+        "promptSchemaVersion":{"$ref":"#/$defs/token"}
+      }
+    },
+    "eligibilityEntry": {
+      "type":"object","additionalProperties":false,
+      "required":["taskKey","status"],
+      "properties":{"taskKey":{"$ref":"#/$defs/token"},"status":{"$ref":"#/$defs/eligibilityStatus"}}
+    },
+    "eligibilityResult": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","mode","catalogDigest","observationDigest","evaluatedAt","entries"],
+      "properties":{
+        "contractVersion":{"const":"sc-1429/v2"},
+        "mode":{"$ref":"#/$defs/executionMode"},
+        "catalogDigest":{"$ref":"#/$defs/sha256"},
+        "observationDigest":{"$ref":"#/$defs/sha256"},
+        "evaluatedAt":{"$ref":"#/$defs/timestamp"},
+        "entries":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/eligibilityEntry"}}
+      }
+    },
+    "providerDecision": {
+      "oneOf":[
+        {
+          "type":"object","additionalProperties":false,
+          "required":["contractVersion","kind","provider","modelVersion","decisionId","promptId","policyConfidence","adapterObservationConfidence","knowledgeFreshnessConfidence","eligibleInputDigest","goalPlan","evidenceRefs"],
+          "properties":{
+            "contractVersion":{"const":"sc-1429/v2"},
+            "kind":{"const":"SELECTED"},
+            "provider":{"enum":["CLAUDE","CODEX"]},
+            "modelVersion":{"$ref":"#/$defs/token"},
+            "decisionId":{"$ref":"#/$defs/token"},
+            "promptId":{"$ref":"#/$defs/token"},
+            "policyConfidence":{"$ref":"#/$defs/confidence"},
+            "adapterObservationConfidence":{"$ref":"#/$defs/confidence"},
+            "knowledgeFreshnessConfidence":{"$ref":"#/$defs/confidence"},
+            "eligibleInputDigest":{"$ref":"#/$defs/sha256"},
+            "goalPlan":{"$ref":"#/$defs/goalPlan"},
+            "evidenceRefs":{"type":"array","maxItems":32,"items":{"$ref":"#/$defs/evidenceRef"}}
+          }
+        },
+        {
+          "type":"object","additionalProperties":false,
+          "required":["contractVersion","kind","provider","modelVersion","decisionId","promptId","policyConfidence","adapterObservationConfidence","knowledgeFreshnessConfidence","eligibleInputDigest","reason","evidenceRefs"],
+          "properties":{
+            "contractVersion":{"const":"sc-1429/v2"},
+            "kind":{"const":"ABSTAINED"},
+            "provider":{"enum":["CLAUDE","CODEX"]},
+            "modelVersion":{"$ref":"#/$defs/token"},
+            "decisionId":{"$ref":"#/$defs/token"},
+            "promptId":{"$ref":"#/$defs/token"},
+            "policyConfidence":{"$ref":"#/$defs/confidence"},
+            "adapterObservationConfidence":{"$ref":"#/$defs/confidence"},
+            "knowledgeFreshnessConfidence":{"$ref":"#/$defs/confidence"},
+            "eligibleInputDigest":{"$ref":"#/$defs/sha256"},
+            "reason":{"$ref":"#/$defs/abstentionReason"},
+            "evidenceRefs":{"type":"array","maxItems":32,"items":{"$ref":"#/$defs/evidenceRef"}}
+          }
+        }
+      ]
+    },
+    "authority": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","authorityId","actorType","approvedBy","approvedAt","expiresAt","envelopeDigest","scopeDigest","oneUse","signature"],
+      "properties":{"contractVersion":{"const":"sc-1429/v2"},"authorityId":{"$ref":"#/$defs/token"},"actorType":{"const":"HUMAN"},"approvedBy":{"$ref":"#/$defs/token"},"approvedAt":{"$ref":"#/$defs/timestamp"},"expiresAt":{"$ref":"#/$defs/timestamp"},"envelopeDigest":{"$ref":"#/$defs/sha256"},"scopeDigest":{"$ref":"#/$defs/sha256"},"oneUse":{"const":true},"signature":{"type":"string","pattern":"^hmac-sha256:[a-f0-9]{64}$"}}
+    },
+    "executionEnvelope": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","mode","provider","modelVersion","decisionId","promptId","requestId","idempotencyKey","goalPlanDigest","taskSkillDigests","taskKey","settings","identities","catalogDigest","catalogRevision","capabilitySnapshotDigest","schemaDigest","policyDigest","knowledgeDigest","planningInputDigest","eligibilityResultDigest","semanticActionDigest","expectedTransition","verifierId","executorArtifactId","pluginId","buildId","expectedObservationRevision","expectedTaskRevision","leaseGeneration","fence","budgets","deadline","killSwitchScope","authorityId"],
+      "properties":{
+        "contractVersion":{"const":"sc-1429/v2"},
+        "mode":{"$ref":"#/$defs/executionMode"},
+        "provider":{"enum":["CLAUDE","CODEX"]},
+        "modelVersion":{"$ref":"#/$defs/token"},
+        "decisionId":{"$ref":"#/$defs/token"},
+        "promptId":{"$ref":"#/$defs/token"},
+        "requestId":{"$ref":"#/$defs/token"},
+        "idempotencyKey":{"$ref":"#/$defs/token"},
+        "goalPlanDigest":{"$ref":"#/$defs/sha256"},
+        "taskSkillDigests":{"type":"array","minItems":1,"maxItems":16,"items":{"$ref":"#/$defs/sha256"}},
+        "taskKey":{"$ref":"#/$defs/taskKey"},
+        "settings":{"$ref":"#/$defs/fishingTrainingSettings"},
+        "identities":{"$ref":"#/$defs/identities"},
+        "catalogDigest":{"$ref":"#/$defs/sha256"},
+        "catalogRevision":{"$ref":"#/$defs/revision"},
+        "capabilitySnapshotDigest":{"$ref":"#/$defs/sha256"},
+        "schemaDigest":{"$ref":"#/$defs/sha256"},
+        "policyDigest":{"$ref":"#/$defs/sha256"},
+        "knowledgeDigest":{"$ref":"#/$defs/sha256"},
+        "planningInputDigest":{"$ref":"#/$defs/sha256"},
+        "eligibilityResultDigest":{"$ref":"#/$defs/sha256"},
+        "semanticActionDigest":{"$ref":"#/$defs/sha256"},
+        "expectedTransition":{"$ref":"#/$defs/expectedTransition"},
+        "verifierId":{"$ref":"#/$defs/token"},
+        "executorArtifactId":{"$ref":"#/$defs/token"},
+        "pluginId":{"$ref":"#/$defs/token"},
+        "buildId":{"$ref":"#/$defs/token"},
+        "expectedObservationRevision":{"$ref":"#/$defs/revision"},
+        "expectedTaskRevision":{"$ref":"#/$defs/revision"},
+        "leaseGeneration":{"type":"integer","minimum":1},
+        "fence":{"type":"integer","minimum":1},
+        "budgets":{"$ref":"#/$defs/budgets"},
+        "deadline":{"$ref":"#/$defs/timestamp"},
+        "killSwitchScope":{"const":"RUN"},
+        "authorityId":{"type":["string","null"],"pattern":"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"}
+      }
+    },
+    "toolOperation": {
+      "oneOf":[
+        {"type":"object","additionalProperties":false,"required":["contractVersion","op","mode","requestId","idempotencyKey","deadline","catalogDigest"],"properties":{"contractVersion":{"const":"sc-1429/v2"},"op":{"const":"CATALOG"},"mode":{"$ref":"#/$defs/executionMode"},"requestId":{"$ref":"#/$defs/token"},"idempotencyKey":{"$ref":"#/$defs/token"},"deadline":{"$ref":"#/$defs/timestamp"},"catalogDigest":{"$ref":"#/$defs/sha256"}}},
+        {"type":"object","additionalProperties":false,"required":["contractVersion","op","mode","requestId","idempotencyKey","deadline","envelopeDigest","leaseGeneration","fence"],"properties":{"contractVersion":{"const":"sc-1429/v2"},"op":{"const":"RESERVE"},"mode":{"$ref":"#/$defs/executionMode"},"requestId":{"$ref":"#/$defs/token"},"idempotencyKey":{"$ref":"#/$defs/token"},"deadline":{"$ref":"#/$defs/timestamp"},"envelopeDigest":{"$ref":"#/$defs/sha256"},"leaseGeneration":{"type":"integer","minimum":1},"fence":{"type":"integer","minimum":1}}},
+        {"type":"object","additionalProperties":false,"required":["contractVersion","op","mode","requestId","idempotencyKey","deadline","envelopeDigest","leaseGeneration","fence"],"properties":{"contractVersion":{"const":"sc-1429/v2"},"op":{"const":"START"},"mode":{"$ref":"#/$defs/executionMode"},"requestId":{"$ref":"#/$defs/token"},"idempotencyKey":{"$ref":"#/$defs/token"},"deadline":{"$ref":"#/$defs/timestamp"},"envelopeDigest":{"$ref":"#/$defs/sha256"},"leaseGeneration":{"type":"integer","minimum":1},"fence":{"type":"integer","minimum":1}}},
+        {"type":"object","additionalProperties":false,"required":["contractVersion","op","mode","requestId","idempotencyKey","deadline"],"properties":{"contractVersion":{"const":"sc-1429/v2"},"op":{"const":"STATUS"},"mode":{"$ref":"#/$defs/executionMode"},"requestId":{"$ref":"#/$defs/token"},"idempotencyKey":{"$ref":"#/$defs/token"},"deadline":{"$ref":"#/$defs/timestamp"}}},
+        {"type":"object","additionalProperties":false,"required":["contractVersion","op","mode","requestId","idempotencyKey","deadline","stopIntent"],"properties":{"contractVersion":{"const":"sc-1429/v2"},"op":{"const":"STOP"},"mode":{"$ref":"#/$defs/executionMode"},"requestId":{"$ref":"#/$defs/token"},"idempotencyKey":{"$ref":"#/$defs/token"},"deadline":{"$ref":"#/$defs/timestamp"},"stopIntent":{"enum":["OPERATOR_STOP","KILL_SWITCH"]}}},
+        {"type":"object","additionalProperties":false,"required":["contractVersion","op","mode","requestId","idempotencyKey","deadline","clientId","capabilitySnapshotDigest"],"properties":{"contractVersion":{"const":"sc-1429/v2"},"op":{"const":"OBSERVE"},"mode":{"$ref":"#/$defs/executionMode"},"requestId":{"$ref":"#/$defs/token"},"idempotencyKey":{"$ref":"#/$defs/token"},"deadline":{"$ref":"#/$defs/timestamp"},"clientId":{"$ref":"#/$defs/token"},"capabilitySnapshotDigest":{"$ref":"#/$defs/sha256"}}}
+      ]
+    },
+    "lifecycleReceipt": {
+      "type":"object","additionalProperties":false,
+      "required":["contractVersion","mode","receiptId","requestId","envelopeDigest","phase","outcome","failureCode","at","evidenceRefs","retryAllowed"],
+      "properties":{"contractVersion":{"const":"sc-1429/v2"},"mode":{"$ref":"#/$defs/executionMode"},"receiptId":{"$ref":"#/$defs/token"},"requestId":{"$ref":"#/$defs/token"},"envelopeDigest":{"$ref":"#/$defs/sha256"},"phase":{"enum":["VALIDATION","AUTHORIZATION","RESERVATION","DISPATCH","ACTIVATION","PROGRESS","TASK_TERMINAL","VERIFICATION","FINALIZATION"]},"outcome":{"enum":["HELD","DELIVERED","CONFIRMED","REFUTED","UNVERIFIABLE","UNCERTAIN_OUTCOME","ABSTAINED","DENIED","FAILED","STOPPED"]},"failureCode":{"type":["string","null"],"pattern":"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},"at":{"$ref":"#/$defs/timestamp"},"evidenceRefs":{"type":"array","maxItems":64,"items":{"$ref":"#/$defs/evidenceRef"}},"retryAllowed":{"type":"boolean"}}
+    }
+  }
+}

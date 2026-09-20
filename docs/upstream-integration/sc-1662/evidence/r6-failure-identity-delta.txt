@@ -1,0 +1,18 @@
+# SC-1662 run-6 vs SC-1661 baseline — failure-identity delta
+
+Method: unique '<TestClass> > <method>' FAILED identities extracted from the raw suite logs,
+sorted, then diffed. A new identity would be an introduced regression; only removals and
+identity-neutral churn are acceptable.
+
+## replayTest
+SC-1661 baseline (reconciled-replayTest.log): 12 unique failure identities
+run-6 (r6-replay-tests.log):                 12 unique failure identities
+diff:
+(identical — all 12 are the known Docker-environmental identities)
+
+## ordinary test
+SC-1661 baseline (reconciled-test.log): 105 unique failure identities
+run-6 (r6-ordinary-tests.log):          104 unique failure identities
+diff:
+57d56
+< Micro6TargetRelaunchServiceTest > integrated_interruptedHealthRequestTerminatesOwnedTreeAndPreservesInterruptStatus

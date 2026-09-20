@@ -26,13 +26,7 @@ public class SourceReadAuditService {
     this.environment = environment;
   }
 
-  /** Compatibility constructor for isolated service tests without a persistence context. */
-  public SourceReadAuditService() {
-    this.events = null;
-    this.environment = "";
-  }
-
-  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void record(
       String actor,
       String operation,
@@ -42,12 +36,21 @@ public class SourceReadAuditService {
       String snapshotId,
       String fileId,
       String result) {
-    recordInternal(actor, operation, runId, recordingId, taskKey, snapshotId, fileId, result,
-        null, MDC.get("source_correlation_id"));
+    recordInternal(
+        actor,
+        operation,
+        runId,
+        recordingId,
+        taskKey,
+        snapshotId,
+        fileId,
+        result,
+        null,
+        MDC.get("source_correlation_id"));
   }
 
   /** Records with an explicit request correlation id without joining the caller's transaction. */
-  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void record(
       String actor,
       String operation,
@@ -58,15 +61,32 @@ public class SourceReadAuditService {
       String fileId,
       String result,
       String correlationId) {
-    recordInternal(actor, operation, runId, recordingId, taskKey, snapshotId, fileId, result,
-        null, correlationId);
+    recordInternal(
+        actor,
+        operation,
+        runId,
+        recordingId,
+        taskKey,
+        snapshotId,
+        fileId,
+        result,
+        null,
+        correlationId);
   }
 
   /** Records a content-addressed retention event without pretending the hash is a file id. */
-  @Transactional(propagation = Propagation.NOT_SUPPORTED)
-  public void recordContent(
-      String actor, String operation, String contentHash, String result) {
-    recordInternal(actor, operation, null, null, null, null, null, result, contentHash,
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void recordContent(String actor, String operation, String contentHash, String result) {
+    recordInternal(
+        actor,
+        operation,
+        null,
+        null,
+        null,
+        null,
+        null,
+        result,
+        contentHash,
         MDC.get("source_correlation_id"));
   }
 
@@ -93,9 +113,19 @@ public class SourceReadAuditService {
     String safeCorrelation = bounded(correlationId);
     if (events != null) {
       try {
-        events.save(SourceReadAuditEvent.create(
-            safeActor, safeOperation, safeRun, safeRecording, safeTask, safeSnapshot, safeFile,
-            safeResult, environment, safeContentHash, safeCorrelation));
+        events.saveAndFlush(
+            SourceReadAuditEvent.create(
+                safeActor,
+                safeOperation,
+                safeRun,
+                safeRecording,
+                safeTask,
+                safeSnapshot,
+                safeFile,
+                safeResult,
+                environment,
+                safeContentHash,
+                safeCorrelation));
       } catch (RuntimeException exception) {
         // Audit persistence must never turn a read into a write or disclose database details to a
         // caller. The structured log remains the fallback audit sink.
@@ -104,8 +134,16 @@ public class SourceReadAuditService {
     }
     log.info(
         "source_read actor={} operation={} run_id={} recording_id={} task_key={} snapshot_id={} file_id={} content_hash={} result={} correlation_id={}",
-        safeActor, safeOperation, safeRun, safeRecording, safeTask, safeSnapshot, safeFile,
-        safeContentHash, safeResult, safeCorrelation);
+        safeActor,
+        safeOperation,
+        safeRun,
+        safeRecording,
+        safeTask,
+        safeSnapshot,
+        safeFile,
+        safeContentHash,
+        safeResult,
+        safeCorrelation);
   }
 
   private static String bounded(String value) {

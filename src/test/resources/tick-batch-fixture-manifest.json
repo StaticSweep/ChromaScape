@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "fixtures": [
+    {
+      "name": "tick-batch-v2-golden.json",
+      "sha256": "93d63932023b7e8d4bce0061f325db657d124898ec28744cc613882714a89241"
+    },
+    {
+      "name": "tick-batch-canonical-vectors.json",
+      "sha256": "97d60b68c04152375971a59ed3495c1c402649f7a70d01e8f1f3828d42c1575a"
+    },
+    {
+      "name": "recording-action-checksum-vectors.json",
+      "sha256": "d1e270c700eb702d1c52a1e79e05859fa6d6f84886b95be1718e8f4e777c2ae6"
+    },
+    {
+      "name": "tick-batch-fishing-golden.json",
+      "sha256": "56e48b37d58e7941a44cfd76cf5c442195b57f88b84caa1879a62803a313f466"
+    }
+  ]
+}

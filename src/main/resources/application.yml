@@ -136,20 +136,12 @@ gateway:
 
 # ChromaScape runtime configuration
 chromascape:
-  # SC-810 authoritative source manifest verification and debugger read boundary. These keys are
-  # the single canonical manifest trust configuration (SourceTrustProperties); the legacy
-  # micro6.source-manifest trust keys are aliases only and must agree with these at startup.
+  # SC-810 authoritative source manifest trust. All values are mandatory at startup; empty
+  # placeholders deliberately fail SourceConfigurationValidator rather than enabling a fallback.
   source:
-    # Legacy manifests remain readable as provenance UNKNOWN, but production can require signed
-    # task-source-manifest/v1 documents by setting this flag and configuring the public key.
-    require-signature: ${CHROMASCAPE_SOURCE_REQUIRE_SIGNATURE:false}
-    allow-legacy: ${CHROMASCAPE_SOURCE_ALLOW_LEGACY:true}
     public-key-base64: ${CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64:}
     public-key-id: ${CHROMASCAPE_SOURCE_PUBLIC_KEY_ID:}
     environment: ${CHROMASCAPE_SOURCE_ENVIRONMENT:}
-    # Development default keeps debugger read authentication off; enabling it without both tokens
-    # fails startup through SourceConfigurationValidator. Production must enable it explicitly.
-    require-auth: ${CHROMASCAPE_SOURCE_REQUIRE_AUTH:false}
     access:
       metadata-token: ${CHROMASCAPE_SOURCE_METADATA_TOKEN:}
       content-token: ${CHROMASCAPE_SOURCE_CONTENT_TOKEN:}
@@ -166,6 +158,12 @@ chromascape:
     task-sync-interval-ms: ${CHROMASCAPE_PATCHLOOP_TASK_SYNC_INTERVAL_MS:5000}
 
 builder-goal:
+  remote:
+    machine-uuid: ${BUILDER_GOAL_REMOTE_MACHINE_UUID:}
+    endpoint: ${BUILDER_GOAL_REMOTE_ENDPOINT:}
+    executor-url: ${BUILDER_GOAL_REMOTE_EXECUTOR_URL:}
+    token: ${BUILDER_GOAL_REMOTE_TOKEN:}
+    timeout-seconds: ${BUILDER_GOAL_REMOTE_TIMEOUT_SECONDS:1800}
   run-timeout-ms: ${BUILDER_GOAL_RUN_TIMEOUT_MS:300000}
   status-sync-max-consecutive-failures: ${BUILDER_GOAL_STATUS_SYNC_MAX_CONSECUTIVE_FAILURES:3}
   status-sync-failure-grace-ms: ${BUILDER_GOAL_STATUS_SYNC_FAILURE_GRACE_MS:15000}
@@ -304,19 +302,11 @@ micro6:
     timeout-ms: ${MICRO6_EXECUTOR_TIMEOUT_MS:60000}
     # Cache TTL in seconds
     refresh-seconds: ${MICRO6_EXECUTOR_CATALOG_REFRESH_SECONDS:30}
-  source-manifest:
-    # The producer source API is a separate transport boundary from the general catalog API.
-    # Trust values below (require-signature/allow-legacy/public-key*/environment) are legacy
-    # aliases only: services no longer read them, and SourceConfigurationValidator fails startup
-    # when an explicitly configured alias disagrees with the canonical chromascape.source trust.
-    auth-required: ${MICRO6_SOURCE_AUTH_REQUIRED:false}
-    auth-token: ${MICRO6_SOURCE_AUTH_TOKEN:}
-    actor: ${MICRO6_SOURCE_ACTOR:chromascape-web}
-    environment: ${MICRO6_SOURCE_ENVIRONMENT:}
-    allow-legacy: ${MICRO6_SOURCE_ALLOW_LEGACY:true}
-    require-signature: ${MICRO6_SOURCE_REQUIRE_SIGNATURE:false}
-    public-key-base64: ${MICRO6_SOURCE_PUBLIC_KEY_BASE64:}
-    public-key-id: ${MICRO6_SOURCE_PUBLIC_KEY_ID:}
+  source:
+    transport:
+      base-url: ${MICRO6_SOURCE_TRANSPORT_BASE_URL:}
+      auth-token: ${MICRO6_SOURCE_TRANSPORT_AUTH_TOKEN:}
+      actor: ${MICRO6_SOURCE_TRANSPORT_ACTOR:chromascape-web}
 
 # Analysis Provider Configuration - For BMAD (Bot Metric Analysis & Diagnostics)
 analysis:
@@ -438,6 +428,16 @@ features:
 
 # SC-1430 provider decision runtime. It is deliberately disabled and has no delivery capability.
 gameplay:
+  v2:
+    # SC-1449 additive v2 live gate. Default-off; both flags stay off until the exact
+    # human gate passes. Enable Micro6 validation without start permission first,
+    # then one bounded SC-1498 Fishing run. Disable both flags immediately on any
+    # identity or reconciliation discrepancy.
+    live-enabled: ${GAMEPLAY_V2_LIVE_ENABLED:false}
+    # Operator secret for /api/internal/gameplay/v2. Fail-closed: unset or shorter than 32
+    # characters closes the boundary entirely. Compared in constant time; header presence is
+    # never authentication on its own.
+    operator-key: ${GAMEPLAY_V2_OPERATOR_KEY:}
   # SC-1431 source-neutral orchestration. Both flags stay off until dependency and SC-1449
   # conformance evidence exists; HELD/SHADOW use the application service directly in tests.
   accountbuilder-orchestration:

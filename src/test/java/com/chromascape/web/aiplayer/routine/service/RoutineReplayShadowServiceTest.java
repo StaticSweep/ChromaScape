@@ -41,7 +41,8 @@ class RoutineReplayShadowServiceTest {
 
     assertThat(RoutineReplayShadowService.passed(expected, decisions)).isTrue();
     assertThat(decisions).hasSize(4);
-    assertThat(decisions).extracting(d -> d.get("status"))
+    assertThat(decisions)
+        .extracting(d -> d.get("status"))
         .containsExactly("ABSTAINED", "ABSTAINED", "MATCHED", "ABSTAINED");
     // The abstentions carry the observed action so a failing run stays diagnosable.
     assertThat(decisions.get(0).get("observed")).isNotNull();
@@ -56,10 +57,13 @@ class RoutineReplayShadowServiceTest {
         RoutineReplayShadowService.decisions(expected, recording());
 
     assertThat(RoutineReplayShadowService.passed(expected, decisions)).isFalse();
-    assertThat(decisions).last().satisfies(decision -> {
-      assertThat(decision).containsEntry("status", "MISSING");
-      assertThat(decision.get("observed")).isNull();
-    });
+    assertThat(decisions)
+        .last()
+        .satisfies(
+            decision -> {
+              assertThat(decision).containsEntry("status", "MISSING");
+              assertThat(decision.get("observed")).isNull();
+            });
   }
 
   @Test
@@ -81,8 +85,7 @@ class RoutineReplayShadowServiceTest {
     List<Map<String, Object>> decisions =
         RoutineReplayShadowService.decisions(expected, recording());
 
-    assertThat(decisions).extracting(d -> d.get("status"))
-        .containsOnly("ABSTAINED");
+    assertThat(decisions).extracting(d -> d.get("status")).containsOnly("ABSTAINED");
     assertThat(RoutineReplayShadowService.passed(expected, decisions)).isFalse();
   }
 

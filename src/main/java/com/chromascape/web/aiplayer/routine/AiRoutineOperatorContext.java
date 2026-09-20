@@ -14,10 +14,11 @@ public final class AiRoutineOperatorContext {
   /** Request attribute holding the configured operator ID. */
   public static final String OPERATOR_ID_ATTRIBUTE = "aiRoutineOperatorId";
 
-  private AiRoutineOperatorContext() {
-  }
+  private AiRoutineOperatorContext() {}
 
-  /** Reads the verified operator ID for the current request, or {@code null} when unauthenticated. */
+  /**
+   * Reads the verified operator ID for the current request, or {@code null} when unauthenticated.
+   */
   public static String operatorId() {
     ServletRequestAttributes attributes =
         (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();

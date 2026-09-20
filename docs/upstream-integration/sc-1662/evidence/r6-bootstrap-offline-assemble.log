@@ -1,0 +1,11 @@
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :resolveMainClassName UP-TO-DATE
+> Task :bootJar UP-TO-DATE
+> Task :assembleLinuxDistribution
+
+BUILD SUCCESSFUL in 3s
+5 actionable tasks: 1 executed, 4 up-to-date
+EXIT=0

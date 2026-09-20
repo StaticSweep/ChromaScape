@@ -18,8 +18,7 @@ class CanonicalSettingsHasherTest {
   void canonicalJsonSortsObjectKeysButPreservesArrayOrder() throws Exception {
     String canonical =
         CanonicalSettingsHasher.canonicalJson(
-            objectMapper.readTree(
-                "{\"z\":[{\"b\":true,\"a\":null},2],\"a\":\"café\"}"));
+            objectMapper.readTree("{\"z\":[{\"b\":true,\"a\":null},2],\"a\":\"café\"}"));
 
     assertThat(canonical).isEqualTo("{\"a\":\"café\",\"z\":[{\"a\":null,\"b\":true},2]}");
   }
@@ -42,7 +41,8 @@ class CanonicalSettingsHasherTest {
   }
 
   @Test
-  void settingsContractNormalizesNumbersLineEndingsUnicodeAndRetainsMetadataKeys() throws Exception {
+  void settingsContractNormalizesNumbersLineEndingsUnicodeAndRetainsMetadataKeys()
+      throws Exception {
     JsonNode first =
         objectMapper.readTree(
             "{\"run_id\":\"r\",\"text\":\"e\\u0301\\r\\n\",\"value\":40,\"items\":[true,null]}");
@@ -60,8 +60,8 @@ class CanonicalSettingsHasherTest {
 
   @Test
   void committedContractVectorsMatchTheHasher() throws Exception {
-    try (InputStream input = getClass().getResourceAsStream(
-        "/contracts/builder-settings-canonical-json-v1.json")) {
+    try (InputStream input =
+        getClass().getResourceAsStream("/contracts/builder-settings-canonical-json-v1.json")) {
       assertThat(input).isNotNull();
       JsonNode contract = objectMapper.readTree(input);
       assertThat(contract.path("contract").asText())
