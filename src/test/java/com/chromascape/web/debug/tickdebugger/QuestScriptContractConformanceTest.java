@@ -4,7 +4,12 @@
  */
 package com.chromascape.web.debug.tickdebugger;
 
+import static com.chromascape.web.debug.tickdebugger.QuestContractMirrorSupport.assertByteIdentical;
+import static com.chromascape.web.debug.tickdebugger.QuestContractMirrorSupport.mainMirror;
+import static com.chromascape.web.debug.tickdebugger.QuestContractMirrorSupport.resolveMicro6QuestDir;
+import static com.chromascape.web.debug.tickdebugger.QuestContractMirrorSupport.testMirror;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,8 +18,8 @@ import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
 import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -27,25 +32,22 @@ import org.junit.jupiter.api.Test;
  *   <li>the mirrored schema accepts every valid golden fixture;
  *   <li>structurally malformed scripts are rejected;
  *   <li>semantically invalid scripts remain schema-valid (semantic linting is Micro6's job);
- *   <li>the mirror equals the Micro6 resource byte-for-byte when a Micro6 checkout is available.
+ *   <li>the main- and test-resource mirrors are byte-identical to each other, always;
+ *   <li>when a Micro6 checkout is available (configured or found at a known root), the mirror is
+ *       byte-identical to the Micro6 owner for the schema and every fixture copy.
  * </ul>
  *
- * <p>Micro6 owns the contract. ChromaScape stores the mirror unchanged and proves drift.
+ * <p>Micro6 owns the contract. ChromaScape stores the mirror unchanged and proves drift. Normal
+ * ChromaScape CI does not provision Micro6, so the cross-repository comparison is skipped there;
+ * the in-repository mirror gate still runs.
  */
 class QuestScriptContractConformanceTest {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String SCHEMA_RESOURCE = "contracts/quest/quest-script-v1.schema.json";
-  private static final String FIXTURES_RESOURCE =
-      "contracts/quest/quest-script-v1-fixtures.json";
-  private static final String MICRO6_RESOURCE =
-      "src/main/resources/micro6-contracts/quest/quest-script-v1.schema.json";
-
-  private static final String[] MICRO6_FALLBACK_ROOTS = {
-    "C:\\Dev\\IdeaProjects\\micro6",
-    "/run/media/ikiddoi/dev-hdd/dev/IdeaProjects/micro6",
-    "/run/media/ikiddoi/dev-hdd/dev/Worktrees/micro6-sc265-luna",
-  };
+  private static final String FIXTURES_RESOURCE = "contracts/quest/quest-script-v1-fixtures.json";
+  private static final String SCHEMA_NAME = "quest-script-v1.schema.json";
+  private static final String FIXTURES_NAME = "quest-script-v1-fixtures.json";
 
   private static JsonSchema schema;
   private static JsonNode fixtures;
@@ -106,41 +108,20 @@ class QuestScriptContractConformanceTest {
   }
 
   @Test
-  void mirroredSchemaIsByteIdenticalToMicro6Owner() throws Exception {
-    Path micro6 = resolveMicro6Resource();
-    assertThat(Files.isRegularFile(micro6))
-        .as(
-            "Micro6 quest script schema missing at %s; SC-266 requires a byte-identical "
-                + "quest.script.v1 contract in Micro6 (owner) and ChromaScape (mirror)",
-            micro6)
-        .isTrue();
-    byte[] micro6Bytes = Files.readAllBytes(micro6);
-    try (InputStream mirror =
-        getClass().getClassLoader().getResourceAsStream(SCHEMA_RESOURCE)) {
-      assertThat(mirror).as("ChromaScape mirror schema on classpath").isNotNull();
-      assertThat(mirror.readAllBytes())
-          .as("quest-script-v1 schema must be byte-identical across repositories")
-          .isEqualTo(micro6Bytes);
-    }
+  void mainAndTestFixtureMirrorsAreByteIdentical() throws Exception {
+    assertByteIdentical(mainMirror(FIXTURES_NAME), testMirror(FIXTURES_NAME));
   }
 
-  private static Path resolveMicro6Resource() {
-    String configured = System.getenv("BUILDER_GOAL_MICRO6_PROJECT_DIR");
-    if (configured == null || configured.isBlank()) {
-      configured = System.getProperty("builder.goal.micro6.project-dir", "");
-    }
-    if (configured != null && !configured.isBlank()) {
-      Path path = Path.of(configured.trim()).resolve("runelite-client").resolve(MICRO6_RESOURCE);
-      if (Files.isRegularFile(path)) {
-        return path;
-      }
-    }
-    for (String root : MICRO6_FALLBACK_ROOTS) {
-      Path candidate = Path.of(root).resolve("runelite-client").resolve(MICRO6_RESOURCE);
-      if (Files.isRegularFile(candidate)) {
-        return candidate;
-      }
-    }
-    return Path.of(MICRO6_FALLBACK_ROOTS[0]).resolve("runelite-client").resolve(MICRO6_RESOURCE);
+  @Test
+  void mirroredContractIsByteIdenticalToMicro6Owner() throws Exception {
+    Optional<Path> micro6 = resolveMicro6QuestDir();
+    assumeTrue(
+        micro6.isPresent(),
+        "Micro6 checkout not available; configure BUILDER_GOAL_MICRO6_PROJECT_DIR for the "
+            + "cross-repository mirror gate");
+
+    assertByteIdentical(micro6.get().resolve(SCHEMA_NAME), mainMirror(SCHEMA_NAME));
+    assertByteIdentical(micro6.get().resolve(FIXTURES_NAME), mainMirror(FIXTURES_NAME));
+    assertByteIdentical(micro6.get().resolve(FIXTURES_NAME), testMirror(FIXTURES_NAME));
   }
 }

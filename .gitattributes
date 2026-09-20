@@ -4,3 +4,7 @@
 *.jar binary
 docs/MCP_QUICK_START.md text eol=lf
 src/main/resources/templates/debugger.html text eol=lf
+# Quest contract mirrors are compared byte-for-byte across repositories and resource trees;
+# force LF so a Windows checkout cannot materialize them differently from the committed blobs.
+src/main/resources/contracts/quest/*.json text eol=lf
+src/test/resources/contracts/quest/*.json text eol=lf
