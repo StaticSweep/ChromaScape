@@ -14,6 +14,14 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class GameplayBootstrapConfiguration {
+  /**
+   * Legacy file-evidence compatibility bean (SC-1498 WP7).
+   *
+   * @deprecated Production bootstrap delivery uses {@code BootstrapGameplayOperatorService} with
+   *     the durable SC-1431 orchestration and the immutable manifest service. This bean remains
+   *     only for the compatibility tests; it is not part of the production delivery route.
+   */
+  @Deprecated
   @Bean
   BootstrapEvidenceStore bootstrapEvidenceStore(
       ObjectMapper objectMapper,
@@ -23,6 +31,15 @@ public class GameplayBootstrapConfiguration {
     return new BootstrapEvidenceStore(objectMapper, canonicalJson, Path.of(evidenceRoot));
   }
 
+  /**
+   * Legacy orchestrator compatibility bean (SC-1498 WP7).
+   *
+   * @deprecated Production bootstrap delivery uses {@code BootstrapGameplayOperatorService}
+   *     delegating exclusively to {@code AccountBuilderOrchestrationService} in {@code
+   *     BOOTSTRAP_RECORDING} mode via the Micro6 v2 gateway. This bean remains only for the
+   *     compatibility tests; it is not part of the production delivery route.
+   */
+  @Deprecated
   @Bean
   BootstrapGameplayOrchestrator bootstrapGameplayOrchestrator(
       GameplayContractValidator validator,

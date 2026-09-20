@@ -2,43 +2,76 @@ package com.chromascape.web.gameplay.orchestration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 
 import com.chromascape.web.gameplay.authority.HumanGameplayAuthorityService;
+import com.chromascape.web.gameplay.bootstrap.BootstrapApprovalStore;
+import com.chromascape.web.gameplay.bootstrap.BootstrapEvidenceManifestService;
+import com.chromascape.web.gameplay.bootstrap.BootstrapProposalAssembler;
+import com.chromascape.web.gameplay.bootstrap.BootstrapRecordingCoordinator;
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
-import com.chromascape.web.gameplay.contract.GameplayContractValidator;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ExecutionEnvelope;
-import com.chromascape.web.gameplay.contract.GameplayContracts.Outcome;
+import com.chromascape.web.gameplay.contract.GameplayContracts.Provider;
+import com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision;
 import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.ApprovalRequest;
 import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.DispatchRequest;
 import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.OperatorException;
-import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.ProposalRequest;
-import com.chromascape.web.gameplay.provider.ClaudeGameplayProviderAdapter;
-import com.chromascape.web.gameplay.provider.CodexGameplayProviderAdapter;
+import com.chromascape.web.gameplay.orchestration.BootstrapGameplayOperatorService.PreviewRequest;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderCapabilityPreflight;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRequestFactory;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationValidator;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.ProviderDecisionOrchestrationSource;
+import com.chromascape.web.gameplay.provider.runtime.ProviderDecisionHandoff;
+import com.chromascape.web.gameplay.provider.runtime.ProviderDecisionHandoff.PersistedDecision;
+import com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeModels;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 class BootstrapGameplayOperatorServiceTest {
   private static final String AUTHORITY_SECRET = "authority-test-secret-at-least-32-bytes";
   private static final String OPERATOR_KEY = "operator-test-key-at-least-32-bytes";
-
-  @TempDir Path temporaryDirectory;
+  private static final Instant NOW = Instant.parse("2026-08-30T12:01:00Z");
 
   private ObjectMapper objectMapper;
+  private CanonicalGameplayJson canonicalJson;
   private JsonNode fixtures;
+
+  @Mock private BootstrapApprovalStore approvalStore;
+  @Mock private BootstrapRecordingCoordinator recordingCoordinator;
+  @Mock private BootstrapEvidenceManifestService manifestService;
+  @Mock private AccountBuilderCapabilityPreflight capabilityPreflight;
+  @Mock private AccountBuilderOrchestrationService orchestrationService;
+
+  @Mock
+  private com.chromascape.web.gameplay.provider.runtime.GameplayProviderRuntime providerRuntime;
+
   private BootstrapGameplayOperatorService service;
-  private FakeGateway gateway;
+  private HumanGameplayAuthorityService authorityService;
+  private BootstrapProposalAssembler assembler;
+  private ProviderDecisionOrchestrationSource decisionSource;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -52,74 +85,230 @@ class BootstrapGameplayOperatorServiceTest {
             getClass()
                 .getClassLoader()
                 .getResourceAsStream("contracts/gameplay/sc-1429-golden-fixtures-v1.json"));
-    CanonicalGameplayJson canonicalJson = new CanonicalGameplayJson(objectMapper);
-    GameplayContractValidator validator = new GameplayContractValidator(objectMapper);
-    HumanGameplayAuthorityService authorityService =
-        new HumanGameplayAuthorityService(canonicalJson, AUTHORITY_SECRET);
-    gateway = new FakeGateway();
-    BootstrapGameplayOrchestrator orchestrator =
-        new BootstrapGameplayOrchestrator(
-            validator,
-            canonicalJson,
-            gateway,
-            new BootstrapEvidenceStore(objectMapper, canonicalJson, temporaryDirectory));
+    canonicalJson = new CanonicalGameplayJson(objectMapper);
+    Clock fixed = Clock.fixed(NOW, ZoneOffset.UTC);
+    authorityService = new HumanGameplayAuthorityService(canonicalJson, fixed, AUTHORITY_SECRET);
+    FakeHandoff handoff = new FakeHandoff();
+    assembler = new BootstrapProposalAssembler(handoff, authorityService, canonicalJson);
+    AccountBuilderOrchestrationValidator validator =
+        new AccountBuilderOrchestrationValidator(canonicalJson, fixed, authorityService);
+    AccountBuilderOrchestrationRequestFactory requestFactory =
+        new AccountBuilderOrchestrationRequestFactory(validator, canonicalJson);
+    decisionSource =
+        new ProviderDecisionOrchestrationSource(handoff, canonicalJson, requestFactory);
     service =
         new BootstrapGameplayOperatorService(
             canonicalJson,
             authorityService,
-            orchestrator,
-            List.of(
-                new ClaudeGameplayProviderAdapter(validator),
-                new CodexGameplayProviderAdapter(validator)),
-            Clock.systemUTC(),
+            assembler,
+            approvalStore,
+            recordingCoordinator,
+            manifestService,
+            decisionSource,
+            capabilityPreflight,
+            orchestrationService,
+            providerRuntime,
+            objectMapper,
+            fixed,
             true,
-            OPERATOR_KEY);
+            OPERATOR_KEY,
+            true,
+            true);
   }
 
   @Test
-  void previewApproveAndDispatchConsumeOneExactHumanApproval() {
-    ProposalRequest draft = proposal(envelopeWithFutureDeadline());
-    var preview = service.preview(OPERATOR_KEY, draft);
+  void previewApproveAndDispatchUsePersistedDecisionOnly() {
+    ExecutionEnvelope envelope = envelopeWithFutureDeadline();
+    var bindings = bindings(envelope);
+    PreviewRequest previewRequest =
+        new PreviewRequest("session-fixture", "turn-fixture", observation(), envelope, bindings);
+
+    var preview = service.preview(OPERATOR_KEY, previewRequest);
+    assertThat(preview.scopeDigest()).startsWith("sha256:");
+
+    String approvalId = "approval-1";
+    Instant expiresAt = NOW.plus(5, ChronoUnit.MINUTES);
+    when(approvalStore.create(
+            eq("session-fixture"),
+            eq("turn-fixture"),
+            any(),
+            any(),
+            any(),
+            any(),
+            eq(preview.scopeDigest()),
+            eq("operator-sc1498"),
+            any()))
+        .thenReturn(
+            new BootstrapApprovalStore.Claim(
+                new BootstrapApprovalStore.ApprovalView(
+                    approvalId,
+                    preview.scopeDigest(),
+                    "session-fixture",
+                    "turn-fixture",
+                    preview.orchestrationId(),
+                    preview.requestId(),
+                    preview.recordingId(),
+                    preview.previewFingerprint(),
+                    "operator-sc1498",
+                    NOW,
+                    expiresAt,
+                    "APPROVED",
+                    null,
+                    null,
+                    NOW,
+                    NOW),
+                true));
+
     var approval =
         service.approve(
             OPERATOR_KEY,
             new ApprovalRequest(
-                draft,
+                "session-fixture",
+                "turn-fixture",
+                observation(),
+                envelope,
+                bindings,
                 "operator-sc1498",
-                Instant.now().plus(5, ChronoUnit.MINUTES),
+                expiresAt,
                 preview.scopeDigest(),
-                true));
-    ProposalRequest approved = proposal(withAuthority(draft.envelope(), approval.authorityId()));
+                true,
+                "CONFIRM"));
+    assertThat(approval.approvalId()).isEqualTo(approvalId);
 
-    var receipt =
-        service.dispatch(OPERATOR_KEY, new DispatchRequest(approval.authorityId(), approved));
+    var storedApproval =
+        new BootstrapApprovalStore.ApprovalView(
+            approvalId,
+            preview.scopeDigest(),
+            "session-fixture",
+            "turn-fixture",
+            preview.orchestrationId(),
+            preview.requestId(),
+            preview.recordingId(),
+            preview.previewFingerprint(),
+            "operator-sc1498",
+            NOW,
+            expiresAt,
+            "APPROVED",
+            null,
+            null,
+            NOW,
+            NOW);
+    when(approvalStore.find(approvalId)).thenReturn(storedApproval);
+    String authorityId = "auth_approval-1";
+    String signatureDigest = "sha256:" + "f".repeat(64);
+    var boundApproval =
+        new BootstrapApprovalStore.ApprovalView(
+            approvalId,
+            preview.scopeDigest(),
+            "session-fixture",
+            "turn-fixture",
+            preview.orchestrationId(),
+            preview.requestId(),
+            preview.recordingId(),
+            preview.previewFingerprint(),
+            "operator-sc1498",
+            NOW,
+            expiresAt,
+            "BOUND",
+            authorityId,
+            signatureDigest,
+            NOW,
+            NOW);
+    when(approvalStore.bind(eq(approvalId), any(), any())).thenReturn(boundApproval);
+    var recording =
+        new BootstrapRecordingCoordinator.RecordingView(
+            preview.orchestrationId(),
+            preview.recordingId(),
+            "session-fixture",
+            "turn-fixture",
+            "sha256:" + "a".repeat(64),
+            "sha256:" + "b".repeat(64),
+            "CLAUDE",
+            envelope.modelVersion(),
+            "STARTED",
+            null,
+            null,
+            null,
+            null,
+            null,
+            NOW,
+            null);
+    when(recordingCoordinator.start(
+            any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(recording);
+    when(recordingCoordinator.stopForFinalization(any()))
+        .thenReturn(
+            Optional.of(
+                new BootstrapRecordingCoordinator.RecordingArtifact(
+                    preview.recordingId(),
+                    "target/rec-fixture.mp4",
+                    "sha256:" + "9".repeat(64),
+                    1000L,
+                    30L,
+                    30,
+                    "libx264",
+                    1L,
+                    LocalDateTime.ofInstant(NOW, ZoneOffset.UTC),
+                    LocalDateTime.ofInstant(NOW, ZoneOffset.UTC))));
+    OrchestrationView terminalView = terminalView(preview.orchestrationId());
+    // The hardened SC-1431 provider route is mirrored: an exact replay resolves with the stored
+    // capability digest, otherwise one read-only Micro6 preflight backs the new orchestration.
+    // Delivery itself stays mocked; the real two-stage assembly above it is what this verifies.
+    when(orchestrationService.findOrchestration(any())).thenReturn(Optional.empty());
+    when(capabilityPreflight.probe(any()))
+        .thenReturn(
+            new CapabilitySnapshot(
+                envelope.catalogDigest(),
+                "sha256:" + "c".repeat(64),
+                envelope.buildId(),
+                envelope.expectedObservationRevision(),
+                envelope.expectedTaskRevision(),
+                NOW,
+                NOW.plus(1, ChronoUnit.MINUTES),
+                false,
+                List.of()));
+    when(orchestrationService.orchestrateProvider(any()))
+        .thenReturn(new AccountBuilderOrchestrationService.Submission(terminalView, true));
+    when(manifestService.buildManifest(
+            any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(
+            new BootstrapEvidenceManifestService.ManifestPublication(
+                Map.of("manifestDigest", "sha256:" + "d".repeat(64)), "sha256:" + "d".repeat(64)));
+    when(manifestService.publish(any(), any(), any()))
+        .thenReturn(
+            java.nio.file.Path.of(".chromascape/bootstrap-recordings/rec-fixture.sc-1498.json"));
 
-    assertThat(receipt.outcome()).isEqualTo(Outcome.CONFIRMED);
-    assertThat(gateway.dispatches).hasValue(1);
-    assertThat(temporaryDirectory.resolve("recording-sc1498-001.sc-1498.json")).exists();
-    assertThatThrownBy(
-            () ->
-                service.dispatch(
-                    OPERATOR_KEY, new DispatchRequest(approval.authorityId(), approved)))
-        .isInstanceOf(OperatorException.class)
-        .hasMessageContaining("already used");
+    var dispatched =
+        service.dispatch(
+            OPERATOR_KEY, new DispatchRequest(approvalId, observation(), envelope, bindings));
+    assertThat(dispatched.state()).isEqualTo(AccountBuilderOrchestrationModels.State.CONFIRMED);
   }
 
   @Test
   void approvalRequiresHumanConfirmationOfTheCurrentDigest() {
-    ProposalRequest draft = proposal(envelopeWithFutureDeadline());
-    var preview = service.preview(OPERATOR_KEY, draft);
+    ExecutionEnvelope envelope = envelopeWithFutureDeadline();
+    var bindings = bindings(envelope);
+    var preview =
+        service.preview(
+            OPERATOR_KEY,
+            new PreviewRequest(
+                "session-fixture", "turn-fixture", observation(), envelope, bindings));
 
     assertThatThrownBy(
             () ->
                 service.approve(
                     OPERATOR_KEY,
                     new ApprovalRequest(
-                        draft,
+                        "session-fixture",
+                        "turn-fixture",
+                        observation(),
+                        envelope,
+                        bindings,
                         "operator-sc1498",
-                        Instant.now().plus(5, ChronoUnit.MINUTES),
+                        NOW.plus(5, ChronoUnit.MINUTES),
                         preview.scopeDigest(),
-                        false)))
+                        false,
+                        "CONFIRM")))
         .isInstanceOf(OperatorException.class)
         .hasMessageContaining("explicit human confirmation");
     assertThatThrownBy(
@@ -127,67 +316,128 @@ class BootstrapGameplayOperatorServiceTest {
                 service.approve(
                     OPERATOR_KEY,
                     new ApprovalRequest(
-                        draft,
+                        "session-fixture",
+                        "turn-fixture",
+                        observation(),
+                        envelope,
+                        bindings,
                         "operator-sc1498",
-                        Instant.now().plus(5, ChronoUnit.MINUTES),
+                        NOW.plus(5, ChronoUnit.MINUTES),
                         "sha256:" + "0".repeat(64),
-                        true)))
+                        true,
+                        "CONFIRM")))
         .isInstanceOf(OperatorException.class)
         .hasMessageContaining("does not match");
   }
 
   @Test
-  void operatorAuthenticationAndStopFailClosed() {
-    assertThatThrownBy(() -> service.preview("wrong-key", proposal(envelopeWithFutureDeadline())))
-        .isInstanceOf(OperatorException.class)
-        .hasMessageContaining("valid SC-1498 operator key");
+  void operatorAuthenticationFailsClosed() {
     assertThatThrownBy(
             () ->
-                service.stop(
-                    OPERATOR_KEY,
-                    new BootstrapGameplayOperatorService.StopRequest(
-                        "request-not-active", "operator requested stop", true)))
-        .isInstanceOf(BootstrapGameplayOrchestrator.GameplayProposalException.class)
-        .hasMessageContaining("not active");
-    assertThat(gateway.stops).hasValue(0);
+                service.preview(
+                    "wrong-key",
+                    new PreviewRequest(
+                        "session-fixture",
+                        "turn-fixture",
+                        observation(),
+                        envelopeWithFutureDeadline(),
+                        bindings(envelopeWithFutureDeadline()))))
+        .isInstanceOf(OperatorException.class)
+        .hasMessageContaining("valid SC-1498 operator key");
   }
 
-  private ProposalRequest proposal(ExecutionEnvelope envelope) {
-    return new ProposalRequest(
-        fixtures.path("observation").deepCopy(),
-        "claude-fixture-v1",
-        fixtures.path("claudeProposal").deepCopy(),
-        envelope);
+  private JsonNode observation() {
+    return fixtures.path("observation").deepCopy();
   }
 
   private ExecutionEnvelope envelopeWithFutureDeadline() {
     ObjectNode node = fixtures.path("executionEnvelope").deepCopy();
-    node.put("deadline", Instant.now().plus(10, ChronoUnit.MINUTES).toString());
+    node.put("deadline", NOW.plus(10, ChronoUnit.MINUTES).toString());
+    node.put("authorityId", "authority-draft");
+    node.put("semanticActionDigest", canonicalJson.digest(fixtures.path("semanticAction")));
     return objectMapper.convertValue(node, ExecutionEnvelope.class);
   }
 
-  private ExecutionEnvelope withAuthority(ExecutionEnvelope envelope, String authorityId) {
-    ObjectNode node = objectMapper.valueToTree(envelope);
-    node.put("authorityId", authorityId);
-    return objectMapper.convertValue(node, ExecutionEnvelope.class);
+  private AccountBuilderOrchestrationModels.SnapshotBindings bindings(ExecutionEnvelope envelope) {
+    FakeHandoff handoff = new FakeHandoff();
+    var persisted = handoff.findValidatedDecision("session-fixture", "turn-fixture").orElseThrow();
+    return new AccountBuilderOrchestrationModels.SnapshotBindings(
+        persisted.decisionDigest(),
+        persisted.semanticActionDigest(),
+        envelope.catalogDigest(),
+        "sha256:" + "c".repeat(64),
+        envelope.goalPlanDigest(),
+        envelope.taskSkillDigests(),
+        envelope.schemaDigest(),
+        envelope.knowledgeDigest(),
+        envelope.policyDigest(),
+        envelope.verifierId(),
+        envelope.buildId(),
+        envelope.expectedObservationRevision(),
+        envelope.expectedTaskRevision(),
+        persisted.observationDigest(),
+        persisted.promptDigest());
   }
 
-  private static final class FakeGateway implements AccountBuilderGameplayGateway {
-    private final AtomicInteger dispatches = new AtomicInteger();
-    private final AtomicInteger stops = new AtomicInteger();
+  private OrchestrationView terminalView(String orchestrationId) {
+    return new OrchestrationView(
+        "sc-1431/v1",
+        orchestrationId,
+        "fixture-request",
+        "fixture-idempotency",
+        "sha256:" + "f".repeat(64),
+        "sha256:" + "e".repeat(64),
+        AccountBuilderOrchestrationModels.Mode.BOOTSTRAP_RECORDING,
+        "PROVIDER:CLAUDE",
+        AccountBuilderOrchestrationModels.State.CONFIRMED,
+        AccountBuilderOrchestrationModels.FailureCode.NONE,
+        null,
+        List.of(),
+        true,
+        false,
+        5,
+        NOW,
+        NOW);
+  }
 
+  private final class FakeHandoff implements ProviderDecisionHandoff {
     @Override
-    public DispatchResult dispatch(
-        ExecutionEnvelope envelope,
-        com.chromascape.web.gameplay.contract.GameplayContracts.HumanAuthority authority) {
-      dispatches.incrementAndGet();
-      return new DispatchResult(Outcome.CONFIRMED, null, true, true, List.of("micro6:terminal"));
-    }
-
-    @Override
-    public DispatchResult stop(String requestId, String reason, boolean killSwitch) {
-      stops.incrementAndGet();
-      return new DispatchResult(Outcome.STOPPED, null, true, true, List.of("micro6:stop"));
+    public Optional<PersistedDecision> findValidatedDecision(String sessionId, String turnId) {
+      if (!"session-fixture".equals(sessionId) || !"turn-fixture".equals(turnId)) {
+        return Optional.empty();
+      }
+      JsonNode action = fixtures.path("semanticAction").deepCopy();
+      ExecutionEnvelope envelope = envelopeWithFutureDeadline();
+      ProviderDecision decision =
+          new ProviderDecision(
+              "sc-1429/v1",
+              Provider.CLAUDE,
+              envelope.modelVersion(),
+              envelope.decisionId(),
+              0.9,
+              action,
+              List.of("observation:observation-fixture"));
+      String transcriptDigest = "sha256:" + "7".repeat(64);
+      return Optional.of(
+          new PersistedDecision(
+              sessionId,
+              turnId,
+              envelope.requestId(),
+              Provider.CLAUDE,
+              envelope.modelVersion(),
+              canonicalJson.digest(decision),
+              canonicalJson.digest(action),
+              canonicalJson.digest(observation()),
+              canonicalJson.digest(fixtures.path("claudeProposal")),
+              canonicalJson.digest(action),
+              envelope.knowledgeDigest(),
+              envelope.goalPlanDigest(),
+              envelope.taskSkillDigests(),
+              transcriptDigest,
+              transcriptDigest,
+              ProviderRuntimeModels.TurnState.DECIDED,
+              ProviderRuntimeModels.FailureCode.NONE,
+              decision));
     }
   }
 }

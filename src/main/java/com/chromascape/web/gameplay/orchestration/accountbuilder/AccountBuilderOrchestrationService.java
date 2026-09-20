@@ -124,8 +124,12 @@ public final class AccountBuilderOrchestrationService {
    * Preparation, replay resolution and capability preflight all happen here, so no caller can
    * assemble a provider-shaped {@link OrchestrationRequest} and submit it. The final {@link
    * #orchestrateInternal(OrchestrationRequest)} stays private.
+   *
+   * <p>Authorized callers are the SC-1431 provider-orchestration controller route and the SC-1498
+   * bootstrap operator service for {@code BOOTSTRAP_RECORDING} delivery. All other callers must use
+   * {@link #orchestrate(OrchestrationRequest)}, which rejects provider sources.
    */
-  Submission orchestrateProvider(ProviderOrchestrationCommand command) {
+  public Submission orchestrateProvider(ProviderOrchestrationCommand command) {
     Objects.requireNonNull(command, "command");
     ProviderDecisionOrchestrationSource.PreparedProviderRequest prepared =
         providerSource.prepareProduction(command);
@@ -267,6 +271,34 @@ public final class AccountBuilderOrchestrationService {
             () ->
                 new AccountBuilderOrchestrationException(
                     FailureCode.INVALID_CONTRACT, "Orchestration was not found"));
+  }
+
+  /**
+   * Returns the durable redacted SC-1431 request snapshot for evidence recovery (SC-1498).
+   *
+   * <p>Used only to rebuild terminal evidence manifests from durable state after a crash. It never
+   * dispatches, reserves or mutates delivery state; recovery is lookup/finalization only.
+   */
+  public OrchestrationRequest findRequest(String orchestrationId) {
+    AccountBuilderOrchestrationStore.NormalizedAggregate aggregate =
+        store.readAggregate(orchestrationId);
+    OrchestrationRequest snapshot = aggregate == null ? null : aggregate.redactedRequestSnapshot();
+    if (snapshot == null) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT, "Persisted orchestration request was not found");
+    }
+    return snapshot;
+  }
+
+  /**
+   * Durable terminal result for deterministic manifest recovery (SC-1498).
+   *
+   * <p>Prefers the persisted SC-1431 terminal-result timestamp so crash recovery replays
+   * byte-identical manifest bytes and digest. Never dispatches or mutates delivery state.
+   */
+  public java.util.Optional<AccountBuilderOrchestrationModels.TerminalResult> findTerminalResult(
+      String orchestrationId) {
+    return store.terminalResult(orchestrationId);
   }
 
   /** Durable budget row for the orchestration, if immutable limits were claimed. */
