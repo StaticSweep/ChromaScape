@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -75,6 +77,90 @@ class TickBatchMessageTest {
     TickBatchMessage msg = objectMapper.readValue(json, TickBatchMessage.class);
     assertNotNull(msg.getQuestHelper());
     assertThat(msg.getQuestHelper()).isEmpty();
+  }
+
+  @Test
+  void deserializesStructuredSc265QuestHelperFixture() throws Exception {
+    Map<String, Object> questHelper = fixtureAsMap("full");
+    String json = objectMapper.writeValueAsString(tickBatchEnvelope(questHelper));
+
+    TickBatchMessage msg = objectMapper.readValue(json, TickBatchMessage.class);
+    Map<String, Object> qh = msg.getQuestHelper();
+    assertThat(qh).isNotNull();
+    assertThat(qh.get("schema")).isEqualTo("quest.helper.runtime.v1");
+    assertThat(qh.get("outcome")).isEqualTo("FULL");
+    assertThat(qh.get("usable")).isEqualTo(true);
+    assertThat(qh.get("complete")).isEqualTo(true);
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> steps = (List<Map<String, Object>>) qh.get("steps");
+    assertThat(steps).hasSize(2);
+    assertThat(steps.get(0).get("stepId")).isEqualTo("cooks_assistant:7c63d1a2b4c5");
+    assertThat(steps.get(0).get("ordinal")).isEqualTo(0);
+  }
+
+  @Test
+  void deserializesDegradedUnavailableAndFailedQuestHelperFixtures() throws Exception {
+    for (String fixtureName : new String[] {"degraded", "unavailable", "failed"}) {
+      Map<String, Object> questHelper = fixtureAsMap(fixtureName);
+      String json = objectMapper.writeValueAsString(tickBatchEnvelope(questHelper));
+
+      TickBatchMessage msg = objectMapper.readValue(json, TickBatchMessage.class);
+      assertThat(msg.getQuestHelper()).isNotNull();
+      assertThat(msg.getQuestHelper().get("outcome")).isEqualTo(fixtureName.toUpperCase());
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> diagnostics =
+          (List<Map<String, Object>>) msg.getQuestHelper().get("diagnostics");
+      assertThat(diagnostics).isNotEmpty();
+    }
+  }
+
+  @Test
+  void fixtureCorpusLoadsFromMirroredTestResources() throws Exception {
+    try (java.io.InputStream input = getClass().getClassLoader()
+        .getResourceAsStream("contracts/quest/quest-helper-runtime-v1-fixtures.json")) {
+      assertThat(input).as("mirrored fixture corpus").isNotNull();
+      com.fasterxml.jackson.databind.JsonNode corpus =
+          objectMapper.readTree(input).path("fixtures");
+      assertThat(corpus.size()).isGreaterThanOrEqualTo(11);
+      assertThat(corpus.has("legacyV1")).isTrue();
+    }
+  }
+
+  private Map<String, Object> fixtureAsMap(String name) throws Exception {
+    try (java.io.InputStream input = getClass().getClassLoader()
+        .getResourceAsStream("contracts/quest/quest-helper-runtime-v1-fixtures.json")) {
+      assertThat(input).as("fixture corpus").isNotNull();
+      com.fasterxml.jackson.databind.JsonNode fixture =
+          objectMapper.readTree(input).path("fixtures").path(name);
+      return objectMapper.convertValue(
+          fixture, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+    }
+  }
+
+  private static Map<String, Object> tickBatchEnvelope(Map<String, Object> questHelper) {
+    Map<String, Object> envelope = new LinkedHashMap<>();
+    envelope.put("type", "TICK_BATCH");
+    envelope.put("schemaVersion", 2);
+    envelope.put("sessionId", "s1");
+    envelope.put("tick", 100);
+    envelope.put("timestamp", "2025-06-15T12:00:00Z");
+    envelope.put("playerState", Map.of("x", 3200, "z", 3200));
+    envelope.put("inventory", List.of());
+    envelope.put("equipment", List.of());
+    envelope.put("threats", List.of());
+    envelope.put("projectiles", List.of());
+    envelope.put("cooldowns", Map.of());
+    envelope.put("logs", List.of());
+    envelope.put("overlays", List.of());
+    envelope.put("quest", Map.of());
+    envelope.put("questHelper", questHelper);
+    envelope.put("npcs", List.of());
+    envelope.put("gameObjects", List.of());
+    envelope.put("groundObjects", List.of());
+    envelope.put("groundItems", List.of());
+    envelope.put("players", List.of());
+    envelope.put("widgets", List.of());
+    return envelope;
   }
 
   @Test
