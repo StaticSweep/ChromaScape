@@ -37,7 +37,11 @@ public final class HumanGameplayAuthorityService implements AccountBuilderAuthor
     this(canonicalJson, Clock.systemUTC(), signingSecret);
   }
 
-  HumanGameplayAuthorityService(
+  /**
+   * Deterministic-clock constructor. Public so cross-package SC-1498 tests can pin approval-expiry
+   * behavior; production wiring uses the {@code Clock.systemUTC()} entry point above.
+   */
+  public HumanGameplayAuthorityService(
       CanonicalGameplayJson canonicalJson, Clock clock, String signingSecret) {
     this.canonicalJson = canonicalJson;
     this.clock = clock;
@@ -72,6 +76,69 @@ public final class HumanGameplayAuthorityService implements AccountBuilderAuthor
   }
 
   /**
+   * Creates a pending approval without touching process-local storage.
+   *
+   * <p>The SC-1498 durable path persists the returned approval via {@code BootstrapApprovalStore}
+   * and binds it exactly once there. Secrets stay memory-only; only the scope digest leaves this
+   * method.
+   */
+  public PendingApproval newDurablePendingApproval(
+      String approvedBy, Object exactScope, Instant expiresAt) {
+    requireSigningConfigured();
+    if (exactScope == null) {
+      throw new AuthorityException("AUTHORITY_SCOPE_INVALID", "Exact approval scope is required");
+    }
+    if (approvedBy == null || !approvedBy.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")) {
+      throw new AuthorityException(
+          "AUTHORITY_APPROVER_INVALID", "A stable human operator id is required");
+    }
+    Instant now = clock.instant();
+    if (expiresAt == null || !expiresAt.isAfter(now) || expiresAt.isAfter(now.plus(MAX_LIFETIME))) {
+      throw new AuthorityException(
+          "AUTHORITY_EXPIRY_INVALID", "Authority must expire within 15 minutes");
+    }
+    String authorityId = "auth_" + UUID.randomUUID().toString().replace("-", "");
+    return new PendingApproval(
+        authorityId, approvedBy, now, expiresAt, canonicalJson.digest(exactScope));
+  }
+
+  /**
+   * Deterministically signs an already durably bound approval.
+   *
+   * <p>Unlike {@link #bindEnvelope}, this method consumes no process-local state. The caller must
+   * have atomically bound the approval via {@code BootstrapApprovalStore}; single-use is enforced
+   * by the durable row and by SC-1431 authority consumption, not by this method.
+   */
+  public HumanAuthority signDurableApproval(PendingApproval approval, ExecutionEnvelope envelope) {
+    requireSigningConfigured();
+    if (approval == null) {
+      throw new AuthorityException(
+          "AUTHORITY_MISSING", "Pending approval is absent or already bound");
+    }
+    Instant now = clock.instant();
+    if (!approval.expiresAt().isAfter(now)) {
+      throw new AuthorityException("AUTHORITY_EXPIRED", "Pending approval expired before binding");
+    }
+    String scopeDigest = canonicalJson.digest(exactScope(envelope));
+    if (!constantTimeEquals(scopeDigest, approval.scopeDigest())) {
+      throw new AuthorityException(
+          "AUTHORITY_SCOPE_MISMATCH", "Provider proposal changed the approved scope");
+    }
+    if (!approval.authorityId().equals(envelope.authorityId())) {
+      throw new AuthorityException(
+          "AUTHORITY_ID_MISMATCH", "Envelope authority id differs from approval");
+    }
+    return sign(approval, envelope, scopeDigest, canonicalJson.digest(envelope));
+  }
+
+  public String signatureDigest(HumanAuthority authority) {
+    if (authority == null || authority.signature() == null) {
+      throw new AuthorityException("AUTHORITY_SCOPE_INVALID", "Signed authority is required");
+    }
+    return canonicalJson.digest(authority.signature());
+  }
+
+  /**
    * Binds a provider proposal only when its independently computed scope is exactly what the human
    * approved.
    */
@@ -95,7 +162,14 @@ public final class HumanGameplayAuthorityService implements AccountBuilderAuthor
       throw new AuthorityException(
           "AUTHORITY_ID_MISMATCH", "Envelope authority id differs from approval");
     }
-    String envelopeDigest = canonicalJson.digest(envelope);
+    return sign(approval, envelope, scopeDigest, canonicalJson.digest(envelope));
+  }
+
+  private HumanAuthority sign(
+      PendingApproval approval,
+      ExecutionEnvelope envelope,
+      String scopeDigest,
+      String envelopeDigest) {
     HumanAuthority unsigned =
         new HumanAuthority(
             GameplayContracts.VERSION,

@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Direct Flyway/PostgreSQL proof of the SC-1431 budget contract.
  *
- * <p>The test stages the full repository migration chain, proves the upgrade to {@code V60}, and
+ * <p>The test stages the full repository migration chain, proves the upgrade to {@code V89}, and
  * asserts the database-owned constraints: non-null timestamps and limits, bound and counter checks,
  * expiry ordering, immutable claimed limits and timestamps, monotonic counters and an advancing
  * optimistic-lock version. It runs against an isolated schema on the local PostgreSQL instance and
@@ -55,12 +55,12 @@ class Sc1431BudgetIntegritySchemaTest {
   @Test
   void v59UpgradeAndBudgetConstraintsAreDatabaseOwned() throws Exception {
     recreateSchema();
-    // The previous integration head applies cleanly, then the V59 upgrade applies on top.
-    migrate("58");
-    assertEquals("58", currentVersion());
+    // The previous integration head applies cleanly, then the SC-1498 V89 upgrade applies on top.
+    migrate("88");
+    assertEquals("88", currentVersion());
     migrate(null);
 
-    assertEquals("60", currentVersion());
+    assertEquals("89", currentVersion());
     assertFalse(columnIsNullable("ab_orchestration_budget", "started_at"));
     assertFalse(columnIsNullable("ab_orchestration_budget", "expires_at"));
     assertFalse(columnIsNullable("ab_orchestration_budget", "max_actions"));

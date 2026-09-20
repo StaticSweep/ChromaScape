@@ -1,0 +1,177 @@
+package com.chromascape.web.gameplay.bootstrap;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
+import com.chromascape.web.gameplay.bootstrap.BootstrapApprovalStore.ApprovalView;
+import com.chromascape.web.gameplay.bootstrap.BootstrapApprovalStore.BootstrapApprovalException;
+import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import jakarta.persistence.EntityManager;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.stream.IntStream;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
+/** PostgreSQL concurrency and restart durability for SC-1498 approvals. */
+@SpringBootTest(
+    classes = BootstrapApprovalStorePostgresTest.TestApplication.class,
+    properties = {
+      "spring.jpa.hibernate.ddl-auto=validate",
+      "stabilization.auth.token=sc1498-read-token",
+      "stabilization.auth.write-token=sc1498-write-token"
+    })
+@AutoConfigureTestDatabase(replace = Replace.NONE)
+@ActiveProfiles("test")
+class BootstrapApprovalStorePostgresTest {
+  private static final Clock CLOCK =
+      Clock.fixed(Instant.parse("2026-08-30T12:00:00Z"), ZoneOffset.UTC);
+
+  @Autowired private BootstrapApprovalStore store;
+
+  @DynamicPropertySource
+  static void isolatedPostgres(DynamicPropertyRegistry registry) {
+    IsolatedPostgresTestDatabase.register(registry);
+  }
+
+  @Test
+  void identicalCreatesReturnSameDurableOwner() throws Exception {
+    String scope = "sha256:" + "a".repeat(64);
+    String fingerprint = "sha256:" + "b".repeat(64);
+    CyclicBarrier barrier = new CyclicBarrier(4);
+    ExecutorService executor = Executors.newFixedThreadPool(4);
+    try {
+      List<Future<BootstrapApprovalStore.Claim>> futures =
+          IntStream.range(0, 4)
+              .mapToObj(
+                  index ->
+                      executor.submit(
+                          () -> {
+                            barrier.await();
+                            return store.create(
+                                "session-1",
+                                "turn-1",
+                                "orch-approval-1",
+                                "req-approval-1",
+                                "rec-approval-1",
+                                fingerprint,
+                                scope,
+                                "operator-1",
+                                CLOCK.instant().plusSeconds(300));
+                          }))
+              .toList();
+      List<BootstrapApprovalStore.Claim> claims =
+          futures.stream()
+              .map(
+                  future -> {
+                    try {
+                      return future.get(20, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (Exception exception) {
+                      throw new AssertionError(exception);
+                    }
+                  })
+              .toList();
+      long created = claims.stream().filter(BootstrapApprovalStore.Claim::created).count();
+      assertThat(created).isEqualTo(1);
+      assertThat(claims.stream().map(c -> c.view().approvalId()).distinct()).hasSize(1);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
+  void conflictingReuseIsStableConflictAndBindIsSingleUse() {
+    String scope = "sha256:" + "c".repeat(64);
+    String fingerprint = "sha256:" + "d".repeat(64);
+    var claim =
+        store.create(
+            "session-2",
+            "turn-2",
+            "orch-approval-2",
+            "req-approval-2",
+            "rec-approval-2",
+            fingerprint,
+            scope,
+            "operator-1",
+            CLOCK.instant().plusSeconds(300));
+    assertThat(claim.created()).isTrue();
+
+    assertThatThrownBy(
+            () ->
+                store.create(
+                    "session-2",
+                    "turn-2",
+                    "orch-approval-2",
+                    "req-approval-2",
+                    "rec-approval-2",
+                    "sha256:" + "e".repeat(64),
+                    scope,
+                    "operator-1",
+                    CLOCK.instant().plusSeconds(300)))
+        .isInstanceOf(BootstrapApprovalException.class)
+        .hasMessageContaining("different scope");
+
+    ApprovalView bound =
+        store.bind(claim.view().approvalId(), "auth-1", "sha256:" + "f".repeat(64));
+    assertThat(bound.state()).isEqualTo("BOUND");
+
+    ApprovalView replay =
+        store.bind(claim.view().approvalId(), "auth-1", "sha256:" + "f".repeat(64));
+    assertThat(replay.approvalId()).isEqualTo(bound.approvalId());
+
+    assertThatThrownBy(
+            () -> store.bind(claim.view().approvalId(), "auth-2", "sha256:" + "0".repeat(64)))
+        .isInstanceOf(BootstrapApprovalException.class)
+        .hasMessageContaining("different authority");
+  }
+
+  @SpringBootConfiguration
+  @EnableAutoConfiguration
+  @EntityScan(basePackages = "com.chromascape.web.gameplay.bootstrap")
+  @Import(JsonConfiguration.class)
+  static class TestApplication {
+    @Bean
+    BootstrapApprovalStore approvalStore(
+        EntityManager entityManager, CanonicalGameplayJson canonicalJson) {
+      return new BootstrapApprovalStore(entityManager, canonicalJson, CLOCK);
+    }
+  }
+
+  @TestConfiguration
+  static class JsonConfiguration {
+    @Bean
+    ObjectMapper objectMapper() {
+      return JsonMapper.builder()
+          .findAndAddModules()
+          .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+          .build();
+    }
+
+    @Bean
+    CanonicalGameplayJson canonicalGameplayJson(ObjectMapper objectMapper) {
+      return new CanonicalGameplayJson(objectMapper);
+    }
+  }
+}

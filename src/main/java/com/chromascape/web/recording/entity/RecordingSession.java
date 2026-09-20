@@ -38,7 +38,9 @@ public class RecordingSession {
     /** Automatic recording triggered by error event. */
     ERROR_EVENT,
     /** Automatic recording started by Micro6 SESSION_START message. */
-    MICRO6_AUTO
+    MICRO6_AUTO,
+    /** Recording started by the SC-1498 bootstrap coordinator before SC-1431 delivery. */
+    BOOTSTRAP_RECORDING
   }
 
   @Id

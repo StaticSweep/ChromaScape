@@ -930,6 +930,9 @@ public class DebugSessionService {
       case MANUAL -> true;
       case TASK_AUTO -> recordingService.isTaskAutoRecordEnabled();
       case MICRO6_AUTO -> recordingService.isAutoRecordEnabled();
+        // The SC-1498 bootstrap recording is owned by the bootstrap coordinator, never by a debug
+        // session, so it never starts here.
+      case BOOTSTRAP_RECORDING -> false;
     };
   }
 
@@ -938,6 +941,8 @@ public class DebugSessionService {
       case TASK_AUTO -> "Task auto-recording is disabled";
       case MICRO6_AUTO -> "Generic Micro6 auto-recording is disabled";
       case MANUAL -> "Recording was not permitted";
+      case BOOTSTRAP_RECORDING ->
+          "Bootstrap recordings are coordinated by the SC-1498 bootstrap service";
     };
   }
 
