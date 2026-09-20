@@ -1452,3 +1452,31 @@ val sc1668EvidenceTests by tasks.registering(Exec::class) {
 	commandLine("python3", "-B", "-m", "unittest", "discover", "-s", tests, "-t", projectDir.absolutePath)
 	outputs.upToDateWhen { false }
 }
+
+// FEDORA-01/02 packaging regressions. They build synthetic distributions and drive the real
+// packaging, installer, uninstaller and certification scripts against them, so the shipping code
+// path is exercised without a Gradle build, a native toolchain, a client or a database. Every
+// path is under a private temporary root; build/dist and build/packages are never touched.
+val fedoraPackagingRegressions by tasks.registering(Exec::class) {
+	group = "verification"
+	description = "Run FEDORA-01/02 packaging, install/uninstall and certification regressions."
+
+	onlyIf { isLinux }
+	commandLine(
+		"bash",
+		layout.projectDirectory.file("scripts/fedora/tests/packaging-regressions.sh").asFile.absolutePath,
+	)
+	outputs.upToDateWhen { false }
+}
+
+// FEDORA-02 packaged-distribution evidence contract. The record module is fail-closed: a package
+// matrix cannot become complete until the tarball and RPM records agree on the exact application
+// revision and package version, carry distinct artifact digests, and every required case is PASS.
+val fedora02EvidenceTests by tasks.registering(Exec::class) {
+	group = "verification"
+	description = "Run FEDORA-02 packaged-distribution evidence contract regressions."
+
+	val tests = layout.projectDirectory.dir("scripts/qualification/tests").asFile.absolutePath
+	commandLine("python3", "-B", "-m", "unittest", "discover", "-s", tests, "-t", projectDir.absolutePath)
+	outputs.upToDateWhen { false }
+}
