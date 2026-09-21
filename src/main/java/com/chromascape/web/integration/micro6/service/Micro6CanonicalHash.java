@@ -58,9 +58,9 @@ final class Micro6CanonicalHash {
   }
 
   /**
-   * Canonical task summary fields used by {@link #catalogHash}. These match Micro6's stable
-   * catalog identity projection: schema-bearing fields are excluded so lightweight, full, and
-   * health attestations retain one catalog hash while schema changes move the bundle hash.
+   * Canonical task summary fields used by {@link #catalogHash}. These match Micro6's stable catalog
+   * identity projection: schema-bearing fields are excluded so lightweight, full, and health
+   * attestations retain one catalog hash while schema changes move the bundle hash.
    */
   static final Set<String> CATALOG_HASH_TASK_FIELDS =
       Set.of(

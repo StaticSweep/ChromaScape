@@ -116,8 +116,10 @@ class TickBatchMessageTest {
 
   @Test
   void fixtureCorpusLoadsFromMirroredTestResources() throws Exception {
-    try (java.io.InputStream input = getClass().getClassLoader()
-        .getResourceAsStream("contracts/quest/quest-helper-runtime-v1-fixtures.json")) {
+    try (java.io.InputStream input =
+        getClass()
+            .getClassLoader()
+            .getResourceAsStream("contracts/quest/quest-helper-runtime-v1-fixtures.json")) {
       assertThat(input).as("mirrored fixture corpus").isNotNull();
       com.fasterxml.jackson.databind.JsonNode corpus =
           objectMapper.readTree(input).path("fixtures");
@@ -127,8 +129,10 @@ class TickBatchMessageTest {
   }
 
   private Map<String, Object> fixtureAsMap(String name) throws Exception {
-    try (java.io.InputStream input = getClass().getClassLoader()
-        .getResourceAsStream("contracts/quest/quest-helper-runtime-v1-fixtures.json")) {
+    try (java.io.InputStream input =
+        getClass()
+            .getClassLoader()
+            .getResourceAsStream("contracts/quest/quest-helper-runtime-v1-fixtures.json")) {
       assertThat(input).as("fixture corpus").isNotNull();
       com.fasterxml.jackson.databind.JsonNode fixture =
           objectMapper.readTree(input).path("fixtures").path(name);

@@ -46,7 +46,9 @@ public final class IsolatedPostgresTestDatabase {
     register(registry, newDatabase());
   }
 
-  /** Registers a previously allocated database so a test can also make schema-scoped raw JDBC calls. */
+  /**
+   * Registers a previously allocated database so a test can also make schema-scoped raw JDBC calls.
+   */
   public static void register(DynamicPropertyRegistry registry, Database database) {
     registerWithDdlAuto(registry, database, "update");
   }
@@ -55,11 +57,11 @@ public final class IsolatedPostgresTestDatabase {
    * Registers a new schema-backed datasource for one Spring context with Hibernate set to {@code
    * validate} instead of {@code update}.
    *
-   * <p>Unlike {@link #register}, Hibernate is never permitted to create or alter any schema
-   * element here: the context only starts successfully when Flyway alone has already produced
-   * every table, column, index, and constraint the JPA metamodel expects. Use this only for a
-   * dedicated migration-completeness proof; ordinary integration tests should keep using {@link
-   * #register}, which this method does not change.
+   * <p>Unlike {@link #register}, Hibernate is never permitted to create or alter any schema element
+   * here: the context only starts successfully when Flyway alone has already produced every table,
+   * column, index, and constraint the JPA metamodel expects. Use this only for a dedicated
+   * migration-completeness proof; ordinary integration tests should keep using {@link #register},
+   * which this method does not change.
    *
    * <p>Call this only from a test class's static {@code @DynamicPropertySource} method.
    */
@@ -69,13 +71,13 @@ public final class IsolatedPostgresTestDatabase {
 
   private static void registerWithDdlAuto(
       DynamicPropertyRegistry registry, Database database, String ddlAuto) {
-    registry.add(
-        "spring.datasource.url", () -> schemaJdbcUrl(database));
+    registry.add("spring.datasource.url", () -> schemaJdbcUrl(database));
     registry.add("spring.datasource.username", database::username);
     registry.add("spring.datasource.password", database::password);
     registry.add("spring.datasource.hikari.schema", database::schema);
     // Spring's test context cache can retain dozens of application contexts in one JVM. Keep each
-    // isolated schema's pool small so the shared PostgreSQL container never exhausts max_connections.
+    // isolated schema's pool small so the shared PostgreSQL container never exhausts
+    // max_connections.
     registry.add("spring.datasource.hikari.maximum-pool-size", () -> 2);
     registry.add("spring.datasource.hikari.minimum-idle", () -> 0);
     registry.add("spring.flyway.schemas", database::schema);
@@ -121,7 +123,8 @@ public final class IsolatedPostgresTestDatabase {
                 + flyway.getConfiguration().getTable()
                 + "\" WHERE version = '16'",
             Integer.class);
-    assertEquals(1, migration16Rows, "isolated Flyway history must apply migration 16 exactly once");
+    assertEquals(
+        1, migration16Rows, "isolated Flyway history must apply migration 16 exactly once");
     assertTrue(
         flyway.info().all().length > 0,
         "isolated Flyway context must expose repository migrations");
