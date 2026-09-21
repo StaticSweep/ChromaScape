@@ -354,7 +354,7 @@ class BuilderGoalRunStateMutationServiceTest {
   void applyExecutorStatus_finalizesStopWhenDeliveredEntryDisappears() {
     mutationService =
         new BuilderGoalRunStateMutationService(
-            iterationRepository, persistenceService, objectMapper, 300_000L, 1, 1_000L);
+            iterationRepository, persistenceService, objectMapper, 300_000L, 1, 1_000L, null);
     PatchLoopIteration iteration = publishedIteration("bg_stopped_missing0001", "STOPPING");
     Map<String, Object> metadata =
         objectMapper.convertValue(iteration.getTaskMetadataJson(), Map.class);

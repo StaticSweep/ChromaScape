@@ -101,7 +101,7 @@ class RecordingServiceInitialFrameReadinessTest {
         .thenReturn(new FrameEvent(image, 12, 8, 8, binding, null, null, null));
     RecordingService service = newService(config(), capture);
 
-    assertThat(waitForInitialFrame(service)).isSameAs(image);
+    assertThat(waitForStableInitialFrame(service)).isSameAs(image);
     assertThat(service.getMetrics().get("sourceBinding")).isEqualTo(binding.toDisplayString());
   }
 
