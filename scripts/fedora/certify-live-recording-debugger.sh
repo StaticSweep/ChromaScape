@@ -361,10 +361,15 @@ check_explicit_selection() {
     fi
     selected_window_id="$choice"
     selected_pid="$(jq -r --arg id "$choice" '.[] | select(.id == $id) | .pid' <<<"$candidates" | head -n 1)"
-    local cmdline
+    local cmdline client_root
     cmdline="$(tr '\0' ' ' < "/proc/$selected_pid/cmdline" 2>/dev/null || true)"
-    selected_client="$(basename "$(grep -oE '[^ ]+\.jar' <<<"$cmdline" | head -n 1)" 2>/dev/null || true)"
-    [[ -n "$selected_client" ]] || selected_client="pid-$selected_pid"
+    client_root="$(tr ' ' '\n' <<<"$cmdline" | grep -m 1 -E '/runelite-client/(build/classes|src)/' || true)"
+    if [[ -n "$client_root" ]]; then
+        client_root="${client_root%%/runelite-client/*}"
+        selected_client="net.runelite.client.RuneLite@$(basename "$client_root")"
+    else
+        selected_client="net.runelite.client.RuneLite@pid-$selected_pid"
+    fi
     record liveExplicitSelection PASS "selected window $choice for pid $selected_pid ($selected_client)"
     return 0
 }
