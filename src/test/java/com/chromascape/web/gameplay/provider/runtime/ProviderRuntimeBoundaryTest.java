@@ -146,16 +146,6 @@ class ProviderRuntimeBoundaryTest {
   }
 
   private List<String> fixtureCommand(String mode) throws Exception {
-    if (isWindows()) {
-      String command =
-          switch (mode) {
-            case "sleep" -> "ping -n 11 127.0.0.1 >nul";
-            case "event-then-sleep" -> "(echo event) & ping -n 11 127.0.0.1 >nul";
-            case "overflow" -> "echo " + "x".repeat(5000);
-            default -> "echo decision";
-          };
-      return List.of(System.getenv("ComSpec"), "/d", "/c", command);
-    }
     return List.of(
         ProcessHandle.current().info().command().orElseThrow(),
         "-cp",
@@ -168,9 +158,5 @@ class ProviderRuntimeBoundaryTest {
             .toString(),
         ProviderProcessFixture.class.getName(),
         mode);
-  }
-
-  private boolean isWindows() {
-    return System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win");
   }
 }

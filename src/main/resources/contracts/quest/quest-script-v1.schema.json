@@ -1,0 +1,728 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://chromascape.dev/contracts/quest/quest-script-v1.schema.json",
+  "title": "AIO quest script definition (quest.script.v1)",
+  "description": "Declarative quest script consumed by the Micro6 quest script framework (SC-266). A script declares prerequisites, an ordered step flow, gate conditions, and failure handling. The framework compiles steps into existing AccountBuilder/QuestHelper action primitives; it does not redefine quest.state.v1 (SC-500) or quest.runtime.v1 (SC-265).",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "name",
+    "questKey",
+    "version",
+    "prerequisites",
+    "steps",
+    "failureHandling",
+    "completion"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "quest.script.v1"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "questKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "members": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 2048
+    },
+    "prerequisites": {
+      "$ref": "#/definitions/prerequisites"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {
+        "$ref": "#/definitions/step"
+      }
+    },
+    "failureHandling": {
+      "$ref": "#/definitions/failureHandling"
+    },
+    "completion": {
+      "$ref": "#/definitions/completion"
+    },
+    "metadata": {
+      "$ref": "#/definitions/metadata"
+    }
+  },
+  "definitions": {
+    "prerequisites": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "quests": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "skills": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/definitions/skillRequirement"
+          }
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/definitions/itemRequirement"
+          }
+        },
+        "minimumQuestPoints": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      }
+    },
+    "skillRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "skill",
+        "level"
+      ],
+      "properties": {
+        "skill": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99
+        },
+        "boostable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "itemRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "itemId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "consume": {
+          "type": "boolean"
+        }
+      }
+    },
+    "failureHandling": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxRetries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "onPrepareFailure": {
+          "type": "string",
+          "enum": [
+            "FAIL",
+            "RETRY",
+            "SKIP"
+          ]
+        },
+        "retryableCodes": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          }
+        },
+        "terminalCodes": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          }
+        }
+      }
+    },
+    "completion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "QUEST_STATE",
+            "STEP",
+            "CONDITION"
+          ]
+        },
+        "questKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "expect": {
+          "type": "string",
+          "enum": [
+            "NOT_STARTED",
+            "IN_PROGRESS",
+            "FINISHED",
+            "UNKNOWN"
+          ]
+        },
+        "stepId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "conditions": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/definitions/condition"
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "difficulty": {
+          "type": "string",
+          "enum": [
+            "NOVICE",
+            "INTERMEDIATE",
+            "EXPERIENCED",
+            "MASTER",
+            "GRANDMASTER",
+            "SPECIAL"
+          ]
+        },
+        "estimatedTicks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "dialogue",
+            "travel",
+            "inventory",
+            "gate",
+            "interact",
+            "wait",
+            "checkpoint",
+            "complete"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "next": {
+          "$ref": "#/definitions/stepTarget"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "failureCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "dialogue": {
+          "$ref": "#/definitions/dialogue"
+        },
+        "travel": {
+          "$ref": "#/definitions/travel"
+        },
+        "inventory": {
+          "$ref": "#/definitions/inventory"
+        },
+        "gate": {
+          "$ref": "#/definitions/gate"
+        },
+        "interact": {
+          "$ref": "#/definitions/interact"
+        },
+        "wait": {
+          "$ref": "#/definitions/wait"
+        },
+        "checkpoint": {
+          "$ref": "#/definitions/checkpoint"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "dialogue"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "dialogue"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "travel"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "travel"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "inventory"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "inventory"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "gate"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "gate"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "interact"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "interact"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "wait"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "wait"
+            ]
+          }
+        }
+      ]
+    },
+    "stepTarget": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^([a-z][a-z0-9_]*|COMPLETE|FAIL)$"
+    },
+    "dialogue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "npc"
+      ],
+      "properties": {
+        "npc": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "npcId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "continueText": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "options": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/definitions/dialogueOption"
+          }
+        }
+      }
+    },
+    "dialogueOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "next": {
+          "$ref": "#/definitions/stepTarget"
+        }
+      }
+    },
+    "travel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "destination"
+      ],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "WALK",
+            "TELEPORT",
+            "SPIRIT_TREE",
+            "FAIRY_RING",
+            "SHIP",
+            "BOAT",
+            "GLIDER",
+            "CARPET"
+          ]
+        },
+        "destination": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "item": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "itemId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "regionId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        },
+        "plane": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "name"
+      ],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "WITHDRAW",
+            "DEPOSIT",
+            "EQUIP",
+            "USE",
+            "DROP"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "itemId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "target": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conditions",
+        "onFalse"
+      ],
+      "properties": {
+        "conditions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/definitions/condition"
+          }
+        },
+        "onFalse": {
+          "$ref": "#/definitions/stepTarget"
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "QUEST_FINISHED",
+            "QUEST_STARTED",
+            "ITEM_IN_INVENTORY",
+            "ITEM_EQUIPPED",
+            "SKILL_LEVEL",
+            "VARBIT",
+            "STEP_COMPLETE"
+          ]
+        },
+        "questKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "itemId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "itemName": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "skill": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99
+        },
+        "varType": {
+          "type": "string",
+          "enum": [
+            "VARBIT",
+            "VARP"
+          ]
+        },
+        "varId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "varValue": {
+          "type": "integer"
+        },
+        "stepId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "negate": {
+          "type": "boolean"
+        }
+      }
+    },
+    "interact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "name"
+      ],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": [
+            "NPC",
+            "OBJECT",
+            "GROUND_ITEM"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "action": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "option": {
+          "type": "string",
+          "maxLength": 64
+        }
+      }
+    },
+    "wait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "condition"
+      ],
+      "properties": {
+        "condition": {
+          "$ref": "#/definitions/condition"
+        },
+        "timeoutTicks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    }
+  }
+}

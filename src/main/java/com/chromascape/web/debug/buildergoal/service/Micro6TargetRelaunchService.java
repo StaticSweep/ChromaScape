@@ -41,14 +41,15 @@ public class Micro6TargetRelaunchService {
   private static final String DEFAULT_GRADLE_PREPARE_TASK = ":client:prepareBuilderGoal";
   private static final String CUSTOM_LAUNCH_COMMAND = "custom_launch_command";
   private static final int MAX_LAUNCH_ATTEMPTS = 2;
+
   /**
    * Windows spawns a fresh PowerShell for every listener probe, and cold start alone routinely
-   * exceeds five seconds on a loaded workstation (measured at ~8.4s while a Micro6 client, a
-   * second ChromaScape instance and a Docker stack were running). The probe is fail-closed: a
-   * timeout yields {@code UNKNOWN}, which both blocks executor replacement and prevents a healthy
-   * executor from being reused, so an over-tight bound silently converts transient machine load
-   * into spurious dispatch failures. The bound stays finite so a genuinely hung probe still fails
-   * closed rather than stalling a launch indefinitely.
+   * exceeds five seconds on a loaded workstation (measured at ~8.4s while a Micro6 client, a second
+   * ChromaScape instance and a Docker stack were running). The probe is fail-closed: a timeout
+   * yields {@code UNKNOWN}, which both blocks executor replacement and prevents a healthy executor
+   * from being reused, so an over-tight bound silently converts transient machine load into
+   * spurious dispatch failures. The bound stays finite so a genuinely hung probe still fails closed
+   * rather than stalling a launch indefinitely.
    */
   private static final long PORT_PROBE_WAIT_MS = 30_000L;
 

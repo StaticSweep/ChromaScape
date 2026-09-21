@@ -1,6 +1,5 @@
 package com.chromascape.web.aiplayer.routine.source;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -23,24 +22,24 @@ import org.junit.jupiter.api.Test;
 /**
  * SC-810 Flyway-only migration-completeness proof, in the same style as {@code
  * Sc967FlywaySchemaTest}: plain JDBC and a standalone {@link Flyway} configuration, no Spring
- * context and no Hibernate at all — so there is no {@code ddl-auto} of any kind to silently
- * paper over a migration gap. Runs against the configured local test PostgreSQL ({@code
+ * context and no Hibernate at all — so there is no {@code ddl-auto} of any kind to silently paper
+ * over a migration gap. Runs against the configured local test PostgreSQL ({@code
  * localhost:5433/chromascape_test}) inside a dedicated per-run schema that is dropped afterwards;
  * never touches the shared {@code chromascape} developer database.
  *
- * <p>An earlier attempt booted the full {@link Sc810PostgresTestConfiguration} Spring context
- * with {@code ddl-auto=validate} instead. That surfaced real but entirely unrelated gaps —
- * {@code DecisionEntity}'s {@code decisions} table and {@code ScriptFailureTriage}'s {@code
- * script_failure_triage} table are never created by any migration, masked everywhere else by
- * {@code ddl-auto=update} — because {@code @EntityScan(basePackageClasses = ScriptStabilizationRun
+ * <p>An earlier attempt booted the full {@link Sc810PostgresTestConfiguration} Spring context with
+ * {@code ddl-auto=validate} instead. That surfaced real but entirely unrelated gaps — {@code
+ * DecisionEntity}'s {@code decisions} table and {@code ScriptFailureTriage}'s {@code
+ * script_failure_triage} table are never created by any migration, masked everywhere else by {@code
+ * ddl-auto=update} — because {@code @EntityScan(basePackageClasses = ScriptStabilizationRun
  * .class)} scans that class's whole package, not just that one class, sweeping in every sibling
  * entity in {@code com.chromascape.web.accounttask.entity}. This test avoids Hibernate entirely so
  * it proves exactly the SC-810 source/capture/run migration contract (V21, V36) without depending
  * on that scan's breadth.
  *
- * <p>This raw-JDBC approach found a third, separate gap the same way: no migration anywhere
- * creates {@code script_stabilization_run} (the exact table {@code ScriptStabilizationRun} maps
- * to; a related but different table, {@code script_stabilization_snapshot}, does exist). {@code
+ * <p>This raw-JDBC approach found a third, separate gap the same way: no migration anywhere creates
+ * {@code script_stabilization_run} (the exact table {@code ScriptStabilizationRun} maps to; a
+ * related but different table, {@code script_stabilization_snapshot}, does exist). {@code
  * CurrentSliceRunService}'s own code attributes that entity to SC-572, not SC-810; {@link
  * Sc810PostgresTestConfiguration} only consumes it (as the stabilization PASS gate) rather than
  * owning its schema, so this test deliberately does not assert its presence. All three gaps are
@@ -101,7 +100,8 @@ class Sc810FlywayOnlyMigrationCompletenessTest {
 
     assertTrue(
         indexExists("source_manifest_references", "uk_source_manifest_references_manifest_hash"));
-    assertTrue(indexIsUnique("source_manifest_references", "uk_source_manifest_references_manifest_hash"));
+    assertTrue(
+        indexIsUnique("source_manifest_references", "uk_source_manifest_references_manifest_hash"));
     assertTrue(
         indexExists("source_manifest_references", "uk_source_manifest_references_snapshot_id"));
     assertTrue(indexExists("source_run_bindings", "uk_source_run_bindings_run_id"));
