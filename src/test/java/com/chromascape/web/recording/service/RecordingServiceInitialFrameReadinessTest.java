@@ -8,6 +8,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.chromascape.utils.core.screen.FrameEvent;
+import com.chromascape.utils.core.screen.FrameSourceBinding;
+import com.chromascape.utils.core.screen.window.ProcessOrigin;
 import com.chromascape.web.recording.capture.WindowFrameCapture;
 import com.chromascape.web.recording.config.RecordingConfig;
 import com.chromascape.web.recording.config.RecordingTriggerSource;
@@ -18,6 +21,7 @@ import java.awt.image.BufferedImage;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -79,6 +83,26 @@ class RecordingServiceInitialFrameReadinessTest {
     assertThat(result.getWidth()).isEqualTo(8);
     assertThat(result.getHeight()).isEqualTo(6);
     verify(capture, times(1)).capture();
+  }
+
+  @Test
+  void validInitialEventPinsExactRecordingSource() throws Exception {
+    WindowFrameCapture capture = mock(WindowFrameCapture.class);
+    BufferedImage image = frame(8, 8);
+    FrameSourceBinding binding =
+        new FrameSourceBinding(
+            ProcessOrigin.LOCAL,
+            "fedora-host",
+            88,
+            Instant.parse("2026-09-18T00:00:00Z"),
+            "boot",
+            4);
+    when(capture.captureEvent())
+        .thenReturn(new FrameEvent(image, 12, 8, 8, binding, null, null, null));
+    RecordingService service = newService(config(), capture);
+
+    assertThat(waitForInitialFrame(service)).isSameAs(image);
+    assertThat(service.getMetrics().get("sourceBinding")).isEqualTo(binding.toDisplayString());
   }
 
   @Test

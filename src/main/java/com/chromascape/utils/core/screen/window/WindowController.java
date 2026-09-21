@@ -2,6 +2,7 @@ package com.chromascape.utils.core.screen.window;
 
 import java.awt.Rectangle;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
@@ -27,10 +28,32 @@ public class WindowController {
   private static final Logger logger = LogManager.getLogger(WindowController.class);
 
   private final WindowSelectionService windowSelectionService;
+  private final TargetDiscoveryService targetDiscoveryService;
 
+  /**
+   * Spring constructor.
+   *
+   * @param windowSelectionService current selection state
+   * @param targetDiscoveryService single read path to discovery
+   */
   @Autowired
-  public WindowController(WindowSelectionService windowSelectionService) {
+  public WindowController(
+      WindowSelectionService windowSelectionService,
+      TargetDiscoveryService targetDiscoveryService) {
     this.windowSelectionService = windowSelectionService;
+    this.targetDiscoveryService = targetDiscoveryService;
+  }
+
+  /**
+   * Convenience constructor for tests: resolves candidates through a default discovery service
+   * wired to the given selection service.
+   *
+   * @param windowSelectionService current selection state
+   */
+  public WindowController(WindowSelectionService windowSelectionService) {
+    this(
+        windowSelectionService,
+        new TargetDiscoveryService(new ProcessManagerFactory(), windowSelectionService));
   }
 
   /**
@@ -42,7 +65,7 @@ public class WindowController {
    */
   @GetMapping
   public ResponseEntity<List<Map<String, Object>>> listWindows() {
-    List<WindowHandler.WindowCandidate> candidates = WindowHandler.getUiWindowCandidates();
+    List<WindowHandler.WindowCandidate> candidates = targetDiscoveryService.listUiCandidates();
     logger.debug("Returning {} debugger window candidates", candidates.size());
 
     List<Map<String, Object>> response =
@@ -62,12 +85,16 @@ public class WindowController {
                   map.put("selectionReason", candidate.selectionReason());
 
                   Rectangle bounds = window.getBounds();
-                  Map<String, Object> boundsMap = new HashMap<>();
-                  boundsMap.put("x", bounds.x);
-                  boundsMap.put("y", bounds.y);
-                  boundsMap.put("width", bounds.width);
-                  boundsMap.put("height", bounds.height);
-                  map.put("bounds", boundsMap);
+                  if (bounds != null) {
+                    Map<String, Object> boundsMap = new HashMap<>();
+                    boundsMap.put("x", bounds.x);
+                    boundsMap.put("y", bounds.y);
+                    boundsMap.put("width", bounds.width);
+                    boundsMap.put("height", bounds.height);
+                    map.put("bounds", boundsMap);
+                  } else {
+                    map.put("bounds", null);
+                  }
 
                   return map;
                 })
@@ -96,12 +123,16 @@ public class WindowController {
     response.put("visible", selected.isVisible());
 
     Rectangle bounds = selected.getBounds();
-    Map<String, Object> boundsMap = new HashMap<>();
-    boundsMap.put("x", bounds.x);
-    boundsMap.put("y", bounds.y);
-    boundsMap.put("width", bounds.width);
-    boundsMap.put("height", bounds.height);
-    response.put("bounds", boundsMap);
+    if (bounds != null) {
+      Map<String, Object> boundsMap = new HashMap<>();
+      boundsMap.put("x", bounds.x);
+      boundsMap.put("y", bounds.y);
+      boundsMap.put("width", bounds.width);
+      boundsMap.put("height", bounds.height);
+      response.put("bounds", boundsMap);
+    } else {
+      response.put("bounds", null);
+    }
 
     return ResponseEntity.ok(response);
   }
@@ -125,7 +156,7 @@ public class WindowController {
     }
 
     List<WindowInfo> candidates =
-        WindowHandler.getUiWindowCandidates().stream()
+        targetDiscoveryService.listUiCandidates().stream()
             .map(WindowHandler.WindowCandidate::window)
             .toList();
 
@@ -139,8 +170,13 @@ public class WindowController {
     windowSelectionService.setSelectedWindow(selectedWindow);
     logger.info("Window selected via API: {} (ID: {})", selectedWindow.getTitle(), windowId);
 
-    return ResponseEntity.ok(
-        Map.of("status", "selected", "id", windowId, "title", selectedWindow.getTitle()));
+    // A null-tolerant map is required here: neutral Linux candidates intentionally carry no title,
+    // and Map.of rejects null values.
+    Map<String, String> response = new LinkedHashMap<>();
+    response.put("status", "selected");
+    response.put("id", windowId);
+    response.put("title", selectedWindow.getTitle());
+    return ResponseEntity.ok(response);
   }
 
   /**

@@ -1,0 +1,9 @@
+# SC-1661 focused review run — Micro6RemoteLauncherServiceTest result summary
+# Source revision: 966e0e3e47db71fe5d57629205efcb23cd11e026
+# Command: ./gradlew test --tests '*Micro6RemoteLauncherServiceTest' -Psc967VectorsPath=... --console=plain --rerun-tasks
+# Captured from build/test-results/test/ immediately after the run (build/ is git-ignored;
+# this file is the durable summary, retained because the XML is not).
+
+<testsuite name="com.chromascape.web.debug.buildergoal.service.Micro6RemoteLauncherServiceTest" tests="3" skipped="0" failures="0" errors="0"
+
+tests=3 skipped=0 failures=0 errors=0 -> exit 0

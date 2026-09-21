@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:48:05.325Z" hostname="fedora" time="0.074">
+  <properties/>
+  <testcase name="updatePhaseFencedWithExpectedPhaseRejectsMismatchedCurrentPhase()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.005"/>
+  <testcase name="heartbeatFromStaleWorkerThrowsStaleFenceWithoutSaving()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.004"/>
+  <testcase name="updatePhaseFencedSucceedsWhenLeaseMatches()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.004"/>
+  <testcase name="updatePhaseFencedRequiresRunningState()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.004"/>
+  <testcase name="requireValidFencePassesExactFencePredicates()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.005"/>
+  <testcase name="requireValidFenceThrowsStaleFenceWhenQueryReturnsNoRow()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.006"/>
+  <testcase name="heartbeatRenewsViaAtomicConditionalUpdate()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.005"/>
+  <testcase name="cancellingMayOnlyTerminalize()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.003"/>
+  <testcase name="requireValidFenceDelegatesToDatabaseClockLockingQuery()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.004"/>
+  <testcase name="terminalStatesRejectEveryTransition()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.004"/>
+  <testcase name="updatePhaseFencedRejectsWrongGeneration()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.003"/>
+  <testcase name="claimCreatesAttemptAndImmutableFence()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.004"/>
+  <testcase name="updatePhaseFencedThrowsStaleFenceWhenNoRowsUpdated()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.003"/>
+  <testcase name="runningToRunningIsIllegalForPhaseChanges()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.005"/>
+  <testcase name="startingToRunningIsLegalAndSetsStartedAtOnce()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.004"/>
+  <testcase name="claimInsertReturningZeroAbortsTheClaim()" classname="com.chromascape.web.replay.run.ReplayRunStatePhaseFencingTest" time="0.004"/>
+  <system-out><![CDATA[12:48:05.329 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@7c8d382e] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.333 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@12b0440b] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.338 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@53e780d7] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.343 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@631bb90c] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.348 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@62a9d176] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.354 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@34ccce55] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.360 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@641bd93e] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.363 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@78f2cab9] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.367 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@536d153b] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.371 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@34949460] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.374 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@74a46f81] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.378 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@67231d8d] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.380 [Test worker] INFO  com.chromascape.web.replay.run.ReplayRunService - Worker w1 claimed run 98823e2c-5798-454c-a1e9-5dcfbf06fb14 attempt 4 fence 6
+12:48:05.383 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@4d53dfb7] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.388 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@4f03729f] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.394 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@113a7d12] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+12:48:05.398 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'leaseDurationSeconds' of type [null] on target object [com.chromascape.web.replay.run.ReplayRunService@319c77de] or target class [class com.chromascape.web.replay.run.ReplayRunService] to value [30]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

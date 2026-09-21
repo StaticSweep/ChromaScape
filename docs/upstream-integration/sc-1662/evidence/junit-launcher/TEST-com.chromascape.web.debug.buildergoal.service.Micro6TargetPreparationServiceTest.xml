@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-15T03:10:25.912Z" hostname="fedora" time="0.158">
+  <properties/>
+  <testcase name="ensureReady_rejectsLeaseLossBeforeRestart()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.051"/>
+  <testcase name="ensureReady_propagatesCancellationUnchangedFromRelaunch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.004"/>
+  <testcase name="ensureReady_cancelledBeforeRestartThrows()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.003"/>
+  <testcase name="ensureReady_rejectsNullLease()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.002"/>
+  <testcase name="ensureReady_rejectsNullCancellation()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.001"/>
+  <testcase name="remoteMachineNeverInvokesLocalRelaunch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.082"/>
+  <testcase name="ensureReady_combinedCancellationDetectsLeaseLossMidRelaunch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.005"/>
+  <testcase name="ensureReady_usesLocalMicro6WorkspaceLaunch()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.003"/>
+  <testcase name="ensureReady_rejectsNonLocalMachineForBuilderGoalFlow()" classname="com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationServiceTest" time="0.003"/>
+  <system-out><![CDATA[05:10:25.962 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationService - ensureReady called with lease handle owner=test-lost account=hash-1
+05:10:25.966 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationService - ensureReady called with lease handle owner=test account=hash-1
+05:10:25.970 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationService - ensureReady called with lease handle owner=test account=hash-1
+05:10:26.054 [Test worker] DEBUG org.springframework.test.util.ReflectionTestUtils - Setting field 'remoteLauncher' of type [null] on target object [com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationService@41f5389f] or target class [class com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationService] to value [Mock for Micro6RemoteLauncherService, hashCode: 934651164]
+05:10:26.056 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationService - ensureReady called with lease handle owner=owner account=<redacted>
+05:10:26.062 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationService - ensureReady called with lease handle owner=test account=hash-1
+05:10:26.066 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationService - ensureReady called with lease handle owner=test-recovery account=hash-1
+05:10:26.069 [Test worker] DEBUG com.chromascape.web.debug.buildergoal.service.Micro6TargetPreparationService - ensureReady called with lease handle owner=test-reject account=hash-1
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

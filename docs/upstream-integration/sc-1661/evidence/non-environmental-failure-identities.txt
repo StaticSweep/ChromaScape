@@ -1,0 +1,28 @@
+# SC-1661 — non-environmental (assertion/behaviour) failures at the candidate baseline
+# Revision: 4e0a3d5b56ae7d3d50bd4ce878b31dd541540a23 (content baseline 583a05b91687d156b1baa52dbda2b219604c7b39)
+# Derived from candidate-test.log (C6). A failure is listed here when its reported root cause is an
+# assertion/behaviour exception rather than a Testcontainers/PostgreSQL/context-load exception.
+# Identical set on the reconciled branch: reconciled-test.log (R4) has the same 110 identities.
+# Count: 18
+
+## Gameplay / provider-output family (16)
+HumanGameplayAuthorityServiceTest > bindsOneUseAuthorityToTheExactEnvelopeAndScope() FAILED    [org.opentest4j.AssertionFailedError]
+GameplayContractConformanceTest > claudeAndCodexUseTheSameClosedDownstreamShape() FAILED    [com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation]
+GameplayContractConformanceTest > securitySensitiveObjectsRejectUnknownOrUnsupportedFields() FAILED    [java.lang.ClassCastException]
+GameplayContractConformanceTest > canonicalResourcesHaveFrozenByteDigests() FAILED    [org.opentest4j.AssertionFailedError]
+GameplayContractConformanceTest > canonicalFixturesValidateAndPinDigests() FAILED    [com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation]
+BootstrapGameplayOperatorServiceTest > approvalRequiresHumanConfirmationOfTheCurrentDigest() FAILED    [com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation]
+BootstrapGameplayOperatorServiceTest > previewApproveAndDispatchConsumeOneExactHumanApproval() FAILED    [com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation]
+BootstrapGameplayOrchestratorTest > fakeAccountBuilderCoversTerminalAndUncertainPathsWithAtomicEvidence() FAILED    [com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation]
+BootstrapGameplayOrchestratorTest > identicalRequestReconcilesAndConflictingIdempotencyFailsBeforeDispatch() FAILED    [com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation]
+BootstrapGameplayOrchestratorTest > staleObservationFailsBeforeAccountBuilderReservation() FAILED    [com.chromascape.web.gameplay.contract.GameplayContractValidator$GameplayContractViolation]
+GameplayProviderRuntimeTest > identicalRetryInvokesProviderOnceAndPublishesOnlyPersistedDecision() FAILED    [org.opentest4j.AssertionFailedError]
+ProviderOutputNormalizerTest > normalizesClaudeAndCodexGoldenProposalsToEquivalentDecisions() FAILED    [com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException]
+ProviderOutputNormalizerTest > rejectsProseMultipleDecisionsAndUnsupportedActions() FAILED    [java.lang.ClassCastException]
+ProviderOutputNormalizerTest > rejectsEvidenceOutsidePinnedInput() FAILED    [java.lang.ClassCastException]
+ProviderOutputNormalizerTest > extractsOneClaudeTerminalResultFromBoundedTransportEvents() FAILED    [com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException]
+ProviderOutputNormalizerTest > acceptsOnlyThePinnedAbstainAction() FAILED    [com.chromascape.web.gameplay.provider.runtime.ProviderRuntimeException]
+
+## Other assertion/behaviour failures outside that family (2)
+SourceContractSchemaEqualityTest > canonicalSchemaIsByteIdenticalAcrossRepositories() FAILED    [org.opentest4j.AssertionFailedError]
+Micro6TargetRelaunchServiceTest > integrated_interruptedHealthRequestTerminatesOwnedTreeAndPreservesInterruptStatus() FAILED    [org.opentest4j.AssertionFailedError]

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.chromascape.web.accounttask.config.StabilizationAuthConfigTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-16T10:39:09.558Z" hostname="fedora" time="0.026">
+  <properties/>
+  <testcase name="the filter registration covers the entire stabilization surface and runs early" classname="com.chromascape.web.accounttask.config.StabilizationAuthConfigTest" time="0.02"/>
+  <testcase name="the registration url pattern covers every exposed stabilization endpoint" classname="com.chromascape.web.accounttask.config.StabilizationAuthConfigTest" time="0.005"/>
+  <system-out><![CDATA[12:39:09.567 [Test worker] DEBUG org.springframework.core.env.StandardEnvironment - Activating profiles [local-development]
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

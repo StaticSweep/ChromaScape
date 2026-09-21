@@ -9,6 +9,10 @@ import java.awt.Rectangle;
  *
  * <p>This class encapsulates details about a RuneLite window including its handle, title, account
  * name, process ID, and screen position.
+ *
+ * <p>Since SC-1663 a window may carry a neutral, nullable {@link ProcessIdentity}; the HWND is no
+ * longer required for a valid selection value (Linux discoveries have no window handle). The
+ * original constructor is preserved and derives a null identity.
  */
 public class WindowInfo {
 
@@ -19,9 +23,10 @@ public class WindowInfo {
   private final int pid;
   private final boolean visible;
   private final Rectangle bounds;
+  private final ProcessIdentity processIdentity;
 
   /**
-   * Creates a new WindowInfo.
+   * Creates a new WindowInfo without a neutral process identity.
    *
    * @param id Sequential ID for this window (1-based index)
    * @param hwnd The native window handle
@@ -38,6 +43,29 @@ public class WindowInfo {
       int pid,
       boolean visible,
       Rectangle bounds) {
+    this(id, hwnd, title, accountName, pid, visible, bounds, null);
+  }
+
+  /**
+   * Creates a new WindowInfo with an optional neutral process identity.
+   *
+   * @param id Sequential ID for this window (1-based index)
+   * @param hwnd The native window handle (null for neutral Linux discoveries)
+   * @param title The full window title (null for neutral Linux discoveries)
+   * @param accountName The account name extracted from title (may be null)
+   * @param pid The process ID
+   * @param bounds The window bounds on screen (null for neutral Linux discoveries)
+   * @param processIdentity The neutral process identity (may be null)
+   */
+  public WindowInfo(
+      String id,
+      HWND hwnd,
+      String title,
+      String accountName,
+      int pid,
+      boolean visible,
+      Rectangle bounds,
+      ProcessIdentity processIdentity) {
     this.id = id;
     this.hwnd = hwnd;
     this.title = title;
@@ -45,6 +73,7 @@ public class WindowInfo {
     this.pid = pid;
     this.visible = visible;
     this.bounds = bounds;
+    this.processIdentity = processIdentity;
   }
 
   /**
@@ -85,8 +114,13 @@ public class WindowInfo {
     return accountName;
   }
 
+  /**
+   * Returns the process ID, preferring the neutral identity's pid when present.
+   *
+   * @return the identity pid when this window carries an identity, otherwise the stored pid
+   */
   public int getPid() {
-    return pid;
+    return processIdentity != null ? (int) processIdentity.pid() : pid;
   }
 
   public boolean isVisible() {
@@ -95,6 +129,20 @@ public class WindowInfo {
 
   public Rectangle getBounds() {
     return bounds;
+  }
+
+  public ProcessIdentity getProcessIdentity() {
+    return processIdentity;
+  }
+
+  /**
+   * Returns a copy of this window with the given neutral identity attached (Windows enrichment).
+   *
+   * @param identity the identity to attach
+   * @return a new WindowInfo with the same fields plus the identity
+   */
+  public WindowInfo withIdentity(ProcessIdentity identity) {
+    return new WindowInfo(id, hwnd, title, accountName, pid, visible, bounds, identity);
   }
 
   @Override
@@ -110,11 +158,13 @@ public class WindowInfo {
         + accountName
         + '\''
         + ", pid="
-        + pid
+        + getPid()
         + ", visible="
         + visible
         + ", bounds="
         + bounds
+        + ", identity="
+        + (processIdentity != null ? processIdentity.toDisplayString() : "none")
         + '}';
   }
 }

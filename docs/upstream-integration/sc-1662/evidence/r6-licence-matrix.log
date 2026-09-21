@@ -1,0 +1,16 @@
+
+> Task :verifyRemoteInputDistributionLicenceMatrix
+PASS: unresolved + no licence -> unresolved
+PASS: unresolved + non-empty licence -> unresolved
+PASS: resolved + missing licence -> unresolved
+PASS: resolved + empty licence -> unresolved
+PASS: resolved + non-empty licence -> closed
+PASS: missing marker -> unresolved
+PASS: malformed marker -> unresolved
+PASS: duplicate marker -> unresolved
+PASS: missing provenance file -> unresolved
+licence gate matrix: 9/9 states behaved as documented
+
+BUILD SUCCESSFUL in 1s
+1 actionable task: 1 executed
+EXIT=0

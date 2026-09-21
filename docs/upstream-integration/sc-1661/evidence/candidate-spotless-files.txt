@@ -1,0 +1,4 @@
+src/main/java/com/chromascape/web/aiplayer/routine/service/IsolatedPatchWorker.java
+src/main/java/com/chromascape/web/ChromaScapeApplication.java
+src/main/java/com/chromascape/web/debug/buildergoal/service/Micro6TargetRelaunchService.java
+src/main/java/com/chromascape/web/gameplay/orchestration/v2/GameplayV2LiveGateService.java

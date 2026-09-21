@@ -1,0 +1,23 @@
+# command: ./gradlew --offline cleanTest test --tests '*NativeArtifactResolverTest' --tests '*RemoteInputLibraryLoaderTest' --tests '*RemoteInputManifestTest' --tests '*RemoteInputSmokeVerifierTest' --console=plain -Psc967VectorsPath=<redacted>
+# utc: 2026-09-16T00:42:03Z
+# revision: be4230c0198e065748ff5b49a76f434a581fee4d
+# worktree_status_sha256: 4a8acee11127562d70219a4472b560ade014a8186228bfd8b73a6bd7a9beb845
+# run_sequence: 5 (fourth-review fixes; runs 1-4 retained unmodified apart from redaction)
+
+> Task :cleanTest
+> Task :compileJava UP-TO-DATE
+> Task :copyNativeLibraries SKIPPED
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses UP-TO-DATE
+
+> Task :test
+SC-967 vectors: <repo>/src/test/resources/sc967/runelite-fishing-capture-v1.json
+
+BUILD SUCCESSFUL in 8s
+6 actionable tasks: 2 executed, 4 up-to-date
+
+# exit: 0
+# elapsed_seconds: 9

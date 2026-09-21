@@ -42,6 +42,7 @@ public class ChromaScapeApplication {
    * @param args command-line arguments passed to the application
    */
   public static void main(String[] args) {
+    AwtStartupMode.configureForCurrentHost();
     SpringApplication.run(ChromaScapeApplication.class, args);
   }
 

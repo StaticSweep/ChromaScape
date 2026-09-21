@@ -1,0 +1,29 @@
+# SC-1662 run-6 container identity (captured 2026-09-16T10:44:29Z)
+
+## Host tooling
+podman version 5.8.1
+
+## Base image
+registry.fedoraproject.org/fedora:latest
+image ID: 8c45708ba0fc
+digest: sha256:e64b8b7945c88d2bc368f4bf66a69ed418a3789bf0638fef403b8e18780f3383
+
+## Committed toolchain image (dnf packages installed on the base)
+image ID: cabd7e24e0ca (localhost/sc1662-fedora-toolchain:latest)
+digest: sha256:15179d9fbd427cc73c799f4710631fdb37c2183dbedfe53c5a24cc758ea72af4
+
+## Build container configuration
+name: sc1662-build
+user: 1000:1000
+image: localhost/sc1662-fedora-toolchain:latest
+command: ["sleep","infinity"]
+<home>/.jdks/corretto-17.0.20.1 -> /opt/jdk17 ([rbind])
+<repo> -> /ws ([rbind])
+
+## Guest OS and toolchain (as seen by the build)
+Fedora release 44 (Forty Four)
+glibc-2.43-8.fc44.x86_64
+cmake version 4.3.0
+g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+Python 3.14.7
+JAVA_HOME inside container: /opt/jdk17 (host JDK bind-mounted read-only into the image run)

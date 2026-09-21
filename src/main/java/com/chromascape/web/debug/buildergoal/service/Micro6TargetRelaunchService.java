@@ -41,6 +41,16 @@ public class Micro6TargetRelaunchService {
   private static final String DEFAULT_GRADLE_PREPARE_TASK = ":client:prepareBuilderGoal";
   private static final String CUSTOM_LAUNCH_COMMAND = "custom_launch_command";
   private static final int MAX_LAUNCH_ATTEMPTS = 2;
+
+  /**
+   * Windows spawns a fresh PowerShell for every listener probe, and cold start alone routinely
+   * exceeds five seconds on a loaded workstation (measured at ~8.4s while a Micro6 client, a second
+   * ChromaScape instance and a Docker stack were running). The probe is fail-closed: a timeout
+   * yields {@code UNKNOWN}, which both blocks executor replacement and prevents a healthy executor
+   * from being reused, so an over-tight bound silently converts transient machine load into
+   * spurious dispatch failures. The bound stays finite so a genuinely hung probe still fails closed
+   * rather than stalling a launch indefinitely.
+   */
   private static final long GRACEFUL_TERMINATION_WAIT_MS = 3_000L;
   private static final long FORCE_TERMINATION_WAIT_MS = 2_000L;
   private static final long OWNED_TREE_SETTLE_MS = 1_500L;
@@ -50,7 +60,7 @@ public class Micro6TargetRelaunchService {
    * that can stall for several seconds under load, so the bound must be generous enough that a slow
    * but healthy probe is not misclassified as {@code UNKNOWN}.
    */
-  private static final long PORT_PROBE_TIMEOUT_MS = 10_000L;
+  private static final long PORT_PROBE_TIMEOUT_MS = 30_000L;
 
   /** Delay before retrying the native netstat fallback after an indeterminate listener probe. */
   private static final long PORT_PROBE_FALLBACK_RETRY_DELAY_MS = 750L;

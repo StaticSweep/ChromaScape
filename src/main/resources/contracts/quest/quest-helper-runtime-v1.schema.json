@@ -1,0 +1,652 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://chromascape.dev/contracts/quest/quest-helper-runtime-v1.schema.json",
+  "title": "QuestHelper runtime structured payload (quest.helper.runtime.v1)",
+  "description": "Micro6 QuestHelper runtime snapshot streamed in the tick batch questHelper field. SC-265 owns this schema; SC-500 owns quest.state.v1. Additive keys are tolerated; core records reject wrong types.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "source",
+    "collectionMode",
+    "activeQuest",
+    "currentStep",
+    "steps",
+    "requirements",
+    "targets",
+    "varbits",
+    "events",
+    "debug"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "quest.helper.runtime.v1"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "micro6.questhelper",
+        "micro6.accountbuilder_fallback"
+      ]
+    },
+    "tick": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "FULL",
+        "DEGRADED",
+        "UNAVAILABLE",
+        "FAILED"
+      ]
+    },
+    "usable": {
+      "type": "boolean"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "collectionMode": {
+      "type": "string",
+      "enum": [
+        "questhelper",
+        "logging_fallback",
+        "unavailable",
+        "error"
+      ]
+    },
+    "activeQuest": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "questKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "questName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "questState": {
+          "type": "string",
+          "enum": [
+            "NOT_STARTED",
+            "IN_PROGRESS",
+            "FINISHED",
+            "UNKNOWN"
+          ]
+        },
+        "questVarType": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "VARBIT",
+            "VARP",
+            null
+          ]
+        },
+        "questVarId": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "questVarValue": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "started": {
+          "type": "boolean"
+        },
+        "finished": {
+          "type": "boolean"
+        }
+      }
+    },
+    "currentStep": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/definitions/stepEntry"
+        }
+      ]
+    },
+    "steps": {
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+        "$ref": "#/definitions/stepEntry"
+      }
+    },
+    "requirements": {
+      "$ref": "#/definitions/requirementsBlock"
+    },
+    "targets": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "sourceStepId"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "WORLD_POINT",
+              "NPC",
+              "GAME_OBJECT",
+              "WIDGET",
+              "TARGET"
+            ]
+          },
+          "sourceStepId": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "id": {
+            "type": "integer"
+          },
+          "worldPoint": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              },
+              "plane": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "overlays": {
+      "type": "array",
+      "maxItems": 100
+    },
+    "varbits": {
+      "type": "object",
+      "maxProperties": 64,
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "id",
+          "type"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "VARBIT",
+              "VARP"
+            ]
+          },
+          "value": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "tick": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$ref": "#/definitions/diagnostic"
+      }
+    },
+    "debug": {
+      "type": "object",
+      "required": [
+        "collectionMode"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "collectionMode": {
+          "type": "string",
+          "enum": [
+            "questhelper",
+            "logging_fallback",
+            "unavailable",
+            "error"
+          ]
+        },
+        "questHelperPluginEnabled": {
+          "type": "boolean"
+        },
+        "fullSnapshotDue": {
+          "type": "boolean"
+        },
+        "lastCollectionError": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 512
+        },
+        "activeHelperClass": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        }
+      }
+    }
+  },
+  "definitions": {
+    "stepEntry": {
+      "type": "object",
+      "required": [
+        "stepId",
+        "index",
+        "text",
+        "status"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "stepId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "structuralPath": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parentStepId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "panelIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "panelTitle": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ACTIVE",
+            "AVAILABLE",
+            "LOCKED",
+            "COMPLETED",
+            "UNKNOWN"
+          ]
+        },
+        "current": {
+          "type": "boolean"
+        },
+        "synthetic": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "changedThisTick": {
+          "type": "boolean"
+        },
+        "startedAtTick": {
+          "type": "integer"
+        },
+        "lastChangedAtTick": {
+          "type": "integer"
+        },
+        "rawClassName": {
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    },
+    "requirementEntry": {
+      "type": "object",
+      "required": [
+        "type",
+        "text"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "requirementId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "ITEM",
+            "SKILL",
+            "QUEST",
+            "VARBIT",
+            "VARP",
+            "LOCATION",
+            "COMBAT",
+            "PRAYER",
+            "DIARY",
+            "LOGICAL",
+            "CUSTOM",
+            "UNKNOWN"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "QUEST",
+            "PANEL",
+            "STEP",
+            "RECOMMENDED"
+          ]
+        },
+        "sourcePath": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "MET",
+            "MISSING",
+            "UNKNOWN",
+            "ERROR"
+          ]
+        },
+        "met": {
+          "type": "boolean"
+        },
+        "blocking": {
+          "type": "boolean"
+        },
+        "itemId": {
+          "type": "integer"
+        },
+        "itemIds": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "integer"
+          }
+        },
+        "alternateItemIds": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "integer"
+          }
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "quantityRequired": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "quantityOwned": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "equipped": {
+          "type": "boolean"
+        },
+        "consumed": {
+          "type": "boolean"
+        },
+        "skill": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "requiredLevel": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currentLevel": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "boostable": {
+          "type": "boolean"
+        },
+        "prerequisiteQuestKey": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "prerequisiteState": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "varId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "varExpectedValue": {
+          "type": "integer"
+        },
+        "operation": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "diagnosticCode": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "rawClassName": {
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    },
+    "requirementsBlock": {
+      "type": "object",
+      "required": [
+        "met",
+        "missing",
+        "blockedBy"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "all": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/definitions/requirementEntry"
+          }
+        },
+        "met": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/definitions/requirementEntry"
+          }
+        },
+        "missing": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/definitions/requirementEntry"
+          }
+        },
+        "unknown": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/definitions/requirementEntry"
+          }
+        },
+        "errors": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/definitions/requirementEntry"
+          }
+        },
+        "blockedBy": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "required": [
+              "type",
+              "text"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "type": {
+                "type": "string",
+                "maxLength": 32
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "itemId": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "severity",
+        "code",
+        "message"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": [
+            "INFO",
+            "WARNING",
+            "ERROR"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "NO_ACTIVE_QUEST",
+            "QUEST_ENUM_UNAVAILABLE",
+            "QUEST_HELPER_UNAVAILABLE",
+            "CLIENT_UNAVAILABLE",
+            "QUEST_IDENTITY_FALLBACK",
+            "QUEST_STATE_READ_FAILED",
+            "QUEST_VAR_READ_FAILED",
+            "PANEL_LIST_UNAVAILABLE",
+            "STEP_GRAPH_CYCLE",
+            "STEP_LIMIT_EXCEEDED",
+            "STEP_ID_COLLISION",
+            "STEP_TEXT_UNAVAILABLE",
+            "CURRENT_STEP_NOT_IN_GRAPH",
+            "REQUIREMENT_LIST_UNAVAILABLE",
+            "REQUIREMENT_UNSUPPORTED",
+            "REQUIREMENT_EVALUATION_FAILED",
+            "TARGET_MAPPING_FAILED",
+            "CONTRACT_SERIALIZATION_FAILED",
+            "UNEXPECTED_ADAPTER_FAILURE"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "sourceType": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
