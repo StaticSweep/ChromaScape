@@ -84,8 +84,13 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
 
   @Override
   @Transactional
-  public Claim claim(OrchestrationRequest request, String fingerprint, String envelopeDigest) {
+  public Claim claim(
+      OrchestrationRequest request,
+      String fingerprint,
+      String envelopeDigest,
+      AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
     requireIdentity(request, fingerprint, envelopeDigest);
+    Objects.requireNonNull(budget, "budget");
     Instant now = now();
     OrchestrationView initial =
         new OrchestrationView(
@@ -150,6 +155,15 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
           || !Objects.equals(existing.envelopeDigest, envelopeDigest)) {
         throw conflict();
       }
+      AccountBuilderOrchestrationBudgetEntity existingBudget =
+          entityManager.find(
+              AccountBuilderOrchestrationBudgetEntity.class, existing.orchestrationId);
+      if (existingBudget == null) {
+        // A durable claim without a budget is an incomplete aggregate. Replay must never present
+        // it as a healthy claim; only a specifically tested recovery transaction may repair it.
+        throw integrity("Durable orchestration claim has no immutable budget row");
+      }
+      requireSameBudget(existingBudget, budget);
       return new Claim(readNormalized(existing).view(), false);
     }
 
@@ -163,9 +177,115 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
     }
     persistBinding(request);
     persistCorrelation(request, envelopeDigest);
+    persistBudget(request.orchestrationId(), budget);
     appendEvent(entity, "ORCHESTRATION_CREATED", fingerprint);
     entityManager.flush();
     return new Claim(initial, true);
+  }
+
+  private void persistBudget(
+      String orchestrationId, AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
+    AccountBuilderOrchestrationBudgetEntity created = new AccountBuilderOrchestrationBudgetEntity();
+    created.orchestrationId = orchestrationId;
+    created.maxActions = budget.maxActions();
+    created.maxAttempts = budget.maxAttempts();
+    created.maxElapsedMs = budget.maxElapsedMs();
+    created.actionsUsed = budget.actionsUsed();
+    created.attemptsUsed = budget.attemptsUsed();
+    created.startedAt = budget.startedAt();
+    created.expiresAt = budget.expiresAt();
+    entityManager.persist(created);
+  }
+
+  /** Replay compares only the immutable limits; started/expires derive from the claim instant. */
+  private void requireSameBudget(
+      AccountBuilderOrchestrationBudgetEntity persisted,
+      AccountBuilderBudgetPolicy.OrchestrationBudget budget) {
+    if (persisted.maxActions != budget.maxActions()
+        || persisted.maxAttempts != budget.maxAttempts()
+        || persisted.maxElapsedMs != budget.maxElapsedMs()) {
+      throw conflict();
+    }
+  }
+
+  @Override
+  @Transactional
+  public Optional<AccountBuilderBudgetPolicy.OrchestrationBudget> findBudget(
+      String orchestrationId) {
+    return Optional.ofNullable(
+            entityManager.find(AccountBuilderOrchestrationBudgetEntity.class, orchestrationId))
+        .map(this::toBudget);
+  }
+
+  @Override
+  @Transactional
+  public AccountBuilderBudgetPolicy.OrchestrationBudget consumeBudget(
+      String orchestrationId, boolean action, boolean attempt) {
+    Instant now = now();
+    // A single conditional UPDATE is the atomic capacity check. Rows are only advanced when both
+    // the action and the attempt capacity remain at the instant of the update, so two racing
+    // callers can never both take the final unit of capacity.
+    int advanced =
+        entityManager
+            .createNativeQuery(
+                """
+                UPDATE ab_orchestration_budget
+                SET actions_used = CASE WHEN :action THEN actions_used + 1 ELSE actions_used END,
+                    attempts_used = CASE WHEN :attempt THEN attempts_used + 1 ELSE attempts_used END,
+                    version = version + 1
+                WHERE orchestration_id = :orchestrationId
+                  AND (CASE WHEN :action THEN actions_used < max_actions ELSE TRUE END)
+                  AND (CASE WHEN :attempt THEN attempts_used < max_attempts ELSE TRUE END)
+                  AND expires_at > :now
+                """)
+            .setParameter("action", action)
+            .setParameter("attempt", attempt)
+            .setParameter("orchestrationId", orchestrationId)
+            .setParameter("now", now)
+            .executeUpdate();
+    if (advanced > 0) {
+      entityManager.flush();
+      AccountBuilderOrchestrationBudgetEntity advancedEntity =
+          entityManager.find(AccountBuilderOrchestrationBudgetEntity.class, orchestrationId);
+      if (advancedEntity != null) {
+        return toBudget(advancedEntity);
+      }
+      throw integrity("An advanced budget row could not be reloaded");
+    }
+    AccountBuilderOrchestrationBudgetEntity entity =
+        entityManager.find(AccountBuilderOrchestrationBudgetEntity.class, orchestrationId);
+    if (entity == null) {
+      throw failure(
+          FailureCode.INVALID_CONTRACT, "No durable budget was claimed for this orchestration");
+    }
+    if (!entity.expiresAt.isAfter(now)) {
+      throw failure(FailureCode.DEADLINE_EXPIRED, "The orchestration budget horizon has expired");
+    }
+    if ((action && entity.actionsUsed >= entity.maxActions)
+        || (attempt && entity.attemptsUsed >= entity.maxAttempts)) {
+      throw failure(
+          FailureCode.BUDGET_EXHAUSTED, "No orchestration budget capacity remains for delivery");
+    }
+    // The conditional update lost a race with an exhausted row; re-read the authoritative state.
+    if (action && entity.actionsUsed >= entity.maxActions) {
+      throw failure(FailureCode.BUDGET_EXHAUSTED, "Action capacity was consumed concurrently");
+    }
+    if (attempt && entity.attemptsUsed >= entity.maxAttempts) {
+      throw failure(FailureCode.BUDGET_EXHAUSTED, "Attempt capacity was consumed concurrently");
+    }
+    throw integrity("A budget consumption race did not expose a stable outcome");
+  }
+
+  private AccountBuilderBudgetPolicy.OrchestrationBudget toBudget(
+      AccountBuilderOrchestrationBudgetEntity entity) {
+    return new AccountBuilderBudgetPolicy.OrchestrationBudget(
+        entity.maxActions,
+        entity.maxAttempts,
+        entity.maxElapsedMs,
+        entity.actionsUsed,
+        entity.attemptsUsed,
+        entity.startedAt,
+        entity.expiresAt);
   }
 
   @Override
@@ -743,6 +863,10 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
     binding.buildId = request.bindings().buildId();
     binding.expectedObservationRevision = request.bindings().expectedObservationRevision();
     binding.expectedTaskRevision = request.bindings().expectedTaskRevision();
+    binding.observationDigest = request.bindings().observationDigest();
+    binding.promptDigest = request.bindings().promptDigest();
+    binding.providerSessionId = request.bindings().providerSessionId();
+    binding.providerTurnId = request.bindings().providerTurnId();
     entityManager.persist(binding);
   }
 
@@ -1073,7 +1197,8 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
         lease,
         evidenceRefs,
         at,
-        receipt.receiptId() == null ? null : opaqueDigest(receipt.receiptId()));
+        receipt.receiptId() == null ? null : opaqueDigest(receipt.receiptId()),
+        receipt.killSwitch());
   }
 
   private String receiptIdentity(GatewayReceipt receipt, String digest) {
@@ -1232,7 +1357,11 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
         entity.verifierDigest,
         entity.buildId,
         entity.expectedObservationRevision,
-        entity.expectedTaskRevision);
+        entity.expectedTaskRevision,
+        entity.observationDigest,
+        entity.promptDigest,
+        entity.providerSessionId,
+        entity.providerTurnId);
   }
 
   private Lease toLease(AccountBuilderOrchestrationLeaseEntity entity) {
@@ -1348,7 +1477,11 @@ public class JpaAccountBuilderOrchestrationStore implements AccountBuilderOrches
   }
 
   private boolean requiresLease(State state) {
-    return LEASE_STATES.contains(state) && state != State.NEEDS_RECONCILIATION;
+    // A proven pre-submission terminal failure (connection refused before submission) carries no
+    // lease and never needs one; a lease attached to a terminal state is still validated.
+    return LEASE_STATES.contains(state)
+        && state != State.NEEDS_RECONCILIATION
+        && state != State.FAILED;
   }
 
   private boolean samePersistedReceipt(List<GatewayReceipt> persisted, GatewayReceipt candidate) {

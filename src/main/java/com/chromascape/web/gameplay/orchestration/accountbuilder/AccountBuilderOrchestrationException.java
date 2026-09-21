@@ -10,6 +10,12 @@ public final class AccountBuilderOrchestrationException extends RuntimeException
     this.failureCode = failureCode;
   }
 
+  public AccountBuilderOrchestrationException(
+      FailureCode failureCode, String message, Throwable cause) {
+    super(message, cause);
+    this.failureCode = failureCode;
+  }
+
   public FailureCode failureCode() {
     return failureCode;
   }

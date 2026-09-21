@@ -146,6 +146,7 @@ public final class AccountBuilderOrchestrationModels {
     STOP_REJECTED,
     NEEDS_RECONCILIATION,
     BOUNDARY_VIOLATION,
+    INVALID_GATEWAY_RECEIPT,
     INTERNAL_FAILURE
   }
 
@@ -195,7 +196,11 @@ public final class AccountBuilderOrchestrationModels {
       String verifierDigest,
       String buildId,
       long expectedObservationRevision,
-      long expectedTaskRevision) {
+      long expectedTaskRevision,
+      String observationDigest,
+      String promptDigest,
+      String providerSessionId,
+      String providerTurnId) {
     public SnapshotBindings {
       taskSkillDigests = taskSkillDigests == null ? List.of() : List.copyOf(taskSkillDigests);
     }
@@ -211,6 +216,24 @@ public final class AccountBuilderOrchestrationModels {
       ProviderDecision decision,
       ExecutionEnvelope envelope,
       SnapshotBindings bindings,
+      HumanAuthority authority,
+      JsonNode observation,
+      Instant deadline) {}
+
+  /**
+   * Production provider-orchestration command. It carries provider session and turn identity plus
+   * request identity, envelope, authority, observation and deadline only. The provider decision,
+   * the provider provenance and the source type are never caller input: they are loaded from the
+   * durable persisted provider turn by {@code ProviderDecisionOrchestrationSource}.
+   */
+  public record ProviderOrchestrationCommand(
+      String providerSessionId,
+      String providerTurnId,
+      String orchestrationId,
+      String requestId,
+      String idempotencyKey,
+      Mode mode,
+      ExecutionEnvelope envelope,
       HumanAuthority authority,
       JsonNode observation,
       Instant deadline) {}
@@ -277,7 +300,8 @@ public final class AccountBuilderOrchestrationModels {
       Lease lease,
       List<String> evidenceRefs,
       Instant at,
-      String receiptId) {
+      String receiptId,
+      boolean killSwitch) {
     public GatewayReceipt(
         String requestId,
         String envelopeDigest,
@@ -300,7 +324,8 @@ public final class AccountBuilderOrchestrationModels {
           lease,
           evidenceRefs,
           at,
-          null);
+          null,
+          false);
     }
 
     public GatewayReceipt {

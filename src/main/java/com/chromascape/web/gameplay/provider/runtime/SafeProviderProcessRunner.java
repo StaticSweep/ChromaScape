@@ -16,8 +16,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,7 +86,7 @@ public final class SafeProviderProcessRunner {
     if (deadline == null || !deadline.isAfter(startedAt)) {
       return ProcessResult.failure(false, FailureCode.DEADLINE_EXPIRED, 0);
     }
-    Process process;
+    ProcessBuilder builder;
     try {
       String safeTurnRef = turnRef.replaceAll("[^A-Za-z0-9._-]", "_");
       Path root = properties.getWorkRoot().resolve("isolated").toAbsolutePath().normalize();
@@ -102,7 +105,7 @@ public final class SafeProviderProcessRunner {
       for (String argument : command) {
         resolvedCommand.add(argument.replace("${WORK_DIR}", work.toString()));
       }
-      ProcessBuilder builder = new ProcessBuilder(resolvedCommand);
+      builder = new ProcessBuilder(resolvedCommand);
       builder.directory(work.toFile());
       Map<String, String> environment = builder.environment();
       Map<String, String> source = System.getenv();
@@ -123,20 +126,47 @@ public final class SafeProviderProcessRunner {
           });
       environment.put("NO_COLOR", "1");
       environment.put("TERM", "dumb");
-      process = builder.start();
-      active.put(turnRef, process);
     } catch (IOException exception) {
       return ProcessResult.failure(false, FailureCode.PROCESS_START_FAILED, 0);
     }
 
+    Process process;
+    CompletableFuture<Process> starting =
+        CompletableFuture.supplyAsync(
+            () -> {
+              try {
+                return builder.start();
+              } catch (IOException exception) {
+                throw new CompletionException(exception);
+              }
+            });
+    try {
+      long startWait = boundedWait(deadline, properties.getProcessStartTimeoutMillis());
+      process = starting.get(startWait, TimeUnit.MILLISECONDS);
+      active.put(turnRef, process);
+    } catch (TimeoutException exception) {
+      starting.thenAccept(this::terminateProcessTree);
+      return ProcessResult.failure(false, FailureCode.PROCESS_START_TIMEOUT, elapsed(startedAt));
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      return ProcessResult.failure(false, FailureCode.PROCESS_START_FAILED, elapsed(startedAt));
+    } catch (ExecutionException exception) {
+      return ProcessResult.failure(false, FailureCode.PROCESS_START_FAILED, elapsed(startedAt));
+    }
+
     boolean submitted = false;
     try {
+      CompletableFuture<Void> firstEvent = new CompletableFuture<>();
       CompletableFuture<BoundedOutput> stdout =
           CompletableFuture.supplyAsync(
-              () -> readBounded(process.getInputStream(), properties.getMaxStdoutBytes()));
+              () ->
+                  readBounded(
+                      process.getInputStream(), properties.getMaxStdoutBytes(), firstEvent));
       CompletableFuture<BoundedOutput> stderr =
           CompletableFuture.supplyAsync(
-              () -> readBounded(process.getErrorStream(), properties.getMaxStderrBytes()));
+              () ->
+                  readBounded(
+                      process.getErrorStream(), properties.getMaxStderrBytes(), firstEvent));
       // Once the child is running, submission has begun. A child may legitimately close stdin
       // after producing a terminal response, so a broken input pipe must not discard the bounded
       // output or be misclassified as a process-start failure.
@@ -145,6 +175,13 @@ public final class SafeProviderProcessRunner {
         processInput.write(stdin.getBytes(StandardCharsets.UTF_8));
       } catch (IOException inputFailure) {
         logger.debug("Provider process {} closed stdin during submission", turnRef, inputFailure);
+      }
+      try {
+        firstEvent.get(
+            boundedWait(deadline, properties.getFirstEventTimeoutMillis()), TimeUnit.MILLISECONDS);
+      } catch (TimeoutException exception) {
+        terminateProcessTree(process);
+        return ProcessResult.failure(true, FailureCode.FIRST_EVENT_TIMEOUT, elapsed(startedAt));
       }
       long remaining = Math.max(1, Duration.between(clock.instant(), deadline).toMillis());
       if (!process.waitFor(remaining, TimeUnit.MILLISECONDS)) {
@@ -230,7 +267,8 @@ public final class SafeProviderProcessRunner {
     return new ProbeResult(result.exitCode() == 0, version, result.failureCode());
   }
 
-  private BoundedOutput readBounded(InputStream input, int limit) {
+  private BoundedOutput readBounded(
+      InputStream input, int limit, CompletableFuture<Void> firstEvent) {
     try (input;
         ByteArrayOutputStream output = new ByteArrayOutputStream()) {
       byte[] buffer = new byte[8192];
@@ -238,6 +276,7 @@ public final class SafeProviderProcessRunner {
       int retained = 0;
       boolean overflow = false;
       while ((read = input.read(buffer)) >= 0) {
+        firstEvent.complete(null);
         int writable = Math.min(read, Math.max(0, limit - retained));
         if (writable > 0) {
           output.write(buffer, 0, writable);
@@ -245,10 +284,17 @@ public final class SafeProviderProcessRunner {
         }
         overflow |= writable < read;
       }
+      firstEvent.complete(null);
       return new BoundedOutput(output.toString(StandardCharsets.UTF_8), overflow);
     } catch (IOException exception) {
+      firstEvent.complete(null);
       return new BoundedOutput("", true);
     }
+  }
+
+  private long boundedWait(Instant deadline, long configuredMillis) {
+    long remaining = Math.max(1, Duration.between(clock.instant(), deadline).toMillis());
+    return Math.max(1, Math.min(configuredMillis, remaining));
   }
 
   private long elapsed(Instant startedAt) {

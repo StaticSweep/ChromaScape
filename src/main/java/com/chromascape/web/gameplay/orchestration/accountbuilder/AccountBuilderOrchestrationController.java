@@ -3,6 +3,7 @@ package com.chromascape.web.gameplay.orchestration.accountbuilder;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.ProviderOrchestrationCommand;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Readiness;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -44,7 +45,36 @@ public final class AccountBuilderOrchestrationController {
       @RequestHeader(value = OPERATOR_HEADER, required = false) String operatorKey,
       @RequestBody OrchestrationRequest request) {
     authenticate(operatorKey);
+    // The generic endpoint can never carry a provider source: provider orchestrations must be
+    // created through the persisted provider decision handoff, so a caller can never submit its
+    // own decision or provenance by naming a provider source type. The check is ASCII
+    // case-independent, so provider:CODEX and mixed-case variants are rejected here too.
+    if (request != null && AccountBuilderOrchestrationSources.providerLike(request.sourceType())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT,
+          "Provider source orchestrations must be created through the persisted provider"
+              + " decision handoff");
+    }
     AccountBuilderOrchestrationService.Submission submission = service.orchestrate(request);
+    return ResponseEntity.status(submission.created() ? HttpStatus.CREATED : HttpStatus.OK)
+        .body(submission.view());
+  }
+
+  /**
+   * Production provider-orchestration route. The provider decision, its provenance and the source
+   * type are loaded from the durable persisted provider turn; the command may only carry provider
+   * session and turn identity plus request identity, envelope, authority, observation and deadline.
+   *
+   * <p>The single {@link AccountBuilderOrchestrationService#orchestrateProvider} boundary owns
+   * preparation, replay resolution and capability preflight, so this controller never assembles or
+   * accepts a provider-shaped request.
+   */
+  @PostMapping("/provider-orchestrations")
+  public ResponseEntity<OrchestrationView> orchestrateProvider(
+      @RequestHeader(value = OPERATOR_HEADER, required = false) String operatorKey,
+      @RequestBody ProviderOrchestrationCommand command) {
+    authenticate(operatorKey);
+    AccountBuilderOrchestrationService.Submission submission = service.orchestrateProvider(command);
     return ResponseEntity.status(submission.created() ? HttpStatus.CREATED : HttpStatus.OK)
         .body(submission.view());
   }
@@ -63,7 +93,8 @@ public final class AccountBuilderOrchestrationController {
       @PathVariable String orchestrationId,
       @RequestBody ControlRequest request) {
     authenticate(operatorKey);
-    return ResponseEntity.accepted().body(service.stop(orchestrationId, request.reason()));
+    return ResponseEntity.accepted()
+        .body(service.stop(orchestrationId, request.reason(), request.killSwitch()));
   }
 
   @PostMapping("/orchestrations/{orchestrationId}/reconcile")
@@ -115,7 +146,7 @@ public final class AccountBuilderOrchestrationController {
     }
   }
 
-  public record ControlRequest(String reason) {}
+  public record ControlRequest(String reason, boolean killSwitch) {}
 
   public record ApiError(String contractVersion, FailureCode failureCode, String message) {}
 }

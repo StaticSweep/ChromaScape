@@ -57,7 +57,7 @@ public final class ProviderRuntimeModels {
     public boolean submitted() {
       return switch (this) {
         case SUBMITTED, STREAMING, NORMALIZING -> true;
-        default -> terminal() && this != PROVIDER_UNAVAILABLE && this != BUDGET_EXHAUSTED;
+        default -> false;
       };
     }
   }
@@ -75,6 +75,9 @@ public final class ProviderRuntimeModels {
     BUDGET_EXHAUSTED,
     DEADLINE_EXPIRED,
     PROCESS_START_FAILED,
+    PROCESS_START_TIMEOUT,
+    FIRST_EVENT_TIMEOUT,
+    TOOL_RESPONSE_TIMEOUT,
     PROCESS_TIMEOUT_BEFORE_SUBMISSION,
     UNKNOWN_PROVIDER_OUTCOME,
     NEEDS_RECONCILIATION,
@@ -82,6 +85,10 @@ public final class ProviderRuntimeModels {
     TOOL_NOT_ALLOWED,
     TOOL_ARGUMENT_MISMATCH,
     TRANSCRIPT_PERSISTENCE_FAILED,
+    TRANSCRIPT_ARTIFACT_MISSING,
+    TRANSCRIPT_ARTIFACT_UNREADABLE,
+    TRANSCRIPT_ARTIFACT_TOO_LARGE,
+    TRANSCRIPT_DIGEST_MISMATCH,
     INTERNAL_FAILURE
   }
 

@@ -28,6 +28,8 @@ public interface ProviderRuntimeStore {
   void markSubmitted(
       String turnId, String providerSessionRef, String providerTurnRef, List<String> events);
 
+  void markStreaming(String turnId);
+
   void markNormalizing(String turnId);
 
   TurnView finish(
@@ -42,6 +44,13 @@ public interface ProviderRuntimeStore {
 
   void recordTranscript(String turnId, String artifactRef, long byteLength);
 
+  ToolCallReservation reserveToolCall(
+      String turnId, String toolCallId, String toolName, String argumentsDigest);
+
+  void finishToolCall(String toolCallId, String resultDigest, boolean succeeded);
+
+  int toolCallCount(String turnId);
+
   List<TurnView> recoverableTurns();
 
   List<TurnView> turnsForSession(String sessionId);
@@ -49,4 +58,6 @@ public interface ProviderRuntimeStore {
   BudgetUsage usage(String sessionId);
 
   record TurnReservation(TurnView turn, boolean created) {}
+
+  record ToolCallReservation(boolean created, String resultDigest, boolean completed) {}
 }

@@ -457,6 +457,9 @@ gameplay:
     transcript-root: ${GAMEPLAY_PROVIDER_TRANSCRIPT_ROOT:.chromascape/provider-transcripts}
     max-stdout-bytes: ${GAMEPLAY_PROVIDER_MAX_STDOUT_BYTES:1048576}
     max-stderr-bytes: ${GAMEPLAY_PROVIDER_MAX_STDERR_BYTES:131072}
+    process-start-timeout-millis: ${GAMEPLAY_PROVIDER_PROCESS_START_TIMEOUT_MS:5000}
+    first-event-timeout-millis: ${GAMEPLAY_PROVIDER_FIRST_EVENT_TIMEOUT_MS:30000}
+    tool-response-timeout-millis: ${GAMEPLAY_PROVIDER_TOOL_RESPONSE_TIMEOUT_MS:5000}
     claude:
       command: ["${GAMEPLAY_PROVIDER_CLAUDE_COMMAND:claude}"]
       allowed-models: ["claude-*", "sonnet", "opus"]
