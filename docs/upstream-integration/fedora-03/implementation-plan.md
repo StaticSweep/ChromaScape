@@ -110,12 +110,12 @@ viewport/tick stream → fail-closed evidence.
 | Phase | Deliverable | Status |
 |---|---|---|
 | 1 | Frozen plan and runbook | DONE |
-| 2 | Fail-closed evidence contract + unit tests | IN PROGRESS |
-| 3 | Live harness (install, native overlay, runtime, checks) | PENDING |
-| 4 | Client launch and explicit selection | PENDING |
-| 5 | Live matrix execution and evidence | PENDING |
-| 6 | Automated verification and regenerated evidence | PENDING |
-| 7 | Review PR and Shortcut handoff | PENDING |
+| 2 | Fail-closed evidence contract + unit tests | DONE |
+| 3 | Live harness (install, native overlay, runtime, checks) | DONE |
+| 4 | Client launch and explicit selection | DONE (canonical `:client:runBuilderGoal` from `micro6-sc1618-fedora`, pid 150259) |
+| 5 | Live matrix execution and evidence | DONE, partial matrix: 17 PASS, 3 NOT_RUN (no tick session), 0 FAIL |
+| 6 | Automated verification and regenerated evidence | DONE (record VALID; `--require-complete` correctly refuses) |
+| 7 | Review PR and Shortcut handoff | IN PROGRESS (PR #25 open; tick-session/in-game follow-ups remain) |
 
 ## 7. Definition of done
 

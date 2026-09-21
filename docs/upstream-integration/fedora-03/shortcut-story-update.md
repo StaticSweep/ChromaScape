@@ -53,4 +53,4 @@ FEDORA-03: Qualify live recording and the debugger on Fedora
 
 - Branch: `codex/fedora-03-live-recording-debugger`
 - Evidence: `docs/upstream-integration/fedora-03/verification-evidence.md`
-- Pull request link is recorded here when opened.
+- Pull request: https://github.com/ikiddoi/ChromaScape/pull/25 (base `codex/fedora-packaging-certification`, OPEN)
