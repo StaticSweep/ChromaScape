@@ -37,9 +37,10 @@ public final class ProviderPromptBuilder {
     try {
       return "You are a decide-only gameplay policy. Return exactly one JSON object conforming "
           + "to sc-1429/v1 providerProposal. Select semanticAction exactly from eligibleActions "
-          + "or select its ABSTAIN action. Do not execute, call tools, browse, read files, mutate "
-          + "state, claim authority, repair inputs, or add prose. Evidence must reference only "
-          + "the pinned input.\nINPUT:\n"
+          + "or select its ABSTAIN action. An adapter may expose only the closed read-only "
+          + "provider tool gateway for these pinned inputs. Never use shell, browser, filesystem, "
+          + "generic MCP, or mutating tools. Do not execute, mutate state, claim authority, repair "
+          + "inputs, or add prose. Evidence must reference only the pinned input.\nINPUT:\n"
           + objectMapper.writeValueAsString(input);
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Unable to build provider decision prompt", exception);

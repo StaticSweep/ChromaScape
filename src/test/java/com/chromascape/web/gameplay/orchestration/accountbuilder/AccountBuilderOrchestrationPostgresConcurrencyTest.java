@@ -42,7 +42,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
     classes = AccountBuilderOrchestrationPostgresConcurrencyTest.TestBootstrap.class,
     properties = {
-      "spring.flyway.target=32",
+      "spring.flyway.target=49",
       "spring.jpa.hibernate.ddl-auto=validate",
       "stabilization.auth.token=sc1431-read-token",
       "stabilization.auth.write-token=sc1431-write-token"
@@ -57,7 +57,9 @@ class AccountBuilderOrchestrationPostgresConcurrencyTest {
 
   @DynamicPropertySource
   static void isolatedPostgres(DynamicPropertyRegistry registry) {
-    IsolatedPostgresTestDatabase.register(registry);
+    // Hibernate is validate-only: Flyway alone must produce every SC-1431 table, column and
+    // constraint through the actual repository migration head.
+    IsolatedPostgresTestDatabase.registerFlywayValidateOnly(registry);
   }
 
   @AfterEach
@@ -87,7 +89,8 @@ class AccountBuilderOrchestrationPostgresConcurrencyTest {
                                 store.claim(
                                     request,
                                     request.requestFingerprint(),
-                                    AccountBuilderPostgresTestFixtures.envelopeDigest(request));
+                                    AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                                    AccountBuilderPostgresTestFixtures.budget(request));
                           }))
               .toList();
       List<Object> results = awaitAll(futures);
@@ -371,7 +374,8 @@ class AccountBuilderOrchestrationPostgresConcurrencyTest {
                               return store.claim(
                                   request,
                                   request.requestFingerprint(),
-                                  AccountBuilderPostgresTestFixtures.envelopeDigest(request));
+                                  AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                                  AccountBuilderPostgresTestFixtures.budget(request));
                             } catch (AccountBuilderOrchestrationException exception) {
                               return exception.failureCode();
                             }
@@ -389,7 +393,8 @@ class AccountBuilderOrchestrationPostgresConcurrencyTest {
                 .claim(
                     request,
                     request.requestFingerprint(),
-                    AccountBuilderPostgresTestFixtures.envelopeDigest(request))
+                    AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                    AccountBuilderPostgresTestFixtures.budget(request))
                 .created())
         .isTrue();
   }

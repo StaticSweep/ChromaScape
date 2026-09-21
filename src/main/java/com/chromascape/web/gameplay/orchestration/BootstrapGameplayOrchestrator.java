@@ -9,6 +9,14 @@ import com.chromascape.web.gameplay.contract.GameplayContracts.Outcome;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision;
 import com.chromascape.web.gameplay.contract.GameplayContracts.Receipt;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ReceiptPhase;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderCapabilityPreflight;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationException;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationRequestFactory;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Clock;
 import java.time.Instant;
@@ -23,6 +31,9 @@ public final class BootstrapGameplayOrchestrator {
   private final CanonicalGameplayJson canonicalJson;
   private final AccountBuilderGameplayGateway gateway;
   private final BootstrapEvidenceStore evidenceStore;
+  private final AccountBuilderOrchestrationService orchestrationService;
+  private final AccountBuilderOrchestrationRequestFactory requestFactory;
+  private final AccountBuilderCapabilityPreflight capabilityPreflight;
   private final Clock clock;
   private final Map<String, RequestState> requests = new ConcurrentHashMap<>();
   private final Map<String, RequestIdentity> idempotencyOwners = new ConcurrentHashMap<>();
@@ -32,7 +43,7 @@ public final class BootstrapGameplayOrchestrator {
       CanonicalGameplayJson canonicalJson,
       AccountBuilderGameplayGateway gateway,
       BootstrapEvidenceStore evidenceStore) {
-    this(validator, canonicalJson, gateway, evidenceStore, Clock.systemUTC());
+    this(validator, canonicalJson, gateway, evidenceStore, null, null, null, Clock.systemUTC());
   }
 
   BootstrapGameplayOrchestrator(
@@ -41,10 +52,42 @@ public final class BootstrapGameplayOrchestrator {
       AccountBuilderGameplayGateway gateway,
       BootstrapEvidenceStore evidenceStore,
       Clock clock) {
+    this(validator, canonicalJson, gateway, evidenceStore, null, null, null, clock);
+  }
+
+  /**
+   * SC-1431 unified constructor: dispatch, stop, idempotency, authority ownership and lifecycle
+   * delegate to the durable orchestration service through the shared request factory; the legacy
+   * gateway is only the compatibility fallback for callers that were never wired to the durable
+   * store. When the durable service is configured, the shared request factory and the read-only
+   * capability preflight are mandatory so the bootstrap path can never emit a partial fingerprint
+   * or substitute a catalog digest for a capability attestation.
+   */
+  BootstrapGameplayOrchestrator(
+      GameplayContractValidator validator,
+      CanonicalGameplayJson canonicalJson,
+      AccountBuilderGameplayGateway gateway,
+      BootstrapEvidenceStore evidenceStore,
+      AccountBuilderOrchestrationService orchestrationService,
+      AccountBuilderOrchestrationRequestFactory requestFactory,
+      AccountBuilderCapabilityPreflight capabilityPreflight,
+      Clock clock) {
+    if (orchestrationService != null && requestFactory == null) {
+      throw new IllegalStateException(
+          "Durable SC-1431 bootstrap delegation requires the shared orchestration request"
+              + " factory");
+    }
+    if (orchestrationService != null && capabilityPreflight == null) {
+      throw new IllegalStateException(
+          "Durable SC-1431 bootstrap delegation requires the read-only capability preflight");
+    }
     this.validator = validator;
     this.canonicalJson = canonicalJson;
     this.gateway = gateway;
     this.evidenceStore = evidenceStore;
+    this.orchestrationService = orchestrationService;
+    this.requestFactory = requestFactory;
+    this.capabilityPreflight = capabilityPreflight;
     this.clock = clock;
   }
 
@@ -73,6 +116,16 @@ public final class BootstrapGameplayOrchestrator {
       throw new GameplayProposalException(
           "STOP_REASON_INVALID", "A bounded stop reason is required");
     }
+    if (orchestrationService != null) {
+      // Durable SC-1431 state alone decides whether the orchestration exists or is terminal: no
+      // in-memory bootstrap entry is required, so stop works after a process restart.
+      try {
+        return toDispatchResult(
+            orchestrationService.stop(sc1431OrchestrationId(requestId), reason, killSwitch));
+      } catch (AccountBuilderOrchestrationException exception) {
+        throw new GameplayProposalException(stopFailureCode(exception), exception.getMessage());
+      }
+    }
     RequestState state = requests.get(requestId);
     if (state == null) {
       throw new GameplayProposalException("REQUEST_NOT_ACTIVE", "Gameplay request is not active");
@@ -82,6 +135,15 @@ public final class BootstrapGameplayOrchestrator {
           "REQUEST_ALREADY_TERMINAL", "Gameplay request is already terminal");
     }
     return gateway.stop(requestId, reason, killSwitch);
+  }
+
+  /** Preserves the stable bootstrap stop codes across the durable failure mapping. */
+  private static String stopFailureCode(AccountBuilderOrchestrationException exception) {
+    return switch (exception.failureCode()) {
+      case INVALID_CONTRACT -> "REQUEST_NOT_ACTIVE";
+      case STOP_REJECTED -> "REQUEST_ALREADY_TERMINAL";
+      default -> exception.failureCode().name();
+    };
   }
 
   public Receipt dispatch(
@@ -94,6 +156,13 @@ public final class BootstrapGameplayOrchestrator {
     validator.validate("executionEnvelope", envelope);
     validator.validate("authority", authority);
     String digest = canonicalJson.digest(envelope);
+
+    if (orchestrationService != null) {
+      // Durable SC-1431 lifecycle: the bootstrap request and idempotency maps, the independent
+      // terminal receipts and the bootstrap evidence store are never the lifecycle authority.
+      return dispatchThroughSc1431(observation, decision, envelope, authority, digest);
+    }
+
     String recordingId = envelope.identities().path("recordingId").asText();
 
     RequestIdentity idempotencyOwner =
@@ -219,6 +288,162 @@ public final class BootstrapGameplayOrchestrator {
       requests.get(envelope.requestId()).terminal(uncertain);
       return finalizeEvidence(envelope, digest, recordingId, uncertain);
     }
+  }
+
+  /**
+   * Durable dispatch: the proposal binding and authority checks run before the durable claim, then
+   * the SC-1431 service owns idempotency, claim, budget, authority, reservation, dispatch, status
+   * verification and terminal evidence. The returned receipt is a read-only projection of the
+   * durable view; no bootstrap state is mutated.
+   */
+  private Receipt dispatchThroughSc1431(
+      JsonNode observation,
+      ProviderDecision decision,
+      ExecutionEnvelope envelope,
+      HumanAuthority authority,
+      String digest) {
+    String bindingFailure = decisionBindingFailure(observation, decision, envelope);
+    if (bindingFailure != null) {
+      return receipt(
+          envelope,
+          digest,
+          ReceiptPhase.VALIDATION,
+          Outcome.DENIED,
+          bindingFailure,
+          false,
+          List.of());
+    }
+    if (!digest.equals(authority.envelopeDigest())
+        || !envelope.authorityId().equals(authority.authorityId())) {
+      return receipt(
+          envelope,
+          digest,
+          ReceiptPhase.AUTHORIZATION,
+          Outcome.DENIED,
+          "AUTHORITY_SCOPE_MISMATCH",
+          false,
+          List.of());
+    }
+    if (!authority.expiresAt().isAfter(clock.instant())
+        || !envelope.deadline().isAfter(clock.instant())) {
+      return receipt(
+          envelope,
+          digest,
+          ReceiptPhase.AUTHORIZATION,
+          Outcome.DENIED,
+          "AUTHORITY_EXPIRED",
+          false,
+          List.of());
+    }
+    try {
+      AccountBuilderGameplayGateway.DispatchResult result =
+          orchestrateThroughSc1431(observation, decision, envelope, authority, digest);
+      Outcome outcome = classify(result);
+      boolean retryAllowed = !result.deliveryAcknowledged() && outcome == Outcome.FAILED;
+      return receipt(
+          envelope,
+          digest,
+          terminalPhase(result),
+          outcome,
+          result.failureCode(),
+          retryAllowed,
+          result.evidenceRefs());
+    } catch (AccountBuilderOrchestrationException exception) {
+      // Stable durable failure codes surface unchanged, including IDEMPOTENCY_CONFLICT.
+      return receipt(
+          envelope,
+          digest,
+          ReceiptPhase.VALIDATION,
+          Outcome.DENIED,
+          exception.failureCode().name(),
+          false,
+          List.of());
+    } catch (RuntimeException exception) {
+      return receipt(
+          envelope,
+          digest,
+          ReceiptPhase.VERIFICATION,
+          Outcome.UNCERTAIN_OUTCOME,
+          "DELIVERY_RECONCILIATION_FAILED",
+          false,
+          List.of());
+    }
+  }
+
+  /**
+   * Builds exactly one durable {@code OrchestrationRequest} from the validated bootstrap proposal
+   * and delegates authority ownership, reservation, dispatch, status verification and terminal
+   * evidence to the SC-1431 orchestration service. The bootstrap path never opens a second mutable
+   * task state: the returned view is the only lifecycle authority.
+   */
+  private AccountBuilderGameplayGateway.DispatchResult orchestrateThroughSc1431(
+      JsonNode observation,
+      ProviderDecision decision,
+      ExecutionEnvelope envelope,
+      HumanAuthority authority,
+      String envelopeDigest) {
+    String orchestrationId = sc1431OrchestrationId(envelope.requestId());
+    // Idempotent replay: a durable aggregate with the same request identity owns the outcome. It
+    // is consulted before any capability preflight, so a replay neither fetches a new snapshot nor
+    // redispatches, and an existing capability binding is never replaced. The comparison covers the
+    // complete immutable identity, not just the envelope digest: the candidate request is rebuilt
+    // with the persisted capability digest and its full fingerprint is compared against the stored
+    // one, so any changed observation, provider decision, authority, envelope or binding conflicts.
+    java.util.Optional<OrchestrationView> existing =
+        orchestrationService.findOrchestration(orchestrationId);
+    if (existing.isPresent()) {
+      String storedCapabilityDigest = orchestrationService.storedCapabilityDigest(orchestrationId);
+      OrchestrationRequest replayCandidate =
+          requestFactory.fromBootstrapReplay(
+              observation, decision, envelope, authority, storedCapabilityDigest);
+      if (!replayCandidate.requestFingerprint().equals(existing.get().requestFingerprint())) {
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.IDEMPOTENCY_CONFLICT,
+            "A different request is already persisted under this orchestration id");
+      }
+      return toDispatchResult(existing.get());
+    }
+    // Read-only capability preflight: catalog and client observation only, never reserve or
+    // dispatch. The server-issued capability digest from this probe is what the immutable request
+    // binds; the catalog digest is never substituted.
+    CapabilitySnapshot preflight = capabilityPreflight.probe(envelope);
+    OrchestrationRequest request =
+        requestFactory.fromBootstrap(observation, decision, envelope, authority, preflight);
+    return toDispatchResult(orchestrationService.orchestrate(request).view());
+  }
+
+  /** Maps a durable SC-1431 view onto the bootstrap compatibility result without redispatch. */
+  private AccountBuilderGameplayGateway.DispatchResult toDispatchResult(OrchestrationView view) {
+    String failureCode =
+        view.failureCode() == null || view.failureCode() == FailureCode.NONE
+            ? null
+            : view.failureCode().name();
+    List<String> evidenceRefs =
+        view.receipts().isEmpty()
+            ? List.of()
+            : view.receipts().get(view.receipts().size() - 1).evidenceRefs();
+    return switch (view.state()) {
+      case CONFIRMED -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.CONFIRMED, failureCode, true, true, evidenceRefs);
+      case REFUTED -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.REFUTED, failureCode, true, true, evidenceRefs);
+      case UNVERIFIABLE -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.UNVERIFIABLE, failureCode, true, true, evidenceRefs);
+      case STOPPED -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.STOPPED, failureCode, true, true, evidenceRefs);
+      case DENIED -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.DENIED, failureCode, false, true, evidenceRefs);
+      case FAILED -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.FAILED, failureCode, !view.retryAllowed(), true, evidenceRefs);
+      case NEEDS_RECONCILIATION -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.UNCERTAIN_OUTCOME, failureCode, true, false, evidenceRefs);
+      default -> new AccountBuilderGameplayGateway.DispatchResult(
+          Outcome.UNCERTAIN_OUTCOME, failureCode, false, false, evidenceRefs);
+    };
+  }
+
+  private static String sc1431OrchestrationId(String requestId) {
+    return "bootstrap-" + requestId;
   }
 
   private String decisionBindingFailure(

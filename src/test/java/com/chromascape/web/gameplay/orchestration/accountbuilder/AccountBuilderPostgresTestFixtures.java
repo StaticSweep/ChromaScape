@@ -6,6 +6,7 @@ import com.chromascape.web.gameplay.contract.GameplayContracts.ExecutionEnvelope
 import com.chromascape.web.gameplay.contract.GameplayContracts.HumanAuthority;
 import com.chromascape.web.gameplay.contract.GameplayContracts.Provider;
 import com.chromascape.web.gameplay.contract.GameplayContracts.ProviderDecision;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayReceipt;
@@ -44,6 +45,12 @@ final class AccountBuilderPostgresTestFixtures {
 
   private AccountBuilderPostgresTestFixtures() {}
 
+  /** Immutable budget parsed from the fixture envelope at the fixture clock. */
+  static AccountBuilderBudgetPolicy.OrchestrationBudget budget(OrchestrationRequest request) {
+    return AccountBuilderBudgetPolicy.OrchestrationBudget.fromEnvelope(
+        request.envelope(), CANONICAL_JSON, CLOCK);
+  }
+
   static OrchestrationRequest request(String suffix) {
     return request(
         suffix,
@@ -71,6 +78,65 @@ final class AccountBuilderPostgresTestFixtures {
       String requestId,
       String idempotencyKey,
       String authorityId) {
+    Proposal proposal = proposal(suffix, requestId, idempotencyKey, authorityId);
+    SnapshotBindings bindings =
+        new SnapshotBindings(
+            CANONICAL_JSON.digest(proposal.decision()),
+            CANONICAL_JSON.digest(proposal.decision().semanticAction()),
+            proposal.envelope().catalogDigest(),
+            digest("capability"),
+            proposal.envelope().goalPlanDigest(),
+            proposal.envelope().taskSkillDigests(),
+            proposal.envelope().schemaDigest(),
+            proposal.envelope().knowledgeDigest(),
+            proposal.envelope().policyDigest(),
+            proposal.envelope().verifierId(),
+            proposal.envelope().buildId(),
+            proposal.envelope().expectedObservationRevision(),
+            proposal.envelope().expectedTaskRevision(),
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            null,
+            null);
+    OrchestrationRequest withoutFingerprint =
+        new OrchestrationRequest(
+            orchestrationId,
+            requestId,
+            idempotencyKey,
+            null,
+            mode,
+            "TEST",
+            proposal.decision(),
+            proposal.envelope(),
+            bindings,
+            proposal.authority(),
+            proposal.observation(),
+            proposal.envelope().deadline());
+    return withFingerprint(withoutFingerprint);
+  }
+
+  /**
+   * A bootstrap-sourced request built through the production request factory, so the binding
+   * intentionally carries a null prompt digest and null provider session/turn identity.
+   */
+  static OrchestrationRequest bootstrapRequest(String suffix, CapabilitySnapshot preflight) {
+    Proposal proposal =
+        proposal(suffix, "request-" + suffix, "idempotency-" + suffix, "authority-" + suffix);
+    AccountBuilderOrchestrationValidator validator =
+        new AccountBuilderOrchestrationValidator(CANONICAL_JSON, (authority, envelope) -> true);
+    AccountBuilderOrchestrationRequestFactory factory =
+        new AccountBuilderOrchestrationRequestFactory(validator, CANONICAL_JSON);
+    return factory.fromBootstrap(
+        proposal.observation(),
+        proposal.decision(),
+        proposal.envelope(),
+        proposal.authority(),
+        preflight);
+  }
+
+  static Proposal proposal(
+      String suffix, String requestId, String idempotencyKey, String authorityId) {
+    var settings = JsonNodeFactory.instance.objectNode().put("secret-setting", "must-not-persist");
     var action =
         JsonNodeFactory.instance
             .objectNode()
@@ -78,9 +144,14 @@ final class AccountBuilderPostgresTestFixtures {
             .put("expectedTransition", "FISHING_XP_INCREASED")
             .put("verifierId", "verifier-v1")
             .put("kind", "START_FISHING_TASK");
-    var settings = JsonNodeFactory.instance.objectNode().put("secret-setting", "must-not-persist");
+    action.set("settings", settings.deepCopy());
     var identities = JsonNodeFactory.instance.objectNode().put("runId", "run-" + suffix);
-    var budgets = JsonNodeFactory.instance.objectNode().put("actions", 1);
+    var budgets =
+        JsonNodeFactory.instance
+            .objectNode()
+            .put("maxActions", 5)
+            .put("maxAttempts", 2)
+            .put("maxElapsedMs", 60_000);
     ExecutionEnvelope envelope =
         new ExecutionEnvelope(
             GameplayContracts.VERSION,
@@ -119,21 +190,6 @@ final class AccountBuilderPostgresTestFixtures {
             0.9,
             action,
             List.of("observation:" + suffix));
-    SnapshotBindings bindings =
-        new SnapshotBindings(
-            CANONICAL_JSON.digest(decision),
-            CANONICAL_JSON.digest(action),
-            envelope.catalogDigest(),
-            digest("capability"),
-            envelope.goalPlanDigest(),
-            envelope.taskSkillDigests(),
-            envelope.schemaDigest(),
-            envelope.knowledgeDigest(),
-            envelope.policyDigest(),
-            envelope.verifierId(),
-            envelope.buildId(),
-            envelope.expectedObservationRevision(),
-            envelope.expectedTaskRevision());
     HumanAuthority authority = signedAuthority(envelope);
     var observation =
         JsonNodeFactory.instance
@@ -144,22 +200,14 @@ final class AccountBuilderPostgresTestFixtures {
             .put("buildId", envelope.buildId());
     observation.set("identities", identities.deepCopy());
     observation.set("taskState", JsonNodeFactory.instance.objectNode().put("revision", 1));
-    OrchestrationRequest withoutFingerprint =
-        new OrchestrationRequest(
-            orchestrationId,
-            requestId,
-            idempotencyKey,
-            null,
-            mode,
-            "TEST",
-            decision,
-            envelope,
-            bindings,
-            authority,
-            observation,
-            envelope.deadline());
-    return withFingerprint(withoutFingerprint);
+    return new Proposal(observation, decision, envelope, authority);
   }
+
+  record Proposal(
+      com.fasterxml.jackson.databind.JsonNode observation,
+      ProviderDecision decision,
+      ExecutionEnvelope envelope,
+      HumanAuthority authority) {}
 
   static OrchestrationRequest withAuthority(
       OrchestrationRequest request, HumanAuthority authority) {

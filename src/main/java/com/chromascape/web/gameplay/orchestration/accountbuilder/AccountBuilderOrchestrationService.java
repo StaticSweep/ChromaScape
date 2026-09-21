@@ -1,6 +1,7 @@
 package com.chromascape.web.gameplay.orchestration.accountbuilder;
 
 import com.chromascape.web.gameplay.contract.CanonicalGameplayJson;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderBudgetPolicy.OrchestrationBudget;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.CapabilitySnapshot;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.FailureCode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.GatewayCorrelation;
@@ -9,22 +10,30 @@ import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderO
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Mode;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationRequest;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.OrchestrationView;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.ProviderOrchestrationCommand;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.Readiness;
+import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.SnapshotBindings;
 import com.chromascape.web.gameplay.orchestration.accountbuilder.AccountBuilderOrchestrationModels.State;
 import java.time.Clock;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** Durable, source-neutral SC-1431 orchestration with no blind retry path. */
 @Service
 public final class AccountBuilderOrchestrationService {
+  private static final String DIGEST_PATTERN = "sha256:[0-9a-f]{64}";
+
   private final AccountBuilderOrchestrationValidator validator;
   private final CanonicalGameplayJson canonicalJson;
   private final AccountBuilderOrchestrationStore store;
   private final AccountBuilderOrchestrationGateway gateway;
   private final AccountBuilderOrchestrationProperties properties;
   private final Clock clock;
+  private final ProviderDecisionOrchestrationSource providerSource;
+  private final AccountBuilderCapabilityPreflight capabilityPreflight;
 
   @Autowired
   public AccountBuilderOrchestrationService(
@@ -32,8 +41,18 @@ public final class AccountBuilderOrchestrationService {
       CanonicalGameplayJson canonicalJson,
       AccountBuilderOrchestrationStore store,
       AccountBuilderOrchestrationGateway gateway,
-      AccountBuilderOrchestrationProperties properties) {
-    this(validator, canonicalJson, store, gateway, properties, Clock.systemUTC());
+      AccountBuilderOrchestrationProperties properties,
+      ProviderDecisionOrchestrationSource providerSource,
+      AccountBuilderCapabilityPreflight capabilityPreflight) {
+    this(
+        validator,
+        canonicalJson,
+        store,
+        gateway,
+        properties,
+        Clock.systemUTC(),
+        providerSource,
+        capabilityPreflight);
   }
 
   AccountBuilderOrchestrationService(
@@ -42,20 +61,112 @@ public final class AccountBuilderOrchestrationService {
       AccountBuilderOrchestrationStore store,
       AccountBuilderOrchestrationGateway gateway,
       AccountBuilderOrchestrationProperties properties,
-      Clock clock) {
+      Clock clock,
+      ProviderDecisionOrchestrationSource providerSource,
+      AccountBuilderCapabilityPreflight capabilityPreflight) {
     this.validator = validator;
     this.canonicalJson = canonicalJson;
     this.store = store;
     this.gateway = gateway;
     this.properties = properties;
     this.clock = clock;
+    this.providerSource = Objects.requireNonNull(providerSource, "providerSource");
+    this.capabilityPreflight = Objects.requireNonNull(capabilityPreflight, "capabilityPreflight");
   }
 
+  /**
+   * Returns the durable view of an existing orchestration without validating any new request. The
+   * bootstrap path consults this before its read-only capability preflight, so an idempotent replay
+   * neither fetches a new snapshot nor replaces an existing capability binding.
+   */
+  public java.util.Optional<OrchestrationView> findOrchestration(String orchestrationId) {
+    return store.find(orchestrationId);
+  }
+
+  /**
+   * Returns the persisted capability digest for an existing orchestration, failing closed when the
+   * stored aggregate is missing or malformed. Replay resolution uses it to rebuild the exact
+   * immutable fingerprint without contacting the gateway.
+   */
+  public String storedCapabilityDigest(String orchestrationId) {
+    AccountBuilderOrchestrationStore.NormalizedAggregate aggregate =
+        store.readAggregate(orchestrationId);
+    SnapshotBindings bindings = aggregate == null ? null : aggregate.bindings();
+    String capabilityDigest = bindings == null ? null : bindings.capabilityDigest();
+    if (capabilityDigest == null || !capabilityDigest.matches(DIGEST_PATTERN)) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT, "Persisted capability binding is missing or malformed");
+    }
+    return capabilityDigest;
+  }
+
+  /**
+   * Generic orchestration entry point. Provider-sourced requests are categorically rejected here,
+   * before any durable claim, budget consumption, authority consumption or gateway access, so a
+   * direct service caller can never enter the provider trust path by forging a source type.
+   * Provider orchestrations must flow through {@link
+   * #orchestrateProvider(ProviderOrchestrationCommand)}.
+   */
   public Submission orchestrate(OrchestrationRequest request) {
+    if (request != null && AccountBuilderOrchestrationSources.providerLike(request.sourceType())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT,
+          "Provider source orchestrations must be created through the persisted provider decision"
+              + " handoff");
+    }
+    return orchestrateInternal(request);
+  }
+
+  /**
+   * Single provider-orchestration trust boundary. The caller supplies only a {@link
+   * ProviderOrchestrationCommand}; the provider decision, source type and provenance are always
+   * loaded from the durable persisted provider turn by {@link ProviderDecisionOrchestrationSource}.
+   * Preparation, replay resolution and capability preflight all happen here, so no caller can
+   * assemble a provider-shaped {@link OrchestrationRequest} and submit it. The final {@link
+   * #orchestrateInternal(OrchestrationRequest)} stays private.
+   */
+  Submission orchestrateProvider(ProviderOrchestrationCommand command) {
+    Objects.requireNonNull(command, "command");
+    ProviderDecisionOrchestrationSource.PreparedProviderRequest prepared =
+        providerSource.prepareProduction(command);
+    Optional<OrchestrationView> existing = store.find(command.orchestrationId());
+    if (existing.isPresent()) {
+      // Exact replay: rebuild the candidate with the persisted capability digest and compare the
+      // full immutable fingerprint. Any changed provider session, turn, decision, authority,
+      // envelope, observation or binding conflicts. No capability access occurs.
+      String storedCapabilityDigest = storedCapabilityDigest(command.orchestrationId());
+      OrchestrationRequest replay =
+          providerSource.completeProductionReplay(prepared, storedCapabilityDigest);
+      if (!replay.requestFingerprint().equals(existing.get().requestFingerprint())) {
+        throw new AccountBuilderOrchestrationException(
+            FailureCode.IDEMPOTENCY_CONFLICT,
+            "A different request is already persisted under this orchestration id");
+      }
+      return new Submission(existing.get(), false);
+    }
+    // Only now, for a genuinely new orchestration, is the read-only capability preflight made.
+    CapabilitySnapshot capabilityPreflightSnapshot = capabilityPreflight.probe(command.envelope());
+    OrchestrationRequest request =
+        providerSource.completeProduction(prepared, capabilityPreflightSnapshot);
+    return orchestrateInternal(request);
+  }
+
+  private Submission orchestrateInternal(OrchestrationRequest request) {
     String fingerprint = validator.validateAndFingerprint(request);
     String envelopeDigest = canonicalJson.digest(request.envelope());
+    // The budget is parsed and validated before the claim, so an invalid frozen contract can
+    // never persist any part of the orchestration aggregate.
+    AccountBuilderBudgetPolicy.OrchestrationBudget budget;
+    try {
+      budget = OrchestrationBudget.fromEnvelope(request.envelope(), canonicalJson, clock);
+    } catch (IllegalArgumentException exception) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.INVALID_CONTRACT,
+          "Frozen SC-1429 budget limits are invalid at claim time",
+          exception);
+    }
     AccountBuilderOrchestrationStore.Claim claim =
-        store.claim(request, fingerprint, envelopeDigest);
+        store.claim(request, fingerprint, envelopeDigest, budget);
     if (!claim.created()) {
       return new Submission(claim.view(), false);
     }
@@ -77,7 +188,11 @@ public final class AccountBuilderOrchestrationService {
 
     boolean authorityConsumed = false;
     try {
-      CapabilitySnapshot capabilities = gateway.capabilities();
+      // The reserve begins the one external attempt cycle this orchestration may ever run. The
+      // durable counter advance happens before any gateway access, so an exhausted or expired
+      // budget is always a proven denial, never a gateway mutation.
+      store.consumeBudget(request.orchestrationId(), false, true);
+      CapabilitySnapshot capabilities = gateway.capabilities(request);
       if (capabilities == null || !capabilities.liveDeliveryReady()) {
         return terminal(request, State.DENIED, FailureCode.GATEWAY_UNAVAILABLE, null, false);
       }
@@ -96,6 +211,16 @@ public final class AccountBuilderOrchestrationService {
       try {
         reservation = gateway.reserve(request, envelopeDigest);
         requireBoundReceipt(request, envelopeDigest, reservation, null);
+      } catch (AccountBuilderOrchestrationException exception) {
+        if (exception.failureCode() == FailureCode.GATEWAY_UNAVAILABLE) {
+          // The adapter only raises GATEWAY_UNAVAILABLE when the transport proves the connection
+          // never opened, so no request bytes could have been submitted. The outcome is therefore
+          // a proven pre-submission failure, not a reconciliation case. Authority is already
+          // consumed, so the orchestration is non-retryable: a new attempt requires a new
+          // orchestration with fresh valid human authority.
+          return terminal(request, State.FAILED, FailureCode.GATEWAY_UNAVAILABLE, null, false);
+        }
+        return uncertain(request, uncertaintyCode(exception));
       } catch (RuntimeException exception) {
         return uncertain(request, uncertaintyCode(exception));
       }
@@ -144,7 +269,12 @@ public final class AccountBuilderOrchestrationService {
                     FailureCode.INVALID_CONTRACT, "Orchestration was not found"));
   }
 
-  public OrchestrationView stop(String orchestrationId, String reason) {
+  /** Durable budget row for the orchestration, if immutable limits were claimed. */
+  public Optional<AccountBuilderBudgetPolicy.OrchestrationBudget> budget(String orchestrationId) {
+    return store.findBudget(orchestrationId);
+  }
+
+  public OrchestrationView stop(String orchestrationId, String reason, boolean killSwitch) {
     OrchestrationView view = find(orchestrationId);
     if (reason == null
         || reason.isBlank()
@@ -154,10 +284,13 @@ public final class AccountBuilderOrchestrationService {
       throw new AccountBuilderOrchestrationException(
           FailureCode.STOP_REJECTED, "A bounded stop requires active orchestration state");
     }
+    // Kill-switch use is authorized by the approved scope. This check runs before any gateway
+    // access: an unauthorized kill switch can never reach the transport.
+    requireKillSwitchScope(orchestrationId, killSwitch);
     try {
       GatewayCorrelation correlation = store.correlation(orchestrationId);
       Lease lease = store.requireLease(orchestrationId, view.lease());
-      GatewayReceipt receipt = gateway.stop(correlation, lease, reason);
+      GatewayReceipt receipt = gateway.stop(correlation, lease, reason, killSwitch);
       requireBoundReceipt(correlation, receipt, lease);
       State state =
           receipt.terminalReconciled() && receipt.state().provenTerminal()
@@ -177,6 +310,25 @@ public final class AccountBuilderOrchestrationService {
           null,
           false,
           false);
+    }
+  }
+
+  /**
+   * Kill-switch intent is only valid inside the approved {@code RUN} scope that was verified at
+   * claim time. The persisted request snapshot is the authorization source; nothing here trusts the
+   * caller's assertion.
+   */
+  private void requireKillSwitchScope(String orchestrationId, boolean killSwitch) {
+    if (!killSwitch) {
+      return;
+    }
+    OrchestrationRequest stored = store.readAggregate(orchestrationId).redactedRequestSnapshot();
+    if (stored == null
+        || stored.envelope() == null
+        || !"RUN".equals(stored.envelope().killSwitchScope())) {
+      throw new AccountBuilderOrchestrationException(
+          FailureCode.OPERATOR_UNAUTHORIZED,
+          "Kill-switch stop is not authorized by the approved scope");
     }
   }
 
@@ -301,7 +453,9 @@ public final class AccountBuilderOrchestrationService {
   public Readiness readiness() {
     CapabilitySnapshot capabilities;
     try {
-      capabilities = gateway.capabilities();
+      // Readiness is request-free and therefore cannot present client observation evidence; a
+      // catalog-only probe is never delivery-ready.
+      capabilities = gateway.capabilities(null);
     } catch (RuntimeException exception) {
       capabilities = null;
     }
@@ -322,6 +476,10 @@ public final class AccountBuilderOrchestrationService {
   private OrchestrationView deliver(
       OrchestrationRequest request, String envelopeDigest, Lease lease) {
     try {
+      // The dispatch belongs to the attempt cycle already opened by the reserve, so it consumes a
+      // semantic action rather than a second attempt. An exhausted or expired budget is a proven
+      // denial before the dispatch boundary is persisted and before any gateway access.
+      store.consumeBudget(request.orchestrationId(), true, false);
       Lease storedLease = store.requireLease(request.orchestrationId(), lease);
       // Persist the submission boundary before the network call. A restart can therefore
       // distinguish an unattempted reservation from a call whose outcome must be reconciled.
@@ -388,6 +546,28 @@ public final class AccountBuilderOrchestrationService {
           status.failureCode(),
           statusLease,
           status,
+          false,
+          false);
+    } catch (AccountBuilderOrchestrationException exception) {
+      if (exception.failureCode() == FailureCode.BUDGET_EXHAUSTED
+          || exception.failureCode() == FailureCode.DEADLINE_EXPIRED) {
+        // A budget denial at the dispatch boundary is a proven terminal failure before any
+        // gateway access; it is never a reconciliation case and never retryable.
+        return store.transition(
+            request.orchestrationId(),
+            State.FAILED,
+            exception.failureCode(),
+            lease,
+            null,
+            false,
+            false);
+      }
+      return store.transition(
+          request.orchestrationId(),
+          State.NEEDS_RECONCILIATION,
+          uncertaintyCode(exception),
+          null,
+          null,
           false,
           false);
     } catch (RuntimeException exception) {
@@ -488,7 +668,8 @@ public final class AccountBuilderOrchestrationService {
         receipt.lease(),
         receipt.evidenceRefs(),
         receipt.at(),
-        receipt.receiptId());
+        receipt.receiptId(),
+        receipt.killSwitch());
   }
 
   private boolean validLease(OrchestrationRequest request, Lease lease) {

@@ -89,6 +89,63 @@ class GameplayProviderRuntimeTest {
     fixture.runtime.close();
   }
 
+  @Test
+  void adapterToolCallsUseDurableClosedGateway() throws Exception {
+    Fixture fixture = fixture(validResult());
+    fixture.adapter.toolName = DecisionToolFacade.OBSERVATION;
+    fixture.adapter.toolDigest = fixture.turn.observationDigest();
+    fixture.runtime.createSession(fixture.session);
+    fixture.runtime.submitTurn(fixture.session.sessionId(), fixture.turn);
+
+    TurnView terminal =
+        awaitTerminal(fixture.runtime, fixture.session.sessionId(), fixture.turn.turnId());
+
+    assertEquals(TurnState.DECIDED, terminal.state());
+    assertEquals(1, fixture.store.toolCalls.size());
+    assertEquals("COMPLETED", fixture.store.toolCalls.get("tool-call-1"));
+    fixture.runtime.close();
+  }
+
+  @Test
+  void restartRetriesReservedTurnBecauseProviderWasNotSubmitted() throws Exception {
+    Fixture fixture = fixture(validResult());
+    fixture.runtime.createSession(fixture.session);
+    fixture.store.reserveTurn(fixture.session.sessionId(), fixture.turn);
+
+    fixture.runtime.recoverAtStartup();
+
+    assertEquals(
+        TurnState.DECIDED,
+        awaitTerminal(fixture.runtime, fixture.session.sessionId(), fixture.turn.turnId()).state());
+    assertEquals(1, fixture.adapter.calls.get());
+    fixture.runtime.close();
+  }
+
+  @Test
+  void restartNeverRetriesAnySubmittedNonterminalState() throws Exception {
+    for (TurnState state :
+        List.of(TurnState.SUBMITTED, TurnState.STREAMING, TurnState.NORMALIZING)) {
+      Fixture fixture = fixture(validResult());
+      fixture.runtime.createSession(fixture.session);
+      fixture.store.reserveTurn(fixture.session.sessionId(), fixture.turn);
+      fixture.store.markSubmitted(
+          fixture.turn.turnId(), "provider-session", "provider-turn", List.of());
+      if (state == TurnState.STREAMING || state == TurnState.NORMALIZING) {
+        fixture.store.markStreaming(fixture.turn.turnId());
+      }
+      if (state == TurnState.NORMALIZING) {
+        fixture.store.markNormalizing(fixture.turn.turnId());
+      }
+
+      fixture.runtime.recoverAtStartup();
+
+      TurnView recovered = fixture.runtime.turn(fixture.session.sessionId(), fixture.turn.turnId());
+      assertEquals(TurnState.NEEDS_RECONCILIATION, recovered.state(), state.name());
+      assertEquals(0, fixture.adapter.calls.get(), state.name());
+      fixture.runtime.close();
+    }
+  }
+
   private Fixture fixture(ProviderAdapter.ProviderTurnResult result) throws Exception {
     ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
     CanonicalGameplayJson canonical = new CanonicalGameplayJson(mapper);
@@ -114,7 +171,7 @@ class GameplayProviderRuntimeTest {
             digest,
             List.of(digest),
             Instant.now().plusSeconds(120),
-            new BudgetLimits(10_000, 10_000, 2, 0, 2, 60_000, 120_000),
+            new BudgetLimits(10_000, 10_000, 2, 1, 2, 60_000, 120_000),
             true);
     JsonNode observation = fixtures.path("observation");
     JsonNode actions = mapper.createArrayNode().add(fixtures.path("semanticAction"));
@@ -136,7 +193,7 @@ class GameplayProviderRuntimeTest {
             true);
     ProviderRuntimeValidator validator =
         new ProviderRuntimeValidator(new GameplayContractValidator(mapper), canonical);
-    TurnRequest turn =
+    final TurnRequest turn =
         new TurnRequest(
             preliminary.turnId(),
             preliminary.requestId(),
@@ -167,9 +224,11 @@ class GameplayProviderRuntimeTest {
             new ProviderPromptBuilder(mapper),
             new ProviderOutputNormalizer(mapper, new GameplayContractValidator(mapper), canonical),
             new RedactedTranscriptStore(properties, canonical),
+            new DurableProviderToolGateway(
+                store, new DecisionToolFacade(canonical), canonical, properties),
             List.of(adapter));
     adapter.rawDecision = mapper.writeValueAsString(fixtures.path("claudeProposal"));
-    return new Fixture(runtime, adapter, session, turn);
+    return new Fixture(runtime, adapter, store, session, turn);
   }
 
   private ProviderAdapter.ProviderTurnResult validResult() {
@@ -200,6 +259,7 @@ class GameplayProviderRuntimeTest {
   private record Fixture(
       GameplayProviderRuntime runtime,
       FakeAdapter adapter,
+      InMemoryStore store,
       SessionRequest session,
       TurnRequest turn) {}
 
@@ -207,6 +267,8 @@ class GameplayProviderRuntimeTest {
     private final AtomicInteger calls = new AtomicInteger();
     private final ProviderTurnResult configured;
     private String rawDecision;
+    private String toolName;
+    private String toolDigest;
 
     private FakeAdapter(ProviderTurnResult configured) {
       this.configured = configured;
@@ -225,6 +287,9 @@ class GameplayProviderRuntimeTest {
     @Override
     public ProviderTurnResult startTurn(ProviderInvocation invocation) {
       calls.incrementAndGet();
+      if (toolName != null) {
+        invocation.tools().invoke("tool-call-1", toolName, Map.of("digest", toolDigest));
+      }
       return new ProviderTurnResult(
           configured.submitted(),
           configured.terminal(),
@@ -254,6 +319,9 @@ class GameplayProviderRuntimeTest {
     private final Map<String, SessionView> sessions = new LinkedHashMap<>();
     private final Map<String, TurnRequest> turnRequests = new LinkedHashMap<>();
     private final Map<String, TurnView> turns = new LinkedHashMap<>();
+    private final Map<String, String> toolCalls = new LinkedHashMap<>();
+    private final Map<String, String> toolCallArguments = new LinkedHashMap<>();
+    private final Map<String, String> toolCallResults = new LinkedHashMap<>();
 
     private InMemoryStore(CanonicalGameplayJson canonical) {
       this.canonical = canonical;
@@ -346,6 +414,11 @@ class GameplayProviderRuntimeTest {
     }
 
     @Override
+    public synchronized void markStreaming(String turnId) {
+      replace(turnId, TurnState.STREAMING, FailureCode.NONE, null, null, null, null, null);
+    }
+
+    @Override
     public synchronized TurnView finish(
         String turnId,
         TurnState state,
@@ -365,6 +438,35 @@ class GameplayProviderRuntimeTest {
 
     @Override
     public void recordTranscript(String turnId, String artifactRef, long byteLength) {}
+
+    @Override
+    public synchronized ToolCallReservation reserveToolCall(
+        String turnId, String toolCallId, String toolName, String argumentsDigest) {
+      String identity = turnId + ":" + toolName + ":" + argumentsDigest;
+      String existing = toolCallArguments.putIfAbsent(toolCallId, identity);
+      if (existing != null && !existing.equals(identity)) {
+        throw new ProviderRuntimeException(
+            FailureCode.IDEMPOTENCY_CONFLICT.name(), "tool identity conflict");
+      }
+      return new ToolCallReservation(
+          existing == null,
+          toolCallResults.get(toolCallId),
+          "COMPLETED".equals(toolCalls.get(toolCallId)));
+    }
+
+    @Override
+    public synchronized void finishToolCall(
+        String toolCallId, String resultDigest, boolean succeeded) {
+      toolCalls.put(toolCallId, succeeded ? "COMPLETED" : "FAILED");
+      toolCallResults.put(toolCallId, resultDigest);
+    }
+
+    @Override
+    public synchronized int toolCallCount(String turnId) {
+      String prefix = turnId + ":";
+      return (int)
+          toolCallArguments.values().stream().filter(value -> value.startsWith(prefix)).count();
+    }
 
     @Override
     public synchronized List<TurnView> recoverableTurns() {

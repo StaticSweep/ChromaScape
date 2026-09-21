@@ -27,7 +27,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
     classes = JpaAccountBuilderOrchestrationStoreTest.JpaTestBootstrap.class,
     properties = {
-      "spring.flyway.target=32",
+      "spring.flyway.target=49",
       "spring.jpa.hibernate.ddl-auto=validate",
       "stabilization.auth.token=sc1431-read-token",
       "stabilization.auth.write-token=sc1431-write-token",
@@ -45,7 +45,9 @@ class AccountBuilderOrchestrationRollbackTest {
 
   @DynamicPropertySource
   static void isolatedPostgres(DynamicPropertyRegistry registry) {
-    IsolatedPostgresTestDatabase.register(registry);
+    // Hibernate is validate-only: Flyway alone must produce every SC-1431 table, column and
+    // constraint through the actual repository migration head.
+    IsolatedPostgresTestDatabase.registerFlywayValidateOnly(registry);
   }
 
   @AfterEach
@@ -56,6 +58,38 @@ class AccountBuilderOrchestrationRollbackTest {
       activeFunction = null;
       activeTrigger = null;
       activeTable = null;
+    }
+  }
+
+  @Test
+  void budgetInsertFailureRollsBackTheEntireClaimAggregate() {
+    OrchestrationRequest request = AccountBuilderPostgresTestFixtures.request("rollback-budget");
+    enableFault("budget", "ab_orchestration_budget");
+
+    assertThatThrownBy(
+            () ->
+                store.claim(
+                    request,
+                    request.requestFingerprint(),
+                    AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                    AccountBuilderPostgresTestFixtures.budget(request)))
+        .isInstanceOf(RuntimeException.class);
+
+    // The atomic claim must leave no root, snapshot, correlation, budget or event behind.
+    for (String table :
+        List.of(
+            "ab_orchestration",
+            "ab_orchestration_budget",
+            "ab_snapshot_binding",
+            "ab_gateway_correlation",
+            "ab_orchestration_event")) {
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "select count(*) from " + table + " where orchestration_id = ?",
+                  Integer.class,
+                  request.orchestrationId()))
+          .as(table)
+          .isZero();
     }
   }
 
@@ -194,7 +228,8 @@ class AccountBuilderOrchestrationRollbackTest {
                 .claim(
                     request,
                     request.requestFingerprint(),
-                    AccountBuilderPostgresTestFixtures.envelopeDigest(request))
+                    AccountBuilderPostgresTestFixtures.envelopeDigest(request),
+                    AccountBuilderPostgresTestFixtures.budget(request))
                 .created())
         .isTrue();
   }

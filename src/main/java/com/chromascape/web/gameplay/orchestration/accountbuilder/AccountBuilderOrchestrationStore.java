@@ -15,7 +15,34 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AccountBuilderOrchestrationStore {
-  Claim claim(OrchestrationRequest request, String fingerprint, String envelopeDigest);
+  /**
+   * Claims the orchestration and its immutable budget in one atomic operation.
+   *
+   * <p>The budget is parsed and validated by the caller before this method runs, so an invalid
+   * budget can never persist any part of the aggregate. On success the root, the initial lifecycle
+   * snapshot, the immutable request snapshot, the snapshot bindings, the gateway correlation, the
+   * budget row and the initial event all exist or none of them do. An exact replay — same
+   * fingerprint and same immutable budget — returns the existing aggregate. A changed request or
+   * budget is an {@code IDEMPOTENCY_CONFLICT}. A durable claim without a budget is an internal
+   * integrity failure and never silently replays.
+   */
+  Claim claim(
+      OrchestrationRequest request,
+      String fingerprint,
+      String envelopeDigest,
+      AccountBuilderBudgetPolicy.OrchestrationBudget budget);
+
+  /** Returns the durable budget row, or empty when the claim never persisted one. */
+  Optional<AccountBuilderBudgetPolicy.OrchestrationBudget> findBudget(String orchestrationId);
+
+  /**
+   * Atomically consumes one external attempt and, optionally, one semantic action. Returns the
+   * advanced budget only when capacity remains at the moment of the conditional update; exhausted
+   * or expired budgets throw {@link AccountBuilderOrchestrationException} with {@code
+   * BUDGET_EXHAUSTED} or {@code DEADLINE_EXPIRED} before any gateway access.
+   */
+  AccountBuilderBudgetPolicy.OrchestrationBudget consumeBudget(
+      String orchestrationId, boolean action, boolean attempt);
 
   /** Atomically claims a one-use authority before any gateway reservation is attempted. */
   AuthorityConsumption consumeAuthority(
