@@ -150,6 +150,7 @@ class ProviderRuntimeBoundaryTest {
       String command =
           switch (mode) {
             case "sleep" -> "ping -n 11 127.0.0.1 >nul";
+            case "event-then-sleep" -> "(echo event) & ping -n 11 127.0.0.1 >nul";
             case "overflow" -> "echo " + "x".repeat(5000);
             default -> "echo decision";
           };
