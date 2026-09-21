@@ -178,8 +178,8 @@ class ReplayTickBatchReceiptIntegrationTest {
 
       migrate(
           "V35__replay_tick_batch_receipts.sql",
-          "V51__repair_replay_tick_batch_receipt_id_default.sql");
-      assertFlywayVersions(connection, "34", "35", "51");
+          "V57__repair_replay_tick_batch_receipt_id_default.sql");
+      assertFlywayVersions(connection, "34", "35", "57");
 
       String sessionId = "debug-repaired-id-default";
       insertSession(connection, sessionId);

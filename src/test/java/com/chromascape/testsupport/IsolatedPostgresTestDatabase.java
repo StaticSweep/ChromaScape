@@ -111,7 +111,7 @@ public final class IsolatedPostgresTestDatabase {
     var current = flyway.info().current();
     assertNotNull(current, "Flyway must migrate the isolated schema");
     assertNotNull(current.getVersion(), "Flyway must expose a repository migration version");
-    assertEquals("49", current.getVersion().getVersion(), "Flyway must reach repository head V49");
+    assertEquals("57", current.getVersion().getVersion(), "Flyway must reach repository head V57");
 
     String schema = flyway.getConfiguration().getDefaultSchema();
     JdbcTemplate jdbc = new JdbcTemplate(dataSource);
