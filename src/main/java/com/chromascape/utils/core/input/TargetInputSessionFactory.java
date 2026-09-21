@@ -18,6 +18,7 @@ import com.chromascape.utils.core.screen.window.TargetDiscoveryService;
 import com.chromascape.utils.core.screen.window.WindowInfo;
 import com.chromascape.utils.core.screen.window.WindowSelectionService;
 import java.awt.Rectangle;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -44,6 +45,7 @@ public final class TargetInputSessionFactory {
   private final KinputBackendFactory kinputBackends;
 
   /** Creates the production factory. */
+  @Autowired
   public TargetInputSessionFactory(
       TargetDiscoveryService discovery,
       WindowSelectionService selection,

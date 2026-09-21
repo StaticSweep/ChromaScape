@@ -1,4 +1,7 @@
 /gradlew text eol=lf
+# JSON contracts and golden fixtures are hashed and compared byte-for-byte. Keep their checkout
+# representation stable on every host, including Windows machines with core.autocrlf enabled.
+*.json text eol=lf
 src/test/resources/micro6-fixtures/* text eol=lf
 /src/test/resources/tick-batch-*.json text eol=lf
 /src/test/resources/recording-action-checksum-vectors.json text eol=lf
