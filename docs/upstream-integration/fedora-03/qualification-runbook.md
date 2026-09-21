@@ -15,6 +15,28 @@ The native pair is local-only: `third-party/RemoteInput/PROVENANCE.md` records
 `top-level-licence-resolution: unresolved`, the shipped package contains no RemoteInput payload, and
 this runbook wires the pair into the private installed prefix.
 
+## 1b. Launch the client (canonical entry point only)
+
+Use the IntelliJ-equivalent Builder Goal task from a Micro6 checkout whose `capture-contract.lock`
+matches the shared contracts revision (at the time of writing: `micro6-sc1618-fedora`, lock
+`7f4fa47e…`):
+
+```bash
+printf -- '-developer-mode\n-clean-jagex-launcher\n' > /tmp/micro6-client-args.txt
+JAVA_HOME="$HOME/jdks/jdk-17.0.20.1+1" \
+MICRO6_CLIENT_ARGS_FILE=/tmp/micro6-client-args.txt \
+MICRO6_LOCAL_EXECUTOR_ENABLED=true \
+  bash ./gradlew --no-daemon --no-watch-fs :client:runBuilderGoal
+```
+
+The client process is eligible for discovery when its command line carries
+`net.runelite.client.RuneLite`. Do **not** launch the shaded client JAR directly: that path produced
+`error_game_js5connect_outofdate` and a black canvas, and every capture came back uniform.
+
+The main `micro6` checkout at the time of writing cannot compile the client because its Gradle plugin
+build lacks the `component` generator (and its ANTLR runtime dependency); that fix belongs on a
+Micro6 branch, not in the ChromaScape qualification.
+
 ## 2. Build and stage the native pair
 
 The host has no compiler toolchain; the build runs in the pinned Fedora toolchain container
