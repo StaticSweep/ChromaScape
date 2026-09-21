@@ -321,8 +321,8 @@ class RemoteInputSessionTest {
         true,
         Duration.ofSeconds(1),
         Duration.ofSeconds(1),
-        Duration.ofMillis(20),
-        Duration.ofMillis(20),
+        Duration.ofMillis(500),
+        Duration.ofMillis(500),
         Duration.ofMillis(1),
         8);
   }

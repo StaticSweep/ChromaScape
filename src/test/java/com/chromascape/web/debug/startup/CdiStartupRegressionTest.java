@@ -3,10 +3,10 @@ package com.chromascape.web.debug.startup;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import com.chromascape.web.aiplayer.routine.source.SourceDebuggerReadService;
 import com.chromascape.web.debug.buildergoal.service.BuilderGoalRepairIncidentService;
 import com.chromascape.web.logs.LogWebSocketHandler;
-import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

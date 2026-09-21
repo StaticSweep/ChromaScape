@@ -164,11 +164,9 @@ public final class Micro6CatalogV2Contract {
     // Full catalogs containing solely NOT_APPLICABLE or ERROR entries therefore legitimately have
     // no schema_bundle_hash; requiring one would reject a producer-valid degraded catalog.
     String attestedBundle = text(payload.get("schema_bundle_hash"));
-    String recomputedBundle =
-        Micro6CanonicalHash.schemaBundleHash(payload, recomputedCatalogHash);
+    String recomputedBundle = Micro6CanonicalHash.schemaBundleHash(payload, recomputedCatalogHash);
     if (recomputedBundle != null) {
-      if (attestedBundle != null
-          && !attestedBundle.equals(recomputedBundle)) {
+      if (attestedBundle != null && !attestedBundle.equals(recomputedBundle)) {
         reasons.add("schema_bundle_hash_mismatch");
       }
       if (attestedBundle == null || !isSha256(attestedBundle)) {

@@ -149,6 +149,9 @@ public final class SafeProviderProcessRunner {
       long remaining = Math.max(1, Duration.between(clock.instant(), deadline).toMillis());
       if (!process.waitFor(remaining, TimeUnit.MILLISECONDS)) {
         terminateProcessTree(process);
+        // The readers own the process pipes. Await their completion after termination so Windows
+        // releases the child's working directory before callers attempt to remove it.
+        CompletableFuture.allOf(stdout, stderr).get(5, TimeUnit.SECONDS);
         return ProcessResult.failure(
             true, FailureCode.UNKNOWN_PROVIDER_OUTCOME, elapsed(startedAt));
       }
