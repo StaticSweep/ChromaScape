@@ -15,12 +15,16 @@ class TaskSourceManifestVerifierTest {
   void preservesGeneratedMappingsBoundToAuthoredSource() throws Exception {
     ObjectNode manifest = manifestWithGeneratedMapping();
     KeyPair keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
-    TaskSourceManifest verified = verifier(keyPair)
-        .verify(SourceManifestTestFixtures.resealAndSign(manifest, keyPair)).manifest();
+    TaskSourceManifest verified =
+        verifier(keyPair)
+            .verify(SourceManifestTestFixtures.resealAndSign(manifest, keyPair))
+            .manifest();
     assertEquals(1, verified.generatedMappings().size());
-    assertEquals(java.util.List.of(SourceManifestTestFixtures.FILE_ID),
+    assertEquals(
+        java.util.List.of(SourceManifestTestFixtures.FILE_ID),
         verified.generatedMappings().get(0).authoredFileIds());
-    assertThrows(UnsupportedOperationException.class,
+    assertThrows(
+        UnsupportedOperationException.class,
         () -> verified.generatedMappings().get(0).authoredFileIds().add("other"));
   }
 
@@ -37,7 +41,9 @@ class TaskSourceManifestVerifierTest {
 
   @Test
   void rejectsInvalidMappingReferencesAndMetadata() throws Exception {
-    for (String field : java.util.List.of("generated_file_id", "mapping_kind", "tool", "tool_version", "description")) {
+    for (String field :
+        java.util.List.of(
+            "generated_file_id", "mapping_kind", "tool", "tool_version", "description")) {
       ObjectNode manifest = manifestWithGeneratedMapping();
       ((ObjectNode) manifest.get("generated_mappings").get(0)).put(field, "");
       assertMappingRejected(manifest);
@@ -47,12 +53,14 @@ class TaskSourceManifestVerifierTest {
     assertMappingRejected(unknown);
     ObjectNode generatedAuthor = manifestWithGeneratedMapping();
     ((ObjectNode) generatedAuthor.get("generated_mappings").get(0))
-        .putArray("authored_file_ids").add(SourceManifestTestFixtures.GENERATED_FILE_ID);
+        .putArray("authored_file_ids")
+        .add(SourceManifestTestFixtures.GENERATED_FILE_ID);
     assertMappingRejected(generatedAuthor);
     ObjectNode duplicateAuthor = manifestWithGeneratedMapping();
     ((ObjectNode) duplicateAuthor.get("generated_mappings").get(0))
         .putArray("authored_file_ids")
-        .add(SourceManifestTestFixtures.FILE_ID).add(SourceManifestTestFixtures.FILE_ID);
+        .add(SourceManifestTestFixtures.FILE_ID)
+        .add(SourceManifestTestFixtures.FILE_ID);
     assertMappingRejected(duplicateAuthor);
   }
 
@@ -64,8 +72,8 @@ class TaskSourceManifestVerifierTest {
   private static void assertMappingRejected(ObjectNode manifest) throws Exception {
     KeyPair keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
     SourceManifestTestFixtures.resealAndSign(manifest, keyPair);
-    SourceManifestException error = assertThrows(SourceManifestException.class,
-        () -> verifier(keyPair).verify(manifest));
+    SourceManifestException error =
+        assertThrows(SourceManifestException.class, () -> verifier(keyPair).verify(manifest));
     assertEquals(SourceManifestFailureCode.SOURCE_MANIFEST_INVALID, error.code());
   }
 

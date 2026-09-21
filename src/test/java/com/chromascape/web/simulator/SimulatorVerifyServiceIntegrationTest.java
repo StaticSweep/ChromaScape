@@ -35,14 +35,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -108,7 +108,8 @@ class SimulatorVerifyServiceIntegrationTest {
     }
 
     @Override
-    Process createVerifierProcess(List<String> command, File workingDir) throws java.io.IOException {
+    Process createVerifierProcess(List<String> command, File workingDir)
+        throws java.io.IOException {
       String session = argument(command, "--session");
       String scenario = argument(command, "--scenario");
       String reportPath = argument(command, "--output");

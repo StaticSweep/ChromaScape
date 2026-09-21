@@ -506,8 +506,7 @@ public class IsolatedPatchWorker {
     if (value != null && !value.isBlank()) destination.put(name, value);
   }
 
-  private static void copyEnvironmentIgnoringCase(
-      Map<String, String> destination, String name) {
+  private static void copyEnvironmentIgnoringCase(Map<String, String> destination, String name) {
     System.getenv().entrySet().stream()
         .filter(entry -> entry.getKey().equalsIgnoreCase(name))
         .findFirst()

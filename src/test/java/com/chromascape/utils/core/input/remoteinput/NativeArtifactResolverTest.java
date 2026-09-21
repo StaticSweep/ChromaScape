@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.function.Function;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 class NativeArtifactResolverTest {
@@ -182,6 +184,7 @@ class NativeArtifactResolverTest {
   }
 
   @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
   void unreadableFileIsRejected(@TempDir Path tmp) throws IOException {
     Assumptions.assumeFalse(
         "root".equals(System.getProperty("user.name")), "root ignores permissions");

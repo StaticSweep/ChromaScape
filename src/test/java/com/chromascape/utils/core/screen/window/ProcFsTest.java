@@ -108,6 +108,7 @@ class ProcFsTest {
   }
 
   @Test
+  @EnabledOnOs(OS.LINUX)
   void readExeTargetResolvesSymlinkAndIsEmptyWhenAbsent() throws Exception {
     Path pidDir = Files.createDirectories(root.resolve("42"));
     Files.createSymbolicLink(pidDir.resolve("exe"), Path.of("/opt/jre/bin/java"));

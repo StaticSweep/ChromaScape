@@ -24,14 +24,15 @@ import org.springframework.test.context.TestPropertySource;
  * services and repositories, and must never construct the unrelated account-task service graph
  * (whose {@code LogRepository} dependency is not available in this narrow context by design).
  *
- * <p>{@code Sc810PostgresTestConfiguration} carries both {@code @TestConfiguration} and {@code
- * @SpringBootConfiguration}: the former excludes it from full-application component scanning, and
- * the latter makes it discoverable as its own root configuration, so {@code @SpringBootTest}'s
- * search for the nearest {@code @SpringBootConfiguration} from the test class's package finds this
- * class itself instead of falling back to auto-merging the full {@code ChromaScapeApplication}
- * (which happens whenever every explicitly listed {@code classes=} entry is {@code
- * @TestConfiguration} only). See {@link ChromaScapeFullContextExcludesSc810TestBootstrapTest} for
- * the complementary proof that the full application context never discovers this class either.
+ * <p>{@code Sc810PostgresTestConfiguration} carries both {@code @TestConfiguration} and
+ * {@code @SpringBootConfiguration}: the former excludes it from full-application component
+ * scanning, and the latter makes it discoverable as its own root configuration, so
+ * {@code @SpringBootTest}'s search for the nearest {@code @SpringBootConfiguration} from the test
+ * class's package finds this class itself instead of falling back to auto-merging the full {@code
+ * ChromaScapeApplication} (which happens whenever every explicitly listed {@code classes=} entry is
+ * {@code @TestConfiguration} only). See {@link
+ * ChromaScapeFullContextExcludesSc810TestBootstrapTest} for the complementary proof that the full
+ * application context never discovers this class either.
  */
 @SpringBootTest(
     classes = Sc810PostgresTestConfiguration.class,
