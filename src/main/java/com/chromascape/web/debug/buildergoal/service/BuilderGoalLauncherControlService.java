@@ -180,8 +180,11 @@ public class BuilderGoalLauncherControlService {
   }
 
   public boolean isBuilderGoalRunnableMachine(LauncherMachine machine) {
-    return machine != null && machine.enabled() && machine.online()
-        && (isLocalMachine(machine) || (remoteLauncher != null && remoteLauncher.supports(machine)));
+    return machine != null
+        && machine.enabled()
+        && machine.online()
+        && (isLocalMachine(machine)
+            || (remoteLauncher != null && remoteLauncher.supports(machine)));
   }
 
   public String getBuilderGoalMachineDisabledReason(LauncherMachine machine) {

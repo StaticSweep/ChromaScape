@@ -1648,6 +1648,20 @@ public class ScriptExecutionService {
     if (taskMetadata != null) {
       Object target = taskMetadata.get("micro6_target");
       if (target instanceof Map<?, ?> targetMap) {
+        Object value = ((Map<String, Object>) targetMap).get("local_executor_base_url");
+        if (value != null && !value.toString().isBlank()) {
+          return normalizeBaseUrl(value.toString());
+        }
+      }
+      Object preparation = taskMetadata.get("target_preparation");
+      if (preparation instanceof Map<?, ?> preparationMap) {
+        Object value =
+            ((Map<String, Object>) preparationMap).get("local_executor_base_url");
+        if (value != null && !value.toString().isBlank()) {
+          return normalizeBaseUrl(value.toString());
+        }
+      }
+      if (target instanceof Map<?, ?> targetMap) {
         Object value = ((Map<String, Object>) targetMap).get("advertised_base_url");
         if (value != null && !value.toString().isBlank()) {
           return normalizeBaseUrl(value.toString());

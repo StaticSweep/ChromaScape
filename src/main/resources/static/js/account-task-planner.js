@@ -5,7 +5,7 @@
  * approving/rejecting tasks, and triggering patch loop execution.
  */
 class AccountTaskPlanner {
-  static BUILDER_GOAL_BUNDLE_VERSION = '40';
+  static BUILDER_GOAL_BUNDLE_VERSION = '44';
   static BUILDER_GOAL_PRIMARY_ITEM_ID = 'builderGoalPrimary';
   static UNASSIGNED_FILTER = '__UNASSIGNED__';
   static BUILDER_GOAL_PUBLISH_TIMEOUT_MS = 240000;
@@ -459,6 +459,7 @@ class AccountTaskPlanner {
     this.builderGoalMachineSelect = document.getElementById('builderGoalMachineSelect');
     this.builderGoalMachineSummary = document.getElementById('builderGoalMachineSummary');
     this.builderGoalWorldInput = document.getElementById('builderGoalWorldInput');
+    this.builderGoalAutoRecord = document.getElementById('builderGoalAutoRecord');
     this.builderGoalTaskSearchInput = document.getElementById('builderGoalTaskSearchInput');
     this.builderGoalTaskSelect = document.getElementById('builderGoalTaskSelect');
     this.builderGoalConfigInput = document.getElementById('builderGoalConfigInput');
@@ -549,6 +550,7 @@ class AccountTaskPlanner {
     this.recoveryStatusError = document.getElementById('recoveryStatusError');
     this.recoveryErrorBanner = document.getElementById('recoveryErrorBanner');
     this.recoveryReplayAlert = document.getElementById('recoveryReplayAlert');
+    this.recoveryRunPicker = document.getElementById('recoveryRunPicker');
 
     // Plans list
     this.plansList = document.getElementById('plansList');
@@ -806,6 +808,21 @@ class AccountTaskPlanner {
     if (this.closeBuilderGoalLogsBtn) {
       this.closeBuilderGoalLogsBtn.addEventListener('click', () => this.closeBuilderGoalRunLogs());
     }
+    if (this.recoveryRunPicker) {
+      this.recoveryRunPicker.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-recovery-open]');
+        if (!button) return;
+        const iterationId = button.dataset.recoveryOpen;
+        if (iterationId) {
+          this.enterRecoveryMode(iterationId);
+        }
+      });
+    }
+    document.addEventListener('debugger:workspace-changed', (event) => {
+      if (event && event.detail && event.detail.workspace === 'recovery') {
+        this.renderRecoveryRunPicker();
+      }
+    });
     if (this.builderGoalAnalysisResetBtn) {
       this.builderGoalAnalysisResetBtn.addEventListener('click', () => this.resetBuilderGoalAnalysisPrompt());
     }
@@ -886,6 +903,17 @@ class AccountTaskPlanner {
     if (recoveryReplayVideo) {
       recoveryReplayVideo.addEventListener('loadedmetadata', () => {
         if (this.recoveryModeActive) {
+          // Any recording loaded through the shared replay picker becomes the recovery surface,
+          // including when the opened run had no replay of its own.
+          if (this.recoveryReplayStatus !== 'loaded') {
+            this.recoveryReplayStatus = 'loaded';
+            this.recoveryReplayError = '';
+            this.hideRecoveryReplayAlert();
+            this.setRecoveryStatusChip(this.recoveryStatusRecording, 'Recording', {
+              text: 'Loaded',
+              tone: 'ok'
+            });
+          }
           this.renderRecoveryTimelineMarkers();
         }
       });
@@ -1645,34 +1673,36 @@ class AccountTaskPlanner {
     const filteredSettings = {};
     const discardedKeys = [];
     const taskKey = String(task?.task_key || '').toUpperCase();
-    const isFishingTraining = taskKey === 'FISHING_TRAINING' || taskKey === 'FISH_TRAINING';
-    const hasCanonicalStopValue = Object.prototype.hasOwnProperty.call(settings, 'stopConditionValue');
-    const legacyStopValues = ['targetLevel', 'target_level']
-      .filter(key => Object.prototype.hasOwnProperty.call(settings, key))
-      .map(key => settings[key]);
+    // A task schema can declare either targetLevel (some construction/crafting/herblore tasks) or
+    // the canonical stopConditionValue; only fold a legacy alias into a field the schema accepts.
+    const canonicalLevelKey = allowedKeys.has('targetLevel')
+      ? 'targetLevel'
+      : allowedKeys.has('stopConditionValue')
+        ? 'stopConditionValue'
+        : (taskKey === 'FISHING_TRAINING' || taskKey === 'FISH_TRAINING')
+          ? 'stopConditionValue'
+          : null;
+    const legacyStopKeys = ['targetLevel', 'target_level'].filter(
+      key => !allowedKeys.has(key) && Object.prototype.hasOwnProperty.call(settings, key)
+    );
+    const legacyStopValues = legacyStopKeys.map(key => settings[key]);
     const legacyStopValueIsConsistent =
       legacyStopValues.length > 0 && legacyStopValues.every(value => Object.is(value, legacyStopValues[0]));
     Object.entries(settings).forEach(([key, value]) => {
       if (allowedKeys.has(key)) {
         filteredSettings[key] = value;
       } else if (
-        isFishingTraining &&
-        !hasCanonicalStopValue &&
-        key === 'targetLevel' &&
+        canonicalLevelKey &&
+        canonicalLevelKey !== key &&
+        (key === 'targetLevel' || key === 'target_level') &&
         legacyStopValueIsConsistent
       ) {
-        // Saved Fishing settings may predate the canonical stop-condition field. Migrate this
-        // narrow legacy alias only during automatic restoration; pasted/manual settings still go
-        // to server validation unchanged and unknown keys remain rejected there.
-        filteredSettings.stopConditionValue = value;
-        discardedKeys.push(key);
-      } else if (
-        isFishingTraining &&
-        !hasCanonicalStopValue &&
-        key === 'target_level' &&
-        legacyStopValueIsConsistent
-      ) {
-        filteredSettings.stopConditionValue = value;
+        // Saved settings may predate the schema's canonical level field. Migrate this narrow legacy
+        // alias only during automatic restoration; pasted/manual settings still go to server
+        // validation unchanged and unknown keys remain rejected there.
+        if (!Object.prototype.hasOwnProperty.call(filteredSettings, canonicalLevelKey)) {
+          filteredSettings[canonicalLevelKey] = legacyStopValues[0];
+        }
         discardedKeys.push(key);
       } else {
         discardedKeys.push(key);
@@ -1803,7 +1833,20 @@ class AccountTaskPlanner {
     if (normalized.error) {
       return normalized;
     }
-    return normalized;
+    const effectiveTaskKey =
+      normalized.taskKey || this.getSelectedBuilderGoalTask?.()?.task_key || this.selectedBuilderGoalTaskKey || '';
+    const canonicalSettings = this.normalizeLevelAliasSettings(
+      normalized.settings,
+      this.resolveCatalogTaskForNormalization(effectiveTaskKey) || effectiveTaskKey
+    );
+    if (canonicalSettings.error) {
+      return canonicalSettings;
+    }
+    return { ...normalized, settings: canonicalSettings.settings };
+  }
+
+  shouldAutoRecordBuilderGoal() {
+    return this.builderGoalAutoRecord?.checked !== false;
   }
 
   getBuilderGoalWorldValue() {
@@ -2232,7 +2275,10 @@ class AccountTaskPlanner {
 
     this.builderGoalRunsList.innerHTML = this.builderGoalRuns.map(run => {
       const status = (run.status || 'QUEUED').toLowerCase();
-      const canReview = Boolean(run.canAnalyze);
+      // Every analysable run can open the recovery workspace; a cancelled run is inspectable and
+      // patch-plannable even though it is not relaunched, and nothing disappears because the
+      // executor lifecycle ended as CANCELLED rather than FAILED.
+      const canReview = Boolean(run.canAnalyze || run.recoveryWorkspaceAvailable);
       const canApprove = Boolean(run.approvalAvailable);
       const canRerun = Boolean(run.canRerun);
       const canLoadConfig = Boolean(run.configAvailable);
@@ -2349,13 +2395,45 @@ class AccountTaskPlanner {
         </div>
       `;
     }).join('');
+    this.renderRecoveryRunPicker();
+  }
+
+  /**
+   * Renders the Recovery workspace's run picker so the operator can open the recovery workspace for
+   * any analysable run (including cancelled ones), not just failed runs.
+   */
+  renderRecoveryRunPicker() {
+    if (!this.recoveryRunPicker) return;
+    const runs = Array.isArray(this.builderGoalRuns)
+      ? this.builderGoalRuns.filter(run => run && run.canAnalyze)
+      : [];
+    if (runs.length === 0) {
+      this.recoveryRunPicker.innerHTML =
+        '<div class="text-muted small fst-italic">No runs are available for recovery yet.</div>';
+      return;
+    }
+    this.recoveryRunPicker.innerHTML = runs.map(run => {
+      const status = (run.status || 'QUEUED').toLowerCase();
+      const statusLabel = AccountTaskPlanner.formatBuilderGoalStatus(run) || run.status || 'QUEUED';
+      return `
+        <div class="plan-card">
+          <div class="plan-card-header">
+            <span class="plan-card-title">${this.escapeHtml(run.displayName || run.taskKey || 'Builder Goal')}</span>
+            <span class="plan-card-status ${status}">${this.escapeHtml(statusLabel)}</span>
+          </div>
+          <div class="small text-muted">${this.escapeHtml(run.taskKey || '')}</div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-sm btn-outline-primary flex-fill" type="button"
+              data-recovery-open="${this.escapeAttr(run.iterationId || '')}">
+              <i class="bi bi-tools me-1"></i>Open Recovery Workspace
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
   renderBuilderGoalActionStep(run) {
-    const runStatus = (run.status || '').toUpperCase();
-    if (runStatus !== 'FAILED') {
-      return '';
-    }
     if (run.recoveryPhase === 'AWAITING_OPERATOR_PROMPT') {
       return '<div class="small text-muted mt-2">1. Open the recovery workspace, describe the issue, and choose the evidence/time clip to send for patch planning.</div>';
     }
@@ -2368,7 +2446,10 @@ class AccountTaskPlanner {
     if (run.analysisAvailable) {
       return '<div class="small text-muted mt-2">Patch planning completed, but MCP did not produce a patch draft.</div>';
     }
-    return '<div class="small text-muted mt-2">Waiting for an operator-authored patch request.</div>';
+    if (run.canAnalyze) {
+      return '<div class="small text-muted mt-2">Open the recovery workspace to review evidence and author a patch request.</div>';
+    }
+    return '';
   }
 
   renderBuilderGoalBlockedReason(run) {
@@ -3323,10 +3404,14 @@ class AccountTaskPlanner {
       </div>
       <pre class="small mt-3 mb-0 p-2 bg-white border rounded" data-compile-recovery-errors hidden></pre>
       <div class="mt-3" data-compile-recovery-plan hidden></div>
+      <div class="mt-3" data-compile-recovery-validation hidden></div>
       <div class="small mt-2" data-compile-recovery-status></div>
       <div class="mt-2 d-flex gap-2 flex-wrap" data-compile-recovery-actions></div>
     </section>`;
   }
+
+  static RECOVERY_ACTIVE_STATES = ['ANALYZING', 'VALIDATION_QUEUED', 'VALIDATING', 'RERUN_REQUESTED'];
+  static VALIDATION_STAGES = ['ISOLATED_CHECKOUT', 'STRICT_PATCH_APPLY', 'COMPILE_STATIC_TESTS', 'ARTIFACT_FINALIZATION'];
 
   async refreshCompileRecovery(iterationId) {
     const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
@@ -3336,62 +3421,123 @@ class AccountTaskPlanner {
       const state = await response.json();
       if (!response.ok) throw new Error(state.message || `HTTP ${response.status}`);
       panel._compileRecovery = state;
-      const original = (state.artifacts || []).find(a => a.kind === 'ORIGINAL_COMPILE_LOG');
-      const errorsArtifact = (state.artifacts || []).find(a => a.kind === 'COMPILER_ERRORS');
+      const errorsArtifact = (state.artifacts || []).find(a => a.kind === 'COMPILER_DIAGNOSTICS');
       const summary = panel.querySelector('[data-compile-recovery-summary]');
-      if (summary) summary.textContent = `${state.activeAttempt?.errorCountBefore ?? 'Compiler'} errors • Run ${iterationId}${original ? ` • SHA-256 ${original.sha256.slice(0, 12)}…` : ''}`;
-      if (errorsArtifact) {
-        const errors = await this.fetchCompileArtifact(iterationId, errorsArtifact.artifactId, 'compiler-errors');
-        const pre = panel.querySelector('[data-compile-recovery-errors]');
-        if (pre) { pre.textContent = errors.text; pre.hidden = false; }
+      const errors = state.diagnosticSummary?.errorCount;
+      if (summary) {
+        const sha = (state.artifacts || []).find(a => a.kind === 'ORIGINAL_COMPILE_LOG')?.sha256;
+        summary.textContent =
+          `${errors ?? 'Compiler'} error${errors === 1 ? '' : 's'} • ${state.incident?.state || 'NO_INCIDENT'}` +
+          ` • Run ${iterationId}${sha ? ` • SHA-256 ${sha.slice(7, 19)}…` : ''}`;
       }
-      this.renderCompileRepairAttempt(panel, iterationId, state.activeAttempt);
-      if (state.activeAttempt && !['AWAITING_APPROVAL', 'SUCCEEDED', 'FAILED', 'CANCELLED'].includes(state.activeAttempt.state)) {
-        window.setTimeout(() => this.refreshCompileRecovery(iterationId), 1500);
+      if (errorsArtifact) {
+        const body = await this.fetchCompileArtifact(iterationId, errorsArtifact.artifactId, 'full');
+        const pre = panel.querySelector('[data-compile-recovery-errors]');
+        if (pre) { pre.textContent = body.text; pre.hidden = false; }
+      }
+      this.renderCompileRecoveryState(panel, iterationId, state);
+      if (state.incident && AccountTaskPlanner.RECOVERY_ACTIVE_STATES.includes(state.incident.state)) {
+        window.clearTimeout(panel._compileRecoveryPoll);
+        panel._compileRecoveryPoll = window.setTimeout(() => this.refreshCompileRecovery(iterationId), 1500);
       }
     } catch (error) {
       this.setCompileRecoveryStatus(panel, `Could not load compile evidence: ${error.message}`, 'danger');
     }
   }
 
-  renderCompileRepairAttempt(panel, iterationId, attempt) {
+  async renderCompileRecoveryState(panel, iterationId, state) {
     const actions = panel.querySelector('[data-compile-recovery-actions]');
-    if (!actions) return;
     const planPanel = panel.querySelector('[data-compile-recovery-plan]');
-    if (!attempt) { actions.innerHTML = ''; if (planPanel) planPanel.hidden = true; return; }
-    this.setCompileRecoveryStatus(panel, `AI Compile Repair • ${attempt.state} • pass ${attempt.passNumber} of ${attempt.maxPasses}`, attempt.state === 'FAILED' ? 'danger' : 'info');
-    this.renderCompileRepairPlan(planPanel, attempt.plan);
-    const attemptId = this.escapeAttr(attempt.attemptId);
-    if (attempt.state === 'AWAITING_APPROVAL') {
-      actions.innerHTML = `<button class="btn btn-success btn-sm" onclick="window.accountTaskPlanner.approveCompileRepair('${this.escapeAttr(iterationId)}','${attemptId}')">Approve and verify</button>
-        <button class="btn btn-outline-danger btn-sm" onclick="window.accountTaskPlanner.cancelCompileRepair('${this.escapeAttr(iterationId)}','${attemptId}')">Cancel</button>`;
-    } else if (attempt.state === 'SUCCEEDED') {
-      actions.innerHTML = `<button class="btn btn-success btn-sm" onclick="window.accountTaskPlanner.rerunCompileRecovery('${this.escapeAttr(iterationId)}','${attemptId}')">Rerun Task</button>`;
-    } else if (!['FAILED', 'CANCELLED'].includes(attempt.state)) {
-      actions.innerHTML = `<button class="btn btn-outline-danger btn-sm" onclick="window.accountTaskPlanner.cancelCompileRepair('${this.escapeAttr(iterationId)}','${attemptId}')">Cancel</button>`;
-    } else actions.innerHTML = '';
+    const validationPanel = panel.querySelector('[data-compile-recovery-validation]');
+    if (!actions) return;
+    const allowed = new Set(state.allowedActions || []);
+    const incidentState = state.incident?.state;
+    this.renderValidationTimeline(validationPanel, state.validationJob, state.iterationId);
+    if (state.proposal && ['AWAITING_REVIEW', 'VALIDATION_QUEUED', 'VALIDATING', 'BUILD_VALIDATED', 'VALIDATION_FAILED'].includes(incidentState)) {
+      await this.renderProposalReview(panel, iterationId, state, allowed);
+    } else if (planPanel) { planPanel.hidden = true; planPanel.innerHTML = ''; }
+    if (incidentState === 'BUILD_VALIDATED' && state.candidate) {
+      actions.innerHTML =
+        `<button class="btn btn-success btn-sm" ${allowed.has('RERUN_CANDIDATE') ? '' : 'disabled'} onclick="window.accountTaskPlanner.rerunWithCandidate('${this.escapeAttr(iterationId)}','${this.escapeAttr(state.candidate.candidateId)}')">Rerun Task with Candidate</button>` +
+        `<div class="small text-muted mt-2 w-100">Build validation is not behavioral certification or promotion.</div>` +
+        (state.incident?.state === 'NEEDS_RECONCILIATION' ? `<div class="small text-warning w-100">A previous rerun request needs reconciliation; do not start another run.</div>` : '');
+      this.setCompileRecoveryStatus(panel, `Validated candidate ${state.candidate.candidateId} ready.`, 'success');
+    } else if (incidentState === 'NEEDS_RECONCILIATION') {
+      actions.innerHTML = '';
+      this.setCompileRecoveryStatus(panel, 'Rerun outcome is uncertain; the run needs reconciliation before any new attempt.', 'warning');
+    } else if (incidentState === 'ANALYZING') {
+      actions.innerHTML = '';
+      this.setCompileRecoveryStatus(panel, 'Run-bound Codex session is preparing an evidence-backed proposal…', 'info');
+    } else if (incidentState === 'VALIDATION_FAILED') {
+      actions.innerHTML = '';
+      this.setCompileRecoveryStatus(panel, `Isolated validation failed (${state.validationJob?.failureCode || 'failure'}). Request a new proposal; the previous approval is not reused.`, 'danger');
+    }
   }
 
-  renderCompileRepairPlan(container, plan) {
-    if (!container) return;
-    if (!plan || !Array.isArray(plan.changes)) {
-      container.hidden = true;
-      container.innerHTML = '';
-      return;
+  async renderProposalReview(panel, iterationId, state, allowed) {
+    const planPanel = panel.querySelector('[data-compile-recovery-plan]');
+    if (!planPanel) return;
+    try {
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/proposals/${encodeURIComponent(state.proposal.proposalId)}`);
+      const proposal = await response.json();
+      if (!response.ok) throw new Error(proposal.message || `HTTP ${response.status}`);
+      const canReview = state.incident?.state === 'AWAITING_REVIEW';
+      planPanel.innerHTML = AccountTaskPlanner.buildProposalReviewHtml(proposal, canReview, allowed, iterationId);
+      planPanel.hidden = false;
+    } catch (error) {
+      this.setCompileRecoveryStatus(panel, `Proposal review failed: ${error.message}`, 'danger');
     }
-    const changes = plan.changes.map((change, index) => {
-      const location = change.lineNumber ? `:${change.lineNumber}` : '';
-      return `<article class="border rounded p-2 mt-2">
-        <div class="small fw-semibold">${index + 1}. ${this.escapeHtml(change.changeType || 'MODIFY')} ${this.escapeHtml(change.filePath || 'unknown file')}${this.escapeHtml(location)}</div>
-        ${change.oldText ? `<div class="small text-muted mt-2">Current</div><pre class="small bg-white border rounded p-2 mb-0">${this.escapeHtml(change.oldText)}</pre>` : ''}
-        ${change.newText ? `<div class="small text-muted mt-2">Proposed</div><pre class="small bg-white border rounded p-2 mb-0">${this.escapeHtml(change.newText)}</pre>` : ''}
-      </article>`;
+  }
+
+  static buildProposalReviewHtml(proposal, canReview, allowed, iterationId) {
+    const escape = (value) => String(value === null || value === undefined ? '' : value)
+      .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    const id = escape(iterationId || '');
+    const citations = Array.isArray(proposal.citations) ? proposal.citations : Object.keys(proposal.citations || {});
+    const policyViolations = (proposal.policyReport?.violations || []);
+    const diff = String(proposal.canonicalDiff || '');
+    const diffPreview = diff.length > 20000 ? diff.slice(0, 20000) + '\n… (diff truncated for display)' : diff;
+    const buttons = !canReview ? '' : `
+        <div class="d-flex gap-2 flex-wrap mt-2">
+          <button class="btn btn-success btn-sm" ${allowed && allowed.has('APPROVE') ? '' : 'disabled'} onclick="window.accountTaskPlanner.approveProposal('${id}','${escape(proposal.proposalId)}')">Approve exact proposal</button>
+          <button class="btn btn-outline-danger btn-sm" ${allowed && allowed.has('REJECT') ? '' : 'disabled'} onclick="window.accountTaskPlanner.reviewProposal('${id}','${escape(proposal.proposalId)}','reject')">Reject</button>
+          <button class="btn btn-outline-secondary btn-sm" ${allowed && allowed.has('REQUEST_CHANGES') ? '' : 'disabled'} onclick="window.accountTaskPlanner.reviewProposal('${id}','${escape(proposal.proposalId)}','request-changes')">Request changes</button>
+        </div>`;
+    return `
+        <div class="fw-semibold">Review proposed compile repair</div>
+        <div class="small text-muted font-monospace mt-1">proposal ${escape(proposal.proposalId)} • checksum ${escape(proposal.proposalHash || '')} • base ${escape(proposal.baseCommit || '')}</div>
+        ${proposal.rationale ? `<div class="small mt-1">${escape(proposal.rationale)}</div>` : ''}
+        <div class="small mt-1">Evidence citations: ${escape(String(citations.length))} • Policy: ${policyViolations.length === 0 ? 'passed' : 'REJECTED'} • Expires ${escape(proposal.expiresAt || '')}</div>
+        ${policyViolations.length ? `<div class="small text-danger">Policy: ${escape(policyViolations.map(v => v.code || v.detail || String(v)).join('; '))}</div>` : ''}
+        <pre class="small mt-2 p-2 bg-white border rounded mb-0" style="max-height:22rem;overflow:auto">${escape(diffPreview)}</pre>
+        ${buttons}`;
+  }
+
+  renderValidationTimeline(container, job, iterationId) {
+    if (!container) return;
+    if (!job) { container.hidden = true; container.innerHTML = ''; return; }
+    const stages = AccountTaskPlanner.VALIDATION_STAGES;
+    const current = job.currentStage;
+    const items = stages.map(stage => {
+      const done = current && stages.indexOf(stage) < stages.indexOf(current);
+      const active = stage === current && !['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(job.state);
+      const icon = done ? 'bi-check-circle-fill text-success' : active ? 'spinner-border spinner-border-sm' : 'bi-circle text-muted';
+      return `<li class="list-unstyled small mt-1"><i class="bi ${icon} me-1"></i>${this.escapeHtml(stage)}</li>`;
     }).join('');
-    container.innerHTML = `<div class="fw-semibold">Review proposed compile repair</div>
-      ${plan.description ? `<div class="small mt-1">${this.escapeHtml(plan.description)}</div>` : ''}
-      ${plan.rationale ? `<div class="small text-muted mt-1">${this.escapeHtml(plan.rationale)}</div>` : ''}
-      ${changes}`;
+    container.innerHTML =
+      `<div class="fw-semibold small">Isolated validation • ${this.escapeHtml(job.state)}</div>` +
+      `<ul class="mb-0">${items}</ul>` +
+      (job.cancelRequested ? `<div class="small text-warning mt-1">Cancellation requested…</div>` : '') +
+      (['QUEUED', 'CLAIMED', 'RUNNING', 'CANCELLING'].includes(job.state) ? `<button type="button" class="btn btn-outline-danger btn-sm mt-1" onclick="window.accountTaskPlanner.cancelValidation('${this.escapeAttr(String(iterationId || ''))}','${this.escapeAttr(String(job.jobId || ''))}')">Cancel validation</button>` : '');
     container.hidden = false;
+  }
+
+  operatorHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = window.CHROMASCAPE_OPERATOR_TOKEN || localStorage.getItem('chromascape.operatorToken');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
   }
 
   setCompileRecoveryStatus(panel, message, tone = 'muted') {
@@ -3410,7 +3556,7 @@ class AccountTaskPlanner {
     const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
     try {
       const state = panel?._compileRecovery || await (await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery`)).json();
-      const kind = view === 'full' ? 'ORIGINAL_COMPILE_LOG' : view === 'prompt' ? 'AI_PROMPT' : 'COMPILER_ERRORS';
+      const kind = view === 'full' ? 'ORIGINAL_COMPILE_LOG' : view === 'prompt' ? 'AI_PROMPT' : 'COMPILER_DIAGNOSTICS';
       const artifact = (state.artifacts || []).find(a => a.kind === kind);
       if (!artifact) throw new Error('Requested sanitized artifact is unavailable');
       const body = await this.fetchCompileArtifact(iterationId, artifact.artifactId, view);
@@ -3431,34 +3577,95 @@ class AccountTaskPlanner {
     try {
       const bound = await this.bindBuilderGoalCodexRun(iterationId, { silent: true });
       if (!bound?.bound || !this.codexSessionId) throw new Error(bound?.reason || 'No Codex session is available');
-      this.setCompileRecoveryStatus(panel, 'Analyzing sanitized compiler diagnostics…', 'info');
+      this.setCompileRecoveryStatus(panel, 'Run-bound Codex session is preparing an evidence-backed proposal…', 'info');
       const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/ai-repair`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({codexSessionId:this.codexSessionId,mode:'PLAN_ONLY',maxPasses:3,idempotencyKey:`ui-${iterationId}-${nonce}`}) });
-      const body = await response.json(); if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/proposals`, {
+        method: 'POST',
+        headers: this.operatorHeaders(),
+        body: JSON.stringify({ codexSessionId: this.codexSessionId, idempotencyKey: `ui-${iterationId}-${nonce}`, operatorContext: 'Requested from compile failure panel' })
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || body.code || `HTTP ${response.status}`);
       await this.refreshCompileRecovery(iterationId);
     } catch (error) { this.setCompileRecoveryStatus(panel, `AI repair failed: ${error.message}`, 'danger'); }
   }
 
-  async approveCompileRepair(iterationId, attemptId) { await this.postCompileRepairAction(iterationId, attemptId, 'approve'); }
-  async cancelCompileRepair(iterationId, attemptId) { await this.postCompileRepairAction(iterationId, attemptId, 'cancel'); }
-  async rerunCompileRecovery(iterationId, attemptId) {
+  async approveProposal(iterationId, proposalId) {
     const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
     try {
-      this.setCompileRecoveryStatus(panel, 'Starting the verified repair as a child run…', 'info');
-      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/attempts/${encodeURIComponent(attemptId)}/rerun`, {method:'POST'});
+      const state = panel?._compileRecovery;
+      const proposalHash = state?.proposal?.proposalHash;
+      if (!proposalHash) throw new Error('The exact proposal checksum is unavailable; reload before approving');
+      this.setCompileRecoveryStatus(panel, 'Recording exact approval…', 'info');
+      const approveResponse = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/proposals/${encodeURIComponent(proposalId)}/approve`, {
+        method: 'POST',
+        headers: this.operatorHeaders(),
+        body: JSON.stringify({ proposalHash, reason: 'Fix all production compiler errors reported by the failed run' })
+      });
+      const approved = await approveResponse.json();
+      if (!approveResponse.ok) throw new Error(approved.message || approved.code || `HTTP ${approveResponse.status}`);
+      this.setCompileRecoveryStatus(panel, 'Approval recorded. Queuing isolated validation…', 'info');
+      const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const queueResponse = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/proposals/${encodeURIComponent(proposalId)}/validation-jobs`, {
+        method: 'POST',
+        headers: this.operatorHeaders(),
+        body: JSON.stringify({ approvalId: approved.approvalId, idempotencyKey: `validate-${proposalHash}-${nonce}` })
+      });
+      const queued = await queueResponse.json();
+      if (!queueResponse.ok) throw new Error(queued.message || queued.code || `HTTP ${queueResponse.status}`);
+      await this.refreshCompileRecovery(iterationId);
+    } catch (error) { this.setCompileRecoveryStatus(panel, `Approval failed: ${error.message}`, 'danger'); }
+  }
+
+  async reviewProposal(iterationId, proposalId, action) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      this.setCompileRecoveryStatus(panel, action === 'reject' ? 'Rejecting proposal…' : 'Requesting changes…', 'info');
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/proposals/${encodeURIComponent(proposalId)}/${action}`, {
+        method: 'POST', headers: this.operatorHeaders(), body: '{}'
+      });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
-      if (body?.run?.iterationId) await this.bindBuilderGoalCodexRun(body.run.iterationId, {silent:true});
+      if (!response.ok) throw new Error(body.message || body.code || `HTTP ${response.status}`);
+      await this.refreshCompileRecovery(iterationId);
+    } catch (error) { this.setCompileRecoveryStatus(panel, `${action} failed: ${error.message}`, 'danger'); }
+  }
+
+  async cancelValidation(iterationId, jobId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      this.setCompileRecoveryStatus(panel, 'Cancelling isolated validation…', 'info');
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/validation-jobs/${encodeURIComponent(jobId)}/cancel`, {
+        method: 'POST', headers: this.operatorHeaders(), body: '{}'
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || body.code || `HTTP ${response.status}`);
+      await this.refreshCompileRecovery(iterationId);
+    } catch (error) { this.setCompileRecoveryStatus(panel, `Cancel failed: ${error.message}`, 'danger'); }
+  }
+
+  async rerunWithCandidate(iterationId, candidateId) {
+    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
+    try {
+      const state = panel?._compileRecovery;
+      const digest = state?.candidate?.candidateDigest;
+      if (!digest) throw new Error('The candidate digest is unavailable; reload before rerunning');
+      this.setCompileRecoveryStatus(panel, 'Starting the verified candidate as a child run…', 'info');
+      const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const response = await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/candidates/${encodeURIComponent(candidateId)}/reruns`, {
+        method: 'POST',
+        headers: this.operatorHeaders(),
+        body: JSON.stringify({ candidateDigest: digest, idempotencyKey: `rerun-${digest}-${nonce}` })
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || body.code || `HTTP ${response.status}`);
+      if (body.childIterationId) await this.bindBuilderGoalCodexRun(body.childIterationId, {silent:true});
       await this.loadBuilderGoalRuns();
-      this.renderBuilderGoalClientStatus(`Verified compile repair rerun accepted${body?.run?.iterationId ? ` as ${body.run.iterationId}` : ''}.`, 'success');
+      this.renderBuilderGoalClientStatus(
+        `Candidate rerun accepted${body.childIterationId ? ` as ${body.childIterationId}` : ''}` +
+        (body.state === 'NEEDS_RECONCILIATION' ? ' (outcome uncertain; reconciling)' : '.') + '', 'success');
     } catch (error) {
       this.setCompileRecoveryStatus(panel, `Rerun failed: ${error.message}`, 'danger');
     }
-  }
-  async postCompileRepairAction(iterationId, attemptId, action) {
-    const panel = this.builderGoalClientStatus?.querySelector(`[data-compile-recovery="${CSS.escape(String(iterationId))}"]`);
-    try { this.setCompileRecoveryStatus(panel, action === 'approve' ? 'Applying approved patch and verifying compilation…' : 'Cancelling repair…', 'info'); const response=await fetch(`/api/debug/builder-goals/runs/${encodeURIComponent(iterationId)}/compile-recovery/attempts/${encodeURIComponent(attemptId)}/${action}`,{method:'POST'});const body=await response.json();if(!response.ok)throw new Error(body.message||`HTTP ${response.status}`);await this.refreshCompileRecovery(iterationId); }
-    catch(error){this.setCompileRecoveryStatus(panel,`${action} failed: ${error.message}`,'danger');}
   }
 
   downloadCompileArtifact(iterationId) {
@@ -3621,6 +3828,7 @@ class AccountTaskPlanner {
           world,
           taskKey: selectedTask.task_key,
           settings,
+          autoRecord: this.shouldAutoRecordBuilderGoal(),
           displayName:
             selectedTask.display_name ||
             selectedTask.panel_display_name ||
@@ -3826,15 +4034,20 @@ class AccountTaskPlanner {
       const settings = parsedConfig.settings && typeof parsedConfig.settings === 'object'
         ? parsedConfig.settings
         : {};
+      const selectedMachine = this.getSelectedBuilderGoalMachine();
       const response = await fetch('/api/debug/builder-goals/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
           accountId: selectedAccount.accountId,
+          ...(selectedMachine?.machineUuid
+            ? { launcherMachineUuid: selectedMachine.machineUuid }
+            : {}),
           world,
           taskKey: selectedTask.task_key,
           settings,
+          autoRecord: this.shouldAutoRecordBuilderGoal(),
           allowLaunchFallback: false
         })
       });
@@ -3966,6 +4179,7 @@ class AccountTaskPlanner {
           launcherMachineUuid: selectedMachine.machineUuid,
           world,
           builderPayload: this.importedBuilderGoal.payload,
+          autoRecord: this.shouldAutoRecordBuilderGoal(),
           initiatedBy: 'user',
           inputOrigin: 'manual',
           userClicked: true,
@@ -5333,6 +5547,13 @@ class AccountTaskPlanner {
     this.setRecoveryGenerateState(true, 'Loading...');
     this.setRecoveryApproveState(true);
     this.setRecoveryExportState(true);
+    // Populate the shared replay picker so the operator can load any recording while the
+    // workspace is open, even when the cancelled run has no replay of its own.
+    try {
+      window.ChromaScapeReplay?.refreshRecordings?.();
+    } catch (error) {
+      console.debug('[BuilderGoal] Could not refresh the replay picker:', error);
+    }
 
     // Bind the Codex session; a bind failure is reported in the status strip but does
     // not block manual prompt/evidence review.
@@ -5363,10 +5584,21 @@ class AccountTaskPlanner {
         runSessionId: result.run?.runSessionId,
         debugSessionId: result.debugSessionId
       });
+      const replayReason = replayResult.reason || '';
+      // 'unbound' means the run has no replay of its own to auto-load; that is not a failure,
+      // the operator is expected to load any recording from the shared replay picker. A run
+      // that does have a replay target but cannot open it stays 'missing'/'error'.
       this.recoveryReplayStatus = replayResult.loaded
         ? 'loaded'
-        : ((replayResult.reason || '').indexOf('No recording or debug session') === 0 ? 'missing' : 'error');
-      this.recoveryReplayError = replayResult.loaded ? '' : (replayResult.reason || 'Replay could not be loaded.');
+        : (replayReason.indexOf('No recording or debug session') === 0
+          ? 'unbound'
+          : (replayReason.indexOf('Replay could not be opened') === 0 ? 'missing' : 'error'));
+      this.recoveryReplayError = replayResult.loaded ? '' : (replayReason || 'Replay could not be loaded.');
+      if (this.recoveryReplayStatus === 'unbound') {
+        // Nothing to auto-load, but foreground the replay surface so the operator can pick any
+        // recording to inspect in the open workspace.
+        window.ChromaScapeReplay?.switchMode?.('replay');
+      }
       // Hydrate recovery workspace UI after replay load completes (or fails).
       const runName = result.run?.displayName || result.run?.taskKey || iterationId;
       if (this.recoveryPrompt) {
@@ -5402,6 +5634,8 @@ class AccountTaskPlanner {
       statusParts.push(`Recovery workspace opened for ${runName}.`);
       if (replayResult.loaded) {
         statusParts.push('Replay loaded.');
+      } else if (this.recoveryReplayStatus === 'unbound') {
+        statusParts.push('No replay is bound to this run; load any recording from the Replay selector.');
       } else {
         statusParts.push(`Replay could not be loaded: ${replayResult.reason}.`);
       }
@@ -5412,7 +5646,9 @@ class AccountTaskPlanner {
       );
       this.renderBuilderGoalClientStatus(
         statusParts.join(' '),
-        patchLoopSeedResult.seeded && replayResult.loaded ? 'info' : 'warning'
+        patchLoopSeedResult.seeded && (replayResult.loaded || this.recoveryReplayStatus === 'unbound')
+          ? 'info'
+          : 'warning'
       );
     } catch (error) {
       console.error('Failed to open recovery workspace:', error);
@@ -5484,14 +5720,23 @@ class AccountTaskPlanner {
         world: run.world != null ? String(run.world) : '--',
         recording: replayResult.loaded
           ? { text: 'Loaded', tone: 'ok' }
-          : (this.recoveryReplayStatus === 'missing'
-            ? { text: 'Missing', tone: 'error' }
-            : { text: 'Failed', tone: 'error' }),
+          : (this.recoveryReplayStatus === 'unbound'
+            ? { text: 'Select Replay', tone: 'warn' }
+            : (this.recoveryReplayStatus === 'missing'
+              ? { text: 'Missing', tone: 'error' }
+              : { text: 'Failed', tone: 'error' })),
         evidence: { text: `Loaded (${totalEvidence})`, tone: totalEvidence > 0 ? 'ok' : 'warn' },
         error: errors.join(' | ')
       });
       if (replayResult.loaded) {
         this.hideRecoveryReplayAlert();
+      } else if (this.recoveryReplayStatus === 'unbound') {
+        // No bound replay is an expected state for a cancelled run: point the operator at the
+        // shared picker instead of reporting a failure.
+        this.showRecoveryReplayAlert(
+          'No replay is bound to this run. Load any recording from the Replay selector to inspect it here.',
+          'info'
+        );
       } else {
         // Keep recovery mode open and show the failure inline near the replay panel.
         this.showRecoveryReplayAlert(
@@ -6920,9 +7165,9 @@ class AccountTaskPlanner {
 
   buildTaskConfigEnvelope(itemId, selectedTask, settingsContainerId) {
     const capturedSettings = this.captureTaskSettingsFromForm(itemId, selectedTask, settingsContainerId);
-    const canonicalSettings = this.normalizeFishingPlannerSettings(
+    const canonicalSettings = this.normalizeLevelAliasSettings(
       capturedSettings,
-      selectedTask?.task_key
+      selectedTask || selectedTask?.task_key
     );
     if (canonicalSettings.error) {
       throw new Error(canonicalSettings.error);
@@ -7008,9 +7253,9 @@ class AccountTaskPlanner {
     const state = this.itemSelectionState.get(itemId) || {};
     const resolvedTask = this.findCatalogTaskByKeyFlexible(normalized.taskKey) || selectedTask || null;
     const resolvedTaskKey = resolvedTask?.task_key || selectedTask?.task_key || state.selectedTaskKey || '';
-    const canonicalSettings = this.normalizeFishingPlannerSettings(
+    const canonicalSettings = this.normalizeLevelAliasSettings(
       normalized.settings,
-      resolvedTaskKey
+      resolvedTask || resolvedTaskKey
     );
     if (canonicalSettings.error) {
       this.showTaskConfigMessage(itemId, canonicalSettings.error, 'error');
@@ -7054,18 +7299,37 @@ class AccountTaskPlanner {
     this.showTaskConfigMessage(itemId, msg, ignoredKeys.length ? 'warning' : 'success');
   }
 
-  // The current Micro6 Fishing schema uses stopConditionValue. Keep copied planner payloads
-  // compatible with its two historical aliases without relaxing validation for other fields.
-  normalizeFishingPlannerSettings(settings, taskKey) {
+  // Copied planner payloads may carry the schema's canonical level field alongside the legacy
+  // targetLevel/target_level aliases. Fold the aliases into whichever level field the task schema
+  // declares (falling back to the Fishing canonical field when the schema is unknown) so the
+  // executor never rejects an otherwise-valid setting as unknown.
+  normalizeLevelAliasSettings(settings, taskOrKey) {
     const normalized =
       settings && typeof settings === 'object' && !Array.isArray(settings) ? { ...settings } : {};
-    const key = String(taskKey || '').toUpperCase();
-    if (key !== 'FISHING_TRAINING' && key !== 'FISH_TRAINING') {
-      return { settings: normalized };
-    }
-    const hasCanonical = Object.prototype.hasOwnProperty.call(normalized, 'stopConditionValue');
     const hasCamel = Object.prototype.hasOwnProperty.call(normalized, 'targetLevel');
     const hasSnake = Object.prototype.hasOwnProperty.call(normalized, 'target_level');
+    if (!hasCamel && !hasSnake) {
+      return { settings: normalized };
+    }
+    const task = taskOrKey && typeof taskOrKey === 'object' ? taskOrKey : null;
+    const key = String(
+      task?.task_key || (typeof taskOrKey === 'string' ? taskOrKey : '') || ''
+    ).toUpperCase();
+    const schemaKeys = new Set(
+      Array.isArray(task?.args_schema?.fields)
+        ? task.args_schema.fields.map(field => field?.key).filter(Boolean)
+        : []
+    );
+    let canonicalKey = null;
+    if (schemaKeys.size) {
+      if (schemaKeys.has('targetLevel')) canonicalKey = 'targetLevel';
+      else if (schemaKeys.has('stopConditionValue')) canonicalKey = 'stopConditionValue';
+    } else if (key === 'FISHING_TRAINING' || key === 'FISH_TRAINING') {
+      canonicalKey = 'stopConditionValue';
+    }
+    if (!canonicalKey) {
+      return { settings: normalized };
+    }
     const legacyValues = [
       ...(hasCamel ? [normalized.targetLevel] : []),
       ...(hasSnake ? [normalized.target_level] : [])
@@ -7074,24 +7338,36 @@ class AccountTaskPlanner {
       legacyValues.length > 1 &&
       !legacyValues.every(value => Object.is(value, legacyValues[0]))
     ) {
-      return { error: 'Conflicting Fishing target-level settings: targetLevel and target_level disagree.' };
+      return { error: 'Conflicting target-level settings: targetLevel and target_level disagree.' };
     }
     const legacy = legacyValues[0];
     if (
-      hasCanonical &&
-      legacyValues.length &&
-      !Object.is(normalized.stopConditionValue, legacy)
+      Object.prototype.hasOwnProperty.call(normalized, canonicalKey) &&
+      !Object.is(normalized[canonicalKey], legacy)
     ) {
       return {
-        error: 'Conflicting Fishing target-level settings: stopConditionValue disagrees with a legacy target-level value.'
+        error: `${canonicalKey} disagrees with a legacy target-level value.`
       };
     }
-    if (!hasCanonical && legacyValues.length) {
-      normalized.stopConditionValue = legacy;
+    if (!Object.prototype.hasOwnProperty.call(normalized, canonicalKey)) {
+      normalized[canonicalKey] = legacy;
     }
-    delete normalized.targetLevel;
+    if (canonicalKey !== 'targetLevel') {
+      delete normalized.targetLevel;
+    }
     delete normalized.target_level;
     return { settings: normalized };
+  }
+
+  // Resolves the catalog task for alias normalization when the catalog is loaded; tests and early
+  // renders may not have one, in which case callers fall back to the task key.
+  resolveCatalogTaskForNormalization(taskKey) {
+    try {
+      if (!taskKey || !Array.isArray(this.scriptCatalog)) return null;
+      return this.findCatalogTaskByKeyFlexible(taskKey);
+    } catch (error) {
+      return null;
+    }
   }
 
   showTaskConfigMessage(itemId, message, tone) {

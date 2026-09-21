@@ -261,6 +261,12 @@ recording:
   initial-frame-timeout-ms: ${RECORDING_INITIAL_FRAME_TIMEOUT_MS:15000}
   # Delay between initial frame-capture attempts
   initial-frame-retry-interval-ms: ${RECORDING_INITIAL_FRAME_RETRY_INTERVAL_MS:250}
+  # How long the captured canvas size must remain unchanged before the recorder locks onto it
+  stability-window-ms: ${RECORDING_STABILITY_WINDOW_MS:1500}
+  # Minimum canvas width accepted as a stable recording size before the deadline fallback
+  min-capture-width: ${RECORDING_MIN_CAPTURE_WIDTH:640}
+  # Minimum canvas height accepted as a stable recording size before the deadline fallback
+  min-capture-height: ${RECORDING_MIN_CAPTURE_HEIGHT:400}
 
 # Tick Debugger Configuration - For tick-based debugging
 tick-debugger:

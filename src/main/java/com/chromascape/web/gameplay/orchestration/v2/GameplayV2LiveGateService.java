@@ -135,7 +135,15 @@ public class GameplayV2LiveGateService {
       Clock clock,
       boolean liveEnabled,
       String signingSecret) {
-    this(validator, List.of(adapter), objectMapper, gateway, store, clock, liveEnabled, signingSecret);
+    this(
+        validator,
+        List.of(adapter),
+        objectMapper,
+        gateway,
+        store,
+        clock,
+        liveEnabled,
+        signingSecret);
   }
 
   private GameplayV2LiveGateService(

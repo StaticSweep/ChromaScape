@@ -91,7 +91,7 @@ const DEBUGGER_WORKSPACES = Object.freeze({
   recovery: {
     eyebrow: 'Diagnose and repair',
     title: 'Recovery',
-    description: 'Annotate failed-run evidence, generate a patch plan, and approve a controlled relaunch.'
+    description: 'Annotate run evidence, generate a patch plan, and approve a controlled relaunch.'
   },
   'ai-training': {
     eyebrow: 'Evidence and operations',
@@ -112,6 +112,15 @@ let currentDebuggerWorkspace = 'runs';
 function activateDebuggerWorkspace(workspace, options = {}) {
   const definition = DEBUGGER_WORKSPACES[workspace];
   if (!definition) return;
+
+  // Runs is a canonical, replay-free location. Replacing (rather than pushing) removes a prior
+  // ?recordingId deep link from the current history entry, so refreshing cannot reopen it.
+  if (workspace === 'runs' && options.syncUrl !== false) {
+    const runsPath = '/debugger/runs';
+    if (window.location.pathname !== runsPath || window.location.search || window.location.hash) {
+      history.replaceState({ workspace: 'runs' }, '', runsPath);
+    }
+  }
 
   currentDebuggerWorkspace = workspace;
   document.body.dataset.workspace = workspace;
@@ -189,7 +198,9 @@ function initializeDebuggerWorkspaces() {
   }
   syncWorkspaceConnectionStatus();
   debuggerWorkspaceInitialized = true;
-  activateDebuggerWorkspace('runs', { syncMode: false });
+  // Do not canonicalize during bootstrap: a recording deep link still needs its query parameters
+  // later in initialization. URL ownership begins when the operator selects a workspace.
+  activateDebuggerWorkspace('runs', { syncMode: false, syncUrl: false });
 }
 
 window.DebuggerWorkspace = {
@@ -665,6 +676,7 @@ function cacheElements() {
   viewportCanvas = elements.viewportCanvas;
   viewportCtx = elements.viewportCanvas?.getContext('2d');
   elements.replayVideo = document.getElementById('replayVideo');
+  elements.replayVideoWarning = document.getElementById('replayVideoWarning');
   elements.viewportLoader = document.getElementById('viewport-loader');
   elements.overlayCanvas = document.getElementById('overlay-canvas');
   elements.sessionSelect = document.getElementById('sessionSelect');
@@ -794,6 +806,7 @@ function switchMode(mode) {
     elements.replayVideo.style.display = 'none';
     elements.viewportCanvas.style.display = 'block';
     elements.viewportLoader.style.display = 'flex';
+    setReplayVideoWarning(null);
     currentRecordingFps = 30; // Reset to default when leaving replay
     currentReplayDebugSessionId = null;
     replaySnapshotOrder.length = 0;
@@ -1163,7 +1176,7 @@ function buildTickGroup(tick, entries) {
 
   // DEBUG: Log group creation
   if (window.DEBUG_TICK) {
-    const tickLabel = tick === null ? 'Unknown' : `Tick ${tick}`;
+    const tickLabel = tick === null ? 'Unticked logs' : `Tick ${tick}`;
     console.log('[Tick Debug] Creating tick group:', tickLabel, 'with', entries.length, 'entries');
     entries.slice(0, 3).forEach(e => {
       const msg = e.message ? String(e.message).slice(0, 30) : '';
@@ -1179,7 +1192,7 @@ function buildTickGroup(tick, entries) {
   const header = document.createElement('div');
   header.className = 'tick-group-header';
 
-  const tickLabel = tick === null ? 'Unknown' : `Tick ${tick}`;
+  const tickLabel = tick === null ? 'Unticked logs' : `Tick ${tick}`;
 
   // Build header with tick label, count, and per-tick section chips
   const headerLeft = document.createElement('span');
@@ -1390,7 +1403,7 @@ function buildTickGroupWithFilter(tick, allEntries, visibleEntries) {
   const header = document.createElement('div');
   header.className = 'tick-group-header';
 
-  const tickLabel = tick === null ? 'Unknown' : `Tick ${tick}`;
+  const tickLabel = tick === null ? 'Unticked logs' : `Tick ${tick}`;
 
   // Build header with tick label, count, and per-tick section chips
   const headerLeft = document.createElement('span');
@@ -4684,7 +4697,9 @@ function initAutoFollowToggle() {
         userScrollResetTimeout = null;
       }
 
-      // Immediately jump to current tick
+      // Immediately jump to the best locally known tick, then request the authoritative server
+      // window for the current video time. The async response will render first and follow the
+      // exact returned tick.
       let jumpTick = null;
       if (elements.replayVideo && currentRecording) {
         jumpTick = calculateTickFromVideoTime(elements.replayVideo.currentTime * 1000);
@@ -4702,6 +4717,11 @@ function initAutoFollowToggle() {
         lastHighlightedTick = null; // Force re-highlight
         highlightCurrentTickGroup(jumpTick);
         scrollToCurrentTick(jumpTick);
+      }
+      if (currentMode === 'replay' && elements.replayVideo && currentRecording) {
+        const currentTimeMs = Math.floor(elements.replayVideo.currentTime * 1000);
+        lastSyncTimeMs = currentTimeMs;
+        syncLogsToVideo(currentTimeMs);
       }
     }
   });
@@ -4979,13 +4999,10 @@ function addLiveLogEntry(entry) {
     console.log('[Tick Debug] addLiveLogEntry - tick:', entry.tick, 'source:', entry.source, 'kind:', entry.kind);
   }
 
-  // Extract actual source from client log messages (lightweight, keep synchronous)
-  let actualSource = entry.source;
-  const sourceIsSystem = isSystemSource(entry.source);
-  if (!sourceIsSystem && entry.kind !== 'tick') {
-    entry.originalSource = entry.source;
-    actualSource = extractSourceFromMessage(entry.message, entry.source);
-  }
+  // The transport source is authoritative. Many Micro6 messages begin with bracketed state or
+  // component labels; treating each bracket as a new source produced dozens of meaningless
+  // one-off filters.
+  const actualSource = entry.source || 'unknown';
 
   if (actualSource) {
     // Use originalSource (pre-extraction) for logKind classification
@@ -5077,15 +5094,17 @@ function safeParseStructuredData(structuredData) {
 }
 
 function normalizeStandardLog(log, options = {}) {
-  const allowTickFallback = options.allowTickFallback !== false;
+  const rawTick = log.tick;
+  const numericTick = rawTick !== null && rawTick !== undefined ? Number(rawTick) : NaN;
   return {
     kind: 'standard',
     level: String(log.level || 'INFO').toUpperCase(),
     message: log.message ? String(log.message) : '',
     source: log.source ? String(log.source) : 'unknown',
     timestamp: log.timestamp || null,
-    // Preserve null ticks for unified replay data; live callers may fall back to currentTick.
-    tick: log.tick != null ? log.tick : (allowTickFallback ? (currentTick ?? null) : null)
+    // Ordinary process logs are not game-tick events. Preserve only a positive explicit tick;
+    // never collapse unticked startup/client logs into the initial Tick 0 group.
+    tick: Number.isFinite(numericTick) && numericTick > 0 ? numericTick : null
   };
 }
 
@@ -5238,7 +5257,6 @@ function hasClickProvenance(data) {
  * @returns {Object} Normalized log entry
  */
 function normalizeActionLog(log, options = {}) {
-  const allowTickFallback = options.allowTickFallback !== false;
   const data = log.data || null;
   const logType = log.logType || null;
   const provenanceMessage =
@@ -5252,8 +5270,9 @@ function normalizeActionLog(log, options = {}) {
     source: log.source ? String(log.source) : 'external',
     timestamp: log.timestamp || null,
     logType, // DIALOGUE, INVENTORY, VARBIT, ANIMATION
-    // Preserve null ticks for unified replay data; live callers may fall back to currentTick.
-    tick: log.tick != null ? log.tick : (allowTickFallback ? (currentTick ?? null) : null),
+    // Action rows without an explicit positive game tick remain unticked. Borrowing currentTick
+    // makes unrelated asynchronous logs appear to have happened in the same tick.
+    tick: Number.isFinite(Number(log.tick)) && Number(log.tick) > 0 ? Number(log.tick) : null,
     data, // Structured data
     clickSource: data?.click_source || data?.input_origin || null,
     userClicked: isManualClickData(data),
@@ -6477,6 +6496,22 @@ async function saveReplayMetadata() {
   }
 }
 
+/**
+ * Shows or clears the degraded-recording warning above the replay viewport.
+ * @param {string|null} message warning text, or null to hide
+ */
+function setReplayVideoWarning(message) {
+  const banner = elements.replayVideoWarning;
+  if (!banner) return;
+  if (message) {
+    banner.textContent = message;
+    banner.hidden = false;
+  } else {
+    banner.textContent = '';
+    banner.hidden = true;
+  }
+}
+
 async function loadRecording(recordingId) {
   // Start a new recording-load generation: any in-flight metadata/session response from an
   // earlier load must not repopulate replay state.
@@ -6490,6 +6525,8 @@ async function loadRecording(recordingId) {
   }
   const loadController = new AbortController();
   replayLoadAbortController = loadController;
+
+  setReplayVideoWarning(null);
 
   // Clear ALL replay state immediately to prevent stale data
   currentRecording = null; // Clear first to stop ongoing syncs
@@ -6623,6 +6660,13 @@ async function loadRecording(recordingId) {
   currentRecording = recordingId;
   history.replaceState({}, '', `/debugger?recordingId=${encodeURIComponent(recordingId)}`);
   renderFishingRecordingLabSelection();
+
+  if (recording.degraded) {
+    setReplayVideoWarning(recording.videoWarning
+      || 'This recording contains very few captured frames and may show a static image.');
+  } else {
+    setReplayVideoWarning(null);
+  }
 
   // Load video
   if (elements.replayVideo) {
@@ -7107,14 +7151,16 @@ async function syncLogsToVideo(videoMs) {
     }
 
     const currentTick = result.currentTick != null ? result.currentTick : null;
+
+    // Render first: rebuilding the log DOM invalidates the groups that highlighting and
+    // auto-follow need to target. Following before this call silently scrolled stale elements.
+    renderReplayLogs(result.logs || [], currentTick, result.hasAnyLogs !== false);
+
     if (currentTick != null) {
       updateTickDisplay(currentTick);
       highlightCurrentTickGroup(currentTick);
       maybeAutoFollowTick(currentTick);
     }
-
-    // Render logs from the unified response (may be an empty array)
-    renderReplayLogs(result.logs || [], currentTick, result.hasAnyLogs !== false);
 
     // Load nearby tick snapshots for the authoritative server tick
     if (currentTick != null) {
@@ -7275,19 +7321,15 @@ function renderReplayLogs(logs, currentReplayTick = null, hasAnyLogs = true) {
   sourceLogTypes.clear();
   discoveredPatterns.clear();
   replayLogHistory.forEach(entry => {
-    let actualSource = entry.source;
-    const sourceIsSystem = isSystemSource(entry.source);
-    if (!sourceIsSystem && entry.kind !== 'tick') {
-      entry.originalSource = entry.source;
-      actualSource = extractSourceFromMessage(entry.message, entry.source);
-      entry.source = actualSource;
-    }
+    // Keep replay source handling identical to live handling. The persisted transport source is
+    // authoritative; bracketed message prefixes are component/state labels, not new sources.
+    const actualSource = entry.source || 'unknown';
+    entry.source = actualSource;
 
     if (actualSource) {
-      const kindSource = entry.originalSource || entry.source;
       const logKind = entry.kind === 'tick'
         ? 'tick'
-        : (isSystemSource(kindSource) ? 'standard' : 'external');
+        : (isSystemSource(entry.source) ? 'standard' : 'external');
       discoverSource(actualSource, logKind);
     }
     discoverPatterns(entry.message);
@@ -7392,7 +7434,7 @@ function scrollToCurrentTick(tick) {
   let target = container.querySelector(`.tick-group[data-tick="${tick}"]`);
   if (!target) {
     let minDiff = Infinity;
-    const allGroups = document.querySelectorAll('.tick-group[data-tick]');
+    const allGroups = container.querySelectorAll('.tick-group[data-tick]');
     allGroups.forEach(g => {
       const diff = Math.abs(parseInt(g.dataset.tick) - tick);
       if (diff < minDiff) { minDiff = diff; target = g; }
@@ -11750,6 +11792,16 @@ window.ChromaScapeReplay = window.ChromaScapeReplay || {
     if (typeof switchMode === 'function') {
       switchMode(mode);
     }
+  },
+  /**
+   * Repopulates the shared recording picker so operators can load any replay (for example in the
+   * recovery workspace, where the opened run may have no replay of its own).
+   */
+  refreshRecordings() {
+    if (typeof loadRecordingSessions === 'function') {
+      return loadRecordingSessions();
+    }
+    return Promise.resolve();
   },
   loadRecording(recordingId) {
     if (typeof loadRecording === 'function') {

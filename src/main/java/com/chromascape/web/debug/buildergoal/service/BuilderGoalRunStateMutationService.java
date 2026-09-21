@@ -560,7 +560,9 @@ public class BuilderGoalRunStateMutationService {
     Map<String, Object> targetPreparation = readTargetPreparationMetadata(taskMetadata);
     String preparationState = stringValue(targetPreparation.get("state"));
     if (!Micro6TargetRelaunchService.PHASE_PROCESS_EXITED.equalsIgnoreCase(preparationState)
-        && !Micro6TargetRelaunchService.PHASE_BUILD_FAILED.equalsIgnoreCase(preparationState)) {
+        && !Micro6TargetRelaunchService.PHASE_BUILD_FAILED.equalsIgnoreCase(preparationState)
+        && !Micro6TargetRelaunchService.PHASE_EXECUTOR_STARTUP_REJECTED.equalsIgnoreCase(
+            preparationState)) {
       return false;
     }
 
@@ -651,6 +653,22 @@ public class BuilderGoalRunStateMutationService {
       }
       taskMetadata.put("micro6_publish", publishMetadata);
 
+      // A successful stop request may remove the executor entry before the follow-up status read.
+      // Once the normal lost-target threshold and grace period have elapsed, disappearance while
+      // STOPPING is confirmation of cancellation, not a reason to leave the row stuck forever.
+      if (stopRequested && shouldFailForLostTarget(iteration, publishMetadata, observed)) {
+        publishMetadata.put("status", "CANCELLED");
+        publishMetadata.put("activation_state", "CANCELLED");
+        publishMetadata.put("last_status_at", observed.toString());
+        taskMetadata.put("micro6_publish", publishMetadata);
+        iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+        return finalizeAsCancelled(
+            iteration,
+            entryId,
+            observed,
+            firstNonBlank(error, "Micro6 entry disappeared after stop was delivered"));
+      }
+
       if (!stopRequested && error != null && "SETTINGS_RECEIPT_MISMATCH".equalsIgnoreCase(error)) {
         publishMetadata.put("status", "SETTINGS_RECEIPT_MISMATCH");
         publishMetadata.put("last_status_at", observed.toString());
@@ -732,6 +750,14 @@ public class BuilderGoalRunStateMutationService {
     }
     boolean metadataChanged = recordSuccessfulPoll(publishMetadata, observed);
     metadataChanged |= applyTaskStartFields(iteration, taskMetadata, publishMetadata, statusResult);
+    // Stamp the run start the first time the executor confirms the task is live. Builder-goal runs
+    // otherwise never record a start, which leaves the evidence window anchored before the run and
+    // clips away the very logs the recovery workspace needs. Preserve any existing value.
+    if (iteration.getRunStartTime() == null && isTaskStarted(statusResult)) {
+      LocalDateTime startedAt = parseLocalDateTime(stringValue(taskMetadata.get("task_started_at")));
+      iteration.setRunStartTime(startedAt != null ? startedAt : observed);
+      metadataChanged = true;
+    }
 
     if (stopRequested) {
       if ("COMPLETED".equalsIgnoreCase(executorStatus)) {
@@ -1049,10 +1075,10 @@ public class BuilderGoalRunStateMutationService {
 
   private boolean isTaskStartConfirmed(ScriptExecutionService.Micro6RunStatusResult statusResult) {
     JsonNode raw = statusResult != null ? statusResult.rawResponse() : null;
-    return raw != null
-        && !raw.isNull()
-        && raw.path("task_started").asBoolean(false)
-        && textValue(raw.path("debug_session_id")) != null;
+    // Gameplay activation and evidence binding are independent lifecycles. A recorder may be
+    // disabled, degraded, or still awaiting session confirmation; none of those states means the
+    // executor failed to start the task.
+    return raw != null && !raw.isNull() && raw.path("task_started").asBoolean(false);
   }
 
   private boolean hasTimedOut(

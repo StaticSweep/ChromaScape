@@ -46,7 +46,7 @@ public class ServePages {
    *
    * @return the logical view name "debugger"
    */
-  @GetMapping("/debugger")
+  @GetMapping({"/debugger", "/debugger/runs"})
   public String serveDebuggerPage(Model model) {
     System.setProperty("java.awt.headless", "false");
     model.addAttribute("supervisorBaseUrl", supervisorBaseUrl);

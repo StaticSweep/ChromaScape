@@ -358,6 +358,53 @@ class BuilderGoalRunnerServiceTest {
   }
 
   @Test
+  void importPayload_canonicalizesCopiedFishingTargetLevelAliases() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(null);
+
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "FISHING_TRAINING",
+                  "settings": {
+                    "stopCondition": "Level Target",
+                    "stopConditionValue": 23,
+                    "targetLevel": 23,
+                    "target_level": 23,
+                    "targetFish": "SHRIMP"
+                  }
+                }
+                """));
+
+    assertThat(response.get("settings"))
+        .isEqualTo(
+            Map.of(
+                "stopCondition", "Level Target",
+                "stopConditionValue", 23,
+                "targetFish", "SHRIMP"));
+  }
+
+  @Test
+  void importPayload_rejectsConflictingCopiedFishingTargetLevels() throws Exception {
+    assertThatThrownBy(
+            () ->
+                service.importPayload(
+                    objectMapper.readTree(
+                        """
+                        {
+                          "task_key": "FISHING_TRAINING",
+                          "settings": {
+                            "stopConditionValue": 23,
+                            "targetLevel": 24
+                          }
+                        }
+                        """)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("stopConditionValue disagrees");
+  }
+
+  @Test
   void importPayload_settingsEnvelopeIsAuthoritativeEvenWhenEmpty() throws Exception {
     when(micro6ExecutorCatalogService.getCatalog(false)).thenReturn(null);
 
@@ -642,6 +689,48 @@ class BuilderGoalRunnerServiceTest {
     Map<String, Object> metadata =
         objectMapper.convertValue(captor.getValue().getTaskMetadataJson(), Map.class);
     assertThat(metadata.get("settings")).isEqualTo(Map.of());
+  }
+
+  @Test
+  void startRun_appliesRequestedWorldWhenImportedPayloadOmitsWorld() throws Exception {
+    BuilderGoalAccountCatalogService.AccountDefinition account =
+        new BuilderGoalAccountCatalogService.AccountDefinition(
+            "1111111111111111",
+            "1111111111111111",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            "bigGreenMeat",
+            AccountIdentityContract.HASH_SCHEME,
+            "IlaWalter280@outlook.com",
+            "launcher",
+            true,
+            "ready",
+            Map.of("password", "s3cret"));
+    when(accountCatalogService.findAccount("1111111111111111")).thenReturn(Optional.of(account));
+    when(micro6ExecutorCatalogService.peekCatalog()).thenReturn(null);
+
+    service.startRun(
+        objectMapper.readTree(
+            """
+            {
+              "task_key": "FISHING_TRAINING",
+              "settings": {"targetLevel": 23}
+            }
+            """),
+        "1111111111111111",
+        null,
+        null,
+        null,
+        "machine-1",
+        380,
+        null);
+
+    ArgumentCaptor<PatchLoopIteration> captor = ArgumentCaptor.forClass(PatchLoopIteration.class);
+    verify(iterationRepository).save(captor.capture());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> metadata =
+        objectMapper.convertValue(captor.getValue().getTaskMetadataJson(), Map.class);
+    assertThat(metadata.get("world")).isEqualTo(380);
   }
 
   @Test
@@ -1019,6 +1108,104 @@ class BuilderGoalRunnerServiceTest {
   }
 
   @Test
+  void listRuns_exposesRecoveryWorkspaceAndAnalysisForCancelledRunWithoutReplay() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_cancel001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.CANCELLED);
+    // No runRecordingId/runSessionId: the run was cancelled before a replay was bound.
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "display_name",
+                "Glassblowing",
+                "micro6_publish",
+                Map.of("status", "CANCELLED"))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration));
+
+    Map<String, Object> run = service.listRuns(10).get(0);
+
+    assertThat(run.get("cancelled")).isEqualTo(true);
+    // A cancelled run can still be reviewed and patch-planned from its evidence.
+    assertThat(run.get("canAnalyze")).isEqualTo(true);
+    assertThat(run.get("analyzeBlockedReason")).isNull();
+    // The operator must still be able to open the workspace and load any replay from the picker.
+    assertThat(run.get("recoveryWorkspaceAvailable")).isEqualTo(true);
+    // A cancelled run is analysable but is not relaunched from the recovery workspace.
+    assertThat(run.get("approvalAvailable")).isEqualTo(false);
+    assertThat(run.get("approvalBlockedReason")).isEqualTo("Run was cancelled");
+  }
+
+  @Test
+  void listRuns_allowsRecoveryForCompletedRun() throws Exception {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_completed001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.COMPLETED);
+    iteration.setPatchId("patch-completed-1");
+    iteration.setAnalysisResponseJson(
+        objectMapper.readTree(
+            """
+            {
+              "schemaVersion": "2.0.0",
+              "analysisId": "analysis-completed",
+              "status": "SUCCESS",
+              "patchDraft": {
+                "patchId": "patch-completed-1",
+                "description": "Fix",
+                "changes": [
+                  {"filePath": "tasks/x.java", "oldText": "old", "newText": "new"}
+                ]
+              }
+            }
+            """));
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "display_name", "Glassblowing",
+                "micro6_publish", Map.of("status", "COMPLETED"),
+                "recovery", Map.of("phase", "PATCH_PLAN_READY", "message", "Patch plan ready"))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration));
+
+    Map<String, Object> run = service.listRuns(10).get(0);
+
+    assertThat(run.get("canAnalyze")).isEqualTo(true);
+    assertThat(run.get("analyzeBlockedReason")).isNull();
+    assertThat(run.get("approvalAvailable")).isEqualTo(true);
+    assertThat(run.get("fixBlockedReason")).isNull();
+  }
+
+  @Test
+  void listRuns_blocksPublishFailedRunFromRecovery() {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_pubfail001");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setStatus(PatchLoopStatus.FAILED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "display_name", "Glassblowing",
+                "micro6_publish", Map.of("status", "PUBLISH_FAILED"))));
+    when(iterationRepository.findBySourceTypeOrderByCreatedAtDesc(
+            BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL))
+        .thenReturn(java.util.List.of(iteration));
+
+    Map<String, Object> run = service.listRuns(10).get(0);
+
+    assertThat(run.get("canAnalyze")).isEqualTo(false);
+    assertThat(run.get("analyzeBlockedReason"))
+        .isEqualTo("Publish failed; there is no task run to analyze");
+    assertThat(run.get("approvalAvailable")).isEqualTo(false);
+  }
+
+  @Test
   void listRuns_enablesFixWhenAnalysisProducedPatch() throws Exception {
     PatchLoopIteration iteration = new PatchLoopIteration();
     iteration.setIterationId("buildergoal_test5678");
@@ -1330,6 +1517,35 @@ class BuilderGoalRunnerServiceTest {
     assertThat(request.getEvidenceBundle().getTickLogs()).isEmpty();
     assertThat(request.getEvidenceBundle().getDecisions()).isEmpty();
     verify(persistenceService, times(1)).saveAnalysisRequest(eq(iteration), any());
+  }
+
+  @Test
+  void analyzeFailure_allowsCancelledRunToProducePatchPlan() throws Exception {
+    PatchLoopIteration iteration = new PatchLoopIteration();
+    iteration.setIterationId("buildergoal_analyze_cancelled");
+    iteration.setSourceType(BuilderGoalRunnerService.SOURCE_TYPE_BUILDER_GOAL);
+    iteration.setScriptName("configurable_woodcutting");
+    iteration.setPrompt("Glassblowing stalled");
+    iteration.setPatchTarget(BuilderGoalRunnerService.PATCH_TARGET_MICRO6_TASK_SOURCE);
+    iteration.setStatus(PatchLoopStatus.CANCELLED);
+    iteration.setTaskMetadataJson(
+        objectMapper.valueToTree(
+            Map.of(
+                "display_name", "Glassblowing",
+                "task_key", "configurable_woodcutting",
+                "micro6_publish", Map.of("status", "CANCELLED"))));
+    when(iterationRepository.findByIterationId("buildergoal_analyze_cancelled"))
+        .thenReturn(Optional.of(iteration), Optional.of(iteration));
+    when(evidenceService.collectEvidence(eq(iteration), any())).thenReturn(sampleEvidenceBundle());
+    when(evidenceService.validateEvidenceSufficiency(any())).thenReturn(true);
+    AnalysisV2Response providerResponse = new AnalysisV2Response();
+    providerResponse.setStatus(AnalysisStatus.PARTIAL_SUCCESS);
+    when(analysisProvider.analyzeEvidence(any())).thenReturn(providerResponse);
+
+    // Must not throw "Run was cancelled": an operator can patch-plan a cancelled run.
+    service.analyzeFailure("buildergoal_analyze_cancelled", objectMapper.createObjectNode());
+
+    verify(analysisProvider).analyzeEvidence(any());
   }
 
   @Test
@@ -1722,6 +1938,183 @@ class BuilderGoalRunnerServiceTest {
   }
 
   @Test
+  void publishOnly_acceptsIntegerFieldWithConditionalVisibilityOptions() {
+    when(accountCatalogService.findAccount("1111111111111111"))
+        .thenReturn(Optional.of(credentialedAccount()));
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+
+    JsonNode catalog = runnableCatalog("FISHING_TRAINING", "Fishing Training", null);
+    com.fasterxml.jackson.databind.node.ArrayNode fields =
+        (com.fasterxml.jackson.databind.node.ArrayNode)
+            catalog.path("tasks").get(0).path("args_schema").path("fields");
+    fields
+        .addObject()
+        .put("key", "stopCondition")
+        .put("type", "select")
+        .putArray("options")
+        .add("Level Target");
+    com.fasterxml.jackson.databind.node.ObjectNode stopValue =
+        fields
+            .addObject()
+            .put("key", "stopConditionValue")
+            .put("type", "integer")
+            .put("min", 1)
+            .put("max", 1_000_000)
+            .put("depends_on", "stopCondition");
+    stopValue.putArray("options").add("visible");
+    stopValue.putObject("options_by_dependency").putArray("Level Target").add("visible");
+    when(micro6ExecutorCatalogService.getCatalogForBaseUrl("http://127.0.0.1:8098", true))
+        .thenReturn(catalog);
+    when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
+    when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
+        .thenReturn(dispatchReadyHealth());
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
+        .thenReturn(
+            ScriptExecutionService.Micro6PublishResult.success(
+                43, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null));
+
+    Map<String, Object> response =
+        service.publishOnly(
+            "1111111111111111",
+            "machine-1",
+            "FISHING_TRAINING",
+            Map.of("stopCondition", "Level Target", "stopConditionValue", 23),
+            360,
+            false,
+            null);
+
+    assertThat(response.get("accepted")).isEqualTo(true);
+    assertThat(response.get("published")).isEqualTo(true);
+  }
+
+  @Test
+  void importPayload_reconcilesCraftingTargetLevelAliasesFromSchema() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false))
+        .thenReturn(craftingCatalog("PROGRESSIVE_CRAFTING", "Progressive Crafting", false));
+
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "builder_execution": {
+                    "task_key": "PROGRESSIVE_CRAFTING",
+                    "task_metadata": {
+                      "stopCondition": "Level Target",
+                      "stopConditionValue": 5,
+                      "target_level": 5,
+                      "targetLevel": 5,
+                      "budgetLevel": 50,
+                      "preferredActivity": "Glass"
+                    }
+                  }
+                }
+                """));
+
+    assertThat(response.get("settings"))
+        .isEqualTo(
+            Map.of(
+                "stopCondition", "Level Target",
+                "stopConditionValue", 5,
+                "budgetLevel", 50,
+                "preferredActivity", "Glass"));
+  }
+
+  @Test
+  void importPayload_keepsTargetLevelWhenSchemaDeclaresIt() throws Exception {
+    when(micro6ExecutorCatalogService.getCatalog(false))
+        .thenReturn(craftingCatalog("CONSTRUCTION_PHIALS", "Construction Phials", true));
+
+    Map<String, Object> response =
+        service.importPayload(
+            objectMapper.readTree(
+                """
+                {
+                  "task_key": "CONSTRUCTION_PHIALS",
+                  "settings": {
+                    "targetLevel": 30,
+                    "target_level": 30
+                  }
+                }
+                """));
+
+    assertThat(response.get("settings")).isEqualTo(Map.of("targetLevel", 30));
+  }
+
+  @Test
+  void publishOnly_reconcilesLegacyCraftingTargetLevelAliases() {
+    when(accountCatalogService.findAccount("1111111111111111"))
+        .thenReturn(Optional.of(credentialedAccount()));
+    stubDispatchReadyTarget("1111111111111111", "bigGreenMeat", 360);
+    when(micro6ExecutorCatalogService.getCatalogForBaseUrl("http://127.0.0.1:8098", true))
+        .thenReturn(craftingCatalog("PROGRESSIVE_CRAFTING", "Progressive Crafting", false));
+    when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
+    when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
+        .thenReturn(dispatchReadyHealth());
+    when(scriptExecutionService.publishMicro6Task(anyString(), anyMap(), any()))
+        .thenReturn(
+            ScriptExecutionService.Micro6PublishResult.success(
+                51, true, "http://127.0.0.1:8098", "QUEUED", "QUEUED", null));
+
+    ArgumentCaptor<Map<String, Object>> metadataCaptor = ArgumentCaptor.forClass(Map.class);
+    Map<String, Object> settings = new java.util.LinkedHashMap<>();
+    settings.put("stopCondition", "Level Target");
+    settings.put("stopConditionValue", 5);
+    settings.put("target_level", 5);
+    settings.put("targetLevel", 5);
+    settings.put("budgetLevel", 50);
+    settings.put("preferredActivity", "Glass");
+
+    Map<String, Object> response =
+        service.publishOnly(
+            "1111111111111111",
+            "machine-1",
+            "PROGRESSIVE_CRAFTING",
+            settings,
+            360,
+            false,
+            null);
+
+    assertThat(response.get("accepted")).isEqualTo(true);
+    assertThat(response.get("published")).isEqualTo(true);
+    verify(scriptExecutionService)
+        .publishMicro6Task(eq("micro6:PROGRESSIVE_CRAFTING"), metadataCaptor.capture(), any());
+    assertThat(metadataCaptor.getValue().get("settings"))
+        .isEqualTo(
+            Map.of(
+                "stopCondition", "Level Target",
+                "stopConditionValue", 5,
+                "budgetLevel", 50,
+                "preferredActivity", "Glass"));
+  }
+
+  private JsonNode craftingCatalog(String taskKey, String displayName, boolean declaresTargetLevel) {
+    JsonNode catalog = runnableCatalog(taskKey, displayName, null);
+    com.fasterxml.jackson.databind.node.ArrayNode fields =
+        (com.fasterxml.jackson.databind.node.ArrayNode)
+            catalog.path("tasks").get(0).path("args_schema").path("fields");
+    if (declaresTargetLevel) {
+      fields.addObject().put("key", "targetLevel").put("type", "integer").put("min", 1).put("max", 99);
+      return catalog;
+    }
+    fields
+        .addObject()
+        .put("key", "stopCondition")
+        .put("type", "select")
+        .putArray("options")
+        .add("Level Target");
+    fields.addObject().put("key", "stopConditionValue").put("type", "integer").put("min", 1).put("max", 99);
+    fields.addObject().put("key", "budgetLevel").put("type", "integer").put("min", 0).put("max", 100);
+    fields
+        .addObject()
+        .put("key", "preferredActivity")
+        .put("type", "select")
+        .putArray("options")
+        .add("Glass");
+    return catalog;
+  }
+
+  @Test
   void publishOnly_neverInvokesPreparationValidationOrLaunch() throws Exception {
     BuilderGoalAccountCatalogService.AccountDefinition account =
         new BuilderGoalAccountCatalogService.AccountDefinition(
@@ -2016,7 +2409,7 @@ class BuilderGoalRunnerServiceTest {
     when(clientRegistryService.findDispatchReadyClientsForRecovery(
             eq("3720a9a3b5c9f57b"), eq("udasuAvuco"), isNull(), any(), eq(360)))
         .thenReturn(List.of(targetClient));
-    when(micro6ExecutorCatalogService.getCatalogForBaseUrl("http://127.0.0.1:18098", true))
+    when(micro6ExecutorCatalogService.getCatalogForBaseUrl("http://127.0.0.1:8098", true))
         .thenReturn(runnableCatalog("fish_training", "Fish Training", "targetFish"));
     when(iterationRepository.findByIterationId(anyString())).thenReturn(Optional.empty());
     when(scriptExecutionService.getMicro6ExecutorHealth(anyMap()))
@@ -2087,6 +2480,7 @@ class BuilderGoalRunnerServiceTest {
     assertThat(target.get("account_hash")).isEqualTo("3720a9a3b5c9f57b");
     assertThat(target.get("account_name")).isEqualTo("udasuAvuco");
     assertThat(target.get("advertised_base_url")).isEqualTo("http://127.0.0.1:18098");
+    assertThat(target.get("local_executor_base_url")).isEqualTo("http://127.0.0.1:8098");
   }
 
   @Test

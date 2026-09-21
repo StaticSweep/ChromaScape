@@ -23,7 +23,8 @@ public class Micro6RemoteLauncherService {
   public static final String CAPABILITY = "builder-goal-launch-v2";
   private final ObjectMapper mapper;
   private final Micro6OnlineClientRegistryService registry;
-  private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+  private final HttpClient http =
+      HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
   private final String machineUuid;
   private final String endpoint;
   private final String executorUrl;
@@ -33,7 +34,8 @@ public class Micro6RemoteLauncherService {
   private volatile String agentVersion = "unknown";
 
   public Micro6RemoteLauncherService(
-      ObjectMapper mapper, Micro6OnlineClientRegistryService registry,
+      ObjectMapper mapper,
+      Micro6OnlineClientRegistryService registry,
       @Value("${builder-goal.remote.machine-uuid:}") String machineUuid,
       @Value("${builder-goal.remote.endpoint:}") String endpoint,
       @Value("${builder-goal.remote.executor-url:}") String executorUrl,
@@ -51,7 +53,8 @@ public class Micro6RemoteLauncherService {
       validateUrl(this.endpoint);
       validateUrl(this.executorUrl);
       if (token.length() < 32) {
-        throw new IllegalArgumentException("Remote launcher token must contain at least 32 characters");
+        throw new IllegalArgumentException(
+            "Remote launcher token must contain at least 32 characters");
       }
     }
   }
@@ -59,15 +62,21 @@ public class Micro6RemoteLauncherService {
   private static void validateUrl(String value) {
     URI uri = URI.create(value);
     if (!("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))
-        || uri.getHost() == null || uri.getUserInfo() != null || uri.getQuery() != null
-        || uri.getFragment() != null || !(uri.getPath().isEmpty() || "/".equals(uri.getPath()))) {
+        || uri.getHost() == null
+        || uri.getUserInfo() != null
+        || uri.getQuery() != null
+        || uri.getFragment() != null
+        || !(uri.getPath().isEmpty() || "/".equals(uri.getPath()))) {
       throw new IllegalArgumentException("Remote launcher URLs must be configured HTTP(S) origins");
     }
   }
 
   public boolean authenticate(String authorization) {
-    return !machineUuid.isBlank() && token.length() >= 32 && authorization != null
-        && MessageDigest.isEqual(("Bearer " + token).getBytes(StandardCharsets.UTF_8),
+    return !machineUuid.isBlank()
+        && token.length() >= 32
+        && authorization != null
+        && MessageDigest.isEqual(
+            ("Bearer " + token).getBytes(StandardCharsets.UTF_8),
             authorization.getBytes(StandardCharsets.UTF_8));
   }
 
@@ -78,7 +87,8 @@ public class Micro6RemoteLauncherService {
         || !mapper.convertValue(payload.path("capabilities"), List.class).contains(CAPABILITY)
         || !endpoint.equals(payload.path("launcher_endpoint").asText())
         || !executorUrl.equals(payload.path("executor_url").asText())) {
-      throw new IllegalArgumentException("Remote agent identity or capability does not match configuration");
+      throw new IllegalArgumentException(
+          "Remote agent identity or capability does not match configuration");
     }
     String version = payload.path("agent_version").asText();
     if (!version.matches("[0-9]+\\.[0-9]+\\.[0-9]+")) {
@@ -104,22 +114,37 @@ public class Micro6RemoteLauncherService {
     if (machineUuid.isBlank()) {
       return List.of();
     }
-    return List.of(new BuilderGoalLauncherControlService.LauncherMachine(
-        machineUuid, "Fedora Micro6", online() ? "online" : "offline", true, online(),
-        Map.of("launcher_endpoint", endpoint, "agent_version", agentVersion,
-            "capabilities", List.of(CAPABILITY), "contract_version", 2)));
+    return List.of(
+        new BuilderGoalLauncherControlService.LauncherMachine(
+            machineUuid,
+            "Fedora Micro6",
+            online() ? "online" : "offline",
+            true,
+            online(),
+            Map.of(
+                "launcher_endpoint",
+                endpoint,
+                "agent_version",
+                agentVersion,
+                "capabilities",
+                List.of(CAPABILITY),
+                "contract_version",
+                2)));
   }
 
   public Micro6TargetPreparationService.PreparationResult ensureReady(
       Micro6TargetPreparationService.PreparationRequest request,
-      BuilderGoalLauncherControlService.LauncherMachine machine, String commandId,
+      BuilderGoalLauncherControlService.LauncherMachine machine,
+      String commandId,
       BuilderGoalLaunchCancellation cancellation,
       Consumer<Micro6TargetRelaunchService.RelaunchProgress> listener) {
     if (!supports(machine)) {
       throw new IllegalStateException("Remote launcher is offline or unsupported");
     }
-    if (request.world() == null || !AccountIdentityContract.isCanonicalHash(request.accountHash())) {
-      throw new IllegalArgumentException("Remote launch requires a canonical account hash and world");
+    if (request.world() == null
+        || !AccountIdentityContract.isCanonicalHash(request.accountHash())) {
+      throw new IllegalArgumentException(
+          "Remote launch requires a canonical account hash and world");
     }
     Instant started = Instant.now();
     Map<String, Object> payload = new LinkedHashMap<>();
@@ -128,11 +153,16 @@ public class Micro6RemoteLauncherService {
     payload.put("account_hash", request.accountHash());
     payload.put("world", request.world());
     payload.put("force", request.forceRelaunch());
-    payload.put("clientArgs", List.of("--clean-jagex-launcher", "--auto-enable-accountbuilder",
-        "--profile=" + request.accountName(), "--expected-account-hash=" + request.accountHash(),
-        "--launch-attempt-id=" + commandId,
-        "--profile-email=" + request.accountEmail() + ":" + request.accountPassword(),
-        "--world=" + request.world()));
+    payload.put(
+        "clientArgs",
+        List.of(
+            "--clean-jagex-launcher",
+            "--auto-enable-accountbuilder",
+            "--profile=" + request.accountName(),
+            "--expected-account-hash=" + request.accountHash(),
+            "--launch-attempt-id=" + commandId,
+            "--profile-email=" + request.accountEmail() + ":" + request.accountPassword(),
+            "--world=" + request.world()));
     String logPath = null;
     boolean submitted = false;
     try {
@@ -158,7 +188,8 @@ public class Micro6RemoteLauncherService {
       while (Instant.now().isBefore(deadline)) {
         cancellation.throwIfCancelled();
         if (!online()) {
-          throw new IllegalStateException("Remote launcher heartbeat expired; relaunch on the same host");
+          throw new IllegalStateException(
+              "Remote launcher heartbeat expired; relaunch on the same host");
         }
         if (!commandId.equals(status.path("command_id").asText())
             || !machineUuid.equals(status.path("machine_uuid").asText())) {
@@ -167,11 +198,13 @@ public class Micro6RemoteLauncherService {
         logPath = status.path("log_path").asText(null);
         String state = status.path("status").asText();
         if (List.of("failed", "exited", "stopped", "interrupted").contains(state)) {
-          throw new IllegalStateException("Remote launch ended: " + state + "; relaunch on the same host");
+          throw new IllegalStateException(
+              "Remote launch ended: " + state + "; relaunch on the same host");
         }
         emit(listener, state, logPath, commandId);
-        var ready = registry.findRemoteReadyClient(machineUuid, request.accountHash(), request.world(),
-            commandId, started);
+        var ready =
+            registry.findRemoteReadyClient(
+                machineUuid, request.accountHash(), request.world(), commandId, started);
         if (ready.isPresent() && "running".equals(state)) {
           var target = ready.get();
           if (!executorUrl.equals(target.advertisedBaseUrl())) {
@@ -197,7 +230,8 @@ public class Micro6RemoteLauncherService {
         Thread.sleep(1000);
         status = exchange("GET", "/v1/launches/" + commandId, null);
       }
-      throw new IllegalStateException("Remote executor readiness timed out; relaunch on the same host");
+      throw new IllegalStateException(
+          "Remote executor readiness timed out; relaunch on the same host");
     } catch (Exception failure) {
       // Clear interruption only for the bounded stop request, then restore it for the caller.
       boolean interrupted = Thread.interrupted() || failure instanceof InterruptedException;
@@ -217,31 +251,61 @@ public class Micro6RemoteLauncherService {
       cancellation.throwIfCancelled();
       throw new Micro6TargetPreparationService.PreparationException(
           "REMOTE_LAUNCH_RECOVERABLE",
-          "Remote launch did not become ready; relaunch on the same Fedora host. Command " + commandId,
-          null, false);
+          "Remote launch did not become ready; relaunch on the same Fedora host. Command "
+              + commandId,
+          null,
+          false);
     }
   }
 
-  private void emit(Consumer<Micro6TargetRelaunchService.RelaunchProgress> listener,
-      String state, String logPath, String commandId) {
+  private void emit(
+      Consumer<Micro6TargetRelaunchService.RelaunchProgress> listener,
+      String state,
+      String logPath,
+      String commandId) {
     if (listener != null) {
-      listener.accept(new Micro6TargetRelaunchService.RelaunchProgress(
-          "preparing".equals(state) ? "BUILDING_MICRO6" : "WAITING_FOR_DISPATCH",
-          "Remote Fedora agent: " + state, executorUrl, null, null, null, null, null, null,
-          null, null, null, null, null, null, ":client:runBuilderGoal", null, false,
-          logPath, null, null, commandId));
+      listener.accept(
+          new Micro6TargetRelaunchService.RelaunchProgress(
+              "preparing".equals(state) ? "BUILDING_MICRO6" : "WAITING_FOR_DISPATCH",
+              "Remote Fedora agent: " + state,
+              executorUrl,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              ":client:runBuilderGoal",
+              null,
+              false,
+              logPath,
+              null,
+              null,
+              commandId));
     }
   }
 
   private static class RemoteConflict extends IllegalStateException {}
 
   private JsonNode exchange(String method, String path, Object body) throws Exception {
-    HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(endpoint + path))
-        .timeout(Duration.ofSeconds(10)).header("Authorization", "Bearer " + token)
-        .header("Content-Type", "application/json");
-    request.method(method, body == null ? HttpRequest.BodyPublishers.noBody()
-        : HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)));
-    HttpResponse<String> response = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    HttpRequest.Builder request =
+        HttpRequest.newBuilder(URI.create(endpoint + path))
+            .timeout(Duration.ofSeconds(10))
+            .header("Authorization", "Bearer " + token)
+            .header("Content-Type", "application/json");
+    request.method(
+        method,
+        body == null
+            ? HttpRequest.BodyPublishers.noBody()
+            : HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)));
+    HttpResponse<String> response =
+        http.send(request.build(), HttpResponse.BodyHandlers.ofString());
     if (response.statusCode() == 409) {
       throw new RemoteConflict();
     }

@@ -74,6 +74,14 @@ public class Micro6LogShipperService {
     this.debugSessionService = debugSessionService;
   }
 
+  public boolean isRunning() {
+    return running.get();
+  }
+
+  public String getSourceName() {
+    return config.getLogShipper().getSourceName();
+  }
+
   /** Start the log shipper service if enabled and configured. */
   @PostConstruct
   public void start() {
@@ -89,7 +97,9 @@ public class Micro6LogShipperService {
     }
 
     // Initialize components
-    tailer = new LogFileTailer(logFilePath);
+    // This is a live shipper, not a historical importer. Large launcher logs can span many
+    // months, so begin at EOF and ingest only lines appended after ChromaScape starts.
+    tailer = new LogFileTailer(logFilePath, true);
     parser = new LogLineParser();
     deduplicator = new LogDeduplicator(config.getLogShipper().getMaxHistoryLines());
 

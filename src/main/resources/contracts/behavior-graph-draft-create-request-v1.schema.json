@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.leeuwbot.dev/sc728/behavior-graph-draft-create-request/v1",
+  "title": "behavior-graph-draft-create-request/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "draft_id", "graph_id", "task_key", "profile_id", "profile_version"],
+  "properties": {
+    "schema": { "const": "behavior-graph-draft-create-request/v1" },
+    "draft_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+    "graph_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+    "task_key": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" },
+    "profile_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "profile_version": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
+  }
+}

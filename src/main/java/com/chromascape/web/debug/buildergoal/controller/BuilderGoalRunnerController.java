@@ -844,11 +844,16 @@ public class BuilderGoalRunnerController {
     JsonNode inputOrigin = firstPresent(payload, "inputOrigin", "input_origin");
     JsonNode userClicked = firstPresent(payload, "userClicked", "user_clicked");
     JsonNode scriptClicked = firstPresent(payload, "scriptClicked", "script_clicked");
+    JsonNode autoRecord = firstPresent(payload, "autoRecord", "auto_record");
+    if (!autoRecord.isMissingNode() && !autoRecord.isNull() && !autoRecord.isBoolean()) {
+      throw new IllegalArgumentException("autoRecord must be a boolean");
+    }
     if (initiatedBy.isMissingNode()
         && inputOrigin.isMissingNode()
         && userClicked.isMissingNode()
-        && scriptClicked.isMissingNode()) {
-      return null;
+        && scriptClicked.isMissingNode()
+        && autoRecord.isMissingNode()) {
+      return Map.of("auto_record", true);
     }
     Map<String, Object> provenance = new java.util.LinkedHashMap<>();
     if (!initiatedBy.isMissingNode() && !initiatedBy.isNull()) {
@@ -863,7 +868,8 @@ public class BuilderGoalRunnerController {
     if (!scriptClicked.isMissingNode() && !scriptClicked.isNull()) {
       provenance.put("script_clicked", scriptClicked.asBoolean());
     }
-    return provenance.isEmpty() ? null : provenance;
+    provenance.put("auto_record", autoRecord.isMissingNode() || autoRecord.asBoolean());
+    return provenance;
   }
 
   private JsonNode firstPresent(JsonNode payload, String firstField, String secondField) {

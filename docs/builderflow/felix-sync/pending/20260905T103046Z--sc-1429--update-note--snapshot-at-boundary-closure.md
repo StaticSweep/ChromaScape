@@ -1,7 +1,7 @@
 ---
 schema_version: 1
 offline_record_id: offline-20260905-sc1429-snapshot-boundary-001
-sync_status: pending
+sync_status: conflict
 project: C:\Dev\IdeaProjects\ChromaScape
 shortcut_story_id: 1429
 shortcut_tag: shortcut:sc-1429

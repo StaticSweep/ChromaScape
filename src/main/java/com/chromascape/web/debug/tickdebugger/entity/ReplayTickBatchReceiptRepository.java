@@ -22,8 +22,9 @@ public interface ReplayTickBatchReceiptRepository
       value =
           """
           INSERT INTO replay_tick_batch_receipts
-              (session_id, batch_id, tick, payload_checksum, schema_name, persisted_at)
-          VALUES (:sessionId, :batchId, :tick, :payloadChecksum, :schemaName, :persistedAt)
+              (id, session_id, batch_id, tick, payload_checksum, schema_name, persisted_at)
+          VALUES (gen_random_uuid(), :sessionId, :batchId, :tick, :payloadChecksum, :schemaName,
+              :persistedAt)
           ON CONFLICT DO NOTHING
           """,
       nativeQuery = true)

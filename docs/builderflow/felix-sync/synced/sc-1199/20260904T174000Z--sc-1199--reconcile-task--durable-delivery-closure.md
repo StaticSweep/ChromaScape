@@ -1,11 +1,11 @@
 ---
 schema_version: 1
 offline_record_id: offline_sc1199_20260904T000000Z_durable_delivery_closure_9f3c2a71
-sync_status: pending
+sync_status: synced
 project: 'C:\Dev\IdeaProjects\ChromaScape'
 shortcut_story_id: 1199
 shortcut_tag: 'shortcut:sc-1199'
-felix_task_id: task_1788264505764_479zgp12
+felix_task_id: task_1789077614858_lhuqlht1
 operation: reconcile_task
 target_note_id: null
 title: 'SC-1199 durable tick-batch delivery closure — partial completion, native gates blocked'
@@ -18,12 +18,13 @@ stable_tags:
 parent_id: null
 intended_entity_links:
   - entity_type: task
-    entity_id: task_1788264505764_479zgp12
+    entity_id: task_1789077614858_lhuqlht1
     link_strength: primary
   - entity_type: shortcut_story
     entity_id: '1199'
     link_strength: primary
 created_at: '2026-09-04T17:40:00Z'
+synced_at: '2026-09-10T22:04:07.8379951Z'
 intended_felix_task_state: in_progress
 intended_felix_spec_state: spec_ready
 intended_shortcut_transition: none — do not advance SC-1199; xRSPS playback/viewer/fixture/certification remain incomplete
@@ -221,3 +222,12 @@ reconcile-task) record first — resolve by `shortcut:sc-1199` (known ID
 `offline_sc1199_20260904T220000Z_durable_test_integrity_4b7e1c20`) to create the
 evidence note (searching its `offline-sync:` tag before creation). Then mark
 synced and move this file to `synced/sc-1199/`.
+
+## Sync result — 2026-09-10 reconciliation
+
+Synced oldest-first. The previously recorded task was absent from the current Felix index, so the
+same `shortcut:sc-1199` identity was restored as `task_1789077614858_lhuqlht1`; this was recovery
+of the missing record, not a second Shortcut story. The task is `in_progress`/`spec_ready`. Notes
+created from the newer records are `note_1789077724884_d1b11e36` and
+`note_1789077732476_e80f024b`. Current native evidence is `note_1789077797550_950c9e42`.
+Shortcut remained In Progress; the existing started marker was not duplicated.

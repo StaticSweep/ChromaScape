@@ -12,6 +12,9 @@ import com.chromascape.web.recording.exception.RecordingException;
 import com.chromascape.web.viewport.config.UnifiedCaptureConfig;
 import com.chromascape.web.viewport.service.UnifiedFrameCaptureService;
 import jakarta.annotation.PreDestroy;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.file.Files;
@@ -20,9 +23,11 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -57,6 +62,9 @@ public class RecordingService implements FrameListener {
   private final AtomicLong frameCount = new AtomicLong(0);
   private final AtomicLong droppedFrameCount = new AtomicLong(0);
   private final AtomicLong duplicatedFrameCount = new AtomicLong(0);
+  private final AtomicLong scaledFrameCount = new AtomicLong(0);
+  private final AtomicLong dimensionChangeCount = new AtomicLong(0);
+  private final Set<String> observedSizePairs = ConcurrentHashMap.newKeySet();
   private volatile int queueHighWaterMark = 0;
   private final Java2DFrameConverter frameConverter = new Java2DFrameConverter();
 
@@ -66,6 +74,7 @@ public class RecordingService implements FrameListener {
       new ArrayBlockingQueue<>(FRAME_BUFFER_SIZE);
   private volatile boolean encoderRunning = false;
   private long encodedFrameCount = 0; // Track encoded frames for timestamp calculation
+  private volatile long encodedMediaMicros = 0; // Last encoded media timestamp (real elapsed time)
 
   private FFmpegFrameRecorder recorder;
   private File currentRecordingFile;
@@ -154,9 +163,10 @@ public class RecordingService implements FrameListener {
       currentRecordingFile = Paths.get(config.getOutputDirectory(), filename).toFile();
 
       // Wait (bounded) for RuneLite's canvas to expose capturable dimensions. The SunAwtCanvas
-      // may exist while its Win32 client rectangle is still 0x0, so retry without blocking the
-      // RuneLite client thread until the deadline expires.
-      BufferedImage firstFrame = waitForInitialFrame();
+      // may exist while its Win32 client rectangle is still 0x0, and the canvas can pass through
+      // several transient startup sizes, so the acquisition is gated on a stable, plausibly-sized
+      // canvas rather than the first frame that happens to arrive.
+      BufferedImage firstFrame = waitForStableInitialFrame();
 
       BufferedImage normalizedFirstFrame = normalizeFrameDimensions(firstFrame);
       int width = normalizedFirstFrame.getWidth();
@@ -174,6 +184,10 @@ public class RecordingService implements FrameListener {
       // Clear any leftover frames in buffer
       frameBuffer.clear();
       droppedFrameCount.set(0);
+      duplicatedFrameCount.set(0);
+      scaledFrameCount.set(0);
+      dimensionChangeCount.set(0);
+      observedSizePairs.clear();
       framesRecorded = 0;
 
       // CAPTURE START TIME HERE - immediately before first frame queued
@@ -225,24 +239,42 @@ public class RecordingService implements FrameListener {
   }
 
   /**
-   * Polls {@link WindowFrameCapture} until a valid (positive-dimension) frame arrives or the
-   * configured readiness deadline expires.
+   * Polls {@link WindowFrameCapture} until a valid, stable, plausibly-sized canvas is observed or
+   * the configured readiness deadline expires.
+   *
+   * <p>RuneLite's game canvas passes through several transient sizes while the client boots (for
+   * example 200x274 while loading, then intermediate sizes). Locking the video encoder onto the
+   * first transient size would make every later frame fail the dimension check, so a size is only
+   * accepted once it has been stable for {@code recording.stability-window-ms} and is at least
+   * {@code recording.min-capture-width} x {@code recording.min-capture-height}. When the deadline
+   * expires with at least one valid frame observed, the most recent frame is used so recording
+   * still starts (the encoder scales later frames if the canvas keeps changing).
    *
    * <p>Only one thread may perform readiness capture because {@code recordingStarting} is set
    * before this method runs. On interruption the interrupt flag is restored and startup aborts.
    *
-   * @return the first valid frame
-   * @throws FrameCaptureException if the deadline expires or the thread is interrupted
+   * @return a valid frame, preferring one with a stable, sufficiently large canvas
+   * @throws FrameCaptureException if no valid frame arrives before the deadline or the thread is
+   *     interrupted
    */
-  private BufferedImage waitForInitialFrame() {
+  private BufferedImage waitForStableInitialFrame() {
     long timeoutMs = config.getInitialFrameTimeoutMs();
     long retryIntervalMs = config.getInitialFrameRetryIntervalMs();
+    long stabilityWindowMs = config.getStabilityWindowMs();
+    long minWidth = config.getMinCaptureWidth();
+    long minHeight = config.getMinCaptureHeight();
     long startNanos = System.nanoTime();
     long deadlineNanos = startNanos + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
     String lastError = null;
     boolean firstFailureLogged = false;
     long lastProgressLogNanos = 0;
     int attempts = 0;
+
+    BufferedImage candidate = null;
+    int candidateWidth = -1;
+    int candidateHeight = -1;
+    long candidateFirstSeenNanos = 0;
+    String lastObservedDimensions = null;
 
     while (true) {
       attempts++;
@@ -255,14 +287,42 @@ public class RecordingService implements FrameListener {
           captureError =
               String.format("invalid dimensions %dx%d", captured.getWidth(), captured.getHeight());
         } else {
-          long waitMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-          logger.info(
-              "Initial frame ready after {} attempts in {} ms: {}x{}",
-              attempts,
-              waitMs,
-              captured.getWidth(),
-              captured.getHeight());
-          return captured;
+          BufferedImage normalized = normalizeFrameDimensions(captured);
+          int width = normalized.getWidth();
+          int height = normalized.getHeight();
+          String dimensions = width + "x" + height;
+
+          if (!dimensions.equals(lastObservedDimensions)) {
+            if (lastObservedDimensions == null) {
+              logger.info("Initial canvas dimensions observed: {}", dimensions);
+            } else {
+              logger.info(
+                  "Canvas dimensions changed: {} -> {}", lastObservedDimensions, dimensions);
+            }
+            lastObservedDimensions = dimensions;
+          }
+
+          if (width != candidateWidth || height != candidateHeight) {
+            candidateWidth = width;
+            candidateHeight = height;
+            candidateFirstSeenNanos = System.nanoTime();
+          }
+          candidate = normalized;
+
+          boolean largeEnough = width >= minWidth && height >= minHeight;
+          long stableNanos = System.nanoTime() - candidateFirstSeenNanos;
+          if (largeEnough && stableNanos >= TimeUnit.MILLISECONDS.toNanos(stabilityWindowMs)) {
+            long waitMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+            logger.info(
+                "Stable canvas dimensions {}x{} selected after {} attempts in {} ms "
+                    + "(unchanged for {} ms)",
+                width,
+                height,
+                attempts,
+                waitMs,
+                TimeUnit.NANOSECONDS.toMillis(stableNanos));
+            return candidate;
+          }
         }
       } catch (RuntimeException e) {
         captureError = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
@@ -285,9 +345,10 @@ public class RecordingService implements FrameListener {
       if (nowNanos - lastProgressLogNanos > TimeUnit.SECONDS.toNanos(2)) {
         lastProgressLogNanos = nowNanos;
         logger.info(
-            "Waiting for RuneLite window to become capturable (attempt {}, elapsed {} ms)...",
+            "Waiting for a stable RuneLite canvas size (attempt {}, elapsed {} ms, last size {})...",
             attempts,
-            TimeUnit.NANOSECONDS.toMillis(nowNanos - startNanos));
+            TimeUnit.NANOSECONDS.toMillis(nowNanos - startNanos),
+            lastObservedDimensions != null ? lastObservedDimensions : "unknown");
       }
 
       long sleepMs = Math.min(retryIntervalMs, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
@@ -302,6 +363,18 @@ public class RecordingService implements FrameListener {
         logger.warn("Recording start interrupted while waiting for initial frame");
         throw new FrameCaptureException(attempts, timeoutMs, elapsedMs, lastError, true);
       }
+    }
+
+    if (candidate != null) {
+      long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+      logger.warn(
+          "No stable canvas size reached within {} ms (last size {}); using the most recent frame "
+              + "so recording can start. Later frames will be scaled into {}x{}.",
+          elapsedMs,
+          lastObservedDimensions != null ? lastObservedDimensions : "unknown",
+          candidateWidth,
+          candidateHeight);
+      return candidate;
     }
 
     long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
@@ -383,36 +456,41 @@ public class RecordingService implements FrameListener {
       long frames = frameCount.get();
       long dropped = droppedFrameCount.get();
       long duplicated = duplicatedFrameCount.get();
+      long scaled = scaledFrameCount.get();
 
       // Calculate actual FPS
-      double actualCaptureFps = (frames * 1000.0) / duration;
-      double expectedDurationSec = (double) encodedFrameCount / unifiedConfig.getFps();
+      double actualCaptureFps = duration > 0 ? (frames * 1000.0) / duration : 0.0;
+      double encodedMediaSec = encodedMediaMicros / 1_000_000.0;
+      double droppedPercent = frames + dropped > 0 ? dropped * 100.0 / (frames + dropped) : 0.0;
+      double duplicatedPercent =
+          encodedFrameCount > 0 ? duplicated * 100.0 / encodedFrameCount : 0.0;
 
       logger.info(
-          """
-        Recording saved: {}
-        Duration: {} ms (expected ~{} sec based on {} frames @ {} FPS)
-        Frames captured: {}
-        Frames dropped: {} ({:.1f}%)
-        Frames duplicated (CFR fill): {} ({:.1f}%)
-        Frames encoded: {}
-        Queue high-water mark: {}
-        Actual capture FPS: {:.2f}
-        Configured FPS: {}
-        """,
+          "Recording saved: {}\n"
+              + "Duration: {} ms (encoded media ~{} sec, {} frames @ {} FPS)\n"
+              + "Frames captured: {}\n"
+              + "Frames scaled (canvas size changes): {} ({} distinct size transitions)\n"
+              + "Frames dropped (buffer full): {} ({}%)\n"
+              + "Frames duplicated (cadence fill): {} ({}%)\n"
+              + "Frames encoded: {}\n"
+              + "Queue high-water mark: {}\n"
+              + "Actual capture FPS: {}\n"
+              + "Configured FPS: {}",
           currentRecordingFile.getName(),
           duration,
-          String.format("%.1f", expectedDurationSec),
+          String.format("%.1f", encodedMediaSec),
           encodedFrameCount,
           unifiedConfig.getFps(),
           frames,
+          scaled,
+          dimensionChangeCount.get(),
           dropped,
-          dropped * 100.0 / (frames + dropped),
+          String.format("%.1f", droppedPercent),
           duplicated,
-          encodedFrameCount > 0 ? duplicated * 100.0 / encodedFrameCount : 0.0,
+          String.format("%.1f", duplicatedPercent),
           encodedFrameCount,
           queueHighWaterMark,
-          actualCaptureFps,
+          String.format("%.2f", actualCaptureFps),
           unifiedConfig.getFps());
 
       return new RecordingMetadata(
@@ -467,6 +545,8 @@ public class RecordingService implements FrameListener {
     metrics.put("frameBufferCapacity", frameBuffer.remainingCapacity());
     metrics.put("droppedFrames", droppedFrameCount.get());
     metrics.put("duplicatedFrames", duplicatedFrameCount.get());
+    metrics.put("scaledFrames", scaledFrameCount.get());
+    metrics.put("dimensionChanges", dimensionChangeCount.get());
     metrics.put("queueHighWaterMark", queueHighWaterMark);
     metrics.put("framesRecorded", framesRecorded);
     metrics.put("currentRecordingId", currentRecordingId);
@@ -553,18 +633,49 @@ public class RecordingService implements FrameListener {
       if (capturedImage != null) {
         capturedImage = normalizeFrameDimensions(capturedImage);
 
-        // CRITICAL: Validate dimensions match initial dimensions
+        // The encoder's output size is fixed once the recorder starts. If the game canvas
+        // changes size mid-recording (RuneLite startup settling, operator resizing the window,
+        // fixed/resizable switches), scale the frame into the recorder canvas instead of
+        // dropping it: a scaled frame keeps the video timeline usable, while a dropped frame
+        // silently degrades the recording into a static image.
         int frameWidth = capturedImage.getWidth();
         int frameHeight = capturedImage.getHeight();
 
         if (frameWidth != initialWidth || frameHeight != initialHeight) {
-          logger.warn(
-              "Frame dimension mismatch detected! Expected: {}x{}, Got: {}x{}. Dropping frame.",
-              initialWidth,
-              initialHeight,
-              frameWidth,
-              frameHeight);
-          return;
+          if (initialWidth <= 0 || initialHeight <= 0) {
+            logger.warn(
+                "Recorder dimensions unavailable ({}x{}); dropping {}x{} frame.",
+                initialWidth,
+                initialHeight,
+                frameWidth,
+                frameHeight);
+            return;
+          }
+
+          capturedImage = fitToRecorderSize(capturedImage, initialWidth, initialHeight);
+          long scaled = scaledFrameCount.incrementAndGet();
+          String sizePair =
+              frameWidth + "x" + frameHeight + "->" + initialWidth + "x" + initialHeight;
+          if (observedSizePairs.add(sizePair)) {
+            dimensionChangeCount.incrementAndGet();
+            logger.warn(
+                "Canvas size changed ({}x{} -> {}x{}) while recording; scaling frames into the "
+                    + "{}x{} recorder canvas.",
+                frameWidth,
+                frameHeight,
+                initialWidth,
+                initialHeight,
+                initialWidth,
+                initialHeight);
+          } else if (scaled % 300 == 1) {
+            logger.warn(
+                "Scaled {} frames so far into the {}x{} recorder canvas (source canvas {}x{}).",
+                scaled,
+                initialWidth,
+                initialHeight,
+                frameWidth,
+                frameHeight);
+          }
         }
 
         // Store with capture timestamp
@@ -615,28 +726,40 @@ public class RecordingService implements FrameListener {
   private void encoderLoop() {
     logger.info("Encoder thread started");
     encodedFrameCount = 0;
+    encodedMediaMicros = 0;
     duplicatedFrameCount.set(0);
     queueHighWaterMark = 0;
     TimestampedFrame lastFrame = null;
     final int targetFps = unifiedConfig.getFps();
+    // Poll at the frame interval so the last-frame fill can actually sustain the target
+    // cadence. The old 100ms timeout capped the fill at ~10 fps, so a stalled capture
+    // stream produced media that advanced at only ~1/3 of wall time.
+    final long pollTimeoutMs = Math.max(1L, 1000L / targetFps);
+    long lastTimestampMicros = -1L;
 
     while (encoderRunning || !frameBuffer.isEmpty()) {
       try {
         // Wait for frame with timeout
-        TimestampedFrame timestampedFrame = frameBuffer.poll(100, TimeUnit.MILLISECONDS);
+        TimestampedFrame timestampedFrame = frameBuffer.poll(pollTimeoutMs, TimeUnit.MILLISECONDS);
 
         if (timestampedFrame != null) {
           lastFrame = timestampedFrame;
         } else if (encoderRunning && lastFrame != null) {
-          // No frame received within poll window — duplicate last frame to maintain CFR cadence
+          // No frame received within poll window — duplicate last frame to maintain cadence
           timestampedFrame = lastFrame;
           duplicatedFrameCount.incrementAndGet();
         }
 
         if (timestampedFrame != null && recorder != null) {
-          // CFR timestamp: each frame slot gets an evenly-spaced timestamp regardless of
-          // actual capture wall-clock time. This prevents VFR artifacts in the output.
-          long timestampMicros = encodedFrameCount * 1_000_000L / targetFps;
+          // Wall-clock timestamp: the media timeline must track real elapsed time so the video
+          // duration matches the recording window even when capture stalls or the encoder cannot
+          // sustain the target FPS. A count-based timestamp (encodedFrameCount / fps) silently
+          // compresses the video whenever throughput drops below target.
+          long timestampMicros =
+              Math.max(
+                  lastTimestampMicros + 1L,
+                  TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - recordingStartTimeNano));
+          lastTimestampMicros = timestampMicros;
           recorder.setTimestamp(timestampMicros);
           recorder.record(frameConverter.convert(timestampedFrame.image));
           encodedFrameCount++;
@@ -679,7 +802,11 @@ public class RecordingService implements FrameListener {
     while ((frame = frameBuffer.poll()) != null) {
       try {
         if (recorder != null) {
-          long timestampMicros = encodedFrameCount * 1_000_000L / targetFps;
+          long timestampMicros =
+              Math.max(
+                  lastTimestampMicros + 1L,
+                  TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - recordingStartTimeNano));
+          lastTimestampMicros = timestampMicros;
           recorder.setTimestamp(timestampMicros);
           recorder.record(frameConverter.convert(frame.image));
           encodedFrameCount++;
@@ -689,7 +816,11 @@ public class RecordingService implements FrameListener {
       }
     }
 
-    logger.info("Encoder thread finished (encoded {} frames)", encodedFrameCount);
+    encodedMediaMicros = Math.max(0L, lastTimestampMicros);
+    logger.info(
+        "Encoder thread finished (encoded {} frames, {} ms media)",
+        encodedFrameCount,
+        encodedMediaMicros / 1000L);
   }
 
   /** Returns whether a recording is currently in progress. */
@@ -777,8 +908,12 @@ public class RecordingService implements FrameListener {
       frameCount.set(0);
       droppedFrameCount.set(0);
       duplicatedFrameCount.set(0);
+      scaledFrameCount.set(0);
+      dimensionChangeCount.set(0);
+      observedSizePairs.clear();
       queueHighWaterMark = 0;
       encodedFrameCount = 0;
+      encodedMediaMicros = 0;
       framesRecorded = 0;
     }
 
@@ -828,8 +963,12 @@ public class RecordingService implements FrameListener {
     frameCount.set(0);
     droppedFrameCount.set(0);
     duplicatedFrameCount.set(0);
+    scaledFrameCount.set(0);
+    dimensionChangeCount.set(0);
+    observedSizePairs.clear();
     queueHighWaterMark = 0;
     encodedFrameCount = 0;
+    encodedMediaMicros = 0;
     framesRecorded = 0;
     initialWidth = 0;
     initialHeight = 0;
@@ -919,6 +1058,54 @@ public class RecordingService implements FrameListener {
         evenWidth,
         evenHeight);
     return frame.getSubimage(0, 0, evenWidth, evenHeight);
+  }
+
+  /**
+   * Scales a frame into the recorder's fixed output dimensions, preserving the source aspect ratio
+   * and centering the result on a black background (letterbox/pillarbox).
+   *
+   * <p>Used when the captured canvas size no longer matches the size the encoder was opened with.
+   * Encoding a scaled frame keeps the video timeline continuous and playable, unlike dropping the
+   * frame.
+   *
+   * @param source frame captured at the current canvas size
+   * @param targetWidth recorder width
+   * @param targetHeight recorder height
+   * @return a new image of exactly {@code targetWidth} x {@code targetHeight}
+   */
+  static BufferedImage fitToRecorderSize(BufferedImage source, int targetWidth, int targetHeight) {
+    BufferedImage target = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_3BYTE_BGR);
+    Graphics2D graphics = target.createGraphics();
+    try {
+      graphics.setRenderingHint(
+          RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+      graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+      graphics.setColor(Color.BLACK);
+      graphics.fillRect(0, 0, targetWidth, targetHeight);
+
+      double scale =
+          Math.min(
+              targetWidth / (double) source.getWidth(),
+              targetHeight / (double) source.getHeight());
+      int drawWidth = Math.max(1, (int) Math.round(source.getWidth() * scale));
+      int drawHeight = Math.max(1, (int) Math.round(source.getHeight() * scale));
+      int drawX = (targetWidth - drawWidth) / 2;
+      int drawY = (targetHeight - drawHeight) / 2;
+      graphics.drawImage(source, drawX, drawY, drawWidth, drawHeight, null);
+    } finally {
+      graphics.dispose();
+    }
+    return target;
+  }
+
+  /** Number of frames scaled into the recorder canvas because the capture size changed. */
+  public long getScaledFrameCount() {
+    return scaledFrameCount.get();
+  }
+
+  /** Number of distinct canvas-size transitions observed during the current/last recording. */
+  public long getDimensionChangeCount() {
+    return dimensionChangeCount.get();
   }
 
   /**

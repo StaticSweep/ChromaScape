@@ -14,12 +14,18 @@ import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService
 import com.chromascape.web.debug.tickdebugger.service.TickStreamIngestionService.TickBatchAcknowledgment;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -41,10 +47,11 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
  *
  * <p>Each Micro6 WebSocket owns at most one canonical debug session, and each canonical debug
  * session has at most one Micro6 WebSocket owner. Ownership is tracked in {@code sessionBindings}
- * (websocket id to binding) and {@code sessionOwners} (canonical session id to websocket id); both
- * mappings are mutated only under {@code ownershipLock}. Per-WebSocket callbacks are serialized by
- * synchronizing on the WebSocket session, which also covers transport-error and close handling. The
- * lock order is {@code WebSocketSession monitor → ownershipLock} and is never reversed.
+ * (websocket id to binding) and {@code sessionOwners} (canonical session id to websocket id), while
+ * disconnected active sessions are reserved in {@code pendingReconnects}; all three mappings are
+ * mutated only under {@code ownershipLock}. Per-WebSocket callbacks are serialized by synchronizing
+ * on the WebSocket session, which also covers transport-error and close handling. The lock order is
+ * {@code WebSocketSession monitor → ownershipLock} and is never reversed.
  *
  * <p>Session start is transactional: the preferred session id is reserved under {@code
  * ownershipLock} before the (potentially slow) service call, the service call runs outside the
@@ -81,9 +88,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     /** The success response could not be delivered and compensation failed; close may retry. */
     START_RESPONSE_FAILED,
     /** An explicit SESSION_STOP was attempted but finalization failed; close may retry. */
-    EXPLICIT_STOP_FAILED,
-    /** Transport-error finalization failed; close may retry. */
-    TRANSPORT_FINALIZATION_FAILED
+    EXPLICIT_STOP_FAILED
   }
 
   /**
@@ -100,17 +105,43 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       String shadowRunId,
       BindingPhase phase,
       boolean shadowOpened,
-      SessionStartRollbackToken rollbackToken) {
+      SessionStartRollbackToken rollbackToken,
+      Boolean recordingEnabled,
+      String recordingId,
+      Long startTick,
+      String recordingFailureReason) {
 
     SessionBinding withPhase(BindingPhase newPhase) {
-      return new SessionBinding(sessionId, shadowRunId, newPhase, shadowOpened, rollbackToken);
+      return new SessionBinding(
+          sessionId,
+          shadowRunId,
+          newPhase,
+          shadowOpened,
+          rollbackToken,
+          recordingEnabled,
+          recordingId,
+          startTick,
+          recordingFailureReason);
+    }
+  }
+
+  /** An active binding detached from a dead socket while Micro6 is allowed to reconnect. */
+  private static final class PendingReconnect {
+    private final String token = UUID.randomUUID().toString();
+    private final SessionBinding binding;
+    private final String cause;
+    private volatile ScheduledFuture<?> timeout;
+
+    private PendingReconnect(SessionBinding binding, String cause) {
+      this.binding = binding;
+      this.cause = cause;
     }
   }
 
   /**
    * Maps WebSocket session IDs to bound debug session ownership. Populated on successful
-   * SESSION_START, cleared on successful explicit SESSION_STOP or final disconnect finalization.
-   * Mutated only under {@code ownershipLock}.
+   * SESSION_START, detached during reconnect grace, and cleared on successful explicit SESSION_STOP
+   * or final disconnect finalization. Mutated only under {@code ownershipLock}.
    */
   private final Map<String, SessionBinding> sessionBindings = new ConcurrentHashMap<>();
 
@@ -127,6 +158,20 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
    * ownershipLock}.
    */
   private final Map<String, String> preferredReservations = new ConcurrentHashMap<>();
+
+  /** Active sessions awaiting a replacement socket, keyed by canonical debug session id. */
+  private final Map<String, PendingReconnect> pendingReconnects = new ConcurrentHashMap<>();
+
+  private final ScheduledExecutorService reconnectScheduler =
+      Executors.newSingleThreadScheduledExecutor(
+          runnable -> {
+            Thread thread = new Thread(runnable, "tick-stream-reconnect-grace");
+            thread.setDaemon(true);
+            return thread;
+          });
+
+  @Value("${debug.tick-stream.reconnect-grace-ms:30000}")
+  private long reconnectGraceMillis = 30_000L;
 
   /**
    * Serializes session creation, canonical ownership claims, and ownership release. Acquired only
@@ -248,11 +293,16 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       SessionStartRequest request = objectMapper.treeToValue(root, SessionStartRequest.class);
       String clientRequestId = request.getClientRequestId();
       log.info(
-          "Starting debug session via WebSocket: account={}, script={}, recording={}, clientRequestId={}",
+          "Starting debug session via WebSocket: account={}, script={}, recording={},"
+              + " clientRequestId={}",
           request.getAccountName(),
           request.getScriptName(),
           request.getRecordingEnabled(),
           clientRequestId != null ? clientRequestId : "none");
+
+      if (tryResumePendingSession(wsSession, request)) {
+        return;
+      }
 
       // A WebSocket owns at most one session: reject a second SESSION_START on this connection,
       // whether it already has a binding or a start reservation is still in flight.
@@ -285,7 +335,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           if ((owner != null && !owner.equals(wsId))
               || (reserver != null && !reserver.equals(wsId))) {
             log.warn(
-                "Rejecting SESSION_START on connection {}: preferred session {} owned/reserved by another connection",
+                "Rejecting SESSION_START on connection {}: preferred session {} owned/reserved by"
+                    + " another connection",
                 wsId,
                 preferred);
             reservationRejection = "SESSION_ALREADY_OWNED";
@@ -355,12 +406,17 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
                   shadowRunId,
                   BindingPhase.STARTING,
                   false,
-                  outcome.rollbackToken()));
+                  outcome.rollbackToken(),
+                  outcome.response().getRecordingEnabled(),
+                  outcome.response().getRecordingId(),
+                  outcome.response().getStartTick(),
+                  outcome.response().getRecordingFailureReason()));
         }
       }
       if (conflictToken != null) {
         log.warn(
-            "Rejecting SESSION_START on connection {}: canonical session {} owned by another connection",
+            "Rejecting SESSION_START on connection {}: canonical session {} owned by another"
+                + " connection",
             wsId,
             canonicalSessionId);
         // A canonical conflict has no canonical ownership for this socket. If compensation fails,
@@ -375,7 +431,11 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
                     shadowRunId,
                     BindingPhase.START_ROLLBACK_FAILED,
                     false,
-                    conflictToken));
+                    conflictToken,
+                    outcome.response().getRecordingEnabled(),
+                    outcome.response().getRecordingId(),
+                    outcome.response().getStartTick(),
+                    outcome.response().getRecordingFailureReason()));
           }
           closeWebSocketSafely(wsSession);
           return;
@@ -412,7 +472,15 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       SessionBinding starting = sessionBindings.get(wsId);
       SessionBinding active =
           new SessionBinding(
-              canonicalSessionId, shadowRunId, BindingPhase.ACTIVE, true, outcome.rollbackToken());
+              canonicalSessionId,
+              shadowRunId,
+              BindingPhase.ACTIVE,
+              true,
+              outcome.rollbackToken(),
+              outcome.response().getRecordingEnabled(),
+              outcome.response().getRecordingId(),
+              outcome.response().getStartTick(),
+              outcome.response().getRecordingFailureReason());
       synchronized (ownershipLock) {
         sessionBindings.replace(wsId, starting, active);
       }
@@ -423,7 +491,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       response.setShadowRunId(shadowRunId);
 
       log.info(
-          "SESSION_START result: sessionId={}, shadowRunId={}, recordingId={}, failureReason={}, clientRequestId={}",
+          "SESSION_START result: sessionId={}, shadowRunId={}, recordingId={}, failureReason={},"
+              + " clientRequestId={}",
           response.getSessionId(),
           shadowRunId,
           response.getRecordingId() != null ? response.getRecordingId() : "none",
@@ -490,6 +559,68 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
             true);
       }
     }
+  }
+
+  /**
+   * Rebinds a reconnecting Micro6 socket to an active session without starting another session,
+   * recording, or shadow run. The preferred session id is the reconnect token already used by the
+   * wire protocol. Claiming and timeout cancellation are atomic with respect to grace expiry.
+   */
+  private boolean tryResumePendingSession(WebSocketSession wsSession, SessionStartRequest request) {
+    String preferred = request.getPreferredSessionId();
+    if (preferred == null || preferred.isBlank()) {
+      return false;
+    }
+
+    String wsId = wsSession.getId();
+    PendingReconnect pending;
+    synchronized (ownershipLock) {
+      if (sessionBindings.containsKey(wsId) || hasStartReservation(wsId)) {
+        return false;
+      }
+      pending = pendingReconnects.remove(preferred);
+      if (pending == null) {
+        return false;
+      }
+      sessionOwners.put(preferred, wsId);
+      sessionBindings.put(wsId, pending.binding.withPhase(BindingPhase.ACTIVE));
+    }
+
+    ScheduledFuture<?> timeout = pending.timeout;
+    if (timeout != null) {
+      timeout.cancel(false);
+    }
+
+    SessionBinding binding = pending.binding;
+    SessionStartResponse response =
+        new SessionStartResponse(
+            binding.sessionId(),
+            binding.recordingEnabled(),
+            binding.recordingId(),
+            binding.startTick(),
+            binding.recordingFailureReason(),
+            request.getClientRequestId());
+    response.setShadowRunId(binding.shadowRunId());
+
+    try {
+      wsSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+      log.info(
+          "Rebound Micro6 connection {} to debug session {} during reconnect grace",
+          wsId,
+          binding.sessionId());
+    } catch (Exception e) {
+      log.error(
+          "Failed to send reconnect response for session {}; returning it to reconnect grace",
+          binding.sessionId(),
+          e);
+      deferActiveFinalization(wsSession, "reconnect response failure");
+      try {
+        wsSession.close(CloseStatus.SERVER_ERROR);
+      } catch (Exception closeFailure) {
+        log.debug("Failed to close socket after reconnect response failure", closeFailure);
+      }
+    }
+    return true;
   }
 
   /**
@@ -917,15 +1048,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
   }
 
-  /**
-   * Implicitly finalize the debug session bound to a WebSocket that experienced a transport error
-   * without sending an explicit SESSION_STOP.
-   *
-   * <p>For an {@code ACTIVE} binding, one implicit transport finalization is attempted; on success
-   * the binding and ownership are released, on failure the binding is retained in {@link
-   * BindingPhase#TRANSPORT_FINALIZATION_FAILED} for the close callback. Failed-start bindings are
-   * not finalized on transport error; their single retry is reserved for the close callback.
-   */
+  /** Defers finalization after a transport error so a replacement socket can resume the session. */
   private void finalizeOnTransportError(WebSocketSession wsSession) {
     String wsId = wsSession.getId();
     SessionBinding binding = sessionBindings.get(wsId);
@@ -936,44 +1059,15 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     }
 
     switch (binding.phase()) {
-      case ACTIVE -> {
-        log.info(
-            "Implicit session stop on transport error for WS session {}, debugSessionId={}",
-            wsId,
-            binding.sessionId());
-        boolean finalizationSucceeded = false;
-        try {
-          sessionService.finalizeSessionOnDisconnect(binding.sessionId(), "transport error");
-          finalizationSucceeded = true;
-        } catch (Exception e) {
-          log.error(
-              "Failed to implicitly finalize session {} on transport error: {}",
-              binding.sessionId(),
-              e.getMessage(),
-              e);
-        } finally {
-          shadowDecisionService.cleanupSession(binding.sessionId(), binding.shadowRunId());
-        }
-        if (finalizationSucceeded) {
-          removeBindingAndOwnership(wsId, binding);
-        } else {
-          synchronized (ownershipLock) {
-            sessionBindings.replace(
-                wsId, binding, binding.withPhase(BindingPhase.TRANSPORT_FINALIZATION_FAILED));
-          }
-        }
-      }
+      case ACTIVE -> deferActiveFinalization(wsSession, "transport error");
       case STARTING, START_ROLLBACK_FAILED, START_RESPONSE_FAILED -> log.debug(
-          "Skipping transport-error finalization on WS session {} while start is in progress/failed (phase {})",
+          "Skipping transport-error finalization on WS session {} while start is in progress/failed"
+              + " (phase {})",
           wsId,
           binding.phase());
       case EXPLICIT_STOP_FAILED -> log.debug(
           "Skipping transport-error finalization on WS session {} while session {} awaits close "
               + "fallback",
-          wsId,
-          binding.sessionId());
-      case TRANSPORT_FINALIZATION_FAILED -> log.debug(
-          "Ignoring repeated transport-error finalization on WS session {} for session {}",
           wsId,
           binding.sessionId());
     }
@@ -1001,7 +1095,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     switch (binding.phase()) {
       case STARTING, START_ROLLBACK_FAILED, START_RESPONSE_FAILED -> {
         log.info(
-            "Implicit session start cleanup on disconnect for WS session {}, debugSessionId={}, phase={}",
+            "Implicit session start cleanup on disconnect for WS session {}, debugSessionId={},"
+                + " phase={}",
             wsId,
             binding.sessionId(),
             binding.phase());
@@ -1010,26 +1105,8 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
         rollbackBinding(wsId, binding, "disconnect");
         removeBindingAndOwnershipAndReservation(wsId, binding);
       }
-      case ACTIVE -> {
-        log.info(
-            "Implicit session stop on disconnect for WS session {}, debugSessionId={}, shadowRunId={}",
-            wsId,
-            binding.sessionId(),
-            binding.shadowRunId());
-        try {
-          sessionService.finalizeSessionOnDisconnect(binding.sessionId(), "disconnect");
-        } catch (Exception e) {
-          log.error(
-              "Failed to implicitly finalize session {} on disconnect: {}",
-              binding.sessionId(),
-              e.getMessage(),
-              e);
-        } finally {
-          shadowDecisionService.cleanupSession(binding.sessionId(), binding.shadowRunId());
-          removeBindingAndOwnershipAndReservation(wsId, binding);
-        }
-      }
-      case EXPLICIT_STOP_FAILED, TRANSPORT_FINALIZATION_FAILED -> {
+      case ACTIVE -> deferActiveFinalization(wsSession, "disconnect");
+      case EXPLICIT_STOP_FAILED -> {
         log.info("Close fallback for WS session {}, debugSessionId={}", wsId, binding.sessionId());
         try {
           sessionService.finalizeSessionOnDisconnect(binding.sessionId(), "disconnect");
@@ -1044,6 +1121,82 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           removeBindingAndOwnershipAndReservation(wsId, binding);
         }
       }
+    }
+  }
+
+  /** Detaches a dead socket and reserves its active session for a bounded reconnect window. */
+  private void deferActiveFinalization(WebSocketSession wsSession, String cause) {
+    String wsId = wsSession.getId();
+    SessionBinding binding = sessionBindings.get(wsId);
+    if (binding == null || binding.phase() != BindingPhase.ACTIVE) {
+      return;
+    }
+
+    PendingReconnect pending = new PendingReconnect(binding, cause);
+    synchronized (ownershipLock) {
+      if (!sessionBindings.remove(wsId, binding)) {
+        return;
+      }
+      sessionOwners.remove(binding.sessionId(), wsId);
+      preferredReservations.entrySet().removeIf(e -> wsId.equals(e.getValue()));
+      PendingReconnect previous = pendingReconnects.put(binding.sessionId(), pending);
+      if (previous != null && previous.timeout != null) {
+        previous.timeout.cancel(false);
+      }
+    }
+
+    long delayMillis = Math.max(1L, reconnectGraceMillis);
+    try {
+      pending.timeout =
+          reconnectScheduler.schedule(
+              () -> expireReconnectGrace(binding.sessionId(), pending.token),
+              delayMillis,
+              TimeUnit.MILLISECONDS);
+      log.info(
+          "Detached WS session {} from debug session {}; waiting {} ms for Micro6 reconnect ({})",
+          wsId,
+          binding.sessionId(),
+          delayMillis,
+          cause);
+    } catch (RuntimeException schedulingFailure) {
+      log.error(
+          "Could not schedule reconnect grace for session {}; finalizing now",
+          binding.sessionId(),
+          schedulingFailure);
+      expireReconnectGrace(binding.sessionId(), pending.token);
+    }
+  }
+
+  /** Finalizes only if the same pending reconnect generation still owns the grace reservation. */
+  private void expireReconnectGrace(String sessionId, String token) {
+    PendingReconnect pending;
+    synchronized (ownershipLock) {
+      pending = pendingReconnects.get(sessionId);
+      if (pending == null || !pending.token.equals(token)) {
+        return;
+      }
+      pendingReconnects.remove(sessionId, pending);
+    }
+
+    log.info(
+        "Reconnect grace expired for debug session {} after {}; finalizing session and recording",
+        sessionId,
+        pending.cause);
+    try {
+      sessionService.finalizeSessionOnDisconnect(sessionId, pending.cause + " grace expired");
+    } catch (Exception e) {
+      log.error(
+          "Failed to finalize session {} after reconnect grace: {}", sessionId, e.getMessage(), e);
+    } finally {
+      shadowDecisionService.cleanupSession(sessionId, pending.binding.shadowRunId());
+    }
+  }
+
+  @PreDestroy
+  void shutdownReconnectScheduler() {
+    reconnectScheduler.shutdownNow();
+    for (Map.Entry<String, PendingReconnect> entry : Map.copyOf(pendingReconnects).entrySet()) {
+      expireReconnectGrace(entry.getKey(), entry.getValue().token);
     }
   }
 

@@ -245,6 +245,40 @@ class ScriptExecutionServiceTest {
   }
 
   @Test
+  @DisplayName("Micro6 dispatch prefers the trusted local executor URL over an advertised URL")
+  @SuppressWarnings("unchecked")
+  void runScriptAndWait_micro6PrefersLocalExecutorBaseUrl() throws Exception {
+    when(executeResponse.statusCode()).thenReturn(200);
+    when(executeResponse.body()).thenReturn(acceptedBody(1001, "FISHING_TRAINING"));
+    when(statusResponse.statusCode()).thenReturn(200);
+    when(statusResponse.body())
+        .thenReturn("{\"status\":\"COMPLETED\",\"entry_id\":1001,\"task_key\":\"FISHING_TRAINING\"}");
+    when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+        .thenReturn(executeResponse, statusResponse);
+
+    Map<String, Object> taskMetadata =
+        Map.of(
+            "task_key",
+            "FISHING_TRAINING",
+            "micro6_target",
+            Map.of("advertised_base_url", "http://100.120.100.78:8098"),
+            "target_preparation",
+            Map.of("local_executor_base_url", "http://127.0.0.1:8098"));
+
+    ScriptExecutionService.ScriptExecutionResult result =
+        service.runScriptAndWait("execution-1", "micro6:FISHING_TRAINING", 1000, taskMetadata);
+
+    ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+    verify(httpClient, org.mockito.Mockito.times(2))
+        .send(requestCaptor.capture(), any(HttpResponse.BodyHandler.class));
+    assertThat(requestCaptor.getAllValues().get(0).uri().toString())
+        .startsWith("http://127.0.0.1:8098/api/v1/execute");
+    assertThat(requestCaptor.getAllValues().get(1).uri().toString())
+        .startsWith("http://127.0.0.1:8098/api/v1/runs/");
+    assertThat(result.success()).isTrue();
+  }
+
+  @Test
   @DisplayName("Micro6 publish returns accepted entry id without waiting for completion")
   @SuppressWarnings("unchecked")
   void publishMicro6Task_returnsPublishedResult() throws Exception {

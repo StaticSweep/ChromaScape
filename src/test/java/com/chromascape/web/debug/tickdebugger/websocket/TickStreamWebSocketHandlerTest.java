@@ -133,6 +133,16 @@ class TickStreamWebSocketHandlerTest {
     handler.handleTextMessage(wsSession, new TextMessage(startJson()));
   }
 
+  private void expireReconnectGrace(String sessionId) {
+    @SuppressWarnings("unchecked")
+    Map<String, Object> pending =
+        (Map<String, Object>) ReflectionTestUtils.getField(handler, "pendingReconnects");
+    Object reconnect = pending.get(sessionId);
+    assertThat(reconnect).isNotNull();
+    String token = (String) ReflectionTestUtils.getField(reconnect, "token");
+    ReflectionTestUtils.invokeMethod(handler, "expireReconnectGrace", sessionId, token);
+  }
+
   private FishingShadowDecision decision() {
     return new FishingShadowDecision(
         2,
@@ -465,20 +475,22 @@ class TickStreamWebSocketHandlerTest {
   }
 
   @Test
-  @DisplayName("a successful transport-error finalization prevents close retry")
-  void successfulTransportErrorFinalizationPreventsCloseRetry() throws Exception {
+  @DisplayName("a transport error defers finalization until reconnect grace expires")
+  void transportErrorDefersFinalizationUntilGraceExpires() throws Exception {
     setup("ws-transport-ok");
     bind("debug_1");
 
     handler.handleTransportError(wsSession, new RuntimeException("boom"));
     handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
 
+    verify(sessionService, never()).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
+    expireReconnectGrace("debug_1");
     verify(sessionService, times(1)).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
   }
 
   @Test
-  @DisplayName("a failed transport-error finalization receives exactly one close retry")
-  void failedTransportErrorFinalizationGetsOneCloseRetry() throws Exception {
+  @DisplayName("a failed grace-expiry finalization is attempted only once")
+  void failedGraceExpiryFinalizationIsAttemptedOnlyOnce() throws Exception {
     setup("ws-transport-fail");
     bind("debug_1");
     doThrow(new RuntimeException("finalize boom"))
@@ -487,8 +499,9 @@ class TickStreamWebSocketHandlerTest {
 
     handler.handleTransportError(wsSession, new RuntimeException("boom"));
     handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
+    expireReconnectGrace("debug_1");
 
-    verify(sessionService, times(2)).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
+    verify(sessionService, times(1)).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
   }
 
   @Test
@@ -503,7 +516,40 @@ class TickStreamWebSocketHandlerTest {
     handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
     handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
 
+    verify(sessionService, never()).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
+    expireReconnectGrace("debug_1");
     verify(sessionService, times(1)).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
+  }
+
+  @Test
+  @DisplayName("a reconnect with the preferred session preserves the active recording")
+  void reconnectRebindsExistingSessionWithoutStartingAnotherRecording() throws Exception {
+    setup("ws-original");
+    bind("debug_1");
+    handler.handleTransportError(wsSession, new RuntimeException("boom"));
+    handler.afterConnectionClosed(wsSession, CloseStatus.NORMAL);
+
+    WebSocketSession replacement = mock(WebSocketSession.class);
+    when(replacement.getId()).thenReturn("ws-replacement");
+    handler.handleTextMessage(replacement, new TextMessage(startJson()));
+
+    verify(sessionService, times(1)).startSessionWithOutcome(any(), any(), any(), any(), any());
+    verify(sessionService, never()).finalizeSessionOnDisconnect(any(), anyString());
+    verify(shadowDecisionService, times(1)).openSession(eq("debug_1"), any());
+    verify(shadowDecisionService, never()).cleanupSession(eq("debug_1"), any());
+    ArgumentCaptor<TextMessage> response = ArgumentCaptor.forClass(TextMessage.class);
+    verify(replacement).sendMessage(response.capture());
+    assertThat(response.getValue().getPayload()).contains("\"sessionId\":\"debug_1\"");
+    assertThat(response.getValue().getPayload()).contains("\"recordingId\":\"rec_1\"");
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> pending =
+        (Map<String, Object>) ReflectionTestUtils.getField(handler, "pendingReconnects");
+    @SuppressWarnings("unchecked")
+    Map<String, String> owners =
+        (Map<String, String>) ReflectionTestUtils.getField(handler, "sessionOwners");
+    assertThat(pending).doesNotContainKey("debug_1");
+    assertThat(owners).containsEntry("debug_1", "ws-replacement");
   }
 
   @Test
@@ -810,6 +856,8 @@ class TickStreamWebSocketHandlerTest {
     handler.handleTransportError(wsSession, new RuntimeException("boom"));
     handler.handleTransportError(wsSession, new RuntimeException("boom"));
 
+    verify(sessionService, never()).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
+    expireReconnectGrace("debug_1");
     verify(sessionService, times(1)).finalizeSessionOnDisconnect(eq("debug_1"), anyString());
   }
 

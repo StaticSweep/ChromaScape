@@ -1,7 +1,7 @@
 ---
 schema_version: 1
 offline_record_id: offline-20260906-sc1429-signed-receipt-001
-sync_status: pending
+sync_status: conflict
 project: C:\Dev\IdeaProjects\ChromaScape
 shortcut_story_id: 1429
 shortcut_tag: shortcut:sc-1429

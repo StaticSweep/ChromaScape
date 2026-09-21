@@ -167,6 +167,35 @@ class ReplayTickBatchReceiptIntegrationTest {
   }
 
   @Test
+  void v51RepairsLegacyReceiptIdWithoutDefault() throws Exception {
+    try (Connection connection = connection()) {
+      setSchema(connection);
+      createDebugSessionsTable(connection);
+      migrate("V35__replay_tick_batch_receipts.sql");
+      execute(
+          connection,
+          qualified("ALTER TABLE replay_tick_batch_receipts ALTER COLUMN id DROP DEFAULT"));
+
+      migrate(
+          "V35__replay_tick_batch_receipts.sql",
+          "V51__repair_replay_tick_batch_receipt_id_default.sql");
+      assertFlywayVersions(connection, "34", "35", "51");
+
+      String sessionId = "debug-repaired-id-default";
+      insertSession(connection, sessionId);
+      insertReceipt(connection, sessionId, UUID.randomUUID(), 8, checksum('9'));
+      assertEquals(
+          1,
+          scalarInt(
+              connection,
+              qualified(
+                  "SELECT count(*) FROM replay_tick_batch_receipts WHERE session_id = '"
+                      + sessionId
+                      + "' AND id IS NOT NULL")));
+    }
+  }
+
+  @Test
   void receiptAndEvidenceRollbackTogetherBeforeCommit() throws Exception {
     try (Connection connection = connection()) {
       setSchema(connection);

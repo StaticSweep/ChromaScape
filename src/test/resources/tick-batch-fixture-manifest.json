@@ -6,6 +6,10 @@
       "sha256": "93d63932023b7e8d4bce0061f325db657d124898ec28744cc613882714a89241"
     },
     {
+      "name": "tick-batch-v3-packet-golden.json",
+      "sha256": "0d9092b159f2bcac28a0cba9a86f6a6fd638ff5151d984a529e954d6eea753de"
+    },
+    {
       "name": "tick-batch-canonical-vectors.json",
       "sha256": "97d60b68c04152375971a59ed3495c1c402649f7a70d01e8f1f3828d42c1575a"
     },

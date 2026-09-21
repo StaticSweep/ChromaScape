@@ -1,7 +1,7 @@
 ---
 schema_version: 1
 offline_record_id: 7fce96d3-41e5-4bdd-a7fb-d8b51cb356c1
-sync_status: pending
+sync_status: conflict
 project: C:\\Dev\\IdeaProjects\\ChromaScape
 shortcut_story_id: 1429
 shortcut_tag: shortcut:sc-1429

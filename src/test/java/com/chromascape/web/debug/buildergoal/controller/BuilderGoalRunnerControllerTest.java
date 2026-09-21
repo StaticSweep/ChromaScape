@@ -406,6 +406,58 @@ class BuilderGoalRunnerControllerTest {
   }
 
   @Test
+  void publishTask_forwardsDisabledAutoRecordInProvenance() throws Exception {
+    when(builderGoalRunnerService.publishOnly(
+            any(), any(), any(), any(), any(), anyBoolean(), any()))
+        .thenReturn(Map.of("accepted", true));
+
+    JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "taskKey": "FISHING_TRAINING",
+              "world": 360,
+              "settings": {},
+              "autoRecord": false
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.publishTask(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    org.mockito.ArgumentCaptor<Map<String, Object>> provenanceCaptor =
+        org.mockito.ArgumentCaptor.forClass(Map.class);
+    verify(builderGoalRunnerService)
+        .publishOnly(any(), any(), any(), any(), any(), anyBoolean(), provenanceCaptor.capture());
+    assertThat(provenanceCaptor.getValue()).containsEntry("auto_record", false);
+  }
+
+  @Test
+  void publishTask_rejectsNonBooleanAutoRecord() throws Exception {
+    JsonNode payload =
+        objectMapper.readTree(
+            """
+            {
+              "accountId": "hash-1",
+              "launcherMachineUuid": "machine-1",
+              "taskKey": "FISHING_TRAINING",
+              "world": 360,
+              "settings": {},
+              "autoRecord": "yes"
+            }
+            """);
+
+    ResponseEntity<Object> response = controller.publishTask(payload);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> body = (Map<String, Object>) response.getBody();
+    assertThat(body).containsEntry("error", "autoRecord must be a boolean");
+  }
+
+  @Test
   void publishTask_rejectsCallerSelectedTarget() throws Exception {
     com.fasterxml.jackson.databind.JsonNode payload =
         objectMapper.readTree(

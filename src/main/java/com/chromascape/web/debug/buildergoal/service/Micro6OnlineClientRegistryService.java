@@ -78,7 +78,8 @@ public class Micro6OnlineClientRegistryService {
 
   public boolean belongsToMachine(TargetClient target, String machineUuid) {
     ClientState state = clients.get(target.clientId());
-    return state != null && machineUuid.equals(state.machineUuid)
+    return state != null
+        && machineUuid.equals(state.machineUuid)
         && java.util.Objects.equals(target.launchAttemptId(), state.launchAttemptId);
   }
 
@@ -91,7 +92,8 @@ public class Micro6OnlineClientRegistryService {
         .filter(state -> state.lastSeenAt.isAfter(seenAfter) && isDispatchReady(state))
         .map(state -> toTargetClient(state, false))
         .filter(client -> isSelectedAccountEligible(client, accountHash))
-        .filter(client -> world.equals(client.currentWorld()) && world.equals(client.requestedWorld()))
+        .filter(
+            client -> world.equals(client.currentWorld()) && world.equals(client.requestedWorld()))
         .findFirst();
   }
 

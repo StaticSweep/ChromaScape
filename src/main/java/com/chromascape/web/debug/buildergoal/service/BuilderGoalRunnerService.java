@@ -26,7 +26,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.io.InputStreamReader;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -143,6 +145,7 @@ public class BuilderGoalRunnerService {
   private final long runTimeoutMs;
   private final int maxConsecutiveStatusFailures;
   private final long statusFailureGraceMs;
+  private final String localExecutorBaseUrl;
   private final int executorPort;
   private final Set<String> pendingLaunchIterations = ConcurrentHashMap.newKeySet();
   private final ConcurrentHashMap<String, ActiveLaunchWork> activeLaunchWork =
@@ -230,6 +233,7 @@ public class BuilderGoalRunnerService {
     this.objectMapper = objectMapper;
     this.patchLoopExecutor = patchLoopExecutor;
     this.launchExecutor = launchExecutor;
+    this.localExecutorBaseUrl = normalizeBaseUrl(micro6ExecutorBaseUrl);
     this.executorPort = resolveExecutorPort(micro6ExecutorBaseUrl);
     this.runTimeoutMs = runTimeoutMs;
     this.maxConsecutiveStatusFailures = maxConsecutiveStatusFailures;
@@ -467,6 +471,29 @@ public class BuilderGoalRunnerService {
     }
   }
 
+  /**
+   * Classifies a canonical production compilation failure at the process boundary. A Gradle task
+   * failure whose bounded launch-log tail contains javac-style compiler errors is a production
+   * compile failure and becomes the SC-1173 recovery eligibility signal.
+   */
+  private boolean isProductionCompileFailure(
+      Micro6TargetRelaunchService.RelaunchException relaunchException) {
+    if (!"GRADLE_TASK_FAILED".equals(relaunchException.getFailureKind())) {
+      return false;
+    }
+    Path logFile = relaunchException.getLaunchLogFile();
+    if (logFile == null || !Files.isRegularFile(logFile)) {
+      return false;
+    }
+    try {
+      List<String> lines = Files.readAllLines(logFile);
+      int from = Math.max(0, lines.size() - 400);
+      return lines.subList(from, lines.size()).stream().anyMatch(line -> line.contains("error:"));
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
   private boolean isCancelled(String operationId) {
     ActiveLaunchWork work = activeLaunchWork.get(operationId);
     return work != null && work.isCancelled();
@@ -676,6 +703,12 @@ public class BuilderGoalRunnerService {
       Map<String, Object> provenance) {
     rejectPublicTargetOverride(payload);
     NormalizedPayload normalized = normalizePayload(payload);
+    if (world != null) {
+      requireValidWorld(world);
+      normalized =
+          new NormalizedPayload(
+              normalized.taskKey(), normalized.displayName(), normalized.settings(), world);
+    }
     JsonNode canonicalCatalogTask = resolveCatalogTask(normalized.taskKey());
     String canonicalTaskKey = canonicalTaskKey(canonicalCatalogTask, normalized.taskKey());
     if (!canonicalTaskKey.equals(normalized.taskKey())) {
@@ -779,7 +812,7 @@ public class BuilderGoalRunnerService {
     if (taskKey == null || taskKey.isBlank()) {
       throw new IllegalArgumentException("taskKey is required");
     }
-    Map<String, Object> acceptedSettings = normalizeSettings(settings);
+    Map<String, Object> acceptedSettings = normalizeTaskSettings(taskKey, settings);
     JsonNode catalogTask = resolveCatalogTask(taskKey);
     String canonicalTaskKey = canonicalTaskKey(catalogTask, taskKey);
     String resolvedDisplayName =
@@ -900,13 +933,16 @@ public class BuilderGoalRunnerService {
       requireLaunchReadyAccount(selectedAccount);
       requireLaunchableMachine(selectedMachine, selectedMachineUuid);
     }
-    Map<String, Object> acceptedSettings = normalizeSettings(settings);
+    Map<String, Object> acceptedSettings = normalizeTaskSettings(taskKey, settings);
     List<Micro6OnlineClientRegistryService.TargetClient> matchingClients =
         findDispatchReadyClientsForAccount(selectedAccount, world);
     if (selectedMachine != null && !launcherControlService.isLocalMachine(selectedMachine)) {
-      matchingClients = matchingClients.stream()
-          .filter(client -> clientRegistryService.belongsToMachine(client, selectedMachine.machineUuid()))
-          .toList();
+      matchingClients =
+          matchingClients.stream()
+              .filter(
+                  client ->
+                      clientRegistryService.belongsToMachine(client, selectedMachine.machineUuid()))
+              .toList();
     }
     Micro6OnlineClientRegistryService.TargetClient matchingClient =
         matchingClients.size() == 1 ? matchingClients.get(0) : null;
@@ -917,6 +953,13 @@ public class BuilderGoalRunnerService {
     }
     String effectiveTargetBaseUrl =
         matchingClient != null ? matchingClient.advertisedBaseUrl() : null;
+    boolean localTarget =
+        matchingClient != null
+            && selectedMachine != null
+            && launcherControlService.isLocalMachine(selectedMachine);
+    if (localTarget) {
+      effectiveTargetBaseUrl = localExecutorBaseUrl;
+    }
     // A publish without exactly one registry-selected target is deferred before any executor
     // catalog call. This is deliberately independent of settings contents: no target means no
     // executor interaction and no caller-selected/default URL fallback.
@@ -955,6 +998,9 @@ public class BuilderGoalRunnerService {
     }
     if (matchingClient != null) {
       initialTargetMetadata.putAll(buildTargetMetadata(matchingClient));
+      if (localTarget) {
+        initialTargetMetadata.put("local_executor_base_url", localExecutorBaseUrl);
+      }
     }
     PatchLoopIteration iteration =
         createRunIteration(
@@ -1213,7 +1259,7 @@ public class BuilderGoalRunnerService {
           firstNonBlank(stringValue(taskMetadata.get("task_key")), iteration.getScriptName());
       CatalogValidationResult asyncCatalogValidation =
           resolvePublishCatalogValidation(
-              storedTaskKey, preparationResult.targetClient().advertisedBaseUrl(), storedSettings);
+              storedTaskKey, resolveTargetBaseUrl(taskMetadata), storedSettings);
       if (asyncCatalogValidation.rejectPublish()) {
         applyCatalogValidationMetadata(iteration, asyncCatalogValidation);
         Map<String, Object> invalidPublish = readPublishMetadata(taskMetadata);
@@ -1305,9 +1351,14 @@ public class BuilderGoalRunnerService {
       if (!e.isTerminal()) {
         return;
       }
+      String failureCode = PatchLoopFailureCode.SCRIPT_START_FAILED;
+      if (cause instanceof Micro6TargetRelaunchService.RelaunchException relaunchException
+          && isProductionCompileFailure(relaunchException)) {
+        failureCode = "PRODUCTION_COMPILE_FAILED";
+      }
       persistenceService.markIterationFailed(
           iteration,
-          PatchLoopFailureCode.SCRIPT_START_FAILED,
+          failureCode,
           e.getMessage(),
           "account="
               + firstNonBlank(
@@ -1859,12 +1910,18 @@ public class BuilderGoalRunnerService {
 
   private Map<String, Object> executeApprovedRecovery(String iterationId) throws Exception {
     PatchLoopIteration iteration = loadBuilderRun(iterationId);
-    if (iteration.getStatus() != PatchLoopStatus.FAILED) {
-      throw new IllegalStateException("Run must fail before it can be fixed");
+    if ("PRODUCTION_COMPILE_FAILED".equals(iteration.getFailureCode())) {
+      throw new IllegalStateException(
+          "DIRECT_SOURCE_MUTATION_DISABLED: production compile failures must use the"
+              + " compile-recovery proposal, approval, and candidate path");
     }
-
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
     String publishStatus = stringValue(readPublishMetadata(taskMetadata).get("status"));
+    if (iteration.getStatus() == PatchLoopStatus.CANCELLED
+        || "CANCELLED".equalsIgnoreCase(publishStatus)) {
+      throw new IllegalStateException(
+          "Run was cancelled; it can be analysed in the recovery workspace but not relaunched");
+    }
     if ("PUBLISH_FAILED".equalsIgnoreCase(publishStatus)) {
       throw new IllegalStateException(
           "Publish failed; there is no runnable task instance to relaunch");
@@ -2272,8 +2329,10 @@ public class BuilderGoalRunnerService {
     }
     Map<String, Object> targetPreparation =
         readTargetPreparationMetadata(readTaskMetadata(iteration));
-    if (!Micro6TargetRelaunchService.PHASE_PROCESS_EXITED.equalsIgnoreCase(
-        stringValue(targetPreparation.get("state")))) {
+    String preparationState = stringValue(targetPreparation.get("state"));
+    if (!Micro6TargetRelaunchService.PHASE_PROCESS_EXITED.equalsIgnoreCase(preparationState)
+        && !Micro6TargetRelaunchService.PHASE_EXECUTOR_STARTUP_REJECTED.equalsIgnoreCase(
+            preparationState)) {
       return false;
     }
     return mutationService.failStaleLaunchIfActive(iteration.getIterationId());
@@ -3606,6 +3665,10 @@ public class BuilderGoalRunnerService {
             definitions.put(key, field);
           }
         });
+    // Legacy planner payloads can carry both the canonical level field and the legacy
+    // targetLevel/target_level aliases. Fold them into whichever level field the target schema
+    // declares before the unknown-key check so an otherwise-valid publish is not rejected.
+    reconcileLegacyLevelAliases(settings, task);
     Map<String, Object> effectiveSettings = settings == null ? Map.of() : settings;
     for (Map.Entry<String, JsonNode> definitionEntry : definitions.entrySet()) {
       if (definitionEntry.getValue().path("required").asBoolean(false)
@@ -3659,8 +3722,9 @@ public class BuilderGoalRunnerService {
         }
       } else if ("select".equals(type)
           || "enum".equals(type)
-          || definition.path("options").isArray()
-          || definition.path("options_by_dependency").isObject()) {
+          || (("string".equals(type) || "text".equals(type))
+              && (definition.path("options").isArray()
+                  || definition.path("options_by_dependency").isObject()))) {
         Set<String> allowedOptions = schemaOptionValues(definition, effectiveSettings, definitions);
         if (allowedOptions == null
             || !value.isTextual()
@@ -3794,6 +3858,111 @@ public class BuilderGoalRunnerService {
     return new LinkedHashMap<>(settings);
   }
 
+  private Map<String, Object> normalizeTaskSettings(
+      String taskKey, Map<String, Object> settings) {
+    Map<String, Object> normalized = normalizeSettings(settings);
+    String normalizedTaskKey = normalizeTaskKey(taskKey);
+    if (!"fishing_training".equals(normalizedTaskKey)
+        && !"fish_training".equals(normalizedTaskKey)) {
+      return normalized;
+    }
+
+    boolean hasCanonical = normalized.containsKey("stopConditionValue");
+    boolean hasCamelAlias = normalized.containsKey("targetLevel");
+    boolean hasSnakeAlias = normalized.containsKey("target_level");
+    Object camelAlias = normalized.get("targetLevel");
+    Object snakeAlias = normalized.get("target_level");
+    if (hasCamelAlias && hasSnakeAlias && !Objects.equals(camelAlias, snakeAlias)) {
+      throw new IllegalArgumentException(
+          "Conflicting Fishing target-level settings: targetLevel and target_level disagree");
+    }
+
+    Object legacyValue = hasCamelAlias ? camelAlias : snakeAlias;
+    if (hasCanonical
+        && (hasCamelAlias || hasSnakeAlias)
+        && !Objects.equals(normalized.get("stopConditionValue"), legacyValue)) {
+      throw new IllegalArgumentException(
+          "Conflicting Fishing target-level settings: stopConditionValue disagrees with a legacy target-level value");
+    }
+    if (!hasCanonical && (hasCamelAlias || hasSnakeAlias)) {
+      normalized.put("stopConditionValue", legacyValue);
+    }
+    normalized.remove("targetLevel");
+    normalized.remove("target_level");
+    return normalized;
+  }
+
+  /**
+   * Folds legacy level aliases ({@code targetLevel} / {@code target_level}) into the target
+   * task's declared settings schema.
+   *
+   * <p>Legacy planner payloads emit both the canonical level field (for example {@code
+   * stopConditionValue} on progressive crafting) and one or both aliases. The executor schema
+   * rejects the aliases as unknown settings, so an otherwise-valid publish fails. This rewrites or
+   * drops an alias only when the schema proves the canonical field; tasks whose schema declares
+   * {@code targetLevel} as a first-class field keep it untouched, and a disagreeing value is
+   * rejected as a conflict rather than silently resolved.
+   */
+  private void reconcileLegacyLevelAliases(Map<String, Object> settings, JsonNode catalogTask) {
+    if (settings == null || settings.isEmpty()) {
+      return;
+    }
+    Set<String> schemaKeys = catalogFieldKeys(catalogTask);
+    if (schemaKeys.isEmpty()) {
+      return;
+    }
+    String canonicalKey =
+        schemaKeys.contains("targetLevel")
+            ? "targetLevel"
+            : schemaKeys.contains("stopConditionValue") ? "stopConditionValue" : null;
+    if (canonicalKey == null) {
+      return;
+    }
+    boolean hasCamelAlias = settings.containsKey("targetLevel");
+    boolean hasSnakeAlias = settings.containsKey("target_level");
+    if (!hasCamelAlias && !hasSnakeAlias) {
+      return;
+    }
+    Object camelAlias = settings.get("targetLevel");
+    Object snakeAlias = settings.get("target_level");
+    if (hasCamelAlias && hasSnakeAlias && !Objects.equals(camelAlias, snakeAlias)) {
+      throw new IllegalArgumentException(
+          "Conflicting target-level settings: targetLevel and target_level disagree");
+    }
+    Object legacyValue = hasCamelAlias ? camelAlias : snakeAlias;
+    if (settings.containsKey(canonicalKey)) {
+      if (!Objects.equals(settings.get(canonicalKey), legacyValue)) {
+        throw new IllegalArgumentException(
+            canonicalKey + " disagrees with a legacy target-level value");
+      }
+    } else {
+      settings.put(canonicalKey, legacyValue);
+    }
+    if (!"targetLevel".equals(canonicalKey)) {
+      settings.remove("targetLevel");
+    }
+    settings.remove("target_level");
+  }
+
+  private Set<String> catalogFieldKeys(JsonNode catalogTask) {
+    if (catalogTask == null || !catalogTask.isObject()) {
+      return Set.of();
+    }
+    JsonNode fields = catalogTask.path("args_schema").path("fields");
+    if (!fields.isArray()) {
+      return Set.of();
+    }
+    Set<String> keys = new LinkedHashSet<>();
+    fields.forEach(
+        field -> {
+          String key = textValue(field.path("key"));
+          if (key != null) {
+            keys.add(key);
+          }
+        });
+    return keys;
+  }
+
   private void rejectPublicTargetOverride(JsonNode payload) {
     if (containsNonBlankTargetOverride(payload)) {
       throw new IllegalArgumentException("TARGET_OVERRIDE_NOT_ALLOWED");
@@ -3849,9 +4018,13 @@ public class BuilderGoalRunnerService {
     JsonNode settingsNode = resolveAuthoritativeSettings(payload, builderExecution, queuePreview);
 
     Map<String, Object> settings =
-        normalizeSettings(
+        normalizeTaskSettings(
+            taskKey,
             objectMapper.convertValue(
                 settingsNode, new TypeReference<LinkedHashMap<String, Object>>() {}));
+    // Keep imported and persisted settings identical to what the executor schema will accept so
+    // the stored-settings consistency check and the publish payload never carry legacy aliases.
+    reconcileLegacyLevelAliases(settings, resolveCatalogTask(taskKey));
 
     String displayName =
         firstNonBlank(
@@ -4173,7 +4346,7 @@ public class BuilderGoalRunnerService {
     AnalysisInputMetadata analysisInputMetadata = readAnalysisInputMetadata(taskMetadata);
     String publishStatus = stringValue(publishMetadata.get("status"));
     boolean taskStartedObserved = Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"));
-    boolean taskStartConfirmed = taskStartedObserved && iteration.getRunSessionId() != null;
+    boolean taskStartConfirmed = taskStartedObserved;
     String displayStatus = deriveDisplayStatus(iteration, publishStatus);
     boolean cancelled =
         iteration.getStatus() == PatchLoopStatus.CANCELLED
@@ -4188,9 +4361,9 @@ public class BuilderGoalRunnerService {
             && !iteration.getAnalysisResponseJson().isNull();
     boolean patchDraftAvailable =
         iteration.getPatchId() != null && !iteration.getPatchId().isBlank();
-    boolean approvalRequired =
-        iteration.getStatus() == PatchLoopStatus.FAILED
-            && !"PUBLISH_FAILED".equalsIgnoreCase(publishStatus);
+    // Any run that produced a runnable task instance can be recovered; a cancelled run is excluded
+    // separately by the approvalAvailable guard and cannot be relaunched.
+    boolean approvalRequired = !"PUBLISH_FAILED".equalsIgnoreCase(publishStatus);
     boolean approvalAvailable =
         !cancelled
             && repairIncident.isEmpty()
@@ -4269,6 +4442,14 @@ public class BuilderGoalRunnerService {
     response.put("stopSendError", stringValue(publishMetadata.get("stop_send_error")));
     response.put("analysisId", iteration.getAnalysisId());
     response.put("analysisAvailable", analysisAvailable);
+    response.put(
+        "recoveryWorkspaceAvailable",
+        // A publish that never produced a task run has nothing to inspect; every other run can open
+        // the workspace, including a cancelled one whose replay is loaded from the shared picker.
+        !"PUBLISH_FAILED".equalsIgnoreCase(publishStatus)
+            && (iteration.getRunRecordingId() != null
+                || iteration.getRunSessionId() != null
+                || cancelled));
     response.put("patchId", iteration.getPatchId());
     response.put("patchDraftAvailable", patchDraftAvailable);
     response.put("diagnosisSummary", iteration.getDiagnosisSummary());
@@ -4464,14 +4645,8 @@ public class BuilderGoalRunnerService {
   }
 
   private String determineAnalyzeBlockedReason(PatchLoopIteration iteration, String publishStatus) {
-    if (iteration.getStatus() == PatchLoopStatus.CANCELLED
-        || "CANCELLED".equalsIgnoreCase(publishStatus)) {
-      return "Run was cancelled";
-    }
-    boolean repairIncidentOpen = !readRepairIncident(readTaskMetadata(iteration)).isEmpty();
-    if (iteration.getStatus() != PatchLoopStatus.FAILED && !repairIncidentOpen) {
-      return "Run must fail before it can be analyzed";
-    }
+    // Any run can be opened in the recovery workspace to inspect evidence and author a patch plan,
+    // regardless of lifecycle status. Only a publish that never produced a task run is excluded.
     if ("PUBLISH_FAILED".equalsIgnoreCase(publishStatus)) {
       return "Publish failed; there is no task run to analyze";
     }
@@ -4596,17 +4771,22 @@ public class BuilderGoalRunnerService {
     }
   }
 
+  /**
+   * Reads the last {@code maxLines} lines of a log file with a lossy UTF-8 decoder. Launch logs mix
+   * console output emitted under several code pages, so a strict decoder throws on the first
+   * malformed or unmappable byte (and the windows-1252 fallback has unmappable bytes too), which
+   * previously failed the whole read and left "View Launch Log" empty. Replacing those bytes keeps
+   * the readable text intact instead of discarding the file.
+   */
   private List<String> tailFile(Path path, int maxLines) throws IOException {
-    try {
-      return tailFile(path, maxLines, StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      return tailFile(path, maxLines, Charset.forName("windows-1252"));
-    }
-  }
-
-  private List<String> tailFile(Path path, int maxLines, Charset charset) throws IOException {
+    CharsetDecoder decoder =
+        StandardCharsets.UTF_8
+            .newDecoder()
+            .onMalformedInput(CodingErrorAction.REPLACE)
+            .onUnmappableCharacter(CodingErrorAction.REPLACE);
     ArrayDeque<String> lines = new ArrayDeque<>(maxLines);
-    try (BufferedReader reader = Files.newBufferedReader(path, charset)) {
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(Files.newInputStream(path), decoder))) {
       String line;
       while ((line = reader.readLine()) != null) {
         if (lines.size() == maxLines) {
@@ -4654,9 +4834,6 @@ public class BuilderGoalRunnerService {
     if (iteration.getStatus() == PatchLoopStatus.CANCELLED
         || "CANCELLED".equalsIgnoreCase(publishStatus)) {
       return "Run was cancelled";
-    }
-    if (iteration.getStatus() != PatchLoopStatus.FAILED) {
-      return "Run must fail before it can be recovered";
     }
     if ("PUBLISH_FAILED".equalsIgnoreCase(publishStatus)) {
       return "Publish failed; there is no runnable task instance to relaunch";
@@ -5165,11 +5342,26 @@ public class BuilderGoalRunnerService {
       throw new IllegalStateException("Builder Goal run is missing persisted task settings");
     }
     NormalizedPayload imported = normalizePayload(iteration.getImportedPayloadJson());
+    // Runs imported before alias reconciliation persisted legacy target-level aliases. Reconcile
+    // the stored copy against the same schema so the consistency check compares like with like and
+    // the executor snapshot never receives an unknown alias key.
+    Map<String, Object> storedSettings =
+        new LinkedHashMap<>(
+            objectMapper.convertValue(
+                persistedSettings, new TypeReference<Map<String, Object>>() {}));
+    reconcileLegacyLevelAliases(storedSettings, resolveCatalogTask(iteration.getScriptName()));
     JsonNode importedSettings = objectMapper.valueToTree(imported.settings());
-    JsonNode storedSettings = objectMapper.valueToTree(persistedSettings);
-    if (!importedSettings.equals(storedSettings)) {
+    JsonNode reconciledStoredSettings = objectMapper.valueToTree(storedSettings);
+    if (!importedSettings.equals(reconciledStoredSettings)) {
       throw new IllegalStateException(
           "Builder Goal run has imported task settings that do not match its persisted launch settings");
+    }
+    if (!reconciledStoredSettings.equals(objectMapper.valueToTree(persistedSettings))) {
+      taskMetadata.put("settings", storedSettings);
+      taskMetadata.put(
+          "settings_sha256", CanonicalSettingsHasher.sha256(objectMapper, storedSettings));
+      iteration.setTaskMetadataJson(objectMapper.valueToTree(taskMetadata));
+      persistenceService.saveIteration(iteration);
     }
   }
 
@@ -5837,7 +6029,13 @@ public class BuilderGoalRunnerService {
         taskMetadata != null && taskMetadata.containsKey("advertised_base_url")
             ? taskMetadata
             : readTargetMetadata(taskMetadata);
-    String value = stringValue(targetMetadata.get("advertised_base_url"));
+    Map<String, Object> targetPreparationMetadata =
+        readTargetPreparationMetadata(taskMetadata);
+    String value =
+        firstNonBlank(
+            stringValue(targetMetadata.get("local_executor_base_url")),
+            stringValue(targetPreparationMetadata.get("local_executor_base_url")),
+            stringValue(targetMetadata.get("advertised_base_url")));
     if (value == null) {
       return null;
     }
@@ -5845,6 +6043,17 @@ public class BuilderGoalRunnerService {
       value = value.substring(0, value.length() - 1);
     }
     return value.isBlank() ? null : value;
+  }
+
+  private String normalizeBaseUrl(String value) {
+    if (value == null) {
+      return null;
+    }
+    String normalized = value.trim();
+    while (normalized.endsWith("/")) {
+      normalized = normalized.substring(0, normalized.length() - 1);
+    }
+    return normalized.isBlank() ? null : normalized;
   }
 
   private Map<String, Object> buildPublishMetadata(
@@ -5952,7 +6161,7 @@ public class BuilderGoalRunnerService {
     Map<String, Object> taskMetadata = readTaskMetadata(iteration);
     String preparationState = stringValue(readTargetPreparationMetadata(taskMetadata).get("state"));
     boolean taskStarted = Boolean.TRUE.equals(taskMetadata.get("task_start_confirmed"));
-    boolean taskStartConfirmed = taskStarted && iteration.getRunSessionId() != null;
+    boolean taskStartConfirmed = taskStarted;
     if (iteration.getStatus() == PatchLoopStatus.CANCELLED) {
       return "CANCELLED";
     }

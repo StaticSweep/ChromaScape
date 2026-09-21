@@ -2,11 +2,11 @@ package com.chromascape.web.aiplayer.routine.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import com.chromascape.web.aiplayer.routine.entity.BehaviorGraphDefinition;
 import com.chromascape.web.aiplayer.routine.entity.RoutineAssistantConversation;
 import com.chromascape.web.aiplayer.routine.repository.BehaviorGraphDefinitionRepository;
 import com.chromascape.web.aiplayer.routine.repository.RoutineAssistantConversationRepository;
-import com.chromascape.testsupport.IsolatedPostgresTestDatabase;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;

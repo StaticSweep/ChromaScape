@@ -121,3 +121,29 @@ test('debugger page wires the tested recovery guards and retry UI to production 
   assert.match(script, /packetDisplayIdentity/);
   assert.match(script, /forceReload: true/);
 });
+
+test('replay time sync renders the new log window before following its current tick', () => {
+  const root = path.resolve(__dirname, '../../..');
+  const script = fs.readFileSync(
+    path.join(root, 'src/main/resources/static/js/debugger.js'), 'utf8');
+  const syncStart = script.indexOf('async function syncLogsToVideo(videoMs)');
+  const syncEnd = script.indexOf('\nfunction renderReplayLogError()', syncStart);
+  const syncSource = script.slice(syncStart, syncEnd);
+
+  const renderIndex = syncSource.indexOf('renderReplayLogs(result.logs || [], currentTick');
+  const followIndex = syncSource.indexOf('maybeAutoFollowTick(currentTick)');
+  assert.ok(renderIndex >= 0, 'sync must render the authoritative replay window');
+  assert.ok(followIndex > renderIndex, 'auto-follow must target the newly rendered DOM');
+});
+
+test('enabling replay scroll sync immediately refreshes the authoritative video-time window', () => {
+  const root = path.resolve(__dirname, '../../..');
+  const script = fs.readFileSync(
+    path.join(root, 'src/main/resources/static/js/debugger.js'), 'utf8');
+  const toggleStart = script.indexOf('function initAutoFollowToggle()');
+  const toggleEnd = script.indexOf('\nfunction saveLogTypePrefs()', toggleStart);
+  const toggleSource = script.slice(toggleStart, toggleEnd);
+
+  assert.match(toggleSource, /syncLogsToVideo\(currentTimeMs\)/);
+  assert.match(script, /const allGroups = container\.querySelectorAll\('\.tick-group\[data-tick\]'\)/);
+});

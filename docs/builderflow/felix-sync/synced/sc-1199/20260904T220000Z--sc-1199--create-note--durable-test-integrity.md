@@ -1,13 +1,14 @@
 ---
 schema_version: 1
 offline_record_id: offline_sc1199_20260904T220000Z_durable_test_integrity_4b7e1c20
-sync_status: pending
+sync_status: synced
 project: 'C:\Dev\IdeaProjects\ChromaScape'
 shortcut_story_id: 1199
 shortcut_tag: 'shortcut:sc-1199'
-felix_task_id: task_1788264505764_479zgp12
+felix_task_id: task_1789077614858_lhuqlht1
 operation: create_note
-target_note_id: null
+target_note_id: note_1789077724884_d1b11e36
+felix_note_id: note_1789077724884_d1b11e36
 title: 'SC-1199 durable-delivery test-integrity hardening — implementation evidence'
 note_type: documentation
 stable_tags:
@@ -18,12 +19,13 @@ stable_tags:
 parent_id: null
 intended_entity_links:
   - entity_type: task
-    entity_id: task_1788264505764_479zgp12
+    entity_id: task_1789077614858_lhuqlht1
     link_strength: primary
   - entity_type: shortcut_story
     entity_id: '1199'
     link_strength: primary
 created_at: '2026-09-04T22:00:00Z'
+synced_at: '2026-09-10T22:04:07.8379951Z'
 intended_felix_task_state: in_progress
 intended_felix_spec_state: spec_ready
 intended_shortcut_transition: none — do not advance SC-1199; xRSPS playback/viewer/fixture/certification remain incomplete
@@ -238,3 +240,10 @@ evidence headings above form the note payload. Replay oldest-first — after the
 `20260904T174000Z` reconcile-task record — searching the
 `offline-sync:offline_sc1199_20260904T220000Z_durable_test_integrity_4b7e1c20`
 tag before creation, then move this file to `synced/sc-1199/`.
+
+## Sync result — 2026-09-10 reconciliation
+
+Synced as Felix note `note_1789077724884_d1b11e36`, linked to task
+`task_1789077614858_lhuqlht1` and Shortcut story 1199. The complete note payload above was
+preserved; task and Shortcut remain `in_progress`/In Progress and no new synchronization marker
+was posted.

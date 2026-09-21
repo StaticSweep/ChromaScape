@@ -44,6 +44,16 @@ public class Micro6TargetRelaunchService {
   private static final long GRACEFUL_TERMINATION_WAIT_MS = 3_000L;
   private static final long FORCE_TERMINATION_WAIT_MS = 2_000L;
   private static final long OWNED_TREE_SETTLE_MS = 1_500L;
+
+  /**
+   * Bounded wait for a listener probe subprocess. {@code Get-NetTCPConnection} is a CIM/WMI cmdlet
+   * that can stall for several seconds under load, so the bound must be generous enough that a slow
+   * but healthy probe is not misclassified as {@code UNKNOWN}.
+   */
+  private static final long PORT_PROBE_TIMEOUT_MS = 10_000L;
+
+  /** Delay before retrying the native netstat fallback after an indeterminate listener probe. */
+  private static final long PORT_PROBE_FALLBACK_RETRY_DELAY_MS = 750L;
   private static final String FAILURE_KIND_BUILD_OUTPUT_LOCK = "BUILD_OUTPUT_LOCK";
   private static final String FAILURE_KIND_PROCESS_EXITED = "PROCESS_EXITED";
   private static final String FAILURE_KIND_GRADLE_TASK_FAILED = "GRADLE_TASK_FAILED";
@@ -52,6 +62,74 @@ public class Micro6TargetRelaunchService {
   private static final String FAILURE_KIND_GRADLE_TIMEOUT = "GRADLE_TIMEOUT";
   private static final String FAILURE_KIND_EXECUTOR_REPLACEMENT_BLOCKED =
       "EXECUTOR_REPLACEMENT_BLOCKED";
+
+  /**
+   * Terminal executor startup refusal: the process is alive but will never become dispatch-ready.
+   */
+  private static final String FAILURE_KIND_EXECUTOR_STARTUP_REJECTED = "EXECUTOR_STARTUP_REJECTED";
+
+  /** Launcher contract version ChromaScape requires; version 3 adds the explicit source mode. */
+  private static final int LAUNCHER_CONTRACT_VERSION = 3;
+
+  private static final String SOURCE_MODE_ENVIRONMENT_KEY = "MICRO6_SOURCE_MODE";
+  private static final String SOURCE_MODE_DISABLED = "disabled";
+  private static final String SOURCE_MODE_AUTHORITATIVE = "authoritative";
+
+  /**
+   * Authoritative launch task the launcher contract must advertise; mirrors the Gradle composite.
+   */
+  private static final String AUTHORITATIVE_GRADLE_RUN_TASK = ":client:runBuilderGoalAuthoritative";
+
+  /**
+   * Micro6 startup refusals that can never resolve by waiting. Each marker is emitted by the
+   * executor (or the launch task) before it exits, and every one of them means the executor will
+   * not bind its port for this attempt.
+   *
+   * <p>{@code source_startup_failed} covers every fail-closed authoritative source violation,
+   * including an unknown mode and a promoted bundle that does not match the running artifact.
+   * {@code no artifact sidecar configured} and {@code running packaged artifact identity is
+   * unavailable} are the artifact-attestation refusals. {@code Local builder executor did not
+   * start} is the generic bind refusal.
+   *
+   * <p>Ordered most specific first: the executor can publish the generic bind refusal on the same
+   * startup path as the specific underlying cause, so the artifact-attestation markers and the
+   * fail-closed source marker must be matched before the generic one. Otherwise a caller would only
+   * ever see {@code Local builder executor did not start} and lose the actionable cause.
+   */
+  private static final List<String> FATAL_EXECUTOR_STARTUP_MARKERS =
+      List.of(
+          "no artifact sidecar configured",
+          "running packaged artifact identity is unavailable",
+          "source_startup_failed",
+          "Local builder executor did not start");
+
+  /** Highest-priority marker first: the most specific published cause wins. */
+  static String detectFatalExecutorStartupMarker(List<String> lines) {
+    if (lines == null || lines.isEmpty()) {
+      return null;
+    }
+    // Artifact-identity diagnostics can also be emitted by a running development executor while
+    // answering health. They are fatal only when the same attempt contains an explicit startup
+    // refusal. Without this gate a healthy disabled-mode executor can bind 8098 and then be killed
+    // solely because its classes-directory launch has no packaged-JAR sidecar.
+    boolean startupRefused =
+        lines.stream()
+            .anyMatch(
+                line ->
+                    line != null
+                        && (line.contains("[Micro6Executor] refusing startup:")
+                            || line.contains("source_startup_failed")
+                            || line.contains("Local builder executor did not start")));
+    if (!startupRefused) {
+      return null;
+    }
+    for (String marker : FATAL_EXECUTOR_STARTUP_MARKERS) {
+      if (lines.stream().anyMatch(line -> line != null && line.contains(marker))) {
+        return marker;
+      }
+    }
+    return null;
+  }
 
   private enum LaunchMode {
     STRUCTURED_WINDOWS,
@@ -81,6 +159,13 @@ public class Micro6TargetRelaunchService {
   public static final String PHASE_READY = Micro6ExecutorReadinessEvaluator.PHASE_READY;
   public static final String PHASE_BUILD_FAILED = "BUILD_FAILED";
   public static final String PHASE_PROCESS_EXITED = "PROCESS_EXITED";
+
+  /**
+   * Terminal executor startup refusal: the client process is still alive but has published a marker
+   * proving it will never bind the executor port. Distinct from {@link #PHASE_PROCESS_EXITED}
+   * because the process has not exited when this phase is published.
+   */
+  public static final String PHASE_EXECUTOR_STARTUP_REJECTED = "EXECUTOR_STARTUP_REJECTED";
 
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient;
@@ -619,6 +704,11 @@ public class Micro6TargetRelaunchService {
       if (attemptResult.success() != null) {
         return attemptResult.success();
       }
+      // An unsuccessful attempt can still own a live process tree: waitForTargetReady returns
+      // instead of throwing on a fatal executor startup rejection, where the client process stays
+      // alive but will never bind the executor port. Terminate the owned tree before retrying or
+      // throwing so a rejected RuneLite instance cannot outlive the failed attempt.
+      terminateOwnedProcessTree(process);
       LaunchFailure failure = attemptResult.failure();
       if (attemptNumber < MAX_LAUNCH_ATTEMPTS && failure != null && failure.retryable()) {
         logger.warn(
@@ -682,6 +772,53 @@ public class Micro6TargetRelaunchService {
     String lastReadinessReason = null;
     String lastReadinessPhase = PHASE_LAUNCHING_PROCESS;
     while (Instant.now().isBefore(deadline)) {
+      // A terminal startup refusal is checked before the health probe: the executor publishes these
+      // markers only on paths that end startup, so waiting cannot make one resolve. Returning now
+      // keeps the launch failure prompt and stops the owned process tree rather than leaving
+      // RuneLite open with nothing listening on the executor port.
+      LaunchFailure fatalStartupFailure =
+          detectFatalExecutorStartupFailure(logFile, attemptStartOffset);
+      if (fatalStartupFailure != null) {
+        emitProgress(
+            progressListener,
+            new HealthCheckResult(
+                Optional.empty(),
+                PHASE_EXECUTOR_STARTUP_REJECTED,
+                fatalStartupFailure.detail(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null),
+            false,
+            localExecutorBaseUrl,
+            gradleRunTask,
+            maskedLaunchArgs,
+            logFile,
+            fatalStartupFailure.kind(),
+            fatalStartupFailure.detail(),
+            attemptId);
+        return new RelaunchAttemptResult(
+            null, fatalStartupFailure, lastReadinessPhase, lastReadinessReason, attemptId);
+      }
       HealthCheckResult healthCheck =
           readHealthyExecutorTarget(
               localExecutorBaseUrl,
@@ -731,9 +868,14 @@ public class Micro6TargetRelaunchService {
       if (!process.isAlive()) {
         boolean markerSeen = hasSeenLaunchingProcessMarker(logFile, attemptStartOffset);
         LaunchFailure failure = analyzeLaunchFailure(logFile, attemptStartOffset);
-        // If the client Java process launched (marker seen) and then exited, the failure is a
-        // process exit, never a Gradle/build failure from this attempt's log bytes.
-        if (markerSeen) {
+        // A published startup refusal outranks the generic process-exit classification: the exit is
+        // a consequence of the refusal, and the refusal is the actionable cause. It is re-checked
+        // here because the refusal can be written after this iteration's earlier log read.
+        LaunchFailure startupRejection =
+            detectFatalExecutorStartupFailure(logFile, attemptStartOffset);
+        if (startupRejection != null) {
+          failure = startupRejection;
+        } else if (markerSeen) {
           failure =
               new LaunchFailure(
                   FAILURE_KIND_PROCESS_EXITED,
@@ -1300,12 +1442,19 @@ public class Micro6TargetRelaunchService {
       if (probe.state() == PortProbeState.FREE) {
         return;
       }
+      logger.warn(
+          "Blocking Micro6 executor replacement: port {} ownership is unverifiable (owner={}, probe={})",
+          targetPort,
+          probe.pid() != null ? probe.pid() : "unknown",
+          probe.detail());
       throw replacementBlocked(
           launchLog,
           "Unable to verify that the Micro6 executor port "
               + targetPort
               + " is owned by a Builder Goal process; replacement is blocked (owner="
               + (probe.pid() != null ? probe.pid() : "unknown")
+              + ", probe="
+              + probe.detail()
               + ")");
     }
 
@@ -1324,12 +1473,20 @@ public class Micro6TargetRelaunchService {
     }
     if (ownership != PortOwnershipState.VERIFIED_OWNER) {
       PortProbe probe = probeListeningPort(targetPort);
+      logger.warn(
+          "Blocking Micro6 executor termination: port {} ownership is unverifiable before termination"
+              + " (owner={}, probe={})",
+          targetPort,
+          probe.pid() != null ? probe.pid() : "unknown",
+          probe.detail());
       throw replacementBlocked(
           launchLog,
           "Unable to verify that the Micro6 executor port "
               + targetPort
               + " is owned by a Builder Goal process before termination; replacement is blocked (owner="
               + (probe.pid() != null ? probe.pid() : "unknown")
+              + ", probe="
+              + probe.detail()
               + ")");
     }
 
@@ -1857,14 +2014,22 @@ public class Micro6TargetRelaunchService {
       } catch (Exception ignored) {
         // Classified as incompatible below.
       }
+      // Contract version 3 adds the authoritative launch task and the explicit MICRO6_SOURCE_MODE
+      // requirement. It is contract-significant: an older launcher defaults the mode from ambient
+      // environment state instead of adopting the value ChromaScape declares, so it must be
+      // rejected rather than tolerated.
       if (contract == null
           || !contract.isObject()
-          || contract.path("contract_version").asInt(-1) != 2) {
+          || contract.path("contract_version").asInt(-1) != LAUNCHER_CONTRACT_VERSION) {
         throw launcherContractException(
             logFile,
-            "Builder Goal launcher contract is incompatible (expected contract_version 2). Check "
+            "Builder Goal launcher contract is incompatible (expected contract_version "
+                + LAUNCHER_CONTRACT_VERSION
+                + "). Check "
                 + launcherScript,
-            "Builder Goal launcher contract is incompatible (expected contract_version 2)");
+            "Builder Goal launcher contract is incompatible (expected contract_version "
+                + LAUNCHER_CONTRACT_VERSION
+                + ")");
       }
       if (!contract.path("validate_only").asBoolean(false)
           || !contract.path("compile_only").asBoolean(false)) {
@@ -1873,6 +2038,34 @@ public class Micro6TargetRelaunchService {
             "Builder Goal launcher contract is missing preflight capabilities. Check "
                 + launcherScript,
             "Builder Goal launcher contract is missing preflight capabilities");
+      }
+      // The launcher must declare that it adopts the explicitly supplied source mode. A launcher
+      // that ignores MICRO6_SOURCE_MODE would reintroduce mode inference from ambient values, and a
+      // launcher that advertises only some of the modes cannot honor every mode ChromaScape
+      // selects.
+      List<?> declaredSourceModes =
+          contract.path("source_modes").isArray()
+              ? objectMapper.convertValue(contract.path("source_modes"), List.class)
+              : List.of();
+      if (!SOURCE_MODE_ENVIRONMENT_KEY.equals(contract.path("source_mode_env").asText(null))
+          || !declaredSourceModes.contains(SOURCE_MODE_DISABLED)
+          || !declaredSourceModes.contains(SOURCE_MODE_AUTHORITATIVE)) {
+        throw launcherContractException(
+            logFile,
+            "Builder Goal launcher contract does not support the explicit source mode. Check "
+                + launcherScript,
+            "Builder Goal launcher contract does not support the explicit source mode");
+      }
+      // Contract version 3 also promises the dedicated authoritative launch task. A launcher that
+      // does not advertise it cannot run authoritative preparation, so it is an incomplete v3
+      // contract and must be rejected even though its version number is current.
+      if (!AUTHORITATIVE_GRADLE_RUN_TASK.equals(
+          contract.path("authoritative_run_task").asText(null))) {
+        throw launcherContractException(
+            logFile,
+            "Builder Goal launcher contract does not advertise the authoritative Gradle task. Check "
+                + launcherScript,
+            "Builder Goal launcher contract does not advertise the authoritative Gradle task");
       }
       // The launcher must advertise exactly the canonical Gradle tasks ChromaScape will invoke;
       // a launcher that runs a different run/prepare task is incompatible even when the version
@@ -2218,6 +2411,13 @@ public class Micro6TargetRelaunchService {
       return;
     }
     environment.put("MICRO6_LOCAL_EXECUTOR_ENABLED", "true");
+    // ChromaScape owns this value as part of the trusted launch environment. The ordinary local
+    // Builder Goal launch serves no authoritative source, and declaring that explicitly is what
+    // keeps the executor's fail-closed source startup contract from being selected by whatever
+    // MICRO6_SOURCE_* values the developer's .env happens to define. Without this the executor
+    // refuses startup, never binds its port, and the launcher waits out the full readiness timeout
+    // while RuneLite sits open. This is deliberately not a browser-controlled payload field.
+    environment.put("MICRO6_SOURCE_MODE", "disabled");
     if (targetPort != null && targetPort > 0) {
       environment.put("MICRO6_EXECUTOR_BIND_ADDR", "127.0.0.1:" + targetPort);
     }
@@ -2240,6 +2440,9 @@ public class Micro6TargetRelaunchService {
       String launchAttemptId) {
     List<String> clientArgs = new ArrayList<>();
     clientArgs.add("--clean-jagex-launcher");
+    // Builder Goal automation does not need GPU rendering. Keeping it off avoids native OpenGL
+    // driver crashes while leaving Account Builder enabled (unlike RuneLite's broad --safe-mode).
+    clientArgs.add("--disable-gpu");
     clientArgs.add("--auto-enable-accountbuilder");
     clientArgs.add("--profile=" + accountName.trim());
     clientArgs.add("--expected-account-hash=" + accountHash.trim().toLowerCase(Locale.ENGLISH));
@@ -2874,11 +3077,42 @@ public class Micro6TargetRelaunchService {
     if (port == null || port <= 0) {
       return new PortProbe(PortProbeState.FREE, null, "no port configured");
     }
+    PortProbe primary = runListenerProbe(port);
+    if (primary.state() != PortProbeState.UNKNOWN || !isWindows()) {
+      return primary;
+    }
+    // The PowerShell probe is CIM/WMI-backed and can stall or fail under load. A transient
+    // indeterminate result must not be treated as "port occupied by an unverifiable process",
+    // because that blocks replacement of an executor that is already gone. Fall back to the
+    // native, locale-independent netstat probe (retried once) before failing closed.
+    PortProbe fallback = runWindowsNetstatProbe(port);
+    if (fallback.state() == PortProbeState.UNKNOWN) {
+      sleepQuietly(PORT_PROBE_FALLBACK_RETRY_DELAY_MS);
+      fallback = runWindowsNetstatProbe(port);
+    }
+    if (fallback.state() != PortProbeState.UNKNOWN) {
+      logger.warn(
+          "PowerShell listener probe for port {} was indeterminate ({}); netstat reported {} ({})",
+          port,
+          primary.detail(),
+          fallback.state(),
+          fallback.detail());
+      return fallback;
+    }
+    logger.warn(
+        "Listener probe for port {} is indeterminate (powershell={}, netstat={})",
+        port,
+        primary.detail(),
+        fallback.detail());
+    return primary;
+  }
+
+  private PortProbe runListenerProbe(Integer port) {
     try {
       List<String> command =
           isWindows() ? buildWindowsPortProbeCommand(port) : buildUnixPortProbeCommand(port);
       Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-      boolean finished = boundedWaitFor(process, 5_000L);
+      boolean finished = boundedWaitFor(process, PORT_PROBE_TIMEOUT_MS);
       if (!finished) {
         return new PortProbe(PortProbeState.UNKNOWN, null, "listener probe timed out");
       }
@@ -2893,6 +3127,82 @@ public class Micro6TargetRelaunchService {
           PortProbeState.UNKNOWN,
           null,
           "listener probe failed: " + firstNonBlank(e.getMessage(), "unknown error"));
+    }
+  }
+
+  /**
+   * Windows-only fallback used when the PowerShell listener probe is indeterminate. It parses
+   * {@code netstat -ano -p tcp} structurally — a LISTENING socket has the target port in its local
+   * endpoint and the all-zero wildcard as its foreign endpoint — instead of matching the localized
+   * state column, so it is stable across Windows display languages.
+   */
+  protected PortProbe runWindowsNetstatProbe(Integer port) {
+    try {
+      Process process =
+          new ProcessBuilder("netstat", "-ano", "-p", "tcp").redirectErrorStream(true).start();
+      boolean finished = boundedWaitFor(process, PORT_PROBE_TIMEOUT_MS);
+      if (!finished) {
+        return new PortProbe(PortProbeState.UNKNOWN, null, "netstat listener probe timed out");
+      }
+      String output = new String(process.getInputStream().readAllBytes());
+      int exitCode = process.exitValue();
+      return parseWindowsNetstatProbeOutput(output, exitCode, port);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return new PortProbe(PortProbeState.UNKNOWN, null, "netstat listener probe interrupted");
+    } catch (Exception e) {
+      return new PortProbe(
+          PortProbeState.UNKNOWN,
+          null,
+          "netstat listener probe failed: " + firstNonBlank(e.getMessage(), "unknown error"));
+    }
+  }
+
+  protected PortProbe parseWindowsNetstatProbeOutput(String output, int exitCode, Integer port) {
+    if (exitCode != 0) {
+      return new PortProbe(PortProbeState.UNKNOWN, null, "netstat probe exited with " + exitCode);
+    }
+    if (output == null || output.isBlank()) {
+      return new PortProbe(PortProbeState.UNKNOWN, null, "netstat probe returned no result");
+    }
+    String suffix = ":" + port;
+    for (String rawLine : output.split("\\R")) {
+      String line = rawLine == null ? "" : rawLine.trim();
+      if (line.isEmpty()) {
+        continue;
+      }
+      String[] parts = line.split("\\s+");
+      if (parts.length < 5) {
+        continue;
+      }
+      if (!parts[1].endsWith(suffix) || !isWildcardForeignEndpoint(parts[2])) {
+        continue;
+      }
+      String pidText = parts[parts.length - 1];
+      if (pidText.isEmpty() || !pidText.matches("[0-9]+")) {
+        continue;
+      }
+      try {
+        long pid = Long.parseLong(pidText);
+        if (pid > 0L) {
+          return new PortProbe(PortProbeState.OCCUPIED, pid, "netstat listener present");
+        }
+      } catch (NumberFormatException ignored) {
+        // Keep scanning the remaining lines.
+      }
+    }
+    return new PortProbe(PortProbeState.FREE, null, "no listener (netstat)");
+  }
+
+  private boolean isWildcardForeignEndpoint(String foreign) {
+    return "0.0.0.0:0".equals(foreign) || "[::]:0".equals(foreign) || "*:*".equals(foreign);
+  }
+
+  private void sleepQuietly(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
   }
 
@@ -3185,6 +3495,28 @@ public class Micro6TargetRelaunchService {
     return value == null || value.isBlank() ? null : value.trim();
   }
 
+  /**
+   * Classifies a terminal executor startup refusal from this attempt's own log bytes. Returns null
+   * when the attempt has published no fatal marker, so ordinary readiness polling is unaffected.
+   *
+   * <p>The detail is built only from a fixed marker list and the log path. Raw log content is never
+   * forwarded, so a sanitized reason can be surfaced to the launch-operation response.
+   */
+  private LaunchFailure detectFatalExecutorStartupFailure(Path logFile, long attemptStartOffset) {
+    String marker = detectFatalExecutorStartupMarker(readLogTail(logFile, 240, attemptStartOffset));
+    if (marker == null) {
+      return null;
+    }
+    return new LaunchFailure(
+        FAILURE_KIND_EXECUTOR_STARTUP_REJECTED,
+        "Micro6 local executor refused startup: "
+            + marker
+            + ". It will not listen on the executor port for this attempt, so the launch was stopped "
+            + "instead of waiting for readiness. Check "
+            + logFile.toAbsolutePath(),
+        false);
+  }
+
   private LaunchFailure analyzeLaunchFailure(Path logFile, long attemptStartOffset) {
     List<String> lines = readLogTail(logFile, 240, attemptStartOffset);
     String combined = String.join("\n", lines);
@@ -3207,11 +3539,14 @@ public class Micro6TargetRelaunchService {
     }
     String extractedFailureDetail = extractLaunchFailureDetail(lines);
     if (extractedFailureDetail != null) {
+      boolean launchedJvmProcessFailure = isLaunchedJvmProcessFailure(combined);
       return new LaunchFailure(
-          combined.contains("BUILD FAILED")
+          combined.contains("BUILD FAILED") && !launchedJvmProcessFailure
               ? FAILURE_KIND_GRADLE_TASK_FAILED
               : FAILURE_KIND_PROCESS_EXITED,
-          extractedFailureDetail,
+          launchedJvmProcessFailure
+              ? addNativeWindowsExitHint(extractedFailureDetail)
+              : extractedFailureDetail,
           false);
     }
     if (combined.contains("BUILD FAILED")) {
@@ -3226,6 +3561,29 @@ public class Micro6TargetRelaunchService {
         "Micro6 relaunch process exited before the local executor became ready. Check "
             + logFile.toAbsolutePath(),
         false);
+  }
+
+  /**
+   * Distinguishes a Gradle build/configuration failure from the JavaExec child process crashing.
+   * Gradle prints {@code BUILD FAILED} for both cases, but once {@code runBuilderGoal} launched
+   * RuneLite, a nonzero Java process exit is a runtime failure and must not be presented to the
+   * operator as "the client could not launch".
+   */
+  private boolean isLaunchedJvmProcessFailure(String output) {
+    if (output == null || output.isBlank()) {
+      return false;
+    }
+    return output.contains("Execution failed for task ':client:runBuilderGoal'.")
+        && output.contains("Process 'command '")
+        && output.contains("java")
+        && output.contains("finished with non-zero exit value");
+  }
+
+  private String addNativeWindowsExitHint(String detail) {
+    if (detail.contains("-1073741819") && !detail.contains("0xC0000005")) {
+      return detail + "\nNative Windows exit code: 0xC0000005 (EXCEPTION_ACCESS_VIOLATION).";
+    }
+    return detail;
   }
 
   private String extractLaunchFailureDetail(List<String> lines) {
@@ -3488,13 +3846,21 @@ public class Micro6TargetRelaunchService {
                 "Micro6 relaunch process exited before the local executor became ready. Check "
                     + logFile.toAbsolutePath(),
                 false);
-    // Use BUILD_FAILED phase for Gradle/build failures, PROCESS_EXITED otherwise.
+    // Use BUILD_FAILED phase for Gradle/build failures, the dedicated startup-refusal phase for a
+    // terminal executor refusal, and PROCESS_EXITED otherwise.
     boolean buildRelated =
         FAILURE_KIND_GRADLE_TASK_FAILED.equals(resolvedFailure.kind())
             || FAILURE_KIND_BUILD_OUTPUT_LOCK.equals(resolvedFailure.kind())
             || FAILURE_KIND_LAUNCH_CONFIGURATION_INVALID.equals(resolvedFailure.kind())
             || FAILURE_KIND_GRADLE_TIMEOUT.equals(resolvedFailure.kind());
-    String phase = buildRelated ? PHASE_BUILD_FAILED : PHASE_PROCESS_EXITED;
+    String phase;
+    if (buildRelated) {
+      phase = PHASE_BUILD_FAILED;
+    } else if (FAILURE_KIND_EXECUTOR_STARTUP_REJECTED.equals(resolvedFailure.kind())) {
+      phase = PHASE_EXECUTOR_STARTUP_REJECTED;
+    } else {
+      phase = PHASE_PROCESS_EXITED;
+    }
     if (buildRelated) {
       emitBuildFailedProgress(
           progressListener,

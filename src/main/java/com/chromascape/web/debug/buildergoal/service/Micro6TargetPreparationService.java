@@ -126,8 +126,12 @@ public class Micro6TargetPreparationService {
                 || !localLaunchCoordinator.holdsLease(lease);
 
     if (!launcherControlService.isLocalMachine(selectedMachine)) {
-      return remoteLauncher.ensureReady(request, selectedMachine, lease.ownerToken().toString(),
-          combinedCancellation, progressListener);
+      return remoteLauncher.ensureReady(
+          request,
+          selectedMachine,
+          lease.ownerToken().toString(),
+          combinedCancellation,
+          progressListener);
     }
 
     Micro6TargetRelaunchService.RelaunchResult relaunchResult;

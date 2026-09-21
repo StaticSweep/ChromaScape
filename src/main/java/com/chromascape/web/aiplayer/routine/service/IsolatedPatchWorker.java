@@ -148,7 +148,8 @@ public class IsolatedPatchWorker {
         return failed(request, changed, "ISOLATED_TREE_DIRTY");
       }
       verifyCompleteSourceManifest(repo, request);
-      if (!verifySourcePreimage(repo, request)) throw new IOException("SOURCE_PREIMAGE_MISMATCH");
+      if (request.preimageHash() != null && !verifySourcePreimage(repo, request))
+        throw new IOException("SOURCE_PREIMAGE_MISMATCH");
       Files.writeString(patch, request.unifiedDiff(), StandardCharsets.UTF_8);
       runCommand(
           List.of("git", "-C", repo.toString(), "apply", "--check", patch.toString()),
@@ -506,8 +507,7 @@ public class IsolatedPatchWorker {
     if (value != null && !value.isBlank()) destination.put(name, value);
   }
 
-  private static void copyEnvironmentIgnoringCase(
-      Map<String, String> destination, String name) {
+  private static void copyEnvironmentIgnoringCase(Map<String, String> destination, String name) {
     System.getenv().entrySet().stream()
         .filter(entry -> entry.getKey().equalsIgnoreCase(name))
         .findFirst()
@@ -714,7 +714,7 @@ public class IsolatedPatchWorker {
         || manifest.path("files").size() > SourceManifestContract.MAX_FILES)
       throw new IOException("SOURCE_MANIFEST_INVALID");
     Path root = repo.toRealPath();
-    boolean selected = false;
+    boolean selected = request.sourceFile() == null;
     for (JsonNode entry : manifest.path("files")) {
       String relative = entry.path("relative_path").asText();
       String expectedHash = entry.path("content_hash").asText();
@@ -729,7 +729,7 @@ public class IsolatedPatchWorker {
       byte[] normalized = normalize(Files.readAllBytes(file));
       if (!expectedHash.equals(hash(normalized)) || expectedSize != normalized.length)
         throw new IOException("SOURCE_MANIFEST_FILE_MISMATCH_" + relative);
-      if (relative.equals(request.sourceFile())) selected = true;
+      if (request.sourceFile() != null && relative.equals(request.sourceFile())) selected = true;
     }
     if (!selected) throw new IOException("SOURCE_SELECTED_FILE_MISMATCH");
   }

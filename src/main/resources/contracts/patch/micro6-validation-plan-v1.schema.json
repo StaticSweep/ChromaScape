@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://chromascape.local/contracts/patch/micro6-validation-plan-v1.schema.json",
+  "title": "Server-owned isolated validation plan",
+  "type": "object",
+  "required": ["schema", "commandKey", "gates", "networkDenied", "controlAllowed", "rebaseAllowed"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "micro6-validation-plan/v1" },
+    "commandKey": { "type": "string", "maxLength": 80 },
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "SOURCE_PREIMAGE_VERIFICATION", "STRICT_PATCH_CHECK_APPLY",
+          "CHANGED_FILE_ALLOWLIST_EQUALITY", "COMPILE_TYPE_CHECK", "CHECKSTYLE_STATIC",
+          "AFFECTED_UNIT_TESTS", "MANDATORY_CONTRACTS", "PACKAGE_SBOM_PROVENANCE",
+          "CLEANUP_ATTESTATION"
+        ]
+      }
+    },
+    "networkDenied": { "const": true },
+    "controlAllowed": { "const": false },
+    "rebaseAllowed": { "const": false }
+  }
+}

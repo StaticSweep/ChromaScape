@@ -149,6 +149,9 @@ class WindowHandlerTest {
     assertTrue(WindowHandler.isSupportedClientWindowTitle("Leeuwbot"));
     assertTrue(WindowHandler.isSupportedClientWindowTitle("Leeuwbot V2.0.61 - bigGreenMeat"));
     assertTrue(WindowHandler.isSupportedClientWindowTitle("- RuneLite"));
+    assertTrue(WindowHandler.isSupportedClientWindowTitle("-  RuneLite"));
+    assertTrue(WindowHandler.isSupportedClientWindowTitle("RuneLite  -  TheSomaliMan"));
+    assertTrue(WindowHandler.isSupportedClientWindowTitle("Leeuwbot  V0.0.0"));
     assertFalse(
         WindowHandler.isSupportedClientWindowTitle(
             "Merge pull request #1811 from bgatfa/fix/walker-opens-nonblocking-doors · infuse21/Microbot@b0a4607 - Google Chrome"));

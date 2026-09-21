@@ -2710,6 +2710,22 @@ body {
 /* =========================================================================
  * Same-screen Recovery Mode styles (added for debugger recovery mode).
  * ========================================================================= */
+
+/* Bootstrap 5.3 declares its light palette on :root (--bs-body-bg: #fff,
+ * --bs-tertiary-bg: #f8f9fa, --bs-border-color: #dee2e6), so the dark fallbacks
+ * written into the recovery rules never applied: panels rendered white while the
+ * shell kept its light text. Pin the debugger palette while Recovery is active. */
+body[data-workspace="recovery"] {
+  --bs-body-bg: var(--debugger-surface);
+  --bs-body-bg-rgb: 19, 31, 50;
+  --bs-secondary-bg: rgba(19, 31, 50, 0.72);
+  --bs-secondary-bg-rgb: 19, 31, 50;
+  --bs-tertiary-bg: rgba(8, 17, 31, 0.42);
+  --bs-tertiary-bg-rgb: 8, 17, 31;
+  --bs-border-color: var(--debugger-line);
+  --bs-border-color-translucent: rgba(148, 163, 184, 0.2);
+}
+
 .recovery-mode-shell {
   margin: 4px 0 0 0;
   padding: 0;
@@ -3063,6 +3079,13 @@ body.recovery-mode-active .debugger-bottom {
 
 .recovery-annotation-card.border-warning {
   background: rgba(255, 193, 7, 0.06);
+}
+
+/* The pinned dark --bs-body-bg would make unchecked boxes vanish into the panel;
+   keep them on the same light treatment as the workspace's other form controls. */
+body[data-workspace="recovery"] .form-check-input:not(:checked) {
+  background-color: #f8fafc;
+  border-color: #b8c4d3;
 }
 
 .recovery-evidence-checkbox:checked {
@@ -3561,6 +3584,18 @@ body[data-workspace] .input-group-text {
 .workspace-empty-state p {
   margin: 0;
   color: var(--debugger-muted);
+}
+
+/* Recovery workspace picker: lists every analysable run so any run (not just failed ones)
+   can be opened for recovery. */
+#recoveryEmptyState {
+  flex-wrap: wrap;
+}
+
+#recoveryRunPicker {
+  flex-basis: 100%;
+  width: 100%;
+  max-height: 340px;
 }
 
 /* Global header shows only controls relevant to the selected workspace. */
