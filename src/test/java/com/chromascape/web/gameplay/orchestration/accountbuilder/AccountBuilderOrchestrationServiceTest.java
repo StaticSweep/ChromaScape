@@ -113,6 +113,63 @@ class AccountBuilderOrchestrationServiceTest {
   }
 
   @Test
+  void bootstrapProvenanceCannotCarryProviderPromptDigest() {
+    FakeGateway gateway = new FakeGateway(State.CONFIRMED);
+    InMemoryAccountBuilderOrchestrationStore store =
+        new InMemoryAccountBuilderOrchestrationStore(
+            Clock.fixed(NOW, ZoneOffset.UTC), (a, e) -> true);
+    AccountBuilderOrchestrationService service = service(gateway, store);
+    OrchestrationRequest base = request("prompt-smuggle", Mode.BOOTSTRAP_RECORDING);
+    SnapshotBindings bindings = base.bindings();
+    SnapshotBindings smuggled =
+        new SnapshotBindings(
+            bindings.decisionDigest(),
+            bindings.semanticActionDigest(),
+            bindings.catalogDigest(),
+            bindings.capabilityDigest(),
+            bindings.goalPlanDigest(),
+            bindings.taskSkillDigests(),
+            bindings.toolSchemaDigest(),
+            bindings.knowledgeDigest(),
+            bindings.policyDigest(),
+            bindings.verifierDigest(),
+            bindings.buildId(),
+            bindings.expectedObservationRevision(),
+            bindings.expectedTaskRevision(),
+            bindings.observationDigest(),
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            bindings.providerSessionId(),
+            bindings.providerTurnId());
+    OrchestrationRequest unfingerprinted =
+        new OrchestrationRequest(
+            base.orchestrationId(),
+            base.requestId(),
+            base.idempotencyKey(),
+            null,
+            base.mode(),
+            base.sourceType(),
+            base.decision(),
+            base.envelope(),
+            smuggled,
+            base.authority(),
+            base.observation(),
+            base.deadline());
+    OrchestrationRequest forged =
+        withFingerprint(unfingerprinted, validator.immutableFingerprint(unfingerprinted));
+
+    // The documented contract requires the prompt digest to be absent for bootstrap sources;
+    // a smuggled provider prompt digest fails before any durable claim or gateway access.
+    assertThatThrownBy(() -> service.orchestrate(forged))
+        .isInstanceOf(AccountBuilderOrchestrationException.class)
+        .extracting("failureCode")
+        .isEqualTo(FailureCode.STALE_BINDING);
+    assertThat(store.find("orchestration-prompt-smuggle")).isEmpty();
+    assertThat(gateway.capabilityReads).hasValue(0);
+    assertThat(gateway.reservations).hasValue(0);
+    assertThat(gateway.dispatches).hasValue(0);
+  }
+
+  @Test
   void providerEntryPointAcceptsOnlyProviderOrchestrationCommands() {
     FakeGateway gateway = new FakeGateway(State.CONFIRMED);
     InMemoryAccountBuilderOrchestrationStore store =
@@ -592,7 +649,7 @@ class AccountBuilderOrchestrationServiceTest {
             envelope.expectedObservationRevision(),
             envelope.expectedTaskRevision(),
             "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            null,
             null,
             null);
     HumanAuthority authority =

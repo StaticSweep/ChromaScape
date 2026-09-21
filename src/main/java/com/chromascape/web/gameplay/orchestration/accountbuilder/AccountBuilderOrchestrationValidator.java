@@ -114,6 +114,10 @@ public final class AccountBuilderOrchestrationValidator {
       throw failure(
           FailureCode.STALE_BINDING,
           "Non-provider provenance cannot carry provider session or turn identity");
+    } else if (bindings.promptDigest() != null) {
+      throw failure(
+          FailureCode.STALE_BINDING,
+          "Non-provider provenance cannot carry a provider prompt digest");
     }
     if (request.mode().deliveryMode()
         && (request.envelope().leaseGeneration() < 1 || request.envelope().fence() < 1)) {
