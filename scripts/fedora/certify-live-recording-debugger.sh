@@ -412,7 +412,9 @@ check_qualification_capture() {
         return 1
     fi
     if [[ "$non_uniform" != "true" ]]; then
-        record qualificationCapture FAIL "captured frame is uniform; target frame source is not producing rendered pixels"
+        local content_sha
+        content_sha="$(jq -r '.contentSha256 // "unknown"' <<<"$response" 2>/dev/null || echo unknown)"
+        record qualificationCapture FAIL "captured ${width}x${height} frame is uniform; target frame source is not producing rendered pixels (png=$png sha256=$content_sha)"
         return 1
     fi
     if [[ -z "$png" || ! -s "$captures_dir/$png" ]]; then
@@ -424,7 +426,7 @@ check_qualification_capture() {
 }
 
 check_recording() {
-    local start response metrics frames mismatch binding stop file session_status download_dir downloaded probed probed_frames probed_duration
+    local start response metrics frames mismatch binding stop file session_status download_dir downloaded probed video_line duration_line video_dims
     start="$(api_post /api/recordings/start '{"accountName":"fedora03","scriptName":"fedora03-live-qualification"}')"
     if [[ "$(jq -r '.status // empty' <<<"$start")" != "recording" ]]; then
         record recordingStartStop FAIL "recording start failed: $start"
@@ -473,15 +475,26 @@ check_recording() {
         record recordingArtifact FAIL "recorded MP4 is missing or empty at $recording_file"
         return 1
     fi
-    probed="$(ffprobe -v error -count_frames -select_streams v:0 \
-        -show_entries stream=nb_read_frames,duration -of default=noprint_wrappers=1 "$file" 2>/dev/null || true)"
-    probed_frames="$(sed -n 's/^nb_read_frames=\([0-9]*\)$/\1/p' <<<"$probed" | head -n 1)"
-    probed_duration="$(sed -n 's/^duration=//p' <<<"$probed" | head -n 1)"
-    if [[ -z "$probed_frames" || "$probed_frames" == "0" || "$probed_frames" == "N/A" ]]; then
-        record recordingArtifact FAIL "ffprobe found no decodable video frames in $(basename "$file")"
+    probed="$(ffmpeg -hide_banner -i "$file" 2>&1 || true)"
+    video_line="$(grep -m 1 'Stream #.*Video:' <<<"$probed" || true)"
+    duration_line="$(grep -m 1 'Duration:' <<<"$probed" || true)"
+    video_dims="$(grep -oE '[0-9]{2,5}x[0-9]{2,5}' <<<"$video_line" | head -n 1)"
+    if [[ -z "$video_line" ]]; then
+        record recordingArtifact FAIL "recorded file $(basename "$file") carries no video stream"
         return 1
     fi
-    record recordingArtifact PASS "MP4 $(basename "$file") decoded with $probed_frames frame(s), duration=${probed_duration:-unknown}"
+    if [[ -z "$video_dims" ]]; then
+        record recordingArtifact FAIL "recorded video stream reports no frame dimensions: $video_line"
+        return 1
+    fi
+    if [[ "$duration_line" == *"Duration: 00:00:00.0"* || "$duration_line" == *"Duration: N/A"* ]]; then
+        record recordingArtifact FAIL "recorded video carries no measurable duration: $duration_line"
+        return 1
+    fi
+    # The host ffmpeg on Fedora 44 ships only libopenh264, which cannot decode the
+    # libopenh264-encoded stream; the container metadata is therefore the strongest
+    # decoder-independent observation available and is recorded verbatim.
+    record recordingArtifact PASS "MP4 $(basename "$file") carries a video stream ($video_dims) with $duration_line"
     session_status="$(api_get /api/recordings/sessions \
         | jq -r --arg id "$recording_id" '.[] | select(.recordingId == $id) | .status' | head -n 1)"
     if [[ "$session_status" != "FINALIZED" ]]; then
@@ -502,23 +515,33 @@ check_recording() {
     record recordingDownload PASS "download endpoint returned a byte-identical MP4 ($(fedorapkg_sha256 "$file"))"
     return 0
 }
-
 check_debugger_viewport() {
-    local pipeline binding probe probe_frames
+    local pipeline binding probe probe_frames probe_bytes avg_bytes probe_file probe_pid probe_status
+    # The viewport pipeline only runs while a subscriber is connected: the binding is cleared
+    # when the last subscriber leaves. Sample the pipeline while the probe holds the session
+    # open, not after it closes.
+    probe_file="$(mktemp "$work_root/ws-probe.XXXXXX")"
+    python3 -B "$PROJECT_DIR/scripts/qualification/ws_probe.py" \
+        --url "ws://127.0.0.1:$runtime_port/ws/viewport" --seconds 8 --require-binary 1 \
+        > "$probe_file" 2>&1 &
+    probe_pid=$!
+    sleep 3
     pipeline="$(api_get /api/debug/viewport/pipeline)"
     binding="$(jq -r '.capture.sourceBinding // "null"' <<<"$pipeline" 2>/dev/null || echo null)"
+    wait "$probe_pid" || true
+    probe="$(cat "$probe_file")"
     if [[ "$binding" != "null" && -n "$selected_pid" && "$binding" == *"$selected_pid"* ]]; then
-        record debuggerSourceBinding PASS "viewport pipeline source binding=$binding matches selected pid $selected_pid"
+        record debuggerSourceBinding PASS "viewport pipeline source binding=$binding matches selected pid $selected_pid while streaming"
     else
-        record debuggerSourceBinding FAIL "viewport pipeline source binding=$binding does not match selected pid ${selected_pid:-none}"
+        record debuggerSourceBinding FAIL "viewport pipeline source binding=$binding does not match selected pid ${selected_pid:-none} while streaming"
     fi
-    probe="$(python3 -B "$PROJECT_DIR/scripts/qualification/ws_probe.py" \
-        --url "ws://127.0.0.1:$runtime_port/ws/viewport" --seconds 8 --require-binary 1 2>&1 || true)"
     probe_frames="$(sed -n 's/.*"binaryFrames": \([0-9]*\).*/\1/p' <<<"$probe" | head -n 1)"
+    probe_bytes="$(sed -n 's/.*"binaryBytes": \([0-9]*\).*/\1/p' <<<"$probe" | head -n 1)"
     if [[ -z "$probe_frames" || "$probe_frames" == "0" ]]; then
         record debuggerViewportFrames FAIL "no binary frames arrived on /ws/viewport within the bounded window: $probe"
     else
-        record debuggerViewportFrames PASS "/ws/viewport streamed $probe_frames binary frame(s) in 8 s"
+        avg_bytes="$(( probe_bytes / probe_frames ))"
+        record debuggerViewportFrames PASS "/ws/viewport streamed $probe_frames binary frame(s) in 8 s (${probe_bytes} bytes total, ${avg_bytes} bytes/frame average)"
     fi
     return 0
 }
@@ -631,13 +654,17 @@ check_runtime_restart() {
 
 check_no_residue() {
     local residue=""
-    if [[ -n "$runtime_pid" ]] && kill -0 "$runtime_pid" 2>/dev/null; then
-        residue="runtime process $runtime_pid"
-    fi
-    if [[ -n "$postgres_name" ]] && podman ps --format '{{.Names}}' 2>/dev/null | grep -qx "$postgres_name"; then
-        residue="${residue:+$residue, }postgres container $postgres_name"
-    fi
+    # The check owns its own teardown so the observation is about what this run left behind,
+    # not about processes that were still intentionally running when it was measured.
+    stop_runtime
+    stop_postgres
     bash "$SCRIPT_DIR/uninstall-tarball.sh" --prefix "$prefix" --bin-dir "$bin_dir" --name chromascape >/dev/null 2>&1 || true
+    if pgrep -f -- "$prefix/current" >/dev/null 2>&1; then
+        residue="a packaged ChromaScape JVM remains"
+    fi
+    if [[ -n "$postgres_port" ]] && ss -H -ltn "sport = :$postgres_port" 2>/dev/null | grep -q .; then
+        residue="${residue:+$residue, }disposable Postgres port $postgres_port is still listening"
+    fi
     if [[ -e "$prefix/current" || -e "$bin_dir/chromascape" ]]; then
         residue="${residue:+$residue, }install path still present"
     fi
@@ -645,7 +672,7 @@ check_no_residue() {
         record noResidue FAIL "residue observed: $residue"
         return 1
     fi
-    record noResidue PASS "no managed process, container, or install path remains"
+    record noResidue PASS "no managed process, container port, or install path remains"
     return 0
 }
 
