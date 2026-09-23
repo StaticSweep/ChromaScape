@@ -1480,3 +1480,19 @@ val fedora02EvidenceTests by tasks.registering(Exec::class) {
 	commandLine("python3", "-B", "-m", "unittest", "discover", "-s", tests, "-t", projectDir.absolutePath)
 	outputs.upToDateWhen { false }
 }
+
+// FEDORA-03 live recording and debugger qualification. The live matrix needs a packaged install, a
+// running client, a disposable database and a native pair, so it is executed on the qualification
+// host by scripts/fedora/certify-live-recording-debugger.sh. These regressions cover everything
+// that runs without those prerequisites: the fail-closed evidence contract and WebSocket probe
+// through their real CLIs, the probe's frame parser, and the harness's argument refusals.
+val fedora03LiveQualificationTests by tasks.registering(Exec::class) {
+	group = "verification"
+	description = "Run FEDORA-03 live qualification contract, WebSocket probe and harness regressions."
+
+	commandLine(
+		"bash",
+		layout.projectDirectory.file("scripts/fedora/tests/live-recording-debugger-regressions.sh").asFile.absolutePath,
+	)
+	outputs.upToDateWhen { false }
+}
