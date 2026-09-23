@@ -80,6 +80,14 @@ bash scripts/fedora/certify-live-recording-debugger.sh \
   --host-id "$(hostname -s)" --revision "$(git rev-parse HEAD)"
 ```
 
+The harness reads the ignored `.env.fedora.local` through the Fedora wrapper's bounded parser
+and uses its source-trust credentials when present. For a client configured to send ticks to
+`127.0.0.1:8090`, first stop the wrapper-owned development instance, then add
+`--runtime-port 8090` to the harness command. The selected port must be free. The client must
+reconnect and send a fresh `SESSION_START` to the packaged instance and its disposable database;
+the session on the earlier development instance is not evidence for this run. Restart the
+development instance after the harness exits if it is still needed.
+
 `--target-pid` is required whenever more than one eligible client is visible; the harness refuses to
 select automatically. The harness installs into a private prefix, starts a disposable Postgres,
 starts the packaged runtime with `SPRING_PROFILES_ACTIVE=local-development` and the qualification
@@ -100,8 +108,8 @@ controller enabled, selects the window explicitly, and then runs:
 | `debuggerViewportFrames` | `/ws/viewport` streams binary frames (dependency-free probe) |
 | `debuggerSourceBinding` | `/api/debug/viewport/pipeline` reports the selected pid |
 | `debuggerTickSession` | client opened a debugger tick session (else honest `NOT_RUN`) |
-| `debuggerRecordingLink` | session resolves the recording without repair |
-| `sessionExportVideo` | session export ZIP contains `video.mp4` |
+| `debuggerRecordingLink` | after the independent manual recording completes, `/api/debug/replay/start-recording` reuses the active tick session and binds a second recording; the lookup matches that ID before stop and stop needs no link repair |
+| `sessionExportVideo` | export of that debugger-linked session contains a non-empty `video.mp4` |
 | `boundedInput` | in-bounds move, click and 120 ms SHIFT press |
 | `inputRelease` | no key or button remains held |
 | `cleanClose` | session closes without poison |
@@ -118,6 +126,13 @@ python3 -B scripts/qualification/fedora03_evidence.py verify --require-complete 
 The first command validates an honest partial matrix. The second is the release gate: it exits 2
 unless the record carries the exact os/arch/java/client, package and native hashes, the package
 revision equals the application revision, and every check is `PASS`.
+
+The manual `/api/recordings/start` cycle and the debugger-linked replay recording are distinct
+recordings. Manual recording does not bind a tick session; comparing its ID with the debugger
+session's ID would make the link check impossible to pass on the supported API. The harness
+therefore starts and stops a second recording through the debug replay API after proving the
+manual cycle. It requires the existing tick session ID to be reused and verifies the link before
+the stop endpoint can attempt any repair.
 
 ## 6. Cleanup
 

@@ -132,3 +132,49 @@ python3 -B scripts/qualification/fedora03_evidence.py verify --require-complete 
 - Debugger tick session, recording link and session video export: prerequisite above.
 - Multiple-client selection: only one client was running.
 - RPM re-certification for this revision: unchanged from FEDORA-02.
+
+## 2026-09-24 Fedora-native follow-up (sc-1803; release gate still red)
+
+The remote lane was recovered on Fedora using a signed development source bundle and an
+attested, JAR-bound client launch. Port 8098 listened, authenticated heartbeats were accepted,
+the executor was reported online, and the client rendered. This supersedes the earlier finding
+that *all* direct JAR launches were unusable: the rejected launch was an unqualified shaded-JAR
+invocation, while the later attested lane launch used its promoted bundle and matching sidecar.
+No credentials, bundle content, or signing key are stored in this evidence file.
+
+The connected client sent a genuine `SESSION_START` to the Fedora development ChromaScape on
+port 8090. The resulting session `debug_83394eb3a91c466382bbae1b0caa38a6` was active and
+recording in that instance. The no-game catalog and launcher path were also reachable. No real
+game account was selected or launched.
+
+The packaged-tarball harness was then run against the same client on port 8090, with its own
+disposable PostgreSQL. The retained evidence record is
+`build/packages/fedora03-live-evidence-20260924.json` (SHA-256
+`9f63411a6983217df7946dc4da027f6fbab4ce48cd3b0bef872be29ebb11de94`).
+It again produced **17 PASS, 3 NOT_RUN, 0 FAIL**. Ordinary `verify` returned `VALID`;
+`verify --require-complete` exited 2 and named `debuggerTickSession`,
+`debuggerRecordingLink`, and `sessionExportVideo`. The development instance's earlier
+session is not evidence for the packaged instance: the already-running client did not send a
+fresh `SESSION_START` after the server swap. The Fedora development instance was restored after
+the packaged harness cleaned its runtime and disposable database.
+
+Code-path review found a second, independent harness contradiction. Standalone
+`POST /api/recordings/start` never binds its recording to a debugger session; tick
+`SESSION_START` does not adopt an in-progress manual recording. The supported linked path is
+`POST /api/debug/replay/start-recording` with the real tick session ID. The follow-up harness
+therefore retains the manual recording checks and creates a *separate* debug-path recording
+for link/export, verifies the link before stop/repair, waits for a rendered frame, and requires
+a non-empty exported `video.mp4`. These script changes passed 27 fixture regressions, but the
+linked path has **not** passed live packaged qualification; no release claim follows from the
+fixture test.
+
+Deferred separately from the three release-gate cases:
+
+- In-game frames: no real-account choice or login authorization was supplied for this run;
+  login-screen rendered pixels were qualified, but in-game pixels remain unverified.
+- Multiple-client selection: only one attested live client was available; spawning another
+  client solely for this check was deferred, so the explicit-selection behavior is covered by
+  the single-client matrix only.
+- RPM re-certification: this follow-up exercised the tarball and did not install an RPM;
+  retain the FEDORA-02 RPM evidence and run an RPM-specific recertification if that artifact
+  or its native overlay changes.

@@ -123,6 +123,15 @@ set -e
 assert_exit 64 "$usage_status" "harness exits 64 on an unknown option"
 assert_contains "Usage:" "$usage_out" "harness prints usage on an unknown option"
 
+for invalid_port in abc 0 1023 65536; do
+    set +e
+    port_out="$(bash "$HARNESS" --runtime-port "$invalid_port" 2>&1)"
+    port_status=$?
+    set -e
+    assert_exit 64 "$port_status" "harness rejects invalid runtime port $invalid_port"
+    assert_contains "PORT_INVALID" "$port_out" "runtime port $invalid_port refusal is explicit"
+done
+
 empty_pair="$work/empty-pair"
 mkdir -p "$empty_pair"
 set +e

@@ -2,28 +2,27 @@
 
 ## Pathing
 
-- Always use Windows pathing for projects located on Windows drives. Use paths such as
-  `C:\Dev\IdeaProjects\ChromaScape`, never WSL equivalents such as
-  `/mnt/c/Dev/IdeaProjects/ChromaScape`, including when calling Felix MCP or any other tool.
+- Run ChromaScape commands from this native Fedora checkout using POSIX paths. Use the
+  canonical Windows project identity only for Felix or Shortcut references when required.
 
 ## ChromaScape operations on this Fedora host
 
-This checkout runs natively on Fedora. For FEDORA-03 work, start ChromaScape
-on this host; do not route startup to the Windows machine.
+This checkout runs natively on Fedora. For FEDORA-03 work, restart ChromaScape
+on this Fedora host. Do not route the restart to the Windows machine.
 
 Use docs/CHROMASCAPE_RESTART_RUNBOOK.md and
 docs/upstream-integration/sc-1667/fedora-host-native-runbook.md.
 
-From this repository root:
-1. Check `scripts/fedora/chromascape-fedora.sh status`.
-2. Run `scripts/fedora/chromascape-fedora.sh preflight`.
-3. If preflight passes, run `scripts/fedora/chromascape-fedora.sh start`
-   (or `restart` for an instance owned by this wrapper).
-4. Verify `http://127.0.0.1:8090/debugger` and report the wrapper's log path.
+From this repository root, check `scripts/fedora/chromascape-fedora.sh status`,
+then run `scripts/fedora/chromascape-fedora.sh preflight`. Resolve reported
+preflight failures and run `scripts/fedora/chromascape-fedora.sh restart`.
+The wrapper stops only the Fedora instance it owns and starts a replacement;
+it also starts one when no owned instance exists. Verify
+`http://127.0.0.1:8090/debugger` and report the wrapper's log path.
 
 Configuration belongs in the ignored `.env.fedora.local`, copied from
-`.env.fedora.example`. If ChromaScape must start before the client exists,
-set `CHROMASCAPE_FEDORA_REQUIRE_TARGET=false` for that startup, then restore
+`.env.fedora.example`. If ChromaScape must restart before the client exists,
+set `CHROMASCAPE_FEDORA_REQUIRE_TARGET=false` for that restart, then restore
 strict preflight before selecting or attaching to a client.
 
 For FEDORA-03 release evidence, use the packaged-runtime qualification
