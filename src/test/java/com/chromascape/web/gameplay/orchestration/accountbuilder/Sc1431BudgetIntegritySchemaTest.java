@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Direct Flyway/PostgreSQL proof of the SC-1431 budget contract.
  *
- * <p>The test stages the full repository migration chain, proves the upgrade to {@code V49}, and
+ * <p>The test stages the full repository migration chain, proves the upgrade to {@code V60}, and
  * asserts the database-owned constraints: non-null timestamps and limits, bound and counter checks,
  * expiry ordering, immutable claimed limits and timestamps, monotonic counters and an advancing
  * optimistic-lock version. It runs against an isolated schema on the local PostgreSQL instance and
@@ -53,14 +53,14 @@ class Sc1431BudgetIntegritySchemaTest {
   }
 
   @Test
-  void v48UpgradeAndBudgetConstraintsAreDatabaseOwned() throws Exception {
+  void v59UpgradeAndBudgetConstraintsAreDatabaseOwned() throws Exception {
     recreateSchema();
-    // The previous integration head applies cleanly, then the V48 upgrade applies on top.
-    migrate("47");
-    assertEquals("47", currentVersion());
+    // The previous integration head applies cleanly, then the V59 upgrade applies on top.
+    migrate("58");
+    assertEquals("58", currentVersion());
     migrate(null);
 
-    assertEquals("49", currentVersion());
+    assertEquals("60", currentVersion());
     assertFalse(columnIsNullable("ab_orchestration_budget", "started_at"));
     assertFalse(columnIsNullable("ab_orchestration_budget", "expires_at"));
     assertFalse(columnIsNullable("ab_orchestration_budget", "max_actions"));
@@ -68,7 +68,7 @@ class Sc1431BudgetIntegritySchemaTest {
     assertFalse(columnIsNullable("ab_orchestration_budget", "max_elapsed_ms"));
     assertTrue(triggerExists("ab_budget_guard_trigger"));
 
-    // V49: bootstrap prompt provenance is nullable while provider session/turn identity is present.
+    // V60: bootstrap prompt provenance is nullable while provider session/turn identity is present.
     assertTrue(columnIsNullable("ab_snapshot_binding", "prompt_digest"));
     assertTrue(columnIsNullable("ab_snapshot_binding", "provider_session_id"));
     assertTrue(columnIsNullable("ab_snapshot_binding", "provider_turn_id"));
