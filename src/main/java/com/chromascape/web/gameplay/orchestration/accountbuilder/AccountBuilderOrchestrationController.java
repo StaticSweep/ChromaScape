@@ -56,8 +56,7 @@ public final class AccountBuilderOrchestrationController {
               + " decision handoff");
     }
     AccountBuilderOrchestrationService.Submission submission = service.orchestrate(request);
-    return ResponseEntity.status(submission.created() ? HttpStatus.CREATED : HttpStatus.OK)
-        .body(submission.view());
+    return ResponseEntity.status(statusFor(submission)).body(submission.view());
   }
 
   /**
@@ -75,8 +74,15 @@ public final class AccountBuilderOrchestrationController {
       @RequestBody ProviderOrchestrationCommand command) {
     authenticate(operatorKey);
     AccountBuilderOrchestrationService.Submission submission = service.orchestrateProvider(command);
-    return ResponseEntity.status(submission.created() ? HttpStatus.CREATED : HttpStatus.OK)
-        .body(submission.view());
+    return ResponseEntity.status(statusFor(submission)).body(submission.view());
+  }
+
+  private static HttpStatus statusFor(AccountBuilderOrchestrationService.Submission submission) {
+    return switch (submission.view().failureCode()) {
+      case RUNTIME_DISABLED, GATEWAY_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+      case NEEDS_RECONCILIATION, DELIVERY_UNCERTAIN -> HttpStatus.CONFLICT;
+      default -> submission.created() ? HttpStatus.CREATED : HttpStatus.OK;
+    };
   }
 
   @GetMapping("/orchestrations/{orchestrationId}")

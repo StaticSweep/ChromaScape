@@ -71,6 +71,87 @@ final class AccountBuilderPostgresTestFixtures {
         "authority-" + suffix);
   }
 
+  /** Returns a structurally valid request with a wall-clock deadline for real HTTP tests. */
+  static OrchestrationRequest freshRequest(String suffix, Mode mode) {
+    OrchestrationRequest base = request(suffix, mode);
+    Instant deadline = Instant.now().plusSeconds(600);
+    ExecutionEnvelope envelope = base.envelope();
+    var action = base.decision().semanticAction().deepCopy();
+    ((com.fasterxml.jackson.databind.node.ObjectNode) action)
+        .set("settings", envelope.settings().deepCopy());
+    ProviderDecision decision =
+        new ProviderDecision(
+            base.decision().contractVersion(),
+            base.decision().provider(),
+            base.decision().modelVersion(),
+            base.decision().decisionId(),
+            base.decision().policyConfidence(),
+            action,
+            base.decision().evidenceRefs());
+    ExecutionEnvelope freshEnvelope =
+        new ExecutionEnvelope(
+            envelope.contractVersion(),
+            envelope.provider(),
+            envelope.modelVersion(),
+            envelope.decisionId(),
+            envelope.requestId(),
+            envelope.idempotencyKey(),
+            envelope.goalPlanDigest(),
+            envelope.taskSkillDigests(),
+            envelope.taskKey(),
+            envelope.settings(),
+            envelope.identities(),
+            envelope.catalogDigest(),
+            envelope.schemaDigest(),
+            envelope.policyDigest(),
+            envelope.knowledgeDigest(),
+            CANONICAL_JSON.digest(action),
+            envelope.expectedTransition(),
+            envelope.verifierId(),
+            envelope.buildId(),
+            envelope.expectedObservationRevision(),
+            envelope.expectedTaskRevision(),
+            envelope.authorityId(),
+            envelope.leaseGeneration(),
+            envelope.fence(),
+            envelope.budgets(),
+            deadline,
+            envelope.killSwitchScope());
+    SnapshotBindings bindings =
+        new SnapshotBindings(
+            CANONICAL_JSON.digest(decision),
+            CANONICAL_JSON.digest(action),
+            base.bindings().catalogDigest(),
+            base.bindings().capabilityDigest(),
+            base.bindings().goalPlanDigest(),
+            base.bindings().taskSkillDigests(),
+            base.bindings().toolSchemaDigest(),
+            base.bindings().knowledgeDigest(),
+            base.bindings().policyDigest(),
+            base.bindings().verifierDigest(),
+            base.bindings().buildId(),
+            base.bindings().expectedObservationRevision(),
+            base.bindings().expectedTaskRevision(),
+            base.bindings().observationDigest(),
+            null,
+            base.bindings().providerSessionId(),
+            base.bindings().providerTurnId());
+    return withFingerprint(
+        new OrchestrationRequest(
+            base.orchestrationId(),
+            base.requestId(),
+            base.idempotencyKey(),
+            null,
+            base.mode(),
+            "BOOTSTRAP",
+            decision,
+            freshEnvelope,
+            bindings,
+            base.authority(),
+            base.observation(),
+            deadline));
+  }
+
   static OrchestrationRequest request(
       String suffix,
       Mode mode,
