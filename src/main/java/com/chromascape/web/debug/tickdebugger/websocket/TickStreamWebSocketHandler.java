@@ -757,7 +757,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     SessionBinding binding = sessionBindings.get(session.getId());
     if (binding == null) {
       log.warn("Rejecting tick batch on connection {}: SESSION_NOT_BOUND", session.getId());
-      sendErrorResponse(
+      sendBatchErrorResponse(
           session, "SESSION_NOT_BOUND", "Send SESSION_START before sending ticks", batchId(root));
       return;
     }
@@ -766,7 +766,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
           "Rejecting tick batch on connection {} for session {}: SESSION_STOPPING",
           session.getId(),
           binding.sessionId());
-      sendErrorResponse(
+      sendBatchErrorResponse(
           session,
           "SESSION_STOPPING",
           "This connection no longer accepts ticks for its session",
@@ -788,7 +788,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
             session.getId(),
             binding.sessionId(),
             batch.getSessionId());
-        sendErrorResponse(
+        sendBatchErrorResponse(
             session,
             "SESSION_ID_MISMATCH",
             "The tick session does not match the connection binding",
@@ -825,7 +825,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     } catch (Exception e) {
       log.error("Error handling TICK_BATCH: {}", e.getMessage(), e);
       String errorCode = mapTickBatchError(e);
-      sendErrorResponse(session, errorCode, e.getMessage(), batchId(root));
+      sendBatchErrorResponse(session, errorCode, e.getMessage(), batchId(root));
     }
   }
 
@@ -845,6 +845,7 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
     if (message.contains("BATCH_ORDER_INVALID")) return "BATCH_ORDER_INVALID";
     if (message.contains("ACTION_CHECKSUM_CONFLICT")) return "ACTION_CHECKSUM_CONFLICT";
     if (message.contains("PACKET_")) return "BATCH_PACKET_INVALID";
+    if (error instanceof IllegalArgumentException) return "BATCH_INPUT_INVALID";
     return "BATCH_PERSISTENCE_FAILED";
   }
 
@@ -978,6 +979,24 @@ public class TickStreamWebSocketHandler extends TextWebSocketHandler {
       return true;
     } catch (Exception e) {
       log.error("Failed to send error response: {}", e.getMessage());
+      return false;
+    }
+  }
+
+  private boolean sendBatchErrorResponse(
+      WebSocketSession session, String error, String detail, String batchId) {
+    try {
+      java.util.LinkedHashMap<String, Object> response = new java.util.LinkedHashMap<>();
+      response.put("type", "ERROR");
+      response.put("error", error);
+      response.put("detail", detail);
+      if (batchId != null && !batchId.isBlank()) {
+        response.put("batchId", batchId);
+      }
+      session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
+      return true;
+    } catch (Exception e) {
+      log.error("Failed to send batch error response: {}", e.getMessage());
       return false;
     }
   }

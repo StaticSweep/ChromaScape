@@ -275,6 +275,42 @@ class TickStreamWebSocketHandlerTest {
   }
 
   @Test
+  @DisplayName("batch persistence errors identify the batch without a session-start request ID")
+  void persistenceFailureCarriesBatchId() throws Exception {
+    setup("ws-batch-error-id");
+    bind("debug_1");
+    doThrow(new IllegalStateException("database unavailable"))
+        .when(ingestionService)
+        .processTickBatch(any(), any());
+    String wire =
+        tickBatchJson()
+            .replace(
+                "\"type\": \"TICK_BATCH\",",
+                "\"type\": \"TICK_BATCH\", \"batchId\": \"00000000-0000-4000-8000-000000000119\",");
+
+    handler.handleTextMessage(wsSession, new TextMessage(wire));
+
+    String response = lastSentPayload();
+    assertErrorPayload(response, "BATCH_PERSISTENCE_FAILED");
+    assertThat(response).contains("\"batchId\":\"00000000-0000-4000-8000-000000000119\"");
+    assertThat(response).doesNotContain("clientRequestId");
+  }
+
+  @Test
+  @DisplayName("invalid strict replay sections are a permanent batch input error")
+  void invalidReplaySectionsAreNotReportedAsPersistenceFailure() throws Exception {
+    setup("ws-invalid-replay");
+    bind("debug_1");
+    doThrow(new IllegalArgumentException("Missing required player position"))
+        .when(ingestionService)
+        .processTickBatch(any(), any());
+
+    handler.handleTextMessage(wsSession, new TextMessage(tickBatchJson()));
+
+    assertErrorPayload(lastSentPayload(), "BATCH_INPUT_INVALID");
+  }
+
+  @Test
   @DisplayName("a packet validation failure maps to BATCH_PACKET_INVALID, never a retry")
   void packetValidationFailureMapsToPacketInvalid() throws Exception {
     setup("ws-packet-invalid");
