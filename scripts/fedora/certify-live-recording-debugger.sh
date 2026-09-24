@@ -39,6 +39,7 @@ log=""
 recordings_dir=""
 captures_dir=""
 runtime_port=""
+runtime_port_override=""
 runtime_pid=""
 runtime_started=false
 postgres_name=""
@@ -65,6 +66,8 @@ Options:
   --host-id <id>             Stable non-sensitive host label (default: short hostname).
   --revision <sha>           Application revision (default: git HEAD of the checkout).
   --target-pid <pid>         Explicit client pid; required when several are eligible.
+  --runtime-port <port>      Packaged runtime port (default: random 19000-19999).
+                             Use 8090 when the connected client targets local ChromaScape.
   --work-root <dir>          Scratch root (default: mktemp under /tmp).
   --app-timeout <seconds>    Packaged runtime readiness timeout (default: 300).
   --keep-work                Keep the scratch directory (useful when a check fails).
@@ -82,6 +85,7 @@ while (( $# > 0 )); do
         --host-id) host_id="${2:-}"; shift 2 ;;
         --revision) revision="${2:-}"; shift 2 ;;
         --target-pid) target_pid="${2:-}"; shift 2 ;;
+        --runtime-port) runtime_port_override="${2:-}"; shift 2 ;;
         --work-root) work_root="${2:-}"; shift 2 ;;
         --app-timeout) app_timeout="${2:-}"; shift 2 ;;
         --keep-work) keep_work=true; shift ;;
@@ -89,6 +93,21 @@ while (( $# > 0 )); do
         *) usage >&2; exit 64 ;;
     esac
 done
+
+if [[ -n "$runtime_port_override" ]] \
+        && [[ ! "$runtime_port_override" =~ ^[0-9]+$ \
+            || "$runtime_port_override" -lt 1024 || "$runtime_port_override" -gt 65535 ]]; then
+    fedorapkg_fail PORT_INVALID "--runtime-port must be an integer from 1024 to 65535" || true
+    exit 64
+fi
+
+# The Fedora wrapper's bounded parser imports machine-local trust values without
+# executing the file or printing credentials. Explicit process environment wins.
+sc1667_load_env_file "$PROJECT_DIR/.env.fedora.local"
+if (( SC1667_ERRORS > 0 )); then
+    fedorapkg_fail CONFIG_INVALID ".env.fedora.local could not be parsed"
+    exit 2
+fi
 
 if [[ -z "$package" || ! -r "$package" ]]; then
     fedorapkg_fail PACKAGE_MISSING "a readable --package tarball is required"
@@ -242,7 +261,11 @@ start_postgres() {
 }
 
 start_runtime() {
-    runtime_port="$(( 19000 + RANDOM % 1000 ))"
+    runtime_port="${runtime_port_override:-$(( 19000 + RANDOM % 1000 ))}"
+    if ss -H -ltn "sport = :$runtime_port" 2>/dev/null | grep -q .; then
+        fedorapkg_fail PORT_IN_USE "packaged runtime port $runtime_port is already listening"
+        return 1
+    fi
     env \
         SERVER_ADDRESS=127.0.0.1 \
         SERVER_PORT="$runtime_port" \
@@ -258,13 +281,13 @@ start_runtime() {
         ANALYSIS_MCP_AUTO_START=false \
         STABILIZATION_AUTH_TOKEN=certification-read-token \
         STABILIZATION_AUTH_WRITE_TOKEN=certification-write-token \
-        CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64="MCowBQYDK2VwAyEAEiSjIlIP5v4JrCJoFPRhA6/lti3jb/bm+9cpyqEi7Oo=" \
-        CHROMASCAPE_SOURCE_PUBLIC_KEY_ID=certification-source-key \
-        CHROMASCAPE_SOURCE_ENVIRONMENT=certification \
-        CHROMASCAPE_SOURCE_ACCESS_METADATA_TOKEN=certification-metadata-token \
-        CHROMASCAPE_SOURCE_ACCESS_CONTENT_TOKEN=certification-content-token \
-        MICRO6_SOURCE_TRANSPORT_BASE_URL=http://127.0.0.1:8098 \
-        MICRO6_SOURCE_TRANSPORT_AUTH_TOKEN=certification-transport-token \
+        CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64="${CHROMASCAPE_SOURCE_PUBLIC_KEY_BASE64:-MCowBQYDK2VwAyEAEiSjIlIP5v4JrCJoFPRhA6/lti3jb/bm+9cpyqEi7Oo=}" \
+        CHROMASCAPE_SOURCE_PUBLIC_KEY_ID="${CHROMASCAPE_SOURCE_PUBLIC_KEY_ID:-certification-source-key}" \
+        CHROMASCAPE_SOURCE_ENVIRONMENT="${CHROMASCAPE_SOURCE_ENVIRONMENT:-certification}" \
+        CHROMASCAPE_SOURCE_ACCESS_METADATA_TOKEN="${CHROMASCAPE_SOURCE_ACCESS_METADATA_TOKEN:-certification-metadata-token}" \
+        CHROMASCAPE_SOURCE_ACCESS_CONTENT_TOKEN="${CHROMASCAPE_SOURCE_ACCESS_CONTENT_TOKEN:-certification-content-token}" \
+        MICRO6_SOURCE_TRANSPORT_BASE_URL="${MICRO6_SOURCE_TRANSPORT_BASE_URL:-http://127.0.0.1:8098}" \
+        MICRO6_SOURCE_TRANSPORT_AUTH_TOKEN="${MICRO6_SOURCE_TRANSPORT_AUTH_TOKEN:-certification-transport-token}" \
         MICRO6_SOURCE_TRANSPORT_ACTOR=certification-host \
         LEEUWBOT_ENVIRONMENT=certification \
         setsid "$prefix/current/launcher" > "$log" 2>&1 &
@@ -552,7 +575,8 @@ check_debugger_viewport() {
 }
 
 check_debugger_tick_session() {
-    local active link export_dir export_file
+    local active session_count linked_start linked_recording_id link linked_stop
+    local export_dir export_file video_size linked_metrics linked_frames deadline
     active="$(api_get /api/debug/sessions/active)"
     if [[ -z "$active" || "$active" == "null" || "$active" == "[]" ]]; then
         record debuggerTickSession NOT_RUN "client is attached but has not opened a debugger tick session (no Micro6 SESSION_START)"
@@ -567,22 +591,64 @@ check_debugger_tick_session() {
         record sessionExportVideo NOT_RUN "no debugger tick session to export"
         return 0
     fi
+    session_count="$(jq -r 'if type == "array" then length else 1 end' <<<"$active" 2>/dev/null || echo 0)"
+    if [[ "$session_count" != "1" ]]; then
+        record debuggerTickSession FAIL "expected one active debugger tick session, found $session_count; refusing ambiguous recording binding"
+        record debuggerRecordingLink NOT_RUN "active tick session is ambiguous"
+        record sessionExportVideo NOT_RUN "active tick session is ambiguous"
+        return 1
+    fi
     record debuggerTickSession PASS "debugger tick session $debug_session_id is active for the attached client"
+    # The manual /api/recordings cycle above proves standalone recording. It does not
+    # bind a debugger session. Start a second recording through the supported replay
+    # endpoint, explicitly reusing the live tick session, to qualify link and export.
+    linked_start="$(api_post /api/debug/replay/start-recording \
+        "$(jq -cn --arg sessionId "$debug_session_id" \
+            '{sessionId:$sessionId,accountName:"fedora03",scriptName:"fedora03-linked-qualification",recordingEnabled:true}')")"
+    linked_recording_id="$(jq -r '.recordingId // empty' <<<"$linked_start" 2>/dev/null || true)"
+    if [[ "$(jq -r '.sessionId // empty' <<<"$linked_start" 2>/dev/null)" != "$debug_session_id" \
+            || "$(jq -r '.recordingEnabled // false' <<<"$linked_start" 2>/dev/null)" != "true" \
+            || -z "$linked_recording_id" || "$linked_recording_id" == "$recording_id" ]]; then
+        record debuggerRecordingLink FAIL "debug replay recording did not bind the active tick session to a distinct recording: $linked_start"
+        record sessionExportVideo NOT_RUN "no valid debugger-linked recording was started"
+        return 1
+    fi
     link="$(api_get "/api/debug/replay/recording-by-session?sessionId=$debug_session_id")"
-    if [[ "$(jq -r '.recordingId // empty' <<<"$link" 2>/dev/null)" == "$recording_id" ]]; then
-        record debuggerRecordingLink PASS "session $debug_session_id resolves recording $recording_id without repair"
-    elif [[ -z "$(jq -r '.recordingId // empty' <<<"$link" 2>/dev/null)" ]]; then
-        record debuggerRecordingLink NOT_RUN "tick session $debug_session_id has no recording link (recording was started through /api/recordings, not the debug replay path)"
+    # Allow the rendered-buffer recorder to write at least one frame before finalizing.
+    # A zero-byte export must fail, but an immediate stop can manufacture that result.
+    deadline=$((SECONDS + 45))
+    linked_frames=0
+    while (( SECONDS < deadline )); do
+        linked_metrics="$(api_get /api/recordings/metrics)"
+        linked_frames="$(jq -r '.framesRecorded // 0' <<<"$linked_metrics" 2>/dev/null || echo 0)"
+        if [[ "$linked_frames" =~ ^[0-9]+$ ]] && (( linked_frames > 0 )); then
+            break
+        fi
+        sleep 2
+    done
+    linked_stop="$(api_post /api/debug/replay/stop-recording \
+        "$(jq -cn --arg sessionId "$debug_session_id" '{sessionId:$sessionId}')")"
+    if [[ "$(jq -r '.recordingId // empty' <<<"$link" 2>/dev/null)" == "$linked_recording_id" \
+            && "$(jq -r '.status // empty' <<<"$linked_stop" 2>/dev/null)" == "stopped" \
+            && "$(jq -r '.recordingId // empty' <<<"$linked_stop" 2>/dev/null)" == "$linked_recording_id" \
+            && "$(jq -r 'has("linkRepaired") and (.linkRepaired == false)' <<<"$linked_stop" 2>/dev/null)" == "true" ]]; then
+        record debuggerRecordingLink PASS "active tick session $debug_session_id bound debug-path recording $linked_recording_id before stop; no repair needed"
     else
-        record debuggerRecordingLink FAIL "tick session resolves a different recording: $link"
+        record debuggerRecordingLink FAIL "debug replay recording did not retain its original session link (link=$link stop=$linked_stop)"
     fi
     export_dir="$(mktemp -d "$work_root/export.XXXXXX")"
     export_file="$export_dir/session.zip"
     if curl -sS --max-time 90 -X POST -o "$export_file" "$(api_url "/api/debug/export/$debug_session_id")" \
-            && [[ -s "$export_file" ]] && unzip -l "$export_file" 2>/dev/null | grep -q 'video.mp4'; then
-        record sessionExportVideo PASS "session export $debug_session_id contains video.mp4"
+            && [[ -s "$export_file" ]]; then
+        video_size="$(unzip -l "$export_file" video.mp4 2>/dev/null \
+            | awk '$4 == "video.mp4" {print $1}' | head -n 1 || true)"
+        if [[ "$video_size" =~ ^[0-9]+$ ]] && (( video_size > 0 )); then
+            record sessionExportVideo PASS "session export $debug_session_id contains non-empty video.mp4 for linked recording $linked_recording_id"
+        else
+            record sessionExportVideo FAIL "session export $debug_session_id has no non-empty video.mp4 for linked recording $linked_recording_id"
+        fi
     else
-        record sessionExportVideo NOT_RUN "session export for $debug_session_id carried no video.mp4 (no linked recording for this session)"
+        record sessionExportVideo FAIL "session export request failed for debugger-linked recording $linked_recording_id"
     fi
     return 0
 }
