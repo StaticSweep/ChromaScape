@@ -178,3 +178,34 @@ Deferred separately from the three release-gate cases:
 - RPM re-certification: this follow-up exercised the tarball and did not install an RPM;
   retain the FEDORA-02 RPM evidence and run an RPM-specific recertification if that artifact
   or its native overlay changes.
+
+## sc-1803 packaged re-qualification (2026-09-24, attempt 4)
+
+Attempts 1-3 reproduced **17 PASS, 3 NOT_RUN** (gate red): the jar client was still
+booting or its reconnect circuit was already open when the ~2-minute packaged matrix
+reached the tick check, so no `SESSION_START` landed on the packaged runtime. Attempt 4
+sequenced a fresh attested launch ~25 s before the harness start: the client connected
+on a clean retry budget and sent `SESSION_START` in time.
+
+Result: **20 PASS, 0 NOT_RUN, 0 FAIL**; `verify --require-complete` exits 0
+(`FEDORA03_EVIDENCE status=COMPLETE`). Record retained on disk at
+`build/packages/fedora03-sc1803-evidence-attempt4.json` (SHA-256
+`a74300f52f2cf566e2e0097ee3b14a68b2ad9d6c7ffb0710540647dc333b0681`,
+revision `a1e08c91`, `--runtime-port 8090`, explicit target pid, dev source trust
+`fedora-dev-01`/`fedora-dev` exported into the packaged runtime so the attested
+executor heartbeat and tick session were accepted):
+
+- `debuggerTickSession` PASS: fresh session `debug_2ddab2e53948454b9031516ebfd7ce1e`
+  active on the packaged instance (exactly one; ambiguity fails closed).
+- `debuggerRecordingLink` PASS: that session bound debug-path recording
+  `recording_60abd0f8` (distinct from the manual recording) before stop; link
+  verified with no repair.
+- `sessionExportVideo` PASS: export ZIP contains non-empty `video.mp4` for the
+  linked recording.
+
+No game run was used: the session opened from the login screen over the no-game
+tick path, so no account or world choice was consumed. The three deferred items above
+(in-game frames, multi-client selection, RPM) stand as deferred, not tested. Packaged
+runtime and disposable Postgres were removed by the harness (`noResidue` PASS,
+verified: no listener, no container, no JVM remains); the wrapper-owned Fedora
+development instance was restarted afterwards and serves `/debugger`.
