@@ -78,6 +78,26 @@
     };
   }
 
+  /** Load one debug session's packet pages without requiring a video recording. */
+  async function collectPacketPages(fetchPage, maxPages = 20) {
+    const packets = [];
+    let cursor = '';
+    let loadedPages = 0;
+    for (;;) {
+      const page = await fetchPage(cursor);
+      if (!page || !Array.isArray(page.packets)) {
+        throw new Error('Invalid packet replay response');
+      }
+      packets.push(...page.packets);
+      const decision = nextPacketPage(page, loadedPages, maxPages);
+      if (decision.done) {
+        return { packets, truncated: decision.truncated };
+      }
+      cursor = decision.cursor;
+      loadedPages++;
+    }
+  }
+
   /** Coalesce one in-flight promise per replay window and release it after settlement. */
   function createInFlightRegistry() {
     const inFlight = new Map();
@@ -135,6 +155,7 @@
     subtractTruncatedWindows,
     chooseRecoveryWindow,
     nextPacketPage,
+    collectPacketPages,
     createInFlightRegistry,
     acceptsReplayResponse,
     packetIdentityKey,
