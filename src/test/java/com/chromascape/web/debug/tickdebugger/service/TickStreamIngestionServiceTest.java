@@ -349,6 +349,27 @@ class TickStreamIngestionServiceTest {
     return batch;
   }
 
+  @Test
+  @DisplayName("Go forwarding keeps tick fields but excludes packet observations")
+  void goForwardPayloadExcludesPackets() throws Exception {
+    TickBatchMessage batch = strictV2Batch("forward-session", 100L);
+    batch.setSchemaVersion(3);
+    batch.setPackets(
+        List.of(
+            v2PacketEntry(
+                "source-a", 7L, 4812L, 100L, "NPC_INFO_LARGE", "DECODED", false,
+                Map.of("hostileText", "<script>alert(1)</script>"))));
+
+    JsonNode goPayload = objectMapper.readTree(service.goForwardPayload(batch));
+
+    assertThat(goPayload.path("sessionId").asText()).isEqualTo("forward-session");
+    assertThat(goPayload.path("tick").asLong()).isEqualTo(100L);
+    assertThat(goPayload.path("playerState").path("x").asInt()).isEqualTo(3200);
+    assertThat(goPayload.has("packets")).isFalse();
+    assertThat(goPayload.toString()).doesNotContain("NPC_INFO_LARGE", "<script>");
+    assertThat(batch.getPackets()).hasSize(1);
+  }
+
   private void stubPacketSession(String sessionId) {
     lenient()
         .when(sessionService.getSession(sessionId))

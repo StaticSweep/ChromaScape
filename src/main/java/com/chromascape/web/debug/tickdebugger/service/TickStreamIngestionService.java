@@ -15,6 +15,7 @@ import com.chromascape.web.debug.tickdebugger.entity.TimelineMarker;
 import com.chromascape.web.debug.tickdebugger.entity.TimelineMarkerRepository;
 import com.chromascape.web.integration.leeuwbot.config.LeeuwBotConfig;
 import com.chromascape.web.integration.leeuwbot.service.LeeuwBotBridgeService;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -1162,11 +1163,7 @@ public class TickStreamIngestionService {
     }
 
     try {
-      // Packets stay out of the optional Go forwarding path by default; the local
-      // evidence is already durable and the Go contract has no versioned packet shape.
-      com.fasterxml.jackson.databind.node.ObjectNode goNode = objectMapper.valueToTree(batch);
-      goNode.remove("packets");
-      String json = objectMapper.writeValueAsString(goNode);
+      String json = goForwardPayload(batch);
 
       HttpRequest request =
           HttpRequest.newBuilder()
@@ -1190,6 +1187,14 @@ public class TickStreamIngestionService {
       log.warn("Failed to forward tick batch to Go backend: {}", e.getMessage());
       // Data is already saved locally, so no action needed
     }
+  }
+
+  String goForwardPayload(TickBatchMessage batch) throws JsonProcessingException {
+    // Packets stay out of the optional Go forwarding path by default; the local
+    // evidence is already durable and the Go contract has no versioned packet shape.
+    ObjectNode goNode = objectMapper.valueToTree(batch);
+    goNode.remove("packets");
+    return objectMapper.writeValueAsString(goNode);
   }
 
   /**
