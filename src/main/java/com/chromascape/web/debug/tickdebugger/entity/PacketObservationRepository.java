@@ -22,6 +22,13 @@ public interface PacketObservationRepository extends JpaRepository<PacketObserva
       findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
           String sessionId, String sourceSessionId, String packetSchema, Long observationSequence);
 
+  @QueryHints(@QueryHint(name = "org.hibernate.flushMode", value = "COMMIT"))
+  List<PacketObservation> findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequenceIn(
+      String sessionId,
+      String sourceSessionId,
+      String packetSchema,
+      List<Long> observationSequences);
+
   List<PacketObservation> findBySessionIdAndTickOrderByPacketSequenceAsc(
       String sessionId, Long tick);
 

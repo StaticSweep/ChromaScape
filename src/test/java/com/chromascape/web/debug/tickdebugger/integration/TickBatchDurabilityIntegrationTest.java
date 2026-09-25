@@ -428,6 +428,63 @@ class TickBatchDurabilityIntegrationTest {
   }
 
   @Test
+  void recoveryBurstPersistsAllPacketIdentitiesBeforeAcknowledgment() {
+    String sessionId = "packet-burst-" + UUID.randomUUID();
+    seedSession(sessionId, 451L);
+    TickBatchMessage batch = strictBatch(sessionId, UUID.randomUUID().toString(), 451L);
+    batch.setSchemaVersion(3);
+    batch.setActions(List.of());
+    List<TickBatchMessage.TickPacketEntry> packets = new ArrayList<>();
+    for (long sequence = 0; sequence < 200; sequence++) {
+      packets.add(packetEntry("burst-source", sequence, sequence + 1000, 451L, "DECODED", false));
+    }
+    packets.add(packetEntry("burst-source", 200L, null, 451L, "GAP", true));
+    batch.setPackets(packets);
+    applyChecksum(batch);
+    JsonNode wire = wireDocument(batch);
+
+    assertEquals("PERSISTED", ingestionService.processTickBatch(batch, wire).status());
+    assertEquals(201, packetObservationRepository.countBySessionId(sessionId));
+    assertTrue(
+        packetObservationRepository
+            .findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
+                sessionId, "burst-source", "rsprox-packet/v2", 200L)
+            .map(row -> row.getPacketSequence() == null && row.isSynthetic())
+            .orElse(false));
+    assertEquals("PERSISTED", ingestionService.processTickBatch(batch, wire).status());
+    assertEquals(201, packetObservationRepository.countBySessionId(sessionId));
+  }
+
+  @Test
+  void reusedPacketIdentityWithDifferentTickRollsBackTheWholeBatch() {
+    String sessionId = "packet-conflict-" + UUID.randomUUID();
+    seedSession(sessionId, 452L);
+    TickBatchMessage first = strictBatch(sessionId, UUID.randomUUID().toString(), 452L);
+    first.setSchemaVersion(3);
+    first.setActions(List.of());
+    first.setPackets(List.of(packetEntry("conflict-source", 1L, 300L, 452L, "DECODED", false)));
+    applyChecksum(first);
+    assertEquals("PERSISTED", ingestionService.processTickBatch(first, wireDocument(first)).status());
+
+    TickBatchMessage conflict = strictBatch(sessionId, UUID.randomUUID().toString(), 453L);
+    conflict.setSchemaVersion(3);
+    conflict.setActions(List.of());
+    conflict.setPackets(List.of(packetEntry("conflict-source", 1L, 300L, 453L, "DECODED", false)));
+    applyChecksum(conflict);
+    assertTrue(
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> ingestionService.processTickBatch(conflict, wireDocument(conflict)))
+            .getMessage()
+            .contains("PACKET_IDENTITY_CONFLICT"));
+    assertEquals(1, packetObservationRepository.countBySessionId(sessionId));
+    assertTrue(
+        receiptRepository
+            .findBySessionIdAndBatchId(sessionId, UUID.fromString(conflict.getBatchId()))
+            .isEmpty());
+  }
+
+  @Test
   void concurrentExactDuplicatesYieldOneEvidenceSet() throws Exception {
     String sessionId = "durable-" + UUID.randomUUID();
     seedSession(sessionId, 500L);

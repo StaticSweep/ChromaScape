@@ -28,14 +28,18 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -79,6 +83,10 @@ public class TickStreamIngestionService {
   @Autowired(required = false)
   private com.chromascape.web.debug.tickdebugger.entity.PacketObservationRepository
       packetRepository;
+
+  /** Uses the transaction's JDBC connection to batch packet inserts in the running application. */
+  @Autowired(required = false)
+  private JdbcTemplate packetJdbcTemplate;
 
   @Autowired(required = false)
   private BuilderGoalRepairIncidentService repairIncidentService;
@@ -916,6 +924,126 @@ public class TickStreamIngestionService {
     if (packetRepository == null) {
       throw new IllegalStateException("BATCH_PERSISTENCE_FAILED: packet store unavailable");
     }
+    if (packetJdbcTemplate != null) {
+      saveTickPacketsBatched(sessionId, batch);
+      return;
+    }
+    saveTickPacketsJpa(sessionId, batch);
+  }
+
+  private record PacketSource(String sourceSessionId, String schema) {}
+
+  private record PacketIdentity(String sourceSessionId, String schema, Long sequence) {}
+
+  private void saveTickPacketsBatched(String sessionId, TickBatchMessage batch) {
+    Map<PacketSource, List<Long>> sequencesBySource = new LinkedHashMap<>();
+    for (TickBatchMessage.TickPacketEntry packet : batch.getPackets()) {
+      sequencesBySource
+          .computeIfAbsent(
+              new PacketSource(packet.getSourceSessionId(), packet.getSchema()),
+              ignored -> new ArrayList<>())
+          .add(packet.getSequence());
+    }
+
+    Map<PacketIdentity, com.chromascape.web.debug.tickdebugger.entity.PacketObservation> existing =
+        new HashMap<>();
+    for (var source : sequencesBySource.entrySet()) {
+      for (var row :
+          packetRepository.findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequenceIn(
+              sessionId,
+              source.getKey().sourceSessionId(),
+              source.getKey().schema(),
+              source.getValue())) {
+        existing.put(
+            new PacketIdentity(
+                row.getSourceSessionId(), row.getPacketSchema(), row.getObservationSequence()),
+            row);
+      }
+    }
+
+    Set<PacketIdentity> seen = new HashSet<>();
+    List<com.chromascape.web.debug.tickdebugger.entity.PacketObservation> inserts =
+        new ArrayList<>();
+    List<TickBatchMessage.TickPacketEntry> insertedPackets = new ArrayList<>();
+    for (TickBatchMessage.TickPacketEntry packet : batch.getPackets()) {
+      PacketIdentity identity =
+          new PacketIdentity(packet.getSourceSessionId(), packet.getSchema(), packet.getSequence());
+      if (!seen.add(identity)) {
+        throw new IllegalArgumentException("PACKET_ORDER_INVALID: duplicate observation identity");
+      }
+      var prior = existing.get(identity);
+      if (prior != null) {
+        ensurePacketMatches(prior, sessionId, batch.getTick(), packet);
+      } else {
+        inserts.add(packetRow(sessionId, packet));
+        insertedPackets.add(packet);
+      }
+    }
+    if (inserts.isEmpty()) {
+      return;
+    }
+
+    // IDENTITY-generated JPA saves issue one INSERT round trip per packet. A prepared JDBC batch
+    // keeps the same Spring transaction and unique constraint while allowing PostgreSQL to receive
+    // the recovery burst without blocking ACKs on hundreds of separate network round trips.
+    int[] counts =
+        packetJdbcTemplate.batchUpdate(
+            "INSERT INTO packet_observations (session_id, tick, source_session_id, packet_schema,"
+                + " observation_sequence, packet_sequence, captured_at, capture_delta_millis,"
+                + " direction, opcode, protocol_name, encoded_size, decoded_type, decoded_payload,"
+                + " sanitized_payload, decode_status, decode_error, synthetic, created_at)"
+                + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?, ?, ?, ?, ?)"
+                + " ON CONFLICT (session_id, source_session_id, packet_schema, observation_sequence)"
+                + " DO NOTHING",
+            new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
+              @Override
+              public void setValues(java.sql.PreparedStatement statement, int index)
+                  throws java.sql.SQLException {
+                var row = inserts.get(index);
+                statement.setString(1, row.getSessionId());
+                statement.setLong(2, row.getTick());
+                statement.setString(3, row.getSourceSessionId());
+                statement.setString(4, row.getPacketSchema());
+                statement.setLong(5, row.getObservationSequence());
+                statement.setObject(6, row.getPacketSequence(), java.sql.Types.BIGINT);
+                statement.setObject(7, row.getCapturedAt());
+                statement.setObject(8, row.getCaptureDeltaMillis(), java.sql.Types.BIGINT);
+                statement.setString(9, row.getDirection());
+                statement.setInt(10, row.getOpcode());
+                statement.setString(11, row.getProtocolName());
+                statement.setInt(12, row.getEncodedSize());
+                statement.setString(13, row.getDecodedType());
+                statement.setString(
+                    14, row.getDecodedPayload() == null ? null : row.getDecodedPayload().toString());
+                statement.setBytes(15, row.getSanitizedPayload());
+                statement.setString(16, row.getDecodeStatus());
+                statement.setString(17, row.getDecodeError());
+                statement.setBoolean(18, row.isSynthetic());
+                statement.setObject(19, row.getCreatedAt());
+              }
+
+              @Override
+              public int getBatchSize() {
+                return inserts.size();
+              }
+            });
+    for (int i = 0; i < counts.length; i++) {
+      if (counts[i] == 0) {
+        var packet = insertedPackets.get(i);
+        var winner =
+            packetRepository
+                .findBySessionIdAndSourceSessionIdAndPacketSchemaAndObservationSequence(
+                    sessionId,
+                    packet.getSourceSessionId(),
+                    packet.getSchema(),
+                    packet.getSequence())
+                .orElseThrow(() -> new IllegalStateException("PACKET_IDENTITY_CONFLICT"));
+        ensurePacketMatches(winner, sessionId, batch.getTick(), packet);
+      }
+    }
+  }
+
+  private void saveTickPacketsJpa(String sessionId, TickBatchMessage batch) {
     for (TickBatchMessage.TickPacketEntry packet : batch.getPackets()) {
       boolean v2 = "rsprox-packet/v2".equals(packet.getSchema());
       var existing =
@@ -933,35 +1061,7 @@ public class TickStreamIngestionService {
         continue;
       }
       com.chromascape.web.debug.tickdebugger.entity.PacketObservation row =
-          new com.chromascape.web.debug.tickdebugger.entity.PacketObservation(
-              sessionId,
-              packet.getTick(),
-              packet.getSourceSessionId(),
-              packet.getSchema(),
-              packet.getSequence(),
-              v2 ? packet.getPacketSequence() : packet.getSequence());
-      row.setCapturedAt(
-          packet.getCapturedAt() == null ? null : parsePacketTimestamp(packet.getCapturedAt()));
-      row.setCaptureDeltaMillis(packet.getCaptureDeltaMillis());
-      row.setDirection(packet.getDirection());
-      row.setOpcode(packet.getOpcode());
-      row.setProtocolName(packet.getProtocolName());
-      row.setEncodedSize(packet.getEncodedSize());
-      row.setDecodedType(packet.getDecodedType());
-      if (packet.getDecoded() != null) {
-        row.setDecodedPayload(objectMapper.valueToTree(packet.getDecoded()));
-      }
-      if (packet.getSanitizedPayloadBase64() != null) {
-        try {
-          row.setSanitizedPayload(
-              java.util.Base64.getDecoder().decode(packet.getSanitizedPayloadBase64()));
-        } catch (IllegalArgumentException e) {
-          throw new IllegalArgumentException("PACKET_PAYLOAD_INVALID");
-        }
-      }
-      row.setDecodeStatus(packet.getDecodeStatus());
-      row.setDecodeError(packet.getDecodeError());
-      row.setSynthetic(Boolean.TRUE.equals(packet.getSynthetic()));
+          packetRow(sessionId, packet);
       try {
         // IDENTITY inserts execute on save. Flushing the entire persistence context after every
         // packet makes a recovery backlog quadratic as snapshots and other rows accumulate.
@@ -987,6 +1087,42 @@ public class TickStreamIngestionService {
       }
     }
     packetRepository.flush();
+  }
+
+  private com.chromascape.web.debug.tickdebugger.entity.PacketObservation packetRow(
+      String sessionId, TickBatchMessage.TickPacketEntry packet) {
+    boolean v2 = "rsprox-packet/v2".equals(packet.getSchema());
+    var row =
+        new com.chromascape.web.debug.tickdebugger.entity.PacketObservation(
+            sessionId,
+            packet.getTick(),
+            packet.getSourceSessionId(),
+            packet.getSchema(),
+            packet.getSequence(),
+            v2 ? packet.getPacketSequence() : packet.getSequence());
+    row.setCapturedAt(
+        packet.getCapturedAt() == null ? null : parsePacketTimestamp(packet.getCapturedAt()));
+    row.setCaptureDeltaMillis(packet.getCaptureDeltaMillis());
+    row.setDirection(packet.getDirection());
+    row.setOpcode(packet.getOpcode());
+    row.setProtocolName(packet.getProtocolName());
+    row.setEncodedSize(packet.getEncodedSize());
+    row.setDecodedType(packet.getDecodedType());
+    if (packet.getDecoded() != null) {
+      row.setDecodedPayload(objectMapper.valueToTree(packet.getDecoded()));
+    }
+    if (packet.getSanitizedPayloadBase64() != null) {
+      try {
+        row.setSanitizedPayload(
+            java.util.Base64.getDecoder().decode(packet.getSanitizedPayloadBase64()));
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException("PACKET_PAYLOAD_INVALID");
+      }
+    }
+    row.setDecodeStatus(packet.getDecodeStatus());
+    row.setDecodeError(packet.getDecodeError());
+    row.setSynthetic(Boolean.TRUE.equals(packet.getSynthetic()));
+    return row;
   }
 
   private void ensurePacketMatches(
